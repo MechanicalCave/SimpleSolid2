@@ -565,26 +565,30 @@ Responsive transitions are presentation-only: they do not mutate the Document, r
 
 The Workbench binds exactly one active `DocumentSession` at a time. Switching Document Tabs replaces the active Part/Tree/Properties/Viewer projection and invalidates stale CAD-input/edit context.
 
-For Part, Document Tree projects the built-in Origin and source-Sketch/Profile hierarchy before the single Body with its ordered Feature rows, so the visual order reads from authored inputs to modeled result. Body/Feature rows carry semantic IDs and current derived evaluation status, but Tree item addresses are never CAD identity. Invalid Profiles and Failed/Blocked Features retain explicit status labels, receive bold visual emphasis and use a native warning icon; Suppressed remains explicitly labeled and italic. Sketch-authored revision changes refresh the derived Part/Feature evaluation snapshot immediately, so repairing a Profile removes the warning without requiring Save. These cues are projections of semantic/evaluation state, not new authored flags.
+For Part, Document Tree projects the built-in Origin, Reference Geometry and source-Sketch/Profile/Axis hierarchy before the single Body with its ordered Feature rows, so the visual order reads from authored inputs to modeled result. Authored Axis rows live under their source Sketch; Origin X/Y/Z remain only in Origin. Body/Feature rows carry semantic IDs and current derived evaluation status, but Tree item addresses are never CAD identity. Invalid Profiles and Failed/Blocked Features retain explicit status labels, receive bold visual emphasis and use a native warning icon; Suppressed remains explicitly labeled and italic. Sketch-authored revision changes refresh the derived Part/Feature evaluation snapshot immediately, so repairing a Profile removes the warning without requiring Save. These cues are projections of semantic/evaluation state, not new authored flags.
 
-Properties can inspect Body status/Feature count and Feature name, FeatureId, evaluation status/diagnostic, operation, extent, distance/direction and source Profile/Sketch. Profile Properties expose consuming Features. Navigation between Feature and Profile changes runtime selection only.
+Properties can inspect Body status/Feature count and Feature name, FeatureId, evaluation status/diagnostic, operation, extent, distance-or-angle/direction and source Profile/Sketch; Revolve also exposes its AxisReference. Axis Properties expose AxisId, source Sketch/Line, authored visibility and current derived status/origin/direction. Profile Properties expose consuming Features. Navigation between related semantic objects changes runtime selection only.
 
-Feature lifecycle actions from Properties and Tree share the same semantic handlers: Edit Extrude, Suppress/Unsuppress and Delete. They are disabled while an incompatible active Sketch/Extrude modeling context owns input, including the runtime-only command-first Extrude Profile-selection state.
+Feature lifecycle actions from Properties and Tree share the same semantic handlers: Edit Extrude/Edit Revolve, Suppress/Unsuppress and Delete. Axis Create/Edit/Delete/Show/Hide likewise route through application/DocumentSession semantics rather than Tree mutation. Conflicting modeling actions are disabled while an active Sketch/Axis/Datum/Extrude/Revolve context owns input.
 
 Create Extrude supports both selection-first and command-first entry. Without an admissible preselection, Extrude owns an explicit CAD-input context that waits for exactly one valid Profile from Tree/viewport; Esc, toolbar toggle or Command Line CANCEL exits without mutation. The pick context has its own runtime generation so stale input cannot cross activations. Once a valid Profile is accepted, the ordinary revision-bound `ExtrudeDraft` starts and the product UI applies a 10 mm canonical default distance. The underlying application draft API remains capable of incomplete input and does not own that UI default.
+
+Create Revolve uses the shared application `RevolveDraft` for selection-first, command-first and Edit. It requires one valid Profile and one explicit AxisReference; Profile and Axis acquisition may occur in either order and no default Axis is inferred. Origin X/Y/Z or a currently resolved authored Axis can seed the draft. Operations and Command Line mutate the same Add/Cut, OneSide/Midplane, Angle and Reverse state; the UI default is Add + OneSide + 360 degrees + Reverse off. Edit preserves FeatureId. Draft generation is part of CAD-input freshness so stale Dynamic Input/Finish cannot cross a later mutation or activation.
+
+Axis authoring uses one `AxisDraft` shared by toolbar/Operations/Command Line. The source is exactly one Line in an active source Sketch; Create allocates AxisId only at Finish, while Edit re-sources an existing AxisId. Cancel/invalid/stale input performs no authored mutation.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin, Datum reference geometry and reference scene
 
-`PartViewportController` maps the Part's seven deterministic built-in Origin roles and every currently visible/resolved Datum Plane into one provider-neutral `ReferenceScene`.
+`PartViewportController` maps the Part's seven deterministic built-in Origin roles, every currently visible/resolved authored Axis and every currently visible/resolved Datum Plane into one provider-neutral `ReferenceScene`.
 
-Origin identity comes from the built-in role. Datum identity comes from durable `DatumId`; the Viewer never owns that identity. For each scene rebuild the controller allocates disposable presentation tokens and keeps only a runtime token↔DatumId map for current picking/selection. A refresh may allocate different tokens while semantic Datum selection remains stable.
+Origin identity comes from the built-in role. Authored Axis identity comes from durable `AxisId`; Datum identity comes from durable `DatumId`; the Viewer never owns either identity. For each scene rebuild the controller allocates disposable presentation tokens and keeps runtime token↔AxisId/DatumId bindings only for current picking/selection. A refresh may allocate different tokens while semantic Axis/Datum selection remains stable.
 
 The reference grid is a Viewer presentation primitive. It is not a Part semantic object and is not selectable.
 
 A resolved Datum Plane is currently presented with a finite plane footprint and visible border. The finite extent is presentation policy only; it is not an authored plane size. The accepted neutral translucent fill is not rendered in the current build; the Owner explicitly deferred that presentation-only treatment to PM-06 so Origin and Datum planes can receive one coherent fill style. When the plane intersects the current committed Body, the controller may derive presentation-only line segments from the current Body scene. Those segments form an owner-bound overlay: they have no independent token, Edge/Curve identity or Projection meaning, and picking them resolves to the owning Datum Plane token.
 
-Persistent Origin and Datum visibility come from PartDocument authored presentation state. Hidden references still exist semantically and remain present in the Tree. `Reference Geometry` sits directly below Origin and bulk Show/Hide applies the existing per-Datum authored visibility values; the group has no second persisted visibility flag.
+Persistent Origin, authored Axis and Datum visibility come from PartDocument authored presentation state. Hidden references still exist semantically and remain present in the Tree. During an active Revolve draft, the selected source Axis may receive a runtime-only reveal/emphasis even when authored visibility is Hidden; clearing/finishing the draft restores normal presentation without mutating visibility. `Reference Geometry` sits directly below Origin and bulk Show/Hide applies the existing per-Datum authored visibility values; the group has no second persisted visibility flag.
 
 Scene replacement clears native detected/selected state before removing provider presentation objects. A failed native replacement is contained at the provider boundary and leaves provider presentation state coherent instead of propagating a process-level failure.
 
@@ -623,11 +627,11 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored Origin/Datum references, Sketch/Profile presentation, one atomic topology-aware committed Body scene, a separate transient solid-preview scene and a transient Datum-plane draft preview.
+The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored Origin/Axis/Datum references, Sketch/Profile presentation, one atomic topology-aware committed Body scene, a separate transient solid-preview scene and a transient Datum-plane draft preview.
 
 Part evaluation may hold provider-neutral runtime solid/Face/Edge/Vertex tokens while the current runtime exists. Datum presentation likewise uses generation-scoped neutral presentation tokens. No TopoDS/OCAF handle, provider topology ordinal, Viewer presentation token or Datum intersection segment crosses into durable Part identity. `PartViewportController` owns current runtime mappings and invalidates/rebuilds them whenever the corresponding scene/evaluation generation changes.
 
-Current Face/Edge/Vertex picking is presentation acquisition only. Datum patch/border and intersection-overlay picking is also acquisition only: the intersection has no independent semantic target and resolves to its owner DatumId. Tessellation quality, camera, pick aperture, candidate order and Viewer state cannot alter Add/Cut results, Datum source meaning or durable identity.
+Current Face/Edge/Vertex picking is presentation acquisition only. Datum patch/border and intersection-overlay picking is also acquisition only: the intersection has no independent semantic target and resolves to its owner DatumId. Tessellation quality, camera, pick aperture, candidate order and Viewer state cannot alter Add/Cut results, Axis/Revolve source meaning, Datum source meaning or durable identity.
 
 The single Datum Plane tool uses one application-owned `DatumPlaneDraft` for Operations and Command Line. Source acquisition from Origin, planar Body Face or existing Datum Plane writes semantic source intent into that same draft. The default 10 mm Offset, signed Offset edits, Reverse, Finish and Cancel therefore share one validation/commit path. Preview is derived; Finish revalidates the current document/evaluation before the semantic command may commit.
 
@@ -1144,11 +1148,11 @@ The Qt/OCCT reference provider renders a Datum Plane through the existing refere
 
 The active Datum draft preview is deliberately different from committed Datum presentation. The provider renders its finite footprint/border and optional intersection segments as deactivated, non-pickable transient objects with no presentation token. Replacing or clearing that preview cannot change committed Datum token→DatumId mappings or Body selection state. Once Finish commits, the draft preview is removed and ordinary committed Datum presentation is rebuilt from authored state.
 
-The concrete Qt/OCCT provider presents the current derived topology-aware Body scene and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. `PartViewportController` may present that prefix diagnostically so lower UpToDate history remains visible. This does not change final Body truth: final semantic reference authority remains unavailable, downstream active Features remain Blocked and mutating topology-reference actions cannot consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
+The concrete Qt/OCCT provider presents the current derived topology-aware Body scene and a separately replaceable transient Extrude/Revolve solid preview alongside Origin/Axis/Datum, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. `PartViewportController` may present that prefix diagnostically so lower UpToDate history remains visible. This does not change final Body truth: final semantic reference authority remains unavailable, downstream active Features remain Blocked and mutating topology-reference actions cannot consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
 
-The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude draft evaluation still computes the complete candidate Body and that candidate remains the authority for whether Finish is legal. Separately, the modeling provider derives an exact runtime-only operation delta from the same neutral Extrude input and the ordered Body stage immediately before the target Feature: Add preview is `tool - upstream Body`, while Cut preview is `tool ∩ upstream Body`. The accepted Body therefore remains visible in its normal opaque/default presentation and only material that would actually be added or removed is overlaid translucently. The delta crosses the public boundary only as provider-neutral presentation mesh and carries no durable CAD identity. In the Qt/OCCT provider the committed Body and transient preview each own an independent `Prs3d_ShadingAspect` before `Display()`; Body color/opacity and Add/Cut preview color/transparency are never assigned through shared context-linked shading state. Replacing or clearing preview therefore cannot recolor the committed Body. Polygon offset remains scoped to the preview object only. A valid solid preview transiently hides its source Profile to avoid coplanar z-fighting; if preview becomes invalid during Edit, the Profile may be revealed for diagnosis. Finish, Cancel and context exit clear both runtime overrides without changing the authored Profile visibility policy.
+The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude and Revolve draft evaluation compute the complete candidate Body and that candidate remains the authority for whether Finish is legal. Separately, the modeling provider derives an exact runtime-only operation delta from the same neutral operation input and the ordered Body stage immediately before the target Feature: Add preview is `tool - upstream Body`, while Cut preview is `tool ∩ upstream Body`. Revolve preview uses the same resolved `AngularRevolveInput` semantics as committed modeling; the public preview API is presentation-only and cannot define modeling success. The accepted Body therefore remains visible in its normal opaque/default presentation and only material that would actually be added or removed is overlaid translucently. The delta crosses the public boundary only as provider-neutral presentation mesh and carries no durable CAD identity. In the Qt/OCCT provider the committed Body and transient preview each own an independent `Prs3d_ShadingAspect` before `Display()`; Body color/opacity and Add/Cut preview color/transparency are never assigned through shared context-linked shading state. Replacing or clearing preview therefore cannot recolor the committed Body. Polygon offset remains scoped to the preview object only. A valid solid preview transiently hides its source Profile to avoid coplanar z-fighting; if preview becomes invalid during Edit, the Profile may be revealed for diagnosis. Revolve additionally emphasizes/reveals its source Axis as a runtime cue. Finish, Cancel and context exit clear these runtime overrides without changing authored Profile or Axis visibility policy.
 
-Typing into the Extrude distance field mutates the transient draft immediately but debounces the expensive candidate evaluation/tessellation by 90 ms. A pending preview is flushed before Enter/Finish so commit authority still uses an exact-current successful evaluation. Command-line and discrete option changes keep immediate preview evaluation.
+Typing into the Extrude distance or Revolve angle field mutates the transient draft immediately but debounces the expensive candidate evaluation/tessellation by 90 ms. A pending preview is flushed before Enter/Finish so commit authority still uses an exact-current successful evaluation. Command-line and discrete option changes keep immediate preview evaluation.
 
 For Cut, provider evaluation performs an explicit fuzzy=0 volumetric common check between the upstream Body and the Extrude tool before the Boolean Cut. Face-, edge- or point-only contact has zero removable volume and returns `no_effect`; only a positive-volume common may proceed. The older unchanged-result check remains as a secondary invariant. This is modeling validation, not presentation policy.
 
@@ -1174,7 +1178,7 @@ Circle/Arc sampled point chains, native line segments and Profile face tessellat
 
 Selection, primary selection, hover, active grip, DirectEditMode, interaction-start geometry, common-transform/COPY stages and snapshots, Base/Reference/axis points, active PointRequest, pointer candidate, Polar capture, request-local numeric locks, Dynamic Input field focus/overlay, current preview, runtime Measure target, repeatable command, camera/projection, transient detection/grid, presentation tokens, grip/query/selection overlays, active `SketchInteractionState` and workspace CAD input buffer/prompt/diagnostic state are runtime-only. Polar/DYN configuration is retained only by the application-session `CadInputSession` and is discarded on application restart.
 
-Persistent Origin visibility, authored Sketch geometry and entity roles, committed copied entities, model-local identity high-water, Part Profiles/RegionIntent and ProfileId high-water are authored/durable state. COPY and Profile hover/draft preview are never persisted.
+Persistent Origin visibility, authored Sketch geometry and entity roles, committed copied entities, model-local identity high-water, Part Profiles/RegionIntent and ProfileId high-water, authored AxisId/source/visibility and ordered Extrude/Revolve Feature definitions are authored/durable state. COPY, Axis/Revolve draft state, transient Axis emphasis and Profile hover/draft preview are never persisted.
 
 Closing/reopening the application recreates runtime view/interaction state while preserving saved authored geometry, copied EntityIds, the persisted next-identity cursor and visibility in the Part file.
 
@@ -1326,18 +1330,18 @@ App start
 → Shared 2D Line / Circle / Arc / Rectangle authoring
 → precision input + Polar + Dynamic Input + OSNAP/Tracking/Inference
 → Trim / Extend / Measure
-→ Part-owned live-reference Profiles
-→ one durable Body with ordered Extrude Features
-→ Extrude Add / Cut, OneSide / Midplane
+→ Part-owned live-reference Profiles + Sketch-Line Axes
+→ one durable Body with ordered Extrude / Revolve Features
+→ Extrude Add / Cut + Revolve Add / Cut
 → derived Kernel evaluation + solid presentation
 → Feature edit / Suppress / Delete + Undo / Redo
 → Save / Close / Reopen
 → cold rebuild from authored Part state
 ```
 
-The Part Feature model currently supports one Body and one Feature family: Extrude. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. OneSide supports Forward/Reverse and Midplane uses total-distance symmetric semantics. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
+The Part Feature model currently supports one Body and two solid Feature families: Extrude and Revolve. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. Extrude supports OneSide Forward/Reverse and Midplane distance; Revolve supports explicit Origin/Authored AxisReference, OneSide/Midplane angle, One-Side Reverse and 0 < Angle <= 360 degrees. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
 
-Assembly and Drawing remain unimplemented. Part now provides Offset Datum Planes, Sketch support on Origin planes, planar Body Faces and Datum Planes, direct current Face/Edge/Vertex inspection, View Styles and explicit semantic re-support/repair for Sketch support. It does not yet provide Datum Axis/Point, additional Datum Plane constructors, Projection, Revolve, Fillet/Chamfer, multi-body modeling or general authored topology-reference repair for arbitrary future Feature inputs.
+Assembly and Drawing remain unimplemented. Part now provides Offset Datum Planes, Part-owned Sketch-Line Axes, Sketch support on Origin planes, planar Body Faces and Datum Planes, direct current Face/Edge/Vertex inspection, View Styles, Extrude/Revolve and explicit semantic re-support/repair for Sketch/Axis dependencies. It does not yet provide Datum Axis/Point, additional Datum Plane constructors, Body-Edge/Curve Axis constructors, Projection, Fillet/Chamfer, multi-turn Revolve, multi-body modeling or general authored topology-reference repair for arbitrary future Feature inputs.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
@@ -1384,9 +1388,9 @@ A copied `.ss2part` file preserves its embedded DocumentId. If more than one fil
 <!-- section-id: internal.overview.runtime-presentation -->
 ## Runtime and persistent presentation state
 
-Camera, projection, pan/orbit/zoom, active selection, Extrude/Datum preview geometry, virtual Datum/Body intersection segments, evaluated B-Rep handles, derived Datum frames and presentation tokens are runtime-only. They do not become authored Part identity.
+Camera, projection, pan/orbit/zoom, active selection, Extrude/Revolve/Datum preview geometry, transient Revolve Axis emphasis, virtual Datum/Body intersection segments, evaluated B-Rep handles, derived Datum/Axis frames and presentation tokens are runtime-only. They do not become authored Part identity.
 
-User-authored visibility of built-in Origin references, individual Datum Planes and Profile visibility policy are persistent presentation semantics changed through semantic commands and covered by Undo/Redo. `Reference Geometry` group Show/Hide bulk-updates child Datum visibility and owns no second persisted group flag. Profile policy is `automatic`, `force_shown` or `force_hidden`; automatic presentation reacts to active Feature consumption without changing evaluation.
+User-authored visibility of built-in Origin references, authored Sketch-Line Axes, individual Datum Planes and Profile visibility policy are persistent presentation semantics changed through semantic commands and covered by Undo/Redo. `Reference Geometry` group Show/Hide bulk-updates child Datum visibility and owns no second persisted group flag. Profile policy is `automatic`, `force_shown` or `force_hidden`; automatic presentation reacts to active Feature consumption without changing evaluation.
 
 Feature Suppress is not visibility. Suppress is authored modeling state that preserves FeatureId and parameters while removing the Feature contribution from evaluation.
 
@@ -1414,9 +1418,9 @@ Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-The current `PartDocument` is persistent and owns Part-hosted Sketches, Part-owned Profiles, Part-owned Datum Planes and exactly one durable Part Body. The Body has stable `BodyId`, a monotonic `FeatureId` cursor and an ordered collection of authored Features.
+The current `PartDocument` is persistent and owns Part-hosted Sketches, Part-owned Profiles, Part-owned Sketch-Line Axes, Part-owned Datum Planes and exactly one durable Part Body. The Body has stable `BodyId`, a monotonic `FeatureId` cursor and an ordered collection of authored Features.
 
-The authored state contains stable `DocumentId`, common Document Properties, display/input `LengthUnit`, persistent built-in Origin visibility, Sketches, Profiles, a monotonic `DatumId` cursor, ordered Offset Datum Plane records, `ModelingSemanticsVersion`, Body identity/cursor and ordered Features. Canonical geometric length remains millimetres; display/input unit changes do not rescale authored geometry.
+The authored state contains stable `DocumentId`, common Document Properties, display/input `LengthUnit`, persistent built-in Origin visibility, Sketches, Profiles, a monotonic `AxisId` cursor with authored Axis records, a monotonic `DatumId` cursor with ordered Offset Datum Plane records, `ModelingSemanticsVersion`, Body identity/cursor and ordered Features. Canonical geometric length remains millimetres; display/input unit changes do not rescale authored geometry.
 
 Each Offset Datum Plane has stable `DatumId`, one semantic `PlaneReference`, one signed authored Offset and authored visibility. The current constructor is Offset only. A PlaneReference may name a built-in XY/XZ/YZ Origin plane, a planar Body `SurfaceReference` at an explicit `BodyStageRef`, or an earlier Datum Plane by `DatumId`. No world frame, provider object or Viewer token is authored as Datum identity.
 
@@ -1424,7 +1428,9 @@ Each Part Sketch has stable `SketchId`, persistent visibility and one value-owne
 
 Each Profile has stable `ProfileId`, source `SketchId`, authored name, durable `ProfileRegionIntent` and authored visibility policy: `automatic`, `force_shown` or `force_hidden`. RegionIntent references source EntityIds and semantic anchors; it does not store Viewer tokens, OCCT topology or sampled fill geometry.
 
-The only current durable Feature definition is Extrude. An Extrude references exactly one existing ProfileId and authors Add/Cut plus either OneSide distance with Forward/Reverse meaning or Midplane total distance. A `PartFeature` also owns stable `FeatureId`, name and authored Suppressed state.
+Each authored Axis has stable `AxisId`, authored name, independent persistent visibility and one semantic source `SketchId + EntityId` that must identify a non-degenerate Line. Regular and Construction Lines are both admissible; creating an Axis never changes the source Line role. Axis evaluation derives an infinite world line from the current source-Sketch support frame and authored Line endpoint order. Origin X/Y/Z remain built-in semantic axes and never receive synthetic AxisId records.
+
+The current durable solid Feature definitions are Extrude and Revolve. Extrude references one ProfileId and authors Add/Cut plus either OneSide distance with Forward/Reverse meaning or Midplane total distance. Revolve references one ProfileId and one `AxisReference` (built-in Origin X/Y/Z or authored AxisId), authors Add/Cut, and stores either OneSide Angle with Reverse or Midplane total Angle. The accepted Revolve range is `0 < Angle <= 2*pi` (360 degrees). A `PartFeature` also owns stable `FeatureId`, name and authored Suppressed state.
 
 Evaluated solid geometry and Datum frames are derived. Ordered Part evaluation produces Body status `Empty`, `UpToDate` or `Unavailable`; Features report `UpToDate`, `Failed`, `Blocked` or `Suppressed`; Datum evaluation reports structured Resolved/Missing/Ambiguous/Unsupported/Blocked outcomes. A failed Datum has no stale last-good frame. Runtime B-Rep/provider handles are disposable and are rebuilt from authored state.
 
@@ -1455,7 +1461,7 @@ Qt / Command Line / caller
 → derived evaluation / presentation refresh
 ```
 
-Current commands cover Document Properties, Origin visibility, Sketch/Shared-2D mutations, Profile lifecycle and PM-01 Feature lifecycle. Extrude Create/Edit commits through the revision-bound Extrude draft/evaluation path; Feature Suppress/Unsuppress and Delete use semantic commands. UI rows, Viewer objects and preview handles are never mutation authority.
+Current commands cover Document Properties, Origin visibility, Sketch/Shared-2D mutations, Profile lifecycle, authored Axis Create/Edit/Delete/visibility and solid Feature lifecycle. Extrude and Revolve Create/Edit commit through their revision-bound draft/evaluation paths; Feature Suppress/Unsuppress and Delete use shared semantic commands. UI rows, Viewer objects and preview handles are never mutation authority.
 
 Each `PartDocumentTransaction` captures the `DocumentRevision` from which its staged full-state snapshot was created. Commit is authorized only when that base revision still equals the owning document revision. Stale state fails before authored mutation.
 
@@ -1674,7 +1680,7 @@ This is evidence synthesis only. It does not introduce a persistent topology-ref
 
 The native extension is `.ss2part`.
 
-The current Part domain writer uses schema **v11**. In addition to document properties, length unit, built-in Origin visibility, Sketches, Profiles, modeling-semantics version 1, Body identity/cursor and ordered Features, v11 persists the DatumId high-water cursor and ordered Offset Datum Plane records.
+The current Part domain writer uses schema **v13**. In addition to document properties, length unit, built-in Origin visibility, Sketches, Profiles, modeling-semantics version 1, Body identity/cursor and ordered Features, it persists the AxisId high-water cursor with authored Sketch-Line Axes and the DatumId high-water cursor with ordered Offset Datum Plane records.
 
 Each Datum record persists stable DatumId, semantic source, signed offset in millimetres and authored visibility. Origin sources store the built-in plane role; Body sources store the provider-neutral Body stage plus semantic Surface address/provenance; Datum-to-Datum sources store only the source DatumId. Derived O/U/V/N frames, runtime topology/provider tokens and Viewer presentation identity are never serialized.
 
@@ -1682,13 +1688,15 @@ Each Sketch stores stable SketchId, semantic support, visibility and one embedde
 
 Each Profile stores canonical ProfileId, source SketchId, name, visibility policy and semantic RegionIntent. Automatic/forced Profile presentation is authored policy; evaluated region geometry remains derived.
 
-The Body stores stable BodyId, `next_feature_id` and ordered Features. Current Extrude records preserve FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane extent parameters. B-Rep, provider handles, runtime topology tokens, cached Feature/Datum evaluations, preview geometry and tessellation are not serialized.
+Each authored Axis record stores stable AxisId, name, source SketchId + Line EntityId and authored visibility. It stores no world origin/direction, provider edge or Viewer token. Revolve AxisReference stores either the built-in Origin-axis role or authored AxisId; an already-allocated but currently missing AxisId remains valid repairable authored intent.
 
-Legacy schemas remain readable according to their migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement before dropping redundant placement. Loading schema v9 introduces no synthetic Datum records, preserves existing Document/Body/Sketch identities and starts the DatumId cursor at 1; a later successful Save emits the current v11 schema. Schema v11 extends Sketch support with the `datum_plane` variant without persisting a Datum frame. Malformed support, identity or dependency state fails closed through Part-owned reconstruction.
+The Body stores stable BodyId, `next_feature_id` and ordered Features. Extrude records preserve FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane distance parameters. Revolve records preserve FeatureId, name, suppression, source ProfileId, AxisReference, Add/Cut operation and OneSide/Midplane angle parameters with explicit radians. B-Rep, provider handles, runtime topology tokens, cached Feature/Datum/Axis evaluations, preview geometry and tessellation are not serialized.
+
+Legacy schemas remain readable according to their migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement before dropping redundant placement. Loading schema v9 introduces no synthetic Datum records and preserves existing Document/Body/Sketch identities. Schema v10 introduced durable Datum records; v11 added DatumId Sketch support; v12 introduced the AxisId cursor and authored Axis records without creating synthetic Origin axes; v13 adds Revolve Feature records. A later successful Save emits the current v13 schema. Malformed support, Axis/Revolve identity/reference state or dependency state fails closed through Part-owned reconstruction.
 
 ProjectId, DocumentSession, Undo/Redo, active tools, preview, selection, camera, evaluated solid handles, Datum evaluation frames, provider state and Viewer tokens remain runtime-only.
 
-Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged. PM-03 lifecycle coverage saves through `DocumentSession`, destroys the loaded session/provider state, reopens authored v11 data and rebuilds Datum-backed Sketch/Profile/Extrude semantics with a fresh provider token generation.
+Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged. Current lifecycle coverage saves through `DocumentSession`, destroys the loaded session/provider state, reopens authored v13 data and rebuilds Datum-backed support, Profiles, authored Axes and ordered Extrude/Revolve semantics with a fresh provider/runtime generation.
 
 <!-- section-id: internal.part-documents.discovery -->
 ## Discovery and canonical sessions
@@ -1726,9 +1734,9 @@ If the active Sketch disappears through Undo/history or the editing context is r
 <!-- section-id: internal.part-documents.accepted-part-feature-boundary -->
 ## As-built Part Feature and Extrude boundary
 
-ADR-0014 and ADR-0015 are now implemented for the PM-01 vertical slice.
+ADR-0014 and ADR-0015 define and are implemented by the current Part Feature/Extrude boundary.
 
-Part v1 currently owns one durable Body with ordered Features. The only production Feature family is Extrude: Add/Cut and OneSide/Midplane. The first successful solid-producing Feature in an Empty Body must be Add; later Features may be Add or Cut. Every successful evaluated stage remains exactly one valid solid.
+Part v1 currently owns one durable Body with ordered Features. Extrude is a production Feature family with Add/Cut and OneSide/Midplane; Revolve is also production and is described in the Axis/Revolve section below. The first successful solid-producing Feature in an Empty Body must be Add; later Features may be Add or Cut. Every successful evaluated stage remains exactly one valid solid.
 
 OneSide distance runs from the Profile support plane and may be Forward or Reverse. Midplane distance is the total symmetric length and does not author Reverse. Semantic cap/side meaning is stage/role/provenance based; provider topology order is not identity.
 
@@ -1737,6 +1745,27 @@ Already-authored Features retain identity and inputs when Failed, Blocked or Sup
 Extrude Create/Edit uses one runtime draft shared by GUI and Command Line. Valid parameter changes update derived preview; Finish revalidates document revision, draft generation, source Profile and successful evaluation before one authored transaction. Edit preserves FeatureId. Cancel or stale/rejected Finish commits nothing.
 
 The Viewer receives provider-neutral derived committed Body and preview presentation. The current Body scene includes generation-scoped Face/Edge/Vertex presentation records derived from the same current `RuntimeSolid` evaluation generation; direct picking maps transient presentation/runtime tokens immediately back to the Part semantic topology catalog. No Viewer/provider token becomes durable Part identity.
+
+<!-- section-id: internal.part-documents.axis-revolve -->
+## As-built Axis and Revolve boundary
+
+PM-04 implements Part-owned Sketch-Line Axis and the Revolve Feature family without changing Shared-2D ownership. An authored Axis is a Part object whose durable source is `SketchId + Line EntityId`; its evaluated origin/direction is derived from the current source-Sketch world frame and Line endpoint order. Axis source may be Regular or Construction. Visibility is authored independently from the source Sketch and never affects evaluation.
+
+`AxisReference` has exactly two current variants: built-in Origin X/Y/Z or authored AxisId. Built-in axes remain deterministic Origin references with no synthetic AxisId. An authored Axis inherits the Body-stage dependency floor of its source Sketch support. Revolve must be downstream of every stage required by both its Profile and Axis source chains; cycle-causing or forward-stage state is rejected through the existing bounded Part validation rather than a global dependency graph.
+
+Axis Edit may re-source the existing Axis to another admissible Line while preserving AxisId and authored visibility. Missing/invalid source Line leaves the Axis Missing/Unsupported; unavailable source-Sketch support leaves it Blocked. Delete Axis is allowed while referenced: the Axis object disappears, but each Revolve retains its authored AxisId reference and becomes repairably Missing. Undo restores the same AxisId. A later fresh Axis allocation never aliases the deleted identity.
+
+Revolve consumes one Profile and one explicit AxisReference. It supports Add/Cut, OneSide/Midplane and `0 < Angle <= 360 degrees`; OneSide may author Reverse, while Midplane treats Angle as total symmetric sweep and has no Reverse state. No default Axis is inferred. The Axis must be coplanar with the Profile and material must remain on one half-plane; boundary contact/on-axis segments are legal while interior crossing is rejected.
+
+Revolve uses the same single-Body ordered-stage rules as Extrude. First successful solid production must be Add; detached Add, no-effect Add/Cut, remove-all Cut and multi-solid results fail without committing. Edit preserves FeatureId and may change Profile, AxisReference, operation or extent parameters. Suppress/Delete/Undo/Redo use the common Feature lifecycle.
+
+Failure never authorizes stale last-good modeling. Missing Profile, Missing Axis, AxisUnavailable, invalid coplanarity/crossing or upstream support failure keeps authored intent and publishes no current successful Body result for the failing stage. Explicit repair through Profile/source geometry edit, Axis re-source, Undo or Sketch support edit recomputes from current semantics.
+
+Full 360-degree periodic provider seams remain representation artifacts unless separate semantic provenance makes an engineering boundary. Provider seam identity, traversal order, proximity and geometry similarity never become durable Edge identity.
+
+Create/Edit Revolve uses one application-owned runtime draft for GUI, Operations and Command Line. Preview resolves the exact Profile/Axis input and publishes only the exact added/removed material as a transient presentation mesh; the complete candidate Body remains Finish authority. The source Profile and Axis may receive transient visibility/emphasis overrides for spatial clarity, but those overrides never author visibility. Finish revalidates current document/draft/evaluation and commits one transaction; Cancel/stale/invalid input commits nothing.
+
+Schema v13 persists Revolve intent and cold rebuild reconstructs it with fresh provider tokens. Runtime solids, evaluated Axis lines, topology tokens and preview presentation remain disposable.
 
 <!-- section-id: internal.part-documents.accepted-next-topology-boundary -->
 ## As-built semantic topology and face-supported Sketch boundary
@@ -1788,11 +1817,11 @@ A Datum Plane may host a standard Sketch. The Sketch persists only DatumId suppo
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude Features.
+The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Part-owned Sketch-Line Axes; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude/Revolve Features.
 
-Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane. Feature and Datum Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v11 semantic support, Datum references and the ordered Body without persisted B-Rep, topology catalogs, derived Datum frames or runtime tokens.
+Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane plus Revolve Add/Cut with OneSide/Midplane, explicit Origin/Authored AxisReference and `0 < Angle <= 360 degrees`. Axis and Feature Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, explicit Axis repair, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v13 semantic support, Datum/Axis references and the ordered Body without persisted B-Rep, topology catalogs, derived Datum/Axis frames or runtime tokens.
 
-Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body modeling, Material, Assembly and Drawing.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360-degree) Revolve, multi-body modeling, Material, Assembly and Drawing.
 
 Authored constraints/dimensions/solver, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB convergence and clipboard/cross-Sketch Copy also remain outside the current surface.
 
@@ -1842,15 +1871,17 @@ Part001.ss2part
 
 The common manifest contains format/container metadata, Document kind/identity and Part domain schema version. Shared persistence owns package safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part writer is schema **v11**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1, one Body with ordered Features, the DatumId high-water cursor and ordered Offset Datum Plane records.
+The current Part writer is schema **v13**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1, the AxisId high-water cursor with authored Sketch-Line Axis records, one Body with ordered Features, and the DatumId high-water cursor with ordered Offset Datum Plane records.
 
 Each Datum Plane persists stable DatumId, one semantic source, one signed offset in millimetres and authored visibility. Source encoding is provider-neutral: an Origin source stores a built-in XY/XZ/YZ role; a Body source stores explicit `BodyStageRef` plus semantic planar `SurfaceReference`; a Datum source stores only the earlier source DatumId. Derived O/U/V/N frame, runtime provider/topology identity, Viewer token, plane patch and Body-intersection overlay are never authored payload.
 
-Sketches persist stable SketchId, semantic support, visibility, canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Current support may be a built-in Origin plane, a provider-neutral planar Body Surface reference, or a Datum Plane by DatumId. The evaluated world frame is derived and is not persisted. Schema v11 does not write a separate world placement for Datum-backed Sketch support. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
+Sketches persist stable SketchId, semantic support, visibility, canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Current support may be a built-in Origin plane, a provider-neutral planar Body Surface reference, or a Datum Plane by DatumId. The evaluated world frame is derived and is not persisted. Datum-backed Sketch support stores only DatumId, not a world placement. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
 
-The Body persists BodyId, FeatureId cursor and ordered Feature records. The current Extrude Feature record preserves stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane parameters. Evaluated B-Rep, OCCT handles, runtime topology tokens, Datum/Feature evaluation statuses, previews and tessellation are not authored payload.
+Each authored Axis persists stable AxisId, name, source SketchId + Line EntityId and authored visibility. The evaluated infinite world line is derived and not stored. Origin X/Y/Z remain built-in references and are never materialized as synthetic Axis records.
 
-Legacy schemas remain readable according to their existing migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement and removes redundant placement on a later successful Save. Loading schema v9 preserves existing Document/Body/Sketch identity, creates no synthetic Datum records and starts the DatumId cursor at 1. Schema v10 introduced durable Datum records; schema v11 adds DatumId Sketch support. A later successful Save publishes current schema v11. Invalid IDs, malformed references, illegal Datum dependency/cycle state or invalid Sketch support fail closed through Part-domain reconstruction.
+The Body persists BodyId, FeatureId cursor and ordered Feature records. Extrude records preserve stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane distance parameters. Revolve records preserve stable FeatureId, name, suppression, source ProfileId, provider-neutral AxisReference, Add/Cut operation and OneSide/Midplane angle parameters; authored angles are stored explicitly in radians. Evaluated B-Rep, OCCT handles, runtime topology tokens, Axis/Datum/Feature evaluation statuses, previews and tessellation are not authored payload.
+
+Legacy schemas remain readable according to their existing migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement and removes redundant placement on a later successful Save. Loading schema v9 preserves existing Document/Body/Sketch identity and creates no synthetic Datum records. Schema v10 introduced durable Datum records; schema v11 added DatumId Sketch support; schema v12 introduced AxisId high-water plus authored Axis records without creating synthetic Origin axes; schema v13 added Revolve Feature records. A later successful Save publishes current schema v13. Invalid IDs, malformed Axis/Revolve references, illegal dependency/cycle state or invalid Sketch support fail closed through Part-domain reconstruction.
 
 DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera, current Datum frames and all provider/runtime geometry remain non-persistent.
 
@@ -1899,13 +1930,13 @@ The following are derived/runtime and intentionally disposable:
 - `DocumentRevision`, runtime session/request/draft generations and file checkpoints;
 - evaluated Shared-2D arrangements and Profile regions;
 - Part Feature evaluation snapshots and UpToDate/Failed/Blocked/Suppressed diagnostics;
-- Datum evaluation status, current O/U/V/N frames and transitive Body-stage dependency floors;
+- Datum evaluation status, current O/U/V/N frames, Axis evaluation status/current world lines and transitive Body-stage dependency floors;
 - runtime solid/B-Rep handles, Face/Edge/Vertex tokens, evaluated topology catalogs, canonical carrier frames and provider history;
-- Extrude and Datum Plane preview presentation plus temporary source-Profile reveal;
+- Extrude/Revolve and Datum Plane preview presentation plus temporary source-Profile reveal and transient Revolve source-Axis emphasis;
 - Viewer Datum plane patch/border, owner-bound Body-intersection overlay, presentation objects, tessellation, detection/picking tokens and camera state;
 - active selection, hover, grips, Dynamic Input/Polar/OSNAP tracking state and CAD input buffer.
 
-A clean reopen must recover authored semantic state without any of these objects. PM-03 lifecycle coverage saves through the guarded `DocumentSession` path, destroys the loaded session/provider state, reloads schema-v11 authored data and rebuilds Body-Surface/Datum references, Datum-backed Sketch/Profile support and ordered Add/Cut features with a deliberately different runtime token generation. Runtime token values may change; DatumId, semantic source, signed Offset, visibility, Sketch support and authored IDs must not.
+A clean reopen must recover authored semantic state without any of these objects. Current lifecycle coverage saves through the guarded `DocumentSession` path, destroys the loaded session/provider state, reloads schema-v13 authored data and rebuilds Body-Surface/Datum references, Datum-backed Sketch/Profile support, authored Axes and ordered Extrude/Revolve Add/Cut features with a deliberately different runtime/provider generation. Runtime token values may change; DatumId, AxisId, ProfileId, FeatureId, semantic sources, signed Offset, visibility and Sketch support must not.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity and container safety
@@ -1916,7 +1947,7 @@ A rename or move inside the Workspace does not change DocumentId. Duplicate nati
 
 Schema-v6 loading rejects malformed/non-canonical identity strings, duplicate EntityIds across primitive kinds, EntityIds outside `next_entity_id`, malformed/unknown entity kind or role, invalid/non-finite geometry and invalid primitive parameters. The same local EntityId in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
 
-Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Earlier schema validation remains intact for backward read compatibility.
+Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Axis loading validates canonical AxisId/high-water, unique IDs, valid source Sketch/Line identity and authored visibility. Schema-v13 Revolve loading validates ProfileId, AxisReference, operation and extent; a missing but previously allocated AxisId may remain repairable authored intent, while never-allocated IDs fail closed. Earlier schema validation remains intact for backward read compatibility.
 
 After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid semantic Sketch support, illegal support/consumer ordering, malformed legacy migration state or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family.
 
@@ -1929,7 +1960,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 
 Current persistence does not store Undo/Redo history, evaluated B-Rep, Viewer state, runtime topology/provider identity, caches or active edit context.
 
-The native format does not encode Datum-plane support, Projection, generic authored Edge/Vertex feature inputs, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics. Planar Body-Surface Sketch support is encoded semantically in v9; evaluated topology, runtime repair candidates and provider identity remain derived.
+The native format does not encode Datum Axis/Point, Projection, Body-Edge/Curve Axis constructors, generic authored Edge/Vertex feature inputs, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics. Planar Body-Surface Sketch support is encoded semantically in v9, Datum support in v11, authored Sketch-Line Axis in v12 and Revolve in v13; evaluated topology, runtime repair candidates and provider identity remain derived.
 
 Save remains whole-file conditional replacement rather than an in-place feature database or event log.
 </script>
@@ -2477,14 +2508,16 @@ The current product provides:
 - unit-aware precision input, Polar, Dynamic Input and OSNAP/Tracking/Inference;
 - Trim/Extend and read-only Measure;
 - Part-owned live-reference Profiles with Add/Subtract composition;
-- exactly one durable Body with ordered Extrude Features;
+- Part-owned Sketch-Line Axes plus direct Origin X/Y/Z AxisReference;
+- exactly one durable Body with ordered Extrude/Revolve Features;
 - Extrude Add/Cut with OneSide Forward/Reverse and Midplane;
-- dynamic preview, Edit Extrude, Feature status, Suppress/Unsuppress/Delete and Undo/Redo;
-- conflict-protected Save plus Save/Close/Reopen cold rebuild of Body, Datums and their semantic dependencies.
+- Revolve Add/Cut with One Side/Midplane, 0 < Angle <= 360 degrees and One-Side Reverse;
+- dynamic preview, Edit Extrude/Revolve, Axis repair, Feature status, Suppress/Unsuppress/Delete and Undo/Redo;
+- conflict-protected Save plus Save/Close/Reopen cold rebuild of Body, Datums, Axes and their semantic dependencies.
 
 Part is currently the only implemented top-level CAD Document kind. Assembly and Drawing are not yet available.
 
-Current solid modeling remains intentionally limited to Extrude Add/Cut. Datum Axis, Datum Point, additional Datum Plane constructors, Projection, Revolve, Fillet/Chamfer and multi-body remain later scope.
+Current solid modeling is intentionally bounded to Extrude Add/Cut and Revolve Add/Cut in their documented OneSide/Midplane variants. Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve Axis constructors, Projection, Fillet/Chamfer, multi-turn Revolve and multi-body remain later scope.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -2941,12 +2974,12 @@ To change an existing Profile region, select exactly one Profile and use **Edit 
 
 Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` controls only Show Islands presentation; it never disables island analysis.
 
-Profile remains Part semantics based on authored 2D geometry and is now a durable source for solid Features. With **Automatic** visibility, an active Feature consuming the Profile hides its normal presentation; after the last active consumer is Suppressed or Deleted, the Profile becomes visible again. Explicit Show/Hide forces shown/hidden presentation without changing modeling evaluation. During Create/Edit Extrude, a valid solid preview transiently hides its source Profile to avoid coplanar flicker; when an Edit preview becomes invalid, the source Profile may be revealed temporarily for diagnosis. These runtime overrides never change authored Visibility.
+Profile remains Part semantics based on authored 2D geometry and is now a durable source for solid Features. With **Automatic** visibility, an active Feature consuming the Profile hides its normal presentation; after the last active consumer is Suppressed or Deleted, the Profile becomes visible again. Explicit Show/Hide forces shown/hidden presentation without changing modeling evaluation. During Create/Edit Extrude or Revolve, a valid solid preview transiently hides its source Profile to avoid coplanar flicker; when an Edit preview becomes invalid, the source Profile may be revealed temporarily for diagnosis. These runtime overrides never change authored Visibility.
 
 <!-- section-id: product.parts.extrude -->
 ## Body, Feature and Extrude
 
-Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The only production Feature family currently available is **Extrude**.
+Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The production solid Feature families currently available are **Extrude** and **Revolve**. This section describes Extrude; Axis/Revolve is described next.
 
 Extrude supports two equivalent activation paths. **Selection-first:** select exactly one valid Profile and use **Extrude** or enter `EXTRUDE`. **Command-first:** start **Extrude** with no Profile selected; the Workbench enters an explicit selection state and waits for one valid Profile chosen in Tree or viewport. Clicking Extrude again, pressing **Esc**, or entering `CANCEL` leaves that state without authored mutation. The first Feature that creates a solid in an Empty Body must be **Add**. Later Extrudes may be **Add** or **Cut**. Every successful stage must still produce exactly one solid; detached Add, no-effect Add/Cut, a Cut that removes the whole solid, or a multi-solid result is rejected explicitly and is not committed.
 
@@ -2964,6 +2997,31 @@ Document Tree shows Origin and source Sketch/Profile objects first, with the **B
 Command Line and GUI control the same Extrude draft. Supported contextual words include `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` and `CANCEL`; Length uses the shared unit-aware quantity input.
 
 Body/Feature do not have a separate Show/Hide state. Suppress is modeling semantics, not visibility. Current Body Faces, Edges and Vertices are directly selectable for inspection. Durable modeling meaning remains semantic and stage-scoped; Viewer tokens or topology order are never stored as references.
+
+<!-- section-id: product.parts.axis-revolve -->
+## Axis and Revolve
+
+A Revolve axis is always an explicit semantic **AxisReference**. You can use the built-in **Origin X/Y/Z Axis** directly; built-in axes keep their Origin identity and never receive a synthetic AxisId. You can also create a Part-owned **Axis** from exactly one non-degenerate Sketch Line. Start **Axis** or enter `AXIS`, select one Line in an active Sketch, then Finish. The source Line may be Regular or Construction and its role is not changed. The resulting Axis has a stable `AxisId`, appears under its source Sketch in Document Tree, and has its own persistent Show/Hide state independent from Sketch visibility.
+
+**Edit Axis** re-sources the same AxisId to another admissible Sketch Line. Moving or rotating the source Line, or changing the source Sketch support, recomputes the current world axis from the authored Line endpoint order. Deleting the source Line makes the Axis unavailable until it is explicitly repaired. Deleting the Axis object itself is allowed even while a Revolve references it: the Revolve keeps the missing AxisId intent and becomes Blocked/Missing instead of being deleted or rebound. Undo restores the same AxisId. No nearest/similar Edge or Line is substituted automatically.
+
+**Revolve** supports both selection-first and command-first use. A new Revolve requires one valid Profile and one explicit AxisReference; the Profile and Axis may be acquired in either order. Start **Revolve** or enter `REVOLVE`. Origin axes can also be entered as `X`, `Y` or `Z` while the Revolve command is active; an authored Axis is selected from Tree/viewport. There is no inferred/default axis.
+
+New Revolve defaults are **Add**, **One Side**, **360°**, **Reverse off**. The accepted angle range is **0 < Angle ≤ 360°**:
+
+- **One Side** sweeps the authored total angle in one direction; **Reverse** flips that direction;
+- **Midplane** uses the authored Angle as the **total** sweep, distributed symmetrically around the Profile plane; Reverse is not authored in Midplane;
+- **Add** must produce one connected Body and **Cut** must remove positive volume without deleting the whole Body; detached/no-effect/multi-solid results are rejected.
+
+The Axis must lie in the Profile plane. Profile material must lie wholly on one side of the Axis; touching the Axis, including a boundary segment on the Axis, is allowed, while material crossing through the Axis interior is rejected. Skew/non-coplanar general sweeps and angles above 360° are not part of the current tool.
+
+The viewport keeps the accepted Body in normal presentation and shows only the exact added or removed material as the Revolve preview. The source Profile may be hidden transiently while a valid preview is shown. The selected source Axis is also emphasized while the command is active; a normally hidden Origin/authored Axis may be revealed temporarily for spatial clarity. These are runtime presentation overrides only and never author Profile/Axis visibility. Finish validates the complete candidate Body and commits exactly one transaction; Cancel, invalid input or stale draft/evaluation commits nothing.
+
+Editing an existing Revolve uses the same draft, preserves `FeatureId` and may change Profile, AxisReference, Add/Cut, extent, Angle or One-Side Reverse. Suppress/Unsuppress and Delete use the same generic Feature lifecycle as Extrude. A missing Profile, missing Axis, unavailable Axis source or invalid Profile/Axis relation keeps authored intent and reports structured Failed/Blocked status rather than using last-good geometry.
+
+At a full **360°** sweep, provider periodic seam topology may exist as representation detail, but it is not promoted to a durable engineering Edge solely because the kernel emits a seam. Durable topology meaning remains semantic and stage-scoped.
+
+While Revolve is active, Command Line and Operations drive the same draft. Supported contextual input includes `ADD`, `CUT`, `ONESIDE`, `MIDPLANE`, `REVERSE`, Angle input, `X`/`Y`/`Z`, `FINISH` and `CANCEL`.
 
 <!-- section-id: product.parts.body-topology -->
 ## Body topology, View Style and semantic inspection
@@ -3018,9 +3076,9 @@ The next normal full Viewer refresh automatically retries presentation from the 
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state: Document properties, Origin visibility, durable Offset Datum Planes with `DatumId`/source/signed Offset/visibility, Sketches with semantic Origin/Body-Surface/Datum support and local geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude Features, stable identities, parameters and Suppressed state.
+`Save` writes the current authored Part state: Document properties, Origin visibility, durable Offset Datum Planes with `DatumId`/source/signed Offset/visibility, Sketches with semantic Origin/Body-Surface/Datum support and local geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude/Revolve Features, stable identities, parameters and Suppressed state. Authored Sketch-Line Axes persist with AxisId, source Sketch/Line identity and visibility; Revolve persists its ProfileId, AxisReference, Add/Cut operation and OneSide/Midplane angle parameters.
 
-The current B-Rep solid, evaluated topology catalog, derived Body-Surface/Datum support frames, transient Datum/Extrude preview, virtual intersection lines, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
+The current B-Rep solid, evaluated topology catalog, derived Body-Surface/Datum support frames, transient Datum/Extrude/Revolve preview, virtual intersection lines, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
 
 Ordinary Save remains conditional on the exact native file version loaded or last saved by the session. A removed, replaced or externally changed target reports a Save conflict rather than being silently overwritten. The in-memory Part, Undo/Redo and local changes stay open.
 
@@ -3029,11 +3087,11 @@ Closing a dirty Part requires `Save`, `Discard` or `Cancel`. Closing the complet
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
 
-After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, DatumId, SketchId/ProfileId, BodyId and FeatureId values. Face- and Datum-supported Sketches keep their semantic support and local U/V geometry even though runtime topology/presentation token values are rebuilt.
+After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, DatumId, SketchId/ProfileId, AxisId, BodyId and FeatureId values. Face- and Datum-supported Sketches keep their semantic support and local U/V geometry even though runtime topology/presentation token values are rebuilt.
 
-Datums, the Body and ordered Extrude Add/Cut Features are evaluated from scratch from authored state. Datum sources, signed Offsets and authored visibility remain persisted, while world frames and virtual intersections are derived again. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers.
+Datums, authored Axes, the Body and ordered Extrude/Revolve Add/Cut Features are evaluated from scratch from authored state. Datum sources, signed Offsets and authored visibility remain persisted, while world frames and virtual intersections are derived again. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers.
 
-Undo/Redo history, active selection, active Sketch/Datum/Extrude draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
+Undo/Redo history, active selection, active Sketch/Datum/Axis/Extrude/Revolve draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
 
 <!-- section-id: product.parts.conflicts -->
 ## Document and Save conflicts
@@ -3047,11 +3105,11 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides persistent Sketch support on Origin planes, planar Body Faces and Offset Datum Planes; construction Offset Datum Planes in `Reference Geometry`; Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; direct Face/Edge/Vertex inspection; and one durable Body with ordered Extrude Features.
+The current Part provides persistent Sketch support on Origin planes, planar Body Faces and Offset Datum Planes; construction Offset Datum Planes in `Reference Geometry`; Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; direct Face/Edge/Vertex inspection; Part-owned Sketch-Line Axes; and one durable Body with ordered Extrude/Revolve Features.
 
-Solid modeling is currently limited to **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**. Edit Extrude, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum Edit/Show/Hide, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
+Solid modeling currently includes **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**, plus **Revolve Add/Cut** with **One Side/Midplane**, explicit Origin/Authored AxisReference, **0 < Angle ≤ 360°** and One-Side Reverse. Edit Extrude/Revolve, Axis create/edit/re-source/show/hide/delete/repair, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum Edit/Show/Hide, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
 
-Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body, Material, Assembly or Drawing tools.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360°) Revolve, multi-body, Material, Assembly or Drawing tools.
 
 On the Sketch side, authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy and final ordinary-Select RMB convergence remain outside the current surface.
 
@@ -3208,14 +3266,16 @@ Obecny produkt udostępnia:
 - precision input z jednostkami, Polar, Dynamic Input, OSNAP/Tracking/Inference;
 - Trim/Extend oraz read-only Measure;
 - Part-owned live-reference Profiles z Add/Subtract;
-- dokładnie jeden trwały Body i uporządkowane Extrude Features;
+- Part-owned Sketch-Line Axes oraz bezpośredni Origin X/Y/Z AxisReference;
+- dokładnie jeden trwały Body i uporządkowane Extrude/Revolve Features;
 - Extrude Add/Cut z OneSide Forward/Reverse i Midplane;
-- dynamiczny preview, Edit Extrude, Feature status, Suppress/Unsuppress/Delete oraz Undo/Redo;
-- Save z ochroną konfliktu oraz Save/Close/Reopen z cold rebuildem Body, Datumów i ich semantycznych zależności.
+- Revolve Add/Cut z One Side/Midplane, 0 < Angle <= 360° i Reverse dla One Side;
+- dynamiczny preview, Edit Extrude/Revolve, naprawa Axis, Feature status, Suppress/Unsuppress/Delete oraz Undo/Redo;
+- Save z ochroną konfliktu oraz Save/Close/Reopen z cold rebuildem Body, Datumów, Axes i ich semantycznych zależności.
 
 Part jest obecnie jedynym zaimplementowanym typem głównego Dokumentu CAD. Assembly i Drawing nie są jeszcze dostępne.
 
-Bieżący solid modeling pozostaje celowo ograniczony do Extrude Add/Cut. Datum Axis, Datum Point, dodatkowe konstruktory Datum Plane, Projection, Revolve, Fillet/Chamfer i multi-body pozostają późniejszym zakresem.
+Bieżący solid modeling jest celowo ograniczony do Extrude Add/Cut i Revolve Add/Cut w udokumentowanych wariantach OneSide/Midplane. Datum Axis, Datum Point, dodatkowe konstruktory Datum Plane, konstruktory Axis z Body-Edge/Curve, Projection, Fillet/Chamfer, wieloobrotowy Revolve i multi-body pozostają późniejszym zakresem.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -3672,12 +3732,12 @@ Aby zmienić region istniejącego Profile, zaznacz dokładnie jeden Profile i u�
 
 Command Line i Operations sterują tym samym stanem Profile. Komendy kontekstowe to `ADD`, `SUBTRACT`, `FINISH`, `CANCEL` oraz `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF`, `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` steruje tylko prezentacją Show Islands i nigdy nie wyłącza analizy wysp.
 
-Profile pozostaje semantyką Part opartą na geometrii 2D i jest trwałym źródłem dla operacji bryłowych. Gdy Profile ma politykę widoczności **Automatic**, aktywny Feature zużywający ten Profile ukrywa jego normalną prezentację; po Suppress/Delete ostatniego aktywnego konsumenta Profile pojawia się ponownie. Jawne Show/Hide wymusza odpowiednio stan pokazany/ukryty bez zmiany wyniku modelowania. Podczas Create/Edit Extrude poprawny solid preview tymczasowo ukrywa źródłowy Profile, żeby uniknąć migotania współpłaszczyznowej prezentacji; gdy preview podczas Edit staje się niepoprawny, źródłowy Profile może zostać chwilowo ujawniony diagnostycznie. Te runtime override nie zmieniają authored Visibility.
+Profile pozostaje semantyką Part opartą na geometrii 2D i jest trwałym źródłem dla operacji bryłowych. Gdy Profile ma politykę widoczności **Automatic**, aktywny Feature zużywający ten Profile ukrywa jego normalną prezentację; po Suppress/Delete ostatniego aktywnego konsumenta Profile pojawia się ponownie. Jawne Show/Hide wymusza odpowiednio stan pokazany/ukryty bez zmiany wyniku modelowania. Podczas Create/Edit Extrude lub Revolve poprawny solid preview tymczasowo ukrywa źródłowy Profile, żeby uniknąć migotania współpłaszczyznowej prezentacji; gdy preview podczas Edit staje się niepoprawny, źródłowy Profile może zostać chwilowo ujawniony diagnostycznie. Te runtime override nie zmieniają authored Visibility.
 
 <!-- section-id: product.parts.extrude -->
 ## Body, Feature i Extrude
 
-Każdy obecny Part ma dokładnie jeden trwały **Body**. Body może być pusty albo zawierać uporządkowaną historię Feature. Obecnie jedyną dostępną rodziną Feature jest **Extrude**.
+Każdy obecny Part ma dokładnie jeden trwały **Body**. Body może być pusty albo zawierać uporządkowaną historię Feature. Dostępne produkcyjne rodziny bryłowych Feature to obecnie **Extrude** i **Revolve**. Ta sekcja opisuje Extrude; Axis/Revolve opisuje następna sekcja.
 
 Extrude obsługuje dwie równorzędne drogi aktywacji. **Selection-first:** wybierz dokładnie jeden poprawny Profile i użyj **Extrude** albo wpisz `EXTRUDE`. **Command-first:** uruchom **Extrude** bez zaznaczonego Profile; Workbench przechodzi wtedy do jawnego stanu wyboru i czeka na jeden poprawny Profile wskazany w Tree albo viewport. Ponowne kliknięcie Extrude, **Esc** lub `CANCEL` opuszcza ten stan bez authored mutation. Pierwszy Feature tworzący bryłę w pustym Body musi być **Add**. Kolejne Extrude mogą być **Add** albo **Cut**. Każdy poprawny etap musi nadal dawać dokładnie jedną bryłę; detached Add, no-effect Add/Cut, wycięcie do zera albo wynik wielobryłowy są odrzucane jawnie i nie są zatwierdzane.
 
@@ -3695,6 +3755,31 @@ Document Tree pokazuje najpierw Origin i źródłowe Sketch/Profile, a **Body** 
 Command Line i GUI sterują tym samym Extrude draftem. Obsługiwane słowa kontekstowe obejmują `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` i `CANCEL`; Length korzysta ze wspólnego unit-aware quantity input.
 
 Body/Feature nie mają osobnego Show/Hide. Suppress jest semantyką modelowania, a nie widocznością. Bieżące Face, Edge i Vertex Body są bezpośrednio wybieralne do inspekcji. Trwałe znaczenie modelowania pozostaje semantyczne i stage-scoped; tokeny Viewera ani kolejność topologii nie są zapisywane jako referencje.
+
+<!-- section-id: product.parts.axis-revolve -->
+## Axis i Revolve
+
+Oś Revolve jest zawsze jawnym semantycznym **AxisReference**. Możesz bezpośrednio użyć wbudowanej **Origin X/Y/Z Axis**; osie Origin zachowują swoją wbudowaną tożsamość i nigdy nie dostają sztucznego AxisId. Możesz też utworzyć Part-owned **Axis** z dokładnie jednej niedegenerowanej Sketch Line. Uruchom **Axis** albo wpisz `AXIS`, wybierz jedną Line w aktywnym Sketchu i wykonaj Finish. Linia źródłowa może być Regular albo Construction i jej rola nie jest zmieniana. Utworzona Axis ma stabilny `AxisId`, pojawia się pod źródłowym Sketchem w Document Tree i ma własny trwały Show/Hide niezależny od widoczności Sketchu.
+
+**Edit Axis** pozwala wskazać inną dopuszczalną Sketch Line przy zachowaniu tego samego AxisId. Przesunięcie/obrót linii źródłowej albo zmiana supportu źródłowego Sketchu ponownie wyprowadza bieżącą oś świata z authored kolejności endpointów Line. Usunięcie źródłowej Line czyni Axis niedostępną do czasu jawnej naprawy. Usunięcie samego obiektu Axis jest dozwolone nawet wtedy, gdy używa go Revolve: Revolve zachowuje brakujący zamiar AxisId i przechodzi w Blocked/Missing zamiast być usuwany lub przepinany. Undo przywraca ten sam AxisId. System nie podstawia automatycznie najbliższej/podobnej Edge ani Line.
+
+**Revolve** obsługuje selection-first i command-first. Nowy Revolve wymaga jednego poprawnego Profile i jednego jawnego AxisReference; Profile i Axis można wskazać w dowolnej kolejności. Uruchom **Revolve** albo wpisz `REVOLVE`. Podczas aktywnego Revolve Origin Axis można też wskazać przez `X`, `Y` albo `Z`; authored Axis wybiera się z Tree/viewportu. Nie istnieje domyślna ani wnioskowana oś.
+
+Nowy Revolve zaczyna się jako **Add**, **One Side**, **360°**, **Reverse off**. Dopuszczalny zakres to **0 < Angle ≤ 360°**:
+
+- **One Side** wykonuje pełny authored Angle w jednym kierunku; **Reverse** odwraca ten kierunek;
+- **Midplane** traktuje Angle jako **całkowity** kąt obrotu, rozłożony symetrycznie wokół płaszczyzny Profile; Reverse nie jest zapisywany w Midplane;
+- **Add** musi dać jeden połączony Body, a **Cut** musi usunąć dodatnią objętość bez usuwania całego Body; detached/no-effect/multi-solid są jawnie odrzucane.
+
+Axis musi leżeć w płaszczyźnie Profile. Materiał Profile musi znajdować się w całości po jednej stronie Axis; dotknięcie Axis, w tym odcinek granicy leżący na Axis, jest dozwolone, natomiast przejście wnętrza materiału przez Axis jest odrzucane. Skew/non-coplanar sweep oraz kąty powyżej 360° nie należą do obecnego narzędzia.
+
+Viewport pozostawia zaakceptowany Body w normalnej prezentacji i pokazuje tylko dokładny materiał dodawany albo usuwany przez preview Revolve. Źródłowy Profile może zostać chwilowo ukryty przy poprawnym preview. Wybrana Axis jest również wyróżniona podczas aktywnej komendy; normalnie ukryta Origin/authored Axis może zostać tymczasowo pokazana dla orientacji przestrzennej. To wyłącznie runtime presentation override i nigdy nie zapisuje Visibility Profile/Axis. Finish waliduje kompletny wynikowy Body i wykonuje dokładnie jedną transakcję; Cancel, niepoprawne dane albo stale draft/evaluation nie zatwierdzają niczego.
+
+Edit istniejącego Revolve korzysta z tego samego draftu, zachowuje `FeatureId` i może zmieniać Profile, AxisReference, Add/Cut, extent, Angle lub One-Side Reverse. Suppress/Unsuppress i Delete korzystają z tego samego ogólnego lifecycle Feature co Extrude. Brakujący Profile, brakująca Axis, niedostępne źródło Axis albo niepoprawna relacja Profile/Axis zachowują authored intent i raportują strukturalny Failed/Blocked zamiast używać last-good geometry.
+
+Przy pełnym obrocie **360°** provider może wytworzyć periodyczną seam topology jako detal reprezentacji, ale sama seam nie staje się trwałą inżynierską Edge tylko dlatego, że kernel ją emituje. Trwałe znaczenie topologii pozostaje semantyczne i stage-scoped.
+
+Podczas aktywnego Revolve Command Line i Operations sterują tym samym draftem. Obsługiwane wejście kontekstowe obejmuje `ADD`, `CUT`, `ONESIDE`, `MIDPLANE`, `REVERSE`, Angle, `X`/`Y`/`Z`, `FINISH` i `CANCEL`.
 
 <!-- section-id: product.parts.body-topology -->
 ## Topologia Body, View Style i inspekcja semantyczna
@@ -3749,9 +3834,9 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude/Revolve Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed. Authored Sketch-Line Axes są zapisywane z AxisId, tożsamością źródłowego Sketch/Line i widocznością; Revolve zapisuje ProfileId, AxisReference, Add/Cut oraz parametry kąta OneSide/Midplane.
 
-Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
+Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude/Revolve preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
 Ordinary Save pozostaje warunkowy względem dokładnej wersji natywnego pliku wczytanej lub ostatnio zapisanej przez sesję. Usunięty, podmieniony albo zewnętrznie zmieniony target powoduje konflikt Save zamiast cichego nadpisania. In-memory Part, Undo/Redo i lokalne zmiany pozostają wtedy otwarte.
 
@@ -3760,11 +3845,11 @@ Przy zamykaniu Parta z niezapisanymi zmianami aplikacja wymaga `Save`, `Discard`
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
 
-Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, DatumId, SketchId/ProfileId, BodyId oraz FeatureId. Sketche oparte na Face i Datum zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology/presentation tokeny są budowane od nowa.
+Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, DatumId, SketchId/ProfileId, AxisId, BodyId oraz FeatureId. Sketche oparte na Face i Datum zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology/presentation tokeny są budowane od nowa.
 
-Datumy, Body i jego ordered Extrude Add/Cut są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
+Datumy, authored Axes, Body i jego ordered Extrude/Revolve Add/Cut są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
 
-Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Extrude draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
+Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Axis/Extrude/Revolve draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikty Dokumentu i Save
@@ -3778,11 +3863,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex oraz jeden trwały Body z ordered Extrude Features.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex Part-owned Sketch-Line Axes oraz jeden trwały Body z ordered Extrude/Revolve Features.
 
-Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
+Solid modeling obejmuje obecnie **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane** oraz **Revolve Add/Cut** z **One Side/Midplane**, jawnym Origin/Authored AxisReference, zakresem **0 < Angle ≤ 360°** i Reverse dla One Side. Dostępne są Edit Extrude/Revolve, Axis create/edit/re-source/show/hide/delete/repair, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
+Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, Body-Edge/Curve ani innych konstruktorów Axis, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, wieloobrotowego (>360°) Revolve, multi-body, Material ani narzędzi Assembly/Drawing.
 
 Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
 

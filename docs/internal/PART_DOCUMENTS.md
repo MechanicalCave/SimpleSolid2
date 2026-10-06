@@ -6,9 +6,9 @@
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-The current `PartDocument` is persistent and owns Part-hosted Sketches, Part-owned Profiles, Part-owned Datum Planes and exactly one durable Part Body. The Body has stable `BodyId`, a monotonic `FeatureId` cursor and an ordered collection of authored Features.
+The current `PartDocument` is persistent and owns Part-hosted Sketches, Part-owned Profiles, Part-owned Sketch-Line Axes, Part-owned Datum Planes and exactly one durable Part Body. The Body has stable `BodyId`, a monotonic `FeatureId` cursor and an ordered collection of authored Features.
 
-The authored state contains stable `DocumentId`, common Document Properties, display/input `LengthUnit`, persistent built-in Origin visibility, Sketches, Profiles, a monotonic `DatumId` cursor, ordered Offset Datum Plane records, `ModelingSemanticsVersion`, Body identity/cursor and ordered Features. Canonical geometric length remains millimetres; display/input unit changes do not rescale authored geometry.
+The authored state contains stable `DocumentId`, common Document Properties, display/input `LengthUnit`, persistent built-in Origin visibility, Sketches, Profiles, a monotonic `AxisId` cursor with authored Axis records, a monotonic `DatumId` cursor with ordered Offset Datum Plane records, `ModelingSemanticsVersion`, Body identity/cursor and ordered Features. Canonical geometric length remains millimetres; display/input unit changes do not rescale authored geometry.
 
 Each Offset Datum Plane has stable `DatumId`, one semantic `PlaneReference`, one signed authored Offset and authored visibility. The current constructor is Offset only. A PlaneReference may name a built-in XY/XZ/YZ Origin plane, a planar Body `SurfaceReference` at an explicit `BodyStageRef`, or an earlier Datum Plane by `DatumId`. No world frame, provider object or Viewer token is authored as Datum identity.
 
@@ -16,7 +16,9 @@ Each Part Sketch has stable `SketchId`, persistent visibility and one value-owne
 
 Each Profile has stable `ProfileId`, source `SketchId`, authored name, durable `ProfileRegionIntent` and authored visibility policy: `automatic`, `force_shown` or `force_hidden`. RegionIntent references source EntityIds and semantic anchors; it does not store Viewer tokens, OCCT topology or sampled fill geometry.
 
-The only current durable Feature definition is Extrude. An Extrude references exactly one existing ProfileId and authors Add/Cut plus either OneSide distance with Forward/Reverse meaning or Midplane total distance. A `PartFeature` also owns stable `FeatureId`, name and authored Suppressed state.
+Each authored Axis has stable `AxisId`, authored name, independent persistent visibility and one semantic source `SketchId + EntityId` that must identify a non-degenerate Line. Regular and Construction Lines are both admissible; creating an Axis never changes the source Line role. Axis evaluation derives an infinite world line from the current source-Sketch support frame and authored Line endpoint order. Origin X/Y/Z remain built-in semantic axes and never receive synthetic AxisId records.
+
+The current durable solid Feature definitions are Extrude and Revolve. Extrude references one ProfileId and authors Add/Cut plus either OneSide distance with Forward/Reverse meaning or Midplane total distance. Revolve references one ProfileId and one `AxisReference` (built-in Origin X/Y/Z or authored AxisId), authors Add/Cut, and stores either OneSide Angle with Reverse or Midplane total Angle. The accepted Revolve range is `0 < Angle <= 2*pi` (360 degrees). A `PartFeature` also owns stable `FeatureId`, name and authored Suppressed state.
 
 Evaluated solid geometry and Datum frames are derived. Ordered Part evaluation produces Body status `Empty`, `UpToDate` or `Unavailable`; Features report `UpToDate`, `Failed`, `Blocked` or `Suppressed`; Datum evaluation reports structured Resolved/Missing/Ambiguous/Unsupported/Blocked outcomes. A failed Datum has no stale last-good frame. Runtime B-Rep/provider handles are disposable and are rebuilt from authored state.
 
@@ -47,7 +49,7 @@ Qt / Command Line / caller
 → derived evaluation / presentation refresh
 ```
 
-Current commands cover Document Properties, Origin visibility, Sketch/Shared-2D mutations, Profile lifecycle and PM-01 Feature lifecycle. Extrude Create/Edit commits through the revision-bound Extrude draft/evaluation path; Feature Suppress/Unsuppress and Delete use semantic commands. UI rows, Viewer objects and preview handles are never mutation authority.
+Current commands cover Document Properties, Origin visibility, Sketch/Shared-2D mutations, Profile lifecycle, authored Axis Create/Edit/Delete/visibility and solid Feature lifecycle. Extrude and Revolve Create/Edit commit through their revision-bound draft/evaluation paths; Feature Suppress/Unsuppress and Delete use shared semantic commands. UI rows, Viewer objects and preview handles are never mutation authority.
 
 Each `PartDocumentTransaction` captures the `DocumentRevision` from which its staged full-state snapshot was created. Commit is authorized only when that base revision still equals the owning document revision. Stale state fails before authored mutation.
 
@@ -266,7 +268,7 @@ This is evidence synthesis only. It does not introduce a persistent topology-ref
 
 The native extension is `.ss2part`.
 
-The current Part domain writer uses schema **v11**. In addition to document properties, length unit, built-in Origin visibility, Sketches, Profiles, modeling-semantics version 1, Body identity/cursor and ordered Features, v11 persists the DatumId high-water cursor and ordered Offset Datum Plane records.
+The current Part domain writer uses schema **v13**. In addition to document properties, length unit, built-in Origin visibility, Sketches, Profiles, modeling-semantics version 1, Body identity/cursor and ordered Features, it persists the AxisId high-water cursor with authored Sketch-Line Axes and the DatumId high-water cursor with ordered Offset Datum Plane records.
 
 Each Datum record persists stable DatumId, semantic source, signed offset in millimetres and authored visibility. Origin sources store the built-in plane role; Body sources store the provider-neutral Body stage plus semantic Surface address/provenance; Datum-to-Datum sources store only the source DatumId. Derived O/U/V/N frames, runtime topology/provider tokens and Viewer presentation identity are never serialized.
 
@@ -274,13 +276,15 @@ Each Sketch stores stable SketchId, semantic support, visibility and one embedde
 
 Each Profile stores canonical ProfileId, source SketchId, name, visibility policy and semantic RegionIntent. Automatic/forced Profile presentation is authored policy; evaluated region geometry remains derived.
 
-The Body stores stable BodyId, `next_feature_id` and ordered Features. Current Extrude records preserve FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane extent parameters. B-Rep, provider handles, runtime topology tokens, cached Feature/Datum evaluations, preview geometry and tessellation are not serialized.
+Each authored Axis record stores stable AxisId, name, source SketchId + Line EntityId and authored visibility. It stores no world origin/direction, provider edge or Viewer token. Revolve AxisReference stores either the built-in Origin-axis role or authored AxisId; an already-allocated but currently missing AxisId remains valid repairable authored intent.
 
-Legacy schemas remain readable according to their migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement before dropping redundant placement. Loading schema v9 introduces no synthetic Datum records, preserves existing Document/Body/Sketch identities and starts the DatumId cursor at 1; a later successful Save emits the current v11 schema. Schema v11 extends Sketch support with the `datum_plane` variant without persisting a Datum frame. Malformed support, identity or dependency state fails closed through Part-owned reconstruction.
+The Body stores stable BodyId, `next_feature_id` and ordered Features. Extrude records preserve FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane distance parameters. Revolve records preserve FeatureId, name, suppression, source ProfileId, AxisReference, Add/Cut operation and OneSide/Midplane angle parameters with explicit radians. B-Rep, provider handles, runtime topology tokens, cached Feature/Datum/Axis evaluations, preview geometry and tessellation are not serialized.
+
+Legacy schemas remain readable according to their migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement before dropping redundant placement. Loading schema v9 introduces no synthetic Datum records and preserves existing Document/Body/Sketch identities. Schema v10 introduced durable Datum records; v11 added DatumId Sketch support; v12 introduced the AxisId cursor and authored Axis records without creating synthetic Origin axes; v13 adds Revolve Feature records. A later successful Save emits the current v13 schema. Malformed support, Axis/Revolve identity/reference state or dependency state fails closed through Part-owned reconstruction.
 
 ProjectId, DocumentSession, Undo/Redo, active tools, preview, selection, camera, evaluated solid handles, Datum evaluation frames, provider state and Viewer tokens remain runtime-only.
 
-Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged. PM-03 lifecycle coverage saves through `DocumentSession`, destroys the loaded session/provider state, reopens authored v11 data and rebuilds Datum-backed Sketch/Profile/Extrude semantics with a fresh provider token generation.
+Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged. Current lifecycle coverage saves through `DocumentSession`, destroys the loaded session/provider state, reopens authored v13 data and rebuilds Datum-backed support, Profiles, authored Axes and ordered Extrude/Revolve semantics with a fresh provider/runtime generation.
 
 <!-- section-id: internal.part-documents.discovery -->
 ## Discovery and canonical sessions
@@ -318,9 +322,9 @@ If the active Sketch disappears through Undo/history or the editing context is r
 <!-- section-id: internal.part-documents.accepted-part-feature-boundary -->
 ## As-built Part Feature and Extrude boundary
 
-ADR-0014 and ADR-0015 are now implemented for the PM-01 vertical slice.
+ADR-0014 and ADR-0015 define and are implemented by the current Part Feature/Extrude boundary.
 
-Part v1 currently owns one durable Body with ordered Features. The only production Feature family is Extrude: Add/Cut and OneSide/Midplane. The first successful solid-producing Feature in an Empty Body must be Add; later Features may be Add or Cut. Every successful evaluated stage remains exactly one valid solid.
+Part v1 currently owns one durable Body with ordered Features. Extrude is a production Feature family with Add/Cut and OneSide/Midplane; Revolve is also production and is described in the Axis/Revolve section below. The first successful solid-producing Feature in an Empty Body must be Add; later Features may be Add or Cut. Every successful evaluated stage remains exactly one valid solid.
 
 OneSide distance runs from the Profile support plane and may be Forward or Reverse. Midplane distance is the total symmetric length and does not author Reverse. Semantic cap/side meaning is stage/role/provenance based; provider topology order is not identity.
 
@@ -329,6 +333,27 @@ Already-authored Features retain identity and inputs when Failed, Blocked or Sup
 Extrude Create/Edit uses one runtime draft shared by GUI and Command Line. Valid parameter changes update derived preview; Finish revalidates document revision, draft generation, source Profile and successful evaluation before one authored transaction. Edit preserves FeatureId. Cancel or stale/rejected Finish commits nothing.
 
 The Viewer receives provider-neutral derived committed Body and preview presentation. The current Body scene includes generation-scoped Face/Edge/Vertex presentation records derived from the same current `RuntimeSolid` evaluation generation; direct picking maps transient presentation/runtime tokens immediately back to the Part semantic topology catalog. No Viewer/provider token becomes durable Part identity.
+
+<!-- section-id: internal.part-documents.axis-revolve -->
+## As-built Axis and Revolve boundary
+
+PM-04 implements Part-owned Sketch-Line Axis and the Revolve Feature family without changing Shared-2D ownership. An authored Axis is a Part object whose durable source is `SketchId + Line EntityId`; its evaluated origin/direction is derived from the current source-Sketch world frame and Line endpoint order. Axis source may be Regular or Construction. Visibility is authored independently from the source Sketch and never affects evaluation.
+
+`AxisReference` has exactly two current variants: built-in Origin X/Y/Z or authored AxisId. Built-in axes remain deterministic Origin references with no synthetic AxisId. An authored Axis inherits the Body-stage dependency floor of its source Sketch support. Revolve must be downstream of every stage required by both its Profile and Axis source chains; cycle-causing or forward-stage state is rejected through the existing bounded Part validation rather than a global dependency graph.
+
+Axis Edit may re-source the existing Axis to another admissible Line while preserving AxisId and authored visibility. Missing/invalid source Line leaves the Axis Missing/Unsupported; unavailable source-Sketch support leaves it Blocked. Delete Axis is allowed while referenced: the Axis object disappears, but each Revolve retains its authored AxisId reference and becomes repairably Missing. Undo restores the same AxisId. A later fresh Axis allocation never aliases the deleted identity.
+
+Revolve consumes one Profile and one explicit AxisReference. It supports Add/Cut, OneSide/Midplane and `0 < Angle <= 360 degrees`; OneSide may author Reverse, while Midplane treats Angle as total symmetric sweep and has no Reverse state. No default Axis is inferred. The Axis must be coplanar with the Profile and material must remain on one half-plane; boundary contact/on-axis segments are legal while interior crossing is rejected.
+
+Revolve uses the same single-Body ordered-stage rules as Extrude. First successful solid production must be Add; detached Add, no-effect Add/Cut, remove-all Cut and multi-solid results fail without committing. Edit preserves FeatureId and may change Profile, AxisReference, operation or extent parameters. Suppress/Delete/Undo/Redo use the common Feature lifecycle.
+
+Failure never authorizes stale last-good modeling. Missing Profile, Missing Axis, AxisUnavailable, invalid coplanarity/crossing or upstream support failure keeps authored intent and publishes no current successful Body result for the failing stage. Explicit repair through Profile/source geometry edit, Axis re-source, Undo or Sketch support edit recomputes from current semantics.
+
+Full 360-degree periodic provider seams remain representation artifacts unless separate semantic provenance makes an engineering boundary. Provider seam identity, traversal order, proximity and geometry similarity never become durable Edge identity.
+
+Create/Edit Revolve uses one application-owned runtime draft for GUI, Operations and Command Line. Preview resolves the exact Profile/Axis input and publishes only the exact added/removed material as a transient presentation mesh; the complete candidate Body remains Finish authority. The source Profile and Axis may receive transient visibility/emphasis overrides for spatial clarity, but those overrides never author visibility. Finish revalidates current document/draft/evaluation and commits one transaction; Cancel/stale/invalid input commits nothing.
+
+Schema v13 persists Revolve intent and cold rebuild reconstructs it with fresh provider tokens. Runtime solids, evaluated Axis lines, topology tokens and preview presentation remain disposable.
 
 <!-- section-id: internal.part-documents.accepted-next-topology-boundary -->
 ## As-built semantic topology and face-supported Sketch boundary
@@ -380,11 +405,11 @@ A Datum Plane may host a standard Sketch. The Sketch persists only DatumId suppo
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude Features.
+The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Part-owned Sketch-Line Axes; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude/Revolve Features.
 
-Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane. Feature and Datum Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v11 semantic support, Datum references and the ordered Body without persisted B-Rep, topology catalogs, derived Datum frames or runtime tokens.
+Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane plus Revolve Add/Cut with OneSide/Midplane, explicit Origin/Authored AxisReference and `0 < Angle <= 360 degrees`. Axis and Feature Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, explicit Axis repair, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v13 semantic support, Datum/Axis references and the ordered Body without persisted B-Rep, topology catalogs, derived Datum/Axis frames or runtime tokens.
 
-Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body modeling, Material, Assembly and Drawing.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360-degree) Revolve, multi-body modeling, Material, Assembly and Drawing.
 
 Authored constraints/dimensions/solver, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB convergence and clipboard/cross-Sketch Copy also remain outside the current surface.
 

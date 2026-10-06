@@ -41,15 +41,17 @@ Part001.ss2part
 
 The common manifest contains format/container metadata, Document kind/identity and Part domain schema version. Shared persistence owns package safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part writer is schema **v11**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1, one Body with ordered Features, the DatumId high-water cursor and ordered Offset Datum Plane records.
+The current Part writer is schema **v13**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1, the AxisId high-water cursor with authored Sketch-Line Axis records, one Body with ordered Features, and the DatumId high-water cursor with ordered Offset Datum Plane records.
 
 Each Datum Plane persists stable DatumId, one semantic source, one signed offset in millimetres and authored visibility. Source encoding is provider-neutral: an Origin source stores a built-in XY/XZ/YZ role; a Body source stores explicit `BodyStageRef` plus semantic planar `SurfaceReference`; a Datum source stores only the earlier source DatumId. Derived O/U/V/N frame, runtime provider/topology identity, Viewer token, plane patch and Body-intersection overlay are never authored payload.
 
-Sketches persist stable SketchId, semantic support, visibility, canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Current support may be a built-in Origin plane, a provider-neutral planar Body Surface reference, or a Datum Plane by DatumId. The evaluated world frame is derived and is not persisted. Schema v11 does not write a separate world placement for Datum-backed Sketch support. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
+Sketches persist stable SketchId, semantic support, visibility, canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Current support may be a built-in Origin plane, a provider-neutral planar Body Surface reference, or a Datum Plane by DatumId. The evaluated world frame is derived and is not persisted. Datum-backed Sketch support stores only DatumId, not a world placement. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
 
-The Body persists BodyId, FeatureId cursor and ordered Feature records. The current Extrude Feature record preserves stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane parameters. Evaluated B-Rep, OCCT handles, runtime topology tokens, Datum/Feature evaluation statuses, previews and tessellation are not authored payload.
+Each authored Axis persists stable AxisId, name, source SketchId + Line EntityId and authored visibility. The evaluated infinite world line is derived and not stored. Origin X/Y/Z remain built-in references and are never materialized as synthetic Axis records.
 
-Legacy schemas remain readable according to their existing migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement and removes redundant placement on a later successful Save. Loading schema v9 preserves existing Document/Body/Sketch identity, creates no synthetic Datum records and starts the DatumId cursor at 1. Schema v10 introduced durable Datum records; schema v11 adds DatumId Sketch support. A later successful Save publishes current schema v11. Invalid IDs, malformed references, illegal Datum dependency/cycle state or invalid Sketch support fail closed through Part-domain reconstruction.
+The Body persists BodyId, FeatureId cursor and ordered Feature records. Extrude records preserve stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane distance parameters. Revolve records preserve stable FeatureId, name, suppression, source ProfileId, provider-neutral AxisReference, Add/Cut operation and OneSide/Midplane angle parameters; authored angles are stored explicitly in radians. Evaluated B-Rep, OCCT handles, runtime topology tokens, Axis/Datum/Feature evaluation statuses, previews and tessellation are not authored payload.
+
+Legacy schemas remain readable according to their existing migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement and removes redundant placement on a later successful Save. Loading schema v9 preserves existing Document/Body/Sketch identity and creates no synthetic Datum records. Schema v10 introduced durable Datum records; schema v11 added DatumId Sketch support; schema v12 introduced AxisId high-water plus authored Axis records without creating synthetic Origin axes; schema v13 added Revolve Feature records. A later successful Save publishes current schema v13. Invalid IDs, malformed Axis/Revolve references, illegal dependency/cycle state or invalid Sketch support fail closed through Part-domain reconstruction.
 
 DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera, current Datum frames and all provider/runtime geometry remain non-persistent.
 
@@ -98,13 +100,13 @@ The following are derived/runtime and intentionally disposable:
 - `DocumentRevision`, runtime session/request/draft generations and file checkpoints;
 - evaluated Shared-2D arrangements and Profile regions;
 - Part Feature evaluation snapshots and UpToDate/Failed/Blocked/Suppressed diagnostics;
-- Datum evaluation status, current O/U/V/N frames and transitive Body-stage dependency floors;
+- Datum evaluation status, current O/U/V/N frames, Axis evaluation status/current world lines and transitive Body-stage dependency floors;
 - runtime solid/B-Rep handles, Face/Edge/Vertex tokens, evaluated topology catalogs, canonical carrier frames and provider history;
-- Extrude and Datum Plane preview presentation plus temporary source-Profile reveal;
+- Extrude/Revolve and Datum Plane preview presentation plus temporary source-Profile reveal and transient Revolve source-Axis emphasis;
 - Viewer Datum plane patch/border, owner-bound Body-intersection overlay, presentation objects, tessellation, detection/picking tokens and camera state;
 - active selection, hover, grips, Dynamic Input/Polar/OSNAP tracking state and CAD input buffer.
 
-A clean reopen must recover authored semantic state without any of these objects. PM-03 lifecycle coverage saves through the guarded `DocumentSession` path, destroys the loaded session/provider state, reloads schema-v11 authored data and rebuilds Body-Surface/Datum references, Datum-backed Sketch/Profile support and ordered Add/Cut features with a deliberately different runtime token generation. Runtime token values may change; DatumId, semantic source, signed Offset, visibility, Sketch support and authored IDs must not.
+A clean reopen must recover authored semantic state without any of these objects. Current lifecycle coverage saves through the guarded `DocumentSession` path, destroys the loaded session/provider state, reloads schema-v13 authored data and rebuilds Body-Surface/Datum references, Datum-backed Sketch/Profile support, authored Axes and ordered Extrude/Revolve Add/Cut features with a deliberately different runtime/provider generation. Runtime token values may change; DatumId, AxisId, ProfileId, FeatureId, semantic sources, signed Offset, visibility and Sketch support must not.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity and container safety
@@ -115,7 +117,7 @@ A rename or move inside the Workspace does not change DocumentId. Duplicate nati
 
 Schema-v6 loading rejects malformed/non-canonical identity strings, duplicate EntityIds across primitive kinds, EntityIds outside `next_entity_id`, malformed/unknown entity kind or role, invalid/non-finite geometry and invalid primitive parameters. The same local EntityId in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
 
-Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Earlier schema validation remains intact for backward read compatibility.
+Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Axis loading validates canonical AxisId/high-water, unique IDs, valid source Sketch/Line identity and authored visibility. Schema-v13 Revolve loading validates ProfileId, AxisReference, operation and extent; a missing but previously allocated AxisId may remain repairable authored intent, while never-allocated IDs fail closed. Earlier schema validation remains intact for backward read compatibility.
 
 After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid semantic Sketch support, illegal support/consumer ordering, malformed legacy migration state or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family.
 
@@ -128,7 +130,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 
 Current persistence does not store Undo/Redo history, evaluated B-Rep, Viewer state, runtime topology/provider identity, caches or active edit context.
 
-The native format does not encode Datum-plane support, Projection, generic authored Edge/Vertex feature inputs, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics. Planar Body-Surface Sketch support is encoded semantically in v9; evaluated topology, runtime repair candidates and provider identity remain derived.
+The native format does not encode Datum Axis/Point, Projection, Body-Edge/Curve Axis constructors, generic authored Edge/Vertex feature inputs, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics. Planar Body-Surface Sketch support is encoded semantically in v9, Datum support in v11, authored Sketch-Line Axis in v12 and Revolve in v13; evaluated topology, runtime repair candidates and provider identity remain derived.
 
 Save remains whole-file conditional replacement rather than an in-place feature database or event log.
 

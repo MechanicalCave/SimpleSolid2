@@ -23,18 +23,18 @@ App start
 → Shared 2D Line / Circle / Arc / Rectangle authoring
 → precision input + Polar + Dynamic Input + OSNAP/Tracking/Inference
 → Trim / Extend / Measure
-→ Part-owned live-reference Profiles
-→ one durable Body with ordered Extrude Features
-→ Extrude Add / Cut, OneSide / Midplane
+→ Part-owned live-reference Profiles + Sketch-Line Axes
+→ one durable Body with ordered Extrude / Revolve Features
+→ Extrude Add / Cut + Revolve Add / Cut
 → derived Kernel evaluation + solid presentation
 → Feature edit / Suppress / Delete + Undo / Redo
 → Save / Close / Reopen
 → cold rebuild from authored Part state
 ```
 
-The Part Feature model currently supports one Body and one Feature family: Extrude. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. OneSide supports Forward/Reverse and Midplane uses total-distance symmetric semantics. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
+The Part Feature model currently supports one Body and two solid Feature families: Extrude and Revolve. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. Extrude supports OneSide Forward/Reverse and Midplane distance; Revolve supports explicit Origin/Authored AxisReference, OneSide/Midplane angle, One-Side Reverse and 0 < Angle <= 360 degrees. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
 
-Assembly and Drawing remain unimplemented. Part now provides Offset Datum Planes, Sketch support on Origin planes, planar Body Faces and Datum Planes, direct current Face/Edge/Vertex inspection, View Styles and explicit semantic re-support/repair for Sketch support. It does not yet provide Datum Axis/Point, additional Datum Plane constructors, Projection, Revolve, Fillet/Chamfer, multi-body modeling or general authored topology-reference repair for arbitrary future Feature inputs.
+Assembly and Drawing remain unimplemented. Part now provides Offset Datum Planes, Part-owned Sketch-Line Axes, Sketch support on Origin planes, planar Body Faces and Datum Planes, direct current Face/Edge/Vertex inspection, View Styles, Extrude/Revolve and explicit semantic re-support/repair for Sketch/Axis dependencies. It does not yet provide Datum Axis/Point, additional Datum Plane constructors, Body-Edge/Curve Axis constructors, Projection, Fillet/Chamfer, multi-turn Revolve, multi-body modeling or general authored topology-reference repair for arbitrary future Feature inputs.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
@@ -81,9 +81,9 @@ A copied `.ss2part` file preserves its embedded DocumentId. If more than one fil
 <!-- section-id: internal.overview.runtime-presentation -->
 ## Runtime and persistent presentation state
 
-Camera, projection, pan/orbit/zoom, active selection, Extrude/Datum preview geometry, virtual Datum/Body intersection segments, evaluated B-Rep handles, derived Datum frames and presentation tokens are runtime-only. They do not become authored Part identity.
+Camera, projection, pan/orbit/zoom, active selection, Extrude/Revolve/Datum preview geometry, transient Revolve Axis emphasis, virtual Datum/Body intersection segments, evaluated B-Rep handles, derived Datum/Axis frames and presentation tokens are runtime-only. They do not become authored Part identity.
 
-User-authored visibility of built-in Origin references, individual Datum Planes and Profile visibility policy are persistent presentation semantics changed through semantic commands and covered by Undo/Redo. `Reference Geometry` group Show/Hide bulk-updates child Datum visibility and owns no second persisted group flag. Profile policy is `automatic`, `force_shown` or `force_hidden`; automatic presentation reacts to active Feature consumption without changing evaluation.
+User-authored visibility of built-in Origin references, authored Sketch-Line Axes, individual Datum Planes and Profile visibility policy are persistent presentation semantics changed through semantic commands and covered by Undo/Redo. `Reference Geometry` group Show/Hide bulk-updates child Datum visibility and owns no second persisted group flag. Profile policy is `automatic`, `force_shown` or `force_hidden`; automatic presentation reacts to active Feature consumption without changing evaluation.
 
 Feature Suppress is not visibility. Suppress is authored modeling state that preserves FeatureId and parameters while removing the Feature contribution from evaluation.
 
