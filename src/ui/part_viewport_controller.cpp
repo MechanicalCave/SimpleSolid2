@@ -3171,6 +3171,12 @@ PartViewportController::buildReferenceScene() {
     axis_bindings_.clear();
 
     viewer::ReferenceScene scene;
+    const auto fail =
+        [this]() -> std::optional<viewer::ReferenceScene> {
+            datum_bindings_.clear();
+            axis_bindings_.clear();
+            return std::nullopt;
+        };
     if (session_ == nullptr) return scene;
 
     if (const auto* hosted = activeSketch()) {
@@ -3228,7 +3234,7 @@ PartViewportController::buildReferenceScene() {
             datum_evaluation_cache_->source_revision !=
                 session_->document().revision()) {
             axis_bindings_.clear();
-            return std::nullopt;
+            return fail();
         }
 
         for (const auto& axis : axes) {
@@ -3259,7 +3265,7 @@ PartViewportController::buildReferenceScene() {
                          axis.id)
                      .second) {
                 axis_bindings_.clear();
-                return std::nullopt;
+                return fail();
             }
 
             viewer::ReferencePresentation
@@ -3278,7 +3284,7 @@ PartViewportController::buildReferenceScene() {
             reference.visible = true;
             if (!reference.valid()) {
                 axis_bindings_.clear();
-                return std::nullopt;
+                return fail();
             }
             scene.references.push_back(
                 std::move(reference));
@@ -3294,7 +3300,7 @@ PartViewportController::buildReferenceScene() {
                 session_->document().revision() ||
             datum_evaluation_cache_->planes.size() !=
                 datums.size()) {
-            return std::nullopt;
+            return fail();
         }
 
         for (const auto& datum : datums) {
@@ -3303,7 +3309,7 @@ PartViewportController::buildReferenceScene() {
                     datum.id);
             if (evaluation == nullptr) {
                 datum_bindings_.clear();
-                return std::nullopt;
+                return fail();
             }
 
             if (!datum.visible ||
@@ -3323,7 +3329,7 @@ PartViewportController::buildReferenceScene() {
                          datum.id)
                      .second) {
                 datum_bindings_.clear();
-                return std::nullopt;
+                return fail();
             }
 
             const auto& frame =
@@ -3344,7 +3350,7 @@ PartViewportController::buildReferenceScene() {
             reference.visible = true;
             if (!reference.valid()) {
                 datum_bindings_.clear();
-                return std::nullopt;
+                return fail();
             }
             scene.references.push_back(
                 std::move(reference));
@@ -3392,7 +3398,7 @@ PartViewportController::buildReferenceScene() {
                     frame);
         }
         if (!preview.valid()) {
-            return std::nullopt;
+            return fail();
         }
         scene.preview =
             std::move(preview);
@@ -3401,7 +3407,7 @@ PartViewportController::buildReferenceScene() {
     if (!scene.valid()) {
         datum_bindings_.clear();
         axis_bindings_.clear();
-        return std::nullopt;
+        return fail();
     }
     return scene;
 }
