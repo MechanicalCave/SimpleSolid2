@@ -8653,13 +8653,19 @@ void CadWorkbench::refreshActiveContext() {
     viewport_controller_->setDocumentSession(document_session);
     refreshPartFeatureEvaluationSnapshot();
     reconcileSketchRuntimeContext();
+    if (axis_draft_) {
+        refreshAxisEvaluation();
+    }
     if (datum_plane_draft_) {
         refreshDatumPlaneEvaluation();
     }
     if (extrude_draft_) {
         refreshExtrudePreview();
     }
-    if (selected_datum_id_) {
+    if (selected_axis_id_) {
+        refreshAxisProperties(
+            *selected_axis_id_);
+    } else if (selected_datum_id_) {
         refreshDatumProperties(
             *selected_datum_id_);
     } else if (selected_feature_id_) {
@@ -8674,6 +8680,7 @@ void CadWorkbench::refreshActiveContext() {
 }
 
 void CadWorkbench::clearActiveContext() {
+    clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
@@ -8689,6 +8696,7 @@ void CadWorkbench::clearActiveContext() {
     length_unit_combo_->setEnabled(false);
     syncing_precision_ui_ = false;
     selected_profile_id_.reset();
+    selected_axis_id_.reset();
     selected_datum_id_.reset();
     selected_feature_id_.reset();
     selected_body_id_.reset();
@@ -8697,6 +8705,17 @@ void CadWorkbench::clearActiveContext() {
     feature_evaluation_statuses_.clear();
     axis_evaluation_statuses_.clear();
     datum_evaluation_statuses_.clear();
+    axis_name_->clear();
+    axis_identity_->clear();
+    axis_source_sketch_->clear();
+    axis_source_line_->clear();
+    axis_visibility_->clear();
+    axis_status_->clear();
+    axis_diagnostic_->clear();
+    axis_origin_->clear();
+    axis_direction_->clear();
+    axis_edit_button_->setEnabled(false);
+    axis_delete_button_->setEnabled(false);
     datum_name_->clear();
     datum_identity_->clear();
     datum_constructor_->setText(
@@ -9017,6 +9036,7 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
     }
 
     feature_evaluation_statuses_.clear();
+    axis_evaluation_statuses_.clear();
     datum_evaluation_statuses_.clear();
     auto body_status =
         document_session_->document()
