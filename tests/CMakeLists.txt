@@ -957,6 +957,29 @@ set_tests_properties(pm04e1.revolve_persistence PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-persistence"
 )
 
+add_executable(pm04e2_revolve_lifecycle_cold_rebuild_test
+    pm04e2_revolve_lifecycle_cold_rebuild_test.cpp
+)
+
+target_link_libraries(pm04e2_revolve_lifecycle_cold_rebuild_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_part
+        simplesolid2_kernel
+        simplesolid2_persistence
+)
+
+target_compile_features(pm04e2_revolve_lifecycle_cold_rebuild_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm04e2.revolve_lifecycle_cold_rebuild
+    COMMAND pm04e2_revolve_lifecycle_cold_rebuild_test
+)
+
+set_tests_properties(pm04e2.revolve_lifecycle_cold_rebuild PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-kernel;subsystem-persistence"
+)
+
 add_executable(pm04b2_axis_tree_viewer_test
     pm04b2_axis_tree_viewer_test.cpp
 )
