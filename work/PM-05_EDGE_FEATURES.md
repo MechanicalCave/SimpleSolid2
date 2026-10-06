@@ -1,14 +1,14 @@
 # PM-05 — Edge Features: Fillet / Chamfer
 
-**Status:** PROPOSED — OWNER REVIEW; NOT ACTIVE  
-**Decision class:** D2 production Work Contract candidate  
+**Status:** ACTIVE — OWNER ACCEPTED 2026-10-06  
+**Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.26 — PM-05  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.27 — PM-05  
 **Architecture authority:** ADR-0014, ADR-0016, ADR-0017  
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
-**Owner direction accepted:** 2026-10-06 — multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** NOT AUTHORIZED until this exact Work Contract is explicitly Owner-accepted and activated
+**Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
+**Production mutation:** PM-05A evidence/instrumentation only; PM-05B+ durable production mutation remains BLOCKED until explicit Owner acceptance of the PM-05A conclusions
 
 ## 1. Goal
 
@@ -722,18 +722,25 @@ Generated Product Browser: required.
 
 PM-05 changes persistent Feature kinds, strict Edge reference meaning, kernel operations, toolbar organization, multi-selection interaction, lifecycle and schema version. Documentation must be current before PM-05F can close.
 
-## 30. Activation rule
+## 30. Activation state
 
-This file is a Work Contract **candidate only**.
+This exact Work Contract was explicitly Owner-accepted on 2026-10-06.
 
-Creating or merging this candidate does not authorize production mutation.
+PM-05 is ACTIVE only at **PM-05A — Edge-feature topology/provider evidence**.
 
-Activation requires explicit Owner acceptance of this exact contract. After acceptance, governance must:
+Authorized now:
 
-1. mark this contract ACTIVE — OWNER ACCEPTED;
-2. update `work/ACTIVE.yaml` to active PM-05;
-3. synchronize `work/PART_MODELING_V1_ROADMAP.md` version/status;
-4. pass the required work-only governance gate;
-5. only then begin PM-05A evidence implementation.
+- bounded provider/evaluation evidence;
+- test-only or evidence-only adapter instrumentation needed to observe Fillet/Chamfer provider history/topology;
+- semantic experiments that do not persist a production Fillet/Chamfer Feature and do not expose a production Fillet/Chamfer GUI command.
 
-PM-05B and later production mutation remain separately blocked by the PM-05A hard Owner checkpoint in §15.
+Still blocked:
+
+- durable `MaterialEdgeReference` schema/API;
+- schema v14 persistence;
+- `FilletFeature` / `ChamferFeature` in production `PartFeatureDefinition`;
+- production kernel/evaluation mutation path;
+- production toolbar buttons / Operations / Command Line;
+- PM-05B through PM-05F.
+
+PM-05A must produce the conclusions required by §15 and return for explicit Owner acceptance. Only that second Owner decision may authorize PM-05B+ production mutation.
