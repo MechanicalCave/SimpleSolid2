@@ -1210,57 +1210,120 @@ std::string serializeAuthored(
             continue;
         }
 
-        const auto* revolve =
-            std::get_if<RevolveFeature>(
-                &feature.definition);
-        if (revolve == nullptr) {
-            return {};
-        }
-        auto axis =
-            axisReferenceJson(
-                revolve->axis);
-        if (axis.empty()) {
-            return {};
-        }
-
-        nlohmann::json extent;
-        if (const auto* one_sided =
-                std::get_if<OneSidedRevolveExtent>(
-                    &revolve->extent)) {
-            extent = {
-                {"mode", "one_side"},
-                {"angle_rad",
-                 one_sided->angle.radians},
-                {"reverse",
-                 one_sided->reversed},
-            };
-        } else {
-            const auto* midplane =
-                std::get_if<MidplaneRevolveExtent>(
-                    &revolve->extent);
-            if (midplane == nullptr) {
+        if (const auto* revolve =
+                std::get_if<RevolveFeature>(
+                    &feature.definition)) {
+            auto axis =
+                axisReferenceJson(
+                    revolve->axis);
+            if (axis.empty()) {
                 return {};
             }
-            extent = {
-                {"mode", "midplane"},
-                {"angle_rad",
-                 midplane->total_angle.radians},
-            };
+
+            nlohmann::json extent;
+            if (const auto* one_sided =
+                    std::get_if<OneSidedRevolveExtent>(
+                        &revolve->extent)) {
+                extent = {
+                    {"mode", "one_side"},
+                    {"angle_rad",
+                     one_sided->angle.radians},
+                    {"reverse",
+                     one_sided->reversed},
+                };
+            } else {
+                const auto* midplane =
+                    std::get_if<MidplaneRevolveExtent>(
+                        &revolve->extent);
+                if (midplane == nullptr) {
+                    return {};
+                }
+                extent = {
+                    {"mode", "midplane"},
+                    {"angle_rad",
+                     midplane->total_angle.radians},
+                };
+            }
+
+            features.push_back(
+                {
+                    {"id", feature.id.serialized()},
+                    {"kind", "revolve"},
+                    {"name", feature.name},
+                    {"suppressed", feature.suppressed},
+                    {"profile_id",
+                     revolve->profile_id.serialized()},
+                    {"axis", std::move(axis)},
+                    {"operation",
+                     revolveOperationName(
+                         revolve->operation)},
+                    {"extent", std::move(extent)},
+                });
+            continue;
         }
 
+        const auto serialize_edges =
+            [](const std::vector<
+                   MaterialEdgeReference>& authored)
+                -> nlohmann::json {
+                nlohmann::json edges =
+                    nlohmann::json::array();
+                for (const auto& edge : authored) {
+                    auto item =
+                        materialEdgeReferenceJson(
+                            edge);
+                    if (item.empty()) {
+                        return {};
+                    }
+                    edges.push_back(
+                        std::move(item));
+                }
+                return edges;
+            };
+
+        if (const auto* fillet =
+                std::get_if<FilletFeature>(
+                    &feature.definition)) {
+            auto edges =
+                serialize_edges(
+                    fillet->edges);
+            if (edges.empty()) {
+                return {};
+            }
+            features.push_back(
+                {
+                    {"id", feature.id.serialized()},
+                    {"kind", "fillet"},
+                    {"name", feature.name},
+                    {"suppressed", feature.suppressed},
+                    {"edges", std::move(edges)},
+                    {"radius_mm",
+                     fillet->radius.millimetres},
+                });
+            continue;
+        }
+
+        const auto* chamfer =
+            std::get_if<ChamferFeature>(
+                &feature.definition);
+        if (chamfer == nullptr) {
+            return {};
+        }
+        auto edges =
+            serialize_edges(
+                chamfer->edges);
+        if (edges.empty()) {
+            return {};
+        }
         features.push_back(
             {
                 {"id", feature.id.serialized()},
-                {"kind", "revolve"},
+                {"kind", "chamfer"},
                 {"name", feature.name},
                 {"suppressed", feature.suppressed},
-                {"profile_id",
-                 revolve->profile_id.serialized()},
-                {"axis", std::move(axis)},
-                {"operation",
-                 revolveOperationName(
-                     revolve->operation)},
-                {"extent", std::move(extent)},
+                {"edges", std::move(edges)},
+                {"distance_mm",
+                 chamfer->distance.millimetres},
             });
     }
 
