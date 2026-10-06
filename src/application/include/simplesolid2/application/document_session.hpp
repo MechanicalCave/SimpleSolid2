@@ -1,5 +1,6 @@
 #pragma once
 
+#include <simplesolid2/application/axis_draft.hpp>
 #include <simplesolid2/application/datum_plane_draft.hpp>
 #include <simplesolid2/application/extrude_draft.hpp>
 #include <simplesolid2/core/units.hpp>
@@ -186,6 +187,30 @@ struct SetProfilePropertiesCommand final {
 
 struct DeleteProfileCommand final {
     part::ProfileId profile_id;
+    core::DocumentRevision expected_revision;
+};
+
+struct CreateAxisCommand final {
+    part::SketchLineAxisSource source;
+    core::DocumentRevision expected_revision;
+    std::string name;
+    bool visible{true};
+};
+
+struct EditAxisCommand final {
+    part::AxisId axis_id;
+    part::SketchLineAxisSource source;
+    core::DocumentRevision expected_revision;
+};
+
+struct SetAxisVisibilityCommand final {
+    std::vector<part::AxisId> targets;
+    core::DocumentRevision expected_revision;
+    bool visible{true};
+};
+
+struct DeleteAxisCommand final {
+    part::AxisId axis_id;
     core::DocumentRevision expected_revision;
 };
 
@@ -385,6 +410,19 @@ struct CreateProfileResult final {
     }
 };
 
+struct CreateAxisResult final {
+    bool changed{false};
+    std::optional<part::AxisId> axis_id;
+    std::optional<part::AxisEvaluationDiagnostic>
+        evaluation_diagnostic;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code ==
+               DocumentSessionErrorCode::none;
+    }
+};
+
 struct CreateDatumPlaneResult final {
     bool changed{false};
     std::optional<part::DatumId> datum_id;
@@ -498,6 +536,22 @@ public:
         const SetProfilePropertiesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const DeleteProfileCommand& command);
+    [[nodiscard]] AxisDraftEvaluationResult
+    evaluateAxisDraft(
+        const AxisDraft& draft,
+        kernel::ISolidModelingKernel& modeling_kernel) const;
+
+    [[nodiscard]] CreateAxisResult execute(
+        const CreateAxisCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditAxisCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const SetAxisVisibilityCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const DeleteAxisCommand& command);
+
     [[nodiscard]] ExtrudeDraftEvaluationResult
     evaluateExtrudeDraft(
         const ExtrudeDraft& draft,
@@ -589,6 +643,8 @@ private:
         const part::PartAuthoredState& state);
     void applySketchEntityIdCursors(
         part::PartAuthoredState& state) const;
+    void applyAxisIdCursor(
+        part::PartAuthoredState& state) const noexcept;
     void applyDatumIdCursor(
         part::PartAuthoredState& state) const noexcept;
     void applyProfileIdCursor(
@@ -605,6 +661,7 @@ private:
     std::vector<HistoryEntry> history_;
     std::size_t cursor_{0};
     SketchEntityIdCursorMap sketch_entity_id_cursors_;
+    part::AxisIdCursor axis_id_cursor_;
     part::DatumIdCursor datum_id_cursor_;
     part::ProfileIdCursor profile_id_cursor_;
     part::BodyIdCursor body_id_cursor_;
