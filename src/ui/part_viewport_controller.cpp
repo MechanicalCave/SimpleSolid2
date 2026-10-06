@@ -3212,6 +3212,105 @@ PartViewportController::buildReferenceScene() {
                     .builtinReferenceVisible(role)));
     }
 
+    const auto& axes =
+        session_->document().axes();
+    std::optional<part::PartEvaluation>
+        axis_part_evaluation;
+    for (const auto& axis : axes) {
+        if (!axis.visible) {
+            continue;
+        }
+
+        const auto* source =
+            session_->document().findSketch(
+                axis.source.sketch_id);
+        const part::PartEvaluation*
+            part_evaluation = nullptr;
+        const part::DatumEvaluation*
+            datum_evaluation = nullptr;
+
+        if (source != nullptr &&
+            part::bodyPlanarSurfaceReference(
+                source->support) != nullptr) {
+            if (solid_modeling_kernel_ == nullptr) {
+                continue;
+            }
+            if (!axis_part_evaluation) {
+                axis_part_evaluation =
+                    part::evaluatePart(
+                        session_->document(),
+                        *solid_modeling_kernel_);
+            }
+            part_evaluation =
+                &*axis_part_evaluation;
+        } else if (
+            source != nullptr &&
+            part::datumPlaneIdForSketchSupport(
+                source->support)) {
+            if (!datum_evaluation_cache_ ||
+                datum_evaluation_cache_
+                        ->source_revision !=
+                    session_->document()
+                        .revision()) {
+                continue;
+            }
+            datum_evaluation =
+                &*datum_evaluation_cache_;
+        }
+
+        const part::AxisReference reference{
+            part::AuthoredAxisReference{
+                axis.id}};
+        const auto evaluated =
+            part::resolveAxisReference(
+                session_->document(),
+                reference,
+                part_evaluation,
+                datum_evaluation);
+        if (evaluated.status !=
+                part::AxisEvaluationStatus::
+                    resolved ||
+            !evaluated.line ||
+            !evaluated.line->valid()) {
+            continue;
+        }
+
+        const auto token =
+            allocatePresentationToken();
+        if (!token ||
+            !axis_bindings_
+                 .emplace(
+                     token->value,
+                     axis.id)
+                 .second) {
+            datum_bindings_.clear();
+            axis_bindings_.clear();
+            return std::nullopt;
+        }
+
+        viewer::ReferencePresentation
+            presentation;
+        presentation.token = *token;
+        presentation.kind =
+            viewer::ReferencePresentationKind::
+                axis;
+        presentation.origin =
+            viewerPoint(
+                evaluated.line->origin);
+        presentation.u_axis =
+            viewerVector(
+                evaluated.line->direction);
+        presentation.extent = axisExtent;
+        presentation.visible = true;
+        if (!presentation.valid()) {
+            datum_bindings_.clear();
+            axis_bindings_.clear();
+            return std::nullopt;
+        }
+        scene.references.push_back(
+            std::move(presentation));
+    }
+
     const auto& datums =
         session_->document().datumPlanes();
 
