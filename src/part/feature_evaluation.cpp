@@ -1,5 +1,6 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
 
+#include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
 
 #include <simplesolid2/part/feature.hpp>
@@ -9,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <numbers>
+#include <type_traits>
 #include <utility>
 
 namespace simplesolid2::part {
@@ -56,6 +59,14 @@ diagnosticForKernel(
 kernelOperation(
     ExtrudeOperation operation) noexcept {
     return operation == ExtrudeOperation::cut
+        ? kernel::SolidBooleanOperation::cut
+        : kernel::SolidBooleanOperation::add;
+}
+
+[[nodiscard]] kernel::SolidBooleanOperation
+kernelOperation(
+    RevolveOperation operation) noexcept {
+    return operation == RevolveOperation::cut
         ? kernel::SolidBooleanOperation::cut
         : kernel::SolidBooleanOperation::add;
 }
@@ -156,6 +167,429 @@ makeKernelExtrudeInputFromProfile(
               kernel::LinearExtrudeInput>{
               std::move(result)}
         : std::nullopt;
+}
+
+[[nodiscard]] kernel::Point3
+cross3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.y * second.z -
+            first.z * second.y,
+        first.z * second.x -
+            first.x * second.z,
+        first.x * second.y -
+            first.y * second.x};
+}
+
+[[nodiscard]] double
+dot3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return first.x * second.x +
+           first.y * second.y +
+           first.z * second.z;
+}
+
+[[nodiscard]] kernel::Point3
+subtract3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.x - second.x,
+        first.y - second.y,
+        first.z - second.z};
+}
+
+[[nodiscard]] double
+signedHalfPlaneValue(
+    double a,
+    double b,
+    double c,
+    const kernel::Point2& point) noexcept {
+    return a * point.u +
+           b * point.v +
+           c;
+}
+
+[[nodiscard]] kernel::Point2
+linePoint(
+    const kernel::Line2& line,
+    double parameter) noexcept {
+    return {
+        line.start.u +
+            (line.end.u - line.start.u) *
+                parameter,
+        line.start.v +
+            (line.end.v - line.start.v) *
+                parameter};
+}
+
+[[nodiscard]] double
+positiveAngleDelta(
+    double value) noexcept {
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    auto result =
+        std::fmod(value, full_turn);
+    if (result < 0.0) {
+        result += full_turn;
+    }
+    return result;
+}
+
+[[nodiscard]] bool
+angleOnSweep(
+    double start,
+    double delta,
+    double candidate) noexcept {
+    if (delta > 0.0) {
+        return positiveAngleDelta(
+                   candidate - start) <=
+               delta;
+    }
+    return positiveAngleDelta(
+               start - candidate) <=
+           -delta;
+}
+
+void includeCircularExtrema(
+    double center_u,
+    double center_v,
+    double radius,
+    double start,
+    double delta,
+    bool whole,
+    double a,
+    double b,
+    double c,
+    double& minimum,
+    double& maximum) noexcept {
+    const auto value =
+        [=](double angle) noexcept {
+            return a *
+                       (center_u +
+                        radius *
+                            std::cos(angle)) +
+                   b *
+                       (center_v +
+                        radius *
+                            std::sin(angle)) +
+                   c;
+        };
+
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    const double amplitude =
+        radius *
+        std::sqrt(a * a + b * b);
+    const double center =
+        a * center_u +
+        b * center_v +
+        c;
+
+    if (whole ||
+        std::abs(delta) == full_turn) {
+        minimum =
+            std::min(
+                minimum,
+                center - amplitude);
+        maximum =
+            std::max(
+                maximum,
+                center + amplitude);
+        return;
+    }
+
+    const double end =
+        start + delta;
+    minimum =
+        std::min(
+            minimum,
+            std::min(
+                value(start),
+                value(end)));
+    maximum =
+        std::max(
+            maximum,
+            std::max(
+                value(start),
+                value(end)));
+
+    const double maximum_angle =
+        std::atan2(b, a);
+    const double minimum_angle =
+        maximum_angle +
+        std::numbers::pi_v<double>;
+    for (const double candidate :
+         {maximum_angle, minimum_angle}) {
+        if (!angleOnSweep(
+                start,
+                delta,
+                candidate)) {
+            continue;
+        }
+        const double evaluated =
+            value(candidate);
+        minimum =
+            std::min(
+                minimum,
+                evaluated);
+        maximum =
+            std::max(
+                maximum,
+                evaluated);
+    }
+}
+
+[[nodiscard]] bool
+profileCrossesAxis(
+    const kernel::PlanarProfileInput& profile,
+    const ResolvedAxisLine& axis,
+    bool& coplanar) noexcept {
+    const auto plane_normal =
+        cross3(
+            profile.frame.u_axis,
+            profile.frame.v_axis);
+    const auto origin_delta =
+        subtract3(
+            axis.origin,
+            profile.frame.origin);
+    coplanar =
+        dot3(
+            plane_normal,
+            origin_delta) == 0.0 &&
+        dot3(
+            plane_normal,
+            axis.direction) == 0.0;
+    if (!coplanar) {
+        return false;
+    }
+
+    // The signed half-plane functional is evaluated directly on Profile-local
+    // U/V geometry but derived from the current world Axis and support frame.
+    // No tolerance/proximity policy or geometry search is introduced.
+    const auto axis_cross_u =
+        cross3(
+            axis.direction,
+            profile.frame.u_axis);
+    const auto axis_cross_v =
+        cross3(
+            axis.direction,
+            profile.frame.v_axis);
+    const auto axis_cross_origin =
+        cross3(
+            axis.direction,
+            subtract3(
+                profile.frame.origin,
+                axis.origin));
+    const double a =
+        dot3(
+            axis_cross_u,
+            plane_normal);
+    const double b =
+        dot3(
+            axis_cross_v,
+            plane_normal);
+    const double c =
+        dot3(
+            axis_cross_origin,
+            plane_normal);
+
+    double minimum =
+        std::numeric_limits<double>::infinity();
+    double maximum =
+        -std::numeric_limits<double>::infinity();
+
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+
+    for (const auto& use :
+         profile.outer.boundary) {
+        std::visit(
+            [&](const auto& curve) {
+                using T =
+                    std::decay_t<decltype(curve)>;
+                if constexpr (
+                    std::is_same_v<
+                        T,
+                        kernel::Line2>) {
+                    const auto first =
+                        linePoint(
+                            curve,
+                            use.start_parameter);
+                    const auto second =
+                        linePoint(
+                            curve,
+                            use.end_parameter);
+                    const double first_value =
+                        signedHalfPlaneValue(
+                            a, b, c, first);
+                    const double second_value =
+                        signedHalfPlaneValue(
+                            a, b, c, second);
+                    minimum =
+                        std::min(
+                            minimum,
+                            std::min(
+                                first_value,
+                                second_value));
+                    maximum =
+                        std::max(
+                            maximum,
+                            std::max(
+                                first_value,
+                                second_value));
+                } else if constexpr (
+                    std::is_same_v<
+                        T,
+                        kernel::Circle2>) {
+                    double start =
+                        full_turn *
+                        use.start_parameter;
+                    double delta{};
+                    if (use.whole_closed_curve) {
+                        delta =
+                            use.follows_source_direction
+                                ? full_turn
+                                : -full_turn;
+                    } else {
+                        const double from =
+                            use.follows_source_direction
+                                ? use.start_parameter
+                                : use.end_parameter;
+                        const double to =
+                            use.follows_source_direction
+                                ? use.end_parameter
+                                : use.start_parameter;
+                        start =
+                            full_turn * from;
+                        delta =
+                            use.crosses_closed_seam
+                                ? (1.0 - from) + to
+                                : to - from;
+                        delta *= full_turn;
+                        if (!use.follows_source_direction) {
+                            delta = -delta;
+                        }
+                    }
+                    includeCircularExtrema(
+                        curve.center.u,
+                        curve.center.v,
+                        curve.radius,
+                        start,
+                        delta,
+                        use.whole_closed_curve,
+                        a,
+                        b,
+                        c,
+                        minimum,
+                        maximum);
+                } else {
+                    const double start =
+                        curve.start_angle +
+                        curve.sweep_angle *
+                            use.start_parameter;
+                    const double delta =
+                        curve.sweep_angle *
+                        (use.end_parameter -
+                         use.start_parameter);
+                    includeCircularExtrema(
+                        curve.center.u,
+                        curve.center.v,
+                        curve.radius,
+                        start,
+                        delta,
+                        false,
+                        a,
+                        b,
+                        c,
+                        minimum,
+                        maximum);
+                }
+            },
+            use.curve);
+    }
+
+    return minimum < 0.0 &&
+           maximum > 0.0;
+}
+
+[[nodiscard]] const BodyStageTopologyCatalog*
+profileSupportTopology(
+    const PartDocument& document,
+    ProfileId profile_id,
+    const PartEvaluation* prefix_evaluation) noexcept {
+    const auto* profile =
+        document.findProfile(profile_id);
+    if (profile == nullptr) {
+        return nullptr;
+    }
+    const auto* sketch =
+        document.findSketch(
+            profile->source_sketch_id);
+    if (sketch == nullptr) {
+        return nullptr;
+    }
+    const auto* surface =
+        bodyPlanarSurfaceReference(
+            sketch->support);
+    if (surface == nullptr) {
+        return nullptr;
+    }
+    if (prefix_evaluation == nullptr ||
+        prefix_evaluation->source_revision !=
+            document.revision() ||
+        surface->stage.kind !=
+            BodyStageKind::after_feature ||
+        !surface->stage.feature_id) {
+        return nullptr;
+    }
+    const auto* feature =
+        prefix_evaluation->findFeature(
+            *surface->stage.feature_id);
+    return feature != nullptr &&
+                   feature->result_topology &&
+                   feature->result_topology->complete() &&
+                   feature->result_topology->stage ==
+                       surface->stage
+        ? &*feature->result_topology
+        : nullptr;
+}
+
+[[nodiscard]] kernel::AngularRevolveInput
+makeKernelRevolveInputFromResolved(
+    kernel::PlanarProfileInput profile,
+    const ResolvedAxisLine& axis,
+    const RevolveFeature& feature) {
+    kernel::AngularRevolveInput result;
+    result.profile = std::move(profile);
+    result.axis = {
+        axis.origin,
+        axis.direction};
+    result.operation =
+        kernelOperation(feature.operation);
+
+    if (const auto* one_sided =
+            std::get_if<
+                OneSidedRevolveExtent>(
+                &feature.extent)) {
+        result.start_angle_radians = 0.0;
+        result.end_angle_radians =
+            one_sided->reversed
+                ? -one_sided->angle.radians
+                : one_sided->angle.radians;
+        return result;
+    }
+
+    const auto& midplane =
+        std::get<MidplaneRevolveExtent>(
+            feature.extent);
+    const double half =
+        midplane.total_angle.radians * 0.5;
+    result.start_angle_radians = -half;
+    result.end_angle_radians = half;
+    return result;
 }
 
 } // namespace
