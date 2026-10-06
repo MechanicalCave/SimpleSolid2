@@ -138,6 +138,7 @@ add_library(simplesolid2_application STATIC
     application/axis_draft.cpp
     application/datum_plane_draft.cpp
     application/extrude_draft.cpp
+    application/revolve_draft.cpp
     application/precision_input.cpp
     application/cad_input_semantics.cpp
     application/document_session.cpp
