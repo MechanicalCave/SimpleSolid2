@@ -509,6 +509,14 @@ public:
         const LinearExtrudeInput& input,
         RuntimeSolidHandle upstream = {}) noexcept;
 
+    // Presentation-only exact operation delta for Revolve. Same semantics as
+    // Extrude preview: Add => tool - upstream Body, Cut => tool ∩ upstream
+    // Body. Never returns the raw tool as a substitute for an exact delta.
+    [[nodiscard]] virtual SolidPresentationResult
+    revolvePreviewMesh(
+        const AngularRevolveInput& input,
+        RuntimeSolidHandle upstream = {}) noexcept;
+
     // Display-only tessellation. This must never influence authored CAD
     // state, modeling semantics or reference resolution.
     [[nodiscard]] virtual SolidPresentationResult
