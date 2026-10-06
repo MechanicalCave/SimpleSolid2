@@ -322,9 +322,9 @@ If the active Sketch disappears through Undo/history or the editing context is r
 <!-- section-id: internal.part-documents.accepted-part-feature-boundary -->
 ## As-built Part Feature and Extrude boundary
 
-ADR-0014 and ADR-0015 are now implemented for the PM-01 vertical slice.
+ADR-0014 and ADR-0015 define and are implemented by the current Part Feature/Extrude boundary.
 
-Part v1 currently owns one durable Body with ordered Features. The only production Feature family is Extrude: Add/Cut and OneSide/Midplane. The first successful solid-producing Feature in an Empty Body must be Add; later Features may be Add or Cut. Every successful evaluated stage remains exactly one valid solid.
+Part v1 currently owns one durable Body with ordered Features. Extrude is a production Feature family with Add/Cut and OneSide/Midplane; Revolve is also production and is described in the Axis/Revolve section below. The first successful solid-producing Feature in an Empty Body must be Add; later Features may be Add or Cut. Every successful evaluated stage remains exactly one valid solid.
 
 OneSide distance runs from the Profile support plane and may be Forward or Reverse. Midplane distance is the total symmetric length and does not author Reverse. Semantic cap/side meaning is stage/role/provenance based; provider topology order is not identity.
 
