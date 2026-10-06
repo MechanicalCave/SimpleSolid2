@@ -752,7 +752,7 @@ Close:
 - final exact-head automated gate;
 - Owner Windows workflow.
 
-## 13. Documentation impact
+## Documentation Impact
 
 Internal docs: required  
 User/Product docs: required
