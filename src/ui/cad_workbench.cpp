@@ -8695,6 +8695,7 @@ void CadWorkbench::clearActiveContext() {
     part_evaluation_revision_.reset();
     body_evaluation_status_.reset();
     feature_evaluation_statuses_.clear();
+    axis_evaluation_statuses_.clear();
     datum_evaluation_statuses_.clear();
     datum_name_->clear();
     datum_identity_->clear();
@@ -9010,6 +9011,7 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
         part_evaluation_revision_.reset();
         body_evaluation_status_.reset();
         feature_evaluation_statuses_.clear();
+        axis_evaluation_statuses_.clear();
         datum_evaluation_statuses_.clear();
         return;
     }
@@ -9061,6 +9063,30 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                         datum.status,
                         datum.diagnostic});
             }
+        }
+
+        axis_evaluation_statuses_.reserve(
+            document_session_->document()
+                .axes()
+                .size());
+        for (const auto& axis :
+             document_session_->document()
+                 .axes()) {
+            const part::AxisReference reference{
+                part::AuthoredAxisReference{
+                    axis.id}};
+            const auto axis_evaluation =
+                part::resolveAxisReference(
+                    document_session_->document(),
+                    reference,
+                    &evaluation,
+                    &datums);
+            axis_evaluation_statuses_.push_back(
+                AxisEvaluationUiState{
+                    axis.id,
+                    axis_evaluation.status,
+                    axis_evaluation.diagnostic,
+                    axis_evaluation.line});
         }
     } else {
         feature_evaluation_statuses_.reserve(
@@ -9114,10 +9140,24 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                 datum.diagnostic});
     }
 
+    std::vector<AxisTreeEvaluationEntry>
+        axis_entries;
+    axis_entries.reserve(
+        axis_evaluation_statuses_.size());
+    for (const auto& axis :
+         axis_evaluation_statuses_) {
+        axis_entries.push_back(
+            AxisTreeEvaluationEntry{
+                axis.axis_id,
+                axis.status,
+                axis.diagnostic});
+    }
+
     tree_controller_->setEvaluationSnapshot(
         body_status,
         std::move(entries),
-        std::move(datum_entries));
+        std::move(datum_entries),
+        std::move(axis_entries));
 }
 
 void CadWorkbench::refreshDatumProperties(
