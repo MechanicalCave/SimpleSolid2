@@ -4798,6 +4798,9 @@ void PartViewportController::applySelectionToSurfaces() {
         tree_->setDatumSelection(
             {},
             std::nullopt);
+        tree_->setAxisSelection(
+            {},
+            std::nullopt);
         if (viewport_ != nullptr) {
             static_cast<void>(
                 viewport_->setPresentationSelection(
@@ -4816,6 +4819,9 @@ void PartViewportController::applySelectionToSurfaces() {
     tree_->setDatumSelection(
         selection.datums,
         selection.primary_datum);
+    tree_->setAxisSelection(
+        selection.axes,
+        selection.primary_axis);
 
     if (viewport_ == nullptr) return;
 
@@ -4824,6 +4830,7 @@ void PartViewportController::applySelectionToSurfaces() {
         selection.selected.size() +
         selection.profiles.size() +
         selection.datums.size() +
+        selection.axes.size() +
         selection.body_topology.size());
 
     for (const auto role : selection.selected) {
@@ -4844,6 +4851,15 @@ void PartViewportController::applySelectionToSurfaces() {
          selection.datums) {
         const auto token =
             datumPresentationFor(datum_id);
+        if (token) {
+            presentation.selected.push_back(*token);
+        }
+    }
+
+    for (const auto axis_id :
+         selection.axes) {
+        const auto token =
+            axisPresentationFor(axis_id);
         if (token) {
             presentation.selected.push_back(*token);
         }
@@ -4873,6 +4889,10 @@ void PartViewportController::applySelectionToSurfaces() {
             selection.body_topology_generation) {
         presentation.primary =
             selection.primary_body_topology;
+    } else if (selection.primary_axis) {
+        presentation.primary =
+            axisPresentationFor(
+                *selection.primary_axis);
     } else if (selection.primary_datum) {
         presentation.primary =
             datumPresentationFor(
