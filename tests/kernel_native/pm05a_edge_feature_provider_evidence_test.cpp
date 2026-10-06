@@ -125,6 +125,8 @@ int main() {
             << " reverse_same="
             << (probe.reverse_same_topology_and_volume ? 1 : 0)
             << " new_faces=" << probe.new_face_count
+            << " modified_inherited_faces="
+            << probe.modified_inherited_face_count
             << " edge_claimed_faces="
             << probe.generated_from_selected_edges_face_count
             << " vertex_claimed_faces="
