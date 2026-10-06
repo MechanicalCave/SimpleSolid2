@@ -4962,6 +4962,18 @@ void PartViewportController::notifySelectionChanged() {
         }
     }
 
+    if (axis_selection_changed_handler_) {
+        if (selection == nullptr) {
+            axis_selection_changed_handler_(
+                {},
+                std::nullopt);
+        } else {
+            axis_selection_changed_handler_(
+                selection->axes,
+                selection->primary_axis);
+        }
+    }
+
     if (datum_selection_changed_handler_) {
         if (selection == nullptr) {
             datum_selection_changed_handler_(
