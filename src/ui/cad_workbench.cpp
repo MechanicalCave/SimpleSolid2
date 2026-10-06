@@ -1935,6 +1935,99 @@ void CadWorkbench::buildUi() {
     properties_stack_->addWidget(
         reference_properties_page_);
 
+    axis_properties_page_ =
+        new QWidget(properties_stack_);
+    axis_properties_page_->setObjectName(
+        QStringLiteral("axisPropertiesPage"));
+    auto* axis_properties_root =
+        new QFormLayout(axis_properties_page_);
+
+    axis_name_ =
+        new QLabel(axis_properties_page_);
+    axis_name_->setObjectName(
+        QStringLiteral("axisPropertyName"));
+    axis_identity_ =
+        new QLabel(axis_properties_page_);
+    axis_identity_->setObjectName(
+        QStringLiteral("axisPropertyIdentity"));
+    axis_source_sketch_ =
+        new QLabel(axis_properties_page_);
+    axis_source_sketch_->setObjectName(
+        QStringLiteral("axisPropertySourceSketch"));
+    axis_source_line_ =
+        new QLabel(axis_properties_page_);
+    axis_source_line_->setObjectName(
+        QStringLiteral("axisPropertySourceLine"));
+    axis_visibility_ =
+        new QLabel(axis_properties_page_);
+    axis_visibility_->setObjectName(
+        QStringLiteral("axisPropertyVisibility"));
+    axis_status_ =
+        new QLabel(axis_properties_page_);
+    axis_status_->setObjectName(
+        QStringLiteral("axisPropertyStatus"));
+    axis_diagnostic_ =
+        new QLabel(axis_properties_page_);
+    axis_diagnostic_->setObjectName(
+        QStringLiteral("axisPropertyDiagnostic"));
+    axis_diagnostic_->setWordWrap(true);
+    axis_origin_ =
+        new QLabel(axis_properties_page_);
+    axis_origin_->setObjectName(
+        QStringLiteral("axisPropertyOrigin"));
+    axis_direction_ =
+        new QLabel(axis_properties_page_);
+    axis_direction_->setObjectName(
+        QStringLiteral("axisPropertyDirection"));
+
+    axis_edit_button_ =
+        new QPushButton(
+            QStringLiteral("Edit Axis"),
+            axis_properties_page_);
+    axis_edit_button_->setObjectName(
+        QStringLiteral("editAxisPropertyButton"));
+    axis_delete_button_ =
+        new QPushButton(
+            QStringLiteral("Delete Axis"),
+            axis_properties_page_);
+    axis_delete_button_->setObjectName(
+        QStringLiteral("deleteAxisPropertyButton"));
+
+    axis_properties_root->addRow(
+        QStringLiteral("Name"),
+        axis_name_);
+    axis_properties_root->addRow(
+        QStringLiteral("AxisId"),
+        axis_identity_);
+    axis_properties_root->addRow(
+        QStringLiteral("Source Sketch"),
+        axis_source_sketch_);
+    axis_properties_root->addRow(
+        QStringLiteral("Source Line"),
+        axis_source_line_);
+    axis_properties_root->addRow(
+        QStringLiteral("Visibility"),
+        axis_visibility_);
+    axis_properties_root->addRow(
+        QStringLiteral("Status"),
+        axis_status_);
+    axis_properties_root->addRow(
+        QStringLiteral("Diagnostic"),
+        axis_diagnostic_);
+    axis_properties_root->addRow(
+        QStringLiteral("Origin"),
+        axis_origin_);
+    axis_properties_root->addRow(
+        QStringLiteral("Direction"),
+        axis_direction_);
+    axis_properties_root->addRow(
+        axis_edit_button_);
+    axis_properties_root->addRow(
+        axis_delete_button_);
+
+    properties_stack_->addWidget(
+        axis_properties_page_);
+
     datum_properties_page_ =
         new QWidget(properties_stack_);
     datum_properties_page_->setObjectName(
