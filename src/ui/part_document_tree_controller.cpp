@@ -1985,16 +1985,6 @@ void PartDocumentTreeController::updateVisibilityActions() {
             }
         }
     } else if (
-        selectionContainsOnlyAxisReferences()) {
-        const auto targets = selectedAxisIds();
-        if (targets.empty()) return;
-        attempted = true;
-        result = session_->execute(
-            application::SetAxisVisibilityCommand{
-                targets,
-                session_->document().revision(),
-                visible});
-    } else if (
         selectionContainsOnlyDatumReferences()) {
         const auto targets =
             selectedDatumVisibilityTargets();
@@ -2160,6 +2150,18 @@ void PartDocumentTreeController::applySelectedVisibility(
             application::
                 SetBuiltinReferenceVisibilityCommand{
                     roles,
+                    visible});
+    } else if (
+        selectionContainsOnlyAxisReferences()) {
+        const auto targets =
+            selectedAxisIds();
+        if (targets.empty()) return;
+        attempted = true;
+        result = session_->execute(
+            application::
+                SetAxisVisibilityCommand{
+                    targets,
+                    session_->document().revision(),
                     visible});
     } else if (
         selectionContainsOnlyDatumReferences()) {
