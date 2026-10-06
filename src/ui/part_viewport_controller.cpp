@@ -1994,6 +1994,62 @@ PartViewportController::datumPresentationFor(
     return std::nullopt;
 }
 
+std::optional<part::AxisId>
+PartViewportController::axisFor(
+    viewer::PresentationToken token) const {
+    if (!token.valid()) return std::nullopt;
+    const auto found =
+        axis_bindings_.find(token.value);
+    return found == axis_bindings_.end()
+        ? std::nullopt
+        : std::optional<part::AxisId>{
+              found->second};
+}
+
+std::optional<viewer::PresentationToken>
+PartViewportController::axisPresentationFor(
+    part::AxisId axis_id) const {
+    if (!axis_id.valid()) return std::nullopt;
+    for (const auto& [token, id] :
+         axis_bindings_) {
+        if (id == axis_id) {
+            return viewer::PresentationToken{
+                token};
+        }
+    }
+    return std::nullopt;
+}
+
+void PartViewportController::setAxisSelectionFromTree(
+    const std::vector<part::AxisId>& selected,
+    std::optional<part::AxisId> primary) {
+    if (session_ == nullptr) return;
+
+    auto& selection = activeSelection();
+    selection.axes = selected;
+    if (primary &&
+        std::find(
+            selected.begin(),
+            selected.end(),
+            *primary) != selected.end()) {
+        selection.primary_axis = primary;
+        selection.primary.reset();
+        selection.primary_profile.reset();
+        selection.primary_datum.reset();
+    } else if (!selected.empty()) {
+        selection.primary_axis =
+            selected.front();
+        selection.primary.reset();
+        selection.primary_profile.reset();
+        selection.primary_datum.reset();
+    } else {
+        selection.primary_axis.reset();
+    }
+
+    applySelectionToSurfaces();
+    notifySelectionChanged();
+}
+
 void PartViewportController::setProfileSelectionFromTree(
     const std::vector<part::ProfileId>& selected,
     std::optional<part::ProfileId> primary) {
