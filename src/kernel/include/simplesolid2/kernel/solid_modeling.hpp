@@ -261,6 +261,29 @@ enum class SolidBooleanOperation {
     cut,
 };
 
+struct Axis3 final {
+    Point3 origin;
+    Point3 direction{1.0, 0.0, 0.0};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const Axis3&,
+        const Axis3&) = default;
+};
+
+enum class RevolveProfileAdmission {
+    ok,
+    invalid_input,
+    axis_not_in_profile_plane,
+    profile_crosses_axis,
+};
+
+[[nodiscard]] RevolveProfileAdmission
+classifyRevolveProfileAdmission(
+    const PlanarProfileInput& profile,
+    const Axis3& axis) noexcept;
+
 enum class ExtrudeCapRole {
     profile_cap,
     extent_cap,
@@ -287,6 +310,12 @@ struct ExtrudeFaceRole final {
         const ExtrudeFaceRole&) = default;
 };
 
+// Legacy name retained for ABI/source stability. The role vocabulary is
+// intentionally sweep-generic: partial Revolve uses profile/extent or
+// negative/positive caps and boundary-use provenance exactly as Extrude does.
+using SweepCapRole = ExtrudeCapRole;
+using SweepFaceRole = ExtrudeFaceRole;
+
 struct LinearExtrudeInput final {
     PlanarProfileInput profile;
     double start_offset_mm{};
@@ -302,12 +331,31 @@ struct LinearExtrudeInput final {
     [[nodiscard]] bool valid() const noexcept;
 };
 
+struct RevolveInput final {
+    PlanarProfileInput profile;
+    Axis3 axis;
+    // Signed angular interval around axis.direction. OneSide Forward uses
+    // [0,+A], Reverse [0,-A], Midplane [-A/2,+A/2].
+    double start_angle_radians{};
+    double end_angle_radians{};
+    SweepCapRole start_cap_role{
+        SweepCapRole::profile_cap};
+    SweepCapRole end_cap_role{
+        SweepCapRole::extent_cap};
+    SolidBooleanOperation operation{
+        SolidBooleanOperation::add};
+
+    [[nodiscard]] bool fullRotation() const noexcept;
+    [[nodiscard]] bool valid() const noexcept;
+};
+
 enum class SolidModelingStatus {
     ok,
     invalid_input,
     missing_upstream,
     provider_mismatch,
     provider_failure,
+    unsupported,
     invalid_brep,
     detached_add,
     no_effect,
@@ -449,6 +497,14 @@ public:
     extrude(
         const LinearExtrudeInput& input,
         RuntimeSolidHandle upstream = {}) noexcept = 0;
+
+    // PM-04C production rotational sweep. The default keeps bounded test
+    // providers source-compatible and fails explicitly rather than emulating
+    // Revolve through another operation.
+    [[nodiscard]] virtual SolidModelingResult
+    revolve(
+        const RevolveInput& input,
+        RuntimeSolidHandle upstream = {}) noexcept;
 
     // Presentation-only exact operation delta for Extrude preview:
     // Add => tool - upstream Body, Cut => tool ∩ upstream Body.
