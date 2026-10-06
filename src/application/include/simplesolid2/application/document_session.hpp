@@ -3,6 +3,7 @@
 #include <simplesolid2/application/axis_draft.hpp>
 #include <simplesolid2/application/datum_plane_draft.hpp>
 #include <simplesolid2/application/extrude_draft.hpp>
+#include <simplesolid2/application/revolve_draft.hpp>
 #include <simplesolid2/core/units.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_document.hpp>
@@ -258,6 +259,27 @@ struct EditExtrudeFeatureCommand final {
     std::string name;
 };
 
+struct CreateRevolveFeatureCommand final {
+    part::ProfileId profile_id;
+    part::AxisReference axis;
+    core::DocumentRevision expected_revision;
+    part::RevolveOperation operation{
+        part::RevolveOperation::add};
+    part::RevolveExtent extent;
+    std::string name;
+};
+
+struct EditRevolveFeatureCommand final {
+    part::FeatureId feature_id;
+    core::DocumentRevision expected_revision;
+    part::ProfileId profile_id;
+    part::AxisReference axis;
+    part::RevolveOperation operation{
+        part::RevolveOperation::add};
+    part::RevolveExtent extent;
+    std::string name;
+};
+
 struct SetFeatureSuppressedCommand final {
     part::FeatureId feature_id;
     core::DocumentRevision expected_revision;
@@ -451,6 +473,20 @@ struct CreateExtrudeFeatureResult final {
     }
 };
 
+struct CreateRevolveFeatureResult final {
+    bool changed{false};
+    std::optional<part::FeatureId> feature_id;
+    std::optional<
+        part::FeatureEvaluationDiagnosticCode>
+        evaluation_diagnostic;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code ==
+               DocumentSessionErrorCode::none;
+    }
+};
+
 class DocumentSession final {
 public:
     DocumentSession(
@@ -557,6 +593,11 @@ public:
         const ExtrudeDraft& draft,
         kernel::ISolidModelingKernel& modeling_kernel) const;
 
+    [[nodiscard]] RevolveDraftEvaluationResult
+    evaluateRevolveDraft(
+        const RevolveDraft& draft,
+        kernel::ISolidModelingKernel& modeling_kernel) const;
+
     [[nodiscard]] DatumPlaneDraftEvaluationResult
     evaluateDatumPlaneDraft(
         const DatumPlaneDraft& draft,
@@ -579,6 +620,14 @@ public:
     [[nodiscard]] DocumentSessionResult execute(
         const EditExtrudeFeatureCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
+
+    [[nodiscard]] CreateRevolveFeatureResult execute(
+        const CreateRevolveFeatureCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditRevolveFeatureCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+
     [[nodiscard]] DocumentSessionResult execute(
         const SetFeatureSuppressedCommand& command);
     [[nodiscard]] DocumentSessionResult execute(

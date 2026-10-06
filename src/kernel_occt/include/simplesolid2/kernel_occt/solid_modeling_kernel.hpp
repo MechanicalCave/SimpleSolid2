@@ -28,6 +28,11 @@ public:
         kernel::RuntimeSolidHandle upstream = {}) noexcept override;
 
     [[nodiscard]] kernel::SolidPresentationResult
+    revolvePreviewMesh(
+        const kernel::AngularRevolveInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override;
+
+    [[nodiscard]] kernel::SolidPresentationResult
     presentationMesh(
         kernel::RuntimeSolidHandle solid) noexcept override;
 
