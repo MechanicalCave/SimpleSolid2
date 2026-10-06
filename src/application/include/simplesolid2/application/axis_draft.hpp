@@ -101,6 +101,7 @@ enum class AxisDraftEvaluationStatus : std::uint8_t {
     stale_revision,
     invalid_draft,
     missing_axis,
+    source_already_designated,
     id_exhausted,
     invalid_candidate,
     source_unresolved,
