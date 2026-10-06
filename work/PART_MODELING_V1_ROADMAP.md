@@ -6,7 +6,7 @@
 **Previous accepted version:** 1.24 — 2026-10-05  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-04A — Axis semantic model + persistence under `work/PM-04_AXIS_REVOLVE.md`  
+**Current active checkpoint:** PM-04B — Axis lifecycle / Tree / Properties / Viewer under `work/PM-04_AXIS_REVOLVE.md`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -506,7 +506,9 @@ The Revolve family is complete within the accepted bounded matrix: Add/Cut, OneS
 
 Full-rotation periodic seams remain accounted representation artifacts unless they are true material boundaries; PM-04 must extend the existing semantic topology catalog rather than bypass it.
 
-Current implementation checkpoint is **PM-04A — Axis semantic model + persistence**. Datum Axis, Projection and later packages remain separately gated.
+PM-04A Axis semantic model + persistence is **COMPLETED — PASS**. Exact candidate `9a01ec707c12ac699dcd1d5b9e1a4e7d8bc2578a` passed Windows FULL #1531 and merged to main as `4c6ed90e59e365fe6d53a88c68184b6332743749`. Completion evidence: `work/PM-04A_AXIS_SEMANTIC_SCHEMA_V12_COMPLETION.md`.
+
+Current implementation checkpoint is **PM-04B — Axis lifecycle / Tree / Properties / Viewer**. Datum Axis, Projection and later packages remain separately gated.
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 
