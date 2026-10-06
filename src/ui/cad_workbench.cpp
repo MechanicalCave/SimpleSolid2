@@ -2936,6 +2936,63 @@ void CadWorkbench::buildUi() {
         cancel_line_button_);
 
 
+    axis_operations_widget_ =
+        new QWidget(operations_content);
+    axis_operations_widget_->setObjectName(
+        QStringLiteral("axisOperationsWidget"));
+    auto* axis_operations_layout =
+        new QVBoxLayout(
+            axis_operations_widget_);
+    axis_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    auto* axis_source_form =
+        new QFormLayout;
+    axis_source_label_ =
+        new QLabel(
+            QStringLiteral("<select one Sketch Line>"),
+            axis_operations_widget_);
+    axis_source_label_->setObjectName(
+        QStringLiteral("axisSourceLabel"));
+    axis_source_label_->setWordWrap(true);
+    axis_source_form->addRow(
+        QStringLiteral("Source"),
+        axis_source_label_);
+    axis_operations_layout->addLayout(
+        axis_source_form);
+
+    axis_result_label_ =
+        new QLabel(
+            QStringLiteral("Select exactly one valid Sketch Line."),
+            axis_operations_widget_);
+    axis_result_label_->setObjectName(
+        QStringLiteral("axisResultLabel"));
+    axis_result_label_->setWordWrap(true);
+    axis_operations_layout->addWidget(
+        axis_result_label_);
+
+    axis_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Axis"),
+            axis_operations_widget_);
+    axis_finish_button_->setObjectName(
+        QStringLiteral("axisFinishButton"));
+    axis_operations_layout->addWidget(
+        axis_finish_button_);
+
+    axis_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            axis_operations_widget_);
+    axis_cancel_button_->setObjectName(
+        QStringLiteral("axisCancelButton"));
+    axis_operations_layout->addWidget(
+        axis_cancel_button_);
+
+    axis_operations_widget_->setVisible(false);
+    operations_layout->addWidget(
+        axis_operations_widget_);
+
     datum_plane_operations_widget_ =
         new QWidget(operations_content);
     datum_plane_operations_widget_->setObjectName(
