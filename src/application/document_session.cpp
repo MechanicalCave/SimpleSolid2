@@ -49,6 +49,24 @@ part::PartSketch* findSketch(
         : &*found;
 }
 
+part::PartAxis* findAxis(
+    part::PartAuthoredState& state,
+    part::AxisId id) noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found =
+        std::find_if(
+            state.axes.begin(),
+            state.axes.end(),
+            [id](const part::PartAxis& item) {
+                return item.id == id;
+            });
+    return found == state.axes.end()
+        ? nullptr
+        : &*found;
+}
+
 part::OffsetDatumPlane* findDatumPlane(
     part::PartAuthoredState& state,
     part::DatumId id) noexcept {
@@ -115,6 +133,19 @@ std::string defaultFeatureName(
     return result;
 }
 
+std::string defaultAxisName(
+    part::AxisId id) {
+    const auto serialized = id.serialized();
+    std::string result{"Axis"};
+    if (serialized.size() < 3U) {
+        result.append(
+            3U - serialized.size(),
+            '0');
+    }
+    result += serialized;
+    return result;
+}
+
 std::string defaultProfileName(
     part::ProfileId id) {
     const auto serialized = id.serialized();
@@ -126,6 +157,93 @@ std::string defaultProfileName(
     }
     result += serialized;
     return result;
+}
+
+std::string axisEvaluationMessage(
+    const part::AxisEvaluation& evaluated) {
+    using Diagnostic =
+        part::AxisEvaluationDiagnostic;
+    switch (evaluated.diagnostic) {
+    case Diagnostic::none:
+        return {};
+    case Diagnostic::invalid_reference:
+        return "Axis reference is invalid";
+    case Diagnostic::missing_axis:
+        return "Axis does not exist";
+    case Diagnostic::missing_sketch:
+        return "Axis source Sketch is missing";
+    case Diagnostic::missing_line:
+        return "Axis source Line is missing";
+    case Diagnostic::source_not_line:
+        return "Axis source identity does not identify a Sketch Line";
+    case Diagnostic::sketch_support_missing:
+        return "Axis source Sketch support is missing";
+    case Diagnostic::sketch_support_ambiguous:
+        return "Axis source Sketch support is ambiguous";
+    case Diagnostic::sketch_support_unsupported:
+        return "Axis source Sketch support is unsupported";
+    case Diagnostic::sketch_support_blocked:
+        return "Axis source Sketch support is blocked";
+    case Diagnostic::stale_part_evaluation:
+        return "Axis evaluation requires the current Part evaluation";
+    case Diagnostic::stale_datum_evaluation:
+        return "Axis evaluation requires the current Datum evaluation";
+    case Diagnostic::support_stage_unavailable:
+        return "Axis source Sketch Body stage is unavailable";
+    case Diagnostic::invalid_frame:
+        return "Axis source resolves to an invalid world frame";
+    }
+    return "Axis source could not be resolved";
+}
+
+part::AxisEvaluation evaluateAxisInDocument(
+    const part::PartDocument& document,
+    part::AxisId axis_id,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    const part::AxisReference reference{
+        part::AuthoredAxisReference{axis_id}};
+
+    const auto* axis =
+        document.findAxis(axis_id);
+    if (axis == nullptr) {
+        return part::resolveAxisReference(
+            document,
+            reference);
+    }
+
+    const auto* source =
+        document.findSketch(
+            axis->source.sketch_id);
+    if (source == nullptr ||
+        part::builtinOriginPlaneForSketchSupport(
+            source->support)) {
+        return part::resolveAxisReference(
+            document,
+            reference);
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            document,
+            modeling_kernel);
+
+    if (part::datumPlaneIdForSketchSupport(
+            source->support)) {
+        const auto datums =
+            part::evaluateDatums(
+                document,
+                evaluation);
+        return part::resolveAxisReference(
+            document,
+            reference,
+            &evaluation,
+            &datums);
+    }
+
+    return part::resolveAxisReference(
+        document,
+        reference,
+        &evaluation);
 }
 
 SketchSupportMutationResult supportMutationFailure(
