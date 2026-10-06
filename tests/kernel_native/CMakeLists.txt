@@ -509,18 +509,6 @@ target_link_libraries(pm05a_edge_feature_provider_evidence_test
 
 target_compile_features(pm05a_edge_feature_provider_evidence_test PRIVATE cxx_std_20)
 
-# PM-05A evidence-only: emit the refined provider provenance matrix once in
-# the kernel-native build log for the final PM-05A synthesis capture.
-if(NOT SS2_BUILD_DESKTOP)
-    add_custom_command(
-        TARGET pm05a_edge_feature_provider_evidence_test
-        POST_BUILD
-        COMMAND $<TARGET_FILE:pm05a_edge_feature_provider_evidence_test>
-        COMMENT "PM-05A refined provider matrix evidence"
-        VERBATIM
-    )
-endif()
-
 add_test(
     NAME pm05a.edge_feature_provider_evidence
     COMMAND pm05a_edge_feature_provider_evidence_test
@@ -541,18 +529,6 @@ target_link_libraries(pm05a_edge_feature_lifecycle_evidence_test
 )
 
 target_compile_features(pm05a_edge_feature_lifecycle_evidence_test PRIVATE cxx_std_20)
-
-# PM-05A evidence-only: emit the tangent/upstream/chaining observations once
-# in the kernel-native build log. Remove after capture into the evidence report.
-if(NOT SS2_BUILD_DESKTOP)
-    add_custom_command(
-        TARGET pm05a_edge_feature_lifecycle_evidence_test
-        POST_BUILD
-        COMMAND $<TARGET_FILE:pm05a_edge_feature_lifecycle_evidence_test>
-        COMMENT "PM-05A lifecycle matrix evidence"
-        VERBATIM
-    )
-endif()
 
 add_test(
     NAME pm05a.edge_feature_lifecycle_evidence
