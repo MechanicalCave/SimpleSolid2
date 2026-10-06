@@ -419,6 +419,17 @@ QString formatLengthForPart(
                 core::lengthUnitSuffix(unit).size())));
 }
 
+QString formatAngleForCad(
+    core::AngleValue value) {
+    return QStringLiteral("%1 deg")
+        .arg(
+            QString::number(
+                value.radians * 180.0 /
+                    std::numbers::pi_v<double>,
+                'g',
+                12));
+}
+
 std::string toUtf8(const QString& value) {
     const auto bytes = value.toUtf8();
     return std::string{
@@ -1341,6 +1352,17 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         1,
         extrude_button_);
+
+    revolve_button_ =
+        new QPushButton(
+            QStringLiteral("Revolve"),
+            shell_);
+    revolve_button_->setObjectName(
+        QStringLiteral("revolveToolButton"));
+    revolve_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        1,
+        revolve_button_);
 
     datum_plane_button_ =
         new QPushButton(
@@ -3297,6 +3319,167 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         extrude_operations_widget_);
 
+    revolve_operations_widget_ =
+        new QWidget(operations_content);
+    revolve_operations_widget_->setObjectName(
+        QStringLiteral("revolveOperationsWidget"));
+    auto* revolve_operations_layout =
+        new QVBoxLayout(
+            revolve_operations_widget_);
+    revolve_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    auto* revolve_sources_form =
+        new QFormLayout;
+    revolve_profile_label_ =
+        new QLabel(
+            QStringLiteral("<select Profile>"),
+            revolve_operations_widget_);
+    revolve_profile_label_->setObjectName(
+        QStringLiteral("revolveProfileLabel"));
+    revolve_axis_label_ =
+        new QLabel(
+            QStringLiteral("<select Axis>"),
+            revolve_operations_widget_);
+    revolve_axis_label_->setObjectName(
+        QStringLiteral("revolveAxisLabel"));
+    revolve_sources_form->addRow(
+        QStringLiteral("Profile"),
+        revolve_profile_label_);
+    revolve_sources_form->addRow(
+        QStringLiteral("Axis"),
+        revolve_axis_label_);
+    revolve_operations_layout->addLayout(
+        revolve_sources_form);
+
+    auto* revolve_operation_row =
+        new QWidget(
+            revolve_operations_widget_);
+    auto* revolve_operation_layout =
+        new QHBoxLayout(
+            revolve_operation_row);
+    revolve_operation_layout->setContentsMargins(
+        0, 0, 0, 0);
+    revolve_add_button_ =
+        new QPushButton(
+            QStringLiteral("Add"),
+            revolve_operation_row);
+    revolve_add_button_->setObjectName(
+        QStringLiteral("revolveAddButton"));
+    revolve_add_button_->setCheckable(true);
+    revolve_cut_button_ =
+        new QPushButton(
+            QStringLiteral("Cut"),
+            revolve_operation_row);
+    revolve_cut_button_->setObjectName(
+        QStringLiteral("revolveCutButton"));
+    revolve_cut_button_->setCheckable(true);
+    revolve_operation_layout->addWidget(
+        revolve_add_button_);
+    revolve_operation_layout->addWidget(
+        revolve_cut_button_);
+    revolve_operations_layout->addWidget(
+        revolve_operation_row);
+
+    auto* revolve_extent_row =
+        new QWidget(
+            revolve_operations_widget_);
+    auto* revolve_extent_layout =
+        new QHBoxLayout(
+            revolve_extent_row);
+    revolve_extent_layout->setContentsMargins(
+        0, 0, 0, 0);
+    revolve_one_side_button_ =
+        new QPushButton(
+            QStringLiteral("One Side"),
+            revolve_extent_row);
+    revolve_one_side_button_->setObjectName(
+        QStringLiteral("revolveOneSideButton"));
+    revolve_one_side_button_->setCheckable(true);
+    revolve_midplane_button_ =
+        new QPushButton(
+            QStringLiteral("Midplane"),
+            revolve_extent_row);
+    revolve_midplane_button_->setObjectName(
+        QStringLiteral("revolveMidplaneButton"));
+    revolve_midplane_button_->setCheckable(true);
+    revolve_extent_layout->addWidget(
+        revolve_one_side_button_);
+    revolve_extent_layout->addWidget(
+        revolve_midplane_button_);
+    revolve_operations_layout->addWidget(
+        revolve_extent_row);
+
+    revolve_reverse_button_ =
+        new QPushButton(
+            QStringLiteral("Reverse"),
+            revolve_operations_widget_);
+    revolve_reverse_button_->setObjectName(
+        QStringLiteral("revolveReverseButton"));
+    revolve_reverse_button_->setCheckable(true);
+    revolve_operations_layout->addWidget(
+        revolve_reverse_button_);
+
+    auto* revolve_angle_form =
+        new QFormLayout;
+    revolve_angle_edit_ =
+        new QLineEdit(
+            revolve_operations_widget_);
+    revolve_angle_edit_->setObjectName(
+        QStringLiteral("revolveAngleEdit"));
+    revolve_angle_edit_->setPlaceholderText(
+        QStringLiteral("0 < angle <= 360 deg"));
+    revolve_angle_form->addRow(
+        QStringLiteral("Angle"),
+        revolve_angle_edit_);
+    revolve_operations_layout->addLayout(
+        revolve_angle_form);
+
+    revolve_preview_timer_ =
+        new QTimer(this);
+    revolve_preview_timer_->setSingleShot(true);
+    revolve_preview_timer_->setInterval(90);
+    QObject::connect(
+        revolve_preview_timer_,
+        &QTimer::timeout,
+        this,
+        [this] {
+            refreshRevolvePreview();
+        });
+
+    revolve_result_label_ =
+        new QLabel(
+            QStringLiteral(
+                "Select a Profile and an Origin/Authored Axis."),
+            revolve_operations_widget_);
+    revolve_result_label_->setObjectName(
+        QStringLiteral("revolveResultLabel"));
+    revolve_result_label_->setWordWrap(true);
+    revolve_operations_layout->addWidget(
+        revolve_result_label_);
+
+    revolve_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Revolve"),
+            revolve_operations_widget_);
+    revolve_finish_button_->setObjectName(
+        QStringLiteral("revolveFinishButton"));
+    revolve_operations_layout->addWidget(
+        revolve_finish_button_);
+
+    revolve_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            revolve_operations_widget_);
+    revolve_cancel_button_->setObjectName(
+        QStringLiteral("revolveCancelButton"));
+    revolve_operations_layout->addWidget(
+        revolve_cancel_button_);
+
+    revolve_operations_widget_->setVisible(false);
+    operations_layout->addWidget(
+        revolve_operations_widget_);
+
     profile_operations_widget_ =
         new QWidget(operations_content);
     profile_operations_widget_->setObjectName(
@@ -4445,6 +4628,193 @@ void CadWorkbench::buildUi() {
         });
 
     QObject::connect(
+        revolve_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (revolve_draft_) {
+                cancelRevolve();
+                return;
+            }
+            static_cast<void>(
+                startRevolveTool());
+        });
+    QObject::connect(
+        revolve_add_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (revolve_draft_ &&
+                revolve_draft_->setOperation(
+                    part::RevolveOperation::add)) {
+                refreshRevolvePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        revolve_cut_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (!revolve_draft_ ||
+                document_session_ == nullptr) {
+                return;
+            }
+            const auto& features =
+                document_session_->document()
+                    .body().features;
+            bool cut_allowed = !features.empty();
+            if (revolve_draft_->mode() ==
+                    application::RevolveDraftMode::edit &&
+                revolve_draft_->featureId()) {
+                const auto found =
+                    std::find_if(
+                        features.begin(),
+                        features.end(),
+                        [this](const part::PartFeature& feature) {
+                            return feature.id ==
+                                *revolve_draft_->featureId();
+                        });
+                cut_allowed =
+                    found != features.end() &&
+                    found != features.begin();
+            }
+            if (!cut_allowed) {
+                setStatusText(
+                    QStringLiteral(
+                        "The first solid-producing Revolve must be Add."));
+                syncRevolveUi();
+                return;
+            }
+            if (revolve_draft_->setOperation(
+                    part::RevolveOperation::cut)) {
+                refreshRevolvePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        revolve_one_side_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (revolve_draft_ &&
+                revolve_draft_->setExtentMode(
+                    application::RevolveDraftExtentMode::
+                        one_side)) {
+                refreshRevolvePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        revolve_midplane_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (revolve_draft_ &&
+                revolve_draft_->setExtentMode(
+                    application::RevolveDraftExtentMode::
+                        midplane)) {
+                refreshRevolvePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        revolve_reverse_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (!revolve_draft_) return;
+            if (!revolve_draft_->setReversed(
+                    checked)) {
+                syncRevolveUi();
+                return;
+            }
+            refreshRevolvePreview();
+            notifyCadInputContextChanged();
+        });
+    QObject::connect(
+        revolve_angle_edit_,
+        &QLineEdit::textChanged,
+        this,
+        [this](const QString& text_value) {
+            if (syncing_revolve_ui_ ||
+                !revolve_draft_ ||
+                document_session_ == nullptr) {
+                return;
+            }
+            const auto parsed =
+                application::parseCadQuantity(
+                    toUtf8(text_value),
+                    {
+                        application::
+                            CadQuantityDimension::angle,
+                        document_session_->document()
+                            .lengthUnit()});
+            constexpr double full_turn =
+                2.0 * std::numbers::pi_v<double>;
+            if (!parsed ||
+                !(parsed->canonical_value > 0.0) ||
+                parsed->canonical_value > full_turn) {
+                revolve_angle_input_valid_ = false;
+                revolve_evaluation_.reset();
+                if (revolve_preview_timer_ != nullptr) {
+                    revolve_preview_timer_->stop();
+                }
+                if (viewport_controller_) {
+                    viewport_controller_->clearSolidPreview();
+                    if (revolve_draft_->mode() ==
+                            application::RevolveDraftMode::edit &&
+                        revolve_draft_->profileId()) {
+                        viewport_controller_->
+                            setTransientProfilePresentationOverride(
+                                *revolve_draft_->profileId(),
+                                std::nullopt);
+                    } else {
+                        viewport_controller_->
+                            setTransientProfilePresentationOverride(
+                                std::nullopt,
+                                std::nullopt);
+                    }
+                    viewport_controller_->
+                        setTransientAxisEmphasis(
+                            revolve_draft_->axis());
+                }
+                syncRevolveUi();
+                return;
+            }
+            static_cast<void>(
+                setRevolveAngle(
+                    core::AngleValue{
+                        parsed->canonical_value},
+                    toUtf8(text_value),
+                    false));
+        });
+    QObject::connect(
+        revolve_angle_edit_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] {
+            flushRevolvePreview();
+            static_cast<void>(
+                finishRevolve());
+        });
+    QObject::connect(
+        revolve_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                finishRevolve());
+        });
+    QObject::connect(
+        revolve_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cancelRevolve();
+        });
+
+    QObject::connect(
         profile_add_area_button_,
         &QPushButton::clicked,
         this,
@@ -4536,6 +4906,7 @@ void CadWorkbench::buildUi() {
     syncAxisUi();
     syncDatumPlaneUi();
     syncExtrudeUi();
+    syncRevolveUi();
 }
 
 bool CadWorkbench::activateDocument(
