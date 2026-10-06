@@ -91,8 +91,9 @@ int main() {
         CHECK(tangent.source_shape.ok());
         CHECK(tangent.source_shape.solid_count == 1U);
         CHECK(tangent.requested_edge_count == 1U);
-        CHECK(tangent.provider_contour_count >= 1U);
-        CHECK(tangent.provider_contour_edge_count >= 1U);
+        CHECK(tangent.provider_contour_count == 1U);
+        CHECK(tangent.provider_contour_edge_count == 2U);
+        CHECK(!tangent.exact_provider_input_membership);
         CHECK(tangent.build_succeeded);
         CHECK(tangent.full_chain_requested_edge_count == 2U);
         CHECK(tangent.full_chain_provider_contour_edge_count == 2U);

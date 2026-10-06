@@ -100,15 +100,30 @@ int main() {
             ++unclaimed_corner_patch_cases;
         }
 
-        if (probe.scenario !=
+        if (probe.scenario ==
             kernel::EdgeFeatureProbeScenario::
-                excessive_parameter &&
-            probe.build_succeeded) {
+                excessive_parameter) {
+            CHECK(!probe.build_succeeded);
+            CHECK(probe.exact_provider_input_membership);
+            CHECK(probe.reverse_same_topology_and_volume);
+        } else {
+            CHECK(probe.build_succeeded);
             ++successful_normal;
+            CHECK(probe.exact_provider_input_membership);
+            CHECK(probe.reverse_same_topology_and_volume);
             CHECK(probe.result_shape.has_value());
             CHECK(probe.result_shape->ok());
             CHECK(probe.result_shape->solid_count == 1U);
             CHECK(probe.result_signature.has_value());
+            CHECK(
+                probe.generated_from_selected_edges_face_count ==
+                probe.requested_edge_count);
+            CHECK(probe.unclaimed_new_face_count == 0U);
+            CHECK(
+                probe.modified_inherited_face_count +
+                    probe.generated_from_selected_edges_face_count +
+                    probe.generated_from_shared_vertices_face_count ==
+                probe.new_face_count);
         }
 
         std::cout
@@ -135,6 +150,11 @@ int main() {
             << probe.unclaimed_new_face_count
             << '\n';
     }
+
+    CHECK(successful_normal == 12U);
+    CHECK(exact_membership == 14U);
+    CHECK(order_invariant == 14U);
+    CHECK(unclaimed_corner_patch_cases == 0U);
 
     // A single explicit Edge is only a provider sanity baseline, not the
     // production scope. Both operations must at least prove their native
