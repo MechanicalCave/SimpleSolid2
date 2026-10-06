@@ -102,6 +102,39 @@ diagnosticForProfileMaterialization(
         kernel_invalid_input;
 }
 
+[[nodiscard]] FeatureEvaluationDiagnosticCode
+diagnosticForRevolveInput(
+    RevolveKernelInputStatus status) noexcept {
+    switch (status) {
+    case RevolveKernelInputStatus::resolved:
+        return FeatureEvaluationDiagnosticCode::none;
+    case RevolveKernelInputStatus::missing_profile:
+        return FeatureEvaluationDiagnosticCode::
+            missing_profile;
+    case RevolveKernelInputStatus::profile_unavailable:
+        return FeatureEvaluationDiagnosticCode::
+            profile_unavailable;
+    case RevolveKernelInputStatus::missing_axis:
+        return FeatureEvaluationDiagnosticCode::
+            missing_axis;
+    case RevolveKernelInputStatus::axis_unavailable:
+        return FeatureEvaluationDiagnosticCode::
+            axis_unavailable;
+    case RevolveKernelInputStatus::axis_not_in_profile_plane:
+        return FeatureEvaluationDiagnosticCode::
+            axis_not_in_profile_plane;
+    case RevolveKernelInputStatus::profile_crosses_axis:
+        return FeatureEvaluationDiagnosticCode::
+            profile_crosses_axis;
+    case RevolveKernelInputStatus::invalid_input:
+        return FeatureEvaluationDiagnosticCode::
+            kernel_invalid_input;
+    }
+    return FeatureEvaluationDiagnosticCode::
+        kernel_invalid_input;
+}
+
+
 [[nodiscard]] std::optional<kernel::LinearExtrudeInput>
 makeKernelExtrudeInputFromProfile(
     kernel::PlanarProfileInput profile,
