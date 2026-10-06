@@ -29,6 +29,7 @@ enum class FeatureEvaluationStatus {
 enum class FeatureEvaluationDiagnosticCode {
     none,
     missing_profile,
+    profile_unavailable,
     unresolved_profile,
     sketch_support_missing,
     sketch_support_ambiguous,
