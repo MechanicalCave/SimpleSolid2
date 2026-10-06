@@ -600,6 +600,126 @@ int main() {
                 missing_axis);
     }
 
+    // A syntactically valid but never-allocated AxisId cannot become
+    // durable Revolve intent. Deleted previously allocated IDs remain legal
+    // because AxisId high-water preserves their allocation history.
+    {
+        const auto fixture =
+            makeFixture(
+                {10.0, 10.0},
+                {20.0, 20.0});
+        auto state = fixture.document.state();
+        const auto feature_id =
+            state.body.next_feature_id.allocate();
+        CHECK(feature_id.has_value());
+        const auto outside =
+            part::AxisId::parse("999");
+        CHECK(outside.has_value());
+        state.body.features.push_back(
+            part::PartFeature{
+                *feature_id,
+                "Invalid Revolve",
+                false,
+                part::RevolveFeature{
+                    fixture.profile_id,
+                    authoredAxis(*outside),
+                    part::RevolveOperation::add,
+                    part::OneSidedRevolveExtent{
+                        core::AngleValue{
+                            pi / 2.0},
+                        false}}});
+
+        const auto invalid =
+            part::PartDocument::restore(
+                fixture.document.documentId(),
+                std::move(state),
+                fixture.document.revision());
+        CHECK(!invalid.ok());
+        CHECK(
+            invalid.code ==
+            part::PartReconstructErrorCode::
+                invalid_state);
+    }
+
+    // Bounded ordered-history cycle rule: an authored Axis sourced from a
+    // Sketch supported by the same Body stage that consumes that Axis is
+    // structurally invalid. No global dependency graph is introduced.
+    {
+        const auto fixture =
+            makeFixture(
+                {10.0, 10.0},
+                {20.0, 20.0});
+        auto state = fixture.document.state();
+        const auto feature_id =
+            state.body.next_feature_id.allocate();
+        const auto axis_id =
+            state.next_axis_id.allocate();
+        CHECK(feature_id.has_value());
+        CHECK(axis_id.has_value());
+
+        part::FeatureSurfaceAddress surface;
+        surface.producer_feature_id =
+            *feature_id;
+        surface.role =
+            part::FeatureSurfaceRoleKind::
+                revolve_start_cap;
+        const part::SurfaceReference reference{
+            part::BodyStageRef{
+                part::BodyStageKind::
+                    after_feature,
+                *feature_id},
+            surface};
+        const auto support =
+            part::partSketchSupportForBodyPlanarSurface(
+                reference);
+        CHECK(support.has_value());
+
+        sketch::SketchModel axis_model;
+        const auto line =
+            axis_model.addLine(
+                {0.0, 0.0},
+                {10.0, 0.0},
+                sketch::EntityRole::regular);
+        const auto axis_sketch =
+            sketch::SketchId::generate();
+        state.sketches.push_back(
+            part::PartSketch{
+                axis_sketch,
+                *support,
+                true,
+                std::move(axis_model)});
+        state.axes.push_back(
+            part::PartAxis{
+                *axis_id,
+                "Cyclic Axis",
+                {axis_sketch, line},
+                true});
+        state.body.features.push_back(
+            part::PartFeature{
+                *feature_id,
+                "Cyclic Revolve",
+                false,
+                part::RevolveFeature{
+                    fixture.profile_id,
+                    authoredAxis(*axis_id),
+                    part::RevolveOperation::add,
+                    part::OneSidedRevolveExtent{
+                        core::AngleValue{
+                            pi / 2.0},
+                        false}}});
+
+        const auto cyclic =
+            part::PartDocument::restore(
+                fixture.document.documentId(),
+                std::move(state),
+                fixture.document.revision());
+        CHECK(!cyclic.ok());
+        CHECK(
+            cyclic.code ==
+            part::PartReconstructErrorCode::
+                invalid_state);
+    }
+
     // Partial Revolve participates in the normal ordered Body evaluator and
     // maps provider-neutral start/end/side provenance into semantic topology.
     {
