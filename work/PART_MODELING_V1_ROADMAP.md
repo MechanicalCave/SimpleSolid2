@@ -516,7 +516,7 @@ PM-04D Revolve draft / Operations / Command Line / preview is **COMPLETED — PA
 
 PM-04E integrated lifecycle / repair / persistence is **COMPLETED — PASS**. E1 exact candidate `dad92ce54fb0cf69ae96b7210d5f49bfce3f9402` passed Windows FULL #1560 and merged as `a559f7b2d6a667e4d4b34cbfd7af6f2d93cd65e1`; E2 exact candidate `bdf87a29b5cdc27c608023af863e32c44dc55ef1` passed Windows FULL #1562 and merged as `e9a1056da4ec3639458aa1cdf4faacfc1621fcc9`; E3 exact candidate `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` passed Windows FULL #1563 and merged as `1a7e1228a91b23f89bf13f6bb5c07c8abe9afae3`. Completion evidence: `work/PM-04E_REVOLVE_LIFECYCLE_PERSISTENCE_COMPLETION.md`.
 
-Current implementation checkpoint is **PM-04F — documentation / Product Browser / Owner Windows acceptance**. Datum Axis, Projection and later packages remain separately gated.
+Current implementation checkpoint is **PM-04F — documentation / Product Browser / Owner Windows acceptance**. Automated/documentation closure is PASS: the latest runtime-affecting candidate `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` passed Windows FULL #1563, and the final docs/Product Browser candidate `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` passed exact-head Windows DOCS #1565 and merged as `72c40b8cfb39ea63859d5485f80a8adfbba35094`. The only remaining PM-04 gate is explicit Owner PASS for `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md`. Datum Axis, Projection and later packages remain separately gated.
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 
