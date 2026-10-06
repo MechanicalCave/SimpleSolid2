@@ -386,7 +386,7 @@ part::SketchPlacement resolvedDatumSketchFrame(
 int main() {
     CHECK(
         part::PartDocumentStore::
-            current_schema_version == 11);
+            current_schema_version == 12);
 
     TestKernel kernel;
     auto fixture = makeFixture(kernel);
@@ -794,7 +794,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 11);
+            .domain_schema_version == 12);
 
     const auto authored =
         nlohmann::json::parse(
