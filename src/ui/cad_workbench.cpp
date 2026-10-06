@@ -451,7 +451,8 @@ QString revolveAxisText(
             part::authoredAxisIdForAxisReference(
                 axis)) {
         return QStringLiteral("Axis %1")
-            .arg(fromUtf8(id->serialized()));
+            .arg(QString::fromStdString(
+                id->serialized()));
     }
     return QStringLiteral("<invalid Axis>");
 }
@@ -10876,10 +10877,15 @@ void CadWorkbench::refreshFeatureProperties(
     feature_identity_->setText(
         fromUtf8(feature->id.serialized()));
 
-    part::ProfileId source_profile_id;
+    const auto source_profile =
+        part::sourceProfileId(*feature);
+    if (!source_profile) {
+        return;
+    }
+    const auto source_profile_id =
+        *source_profile;
+
     if (extrude != nullptr) {
-        source_profile_id =
-            extrude->profile_id;
         feature_operation_->setText(
             extrude->operation ==
                     part::ExtrudeOperation::cut
@@ -10919,8 +10925,6 @@ void CadWorkbench::refreshFeatureProperties(
         feature_edit_button_->setText(
             QStringLiteral("Edit Extrude"));
     } else {
-        source_profile_id =
-            revolve->profile_id;
         feature_operation_->setText(
             revolve->operation ==
                     part::RevolveOperation::cut
