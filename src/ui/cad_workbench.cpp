@@ -8031,6 +8031,18 @@ CadWorkbench::submitCadInput(
             "EXTRUDE is waiting for one valid Profile selection; use Tree/viewport or CANCEL."};
     }
 
+    if (axis_draft_) {
+        auto result =
+            submitAxisCadInput(text);
+        if (!result.accepted &&
+            status_ != nullptr &&
+            !result.diagnostic.empty()) {
+            setStatusText(
+                fromUtf8(result.diagnostic));
+        }
+        return result;
+    }
+
     if (datum_plane_draft_) {
         auto result =
             submitDatumPlaneCadInput(text);
@@ -8057,6 +8069,14 @@ CadWorkbench::submitCadInput(
 
     const auto top_level_keyword =
         upperAsciiTrimmed(text);
+    if (top_level_keyword == "AXIS") {
+        return startAxisTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "AXIS could not be activated."};
+    }
     if (top_level_keyword == "DATUMPLANE" ||
         top_level_keyword == "DATUM PLANE") {
         return startDatumPlaneTool()
@@ -8153,6 +8173,13 @@ QString CadWorkbench::cadInputPromptText() const {
                   "Command: RESUPPORT — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc")
             : QStringLiteral(
                   "Command: SKETCH — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc");
+    }
+    if (axis_draft_) {
+        return axis_draft_->source()
+            ? QStringLiteral(
+                  "Command: AXIS — SOURCE · FINISH/CANCEL")
+            : QStringLiteral(
+                  "Command: AXIS — Select exactly one Line in an active Sketch · SOURCE · CANCEL/Esc");
     }
     if (datum_plane_draft_) {
         return datum_plane_draft_->source()
@@ -9663,6 +9690,23 @@ bool CadWorkbench::eventFilter(
         event->type() == QEvent::KeyPress) {
         auto* key_event =
             static_cast<QKeyEvent*>(event);
+
+        if (watched == viewport_widget_ &&
+            axis_draft_) {
+            if (key_event->key() ==
+                Qt::Key_Escape) {
+                cancelAxis();
+                return true;
+            }
+            if (key_event->key() ==
+                    Qt::Key_Return ||
+                key_event->key() ==
+                    Qt::Key_Enter) {
+                static_cast<void>(
+                    finishAxis());
+                return true;
+            }
+        }
 
         if (watched == viewport_widget_ &&
             datum_plane_draft_) {
