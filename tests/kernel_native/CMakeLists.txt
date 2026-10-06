@@ -509,16 +509,18 @@ target_link_libraries(pm05a_edge_feature_provider_evidence_test
 
 target_compile_features(pm05a_edge_feature_provider_evidence_test PRIVATE cxx_std_20)
 
-# PM-05A evidence-only: surface the native provider matrix in focused/full
-# build logs without changing test pass/fail semantics. Remove after the
-# matrix has been captured into the PM-05A evidence report.
-add_custom_command(
-    TARGET pm05a_edge_feature_provider_evidence_test
-    POST_BUILD
-    COMMAND $<TARGET_FILE:pm05a_edge_feature_provider_evidence_test>
-    COMMENT "PM-05A provider matrix evidence"
-    VERBATIM
-)
+# PM-05A evidence-only: surface the native provider matrix in the
+# kernel-native Release build log without changing test pass/fail semantics.
+# Do not execute the probe as part of the desktop Debug graph.
+if(NOT SS2_BUILD_DESKTOP)
+    add_custom_command(
+        TARGET pm05a_edge_feature_provider_evidence_test
+        POST_BUILD
+        COMMAND $<TARGET_FILE:pm05a_edge_feature_provider_evidence_test>
+        COMMENT "PM-05A provider matrix evidence"
+        VERBATIM
+    )
+endif()
 
 add_test(
     NAME pm05a.edge_feature_provider_evidence
