@@ -2069,11 +2069,13 @@ void PartViewportController::setProfileSelectionFromTree(
         selection.primary_profile = primary;
         selection.primary.reset();
         selection.primary_datum.reset();
+        selection.primary_axis.reset();
     } else if (!selected.empty()) {
         selection.primary_profile =
             selected.front();
         selection.primary.reset();
         selection.primary_datum.reset();
+        selection.primary_axis.reset();
     } else {
         selection.primary_profile.reset();
     }
@@ -4699,6 +4701,8 @@ void PartViewportController::onBodyTopologyIntent(
     selection.primary_profile.reset();
     selection.datums.clear();
     selection.primary_datum.reset();
+    selection.axes.clear();
+    selection.primary_axis.reset();
 
     if (mode ==
         viewer::SelectionIntentMode::replace) {
