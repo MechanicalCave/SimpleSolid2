@@ -9043,6 +9043,15 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (extrude_draft_->generation() &
                 (extrude_namespace - 1U));
     }
+    if (revolve_draft_) {
+        constexpr application::CadInputContextGeneration
+            revolve_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 58U};
+        return revolve_namespace |
+               (revolve_draft_->generation() &
+                (revolve_namespace - 1U));
+    }
     return sketch_interaction_controller_
                ? sketch_interaction_controller_->
                      cadInputContextGeneration()
@@ -9073,6 +9082,14 @@ CadWorkbench::cadDynamicInputFields() const {
                     CadDynamicInputFieldSemantic::
                         distance,
                 "Distance"}};
+    }
+    if (revolve_draft_) {
+        return {
+            application::CadDynamicInputField{
+                application::
+                    CadDynamicInputFieldSemantic::
+                        angle,
+                "Angle"}};
     }
 
     if (!sketch_interaction_controller_ ||
@@ -9168,6 +9185,37 @@ CadWorkbench::lockCadDynamicInputField(
         return {true, {}};
     }
 
+    if (revolve_draft_) {
+        if (index != 0U ||
+            document_session_ == nullptr) {
+            return {
+                false,
+                "Revolve has one Angle input field."};
+        }
+        const auto quantity =
+            application::parseCadQuantity(
+                text,
+                {
+                    application::CadQuantityDimension::
+                        angle,
+                    document_session_->document()
+                        .lengthUnit()});
+        constexpr double full_turn =
+            2.0 * std::numbers::pi_v<double>;
+        if (!quantity ||
+            !(quantity->canonical_value > 0.0) ||
+            quantity->canonical_value > full_turn ||
+            !setRevolveAngle(
+                core::AngleValue{
+                    quantity->canonical_value},
+                text)) {
+            return {
+                false,
+                "Revolve Angle expects 0 < angle <= 360 deg."};
+        }
+        return {true, {}};
+    }
+
     if (!sketch_interaction_controller_) {
         return {
             false,
@@ -9230,6 +9278,14 @@ CadWorkbench::submitCadDynamicInputRequest(
             : application::CadInputSubmitResult{
                   false,
                   "Extrude Finish was rejected."};
+    }
+    if (revolve_draft_) {
+        return finishRevolve()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Revolve Finish was rejected."};
     }
 
     if (!sketch_interaction_controller_ ||
@@ -9344,6 +9400,17 @@ CadWorkbench::submitCadInput(
         }
         return result;
     }
+    if (revolve_draft_) {
+        auto result =
+            submitRevolveCadInput(text);
+        if (!result.accepted &&
+            status_ != nullptr &&
+            !result.diagnostic.empty()) {
+            setStatusText(
+                fromUtf8(result.diagnostic));
+        }
+        return result;
+    }
 
     const auto top_level_keyword =
         upperAsciiTrimmed(text);
@@ -9371,6 +9438,14 @@ CadWorkbench::submitCadInput(
             : application::CadInputSubmitResult{
                   false,
                   "EXTRUDE could not be activated."};
+    }
+    if (top_level_keyword == "REVOLVE") {
+        return startRevolveTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "REVOLVE could not be activated."};
     }
     if (top_level_keyword == "SKETCH") {
         startSketchTool();
@@ -9473,6 +9548,18 @@ QString CadWorkbench::cadInputPromptText() const {
     if (extrude_draft_) {
         return QStringLiteral(
             "Command: EXTRUDE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Distance · FINISH/CANCEL");
+    }
+    if (revolve_draft_) {
+        if (!revolve_draft_->profileId()) {
+            return QStringLiteral(
+                "Command: REVOLVE — Select one valid Profile · CANCEL/Esc");
+        }
+        if (!revolve_draft_->axis()) {
+            return QStringLiteral(
+                "Command: REVOLVE — Select X/Y/Z Origin Axis or one resolved authored Axis · X/Y/Z · CANCEL/Esc");
+        }
+        return QStringLiteral(
+            "Command: REVOLVE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Angle · FINISH/CANCEL");
     }
 
     if (!sketch_interaction_controller_ ||
