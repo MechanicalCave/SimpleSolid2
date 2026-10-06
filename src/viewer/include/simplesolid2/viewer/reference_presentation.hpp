@@ -27,6 +27,7 @@ enum class ReferencePresentationKind : std::uint8_t {
     x_axis,
     y_axis,
     z_axis,
+    axis,
     plane,
     datum_plane,
 };
