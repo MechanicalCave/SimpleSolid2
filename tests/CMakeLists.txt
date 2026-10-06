@@ -901,6 +901,35 @@ set_tests_properties(pm04d1.revolve_draft_preview PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-kernel"
 )
 
+add_executable(pm04d2_cad_workbench_revolve_test
+    pm04d2_cad_workbench_revolve_test.cpp
+)
+
+target_include_directories(pm04d2_cad_workbench_revolve_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(pm04d2_cad_workbench_revolve_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_ui
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(pm04d2_cad_workbench_revolve_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm04d2.cad_workbench_revolve
+    COMMAND pm04d2_cad_workbench_revolve_test
+)
+
+set_tests_properties(pm04d2.cad_workbench_revolve PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel"
+)
+
 add_executable(pm04b2_axis_tree_viewer_test
     pm04b2_axis_tree_viewer_test.cpp
 )

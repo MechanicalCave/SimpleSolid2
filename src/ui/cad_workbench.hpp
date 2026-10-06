@@ -2,6 +2,7 @@
 
 #include <simplesolid2/application/cad_input.hpp>
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/application/revolve_draft.hpp>
 #include <simplesolid2/sketch/sketch_id.hpp>
 #include <simplesolid2/viewer/camera_state.hpp>
 
@@ -146,6 +147,7 @@ public:
         return axis_draft_.has_value() ||
                datum_plane_draft_.has_value() ||
                extrude_draft_.has_value() ||
+               revolve_draft_.has_value() ||
                (sketch_support_pick_active_ &&
                 pending_sketch_support_.has_value());
     }
@@ -239,6 +241,30 @@ private:
         bool refresh_now = true);
     [[nodiscard]] application::CadInputSubmitResult
     submitExtrudeCadInput(std::string_view text);
+
+    [[nodiscard]] bool startRevolveTool();
+    [[nodiscard]] bool startRevolveEdit(
+        part::FeatureId feature_id);
+    void tryStageRevolveProfile(
+        std::optional<part::ProfileId> profile_id);
+    void tryStageRevolveAxisFromBuiltin(
+        std::optional<core::BuiltinReferenceRole> role);
+    void tryStageRevolveAxisFromAuthored(
+        std::optional<part::AxisId> axis_id);
+    void cancelRevolve();
+    [[nodiscard]] bool finishRevolve();
+    void clearRevolveRuntimeContext();
+    void refreshRevolvePreview();
+    void scheduleRevolvePreview();
+    void flushRevolvePreview();
+    void syncRevolveUi();
+    [[nodiscard]] bool setRevolveAngle(
+        core::AngleValue angle,
+        std::optional<std::string_view> display_text =
+            std::nullopt,
+        bool refresh_now = true);
+    [[nodiscard]] application::CadInputSubmitResult
+    submitRevolveCadInput(std::string_view text);
 
     void setSketchSelectionRole(
         sketch::EntityRole role);
@@ -555,6 +581,7 @@ private:
     QPushButton* axis_button_{};
     QPushButton* datum_plane_button_{};
     QPushButton* extrude_button_{};
+    QPushButton* revolve_button_{};
     QPushButton* select_sketch_button_{};
     QLabel* create_tools_label_{};
     QPushButton* line_sketch_button_{};
@@ -635,6 +662,27 @@ private:
         extrude_profile_pick_generation_{};
     bool extrude_distance_input_valid_{};
     bool syncing_extrude_ui_{};
+
+    QWidget* revolve_operations_widget_{};
+    QLabel* revolve_profile_label_{};
+    QLabel* revolve_axis_label_{};
+    QPushButton* revolve_add_button_{};
+    QPushButton* revolve_cut_button_{};
+    QPushButton* revolve_one_side_button_{};
+    QPushButton* revolve_midplane_button_{};
+    QPushButton* revolve_reverse_button_{};
+    QLineEdit* revolve_angle_edit_{};
+    QTimer* revolve_preview_timer_{};
+    QLabel* revolve_result_label_{};
+    QPushButton* revolve_finish_button_{};
+    QPushButton* revolve_cancel_button_{};
+    std::optional<application::RevolveDraft>
+        revolve_draft_;
+    std::optional<
+        application::RevolveDraftEvaluationResult>
+        revolve_evaluation_;
+    bool revolve_angle_input_valid_{true};
+    bool syncing_revolve_ui_{};
 
     QWidget* profile_operations_widget_{};
     QPushButton* profile_add_area_button_{};

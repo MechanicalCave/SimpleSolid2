@@ -796,6 +796,7 @@ void PartViewportController::setDocumentSession(
         axis_bindings_.clear();
         transient_profile_reveal_.reset();
         transient_profile_hide_.reset();
+    transient_axis_emphasis_.reset();
         body_scene_revision_.reset();
         body_scene_cache_.reset();
         part_evaluation_cache_.reset();
@@ -838,6 +839,7 @@ void PartViewportController::clear() {
     axis_bindings_.clear();
     transient_profile_reveal_.reset();
     transient_profile_hide_.reset();
+    transient_axis_emphasis_.reset();
     body_scene_revision_.reset();
     body_scene_cache_.reset();
     part_evaluation_cache_.reset();
@@ -2127,6 +2129,35 @@ setTransientProfilePresentationOverride(
     refreshPresentation();
 }
 
+
+void PartViewportController::setTransientAxisEmphasis(
+    std::optional<part::AxisReference> axis) {
+    if (axis && !axis->valid()) {
+        axis.reset();
+    }
+
+    if (axis && session_ != nullptr) {
+        if (const auto authored =
+                part::authoredAxisIdForAxisReference(
+                    *axis);
+            authored &&
+            session_->document().findAxis(*authored) ==
+                nullptr) {
+            axis.reset();
+        }
+    }
+
+    if (transient_axis_emphasis_ == axis) {
+        return;
+    }
+
+    transient_axis_emphasis_ = std::move(axis);
+    refreshPresentation();
+    // Highlighting the source Axis is runtime presentation only; it does not
+    // rewrite semantic Tree/viewport selection or authored visibility.
+    applySelectionToSurfaces();
+}
+
 bool PartViewportController::projectSketchEntitySelection(
     const std::vector<sketch::EntityId>& selected,
     std::optional<sketch::EntityId> primary) {
@@ -3216,12 +3247,25 @@ PartViewportController::buildReferenceScene() {
             true};
     }
 
+    const auto transient_origin_axis =
+        transient_axis_emphasis_
+            ? part::builtinOriginAxisForAxisReference(
+                  *transient_axis_emphasis_)
+            : std::nullopt;
+    const auto transient_authored_axis =
+        transient_axis_emphasis_
+            ? part::authoredAxisIdForAxisReference(
+                  *transient_axis_emphasis_)
+            : std::nullopt;
+
     for (const auto role : core::builtin_reference_roles) {
         scene.references.push_back(
             makeReference(
                 role,
                 session_->document()
-                    .builtinReferenceVisible(role)));
+                        .builtinReferenceVisible(role) ||
+                    (transient_origin_axis &&
+                     *transient_origin_axis == role)));
     }
 
     const auto& axes =
@@ -3248,7 +3292,9 @@ PartViewportController::buildReferenceScene() {
                     &*part_evaluation_cache_,
                     &*datum_evaluation_cache_);
 
-            if (!axis.visible ||
+            if ((!axis.visible &&
+                 (!transient_authored_axis ||
+                  *transient_authored_axis != axis.id)) ||
                 evaluation.status !=
                     part::AxisEvaluationStatus::resolved ||
                 !evaluation.line ||
@@ -4841,7 +4887,8 @@ void PartViewportController::applySelectionToSurfaces() {
         selection.profiles.size() +
         selection.datums.size() +
         selection.axes.size() +
-        selection.body_topology.size());
+        selection.body_topology.size() +
+        (transient_axis_emphasis_ ? 1U : 0U));
 
     for (const auto role : selection.selected) {
         presentation.selected.push_back(
@@ -4872,6 +4919,32 @@ void PartViewportController::applySelectionToSurfaces() {
             axisPresentationFor(axis_id);
         if (token) {
             presentation.selected.push_back(*token);
+        }
+    }
+
+
+    if (transient_axis_emphasis_) {
+        std::optional<viewer::PresentationToken>
+            source_axis_token;
+        if (const auto role =
+                part::builtinOriginAxisForAxisReference(
+                    *transient_axis_emphasis_)) {
+            source_axis_token = tokenFor(*role);
+        } else if (const auto axis_id =
+                       part::authoredAxisIdForAxisReference(
+                           *transient_axis_emphasis_)) {
+            source_axis_token =
+                axisPresentationFor(*axis_id);
+        }
+
+        if (source_axis_token &&
+            std::find(
+                presentation.selected.begin(),
+                presentation.selected.end(),
+                *source_axis_token) ==
+                presentation.selected.end()) {
+            presentation.selected.push_back(
+                *source_axis_token);
         }
     }
 

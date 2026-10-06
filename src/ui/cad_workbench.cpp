@@ -419,6 +419,86 @@ QString formatLengthForPart(
                 core::lengthUnitSuffix(unit).size())));
 }
 
+QString formatAngleForCad(
+    core::AngleValue value) {
+    return QStringLiteral("%1 deg")
+        .arg(
+            QString::number(
+                value.radians * 180.0 /
+                    std::numbers::pi_v<double>,
+                'g',
+                12));
+}
+
+
+QString revolveAxisText(
+    const part::AxisReference& axis) {
+    if (const auto role =
+            part::builtinOriginAxisForAxisReference(
+                axis)) {
+        switch (*role) {
+        case core::BuiltinReferenceRole::x_axis:
+            return QStringLiteral("Origin X Axis");
+        case core::BuiltinReferenceRole::y_axis:
+            return QStringLiteral("Origin Y Axis");
+        case core::BuiltinReferenceRole::z_axis:
+            return QStringLiteral("Origin Z Axis");
+        default:
+            break;
+        }
+    }
+    if (const auto id =
+            part::authoredAxisIdForAxisReference(
+                axis)) {
+        return QStringLiteral("Axis %1")
+            .arg(QString::fromStdString(
+                id->serialized()));
+    }
+    return QStringLiteral("<invalid Axis>");
+}
+
+QString revolveEvaluationText(
+    const application::RevolveDraftEvaluationResult&
+        evaluation) {
+    using Status =
+        application::RevolveDraftEvaluationStatus;
+    switch (evaluation.status) {
+    case Status::ok:
+        return evaluation.previewSolidAvailable()
+            ? QStringLiteral("Preview ready.")
+            : QStringLiteral(
+                  "Candidate valid; preview unavailable.");
+    case Status::incomplete_draft:
+        return QStringLiteral(
+            "Select a Profile and an Origin/Authored Axis.");
+    case Status::stale_document:
+    case Status::stale_revision:
+        return QStringLiteral(
+            "Draft is stale; restart Revolve.");
+    case Status::missing_profile:
+        return QStringLiteral("Source Profile is missing.");
+    case Status::missing_feature:
+        return QStringLiteral("Edited Feature is missing.");
+    case Status::suppressed_feature:
+        return QStringLiteral(
+            "Suppressed Feature cannot be edited.");
+    case Status::feature_id_exhausted:
+        return QStringLiteral(
+            "Feature identity space is exhausted.");
+    case Status::invalid_candidate:
+        return QStringLiteral(
+            "Revolve candidate is invalid.");
+    case Status::target_failed:
+        return evaluation.evaluation_diagnostic
+            ? QStringLiteral("Revolve rejected: %1")
+                  .arg(
+                      featureEvaluationDiagnosticText(
+                          *evaluation.evaluation_diagnostic))
+            : QStringLiteral("Revolve evaluation failed.");
+    }
+    return QStringLiteral("Revolve unavailable.");
+}
+
 std::string toUtf8(const QString& value) {
     const auto bytes = value.toUtf8();
     return std::string{
@@ -1342,6 +1422,17 @@ void CadWorkbench::buildUi() {
         1,
         extrude_button_);
 
+    revolve_button_ =
+        new QPushButton(
+            QStringLiteral("Revolve"),
+            shell_);
+    revolve_button_->setObjectName(
+        QStringLiteral("revolveToolButton"));
+    revolve_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        1,
+        revolve_button_);
+
     datum_plane_button_ =
         new QPushButton(
             QStringLiteral("Datum Plane"),
@@ -1584,6 +1675,7 @@ void CadWorkbench::buildUi() {
             refreshPropertiesContext(primary);
             tryCreateSketchFromSupport(primary);
             tryStageDatumPlaneFromSupport(primary);
+            tryStageRevolveAxisFromBuiltin(primary);
         });
 
     viewport_controller_->setBodyTopologySelectionChangedHandler(
@@ -1695,6 +1787,7 @@ void CadWorkbench::buildUi() {
             syncSketchInteractionUi();
             if (semantic) {
                 tryCompleteExtrudeProfilePick();
+                tryStageRevolveProfile(semantic);
             }
             syncActionState();
         });
@@ -1719,6 +1812,7 @@ void CadWorkbench::buildUi() {
                 properties_stack_->setCurrentWidget(
                     document_properties_page_);
             }
+            tryStageRevolveAxisFromAuthored(semantic);
             syncActionState();
         });
 
@@ -1775,6 +1869,7 @@ void CadWorkbench::buildUi() {
             syncSketchInteractionUi();
             if (semantic) {
                 tryCompleteExtrudeProfilePick();
+                tryStageRevolveProfile(semantic);
             }
             syncActionState();
         });
@@ -1824,8 +1919,21 @@ void CadWorkbench::buildUi() {
         });
     tree_controller_->setFeatureEditHandler(
         [this](part::FeatureId feature_id) {
-            static_cast<void>(
-                startExtrudeEdit(feature_id));
+            if (document_session_ != nullptr) {
+                const auto* feature =
+                    document_session_->document()
+                        .findFeature(feature_id);
+                if (feature != nullptr &&
+                    std::holds_alternative<
+                        part::RevolveFeature>(
+                        feature->definition)) {
+                    static_cast<void>(
+                        startRevolveEdit(feature_id));
+                } else {
+                    static_cast<void>(
+                        startExtrudeEdit(feature_id));
+                }
+            }
         });
     tree_controller_->setFeatureSuppressionHandler(
         [this](
@@ -2464,7 +2572,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("Extent"),
         feature_extent_);
     feature_root->addRow(
-        QStringLiteral("Distance"),
+        QStringLiteral("Distance / Angle"),
         feature_distance_);
     feature_root->addRow(
         QStringLiteral("Direction"),
@@ -3297,6 +3405,167 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         extrude_operations_widget_);
 
+    revolve_operations_widget_ =
+        new QWidget(operations_content);
+    revolve_operations_widget_->setObjectName(
+        QStringLiteral("revolveOperationsWidget"));
+    auto* revolve_operations_layout =
+        new QVBoxLayout(
+            revolve_operations_widget_);
+    revolve_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    auto* revolve_sources_form =
+        new QFormLayout;
+    revolve_profile_label_ =
+        new QLabel(
+            QStringLiteral("<select Profile>"),
+            revolve_operations_widget_);
+    revolve_profile_label_->setObjectName(
+        QStringLiteral("revolveProfileLabel"));
+    revolve_axis_label_ =
+        new QLabel(
+            QStringLiteral("<select Axis>"),
+            revolve_operations_widget_);
+    revolve_axis_label_->setObjectName(
+        QStringLiteral("revolveAxisLabel"));
+    revolve_sources_form->addRow(
+        QStringLiteral("Profile"),
+        revolve_profile_label_);
+    revolve_sources_form->addRow(
+        QStringLiteral("Axis"),
+        revolve_axis_label_);
+    revolve_operations_layout->addLayout(
+        revolve_sources_form);
+
+    auto* revolve_operation_row =
+        new QWidget(
+            revolve_operations_widget_);
+    auto* revolve_operation_layout =
+        new QHBoxLayout(
+            revolve_operation_row);
+    revolve_operation_layout->setContentsMargins(
+        0, 0, 0, 0);
+    revolve_add_button_ =
+        new QPushButton(
+            QStringLiteral("Add"),
+            revolve_operation_row);
+    revolve_add_button_->setObjectName(
+        QStringLiteral("revolveAddButton"));
+    revolve_add_button_->setCheckable(true);
+    revolve_cut_button_ =
+        new QPushButton(
+            QStringLiteral("Cut"),
+            revolve_operation_row);
+    revolve_cut_button_->setObjectName(
+        QStringLiteral("revolveCutButton"));
+    revolve_cut_button_->setCheckable(true);
+    revolve_operation_layout->addWidget(
+        revolve_add_button_);
+    revolve_operation_layout->addWidget(
+        revolve_cut_button_);
+    revolve_operations_layout->addWidget(
+        revolve_operation_row);
+
+    auto* revolve_extent_row =
+        new QWidget(
+            revolve_operations_widget_);
+    auto* revolve_extent_layout =
+        new QHBoxLayout(
+            revolve_extent_row);
+    revolve_extent_layout->setContentsMargins(
+        0, 0, 0, 0);
+    revolve_one_side_button_ =
+        new QPushButton(
+            QStringLiteral("One Side"),
+            revolve_extent_row);
+    revolve_one_side_button_->setObjectName(
+        QStringLiteral("revolveOneSideButton"));
+    revolve_one_side_button_->setCheckable(true);
+    revolve_midplane_button_ =
+        new QPushButton(
+            QStringLiteral("Midplane"),
+            revolve_extent_row);
+    revolve_midplane_button_->setObjectName(
+        QStringLiteral("revolveMidplaneButton"));
+    revolve_midplane_button_->setCheckable(true);
+    revolve_extent_layout->addWidget(
+        revolve_one_side_button_);
+    revolve_extent_layout->addWidget(
+        revolve_midplane_button_);
+    revolve_operations_layout->addWidget(
+        revolve_extent_row);
+
+    revolve_reverse_button_ =
+        new QPushButton(
+            QStringLiteral("Reverse"),
+            revolve_operations_widget_);
+    revolve_reverse_button_->setObjectName(
+        QStringLiteral("revolveReverseButton"));
+    revolve_reverse_button_->setCheckable(true);
+    revolve_operations_layout->addWidget(
+        revolve_reverse_button_);
+
+    auto* revolve_angle_form =
+        new QFormLayout;
+    revolve_angle_edit_ =
+        new QLineEdit(
+            revolve_operations_widget_);
+    revolve_angle_edit_->setObjectName(
+        QStringLiteral("revolveAngleEdit"));
+    revolve_angle_edit_->setPlaceholderText(
+        QStringLiteral("0 < angle <= 360 deg"));
+    revolve_angle_form->addRow(
+        QStringLiteral("Angle"),
+        revolve_angle_edit_);
+    revolve_operations_layout->addLayout(
+        revolve_angle_form);
+
+    revolve_preview_timer_ =
+        new QTimer(this);
+    revolve_preview_timer_->setSingleShot(true);
+    revolve_preview_timer_->setInterval(90);
+    QObject::connect(
+        revolve_preview_timer_,
+        &QTimer::timeout,
+        this,
+        [this] {
+            refreshRevolvePreview();
+        });
+
+    revolve_result_label_ =
+        new QLabel(
+            QStringLiteral(
+                "Select a Profile and an Origin/Authored Axis."),
+            revolve_operations_widget_);
+    revolve_result_label_->setObjectName(
+        QStringLiteral("revolveResultLabel"));
+    revolve_result_label_->setWordWrap(true);
+    revolve_operations_layout->addWidget(
+        revolve_result_label_);
+
+    revolve_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Revolve"),
+            revolve_operations_widget_);
+    revolve_finish_button_->setObjectName(
+        QStringLiteral("revolveFinishButton"));
+    revolve_operations_layout->addWidget(
+        revolve_finish_button_);
+
+    revolve_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            revolve_operations_widget_);
+    revolve_cancel_button_->setObjectName(
+        QStringLiteral("revolveCancelButton"));
+    revolve_operations_layout->addWidget(
+        revolve_cancel_button_);
+
+    revolve_operations_widget_->setVisible(false);
+    operations_layout->addWidget(
+        revolve_operations_widget_);
+
     profile_operations_widget_ =
         new QWidget(operations_content);
     profile_operations_widget_->setObjectName(
@@ -3933,10 +4202,23 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
-            if (selected_feature_id_) {
-                static_cast<void>(
-                    startExtrudeEdit(
-                        *selected_feature_id_));
+            if (selected_feature_id_ &&
+                document_session_ != nullptr) {
+                const auto feature_id =
+                    *selected_feature_id_;
+                const auto* feature =
+                    document_session_->document()
+                        .findFeature(feature_id);
+                if (feature != nullptr &&
+                    std::holds_alternative<
+                        part::RevolveFeature>(
+                        feature->definition)) {
+                    static_cast<void>(
+                        startRevolveEdit(feature_id));
+                } else {
+                    static_cast<void>(
+                        startExtrudeEdit(feature_id));
+                }
             }
         });
     QObject::connect(
@@ -4445,6 +4727,193 @@ void CadWorkbench::buildUi() {
         });
 
     QObject::connect(
+        revolve_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (revolve_draft_) {
+                cancelRevolve();
+                return;
+            }
+            static_cast<void>(
+                startRevolveTool());
+        });
+    QObject::connect(
+        revolve_add_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (revolve_draft_ &&
+                revolve_draft_->setOperation(
+                    part::RevolveOperation::add)) {
+                refreshRevolvePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        revolve_cut_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (!revolve_draft_ ||
+                document_session_ == nullptr) {
+                return;
+            }
+            const auto& features =
+                document_session_->document()
+                    .body().features;
+            bool cut_allowed = !features.empty();
+            if (revolve_draft_->mode() ==
+                    application::RevolveDraftMode::edit &&
+                revolve_draft_->featureId()) {
+                const auto found =
+                    std::find_if(
+                        features.begin(),
+                        features.end(),
+                        [this](const part::PartFeature& feature) {
+                            return feature.id ==
+                                *revolve_draft_->featureId();
+                        });
+                cut_allowed =
+                    found != features.end() &&
+                    found != features.begin();
+            }
+            if (!cut_allowed) {
+                setStatusText(
+                    QStringLiteral(
+                        "The first solid-producing Revolve must be Add."));
+                syncRevolveUi();
+                return;
+            }
+            if (revolve_draft_->setOperation(
+                    part::RevolveOperation::cut)) {
+                refreshRevolvePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        revolve_one_side_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (revolve_draft_ &&
+                revolve_draft_->setExtentMode(
+                    application::RevolveDraftExtentMode::
+                        one_side)) {
+                refreshRevolvePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        revolve_midplane_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (revolve_draft_ &&
+                revolve_draft_->setExtentMode(
+                    application::RevolveDraftExtentMode::
+                        midplane)) {
+                refreshRevolvePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        revolve_reverse_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (!revolve_draft_) return;
+            if (!revolve_draft_->setReversed(
+                    checked)) {
+                syncRevolveUi();
+                return;
+            }
+            refreshRevolvePreview();
+            notifyCadInputContextChanged();
+        });
+    QObject::connect(
+        revolve_angle_edit_,
+        &QLineEdit::textChanged,
+        this,
+        [this](const QString& text_value) {
+            if (syncing_revolve_ui_ ||
+                !revolve_draft_ ||
+                document_session_ == nullptr) {
+                return;
+            }
+            const auto parsed =
+                application::parseCadQuantity(
+                    toUtf8(text_value),
+                    {
+                        application::
+                            CadQuantityDimension::angle,
+                        document_session_->document()
+                            .lengthUnit()});
+            constexpr double full_turn =
+                2.0 * std::numbers::pi_v<double>;
+            if (!parsed ||
+                !(parsed->canonical_value > 0.0) ||
+                parsed->canonical_value > full_turn) {
+                revolve_angle_input_valid_ = false;
+                revolve_evaluation_.reset();
+                if (revolve_preview_timer_ != nullptr) {
+                    revolve_preview_timer_->stop();
+                }
+                if (viewport_controller_) {
+                    viewport_controller_->clearSolidPreview();
+                    if (revolve_draft_->mode() ==
+                            application::RevolveDraftMode::edit &&
+                        revolve_draft_->profileId()) {
+                        viewport_controller_->
+                            setTransientProfilePresentationOverride(
+                                *revolve_draft_->profileId(),
+                                std::nullopt);
+                    } else {
+                        viewport_controller_->
+                            setTransientProfilePresentationOverride(
+                                std::nullopt,
+                                std::nullopt);
+                    }
+                    viewport_controller_->
+                        setTransientAxisEmphasis(
+                            revolve_draft_->axis());
+                }
+                syncRevolveUi();
+                return;
+            }
+            static_cast<void>(
+                setRevolveAngle(
+                    core::AngleValue{
+                        parsed->canonical_value},
+                    toUtf8(text_value),
+                    false));
+        });
+    QObject::connect(
+        revolve_angle_edit_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] {
+            flushRevolvePreview();
+            static_cast<void>(
+                finishRevolve());
+        });
+    QObject::connect(
+        revolve_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                finishRevolve());
+        });
+    QObject::connect(
+        revolve_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cancelRevolve();
+        });
+
+    QObject::connect(
         profile_add_area_button_,
         &QPushButton::clicked,
         this,
@@ -4536,6 +5005,7 @@ void CadWorkbench::buildUi() {
     syncAxisUi();
     syncDatumPlaneUi();
     syncExtrudeUi();
+    syncRevolveUi();
 }
 
 bool CadWorkbench::activateDocument(
@@ -4558,6 +5028,7 @@ bool CadWorkbench::activateDocument(
     clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
+    clearRevolveRuntimeContext();
     clearSketchRuntimeContext();
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clear();
@@ -4581,6 +5052,7 @@ void CadWorkbench::deactivateDocument() {
     clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
+    clearRevolveRuntimeContext();
     clearSketchRuntimeContext();
     document_session_ = nullptr;
     workspace_root_.clear();
@@ -4801,6 +5273,7 @@ void CadWorkbench::setFeatureSuppressed(
     if (document_session == nullptr ||
         datum_plane_draft_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -4855,6 +5328,7 @@ void CadWorkbench::deleteFeature(
     if (document_session == nullptr ||
         datum_plane_draft_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -4916,6 +5390,7 @@ bool CadWorkbench::startAxisTool() {
         datum_plane_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         sketch_support_pick_active_) {
         setStatusText(
             QStringLiteral(
@@ -4964,6 +5439,7 @@ bool CadWorkbench::startAxisEdit(
         datum_plane_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         sketch_support_pick_active_) {
         return false;
     }
@@ -5020,6 +5496,12 @@ void CadWorkbench::deleteAxis(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+    if (revolve_draft_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel Revolve before deleting an Axis."));
         return;
     }
     if (axis_draft_) {
@@ -5364,6 +5846,7 @@ bool CadWorkbench::startDatumPlaneTool() {
     if (axis_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5446,6 +5929,7 @@ bool CadWorkbench::startDatumPlaneEdit(
         axis_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5508,6 +5992,7 @@ void CadWorkbench::deleteDatumPlane(
     if (datum_plane_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -6038,10 +6523,11 @@ bool CadWorkbench::startExtrudeTool() {
                 "Extrude requires an active Part and modeling Kernel."));
         return false;
     }
-    if (extrude_draft_) {
+    if (extrude_draft_ ||
+        revolve_draft_) {
         setStatusText(
             QStringLiteral(
-                "An Extrude operation is already active."));
+                "Finish or cancel the active solid Feature command before Extrude."));
         return false;
     }
     if (datum_plane_draft_ ||
@@ -6142,10 +6628,11 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
                 "Extrude requires an active Part and modeling Kernel."));
         return false;
     }
-    if (extrude_draft_) {
+    if (extrude_draft_ ||
+        revolve_draft_) {
         setStatusText(
             QStringLiteral(
-                "An Extrude operation is already active."));
+                "Finish or cancel the active solid Feature command before Extrude."));
         return false;
     }
     if (datum_plane_draft_ ||
@@ -6251,10 +6738,11 @@ bool CadWorkbench::startExtrudeEdit(
                 "Cancel the active Extrude Profile selection before editing a Feature."));
         return false;
     }
-    if (extrude_draft_) {
+    if (extrude_draft_ ||
+        revolve_draft_) {
         setStatusText(
             QStringLiteral(
-                "Finish or cancel the active Extrude before editing another Feature."));
+                "Finish or cancel the active solid Feature command before editing another Feature."));
         return false;
     }
     if (datum_plane_draft_ ||
@@ -6821,6 +7309,803 @@ CadWorkbench::submitExtrudeCadInput(
     return {true, {}};
 }
 
+
+bool CadWorkbench::startRevolveTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        revolve_draft_ ||
+        sketch_support_pick_active_ ||
+        axis_draft_ ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        active_sketch_id_) {
+        return false;
+    }
+
+    auto draft =
+        application::RevolveDraft::beginCreate(
+            *document_session);
+    if (selected_profile_id_) {
+        const auto evaluation =
+            document_session->document()
+                .evaluateProfile(
+                    *selected_profile_id_);
+        if (evaluation && evaluation->valid()) {
+            static_cast<void>(
+                draft.setProfile(
+                    *selected_profile_id_));
+        }
+    }
+
+    if (selected_axis_id_) {
+        const auto found =
+            std::find_if(
+                axis_evaluation_statuses_.begin(),
+                axis_evaluation_statuses_.end(),
+                [this](const AxisEvaluationUiState& item) {
+                    return item.axis_id ==
+                        *selected_axis_id_;
+                });
+        if (found != axis_evaluation_statuses_.end() &&
+            found->status ==
+                part::AxisEvaluationStatus::resolved &&
+            found->line) {
+            static_cast<void>(
+                draft.setAxis(
+                    part::AxisReference{
+                        part::AuthoredAxisReference{
+                            *selected_axis_id_}}));
+        }
+    } else if (viewport_controller_ != nullptr) {
+        if (const auto role =
+                viewport_controller_->primarySelection();
+            role && part::isOriginAxis(*role)) {
+            static_cast<void>(
+                draft.setAxis(
+                    part::AxisReference{
+                        part::BuiltinOriginAxisReference{
+                            *role}}));
+        }
+    }
+
+    revolve_draft_ = std::move(draft);
+    revolve_evaluation_.reset();
+    revolve_angle_input_valid_ = true;
+    if (revolve_angle_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            revolve_angle_edit_};
+        revolve_angle_edit_->setText(
+            formatAngleForCad(
+                revolve_draft_->angle()));
+    }
+    if (viewport_controller_) {
+        viewport_controller_->clearSolidPreview();
+        viewport_controller_->
+            setTransientProfilePresentationOverride(
+                std::nullopt,
+                std::nullopt);
+        viewport_controller_->
+            setTransientAxisEmphasis(
+                std::nullopt);
+    }
+
+    refreshRevolvePreview();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        revolve_draft_->profileId()
+            ? QStringLiteral(
+                  "Revolve active — select an Origin X/Y/Z or authored Axis.")
+            : QStringLiteral(
+                  "Revolve active — select a valid Profile, then an Origin X/Y/Z or authored Axis."));
+    return true;
+}
+
+bool CadWorkbench::startRevolveEdit(
+    part::FeatureId feature_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        revolve_draft_ ||
+        sketch_support_pick_active_ ||
+        axis_draft_ ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        active_sketch_id_) {
+        return false;
+    }
+
+    auto draft =
+        application::RevolveDraft::beginEdit(
+            *document_session,
+            feature_id);
+    if (!draft) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Feature is not an editable Revolve."));
+        return false;
+    }
+
+    revolve_draft_ = std::move(*draft);
+    revolve_evaluation_.reset();
+    revolve_angle_input_valid_ = true;
+    if (revolve_angle_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            revolve_angle_edit_};
+        revolve_angle_edit_->setText(
+            formatAngleForCad(
+                revolve_draft_->angle()));
+    }
+    if (viewport_controller_) {
+        if (revolve_draft_->profileId()) {
+            viewport_controller_->
+                setTransientProfilePresentationOverride(
+                    *revolve_draft_->profileId(),
+                    std::nullopt);
+        }
+        viewport_controller_->
+            setTransientAxisEmphasis(
+                revolve_draft_->axis());
+    }
+
+    refreshRevolvePreview();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Edit Revolve active — FeatureId is preserved."));
+    return true;
+}
+
+void CadWorkbench::tryStageRevolveProfile(
+    std::optional<part::ProfileId> profile_id) {
+    if (!revolve_draft_ ||
+        !profile_id ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    const auto evaluation =
+        document_session_->document()
+            .evaluateProfile(*profile_id);
+    if (!evaluation || !evaluation->valid()) {
+        setStatusText(
+            QStringLiteral(
+                "Revolve requires one valid Profile."));
+        return;
+    }
+
+    if (revolve_draft_->setProfile(
+            *profile_id)) {
+        revolve_evaluation_.reset();
+        refreshRevolvePreview();
+        notifyCadInputContextChanged();
+        setStatusText(
+            revolve_draft_->axis()
+                ? QStringLiteral(
+                      "Revolve Profile selected.")
+                : QStringLiteral(
+                      "Revolve Profile selected — now select an Origin X/Y/Z or authored Axis."));
+    }
+}
+
+void CadWorkbench::tryStageRevolveAxisFromBuiltin(
+    std::optional<core::BuiltinReferenceRole> role) {
+    if (!revolve_draft_ ||
+        !role ||
+        !part::isOriginAxis(*role)) {
+        return;
+    }
+
+    if (revolve_draft_->setAxis(
+            part::AxisReference{
+                part::BuiltinOriginAxisReference{
+                    *role}})) {
+        revolve_evaluation_.reset();
+        refreshRevolvePreview();
+        notifyCadInputContextChanged();
+        setStatusText(
+            revolve_draft_->profileId()
+                ? QStringLiteral(
+                      "Revolve Origin Axis selected.")
+                : QStringLiteral(
+                      "Revolve Axis selected — now select a valid Profile."));
+    }
+}
+
+void CadWorkbench::tryStageRevolveAxisFromAuthored(
+    std::optional<part::AxisId> axis_id) {
+    if (!revolve_draft_ ||
+        !axis_id ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    if (!part_evaluation_revision_ ||
+        *part_evaluation_revision_ !=
+            document_session_->document()
+                .revision()) {
+        refreshPartFeatureEvaluationSnapshot();
+    }
+    const auto found =
+        std::find_if(
+            axis_evaluation_statuses_.begin(),
+            axis_evaluation_statuses_.end(),
+            [axis_id](const AxisEvaluationUiState& item) {
+                return item.axis_id == *axis_id;
+            });
+    if (found == axis_evaluation_statuses_.end() ||
+        found->status !=
+            part::AxisEvaluationStatus::resolved ||
+        !found->line) {
+        setStatusText(
+            QStringLiteral(
+                "Revolve requires a resolved authored Axis."));
+        return;
+    }
+
+    if (revolve_draft_->setAxis(
+            part::AxisReference{
+                part::AuthoredAxisReference{
+                    *axis_id}})) {
+        revolve_evaluation_.reset();
+        refreshRevolvePreview();
+        notifyCadInputContextChanged();
+        setStatusText(
+            revolve_draft_->profileId()
+                ? QStringLiteral(
+                      "Revolve authored Axis selected.")
+                : QStringLiteral(
+                      "Revolve Axis selected — now select a valid Profile."));
+    }
+}
+
+void CadWorkbench::cancelRevolve() {
+    if (!revolve_draft_) {
+        return;
+    }
+    clearRevolveRuntimeContext();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Revolve cancelled — no authored change."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+bool CadWorkbench::finishRevolve() {
+    flushRevolvePreview();
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        !revolve_draft_ ||
+        !revolve_evaluation_ ||
+        !revolve_angle_input_valid_ ||
+        !revolve_evaluation_->committable()) {
+        setStatusText(
+            QStringLiteral(
+                "Revolve cannot finish until Profile, Axis and preview candidate are valid."));
+        return false;
+    }
+
+    const auto result =
+        application::finishRevolveDraft(
+            *document_session,
+            *revolve_draft_,
+            *revolve_evaluation_,
+            *solid_modeling_kernel_);
+    if (!result.ok()) {
+        setStatusText(
+            result.diagnostic.empty()
+                ? QStringLiteral(
+                      "Revolve Finish was rejected.")
+                : fromUtf8(result.diagnostic));
+        refreshRevolvePreview();
+        return false;
+    }
+
+    const auto committed_feature_id =
+        result.feature_id;
+    clearRevolveRuntimeContext();
+    refreshActiveContext();
+    if (committed_feature_id) {
+        navigateToFeature(
+            *committed_feature_id);
+    }
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Revolve finished — Feature committed."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::clearRevolveRuntimeContext() {
+    if (revolve_preview_timer_ != nullptr) {
+        revolve_preview_timer_->stop();
+    }
+    revolve_draft_.reset();
+    revolve_evaluation_.reset();
+    revolve_angle_input_valid_ = true;
+    if (viewport_controller_) {
+        viewport_controller_->clearSolidPreview();
+        viewport_controller_->
+            setTransientProfilePresentationOverride(
+                std::nullopt,
+                std::nullopt);
+        viewport_controller_->
+            setTransientAxisEmphasis(
+                std::nullopt);
+    }
+    if (revolve_angle_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            revolve_angle_edit_};
+        revolve_angle_edit_->clear();
+    }
+    syncRevolveUi();
+}
+
+bool CadWorkbench::setRevolveAngle(
+    core::AngleValue angle,
+    std::optional<std::string_view> display_text,
+    bool refresh_now) {
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    if (!revolve_draft_ ||
+        !angle.finite() ||
+        !(angle.radians > 0.0) ||
+        angle.radians > full_turn) {
+        return false;
+    }
+    if (!revolve_draft_->setAngle(angle)) {
+        return false;
+    }
+
+    revolve_angle_input_valid_ = true;
+    if (display_text &&
+        revolve_angle_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            revolve_angle_edit_};
+        revolve_angle_edit_->setText(
+            fromUtf8(*display_text));
+    }
+
+    revolve_evaluation_.reset();
+    if (refresh_now) {
+        refreshRevolvePreview();
+    } else {
+        scheduleRevolvePreview();
+        syncRevolveUi();
+    }
+    notifyCadInputContextChanged();
+    return true;
+}
+
+void CadWorkbench::scheduleRevolvePreview() {
+    if (revolve_preview_timer_ == nullptr) {
+        refreshRevolvePreview();
+        return;
+    }
+    revolve_preview_timer_->start();
+}
+
+void CadWorkbench::flushRevolvePreview() {
+    if (revolve_preview_timer_ == nullptr ||
+        !revolve_preview_timer_->isActive()) {
+        return;
+    }
+    revolve_preview_timer_->stop();
+    refreshRevolvePreview();
+}
+
+void CadWorkbench::refreshRevolvePreview() {
+    if (revolve_preview_timer_ != nullptr) {
+        revolve_preview_timer_->stop();
+    }
+    revolve_evaluation_.reset();
+
+    if (viewport_controller_) {
+        viewport_controller_->clearSolidPreview();
+        viewport_controller_->setTransientAxisEmphasis(
+            revolve_draft_
+                ? revolve_draft_->axis()
+                : std::nullopt);
+    }
+
+    const auto sync_source_profile =
+        [this](bool preview_ready) {
+            if (viewport_controller_ == nullptr) {
+                return;
+            }
+            if (!revolve_draft_ ||
+                !revolve_draft_->profileId()) {
+                viewport_controller_->
+                    setTransientProfilePresentationOverride(
+                        std::nullopt,
+                        std::nullopt);
+                return;
+            }
+            if (preview_ready) {
+                viewport_controller_->
+                    setTransientProfilePresentationOverride(
+                        std::nullopt,
+                        *revolve_draft_->profileId());
+                return;
+            }
+            if (revolve_draft_->mode() ==
+                application::RevolveDraftMode::edit) {
+                viewport_controller_->
+                    setTransientProfilePresentationOverride(
+                        *revolve_draft_->profileId(),
+                        std::nullopt);
+            } else {
+                viewport_controller_->
+                    setTransientProfilePresentationOverride(
+                        std::nullopt,
+                        std::nullopt);
+            }
+        };
+
+    if (!revolve_draft_ ||
+        !revolve_angle_input_valid_ ||
+        document_session_ == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        sync_source_profile(false);
+        syncRevolveUi();
+        return;
+    }
+
+    auto evaluation =
+        document_session_->evaluateRevolveDraft(
+            *revolve_draft_,
+            *solid_modeling_kernel_);
+    bool preview_ready = false;
+    if (evaluation.previewSolidAvailable() &&
+        viewport_controller_ != nullptr) {
+        const auto tone =
+            revolve_draft_->operation() ==
+                    part::RevolveOperation::cut
+                ? viewer::SolidPreviewTone::subtractive
+                : viewer::SolidPreviewTone::additive;
+        if (viewport_controller_->setSolidPreview(
+                *evaluation.preview_delta_mesh,
+                tone)) {
+            preview_ready = true;
+        } else {
+            evaluation.preview_delta_mesh.reset();
+        }
+    }
+
+    sync_source_profile(preview_ready);
+    revolve_evaluation_ = std::move(evaluation);
+    syncRevolveUi();
+}
+
+void CadWorkbench::syncRevolveUi() {
+    const bool active =
+        revolve_draft_.has_value();
+    if (revolve_operations_widget_ != nullptr) {
+        revolve_operations_widget_->setVisible(
+            active);
+    }
+    if (!active) {
+        return;
+    }
+
+    syncing_revolve_ui_ = true;
+    if (revolve_profile_label_ != nullptr) {
+        revolve_profile_label_->setText(
+            revolve_draft_->profileId()
+                ? fromUtf8(
+                      revolve_draft_->profileId()
+                          ->serialized())
+                : QStringLiteral("<select Profile>"));
+    }
+    if (revolve_axis_label_ != nullptr) {
+        revolve_axis_label_->setText(
+            revolve_draft_->axis()
+                ? revolveAxisText(
+                      *revolve_draft_->axis())
+                : QStringLiteral("<select Axis>"));
+    }
+
+    const bool editing =
+        revolve_draft_->mode() ==
+        application::RevolveDraftMode::edit;
+    const bool add =
+        revolve_draft_->operation() ==
+        part::RevolveOperation::add;
+    revolve_add_button_->setChecked(add);
+    revolve_cut_button_->setChecked(!add);
+
+    const bool one_side =
+        revolve_draft_->extentMode() ==
+        application::RevolveDraftExtentMode::
+            one_side;
+    revolve_one_side_button_->setChecked(
+        one_side);
+    revolve_midplane_button_->setChecked(
+        !one_side);
+    revolve_reverse_button_->setEnabled(
+        one_side);
+    revolve_reverse_button_->setChecked(
+        one_side &&
+        revolve_draft_->reversed());
+
+    bool cut_allowed = false;
+    if (document_session_ != nullptr) {
+        const auto& features =
+            document_session_->document()
+                .body().features;
+        if (!editing) {
+            cut_allowed = !features.empty();
+        } else if (revolve_draft_->featureId()) {
+            const auto found =
+                std::find_if(
+                    features.begin(),
+                    features.end(),
+                    [this](const part::PartFeature& feature) {
+                        return feature.id ==
+                            *revolve_draft_->featureId();
+                    });
+            cut_allowed =
+                found != features.end() &&
+                found != features.begin();
+        }
+    }
+    revolve_cut_button_->setEnabled(
+        cut_allowed);
+
+    const bool committable =
+        revolve_angle_input_valid_ &&
+        revolve_evaluation_ &&
+        revolve_evaluation_->committable();
+    revolve_finish_button_->setEnabled(
+        committable);
+    revolve_finish_button_->setText(
+        editing
+            ? QStringLiteral("Finish Edit")
+            : QStringLiteral("Finish Revolve"));
+
+    if (!revolve_angle_input_valid_) {
+        revolve_result_label_->setText(
+            QStringLiteral(
+                "Angle must satisfy 0 < angle <= 360 deg."));
+    } else if (revolve_evaluation_) {
+        revolve_result_label_->setText(
+            revolveEvaluationText(
+                *revolve_evaluation_));
+    } else {
+        revolve_result_label_->setText(
+            QStringLiteral(
+                "Select a Profile and an Origin/Authored Axis."));
+    }
+
+    if (operations_placeholder_ != nullptr) {
+        operations_placeholder_->setText(
+            QStringLiteral(
+                "%1 — %2 · %3%4")
+                .arg(
+                    editing
+                        ? QStringLiteral("Edit Revolve")
+                        : QStringLiteral("Revolve"),
+                    add
+                        ? QStringLiteral("Add")
+                        : QStringLiteral("Cut"),
+                    one_side
+                        ? QStringLiteral("One Side")
+                        : QStringLiteral("Midplane"),
+                    one_side &&
+                            revolve_draft_->reversed()
+                        ? QStringLiteral(" · Reverse")
+                        : QString{}));
+    }
+
+    syncing_revolve_ui_ = false;
+}
+
+application::CadInputSubmitResult
+CadWorkbench::submitRevolveCadInput(
+    std::string_view text) {
+    if (!revolve_draft_ ||
+        document_session_ == nullptr) {
+        return {
+            false,
+            "No active Revolve draft."};
+    }
+
+    const auto keyword =
+        upperAsciiTrimmed(text);
+    if (keyword == "CANCEL" ||
+        keyword == "ESC") {
+        cancelRevolve();
+        return {true, {}};
+    }
+    if (keyword == "REVOLVE") {
+        return {true, {}};
+    }
+
+    const auto set_origin_axis =
+        [this](core::BuiltinReferenceRole role) {
+            return revolve_draft_->setAxis(
+                part::AxisReference{
+                    part::BuiltinOriginAxisReference{
+                        role}});
+        };
+    if (keyword == "X" ||
+        keyword == "XAXIS" ||
+        keyword == "X AXIS") {
+        if (set_origin_axis(
+                core::BuiltinReferenceRole::x_axis)) {
+            refreshRevolvePreview();
+            notifyCadInputContextChanged();
+        }
+        return {true, {}};
+    }
+    if (keyword == "Y" ||
+        keyword == "YAXIS" ||
+        keyword == "Y AXIS") {
+        if (set_origin_axis(
+                core::BuiltinReferenceRole::y_axis)) {
+            refreshRevolvePreview();
+            notifyCadInputContextChanged();
+        }
+        return {true, {}};
+    }
+    if (keyword == "Z" ||
+        keyword == "ZAXIS" ||
+        keyword == "Z AXIS") {
+        if (set_origin_axis(
+                core::BuiltinReferenceRole::z_axis)) {
+            refreshRevolvePreview();
+            notifyCadInputContextChanged();
+        }
+        return {true, {}};
+    }
+
+    if (!revolve_draft_->profileId()) {
+        return {
+            false,
+            "REVOLVE is waiting for one valid Profile selection; use Tree/viewport or CANCEL."};
+    }
+
+    if (!revolve_draft_->axis()) {
+        return {
+            false,
+            "REVOLVE is waiting for X/Y/Z Origin Axis or one resolved authored Axis selection."};
+    }
+
+    if (keyword.empty() ||
+        keyword == "FINISH") {
+        return finishRevolve()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Revolve Finish was rejected."};
+    }
+    if (keyword == "ADD") {
+        if (!revolve_draft_->setOperation(
+                part::RevolveOperation::add)) {
+            return {
+                false,
+                "ADD could not be applied."};
+        }
+        refreshRevolvePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+    if (keyword == "CUT") {
+        const auto& features =
+            document_session_->document()
+                .body().features;
+        bool cut_allowed = !features.empty();
+        if (revolve_draft_->mode() ==
+                application::RevolveDraftMode::edit &&
+            revolve_draft_->featureId()) {
+            const auto found =
+                std::find_if(
+                    features.begin(),
+                    features.end(),
+                    [this](const part::PartFeature& feature) {
+                        return feature.id ==
+                            *revolve_draft_->featureId();
+                    });
+            cut_allowed =
+                found != features.end() &&
+                found != features.begin();
+        }
+        if (!cut_allowed) {
+            return {
+                false,
+                "The first solid-producing Revolve must be ADD."};
+        }
+        if (!revolve_draft_->setOperation(
+                part::RevolveOperation::cut)) {
+            return {
+                false,
+                "CUT could not be applied."};
+        }
+        refreshRevolvePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+    if (keyword == "REVERSE") {
+        if (revolve_draft_->extentMode() !=
+            application::RevolveDraftExtentMode::
+                one_side) {
+            return {
+                false,
+                "REVERSE is available only for One Side Revolve."};
+        }
+        static_cast<void>(
+            revolve_draft_->setReversed(
+                !revolve_draft_->reversed()));
+        refreshRevolvePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+    if (keyword == "MIDPLANE") {
+        static_cast<void>(
+            revolve_draft_->setExtentMode(
+                application::RevolveDraftExtentMode::
+                    midplane));
+        refreshRevolvePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+    if (keyword == "ONESIDE" ||
+        keyword == "ONE SIDE") {
+        static_cast<void>(
+            revolve_draft_->setExtentMode(
+                application::RevolveDraftExtentMode::
+                    one_side));
+        refreshRevolvePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+
+    const auto quantity =
+        application::parseCadQuantity(
+            text,
+            {
+                application::CadQuantityDimension::
+                    angle,
+                document_session_->document()
+                    .lengthUnit()});
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    if (!quantity ||
+        !(quantity->canonical_value > 0.0) ||
+        quantity->canonical_value > full_turn) {
+        return {
+            false,
+            "Revolve Angle expects 0 < angle <= 360 deg."};
+    }
+
+    return setRevolveAngle(
+               core::AngleValue{
+                   quantity->canonical_value},
+               text)
+        ? application::CadInputSubmitResult{
+              true, {}}
+        : application::CadInputSubmitResult{
+              false,
+              "Revolve Angle could not be applied."};
+}
+
 void CadWorkbench::setSketchSelectionRole(
     sketch::EntityRole role) {
     if (!sketch_interaction_controller_ ||
@@ -6844,7 +8129,8 @@ void CadWorkbench::startSketchTool() {
         datum_plane_draft_ ||
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
-        extrude_draft_) {
+        extrude_draft_ ||
+        revolve_draft_) {
         return;
     }
 
@@ -6882,7 +8168,8 @@ void CadWorkbench::startSketchResupport(
         datum_plane_draft_ ||
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
-        extrude_draft_) {
+        extrude_draft_ ||
+        revolve_draft_) {
         return;
     }
     if (active_sketch_id_) {
@@ -7806,6 +9093,15 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (extrude_draft_->generation() &
                 (extrude_namespace - 1U));
     }
+    if (revolve_draft_) {
+        constexpr application::CadInputContextGeneration
+            revolve_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 58U};
+        return revolve_namespace |
+               (revolve_draft_->generation() &
+                (revolve_namespace - 1U));
+    }
     return sketch_interaction_controller_
                ? sketch_interaction_controller_->
                      cadInputContextGeneration()
@@ -7836,6 +9132,14 @@ CadWorkbench::cadDynamicInputFields() const {
                     CadDynamicInputFieldSemantic::
                         distance,
                 "Distance"}};
+    }
+    if (revolve_draft_) {
+        return {
+            application::CadDynamicInputField{
+                application::
+                    CadDynamicInputFieldSemantic::
+                        angle,
+                "Angle"}};
     }
 
     if (!sketch_interaction_controller_ ||
@@ -7931,6 +9235,37 @@ CadWorkbench::lockCadDynamicInputField(
         return {true, {}};
     }
 
+    if (revolve_draft_) {
+        if (index != 0U ||
+            document_session_ == nullptr) {
+            return {
+                false,
+                "Revolve has one Angle input field."};
+        }
+        const auto quantity =
+            application::parseCadQuantity(
+                text,
+                {
+                    application::CadQuantityDimension::
+                        angle,
+                    document_session_->document()
+                        .lengthUnit()});
+        constexpr double full_turn =
+            2.0 * std::numbers::pi_v<double>;
+        if (!quantity ||
+            !(quantity->canonical_value > 0.0) ||
+            quantity->canonical_value > full_turn ||
+            !setRevolveAngle(
+                core::AngleValue{
+                    quantity->canonical_value},
+                text)) {
+            return {
+                false,
+                "Revolve Angle expects 0 < angle <= 360 deg."};
+        }
+        return {true, {}};
+    }
+
     if (!sketch_interaction_controller_) {
         return {
             false,
@@ -7993,6 +9328,14 @@ CadWorkbench::submitCadDynamicInputRequest(
             : application::CadInputSubmitResult{
                   false,
                   "Extrude Finish was rejected."};
+    }
+    if (revolve_draft_) {
+        return finishRevolve()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Revolve Finish was rejected."};
     }
 
     if (!sketch_interaction_controller_ ||
@@ -8107,6 +9450,17 @@ CadWorkbench::submitCadInput(
         }
         return result;
     }
+    if (revolve_draft_) {
+        auto result =
+            submitRevolveCadInput(text);
+        if (!result.accepted &&
+            status_ != nullptr &&
+            !result.diagnostic.empty()) {
+            setStatusText(
+                fromUtf8(result.diagnostic));
+        }
+        return result;
+    }
 
     const auto top_level_keyword =
         upperAsciiTrimmed(text);
@@ -8134,6 +9488,14 @@ CadWorkbench::submitCadInput(
             : application::CadInputSubmitResult{
                   false,
                   "EXTRUDE could not be activated."};
+    }
+    if (top_level_keyword == "REVOLVE") {
+        return startRevolveTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "REVOLVE could not be activated."};
     }
     if (top_level_keyword == "SKETCH") {
         startSketchTool();
@@ -8236,6 +9598,18 @@ QString CadWorkbench::cadInputPromptText() const {
     if (extrude_draft_) {
         return QStringLiteral(
             "Command: EXTRUDE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Distance · FINISH/CANCEL");
+    }
+    if (revolve_draft_) {
+        if (!revolve_draft_->profileId()) {
+            return QStringLiteral(
+                "Command: REVOLVE — Select one valid Profile · CANCEL/Esc");
+        }
+        if (!revolve_draft_->axis()) {
+            return QStringLiteral(
+                "Command: REVOLVE — Select X/Y/Z Origin Axis or one resolved authored Axis · X/Y/Z · CANCEL/Esc");
+        }
+        return QStringLiteral(
+            "Command: REVOLVE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Angle · FINISH/CANCEL");
     }
 
     if (!sketch_interaction_controller_ ||
@@ -8703,6 +10077,9 @@ void CadWorkbench::refreshActiveContext() {
     if (extrude_draft_) {
         refreshExtrudePreview();
     }
+    if (revolve_draft_) {
+        refreshRevolvePreview();
+    }
     if (selected_axis_id_) {
         refreshAxisProperties(
             *selected_axis_id_);
@@ -8724,6 +10101,7 @@ void CadWorkbench::clearActiveContext() {
     clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
+    clearRevolveRuntimeContext();
     clearSketchRuntimeContext();
     active_path_->setText(QStringLiteral("No Part is open."));
     active_id_->clear();
@@ -9534,7 +10912,11 @@ void CadWorkbench::refreshFeatureProperties(
     const auto* extrude =
         std::get_if<part::ExtrudeFeature>(
             &feature->definition);
-    if (extrude == nullptr) {
+    const auto* revolve =
+        std::get_if<part::RevolveFeature>(
+            &feature->definition);
+    if (extrude == nullptr &&
+        revolve == nullptr) {
         return;
     }
 
@@ -9543,50 +10925,96 @@ void CadWorkbench::refreshFeatureProperties(
         fromUtf8(feature->name));
     feature_identity_->setText(
         fromUtf8(feature->id.serialized()));
-    feature_operation_->setText(
-        extrude->operation ==
-                part::ExtrudeOperation::cut
-            ? QStringLiteral("Cut")
-            : QStringLiteral("Add"));
 
-    const auto unit =
-        document_session_->document()
-            .lengthUnit();
-    if (const auto* one =
-            std::get_if<
-                part::OneSidedExtrudeExtent>(
-                &extrude->extent)) {
-        feature_extent_->setText(
-            QStringLiteral("One Side"));
-        feature_distance_->setText(
-            formatLengthForPart(
-                one->distance,
-                unit));
-        feature_direction_->setText(
-            one->reversed
-                ? QStringLiteral("Reverse")
-                : QStringLiteral("Forward"));
-    } else if (const auto* midplane =
-                   std::get_if<
-                       part::MidplaneExtrudeExtent>(
-                       &extrude->extent)) {
-        feature_extent_->setText(
-            QStringLiteral("Midplane"));
-        feature_distance_->setText(
-            formatLengthForPart(
-                midplane->total_distance,
-                unit));
-        feature_direction_->setText(
-            QStringLiteral("Centered"));
+    const auto source_profile =
+        part::sourceProfileId(*feature);
+    if (!source_profile) {
+        return;
+    }
+    const auto source_profile_id =
+        *source_profile;
+
+    if (extrude != nullptr) {
+        feature_operation_->setText(
+            extrude->operation ==
+                    part::ExtrudeOperation::cut
+                ? QStringLiteral("Cut")
+                : QStringLiteral("Add"));
+
+        const auto unit =
+            document_session_->document()
+                .lengthUnit();
+        if (const auto* one =
+                std::get_if<
+                    part::OneSidedExtrudeExtent>(
+                    &extrude->extent)) {
+            feature_extent_->setText(
+                QStringLiteral("One Side"));
+            feature_distance_->setText(
+                formatLengthForPart(
+                    one->distance,
+                    unit));
+            feature_direction_->setText(
+                one->reversed
+                    ? QStringLiteral("Reverse")
+                    : QStringLiteral("Forward"));
+        } else if (const auto* midplane =
+                       std::get_if<
+                           part::MidplaneExtrudeExtent>(
+                           &extrude->extent)) {
+            feature_extent_->setText(
+                QStringLiteral("Midplane"));
+            feature_distance_->setText(
+                formatLengthForPart(
+                    midplane->total_distance,
+                    unit));
+            feature_direction_->setText(
+                QStringLiteral("Centered"));
+        }
+        feature_edit_button_->setText(
+            QStringLiteral("Edit Extrude"));
+    } else {
+        feature_operation_->setText(
+            revolve->operation ==
+                    part::RevolveOperation::cut
+                ? QStringLiteral("Cut")
+                : QStringLiteral("Add"));
+        if (const auto* one =
+                std::get_if<
+                    part::OneSidedRevolveExtent>(
+                    &revolve->extent)) {
+            feature_extent_->setText(
+                QStringLiteral("One Side"));
+            feature_distance_->setText(
+                formatAngleForCad(
+                    one->angle));
+            feature_direction_->setText(
+                one->reversed
+                    ? QStringLiteral("Reverse")
+                    : QStringLiteral("Forward"));
+        } else if (const auto* midplane =
+                       std::get_if<
+                           part::MidplaneRevolveExtent>(
+                           &revolve->extent)) {
+            feature_extent_->setText(
+                QStringLiteral("Midplane"));
+            feature_distance_->setText(
+                formatAngleForCad(
+                    midplane->total_angle));
+            feature_direction_->setText(
+                QStringLiteral("Centered"));
+        }
+        feature_edit_button_->setText(
+            QStringLiteral("Edit Revolve"));
     }
 
     feature_source_profile_->setText(
         fromUtf8(
-            extrude->profile_id.serialized()));
+            source_profile_id.serialized()));
     const auto* profile =
         document_session_->document()
             .findProfile(
-                extrude->profile_id);
+                source_profile_id);
     feature_source_sketch_->setText(
         profile != nullptr
             ? fromUtf8(
@@ -9637,6 +11065,7 @@ void CadWorkbench::refreshFeatureProperties(
     const bool lifecycle_available =
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     feature_edit_button_->setEnabled(
@@ -9963,6 +11392,23 @@ bool CadWorkbench::eventFilter(
                     Qt::Key_Enter) {
                 static_cast<void>(
                     finishExtrude());
+                return true;
+            }
+        }
+
+        if (watched == viewport_widget_ &&
+            revolve_draft_) {
+            if (key_event->key() ==
+                Qt::Key_Escape) {
+                cancelRevolve();
+                return true;
+            }
+            if (key_event->key() ==
+                    Qt::Key_Return ||
+                key_event->key() ==
+                    Qt::Key_Enter) {
+                static_cast<void>(
+                    finishRevolve());
                 return true;
             }
         }
@@ -11108,6 +12554,7 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
@@ -11116,6 +12563,7 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         document_session->canRedo());
     // Save remains available for a clean active Document so an explicit
     // Save can revalidate the native-file checkpoint and report an external
@@ -11141,7 +12589,8 @@ void CadWorkbench::syncActionState() {
         !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
-        !extrude_draft_);
+        !extrude_draft_ &&
+        !revolve_draft_);
 
     if (axis_button_ != nullptr) {
         axis_button_->setVisible(active);
@@ -11151,6 +12600,7 @@ void CadWorkbench::syncActionState() {
             !datum_plane_draft_ &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
+        !revolve_draft_ &&
             solid_modeling_kernel_ != nullptr);
         axis_button_->setChecked(
             axis_draft_.has_value());
@@ -11166,6 +12616,7 @@ void CadWorkbench::syncActionState() {
             !axis_draft_ &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
+        !revolve_draft_ &&
             solid_modeling_kernel_ != nullptr);
         datum_plane_button_->setChecked(
             datum_plane_draft_.has_value());
@@ -11181,10 +12632,28 @@ void CadWorkbench::syncActionState() {
             !axis_draft_ &&
             !datum_plane_draft_ &&
             !extrude_draft_ &&
+        !revolve_draft_ &&
             solid_modeling_kernel_ != nullptr);
         extrude_button_->setChecked(
             extrude_profile_pick_active_ ||
             extrude_draft_.has_value());
+    }
+
+    if (revolve_button_ != nullptr) {
+        revolve_button_->setVisible(
+            !editing_sketch);
+        revolve_button_->setEnabled(
+            active &&
+            !editing_sketch &&
+            !sketch_support_pick_active_ &&
+            !axis_draft_ &&
+            !datum_plane_draft_ &&
+            !extrude_profile_pick_active_ &&
+            !extrude_draft_ &&
+            !revolve_draft_ &&
+            solid_modeling_kernel_ != nullptr);
+        revolve_button_->setChecked(
+            revolve_draft_.has_value());
     }
 
     select_sketch_button_->setVisible(
@@ -11256,6 +12725,7 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     if (axis_edit_button_ != nullptr) {
@@ -11275,6 +12745,7 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     if (datum_edit_button_ != nullptr) {
@@ -11291,6 +12762,7 @@ void CadWorkbench::syncActionState() {
     syncAxisUi();
     syncDatumPlaneUi();
     syncExtrudeUi();
+    syncRevolveUi();
 }
 
 void CadWorkbench::notifyCadInputContextChanged() {
