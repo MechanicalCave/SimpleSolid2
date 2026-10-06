@@ -652,6 +652,7 @@ void PartDocumentTreeController::clear() {
     session_ = nullptr;
     feature_evaluations_.clear();
     datum_evaluations_.clear();
+    axis_evaluations_.clear();
     body_status_ =
         part::BodyEvaluationStatus::empty;
     tree_->clear();
@@ -761,6 +762,33 @@ PartDocumentTreeController::primaryDatumId() const {
     return selected.empty()
         ? std::nullopt
         : std::optional<part::DatumId>{
+              selected.front()};
+}
+
+std::vector<part::AxisId>
+PartDocumentTreeController::selectedAxisIds() const {
+    std::vector<part::AxisId> ids;
+    for (const auto* item : tree_->selectedItems()) {
+        if (item == nullptr) continue;
+        if (const auto id = axisIdForItem(*item)) {
+            ids.push_back(*id);
+        }
+    }
+    return ids;
+}
+
+std::optional<part::AxisId>
+PartDocumentTreeController::primaryAxisId() const {
+    const auto* current = tree_->currentItem();
+    if (current != nullptr && current->isSelected()) {
+        if (const auto id = axisIdForItem(*current)) {
+            return id;
+        }
+    }
+    const auto selected = selectedAxisIds();
+    return selected.empty()
+        ? std::nullopt
+        : std::optional<part::AxisId>{
               selected.front()};
 }
 
@@ -971,6 +999,62 @@ void PartDocumentTreeController::setDatumSelection(
 }
 
 
+void PartDocumentTreeController::setAxisSelection(
+    const std::vector<part::AxisId>& selected,
+    std::optional<part::AxisId> primary) {
+    const QSignalBlocker blocked{tree_};
+
+    QTreeWidgetItem* first_selected = nullptr;
+    QTreeWidgetItem* primary_item = nullptr;
+
+    const auto visit =
+        [&](auto&& self, QTreeWidgetItem* item) -> void {
+            if (item == nullptr) return;
+            if (const auto id = axisIdForItem(*item)) {
+                const bool should_select =
+                    std::find(
+                        selected.begin(),
+                        selected.end(),
+                        *id) != selected.end();
+                item->setSelected(should_select);
+                if (should_select &&
+                    first_selected == nullptr) {
+                    first_selected = item;
+                }
+                if (should_select &&
+                    primary &&
+                    *primary == *id) {
+                    primary_item = item;
+                }
+            }
+            for (int index = 0;
+                 index < item->childCount();
+                 ++index) {
+                self(self, item->child(index));
+            }
+        };
+
+    for (int index = 0;
+         index < tree_->topLevelItemCount();
+         ++index) {
+        visit(visit, tree_->topLevelItem(index));
+    }
+
+    if (primary_item != nullptr) {
+        tree_->setCurrentItem(
+            primary_item,
+            0,
+            QItemSelectionModel::NoUpdate);
+    } else if (first_selected != nullptr) {
+        tree_->setCurrentItem(
+            first_selected,
+            0,
+            QItemSelectionModel::NoUpdate);
+    }
+    updateVisibilityActions();
+}
+
+
 void PartDocumentTreeController::setFeatureSelection(
     const std::vector<part::FeatureId>& selected,
     std::optional<part::FeatureId> primary) {
@@ -1031,12 +1115,16 @@ void PartDocumentTreeController::setEvaluationSnapshot(
     std::vector<FeatureTreeEvaluationEntry>
         feature_evaluations,
     std::vector<DatumTreeEvaluationEntry>
-        datum_evaluations) {
+        datum_evaluations,
+    std::vector<AxisTreeEvaluationEntry>
+        axis_evaluations) {
     body_status_ = body_status;
     feature_evaluations_ =
         std::move(feature_evaluations);
     datum_evaluations_ =
         std::move(datum_evaluations);
+    axis_evaluations_ =
+        std::move(axis_evaluations);
     rebuild(true);
 }
 
@@ -1062,6 +1150,20 @@ selectionContainsOnlyDatumReferences() const {
         if (item == nullptr ||
             (!datumIdForItem(*item) &&
              !isReferenceGeometryGroupItem(*item))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool PartDocumentTreeController::
+selectionContainsOnlyAxisReferences() const {
+    const auto selected = tree_->selectedItems();
+    if (selected.empty()) return false;
+
+    for (const auto* item : selected) {
+        if (item == nullptr ||
+            !axisIdForItem(*item)) {
             return false;
         }
     }
@@ -1100,6 +1202,19 @@ selectedDatumVisibilityTargets() const {
     }
 
     targets = selectedDatumIds();
+    std::sort(targets.begin(), targets.end());
+    targets.erase(
+        std::unique(
+            targets.begin(),
+            targets.end()),
+        targets.end());
+    return targets;
+}
+
+std::vector<part::AxisId>
+PartDocumentTreeController::
+selectedAxisVisibilityTargets() const {
+    auto targets = selectedAxisIds();
     std::sort(targets.begin(), targets.end());
     targets.erase(
         std::unique(
