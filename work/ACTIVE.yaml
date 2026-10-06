@@ -1,9 +1,9 @@
 version: 1
-status: completed
-active_work: "work/PM-03_DATUM_REFERENCE_GEOMETRY.md"
+status: active
+active_work: "work/PM-04_AXIS_REVOLVE.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.24"
+program_roadmap_version: "1.25"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -47,10 +47,13 @@ next:
   - PM-03D Viewer / intersection overlay / Tree / Properties is COMPLETED — PASS; D1 exact candidate b236e54028a64ba00569a995b592b4ab8de2cd17 passed Windows FULL #1511 and merged as 28c86f2cb62c5c9156cd2d1ca3f305432957eedf; D2 exact candidate adc9dd5c1f970932a03aa43422a105643db9052d passed Windows FULL #1514 and merged as 3aa23632892853dbf9bf51574e5b2c762c2ac426
   - PM-03E Datum-backed Sketch + existing Extrude is COMPLETED — PASS; exact candidate f4c691c50ce28bc311076b94925b719c889e8172 passed Windows FULL #1520 and merged as 66f31391894eb6a0adfb430d4dd78b37e749f150
   - PM-03F lifecycle / persistence / docs / Owner acceptance is COMPLETED — PASS; runtime FULL #1522/#1523 PASS, docs candidate #1524 PASS and Owner Windows workflow PASS
-  - no production CAD Work Contract is active after PM-03 completion; PM-04 Axis / Revolve is next in roadmap order but remains NOT ACTIVE pending its own Owner-accepted contract
-  - the accepted PM-03 presentation defer is tracked for PM-06: add one coherent neutral translucent fill treatment to both Origin planes and Datum planes; no Datum semantic/lifecycle work is deferred
+  - PM-04 Axis / Revolve is ACTIVE under the Owner-accepted Work Contract `work/PM-04_AXIS_REVOLVE.md`
+  - current implementation checkpoint is PM-04A — Axis semantic model + persistence
+  - production mutation is authorized only within the accepted PM-04 contract and its ordered PM-04A..PM-04F checkpoints
+  - the accepted PM-03 presentation defer remains tracked for PM-06: add one coherent neutral translucent fill treatment to both Origin planes and Datum planes; no Datum semantic/lifecycle work is deferred
   - Projection remains outside the PM-03/PM-04 critical path and requires separate later activation
 notes:
+  - PM-04 activation: Owner accepted the exact PM-04 Axis / Revolve Work Contract on 2026-10-06. Contract PR #256 exact head `cc84e21b3178af73ddb06b58d4482a5aba67abee` passed Windows PR gate #1526 and merged to main as `8c464cb7447b8fef7d07b10cc6f16eb849b0c41e`. This activation is governance-only; PM-04A is the first authorized production checkpoint only after the activation exact-head gate passes and this change merges. Datum Axis, Projection, PM-05 and PM-06 remain inactive except the already-recorded PM-06 Origin/Datum fill obligation.
   - PM-03 is COMPLETED — PASS. Owner final Windows workflow on 2026-10-05 reported the implemented Datum workflow PASS with no functional blockers. Owner explicitly accepted one presentation-only amendment: the missing neutral translucent plane fill is deferred to PM-06 and must be solved coherently for both Origin and Datum planes. Datum border/footprint, intersection overlay/picking, semantics, persistence, cold rebuild, Datum-backed Sketch and Extrude remain accepted. Runtime evidence: F1 FULL #1522, F2a FULL #1523; docs candidate `439abd15b9e7ec1c4c8b2177cd8ea31f6debda0e` passed workflow #1524 and merged as `4e9ecdb4d51f7f81be799bbc0778b98808799f3d`.
   - PM-03E is COMPLETED — PASS. Datum-backed Sketch/Profile/existing Extrude exact candidate `f4c691c50ce28bc311076b94925b719c889e8172` passed Windows FULL #1520 and merged as `66f31391894eb6a0adfb430d4dd78b37e749f150`. Completion evidence: `work/PM-03E_DATUM_BACKED_SKETCH_EXTRUDE_COMPLETION.md`. PM-03F is now the active checkpoint.
   - PM-03D is COMPLETED — PASS. D1 Viewer presentation/semantic picking exact candidate `b236e54028a64ba00569a995b592b4ab8de2cd17` passed Windows FULL #1511 and merged as `28c86f2cb62c5c9156cd2d1ca3f305432957eedf`; D2 Reference Geometry Tree/Properties/source/edit/bulk visibility exact candidate `adc9dd5c1f970932a03aa43422a105643db9052d` passed Windows FULL #1514 and merged as `3aa23632892853dbf9bf51574e5b2c762c2ac426`. Completion evidence: `work/PM-03D_VIEWER_TREE_PROPERTIES_COMPLETION.md`. PM-03E is now the active checkpoint.
