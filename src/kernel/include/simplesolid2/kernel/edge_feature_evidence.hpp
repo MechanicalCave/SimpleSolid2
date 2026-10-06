@@ -26,6 +26,14 @@ enum class EdgeFeatureProbeScenario {
     excessive_parameter,
 };
 
+enum class EdgeFeatureUpstreamScenario {
+    dimension_change,
+    unchanged,
+    trim,
+    split,
+    remove,
+};
+
 struct EdgeFeatureTopologySignature final {
     std::size_t face_count{};
     std::size_t edge_count{};
@@ -98,6 +106,84 @@ struct EdgeFeatureProviderMatrixEvidence final {
     friend bool operator==(
         const EdgeFeatureProviderMatrixEvidence&,
         const EdgeFeatureProviderMatrixEvidence&) = default;
+};
+
+struct EdgeFeatureTangentChainEvidence final {
+    EdgeFeatureEvidenceOperation operation{
+        EdgeFeatureEvidenceOperation::fillet};
+    ShapeEvidence source_shape;
+    std::size_t requested_edge_count{};
+    std::size_t provider_contour_count{};
+    std::size_t provider_contour_edge_count{};
+    bool exact_provider_input_membership{false};
+    bool build_succeeded{false};
+
+    friend bool operator==(
+        const EdgeFeatureTangentChainEvidence&,
+        const EdgeFeatureTangentChainEvidence&) = default;
+};
+
+struct EdgeFeatureUpstreamEvidence final {
+    EdgeFeatureEvidenceOperation operation{
+        EdgeFeatureEvidenceOperation::fillet};
+    EdgeFeatureUpstreamScenario scenario{
+        EdgeFeatureUpstreamScenario::unchanged};
+    ShapeEvidence source_shape;
+    ShapeEvidence edited_shape;
+    ReferenceStatus reference_status{
+        ReferenceStatus::unsupported};
+    std::size_t current_edge_candidate_count{};
+    bool downstream_attempted{false};
+    bool downstream_succeeded{false};
+    bool exact_provider_input_membership{false};
+
+    friend bool operator==(
+        const EdgeFeatureUpstreamEvidence&,
+        const EdgeFeatureUpstreamEvidence&) = default;
+};
+
+struct EdgeFeatureChainingEvidence final {
+    EdgeFeatureEvidenceOperation first_operation{
+        EdgeFeatureEvidenceOperation::fillet};
+    EdgeFeatureEvidenceOperation second_operation{
+        EdgeFeatureEvidenceOperation::chamfer};
+    ShapeEvidence source_shape;
+    ShapeEvidence first_result_shape;
+    std::size_t first_generated_face_count{};
+    std::size_t generated_boundary_edge_count{};
+    std::size_t second_operation_attempt_count{};
+    std::size_t second_operation_success_count{};
+
+    [[nodiscard]] bool chainable() const noexcept {
+        return source_shape.ok() &&
+               first_result_shape.ok() &&
+               first_generated_face_count > 0U &&
+               generated_boundary_edge_count > 0U &&
+               second_operation_success_count > 0U;
+    }
+
+    friend bool operator==(
+        const EdgeFeatureChainingEvidence&,
+        const EdgeFeatureChainingEvidence&) = default;
+};
+
+struct EdgeFeatureLifecycleEvidence final {
+    std::vector<EdgeFeatureTangentChainEvidence>
+        tangent_chain;
+    std::vector<EdgeFeatureUpstreamEvidence>
+        upstream;
+    std::vector<EdgeFeatureChainingEvidence>
+        chaining;
+
+    [[nodiscard]] bool complete() const noexcept {
+        return tangent_chain.size() == 2U &&
+               upstream.size() == 10U &&
+               chaining.size() == 2U;
+    }
+
+    friend bool operator==(
+        const EdgeFeatureLifecycleEvidence&,
+        const EdgeFeatureLifecycleEvidence&) = default;
 };
 
 } // namespace simplesolid2::kernel
