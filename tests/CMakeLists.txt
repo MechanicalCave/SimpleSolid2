@@ -857,6 +857,35 @@ set_tests_properties(pm04b.axis_lifecycle_draft PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part"
 )
 
+add_executable(pm04b2_axis_tree_viewer_test
+    pm04b2_axis_tree_viewer_test.cpp
+)
+
+target_include_directories(pm04b2_axis_tree_viewer_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(pm04b2_axis_tree_viewer_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_ui
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(pm04b2_axis_tree_viewer_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm04b2.axis_tree_viewer
+    COMMAND pm04b2_axis_tree_viewer_test
+)
+
+set_tests_properties(pm04b2.axis_tree_viewer PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer"
+)
+
 add_executable(pm03b_datum_evaluation_test
     pm03b_datum_evaluation_test.cpp
 )
