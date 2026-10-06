@@ -1697,7 +1697,6 @@ void CadWorkbench::buildUi() {
             selected_axis_id_ = semantic;
             if (semantic) {
                 selected_profile_id_.reset();
-                selected_axis_id_.reset();
                 selected_datum_id_.reset();
                 selected_feature_id_.reset();
                 selected_body_id_.reset();
