@@ -528,6 +528,140 @@ lineSideCarrierFrame(
         : std::nullopt;
 }
 
+[[nodiscard]] const kernel::BoundaryUse2D*
+boundaryUseForProvenance(
+    const kernel::PlanarProfileInput& input,
+    const kernel::BoundaryUseProvenance& provenance) noexcept {
+    const auto find_in_loop =
+        [&provenance](
+            const kernel::ProfileLoopInput& loop)
+            -> const kernel::BoundaryUse2D* {
+            const auto found =
+                std::find_if(
+                    loop.boundary.begin(),
+                    loop.boundary.end(),
+                    [&provenance](
+                        const kernel::BoundaryUse2D& use) {
+                        return use.provenance ==
+                               provenance;
+                    });
+            return found == loop.boundary.end()
+                ? nullptr
+                : &*found;
+        };
+
+    if (const auto* found =
+            find_in_loop(input.outer)) {
+        return found;
+    }
+    for (const auto& hole : input.holes) {
+        if (const auto* found =
+                find_in_loop(hole)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+revolvePlanarSideCarrierFrame(
+    const kernel::PlanarProfileInput& input,
+    const kernel::Axis3& axis,
+    const kernel::BoundaryUse2D& use) noexcept {
+    const auto* line =
+        std::get_if<kernel::Line2>(
+            &use.curve);
+    const auto unit_axis =
+        unit3(axis.direction);
+    if (line == nullptr ||
+        !unit_axis) {
+        return std::nullopt;
+    }
+
+    const auto world_point =
+        [&input](const kernel::Point2& point) {
+            const auto converted =
+                point3(input.frame, point);
+            return kernel::Point3{
+                converted.X(),
+                converted.Y(),
+                converted.Z()};
+        };
+    const auto project =
+        [&axis, &unit_axis](
+            const kernel::Point3& point) {
+            return add3(
+                axis.origin,
+                scale3(
+                    *unit_axis,
+                    dot3(
+                        subtract3(
+                            point,
+                            axis.origin),
+                        *unit_axis)));
+        };
+
+    const auto first =
+        world_point(
+            linePoint(
+                *line,
+                use.start_parameter));
+    const auto second =
+        world_point(
+            linePoint(
+                *line,
+                use.end_parameter));
+    const auto first_axis =
+        project(first);
+    const auto second_axis =
+        project(second);
+    const auto first_radial =
+        subtract3(first, first_axis);
+    const auto second_radial =
+        subtract3(second, second_axis);
+    const double first_squared =
+        dot3(first_radial, first_radial);
+    const double second_squared =
+        dot3(second_radial, second_radial);
+
+    kernel::Point3 radial;
+    kernel::Point3 origin;
+    if (first_squared >= second_squared &&
+        first_squared > 0.0) {
+        radial = first_radial;
+        origin = first_axis;
+    } else if (second_squared > 0.0) {
+        radial = second_radial;
+        origin = second_axis;
+    } else {
+        return std::nullopt;
+    }
+
+    const auto u =
+        unit3(radial);
+    if (!u) {
+        return std::nullopt;
+    }
+    const auto v =
+        unit3(
+            cross3(
+                *unit_axis,
+                *u));
+    if (!v) {
+        return std::nullopt;
+    }
+
+    kernel::Frame3 result;
+    result.origin = origin;
+    result.u_axis = *u;
+    result.v_axis = *v;
+    result.normal = *unit_axis;
+    return result.valid()
+        ? std::optional<kernel::Frame3>{
+              result}
+        : std::nullopt;
+}
+
 struct SourceEdge final {
     TopoDS_Edge edge;
     kernel::BoundaryUseProvenance provenance;
@@ -1374,6 +1508,209 @@ buildExtrudeTool(
                     source.provenance},
                 std::move(faces),
                 source.surface_kind,
+                std::move(canonical_frame),
+            });
+    }
+
+    return std::make_pair(
+        shape,
+        std::move(sources));
+}
+
+[[nodiscard]] std::optional<
+    std::pair<
+        TopoDS_Shape,
+        std::vector<NewSemanticSource>>>
+buildRevolveTool(
+    const kernel::AngularRevolveInput& input) {
+    if (!input.valid()) {
+        return std::nullopt;
+    }
+
+    const bool full = input.fullTurn();
+    const double delta =
+        input.end_angle_radians -
+        input.start_angle_radians;
+
+    kernel::PlanarProfileInput profile =
+        input.profile;
+    if (!full) {
+        const auto rotated =
+            rotatedProfile(
+                input.profile,
+                input.axis,
+                input.start_angle_radians);
+        if (!rotated) {
+            return std::nullopt;
+        }
+        profile = *rotated;
+    }
+
+    const auto built =
+        buildProfileFace(profile);
+    if (!built) {
+        return std::nullopt;
+    }
+
+    const auto direction =
+        unit3(input.axis.direction);
+    if (!direction) {
+        return std::nullopt;
+    }
+    const gp_Ax1 axis{
+        gp_Pnt{
+            input.axis.origin.x,
+            input.axis.origin.y,
+            input.axis.origin.z},
+        gp_Dir{
+            direction->x,
+            direction->y,
+            direction->z}};
+
+    std::unique_ptr<BRepSweep_Revol> sweep;
+    if (full) {
+        sweep =
+            std::make_unique<BRepSweep_Revol>(
+                built->face,
+                axis,
+                false);
+    } else {
+        sweep =
+            std::make_unique<BRepSweep_Revol>(
+                built->face,
+                axis,
+                delta,
+                false);
+    }
+
+    const auto shape = sweep->Shape();
+    if (shape.IsNull()) {
+        return std::nullopt;
+    }
+
+    std::vector<NewSemanticSource> sources;
+    if (!full) {
+        const auto start_frame =
+            rotatedFrame(
+                input.profile.frame,
+                input.axis,
+                input.start_angle_radians);
+        const auto end_frame =
+            rotatedFrame(
+                input.profile.frame,
+                input.axis,
+                input.end_angle_radians);
+        if (!start_frame ||
+            !end_frame) {
+            return std::nullopt;
+        }
+
+        sources.push_back(
+            {
+                kernel::GeneratedFaceRole{
+                    kernel::GeneratedFaceRoleKind::
+                        revolve_start_cap,
+                    std::nullopt,
+                    std::nullopt},
+                facesFromShape(
+                    sweep->FirstShape()),
+                kernel::SurfaceKind::plane,
+                *start_frame,
+            });
+        sources.push_back(
+            {
+                kernel::GeneratedFaceRole{
+                    kernel::GeneratedFaceRoleKind::
+                        revolve_end_cap,
+                    std::nullopt,
+                    std::nullopt},
+                facesFromShape(
+                    sweep->LastShape()),
+                kernel::SurfaceKind::plane,
+                *end_frame,
+            });
+    }
+
+    for (const auto& source :
+         built->source_edges) {
+        std::vector<TopoDS_Face> faces;
+        const auto basis_edges =
+            matchingFaceEdges(
+                built->face,
+                source.edge);
+        for (const auto& basis_edge :
+             basis_edges) {
+            const auto generated =
+                sweep->Shape(
+                    basis_edge);
+            for (const auto& face :
+                 facesFromShape(generated)) {
+                const bool duplicate =
+                    std::any_of(
+                        faces.begin(),
+                        faces.end(),
+                        [&face](
+                            const TopoDS_Face&
+                                existing) {
+                            return existing.IsSame(
+                                face);
+                        });
+                if (!duplicate) {
+                    faces.push_back(face);
+                }
+            }
+        }
+
+        kernel::SurfaceKind kind{
+            kernel::SurfaceKind::other};
+        if (!faces.empty()) {
+            kind =
+                providerSurfaceKind(
+                    faces.front());
+            const bool uniform =
+                std::all_of(
+                    faces.begin(),
+                    faces.end(),
+                    [kind](
+                        const TopoDS_Face& face) {
+                        return providerSurfaceKind(
+                                   face) == kind;
+                    });
+            if (!uniform) {
+                return std::nullopt;
+            }
+        }
+
+        std::optional<kernel::Frame3>
+            canonical_frame;
+        if (kind ==
+            kernel::SurfaceKind::plane) {
+            const auto* use =
+                boundaryUseForProvenance(
+                    input.profile,
+                    source.provenance);
+            if (use == nullptr) {
+                return std::nullopt;
+            }
+            canonical_frame =
+                revolvePlanarSideCarrierFrame(
+                    input.profile,
+                    input.axis,
+                    *use);
+            if (!canonical_frame) {
+                return std::nullopt;
+            }
+        }
+
+        sources.push_back(
+            {
+                kernel::GeneratedFaceRole{
+                    kernel::GeneratedFaceRoleKind::
+                        revolve_side,
+                    std::nullopt,
+                    source.provenance},
+                std::move(faces),
+                kind,
                 std::move(canonical_frame),
             });
     }
