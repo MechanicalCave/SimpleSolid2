@@ -836,6 +836,27 @@ set_tests_properties(pm04a.axis_schema_v12 PROPERTIES
     LABELS "tier-fast;subsystem-part;subsystem-persistence"
 )
 
+add_executable(pm04b_axis_lifecycle_draft_test
+    pm04b_axis_lifecycle_draft_test.cpp
+)
+
+target_link_libraries(pm04b_axis_lifecycle_draft_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_part
+)
+
+target_compile_features(pm04b_axis_lifecycle_draft_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm04b.axis_lifecycle_draft
+    COMMAND pm04b_axis_lifecycle_draft_test
+)
+
+set_tests_properties(pm04b.axis_lifecycle_draft PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-part"
+)
+
 add_executable(pm03b_datum_evaluation_test
     pm03b_datum_evaluation_test.cpp
 )
