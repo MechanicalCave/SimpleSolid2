@@ -14,4 +14,7 @@ buildEdgeFeatureProviderEvidence(
 [[nodiscard]] kernel::EdgeFeatureProviderMatrixEvidence
 buildEdgeFeatureProviderMatrixEvidence() noexcept;
 
+[[nodiscard]] kernel::EdgeFeatureLifecycleEvidence
+buildEdgeFeatureLifecycleEvidence() noexcept;
+
 } // namespace simplesolid2::kernel_occt
