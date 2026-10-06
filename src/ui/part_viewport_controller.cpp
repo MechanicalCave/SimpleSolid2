@@ -4030,11 +4030,15 @@ void PartViewportController::onTreeSelection(
         tree_->selectedProfileIds();
     selection.datums =
         tree_->selectedDatumIds();
+    selection.axes =
+        tree_->selectedAxisIds();
 
     const auto profile_primary =
         tree_->primaryProfileId();
     const auto datum_primary =
         tree_->primaryDatumId();
+    const auto axis_primary =
+        tree_->primaryAxisId();
 
     if (primary &&
         std::find(
@@ -4044,6 +4048,7 @@ void PartViewportController::onTreeSelection(
         selection.primary = primary;
         selection.primary_profile.reset();
         selection.primary_datum.reset();
+        selection.primary_axis.reset();
     } else if (datum_primary &&
                std::find(
                    selection.datums.begin(),
@@ -4054,6 +4059,18 @@ void PartViewportController::onTreeSelection(
         selection.primary_profile.reset();
         selection.primary_datum =
             datum_primary;
+        selection.primary_axis.reset();
+    } else if (axis_primary &&
+               std::find(
+                   selection.axes.begin(),
+                   selection.axes.end(),
+                   *axis_primary) !=
+                   selection.axes.end()) {
+        selection.primary.reset();
+        selection.primary_profile.reset();
+        selection.primary_datum.reset();
+        selection.primary_axis =
+            axis_primary;
     } else if (profile_primary &&
                std::find(
                    selection.profiles.begin(),
@@ -4064,24 +4081,35 @@ void PartViewportController::onTreeSelection(
         selection.primary_profile =
             profile_primary;
         selection.primary_datum.reset();
+        selection.primary_axis.reset();
     } else if (!selected.empty()) {
         selection.primary = selected.front();
         selection.primary_profile.reset();
         selection.primary_datum.reset();
+        selection.primary_axis.reset();
     } else if (!selection.datums.empty()) {
         selection.primary.reset();
         selection.primary_profile.reset();
         selection.primary_datum =
             selection.datums.front();
+        selection.primary_axis.reset();
+    } else if (!selection.axes.empty()) {
+        selection.primary.reset();
+        selection.primary_profile.reset();
+        selection.primary_datum.reset();
+        selection.primary_axis =
+            selection.axes.front();
     } else if (!selection.profiles.empty()) {
         selection.primary.reset();
         selection.primary_profile =
             selection.profiles.front();
         selection.primary_datum.reset();
+        selection.primary_axis.reset();
     } else {
         selection.primary.reset();
         selection.primary_profile.reset();
         selection.primary_datum.reset();
+        selection.primary_axis.reset();
     }
 
     applySelectionToSurfaces();
