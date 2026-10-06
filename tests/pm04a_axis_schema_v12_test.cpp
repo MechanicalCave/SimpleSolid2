@@ -381,7 +381,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 13);
+            .domain_schema_version == 14);
 
     const auto authored =
         nlohmann::json::parse(
@@ -492,7 +492,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 13);
+            .domain_schema_version == 14);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);
