@@ -6,6 +6,7 @@
 #include <simplesolid2/part/part_sketch.hpp>
 
 #include <cmath>
+#include <utility>
 
 namespace simplesolid2::part {
 namespace {
