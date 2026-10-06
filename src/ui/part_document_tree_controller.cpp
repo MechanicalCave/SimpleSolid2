@@ -2026,6 +2026,12 @@ void PartDocumentTreeController::showContextMenu(
         if (axisIdForItem(*item)) {
             tree_->setCurrentItem(item);
             updateVisibilityActions();
+            edit_axis_action_->setEnabled(
+                static_cast<bool>(
+                    axis_edit_handler_));
+            delete_axis_action_->setEnabled(
+                static_cast<bool>(
+                    axis_delete_handler_));
             QMenu menu{tree_};
             menu.addAction(edit_axis_action_);
             if (show_action_->isEnabled() ||
