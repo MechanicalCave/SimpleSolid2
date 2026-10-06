@@ -3,12 +3,12 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-06  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.27 — PM-05  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.28 — PM-05  
 **Architecture authority:** ADR-0014, ADR-0016, ADR-0017  
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
 **Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** PM-05A evidence/instrumentation only; PM-05B+ durable production mutation remains BLOCKED until explicit Owner acceptance of the PM-05A conclusions
+**Production mutation:** PM-05A evidence is PASS and merged; PM-05B+ durable production mutation remains BLOCKED until explicit Owner acceptance of `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md`
 
 ## 1. Goal
 
@@ -750,4 +750,4 @@ Still blocked:
 - production toolbar buttons / Operations / Command Line;
 - PM-05B through PM-05F.
 
-PM-05A must produce the conclusions required by §15 and return for explicit Owner acceptance. Only that second Owner decision may authorize PM-05B+ production mutation.
+PM-05A produced the required conclusions in `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md`; evidence is PASS and merged. The required second Owner decision is still pending. Only explicit acceptance of that report may authorize PM-05B+ production mutation.
