@@ -1577,7 +1577,8 @@ void PartDocumentTreeController::rebuild(
     }
     reference_geometry->setExpanded(true);
 
-    if (!session_->document().sketches().empty()) {
+    if (!session_->document().sketches().empty() ||
+        !session_->document().axes().empty()) {
         auto* sketches = new QTreeWidgetItem(
             root,
             QStringList{QStringLiteral("Sketches")});
@@ -1819,6 +1820,116 @@ void PartDocumentTreeController::rebuild(
             }
         }
 
+        QTreeWidgetItem* missing_sources = nullptr;
+        for (const auto& axis :
+             session_->document().axes()) {
+            const auto* source_sketch =
+                session_->document().findSketch(
+                    axis.source.sketch_id);
+            if (source_sketch != nullptr) {
+                continue;
+            }
+
+            if (missing_sources == nullptr) {
+                missing_sources =
+                    new QTreeWidgetItem(
+                        sketches,
+                        QStringList{
+                            QStringLiteral(
+                                "Missing source Sketches")});
+                auto missing_font =
+                    missing_sources->font(0);
+                missing_font.setBold(true);
+                missing_sources->setFont(
+                    0,
+                    missing_font);
+                missing_sources->setIcon(
+                    0,
+                    tree_->style()->standardIcon(
+                        QStyle::SP_MessageBoxWarning));
+                missing_sources->setToolTip(
+                    0,
+                    QStringLiteral(
+                        "Authored Axis objects whose source Sketch no longer exists. They remain repairable by Edit Axis."));
+            }
+
+            const auto evaluation =
+                std::find_if(
+                    axis_evaluations_.begin(),
+                    axis_evaluations_.end(),
+                    [&axis](
+                        const AxisTreeEvaluationEntry& entry) {
+                        return entry.axis_id == axis.id;
+                    });
+            const bool evaluated =
+                evaluation != axis_evaluations_.end();
+
+            QString label =
+                axis.name.empty()
+                    ? QStringLiteral("Axis %1")
+                          .arg(fromUtf8(
+                              axis.id.serialized()))
+                    : fromUtf8(axis.name);
+            label += QStringLiteral(
+                " [Missing source Sketch]");
+
+            auto* axis_item =
+                new QTreeWidgetItem(
+                    missing_sources,
+                    QStringList{label});
+            axis_item->setData(
+                0,
+                axisIdData,
+                fromUtf8(axis.id.serialized()));
+
+            auto axis_font =
+                axis_item->font(0);
+            axis_font.setItalic(!axis.visible);
+            axis_font.setBold(true);
+            axis_item->setFont(0, axis_font);
+            axis_item->setIcon(
+                0,
+                tree_->style()->standardIcon(
+                    QStyle::SP_MessageBoxWarning));
+
+            axis_item->setToolTip(
+                0,
+                QStringLiteral(
+                    "AxisId: %1\nMissing source SketchId: %2\nSource EntityId: %3\nVisibility: %4\nStatus: %5\nDiagnostic: %6\nUse Edit Axis to re-source this authored Axis.")
+                    .arg(
+                        fromUtf8(axis.id.serialized()),
+                        fromUtf8(
+                            axis.source.sketch_id.value()),
+                        fromUtf8(
+                            axis.source.entity_id.serialized()),
+                        axis.visible
+                            ? QStringLiteral("Shown")
+                            : QStringLiteral("Hidden"),
+                        evaluated
+                            ? axisStatusText(
+                                  evaluation->status)
+                            : QStringLiteral(
+                                  "Not evaluated"),
+                        evaluated
+                            ? axisDiagnosticText(
+                                  evaluation->diagnostic)
+                            : QStringLiteral("—")));
+
+            if (preserve_reference_selection) {
+                const bool was_selected =
+                    std::find(
+                        previously_selected_axes.begin(),
+                        previously_selected_axes.end(),
+                        axis.id) !=
+                    previously_selected_axes.end();
+                axis_item->setSelected(
+                    was_selected);
+            }
+        }
+
+        if (missing_sources != nullptr) {
+            missing_sources->setExpanded(true);
+        }
         sketches->setExpanded(true);
     }
 
