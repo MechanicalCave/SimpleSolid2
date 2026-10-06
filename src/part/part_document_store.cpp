@@ -474,6 +474,28 @@ std::string serializeAuthored(
             });
     }
 
+    nlohmann::json axes =
+        nlohmann::json::array();
+    for (const auto& axis :
+         document.axes()) {
+        if (!partAxisStructurallyValid(axis)) {
+            return {};
+        }
+
+        axes.push_back(
+            {
+                {"id", axis.id.serialized()},
+                {"kind", "sketch_line"},
+                {"name", axis.name},
+                {"source_sketch_id",
+                 std::string{
+                     axis.source.sketch_id.value()}},
+                {"source_entity_id",
+                 axis.source.entity_id.serialized()},
+                {"visible", axis.visible},
+            });
+    }
+
     nlohmann::json profiles =
         nlohmann::json::array();
     for (const auto& profile :
@@ -573,6 +595,9 @@ std::string serializeAuthored(
         {"datum_planes",
          std::move(datum_planes)},
         {"sketches", std::move(sketches)},
+        {"next_axis_id",
+         document.axisIdCursor().serialized()},
+        {"axes", std::move(axes)},
         {"next_profile_id",
          document.profileIdCursor().serialized()},
         {"profiles", std::move(profiles)},
@@ -1686,6 +1711,88 @@ parseProfileIntent(
     return result;
 }
 
+bool parseAxesV12(
+    const nlohmann::json& value,
+    AxisIdCursor cursor,
+    std::vector<PartAxis>& axes,
+    std::string& error) {
+    if (!value.is_array()) {
+        error =
+            "Native Part Axis payload must be an array";
+        return false;
+    }
+
+    axes.clear();
+    axes.reserve(value.size());
+    std::set<std::string> ids;
+
+    for (const auto& item : value) {
+        if (!item.is_object() ||
+            item.size() != 6U ||
+            !item.contains("id") ||
+            !item.contains("kind") ||
+            !item.contains("name") ||
+            !item.contains("source_sketch_id") ||
+            !item.contains("source_entity_id") ||
+            !item.contains("visible") ||
+            !item["id"].is_string() ||
+            !item["kind"].is_string() ||
+            !item["name"].is_string() ||
+            !item["source_sketch_id"].is_string() ||
+            !item["source_entity_id"].is_string() ||
+            !item["visible"].is_boolean() ||
+            item["kind"].get<std::string>() !=
+                "sketch_line") {
+            error =
+                "Native Part Axis payload is invalid";
+            return false;
+        }
+
+        const auto id_text =
+            item["id"].get<std::string>();
+        const auto id =
+            AxisId::parse(id_text);
+        if (!id ||
+            !cursor.containsAllocated(*id) ||
+            !ids.insert(id_text).second) {
+            error =
+                "Native Part Axis identity is invalid";
+            return false;
+        }
+
+        const auto sketch_id =
+            sketch::SketchId::parse(
+                item["source_sketch_id"]
+                    .get<std::string>());
+        const auto entity_id =
+            sketch::EntityId::parse(
+                item["source_entity_id"]
+                    .get<std::string>());
+        if (!sketch_id || !entity_id) {
+            error =
+                "Native Part Axis source identity is invalid";
+            return false;
+        }
+
+        PartAxis axis{
+            *id,
+            item["name"].get<std::string>(),
+            SketchLineAxisSource{
+                *sketch_id,
+                *entity_id},
+            item["visible"].get<bool>()};
+        if (!partAxisStructurallyValid(axis)) {
+            error =
+                "Native Part contains structurally invalid schema-v12 Axis";
+            return false;
+        }
+
+        axes.push_back(std::move(axis));
+    }
+
+    return true;
+}
+
 bool parseProfiles(
     const nlohmann::json& value,
     int schema_version,
@@ -1933,16 +2040,20 @@ std::optional<PartAuthoredState> parseAuthored(
         schema_version >= 8;
     const bool has_datums =
         schema_version >= 10;
+    const bool has_axes =
+        schema_version >= 12;
     const std::size_t expected_fields =
         legacy_v1
             ? 2U
-            : (has_datums
+            : (has_axes
+                   ? 13U
+                   : (has_datums
                    ? 11U
                    : (has_body_features
                           ? 9U
                           : (has_profiles
                                  ? (has_length_unit ? 6U : 5U)
-                                 : 3U)));
+                                 : 3U))));
 
     if (authored.is_discarded() ||
         !authored.is_object() ||
@@ -1966,7 +2077,12 @@ std::optional<PartAuthoredState> parseAuthored(
          (!authored.contains("next_datum_id") ||
           !authored["next_datum_id"].is_string() ||
           !authored.contains("datum_planes") ||
-          !authored["datum_planes"].is_array()))) {
+          !authored["datum_planes"].is_array())) ||
+        (has_axes &&
+         (!authored.contains("next_axis_id") ||
+          !authored["next_axis_id"].is_string() ||
+          !authored.contains("axes") ||
+          !authored["axes"].is_array()))) {
         error =
             "Native Part authored payload has an invalid top-level schema";
         return std::nullopt;
@@ -2052,6 +2168,26 @@ std::optional<PartAuthoredState> parseAuthored(
             state.sketches,
             error)) {
         return std::nullopt;
+    }
+
+    if (has_axes) {
+        const auto cursor =
+            AxisIdCursor::parse(
+                authored["next_axis_id"]
+                    .get<std::string>());
+        if (!cursor) {
+            error =
+                "Native Part next_axis_id is invalid";
+            return std::nullopt;
+        }
+        state.next_axis_id = *cursor;
+        if (!parseAxesV12(
+                authored["axes"],
+                *cursor,
+                state.axes,
+                error)) {
+            return std::nullopt;
+        }
     }
 
     if (has_profiles) {
