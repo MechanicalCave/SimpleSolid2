@@ -219,6 +219,8 @@ std::string buildSchema8FromCurrentOriginDocument(
     // authored placement.
     authored.erase("next_datum_id");
     authored.erase("datum_planes");
+    authored.erase("next_axis_id");
+    authored.erase("axes");
     for (auto& sketch : authored["sketches"]) {
         auto placement =
             legacyPlacementFor(
@@ -252,8 +254,12 @@ std::string buildSchema9FromCurrentDocument(
             package.authored_json);
     CHECK(authored.contains("next_datum_id"));
     CHECK(authored.contains("datum_planes"));
+    CHECK(authored.contains("next_axis_id"));
+    CHECK(authored.contains("axes"));
     authored.erase("next_datum_id");
     authored.erase("datum_planes");
+    authored.erase("next_axis_id");
+    authored.erase("axes");
 
     auto text = authored.dump(2);
     text.push_back('\n');
@@ -347,7 +353,7 @@ int main() {
     CHECK(current_package.ok());
     CHECK(
         current_package.package->descriptor
-            .domain_schema_version == 11);
+            .domain_schema_version == 12);
     CHECK(
         current_package.package->authored_json.find(
             "\"placement\"") ==
@@ -463,7 +469,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 11);
+            .domain_schema_version == 12);
     CHECK(
         rewritten.package->authored_json.find(
             "\"placement\"") ==
@@ -578,7 +584,7 @@ int main() {
     CHECK(body_package.ok());
     CHECK(
         body_package.package->descriptor
-            .domain_schema_version == 11);
+            .domain_schema_version == 12);
     CHECK(
         body_package.package->authored_json.find(
             "\"body_planar_surface\"") !=
