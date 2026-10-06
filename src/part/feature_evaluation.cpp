@@ -3155,7 +3155,11 @@ PartEvaluation evaluatePart(
         const auto* extrude =
             std::get_if<ExtrudeFeature>(
                 &authored.definition);
-        if (extrude == nullptr) {
+        const auto* revolve =
+            std::get_if<RevolveFeature>(
+                &authored.definition);
+        if (extrude == nullptr &&
+            revolve == nullptr) {
             evaluated.status =
                 FeatureEvaluationStatus::
                     failed;
@@ -3163,18 +3167,19 @@ PartEvaluation evaluatePart(
                 FeatureEvaluationDiagnosticCode::
                     kernel_invalid_input;
             chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
             continue;
         }
 
+        const ProfileId profile_id =
+            extrude != nullptr
+                ? extrude->profile_id
+                : revolve->profile_id;
         const auto* profile =
             document.findProfile(
-                extrude->profile_id);
+                profile_id);
         if (profile == nullptr) {
             evaluated.status =
                 FeatureEvaluationStatus::
@@ -3183,9 +3188,6 @@ PartEvaluation evaluatePart(
                 FeatureEvaluationDiagnosticCode::
                     missing_profile;
             chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
@@ -3220,9 +3222,6 @@ PartEvaluation evaluatePart(
             } else if (
                 datumPlaneIdForSketchSupport(
                     source->support)) {
-                // Same-revision prefix only: a Datum that requires this
-                // Feature or a later stage cannot resolve yet, so the
-                // downstream Feature blocks before any Kernel mutation.
                 support_datums =
                     evaluateDatums(
                         document,
@@ -3230,76 +3229,138 @@ PartEvaluation evaluatePart(
             }
         }
 
-        auto materialized_profile =
-            resolveKernelProfileInput(
-                document,
-                profile->id,
-                support_topology,
-                support_datums
-                    ? &*support_datums
-                    : nullptr);
-        if (!materialized_profile.ok()) {
-            evaluated.status =
-                materialized_profile.status ==
-                        ProfileKernelInputStatus::
-                            invalid_input
-                    ? FeatureEvaluationStatus::failed
-                    : FeatureEvaluationStatus::blocked;
-            evaluated.diagnostic =
-                diagnosticForProfileMaterialization(
-                    materialized_profile.status);
-            chain_broken = true;
-            // The exact current support stage is mandatory. A prior
-            // evaluation's world frame is never reused after Missing,
-            // Ambiguous or Unsupported resolution.
-            current_references.clear();
-            result.features.push_back(
-                std::move(evaluated));
-            continue;
+        // Authored Axis may itself live on a Datum-backed Sketch even when
+        // the consuming Profile does not. Revolve therefore evaluates the
+        // same-revision Datum prefix unconditionally; resolution remains
+        // demand-driven and fail-closed.
+        if (revolve != nullptr &&
+            !support_datums) {
+            support_datums =
+                evaluateDatums(
+                    document,
+                    result);
         }
 
-        if (extrude->operation ==
-                ExtrudeOperation::cut &&
-            current_solid == nullptr) {
-            evaluated.status =
-                FeatureEvaluationStatus::
-                    blocked;
-            evaluated.diagnostic =
-                FeatureEvaluationDiagnosticCode::
-                    missing_upstream_body;
-            chain_broken = true;
-            current_references.clear();
-            result.features.push_back(
-                std::move(evaluated));
-            continue;
+        kernel::SolidModelingResult
+            kernel_result;
+
+        if (extrude != nullptr) {
+            auto materialized_profile =
+                resolveKernelProfileInput(
+                    document,
+                    profile->id,
+                    support_topology,
+                    support_datums
+                        ? &*support_datums
+                        : nullptr);
+            if (!materialized_profile.ok()) {
+                evaluated.status =
+                    materialized_profile.status ==
+                            ProfileKernelInputStatus::
+                                invalid_input
+                        ? FeatureEvaluationStatus::
+                              failed
+                        : FeatureEvaluationStatus::
+                              blocked;
+                evaluated.diagnostic =
+                    diagnosticForProfileMaterialization(
+                        materialized_profile.status);
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            if (extrude->operation ==
+                    ExtrudeOperation::cut &&
+                current_solid == nullptr) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        blocked;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        missing_upstream_body;
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            auto input =
+                makeKernelExtrudeInputFromProfile(
+                    std::move(
+                        *materialized_profile.input),
+                    *extrude);
+            if (!input) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        failed;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        kernel_invalid_input;
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            kernel_result =
+                modeling_kernel.extrude(
+                    *input,
+                    current_solid);
+        } else {
+            if (revolve->operation ==
+                    RevolveOperation::cut &&
+                current_solid == nullptr) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        blocked;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        missing_upstream_body;
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            const auto resolved =
+                resolveKernelRevolveInput(
+                    document,
+                    *revolve,
+                    &result,
+                    support_datums
+                        ? &*support_datums
+                        : nullptr);
+            if (!resolved.ok()) {
+                evaluated.status =
+                    resolved.status ==
+                            RevolveKernelInputStatus::
+                                invalid_input
+                        ? FeatureEvaluationStatus::
+                              failed
+                        : FeatureEvaluationStatus::
+                              blocked;
+                evaluated.diagnostic =
+                    diagnosticForRevolveInput(
+                        resolved.status);
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            kernel_result =
+                modeling_kernel.revolve(
+                    *resolved.input,
+                    current_solid);
         }
 
-        auto input =
-            makeKernelExtrudeInputFromProfile(
-                std::move(
-                    *materialized_profile.input),
-                *extrude);
-        if (!input) {
-            evaluated.status =
-                FeatureEvaluationStatus::
-                    failed;
-            evaluated.diagnostic =
-                FeatureEvaluationDiagnosticCode::
-                    kernel_invalid_input;
-            chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
-            current_references.clear();
-            result.features.push_back(
-                std::move(evaluated));
-            continue;
-        }
-
-        auto kernel_result =
-            modeling_kernel.extrude(
-                *input,
-                current_solid);
         evaluated.kernel_status =
             kernel_result.status;
         if (!kernel_result.ok()) {
@@ -3310,9 +3371,6 @@ PartEvaluation evaluatePart(
                 diagnosticForKernel(
                     kernel_result.status);
             chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
