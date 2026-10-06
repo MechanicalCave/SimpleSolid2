@@ -26,14 +26,16 @@ Obecny produkt udostępnia:
 - precision input z jednostkami, Polar, Dynamic Input, OSNAP/Tracking/Inference;
 - Trim/Extend oraz read-only Measure;
 - Part-owned live-reference Profiles z Add/Subtract;
-- dokładnie jeden trwały Body i uporządkowane Extrude Features;
+- Part-owned Sketch-Line Axes oraz bezpośredni Origin X/Y/Z AxisReference;
+- dokładnie jeden trwały Body i uporządkowane Extrude/Revolve Features;
 - Extrude Add/Cut z OneSide Forward/Reverse i Midplane;
-- dynamiczny preview, Edit Extrude, Feature status, Suppress/Unsuppress/Delete oraz Undo/Redo;
-- Save z ochroną konfliktu oraz Save/Close/Reopen z cold rebuildem Body, Datumów i ich semantycznych zależności.
+- Revolve Add/Cut z One Side/Midplane, 0 < Angle <= 360° i Reverse dla One Side;
+- dynamiczny preview, Edit Extrude/Revolve, naprawa Axis, Feature status, Suppress/Unsuppress/Delete oraz Undo/Redo;
+- Save z ochroną konfliktu oraz Save/Close/Reopen z cold rebuildem Body, Datumów, Axes i ich semantycznych zależności.
 
 Part jest obecnie jedynym zaimplementowanym typem głównego Dokumentu CAD. Assembly i Drawing nie są jeszcze dostępne.
 
-Bieżący solid modeling pozostaje celowo ograniczony do Extrude Add/Cut. Datum Axis, Datum Point, dodatkowe konstruktory Datum Plane, Projection, Revolve, Fillet/Chamfer i multi-body pozostają późniejszym zakresem.
+Bieżący solid modeling jest celowo ograniczony do Extrude Add/Cut i Revolve Add/Cut w udokumentowanych wariantach OneSide/Midplane. Datum Axis, Datum Point, dodatkowe konstruktory Datum Plane, konstruktory Axis z Body-Edge/Curve, Projection, Fillet/Chamfer, wieloobrotowy Revolve i multi-body pozostają późniejszym zakresem.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
