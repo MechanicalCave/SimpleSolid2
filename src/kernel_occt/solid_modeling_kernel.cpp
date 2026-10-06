@@ -1534,18 +1534,20 @@ buildRevolveTool(
             axis_direction.y,
             axis_direction.z}};
 
-    std::optional<BRepSweep_Revol> sweep;
+    std::unique_ptr<BRepSweep_Revol> sweep;
     if (full) {
-        sweep.emplace(
-            built->face,
-            axis,
-            false);
+        sweep =
+            std::make_unique<BRepSweep_Revol>(
+                built->face,
+                axis,
+                false);
     } else {
-        sweep.emplace(
-            built->face,
-            axis,
-            std::abs(authored_sweep),
-            false);
+        sweep =
+            std::make_unique<BRepSweep_Revol>(
+                built->face,
+                axis,
+                std::abs(authored_sweep),
+                false);
     }
 
     const auto shape =
