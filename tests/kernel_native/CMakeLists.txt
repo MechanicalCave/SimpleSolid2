@@ -509,25 +509,45 @@ target_link_libraries(pm05a_edge_feature_provider_evidence_test
 
 target_compile_features(pm05a_edge_feature_provider_evidence_test PRIVATE cxx_std_20)
 
-# PM-05A evidence-only: surface the native provider matrix in the
-# kernel-native Release build log without changing test pass/fail semantics.
-# Do not execute the probe as part of the desktop Debug graph.
-if(NOT SS2_BUILD_DESKTOP)
-    add_custom_command(
-        TARGET pm05a_edge_feature_provider_evidence_test
-        POST_BUILD
-        COMMAND $<TARGET_FILE:pm05a_edge_feature_provider_evidence_test>
-        COMMENT "PM-05A provider matrix evidence"
-        VERBATIM
-    )
-endif()
-
 add_test(
     NAME pm05a.edge_feature_provider_evidence
     COMMAND pm05a_edge_feature_provider_evidence_test
 )
 
 set_tests_properties(pm05a.edge_feature_provider_evidence PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;native"
+)
+
+add_executable(pm05a_edge_feature_lifecycle_evidence_test
+    pm05a_edge_feature_lifecycle_evidence_test.cpp
+)
+
+target_link_libraries(pm05a_edge_feature_lifecycle_evidence_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm05a_edge_feature_lifecycle_evidence_test PRIVATE cxx_std_20)
+
+# PM-05A evidence-only: emit the tangent/upstream/chaining observations once
+# in the kernel-native build log. Remove after capture into the evidence report.
+if(NOT SS2_BUILD_DESKTOP)
+    add_custom_command(
+        TARGET pm05a_edge_feature_lifecycle_evidence_test
+        POST_BUILD
+        COMMAND $<TARGET_FILE:pm05a_edge_feature_lifecycle_evidence_test>
+        COMMENT "PM-05A lifecycle matrix evidence"
+        VERBATIM
+    )
+endif()
+
+add_test(
+    NAME pm05a.edge_feature_lifecycle_evidence
+    COMMAND pm05a_edge_feature_lifecycle_evidence_test
+)
+
+set_tests_properties(pm05a.edge_feature_lifecycle_evidence PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
@@ -556,6 +576,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm02p_e_kernel_lifecycle_test
         pm04c2_production_revolve_test
         pm05a_edge_feature_provider_evidence_test
+        pm05a_edge_feature_lifecycle_evidence_test
 )
 
 foreach(_forbidden_target IN ITEMS
