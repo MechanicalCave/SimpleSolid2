@@ -390,8 +390,9 @@ int main(int argc, char* argv[]) {
         axis_source_line && axis_visibility &&
         axis_status && axis_diagnostic &&
         axis_origin && axis_direction &&
-        axis_tool && axis_operations &&
+        axis_operations &&
         hide && show);
+    CHECK(axis_tool == nullptr);
 
     // Authored Axis is a Part-owned child of its source Sketch even when the
     // source Sketch itself is hidden.
@@ -527,8 +528,8 @@ int main(int argc, char* argv[]) {
             ->visible);
     CHECK(currentAxisPresentation(*viewport));
 
-    // Command-first activates the same shared Axis draft and Operations panel.
-    // Cancel authors nothing; Axis itself remains Part-owned.
+    // Command-first activates the same shared Axis draft and Operations panel
+    // without a standalone GUI Axis authoring button. Cancel authors nothing.
     auto* sketch_item =
         findItem(
             *tree,
@@ -544,7 +545,6 @@ int main(int argc, char* argv[]) {
             "AXIS",
             command_generation);
     CHECK(command.accepted);
-    CHECK(axis_tool->isChecked());
     CHECK(!axis_operations->isHidden());
     CHECK(
         workbench.cadInputPrompt().find(
@@ -562,7 +562,6 @@ int main(int argc, char* argv[]) {
             "CANCEL",
             workbench.cadInputContextGeneration());
     CHECK(command.accepted);
-    CHECK(!axis_tool->isChecked());
     CHECK(
         session.document().axes().size() ==
         axis_count_before_command);
