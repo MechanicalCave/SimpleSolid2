@@ -5,7 +5,9 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
+#include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
+#include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
@@ -213,6 +215,11 @@ public:
             const std::vector<part::ProfileId>&,
             std::optional<part::ProfileId>)>;
 
+    using AxisSelectionChangedHandler =
+        std::function<void(
+            const std::vector<part::AxisId>&,
+            std::optional<part::AxisId>)>;
+
     using DatumSelectionChangedHandler =
         std::function<void(
             const std::vector<part::DatumId>&,
@@ -370,6 +377,11 @@ public:
     [[nodiscard]] std::optional<viewer::PresentationToken>
     profilePresentationFor(part::ProfileId profile_id) const;
 
+    [[nodiscard]] std::optional<part::AxisId>
+    axisFor(viewer::PresentationToken token) const;
+    [[nodiscard]] std::optional<viewer::PresentationToken>
+    axisPresentationFor(part::AxisId axis_id) const;
+
     [[nodiscard]] std::optional<part::DatumId>
     datumFor(viewer::PresentationToken token) const;
     [[nodiscard]] std::optional<viewer::PresentationToken>
@@ -378,6 +390,10 @@ public:
     void setProfileSelectionFromTree(
         const std::vector<part::ProfileId>& selected,
         std::optional<part::ProfileId> primary);
+
+    void setAxisSelectionFromTree(
+        const std::vector<part::AxisId>& selected,
+        std::optional<part::AxisId> primary);
 
     void setTransientProfileReveal(
         std::optional<part::ProfileId> profile_id);
@@ -404,6 +420,12 @@ public:
     void setProfileSelectionChangedHandler(
         ProfileSelectionChangedHandler handler) {
         profile_selection_changed_handler_ =
+            std::move(handler);
+    }
+
+    void setAxisSelectionChangedHandler(
+        AxisSelectionChangedHandler handler) {
+        axis_selection_changed_handler_ =
             std::move(handler);
     }
 
@@ -459,6 +481,8 @@ private:
         std::optional<part::ProfileId> primary_profile;
         std::vector<part::DatumId> datums;
         std::optional<part::DatumId> primary_datum;
+        std::vector<part::AxisId> axes;
+        std::optional<part::AxisId> primary_axis;
         std::vector<viewer::PresentationToken>
             body_topology;
         std::optional<viewer::PresentationToken>
@@ -600,6 +624,8 @@ private:
         body_scene_revision_;
     std::optional<viewer::BodyScene>
         body_scene_cache_;
+    std::optional<part::PartEvaluation>
+        part_evaluation_cache_;
     std::optional<part::DatumEvaluation>
         datum_evaluation_cache_;
     std::optional<kernel::Frame3>
@@ -649,6 +675,10 @@ private:
         std::uint64_t,
         part::DatumId>
         datum_bindings_;
+    std::unordered_map<
+        std::uint64_t,
+        part::AxisId>
+        axis_bindings_;
     std::optional<part::ProfileId>
         transient_profile_reveal_;
     std::optional<part::ProfileId>
@@ -664,6 +694,8 @@ private:
     SelectionChangedHandler selection_changed_handler_;
     ProfileSelectionChangedHandler
         profile_selection_changed_handler_;
+    AxisSelectionChangedHandler
+        axis_selection_changed_handler_;
     DatumSelectionChangedHandler
         datum_selection_changed_handler_;
     BodyTopologySelectionChangedHandler
