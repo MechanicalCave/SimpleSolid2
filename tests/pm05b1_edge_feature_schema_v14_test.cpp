@@ -436,6 +436,42 @@ int main() {
         CHECK(!restored.ok());
     }
 
+    // Structural persistence must preserve repairable edge intent when a
+    // previously consumed/producing upstream Feature is later deleted.
+    // Resolution becomes Missing/Blocked in B2; B1 must not reject the
+    // authored document merely because the historical producer is absent.
+    {
+        auto broken =
+            fixture.document.state();
+        CHECK(
+            broken.body.features.front().id ==
+            fixture.base_id);
+        broken.body.features.erase(
+            broken.body.features.begin());
+
+        auto restored =
+            part::PartDocument::restore(
+                fixture.document.documentId(),
+                std::move(broken));
+        CHECK(restored.ok());
+        CHECK(
+            restored.document->findFeature(
+                fixture.base_id) == nullptr);
+
+        const auto* retained =
+            restored.document->findFeature(
+                fixture.fillet_id);
+        CHECK(retained != nullptr);
+        const auto* retained_fillet =
+            std::get_if<part::FilletFeature>(
+                &retained->definition);
+        CHECK(retained_fillet != nullptr);
+        CHECK(
+            retained_fillet->edges.front()
+                .stage.feature_id ==
+            fixture.base_id);
+    }
+
     TempDirectory temp;
     part::PartDocumentStore store;
 

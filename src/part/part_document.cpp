@@ -454,59 +454,106 @@ bool PartDocument::validAuthoredState(
 
         if (const auto* material_edges =
                 sourceMaterialEdges(feature)) {
-            if (index == 0U) {
+            const auto stage_feature_id =
+                material_edges->front().stage
+                    .feature_id;
+            if (!stage_feature_id ||
+                !state.body.next_feature_id
+                     .containsAllocated(
+                         *stage_feature_id) ||
+                !(*stage_feature_id <
+                  feature.id)) {
                 return false;
             }
 
-            const BodyStageRef consumed_stage{
-                BodyStageKind::after_feature,
-                state.body.features[
-                    index - 1U].id};
-
-            const auto producer_is_upstream =
-                [&state, index](FeatureId producer) {
-                    return std::find_if(
-                               state.body.features.begin(),
-                               state.body.features.begin() +
-                                   static_cast<
-                                       std::ptrdiff_t>(index),
-                               [producer](
-                                   const PartFeature& item) {
-                                   return item.id ==
-                                          producer;
-                               }) !=
-                           state.body.features.begin() +
-                               static_cast<
-                                   std::ptrdiff_t>(index);
+            const auto present_before =
+                [&state, index](FeatureId id) {
+                    const auto found =
+                        std::find_if(
+                            state.body.features.begin(),
+                            state.body.features.end(),
+                            [id](
+                                const PartFeature& item) {
+                                return item.id == id;
+                            });
+                    if (found ==
+                        state.body.features.end()) {
+                        return true;
+                    }
+                    return static_cast<std::size_t>(
+                               std::distance(
+                                   state.body.features.begin(),
+                                   found)) <
+                           index;
                 };
 
-            const auto surface_is_upstream =
-                [&producer_is_upstream](
+            // A deleted consumed stage remains durable repairable intent.
+            // When the stage still exists, it must be the exact immediately
+            // preceding Body stage. Availability itself is B2 resolver state.
+            const auto current_stage =
+                std::find_if(
+                    state.body.features.begin(),
+                    state.body.features.end(),
+                    [stage_feature_id](
+                        const PartFeature& item) {
+                        return item.id ==
+                               *stage_feature_id;
+                    });
+            if (current_stage !=
+                    state.body.features.end() &&
+                (index == 0U ||
+                 static_cast<std::size_t>(
+                     std::distance(
+                         state.body.features.begin(),
+                         current_stage)) +
+                         1U !=
+                     index)) {
+                return false;
+            }
+
+            const auto provenance_is_historical =
+                [&state,
+                 &feature,
+                 &stage_feature_id,
+                 &present_before](
+                    FeatureId producer) {
+                    return state.body.next_feature_id
+                               .containsAllocated(
+                                   producer) &&
+                           producer < feature.id &&
+                           producer <=
+                               *stage_feature_id &&
+                           present_before(producer);
+                };
+
+            const auto surface_is_historical =
+                [&provenance_is_historical](
                     const FeatureSurfaceAddress& surface) {
                     return surface.valid() &&
-                           producer_is_upstream(
+                           provenance_is_historical(
                                surface.producer_feature_id);
                 };
 
-            const auto point_is_upstream =
-                [&producer_is_upstream,
-                 &surface_is_upstream](
+            const auto point_is_historical =
+                [&provenance_is_historical,
+                 &surface_is_historical](
                     const FeaturePointAddress& point) {
                     if (!point.valid() ||
-                        !producer_is_upstream(
+                        !provenance_is_historical(
                             point.producer_feature_id)) {
                         return false;
                     }
                     return std::all_of(
                         point.adjacent_surfaces.begin(),
                         point.adjacent_surfaces.end(),
-                        surface_is_upstream);
+                        surface_is_historical);
                 };
 
             for (const auto& edge :
                  *material_edges) {
-                if (edge.stage != consumed_stage ||
-                    !producer_is_upstream(
+                if (edge.stage !=
+                        material_edges->front().stage ||
+                    !provenance_is_historical(
                         edge.curve
                             .producer_feature_id) ||
                     !std::all_of(
@@ -514,7 +561,7 @@ bool PartDocument::validAuthoredState(
                             .adjacent_surfaces.begin(),
                         edge.curve
                             .adjacent_surfaces.end(),
-                        surface_is_upstream)) {
+                        surface_is_historical)) {
                     return false;
                 }
 
@@ -523,9 +570,9 @@ bool PartDocument::validAuthoredState(
                             BetweenSemanticPoints>(
                             &edge.branch);
                     endpoints != nullptr &&
-                    (!point_is_upstream(
+                    (!point_is_historical(
                          endpoints->first) ||
-                     !point_is_upstream(
+                     !point_is_historical(
                          endpoints->second))) {
                     return false;
                 }
