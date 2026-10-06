@@ -446,10 +446,90 @@ bool PartDocument::validAuthoredState(
         }
 
         const auto source = sourceProfileId(feature);
-        if (!source ||
+        if (source &&
             !state.next_profile_id
                  .containsAllocated(*source)) {
             return false;
+        }
+
+        if (const auto* material_edges =
+                sourceMaterialEdges(feature)) {
+            if (index == 0U) {
+                return false;
+            }
+
+            const BodyStageRef consumed_stage{
+                BodyStageKind::after_feature,
+                state.body.features[
+                    index - 1U].id};
+
+            const auto producer_is_upstream =
+                [&state, index](FeatureId producer) {
+                    return std::find_if(
+                               state.body.features.begin(),
+                               state.body.features.begin() +
+                                   static_cast<
+                                       std::ptrdiff_t>(index),
+                               [producer](
+                                   const PartFeature& item) {
+                                   return item.id ==
+                                          producer;
+                               }) !=
+                           state.body.features.begin() +
+                               static_cast<
+                                   std::ptrdiff_t>(index);
+                };
+
+            const auto surface_is_upstream =
+                [&producer_is_upstream](
+                    const FeatureSurfaceAddress& surface) {
+                    return surface.valid() &&
+                           producer_is_upstream(
+                               surface.producer_feature_id);
+                };
+
+            const auto point_is_upstream =
+                [&producer_is_upstream,
+                 &surface_is_upstream](
+                    const FeaturePointAddress& point) {
+                    if (!point.valid() ||
+                        !producer_is_upstream(
+                            point.producer_feature_id)) {
+                        return false;
+                    }
+                    return std::all_of(
+                        point.adjacent_surfaces.begin(),
+                        point.adjacent_surfaces.end(),
+                        surface_is_upstream);
+                };
+
+            for (const auto& edge :
+                 *material_edges) {
+                if (edge.stage != consumed_stage ||
+                    !producer_is_upstream(
+                        edge.curve
+                            .producer_feature_id) ||
+                    !std::all_of(
+                        edge.curve
+                            .adjacent_surfaces.begin(),
+                        edge.curve
+                            .adjacent_surfaces.end(),
+                        surface_is_upstream)) {
+                    return false;
+                }
+
+                if (const auto* endpoints =
+                        std::get_if<
+                            BetweenSemanticPoints>(
+                            &edge.branch);
+                    endpoints != nullptr &&
+                    (!point_is_upstream(
+                         endpoints->first) ||
+                     !point_is_upstream(
+                         endpoints->second))) {
+                    return false;
+                }
+            }
         }
 
         if (const auto* axis_reference =
