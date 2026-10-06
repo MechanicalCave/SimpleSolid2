@@ -119,6 +119,13 @@ struct EdgeFeatureTangentChainEvidence final {
     bool exact_provider_input_membership{false};
     bool build_succeeded{false};
 
+    // Re-run after explicitly authoring every Edge the provider placed in
+    // the tangent contour discovered from the one-Edge request.
+    std::size_t explicit_contour_requested_edge_count{};
+    std::size_t explicit_contour_provider_edge_count{};
+    bool explicit_contour_exact_membership{false};
+    bool explicit_contour_build_succeeded{false};
+
     // Same geometric tangent chain with both bounded Edges explicitly
     // registered. This proves whether exact-input enforcement can accept the
     // full authored contour while rejecting a silently grown partial set.
