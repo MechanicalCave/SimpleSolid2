@@ -5846,6 +5846,7 @@ bool CadWorkbench::startDatumPlaneTool() {
     if (axis_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5928,6 +5929,7 @@ bool CadWorkbench::startDatumPlaneEdit(
         axis_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5990,6 +5992,7 @@ void CadWorkbench::deleteDatumPlane(
     if (datum_plane_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -6520,10 +6523,11 @@ bool CadWorkbench::startExtrudeTool() {
                 "Extrude requires an active Part and modeling Kernel."));
         return false;
     }
-    if (extrude_draft_) {
+    if (extrude_draft_ ||
+        revolve_draft_) {
         setStatusText(
             QStringLiteral(
-                "An Extrude operation is already active."));
+                "Finish or cancel the active solid Feature command before Extrude."));
         return false;
     }
     if (datum_plane_draft_ ||
@@ -6624,10 +6628,11 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
                 "Extrude requires an active Part and modeling Kernel."));
         return false;
     }
-    if (extrude_draft_) {
+    if (extrude_draft_ ||
+        revolve_draft_) {
         setStatusText(
             QStringLiteral(
-                "An Extrude operation is already active."));
+                "Finish or cancel the active solid Feature command before Extrude."));
         return false;
     }
     if (datum_plane_draft_ ||
@@ -6733,10 +6738,11 @@ bool CadWorkbench::startExtrudeEdit(
                 "Cancel the active Extrude Profile selection before editing a Feature."));
         return false;
     }
-    if (extrude_draft_) {
+    if (extrude_draft_ ||
+        revolve_draft_) {
         setStatusText(
             QStringLiteral(
-                "Finish or cancel the active Extrude before editing another Feature."));
+                "Finish or cancel the active solid Feature command before editing another Feature."));
         return false;
     }
     if (datum_plane_draft_ ||
@@ -8092,7 +8098,8 @@ void CadWorkbench::startSketchTool() {
         datum_plane_draft_ ||
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
-        extrude_draft_) {
+        extrude_draft_ ||
+        revolve_draft_) {
         return;
     }
 
@@ -8130,7 +8137,8 @@ void CadWorkbench::startSketchResupport(
         datum_plane_draft_ ||
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
-        extrude_draft_) {
+        extrude_draft_ ||
+        revolve_draft_) {
         return;
     }
     if (active_sketch_id_) {
