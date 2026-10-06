@@ -8,6 +8,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -141,7 +142,9 @@ public:
     viewer::SketchPointQueryResult
     querySketchPresentation(
         viewer::ViewportPoint2 point) override {
-        return {point.valid(), std::nullopt};
+        return point.valid()
+            ? point_query
+            : viewer::SketchPointQueryResult{};
     }
 
     viewer::SketchRectangleQueryResult
@@ -183,9 +186,30 @@ public:
         QApplication::processEvents();
     }
 
+    void emitSpatialPointer(
+        viewer::SpatialPointerPhase phase,
+        double screen_x,
+        double screen_y,
+        double u,
+        double v) {
+        CHECK(static_cast<bool>(spatial_handler));
+        spatial_handler(
+            viewer::SpatialPointerEvent{
+                phase,
+                {screen_x, screen_y},
+                {
+                    {u, v, 10.0},
+                    {0.0, 0.0, -1.0},
+                },
+                {}});
+        QApplication::processEvents();
+    }
+
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene;
     viewer::SketchScene sketch_scene;
+    viewer::SketchPointQueryResult
+        point_query{true, std::nullopt};
     viewer::PresentationSelection
         presentation_selection;
     viewer::SelectionIntentHandler selection_handler;
@@ -390,8 +414,9 @@ int main(int argc, char* argv[]) {
         axis_source_line && axis_visibility &&
         axis_status && axis_diagnostic &&
         axis_origin && axis_direction &&
-        axis_tool && axis_operations &&
+        axis_operations &&
         hide && show);
+    CHECK(axis_tool == nullptr);
 
     // Authored Axis is a Part-owned child of its source Sketch even when the
     // source Sketch itself is hidden.
@@ -527,8 +552,8 @@ int main(int argc, char* argv[]) {
             ->visible);
     CHECK(currentAxisPresentation(*viewport));
 
-    // Command-first activates the same shared Axis draft and Operations panel.
-    // Cancel authors nothing; Axis itself remains Part-owned.
+    // Command-first activates the same shared Axis draft and Operations panel
+    // without a standalone GUI Axis authoring button. Cancel authors nothing.
     auto* sketch_item =
         findItem(
             *tree,
@@ -544,7 +569,6 @@ int main(int argc, char* argv[]) {
             "AXIS",
             command_generation);
     CHECK(command.accepted);
-    CHECK(axis_tool->isChecked());
     CHECK(!axis_operations->isHidden());
     CHECK(
         workbench.cadInputPrompt().find(
@@ -562,10 +586,254 @@ int main(int argc, char* argv[]) {
             "CANCEL",
             workbench.cadInputContextGeneration());
     CHECK(command.accepted);
-    CHECK(!axis_tool->isChecked());
     CHECK(
         session.document().axes().size() ==
         axis_count_before_command);
+
+    // Normal GUI creation is contextual to Line. Arming Axis is runtime-only
+    // until a Line successfully commits, and there is no standalone Axis
+    // toolbar action.
+    auto* line_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("lineSketchToolButton"));
+    auto* axis_designation =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral(
+                "sketchAxisDesignationCheck"));
+    CHECK(line_tool != nullptr);
+    CHECK(axis_designation != nullptr);
+    CHECK(axis_tool == nullptr);
+    CHECK(!line_tool->isHidden());
+    line_tool->click();
+    QApplication::processEvents();
+    CHECK(!axis_designation->isHidden());
+    CHECK(axis_designation->isEnabled());
+    CHECK(!axis_designation->isChecked());
+    const auto axis_count_before_arming =
+        session.document().axes().size();
+    const auto undo_before_arming =
+        session.undoDepth();
+    axis_designation->click();
+    QApplication::processEvents();
+    CHECK(axis_designation->isChecked());
+    CHECK(
+        session.document().axes().size() ==
+        axis_count_before_arming);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_arming);
+    axis_designation->click();
+    QApplication::processEvents();
+    CHECK(!axis_designation->isChecked());
+
+    // Existing selected Line projects the authored Part designation. ON->OFF
+    // deletes exactly one Axis while preserving the Line; OFF->ON allocates a
+    // fresh AxisId. Undo restores the original AxisId without coupling the
+    // independent Regular/Construction role.
+    auto* select_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "selectSketchToolButton"));
+    auto* regular_role =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "sketchRegularRoleButton"));
+    auto* construction_role =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "sketchConstructionRoleButton"));
+    CHECK(select_tool != nullptr);
+    CHECK(regular_role != nullptr);
+    CHECK(construction_role != nullptr);
+    select_tool->click();
+    QApplication::processEvents();
+    CHECK(viewport->sketch_scene.lines.size() == 1U);
+
+    viewport->point_query = {
+        true,
+        viewport->sketch_scene.lines.front().token};
+    viewport->emitSpatialPointer(
+        viewer::SpatialPointerPhase::primary_press,
+        50.0, 20.0,
+        5.0, 0.0);
+    viewport->emitSpatialPointer(
+        viewer::SpatialPointerPhase::primary_release,
+        50.0, 20.0,
+        5.0, 0.0);
+    CHECK(!axis_designation->isHidden());
+    CHECK(axis_designation->isEnabled());
+    CHECK(axis_designation->isChecked());
+
+    const auto old_axis_id =
+        fixture.axis_id;
+    const auto delete_undo_before =
+        session.undoDepth();
+    axis_designation->click();
+    QApplication::processEvents();
+    CHECK(
+        session.document().findAxis(
+            old_axis_id) == nullptr);
+    CHECK(
+        session.document().findSketch(
+            fixture.sketch_id)
+            ->model.findLine(
+                fixture.line_id) != nullptr);
+    CHECK(
+        session.undoDepth() ==
+        delete_undo_before + 1U);
+
+    axis_designation->click();
+    QApplication::processEvents();
+    CHECK(session.document().axes().size() == 1U);
+    const auto new_axis_id =
+        session.document().axes().front().id;
+    CHECK(new_axis_id != old_axis_id);
+    const part::SketchLineAxisSource
+        expected_selected_line_source{
+            fixture.sketch_id,
+            fixture.line_id};
+    CHECK(
+        session.document().axes().front().source ==
+        expected_selected_line_source);
+
+    workbench.requestUndo();
+    QApplication::processEvents();
+    CHECK(session.document().axes().empty());
+    workbench.requestUndo();
+    QApplication::processEvents();
+    CHECK(
+        session.document().findAxis(
+            old_axis_id) != nullptr);
+    CHECK(
+        session.document().findAxis(
+            old_axis_id)
+            ->id == old_axis_id);
+
+    // Re-select after history reconciliation, then prove geometry role is
+    // independent from the Axis designation.
+    select_tool->click();
+    QApplication::processEvents();
+    viewport->point_query = {
+        true,
+        viewport->sketch_scene.lines.front().token};
+    viewport->emitSpatialPointer(
+        viewer::SpatialPointerPhase::primary_press,
+        50.0, 20.0,
+        5.0, 0.0);
+    viewport->emitSpatialPointer(
+        viewer::SpatialPointerPhase::primary_release,
+        50.0, 20.0,
+        5.0, 0.0);
+    CHECK(axis_designation->isChecked());
+    construction_role->click();
+    QApplication::processEvents();
+    CHECK(
+        session.document().findAxis(
+            old_axis_id) != nullptr);
+    CHECK(
+        session.document().findSketch(
+            fixture.sketch_id)
+            ->model.findLine(
+                fixture.line_id)
+            ->role() ==
+        sketch::EntityRole::construction);
+    regular_role->click();
+    QApplication::processEvents();
+    CHECK(
+        session.document().findAxis(
+            old_axis_id) != nullptr);
+
+    // Legacy duplicate-source state remains representable but selected-Line
+    // designation fails closed as indeterminate/disabled rather than choosing
+    // an arbitrary AxisId owner.
+    auto duplicate_state =
+        session.document().state();
+    const auto duplicate_axis_id =
+        duplicate_state.next_axis_id.allocate();
+    CHECK(duplicate_axis_id.has_value());
+    duplicate_state.axes.push_back(
+        part::PartAxis{
+            *duplicate_axis_id,
+            "Axis Legacy Duplicate",
+            {
+                fixture.sketch_id,
+                fixture.line_id,
+            },
+            true});
+    auto duplicate_document =
+        part::PartDocument::restore(
+            core::DocumentId::generate(),
+            std::move(duplicate_state));
+    CHECK(duplicate_document.ok());
+    application::DocumentSession
+        duplicate_session{
+            {},
+            std::move(
+                *duplicate_document.document)};
+
+    TestViewport* duplicate_viewport = nullptr;
+    ui::CadWorkbench duplicate_workbench{
+        [&duplicate_viewport](QWidget* parent) {
+            auto* created =
+                new TestViewport(parent);
+            duplicate_viewport = created;
+            return ui::ViewportSurface{
+                created,
+                created};
+        },
+        &kernel};
+    CHECK(duplicate_viewport != nullptr);
+    CHECK(
+        duplicate_workbench.activateDocument(
+            &duplicate_session,
+            {}));
+    auto* duplicate_tree =
+        duplicate_workbench.findChild<QTreeWidget*>();
+    auto* duplicate_edit_sketch =
+        duplicate_workbench.findChild<QAction*>(
+            QStringLiteral("editSketchAction"));
+    CHECK(duplicate_tree != nullptr);
+    CHECK(duplicate_edit_sketch != nullptr);
+    auto* duplicate_sketch_item =
+        findItem(
+            *duplicate_tree,
+            QStringLiteral("Sketch 1"));
+    CHECK(duplicate_sketch_item != nullptr);
+    selectOnly(
+        *duplicate_tree,
+        duplicate_sketch_item);
+    duplicate_edit_sketch->trigger();
+    QApplication::processEvents();
+    CHECK(
+        duplicate_viewport->sketch_scene.lines.size() ==
+        1U);
+    duplicate_viewport->point_query = {
+        true,
+        duplicate_viewport->sketch_scene
+            .lines.front().token};
+    duplicate_viewport->emitSpatialPointer(
+        viewer::SpatialPointerPhase::primary_press,
+        50.0, 20.0,
+        5.0, 0.0);
+    duplicate_viewport->emitSpatialPointer(
+        viewer::SpatialPointerPhase::primary_release,
+        50.0, 20.0,
+        5.0, 0.0);
+
+    auto* duplicate_designation =
+        duplicate_workbench.findChild<QCheckBox*>(
+            QStringLiteral(
+                "sketchAxisDesignationCheck"));
+    CHECK(duplicate_designation != nullptr);
+    CHECK(!duplicate_designation->isHidden());
+    CHECK(duplicate_designation->isTristate());
+    CHECK(
+        duplicate_designation->checkState() ==
+        Qt::PartiallyChecked);
+    CHECK(!duplicate_designation->isEnabled());
+    CHECK(
+        duplicate_session.document().axes().size() ==
+        2U);
 
     // Axis command opened source Sketch edit for semantic Line acquisition.
     // Finish that runtime context before the destructive repairability check.
@@ -617,6 +885,6 @@ int main(int argc, char* argv[]) {
     CHECK(!currentAxisPresentation(*viewport));
 
     std::cout
-        << "PM-04B2 Axis Tree/Viewer/Properties tests passed\n";
+        << "PM-04B2/PM-04F Axis contextual Tree/Viewer/Properties tests passed\n";
     return EXIT_SUCCESS;
 }

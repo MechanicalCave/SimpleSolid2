@@ -1444,17 +1444,6 @@ void CadWorkbench::buildUi() {
         1,
         datum_plane_button_);
 
-    axis_button_ =
-        new QPushButton(
-            QStringLiteral("Axis"),
-            shell_);
-    axis_button_->setObjectName(
-        QStringLiteral("axisToolButton"));
-    axis_button_->setCheckable(true);
-    shell_->editorToolsLayout().insertWidget(
-        1,
-        axis_button_);
-
     select_sketch_button_ =
         new QPushButton(
             QStringLiteral("Select"),
@@ -1719,6 +1708,9 @@ void CadWorkbench::buildUi() {
     sketch_interaction_controller_ =
         std::make_unique<PartSketchInteractionController>(
             *viewport_controller_);
+    sketch_interaction_controller_->
+        setSolidModelingKernel(
+            solid_modeling_kernel_);
     if (cad_interaction_settings_provider_) {
         sketch_interaction_controller_->
             setCadInteractionSettingsProvider(
@@ -3088,6 +3080,29 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         construction_role_button_);
 
+    line_part_reference_label_ =
+        new QLabel(
+            QStringLiteral("Part reference:"),
+            operations_content);
+    line_part_reference_label_->setObjectName(
+        QStringLiteral("sketchPartReferenceLabel"));
+    line_part_reference_label_->setVisible(false);
+    operations_layout->addWidget(
+        line_part_reference_label_);
+
+    line_axis_designation_check_ =
+        new QCheckBox(
+            QStringLiteral("Axis"),
+            operations_content);
+    line_axis_designation_check_->setObjectName(
+        QStringLiteral("sketchAxisDesignationCheck"));
+    line_axis_designation_check_->setVisible(false);
+    line_axis_designation_check_->setToolTip(
+        QStringLiteral(
+            "Create or remove the Part-owned Axis designation for this Line."));
+    operations_layout->addWidget(
+        line_axis_designation_check_);
+
     finish_line_button_ =
         new QPushButton(
             QStringLiteral("Finish Line"),
@@ -4403,6 +4418,15 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
+            if (sketch_interaction_controller_ &&
+                sketch_interaction_controller_->tool() ==
+                    sketch::SketchTool::line) {
+                static_cast<void>(
+                    sketch_interaction_controller_->
+                        setCreationRole(
+                            sketch::EntityRole::regular));
+                return;
+            }
             setSketchSelectionRole(
                 sketch::EntityRole::regular);
         });
@@ -4411,23 +4435,28 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
+            if (sketch_interaction_controller_ &&
+                sketch_interaction_controller_->tool() ==
+                    sketch::SketchTool::line) {
+                static_cast<void>(
+                    sketch_interaction_controller_->
+                        setCreationRole(
+                            sketch::EntityRole::construction));
+                return;
+            }
             setSketchSelectionRole(
                 sketch::EntityRole::construction);
         });
-
-
     QObject::connect(
-        axis_button_,
-        &QPushButton::clicked,
+        line_axis_designation_check_,
+        &QCheckBox::clicked,
         this,
-        [this] {
-            if (axis_draft_) {
-                cancelAxis();
-                return;
-            }
-            static_cast<void>(
-                startAxisTool());
+        [this](bool checked) {
+            setSketchLineAxisDesignation(
+                checked);
         });
+
+
     QObject::connect(
         axis_finish_button_,
         &QPushButton::clicked,
@@ -5670,6 +5699,14 @@ void CadWorkbench::syncAxisUi() {
                 axisEvaluationDiagnosticText(
                     *axis_evaluation_->
                          axis_diagnostic);
+        } else if (
+            axis_evaluation_->status ==
+            application::
+                AxisDraftEvaluationStatus::
+                    source_already_designated) {
+            result_text =
+                QStringLiteral(
+                    "Rejected — this Line is already designated by another authored Axis.");
         } else if (
             axis_evaluation_->status ==
             application::
@@ -8121,6 +8158,175 @@ void CadWorkbench::setSketchSelectionRole(
                   "Selected geometry marked Construction.")
             : QStringLiteral(
                   "Selected geometry marked Regular."));
+}
+
+void CadWorkbench::setSketchLineAxisDesignation(
+    bool enabled) {
+    if (!sketch_interaction_controller_ ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    if (sketch_interaction_controller_->tool() ==
+        sketch::SketchTool::line) {
+        if (!sketch_interaction_controller_->
+                 setLineAxisDesignation(enabled)) {
+            setStatusText(
+                QStringLiteral(
+                    "Axis designation is unavailable in the current Line context."));
+            syncSketchInteractionUi();
+            return;
+        }
+        setStatusText(
+            enabled
+                ? QStringLiteral(
+                      "Axis armed for the next successfully committed Line only.")
+                : QStringLiteral(
+                      "Axis designation cleared for Line creation."));
+        return;
+    }
+
+    if (sketch_interaction_controller_->tool() !=
+            sketch::SketchTool::select ||
+        sketch_interaction_controller_->
+                selectedCount() != 1U ||
+        !active_sketch_id_) {
+        syncSketchInteractionUi();
+        return;
+    }
+
+    const auto entity_id =
+        sketch_interaction_controller_->
+            selectedEntities().front();
+    const auto* hosted =
+        document_session_->document()
+            .findSketch(*active_sketch_id_);
+    if (hosted == nullptr ||
+        hosted->model.findLine(entity_id) ==
+            nullptr) {
+        syncSketchInteractionUi();
+        return;
+    }
+
+    const part::SketchLineAxisSource source{
+        *active_sketch_id_,
+        entity_id};
+    std::vector<part::AxisId> matches;
+    for (const auto& axis :
+         document_session_->document().axes()) {
+        if (axis.source == source) {
+            matches.push_back(axis.id);
+        }
+    }
+
+    if (matches.size() > 1U) {
+        setStatusText(
+            QStringLiteral(
+                "Axis designation conflict — repair duplicate legacy Axis sources through Axis Tree/Properties."));
+        syncSketchInteractionUi();
+        return;
+    }
+
+    if (enabled) {
+        if (!matches.empty()) {
+            syncSketchInteractionUi();
+            return;
+        }
+        if (solid_modeling_kernel_ == nullptr) {
+            setStatusText(
+                QStringLiteral(
+                    "Axis creation requires the active modeling kernel."));
+            syncSketchInteractionUi();
+            return;
+        }
+
+        const auto result =
+            document_session_->execute(
+                application::CreateAxisCommand{
+                    source,
+                    document_session_->document()
+                        .revision(),
+                    {},
+                    true},
+                *solid_modeling_kernel_);
+        if (!result.ok()) {
+            showFailure(result.diagnostic);
+            syncSketchInteractionUi();
+            return;
+        }
+
+        refreshActiveContext();
+        notifyDocumentStateChanged();
+        setStatusText(
+            QStringLiteral(
+                "Selected Line designated as one authored Part Axis."));
+        return;
+    }
+
+    if (matches.size() != 1U) {
+        syncSketchInteractionUi();
+        return;
+    }
+
+    const auto axis_id = matches.front();
+    bool referenced_by_revolve = false;
+    for (const auto& feature :
+         document_session_->document()
+             .body().features) {
+        const auto* revolve =
+            std::get_if<part::RevolveFeature>(
+                &feature.definition);
+        if (revolve == nullptr) {
+            continue;
+        }
+        const auto referenced =
+            part::authoredAxisIdForAxisReference(
+                revolve->axis);
+        if (referenced &&
+            *referenced == axis_id) {
+            referenced_by_revolve = true;
+            break;
+        }
+    }
+
+    if (referenced_by_revolve) {
+        const auto answer =
+            QMessageBox::question(
+                this,
+                QStringLiteral(
+                    "Remove Axis designation"),
+                QStringLiteral(
+                    "This Axis is referenced by a Revolve. Removing the Axis keeps the Revolve authored but leaves its Axis intent Missing/Blocked until repaired.\n\nRemove the Axis designation?"),
+                QMessageBox::Yes |
+                    QMessageBox::No,
+                QMessageBox::No);
+        if (answer != QMessageBox::Yes) {
+            syncSketchInteractionUi();
+            return;
+        }
+    }
+
+    const auto result =
+        document_session_->execute(
+            application::DeleteAxisCommand{
+                axis_id,
+                document_session_->document()
+                    .revision()});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        syncSketchInteractionUi();
+        return;
+    }
+
+    if (selected_axis_id_ &&
+        *selected_axis_id_ == axis_id) {
+        selected_axis_id_.reset();
+    }
+    refreshActiveContext();
+    notifyDocumentStateChanged();
+    setStatusText(
+        QStringLiteral(
+            "Axis designation removed; the Sketch Line remains authored."));
 }
 
 void CadWorkbench::startSketchTool() {
@@ -11731,6 +11937,15 @@ void CadWorkbench::syncSketchInteractionUi() {
     if (construction_role_button_ != nullptr) {
         construction_role_button_->setVisible(false);
     }
+    if (line_part_reference_label_ != nullptr) {
+        line_part_reference_label_->setVisible(false);
+    }
+    if (line_axis_designation_check_ != nullptr) {
+        line_axis_designation_check_->setVisible(false);
+        line_axis_designation_check_->setEnabled(false);
+        line_axis_designation_check_->setTristate(false);
+        line_axis_designation_check_->setChecked(false);
+    }
     if (create_construction_button_ != nullptr) {
         create_construction_button_->setVisible(false);
     }
@@ -12157,6 +12372,9 @@ void CadWorkbench::syncSketchInteractionUi() {
         delete_selection_button_->setEnabled(
             selected > 0U);
 
+        entity_role_label_->setText(
+            QStringLiteral(
+                "Selected geometry role:"));
         entity_role_label_->setVisible(
             selected > 0U);
         regular_role_button_->setVisible(
@@ -12174,6 +12392,73 @@ void CadWorkbench::syncSketchInteractionUi() {
             selected_role &&
             *selected_role ==
                 sketch::EntityRole::construction);
+
+        if (selected == 1U &&
+            active_sketch_id_ &&
+            document_session_ != nullptr &&
+            line_part_reference_label_ != nullptr &&
+            line_axis_designation_check_ != nullptr) {
+            const auto entity_id =
+                sketch_interaction_controller_->
+                    selectedEntities().front();
+            const auto* hosted =
+                document_session_->document()
+                    .findSketch(
+                        *active_sketch_id_);
+            if (hosted != nullptr &&
+                hosted->model.findLine(
+                    entity_id) != nullptr) {
+                const part::SketchLineAxisSource
+                    source{
+                        *active_sketch_id_,
+                        entity_id};
+                std::size_t matches = 0U;
+                for (const auto& axis :
+                     document_session_->document()
+                         .axes()) {
+                    if (axis.source == source) {
+                        ++matches;
+                    }
+                }
+
+                line_part_reference_label_->
+                    setVisible(true);
+                line_axis_designation_check_->
+                    setVisible(true);
+
+                if (matches > 1U) {
+                    line_axis_designation_check_->
+                        setTristate(true);
+                    line_axis_designation_check_->
+                        setCheckState(
+                            Qt::PartiallyChecked);
+                    line_axis_designation_check_->
+                        setEnabled(false);
+                    line_axis_designation_check_->
+                        setToolTip(
+                            QStringLiteral(
+                                "Conflict: more than one legacy Axis references this Line. Repair through Axis Tree/Properties."));
+                } else {
+                    line_axis_designation_check_->
+                        setTristate(false);
+                    line_axis_designation_check_->
+                        setChecked(
+                            matches == 1U);
+                    line_axis_designation_check_->
+                        setEnabled(
+                            matches == 1U ||
+                            solid_modeling_kernel_ !=
+                                nullptr);
+                    line_axis_designation_check_->
+                        setToolTip(
+                            matches == 1U
+                                ? QStringLiteral(
+                                      "Remove the Part-owned Axis designation from this Line.")
+                                : QStringLiteral(
+                                      "Create one Part-owned Axis referencing this Line."));
+                }
+            }
+        }
 
         finish_line_button_->setVisible(false);
         cancel_line_button_->setVisible(false);
@@ -12421,7 +12706,8 @@ void CadWorkbench::syncSketchInteractionUi() {
         tool == sketch::SketchTool::rectangle;
     if (create_construction_button_ != nullptr) {
         create_construction_button_->setVisible(
-            creation_tool);
+            creation_tool &&
+            tool != sketch::SketchTool::line);
     }
     if (rectangle_diagonals_button_ != nullptr) {
         rectangle_diagonals_button_->setVisible(
@@ -12429,6 +12715,47 @@ void CadWorkbench::syncSketchInteractionUi() {
     }
 
     if (tool == sketch::SketchTool::line) {
+        if (entity_role_label_ != nullptr) {
+            entity_role_label_->setText(
+                QStringLiteral("Geometry role:"));
+            entity_role_label_->setVisible(true);
+        }
+        if (regular_role_button_ != nullptr) {
+            regular_role_button_->setVisible(true);
+            regular_role_button_->setChecked(
+                sketch_interaction_controller_->
+                    creationRole() ==
+                sketch::EntityRole::regular);
+        }
+        if (construction_role_button_ != nullptr) {
+            construction_role_button_->setVisible(true);
+            construction_role_button_->setChecked(
+                sketch_interaction_controller_->
+                    creationRole() ==
+                sketch::EntityRole::construction);
+        }
+        if (line_part_reference_label_ != nullptr) {
+            line_part_reference_label_->setVisible(true);
+        }
+        if (line_axis_designation_check_ != nullptr) {
+            line_axis_designation_check_->
+                setTristate(false);
+            line_axis_designation_check_->
+                setVisible(true);
+            line_axis_designation_check_->
+                setEnabled(
+                    solid_modeling_kernel_ !=
+                    nullptr);
+            line_axis_designation_check_->
+                setChecked(
+                    sketch_interaction_controller_->
+                        lineAxisDesignation());
+            line_axis_designation_check_->
+                setToolTip(
+                    QStringLiteral(
+                        "One-shot: the next successfully committed Line is also designated as a Part Axis; the option then resets."));
+        }
+
         finish_line_button_->setText(
             QStringLiteral("Finish Line"));
         cancel_line_button_->setText(

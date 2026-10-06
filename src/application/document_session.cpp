@@ -67,6 +67,22 @@ part::PartAxis* findAxis(
         : &*found;
 }
 
+bool axisSourceInUse(
+    const part::PartAuthoredState& state,
+    const part::SketchLineAxisSource& source,
+    std::optional<part::AxisId> excluded_axis_id =
+        std::nullopt) noexcept {
+    return std::any_of(
+        state.axes.begin(),
+        state.axes.end(),
+        [&source, excluded_axis_id](
+            const part::PartAxis& axis) {
+            return axis.source == source &&
+                   (!excluded_axis_id ||
+                    axis.id != *excluded_axis_id);
+        });
+}
+
 part::OffsetDatumPlane* findDatumPlane(
     part::PartAuthoredState& state,
     part::DatumId id) noexcept {
@@ -1026,6 +1042,193 @@ AddSketchLineResult DocumentSession::execute(
     return AddSketchLineResult{
         true,
         *entity_id,
+        DocumentSessionDiagnostic{}};
+}
+
+AddSketchLineWithAxisResult DocumentSession::execute(
+    const AddSketchLineWithAxisCommand& command,
+    kernel::ISolidModelingKernel&
+        modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    revision_diverged,
+                "Add Sketch Line with Axis was started from a stale DocumentRevision",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applySketchEntityIdCursors(after);
+    applyAxisIdCursor(after);
+
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Add Sketch Line with Axis target SketchId does not exist",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    std::optional<sketch::EntityId> entity_id;
+    try {
+        entity_id =
+            target->model.addLine(
+                command.start,
+                command.end,
+                command.role);
+    } catch (const std::invalid_argument&) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Add Sketch Line with Axis contains invalid authored geometry",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    } catch (const std::overflow_error&) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "Sketch EntityId allocation space is exhausted",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const part::SketchLineAxisSource source{
+        command.sketch_id,
+        *entity_id};
+    if (axisSourceInUse(after, source)) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "New Sketch Line source is already designated by an authored Axis",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto axis_id =
+        after.next_axis_id.allocate();
+    if (!axis_id) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "AxisId allocation space is exhausted",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    after.axes.push_back(
+        part::PartAxis{
+            *axis_id,
+            command.axis_name.empty()
+                ? defaultAxisName(*axis_id)
+                : command.axis_name,
+            source,
+            command.axis_visible});
+
+    auto candidate =
+        part::PartDocument::restore(
+            documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "Add Sketch Line with Axis produced invalid authored Part state",
+                path_,
+                part::PartCommitErrorCode::
+                    invalid_state);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluated =
+        evaluateAxisInDocument(
+            *candidate.document,
+            *axis_id,
+            modeling_kernel);
+    if (evaluated.status !=
+            part::AxisEvaluationStatus::resolved ||
+        !evaluated.line ||
+        !evaluated.line->valid()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                axisEvaluationMessage(evaluated),
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            evaluated.diagnostic,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while adding Sketch Line with Axis");
+    if (!committed.ok() ||
+        !committed.changed) {
+        return {
+            committed.changed,
+            std::nullopt,
+            std::nullopt,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return {
+        true,
+        *entity_id,
+        *axis_id,
+        part::AxisEvaluationDiagnostic::none,
         DocumentSessionDiagnostic{}};
 }
 
@@ -2227,6 +2430,18 @@ DocumentSession::evaluateAxisDraft(
         return result;
     }
 
+    if (axisSourceInUse(
+            document_.state(),
+            *draft.source(),
+            draft.mode() == AxisDraftMode::edit
+                ? draft.axisId()
+                : std::nullopt)) {
+        result.status =
+            AxisDraftEvaluationStatus::
+                source_already_designated;
+        return result;
+    }
+
     auto after = document_.state();
     applyAxisIdCursor(after);
 
@@ -2339,6 +2554,21 @@ CreateAxisResult DocumentSession::execute(
             std::nullopt,
             part::AxisEvaluationDiagnostic::
                 invalid_reference,
+            failed.diagnostic};
+    }
+    if (axisSourceInUse(
+            document_.state(),
+            command.source)) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Axis source Line is already designated by another authored Axis",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
             failed.diagnostic};
     }
 
@@ -2462,6 +2692,16 @@ DocumentSessionResult DocumentSession::execute(
             DocumentSessionErrorCode::
                 invalid_command,
             "Edit Axis target AxisId does not exist",
+            path_);
+    }
+    if (axisSourceInUse(
+            after,
+            command.source,
+            command.axis_id)) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Axis target source Line is already designated by another authored Axis",
             path_);
     }
 

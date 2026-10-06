@@ -351,13 +351,14 @@ int main(int argc, char* argv[]) {
             QStringLiteral("axisCancelButton"));
 
     CHECK(
-        tree && axis_tool && axis_page &&
+        tree && axis_page &&
         properties && axis_identity &&
         axis_source_sketch && axis_source_line &&
         axis_visibility && axis_status &&
         axis_direction && axis_edit &&
         axis_operations && axis_finish &&
         axis_cancel);
+    CHECK(axis_tool == nullptr);
 
     // Authored Axis is a Part-owned child of its source Sketch, alongside
     // Profile ownership level rather than a Sketch entity or Origin object.
@@ -468,8 +469,6 @@ int main(int argc, char* argv[]) {
     axis_edit->click();
     QApplication::processEvents();
     CHECK(axis_operations->isVisible());
-    CHECK(axis_tool->isChecked());
-    CHECK(axis_tool->isVisible());
     CHECK(axis_finish->isEnabled());
     CHECK(
         workbench.cadInputPrompt().find(
@@ -479,7 +478,6 @@ int main(int argc, char* argv[]) {
     axis_finish->click();
     QApplication::processEvents();
     CHECK(!axis_operations->isVisible());
-    CHECK(!axis_tool->isChecked());
     CHECK(
         session.document()
             .findAxis(axis_id) != nullptr);
@@ -491,9 +489,9 @@ int main(int argc, char* argv[]) {
         session.document().axes().size() ==
         1U);
 
-    // Command-first activates the same workbench draft and Cancel authors
-    // nothing. Axis remains available while Sketch Edit is active so
-    // selection-first can be "select Line -> start Axis".
+    // Command-first activates the same workbench draft without a standalone
+    // GUI Axis authoring button. Cancel authors nothing; AXIS remains available
+    // through CAD Input while Sketch Edit is active.
     auto result =
         workbench.submitCadInput(
             "AXIS",
@@ -501,8 +499,6 @@ int main(int argc, char* argv[]) {
     CHECK(result.accepted);
     QApplication::processEvents();
     CHECK(axis_operations->isVisible());
-    CHECK(axis_tool->isChecked());
-    CHECK(axis_tool->isVisible());
 
     result =
         workbench.submitCadInput(

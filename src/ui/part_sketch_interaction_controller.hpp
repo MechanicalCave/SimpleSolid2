@@ -54,6 +54,11 @@ public:
     explicit PartSketchInteractionController(
         PartViewportController& viewport_controller);
 
+    void setSolidModelingKernel(
+        kernel::ISolidModelingKernel* modeling_kernel) noexcept {
+        solid_modeling_kernel_ = modeling_kernel;
+    }
+
     void begin(
         application::DocumentSession& session,
         sketch::SketchId sketch_id);
@@ -236,6 +241,12 @@ public:
     }
     [[nodiscard]] bool setCreationRole(
         sketch::EntityRole role);
+    [[nodiscard]] bool lineAxisDesignation()
+        const noexcept {
+        return line_axis_designation_;
+    }
+    [[nodiscard]] bool setLineAxisDesignation(
+        bool enabled);
     [[nodiscard]] bool rectangleDrawDiagonals()
         const noexcept {
         return rectangle_draw_diagonals_;
@@ -515,6 +526,7 @@ private:
     void reportStatus(std::string message);
 
     PartViewportController* viewport_controller_{};
+    kernel::ISolidModelingKernel* solid_modeling_kernel_{};
     application::DocumentSession* session_{};
     std::optional<sketch::SketchId> sketch_id_;
     std::optional<SketchPointerInput> last_pointer_input_;
@@ -534,6 +546,7 @@ private:
         last_repeatable_command_;
     sketch::EntityRole creation_role_{
         sketch::EntityRole::regular};
+    bool line_axis_designation_{};
     bool rectangle_draw_diagonals_{};
     application::CircleSizeInputMode
         circle_size_input_mode_{

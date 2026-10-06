@@ -363,6 +363,68 @@ int main() {
             missing_revolve->axis) ==
         fixture.missing_axis_id);
 
+    // PM-04F compatibility: pre-amendment duplicate-source Axis state remains
+    // structurally/persistently loadable without identity rewrite. The new
+    // one-source rule applies to authoring commands, not migration of already
+    // durable records.
+    const auto* original_axis =
+        fixture.document.findAxis(
+            fixture.live_axis_id);
+    CHECK(original_axis != nullptr);
+
+    auto duplicate_state =
+        fixture.document.state();
+    const auto duplicate_axis_id =
+        duplicate_state.next_axis_id.allocate();
+    CHECK(duplicate_axis_id.has_value());
+    duplicate_state.axes.push_back(
+        part::PartAxis{
+            *duplicate_axis_id,
+            "Axis Legacy Duplicate",
+            original_axis->source,
+            true});
+
+    auto duplicate_document =
+        part::PartDocument::restore(
+            fixture.document.documentId(),
+            std::move(duplicate_state));
+    CHECK(duplicate_document.ok());
+
+    const auto duplicate_path =
+        temp.path / "LegacyDuplicateAxis.ss2part";
+    CHECK(
+        store.createNew(
+            duplicate_path,
+            *duplicate_document.document)
+            .ok());
+
+    const auto duplicate_loaded =
+        store.load(duplicate_path);
+    CHECK(duplicate_loaded.ok());
+    CHECK(
+        duplicate_loaded.document->axes().size() ==
+        fixture.document.axes().size() + 1U);
+    const auto* loaded_original_axis =
+        duplicate_loaded.document->findAxis(
+            fixture.live_axis_id);
+    const auto* loaded_duplicate_axis =
+        duplicate_loaded.document->findAxis(
+            *duplicate_axis_id);
+    CHECK(loaded_original_axis != nullptr);
+    CHECK(loaded_duplicate_axis != nullptr);
+    CHECK(
+        loaded_original_axis->source ==
+        original_axis->source);
+    CHECK(
+        loaded_duplicate_axis->source ==
+        original_axis->source);
+    CHECK(
+        loaded_original_axis->id ==
+        fixture.live_axis_id);
+    CHECK(
+        loaded_duplicate_axis->id ==
+        *duplicate_axis_id);
+
     // A valid schema-v12 document has no Revolve records. Loading it preserves
     // all old authored identities; the next save writes current schema v13.
     auto legacy_state =
@@ -483,6 +545,6 @@ int main() {
             malformed_document);
 
     std::cout
-        << "PM-04E1 Revolve schema-v13 persistence tests passed\n";
+        << "PM-04E1/PM-04F Revolve persistence and legacy Axis compatibility tests passed\n";
     return EXIT_SUCCESS;
 }

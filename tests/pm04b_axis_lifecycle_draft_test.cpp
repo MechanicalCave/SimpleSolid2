@@ -172,6 +172,37 @@ int main() {
 
     const auto axis_id = *branched.axis_id;
 
+    // Newly-authored Axis sources are unique. Duplicate Create fails closed
+    // without advancing revision or history.
+    const auto duplicate_create_revision =
+        session.document().revision();
+    const auto duplicate_create_undo =
+        session.undoDepth();
+    const auto duplicate_create_count =
+        session.document().axes().size();
+    const auto duplicate_create =
+        session.execute(
+            application::CreateAxisCommand{
+                {fixture.sketch_id, fixture.regular_line},
+                duplicate_create_revision,
+                {},
+                true},
+            kernel);
+    CHECK(!duplicate_create.ok());
+    CHECK(
+        duplicate_create.diagnostic.code ==
+        application::DocumentSessionErrorCode::
+            invalid_command);
+    CHECK(
+        session.document().revision() ==
+        duplicate_create_revision);
+    CHECK(
+        session.undoDepth() ==
+        duplicate_create_undo);
+    CHECK(
+        session.document().axes().size() ==
+        duplicate_create_count);
+
     // Construction Line is equally admissible. Hide Axis independently, then
     // re-source it while preserving AxisId and authored visibility.
     const auto construction =
@@ -185,6 +216,63 @@ int main() {
     CHECK(construction.ok());
     CHECK(construction.axis_id.has_value());
     CHECK(construction.axis_id->serialized() == "3");
+
+    // Re-source to another Axis-owned Line is rejected with zero mutation.
+    const auto duplicate_edit_revision =
+        session.document().revision();
+    const auto duplicate_edit_undo =
+        session.undoDepth();
+    const auto duplicate_edit =
+        session.execute(
+            application::EditAxisCommand{
+                axis_id,
+                {fixture.sketch_id,
+                 fixture.construction_line},
+                duplicate_edit_revision},
+            kernel);
+    CHECK(!duplicate_edit.ok());
+    CHECK(
+        duplicate_edit.diagnostic.code ==
+        application::DocumentSessionErrorCode::
+            invalid_command);
+    CHECK(
+        session.document().revision() ==
+        duplicate_edit_revision);
+    CHECK(
+        session.undoDepth() ==
+        duplicate_edit_undo);
+    const part::SketchLineAxisSource
+        expected_regular_source{
+            fixture.sketch_id,
+            fixture.regular_line};
+    CHECK(
+        session.document().findAxis(axis_id)
+            ->source ==
+        expected_regular_source);
+
+    auto duplicate_draft =
+        application::AxisDraft::beginCreate(
+            session,
+            part::SketchLineAxisSource{
+                fixture.sketch_id,
+                fixture.construction_line});
+    CHECK(duplicate_draft.has_value());
+    CHECK(
+        session.evaluateAxisDraft(
+            *duplicate_draft,
+            kernel)
+            .status ==
+        application::AxisDraftEvaluationStatus::
+            source_already_designated);
+
+    // Removing the other Axis makes the Construction Line an admissible
+    // identity-preserving re-source target.
+    CHECK(
+        session.execute(
+            application::DeleteAxisCommand{
+                *construction.axis_id,
+                session.document().revision()})
+            .ok());
 
     CHECK(
         session.execute(
@@ -223,6 +311,143 @@ int main() {
     CHECK(edited.line.has_value());
     CHECK(near(edited.line->direction.x, 0.0));
     CHECK(near(edited.line->direction.y, 1.0));
+
+    // Line + Axis designation is one semantic transaction / one Undo step.
+    const auto* before_atomic_sketch =
+        session.document().findSketch(
+            fixture.sketch_id);
+    CHECK(before_atomic_sketch != nullptr);
+    const auto atomic_entity_count =
+        before_atomic_sketch->model.entityCount();
+    const auto atomic_axis_count =
+        session.document().axes().size();
+    const auto atomic_undo_depth =
+        session.undoDepth();
+
+    const auto atomic_construction =
+        session.execute(
+            application::AddSketchLineWithAxisCommand{
+                fixture.sketch_id,
+                session.document().revision(),
+                {10.0, 0.0},
+                {10.0, 5.0},
+                sketch::EntityRole::construction,
+                {},
+                true},
+            kernel);
+    CHECK(atomic_construction.ok());
+    CHECK(atomic_construction.changed);
+    CHECK(atomic_construction.entity_id.has_value());
+    CHECK(atomic_construction.axis_id.has_value());
+    CHECK(
+        session.undoDepth() ==
+        atomic_undo_depth + 1U);
+    CHECK(
+        session.document().axes().size() ==
+        atomic_axis_count + 1U);
+    const auto* atomic_line =
+        session.document()
+            .findSketch(fixture.sketch_id)
+            ->model.findLine(
+                *atomic_construction.entity_id);
+    CHECK(atomic_line != nullptr);
+    CHECK(
+        atomic_line->role() ==
+        sketch::EntityRole::construction);
+    const part::SketchLineAxisSource
+        expected_atomic_source{
+            fixture.sketch_id,
+            *atomic_construction.entity_id};
+    CHECK(
+        session.document()
+            .findAxis(*atomic_construction.axis_id)
+            ->source ==
+        expected_atomic_source);
+
+    const auto atomic_entity_id =
+        *atomic_construction.entity_id;
+    const auto atomic_axis_id =
+        *atomic_construction.axis_id;
+    CHECK(session.undo().ok());
+    CHECK(
+        session.document()
+            .findSketch(fixture.sketch_id)
+            ->model.entityCount() ==
+        atomic_entity_count);
+    CHECK(
+        session.document().findAxis(
+            atomic_axis_id) == nullptr);
+    CHECK(session.redo().ok());
+    CHECK(
+        session.document()
+            .findSketch(fixture.sketch_id)
+            ->model.findLine(
+                atomic_entity_id) != nullptr);
+    CHECK(
+        session.document().findAxis(
+            atomic_axis_id) != nullptr);
+    const part::SketchLineAxisSource
+        expected_redo_source{
+            fixture.sketch_id,
+            atomic_entity_id};
+    CHECK(
+        session.document()
+            .findAxis(atomic_axis_id)
+            ->source ==
+        expected_redo_source);
+
+    // Regular + Axis is the same Part designation, independent of Line role.
+    const auto atomic_regular =
+        session.execute(
+            application::AddSketchLineWithAxisCommand{
+                fixture.sketch_id,
+                session.document().revision(),
+                {12.0, 0.0},
+                {15.0, 0.0},
+                sketch::EntityRole::regular,
+                {},
+                true},
+            kernel);
+    CHECK(atomic_regular.ok());
+    CHECK(atomic_regular.entity_id.has_value());
+    CHECK(atomic_regular.axis_id.has_value());
+    CHECK(
+        session.document()
+            .findSketch(fixture.sketch_id)
+            ->model.findLine(
+                *atomic_regular.entity_id)
+            ->role() ==
+        sketch::EntityRole::regular);
+
+    // Rejected Line geometry cannot leave either authored object or history.
+    const auto failed_atomic_state =
+        session.document().state();
+    const auto failed_atomic_revision =
+        session.document().revision();
+    const auto failed_atomic_undo =
+        session.undoDepth();
+    const auto failed_atomic =
+        session.execute(
+            application::AddSketchLineWithAxisCommand{
+                fixture.sketch_id,
+                failed_atomic_revision,
+                {20.0, 20.0},
+                {20.0, 20.0},
+                sketch::EntityRole::regular,
+                {},
+                true},
+            kernel);
+    CHECK(!failed_atomic.ok());
+    CHECK(!failed_atomic.changed);
+    CHECK(
+        session.document().revision() ==
+        failed_atomic_revision);
+    CHECK(
+        session.undoDepth() ==
+        failed_atomic_undo);
+    CHECK(
+        session.document().state() ==
+        failed_atomic_state);
 
     // Stale Edit cannot commit.
     const auto stale =
@@ -429,6 +654,6 @@ int main() {
             stale_revision);
 
     std::cout
-        << "PM-04B1 Axis lifecycle/draft tests passed\n";
+        << "PM-04B1/PM-04F Axis lifecycle, uniqueness and atomic designation tests passed\n";
     return EXIT_SUCCESS;
 }

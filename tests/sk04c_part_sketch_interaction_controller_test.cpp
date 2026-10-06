@@ -4,6 +4,7 @@
 
 #include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
@@ -37,6 +38,17 @@ void check(bool value, const char* expression, int line) {
 bool near(double first, double second) {
     return std::abs(first - second) <= 1.0e-10;
 }
+
+class NoopKernel final
+    : public kernel::ISolidModelingKernel {
+public:
+    [[nodiscard]] kernel::SolidModelingResult
+    extrude(
+        const kernel::LinearExtrudeInput&,
+        kernel::RuntimeSolidHandle) noexcept override {
+        return {};
+    }
+};
 
 class TestViewport final
     : public QWidget,
@@ -1144,6 +1156,182 @@ int main(int argc, char* argv[]) {
             exact_profile_id);
 
         exact_interaction.end();
+    }
+
+    {
+        auto axis_line_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession
+            axis_line_session{
+                std::filesystem::path{
+                    "pm04f-line-axis.ss2part"},
+                std::move(axis_line_document)};
+        const auto axis_line_created =
+            axis_line_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            axis_line_created.ok() &&
+            axis_line_created.sketch_id);
+        const auto axis_line_sketch_id =
+            *axis_line_created.sketch_id;
+
+        QTreeWidget axis_line_tree;
+        ui::PartDocumentTreeController
+            axis_line_tree_controller{
+                axis_line_tree};
+        TestViewport axis_line_viewport;
+        ui::PartViewportController
+            axis_line_viewport_controller{
+                axis_line_tree_controller,
+                &axis_line_viewport};
+        axis_line_viewport_controller
+            .setDocumentSession(
+                &axis_line_session);
+        axis_line_viewport_controller
+            .setSketchEditSketch(
+                axis_line_sketch_id);
+
+        NoopKernel axis_line_kernel;
+        ui::PartSketchInteractionController
+            axis_line_interaction{
+                axis_line_viewport_controller};
+        axis_line_interaction
+            .setSolidModelingKernel(
+                &axis_line_kernel);
+        axis_line_interaction.begin(
+            axis_line_session,
+            axis_line_sketch_id);
+        axis_line_interaction.activateLine();
+        CHECK(
+            axis_line_interaction.setCreationRole(
+                sketch::EntityRole::construction));
+        CHECK(
+            axis_line_interaction
+                .setLineAxisDesignation(true));
+        CHECK(
+            axis_line_interaction
+                .lineAxisDesignation());
+
+        const auto axis_line_undo_before =
+            axis_line_session.undoDepth();
+        axis_line_interaction.onPointer(
+            pointer(
+                axis_line_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                10.0, 10.0,
+                0.0, 0.0));
+        axis_line_interaction.onPointer(
+            pointer(
+                axis_line_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                10.0, 10.0,
+                0.0, 0.0));
+        CHECK(
+            axis_line_interaction
+                .lineAxisDesignation());
+        CHECK(
+            axis_line_session.document()
+                .axes().empty());
+        CHECK(
+            axis_line_session.undoDepth() ==
+            axis_line_undo_before);
+
+        axis_line_interaction.onPointer(
+            pointer(
+                axis_line_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                60.0, 10.0,
+                5.0, 0.0));
+        CHECK(
+            !axis_line_interaction
+                 .lineAxisDesignation());
+        CHECK(
+            axis_line_session.undoDepth() ==
+            axis_line_undo_before + 1U);
+        CHECK(
+            axis_line_session.document()
+                .axes().size() == 1U);
+        CHECK(
+            axis_line_session.document()
+                .findSketch(
+                    axis_line_sketch_id)
+                ->model.state().lines.size() ==
+            1U);
+        const auto first_axis_id =
+            axis_line_session.document()
+                .axes().front().id;
+        const auto first_axis_source =
+            axis_line_session.document()
+                .axes().front().source;
+        CHECK(
+            axis_line_session.document()
+                .findSketch(
+                    axis_line_sketch_id)
+                ->model.findLine(
+                    first_axis_source.entity_id)
+                ->role() ==
+            sketch::EntityRole::construction);
+
+        axis_line_interaction.onPointer(
+            pointer(
+                axis_line_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                110.0, 10.0,
+                10.0, 0.0));
+        CHECK(
+            axis_line_session.document()
+                .findSketch(
+                    axis_line_sketch_id)
+                ->model.state().lines.size() ==
+            2U);
+        CHECK(
+            axis_line_session.document()
+                .axes().size() == 1U);
+        CHECK(
+            axis_line_session.undoDepth() ==
+            axis_line_undo_before + 2U);
+
+        axis_line_interaction.cancelForHistory();
+        CHECK(axis_line_session.undo().ok());
+        CHECK(
+            axis_line_session.document()
+                .axes().size() == 1U);
+        CHECK(axis_line_session.undo().ok());
+        CHECK(
+            axis_line_session.document()
+                .axes().empty());
+        CHECK(
+            axis_line_session.document()
+                .findSketch(
+                    axis_line_sketch_id)
+                ->model.state().lines.empty());
+
+        CHECK(axis_line_session.redo().ok());
+        CHECK(
+            axis_line_session.document()
+                .findAxis(first_axis_id) !=
+            nullptr);
+        CHECK(
+            axis_line_session.document()
+                .findAxis(first_axis_id)
+                ->source ==
+            first_axis_source);
+        CHECK(
+            axis_line_session.document()
+                .findSketch(
+                    axis_line_sketch_id)
+                ->model.findLine(
+                    first_axis_source.entity_id) !=
+            nullptr);
+
+        axis_line_interaction.end();
     }
 
     {

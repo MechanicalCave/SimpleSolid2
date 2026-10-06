@@ -59,6 +59,16 @@ struct AddSketchLineCommand final {
     sketch::EntityRole role{sketch::EntityRole::regular};
 };
 
+struct AddSketchLineWithAxisCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::Point2 start;
+    sketch::Point2 end;
+    sketch::EntityRole role{sketch::EntityRole::regular};
+    std::string axis_name;
+    bool axis_visible{true};
+};
+
 struct AddSketchCircleCommand final {
     sketch::SketchId sketch_id;
     sketch::Point2 center;
@@ -368,6 +378,19 @@ struct AddSketchLineResult final {
     }
 };
 
+struct AddSketchLineWithAxisResult final {
+    bool changed{false};
+    std::optional<sketch::EntityId> entity_id;
+    std::optional<part::AxisId> axis_id;
+    std::optional<part::AxisEvaluationDiagnostic>
+        evaluation_diagnostic;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
 struct AddSketchCircleResult final {
     bool changed{false};
     std::optional<sketch::EntityId> entity_id;
@@ -540,6 +563,9 @@ public:
         kernel::ISolidModelingKernel* modeling_kernel = nullptr);
     [[nodiscard]] AddSketchLineResult execute(
         const AddSketchLineCommand& command);
+    [[nodiscard]] AddSketchLineWithAxisResult execute(
+        const AddSketchLineWithAxisCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] AddSketchCircleResult execute(
         const AddSketchCircleCommand& command);
     [[nodiscard]] AddSketchArcResult execute(
