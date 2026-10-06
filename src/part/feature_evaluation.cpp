@@ -380,6 +380,7 @@ void includeCircularExtrema(
 profileCrossesAxis(
     const kernel::PlanarProfileInput& profile,
     const ResolvedAxisLine& axis,
+    bool coplanarity_proven,
     bool& coplanar) noexcept {
     const auto plane_normal =
         cross3(
@@ -390,12 +391,13 @@ profileCrossesAxis(
             axis.origin,
             profile.frame.origin);
     coplanar =
-        dot3(
-            plane_normal,
-            origin_delta) == 0.0 &&
-        dot3(
-            plane_normal,
-            axis.direction) == 0.0;
+        coplanarity_proven ||
+        (dot3(
+             plane_normal,
+             origin_delta) == 0.0 &&
+         dot3(
+             plane_normal,
+             axis.direction) == 0.0);
     if (!coplanar) {
         return false;
     }
@@ -547,6 +549,74 @@ profileCrossesAxis(
 
     return minimum < 0.0 &&
            maximum > 0.0;
+}
+
+[[nodiscard]] bool
+originAxisLiesInOriginPlane(
+    core::BuiltinReferenceRole axis,
+    core::BuiltinReferenceRole plane) noexcept {
+    switch (plane) {
+    case core::BuiltinReferenceRole::xy_plane:
+        return axis ==
+                   core::BuiltinReferenceRole::x_axis ||
+               axis ==
+                   core::BuiltinReferenceRole::y_axis;
+    case core::BuiltinReferenceRole::xz_plane:
+        return axis ==
+                   core::BuiltinReferenceRole::x_axis ||
+               axis ==
+                   core::BuiltinReferenceRole::z_axis;
+    case core::BuiltinReferenceRole::yz_plane:
+        return axis ==
+                   core::BuiltinReferenceRole::y_axis ||
+               axis ==
+                   core::BuiltinReferenceRole::z_axis;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] bool
+coplanarityProvenBySupportIdentity(
+    const PartDocument& document,
+    const PartProfile& profile,
+    const AxisReference& reference) noexcept {
+    const auto* profile_sketch =
+        document.findSketch(
+            profile.source_sketch_id);
+    if (profile_sketch == nullptr) {
+        return false;
+    }
+
+    if (const auto origin_axis =
+            builtinOriginAxisForAxisReference(
+                reference)) {
+        const auto origin_plane =
+            builtinOriginPlaneForSketchSupport(
+                profile_sketch->support);
+        return origin_plane &&
+               originAxisLiesInOriginPlane(
+                   *origin_axis,
+                   *origin_plane);
+    }
+
+    const auto axis_id =
+        authoredAxisIdForAxisReference(
+            reference);
+    if (!axis_id) {
+        return false;
+    }
+    const auto* axis =
+        document.findAxis(*axis_id);
+    if (axis == nullptr) {
+        return false;
+    }
+    const auto* axis_sketch =
+        document.findSketch(
+            axis->source.sketch_id);
+    return axis_sketch != nullptr &&
+           axis_sketch->support ==
+               profile_sketch->support;
 }
 
 [[nodiscard]] const BodyStageTopologyCatalog*
@@ -727,6 +797,10 @@ resolveKernelRevolveInput(
         profileCrossesAxis(
             *materialized.input,
             *axis.line,
+            coplanarityProvenBySupportIdentity(
+                document,
+                *profile,
+                feature.axis),
             coplanar);
     if (!coplanar) {
         result.status =
