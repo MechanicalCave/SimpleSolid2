@@ -241,12 +241,14 @@ int main() {
     CHECK(
         session.undoDepth() ==
         duplicate_edit_undo);
+    const part::SketchLineAxisSource
+        expected_regular_source{
+            fixture.sketch_id,
+            fixture.regular_line};
     CHECK(
         session.document().findAxis(axis_id)
             ->source ==
-        part::SketchLineAxisSource{
-            fixture.sketch_id,
-            fixture.regular_line});
+        expected_regular_source);
 
     auto duplicate_draft =
         application::AxisDraft::beginCreate(
@@ -352,13 +354,15 @@ int main() {
     CHECK(
         atomic_line->role() ==
         sketch::EntityRole::construction);
+    const part::SketchLineAxisSource
+        expected_atomic_source{
+            fixture.sketch_id,
+            *atomic_construction.entity_id};
     CHECK(
         session.document()
             .findAxis(*atomic_construction.axis_id)
             ->source ==
-        part::SketchLineAxisSource{
-            fixture.sketch_id,
-            *atomic_construction.entity_id});
+        expected_atomic_source);
 
     const auto atomic_entity_id =
         *atomic_construction.entity_id;
@@ -382,13 +386,15 @@ int main() {
     CHECK(
         session.document().findAxis(
             atomic_axis_id) != nullptr);
+    const part::SketchLineAxisSource
+        expected_redo_source{
+            fixture.sketch_id,
+            atomic_entity_id};
     CHECK(
         session.document()
             .findAxis(atomic_axis_id)
             ->source ==
-        part::SketchLineAxisSource{
-            fixture.sketch_id,
-            atomic_entity_id});
+        expected_redo_source);
 
     // Regular + Axis is the same Part designation, independent of Line role.
     const auto atomic_regular =
