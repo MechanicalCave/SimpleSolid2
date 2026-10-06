@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 
@@ -25,6 +26,15 @@ struct FeatureTreeEvaluationEntry final {
         part::FeatureEvaluationStatus::blocked};
     part::FeatureEvaluationDiagnosticCode diagnostic{
         part::FeatureEvaluationDiagnosticCode::none};
+};
+
+struct AxisTreeEvaluationEntry final {
+    part::AxisId axis_id;
+    part::AxisEvaluationStatus status{
+        part::AxisEvaluationStatus::blocked};
+    part::AxisEvaluationDiagnostic diagnostic{
+        part::AxisEvaluationDiagnostic::
+            invalid_reference};
 };
 
 struct DatumTreeEvaluationEntry final {
@@ -55,6 +65,14 @@ public:
         std::function<void(
             const std::vector<part::ProfileId>&,
             std::optional<part::ProfileId>)>;
+    using AxisSelectionHandler =
+        std::function<void(
+            const std::vector<part::AxisId>&,
+            std::optional<part::AxisId>)>;
+    using AxisEditHandler =
+        std::function<void(part::AxisId)>;
+    using AxisDeleteHandler =
+        std::function<void(part::AxisId)>;
     using DatumSelectionHandler =
         std::function<void(
             const std::vector<part::DatumId>&,
@@ -108,6 +126,10 @@ public:
         const std::vector<part::ProfileId>& selected,
         std::optional<part::ProfileId> primary);
 
+    void setAxisSelection(
+        const std::vector<part::AxisId>& selected,
+        std::optional<part::AxisId> primary);
+
     void setDatumSelection(
         const std::vector<part::DatumId>& selected,
         std::optional<part::DatumId> primary);
@@ -121,7 +143,9 @@ public:
         std::vector<FeatureTreeEvaluationEntry>
             feature_evaluations,
         std::vector<DatumTreeEvaluationEntry>
-            datum_evaluations = {});
+            datum_evaluations = {},
+        std::vector<AxisTreeEvaluationEntry>
+            axis_evaluations = {});
 
     void setSketchEditHandler(SketchEditHandler handler) {
         sketch_edit_handler_ = std::move(handler);
@@ -139,6 +163,21 @@ public:
     void setProfileEditHandler(
         ProfileEditHandler handler) {
         profile_edit_handler_ =
+            std::move(handler);
+    }
+    void setAxisSelectionHandler(
+        AxisSelectionHandler handler) {
+        axis_selection_handler_ =
+            std::move(handler);
+    }
+    void setAxisEditHandler(
+        AxisEditHandler handler) {
+        axis_edit_handler_ =
+            std::move(handler);
+    }
+    void setAxisDeleteHandler(
+        AxisDeleteHandler handler) {
+        axis_delete_handler_ =
             std::move(handler);
     }
     void setDatumSelectionHandler(
@@ -198,6 +237,10 @@ public:
     selectedProfileIds() const;
     [[nodiscard]] std::optional<part::ProfileId>
     primaryProfileId() const;
+    [[nodiscard]] std::vector<part::AxisId>
+    selectedAxisIds() const;
+    [[nodiscard]] std::optional<part::AxisId>
+    primaryAxisId() const;
     [[nodiscard]] std::vector<part::DatumId>
     selectedDatumIds() const;
     [[nodiscard]] std::optional<part::DatumId>
@@ -223,12 +266,15 @@ private:
     void requestSketchSupportChange(
         const QTreeWidgetItem& item);
     void requestProfileEdit(const QTreeWidgetItem& item);
+    void requestAxisEdit(const QTreeWidgetItem& item);
+    void requestAxisDelete(const QTreeWidgetItem& item);
     void requestDatumEdit(const QTreeWidgetItem& item);
     void requestDatumDelete(const QTreeWidgetItem& item);
     void requestFeatureEdit(const QTreeWidgetItem& item);
     void notifySelectionChanged();
 
     [[nodiscard]] bool selectionContainsOnlyBuiltinReferences() const;
+    [[nodiscard]] bool selectionContainsOnlyAxisReferences() const;
     [[nodiscard]] bool selectionContainsOnlyDatumReferences() const;
     [[nodiscard]] bool referenceGeometryGroupSelected() const;
     [[nodiscard]] std::vector<part::DatumId>
@@ -241,6 +287,8 @@ private:
     sketchIdForItem(const QTreeWidgetItem& item);
     [[nodiscard]] static std::optional<part::ProfileId>
     profileIdForItem(const QTreeWidgetItem& item);
+    [[nodiscard]] static std::optional<part::AxisId>
+    axisIdForItem(const QTreeWidgetItem& item);
     [[nodiscard]] static std::optional<part::DatumId>
     datumIdForItem(const QTreeWidgetItem& item);
     [[nodiscard]] static bool
@@ -258,6 +306,8 @@ private:
     QAction* edit_sketch_action_{};
     QAction* change_sketch_support_action_{};
     QAction* edit_profile_action_{};
+    QAction* edit_axis_action_{};
+    QAction* delete_axis_action_{};
     QAction* edit_datum_action_{};
     QAction* delete_datum_action_{};
     QAction* edit_feature_action_{};
@@ -271,6 +321,9 @@ private:
         sketch_support_change_handler_;
     ProfileSelectionHandler profile_selection_handler_;
     ProfileEditHandler profile_edit_handler_;
+    AxisSelectionHandler axis_selection_handler_;
+    AxisEditHandler axis_edit_handler_;
+    AxisDeleteHandler axis_delete_handler_;
     DatumSelectionHandler datum_selection_handler_;
     DatumEditHandler datum_edit_handler_;
     DatumDeleteHandler datum_delete_handler_;
@@ -288,6 +341,8 @@ private:
         feature_evaluations_;
     std::vector<DatumTreeEvaluationEntry>
         datum_evaluations_;
+    std::vector<AxisTreeEvaluationEntry>
+        axis_evaluations_;
     std::optional<part::FeatureId>
         hovered_feature_id_;
 };

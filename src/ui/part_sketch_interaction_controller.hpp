@@ -205,6 +205,17 @@ public:
 
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] const std::vector<sketch::EntityId>&
+    selectedEntities() const noexcept {
+        return interaction_.selectedEntities();
+    }
+    [[nodiscard]] std::optional<sketch::SketchId>
+    activeSketchId() const noexcept {
+        const auto* sketch = activeSketch();
+        return sketch != nullptr
+            ? std::optional<sketch::SketchId>{sketch->id}
+            : std::nullopt;
+    }
+    [[nodiscard]] const std::vector<sketch::EntityId>&
     structuralBoundaries() const noexcept {
         return interaction_.structuralBoundaries();
     }

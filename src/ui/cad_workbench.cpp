@@ -264,6 +264,58 @@ QString featureEvaluationDiagnosticText(
     return QStringLiteral("Unknown");
 }
 
+QString axisEvaluationStatusText(
+    part::AxisEvaluationStatus status) {
+    switch (status) {
+    case part::AxisEvaluationStatus::resolved:
+        return QStringLiteral("Resolved");
+    case part::AxisEvaluationStatus::missing:
+        return QStringLiteral("Missing");
+    case part::AxisEvaluationStatus::ambiguous:
+        return QStringLiteral("Ambiguous");
+    case part::AxisEvaluationStatus::unsupported:
+        return QStringLiteral("Unsupported");
+    case part::AxisEvaluationStatus::blocked:
+        return QStringLiteral("Blocked");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString axisEvaluationDiagnosticText(
+    part::AxisEvaluationDiagnostic diagnostic) {
+    switch (diagnostic) {
+    case part::AxisEvaluationDiagnostic::none:
+        return QStringLiteral("—");
+    case part::AxisEvaluationDiagnostic::invalid_reference:
+        return QStringLiteral("Invalid reference");
+    case part::AxisEvaluationDiagnostic::missing_axis:
+        return QStringLiteral("Missing Axis");
+    case part::AxisEvaluationDiagnostic::missing_sketch:
+        return QStringLiteral("Missing source Sketch");
+    case part::AxisEvaluationDiagnostic::missing_line:
+        return QStringLiteral("Missing source Line");
+    case part::AxisEvaluationDiagnostic::source_not_line:
+        return QStringLiteral("Source is not a Line");
+    case part::AxisEvaluationDiagnostic::sketch_support_missing:
+        return QStringLiteral("Sketch support missing");
+    case part::AxisEvaluationDiagnostic::sketch_support_ambiguous:
+        return QStringLiteral("Sketch support ambiguous");
+    case part::AxisEvaluationDiagnostic::sketch_support_unsupported:
+        return QStringLiteral("Sketch support unsupported");
+    case part::AxisEvaluationDiagnostic::sketch_support_blocked:
+        return QStringLiteral("Sketch support blocked");
+    case part::AxisEvaluationDiagnostic::stale_part_evaluation:
+        return QStringLiteral("Stale Part evaluation");
+    case part::AxisEvaluationDiagnostic::stale_datum_evaluation:
+        return QStringLiteral("Stale Datum evaluation");
+    case part::AxisEvaluationDiagnostic::support_stage_unavailable:
+        return QStringLiteral("Support stage unavailable");
+    case part::AxisEvaluationDiagnostic::invalid_frame:
+        return QStringLiteral("Invalid frame");
+    }
+    return QStringLiteral("Unknown");
+}
+
 QString datumEvaluationStatusText(
     part::DatumPlaneEvaluationStatus status) {
     switch (status) {
@@ -1162,6 +1214,15 @@ void CadWorkbench::buildUi() {
         [this](const sketch::SketchId& sketch_id) {
             startSketchResupport(sketch_id);
         });
+    tree_controller_->setAxisEditHandler(
+        [this](part::AxisId axis_id) {
+            static_cast<void>(
+                startAxisEdit(axis_id));
+        });
+    tree_controller_->setAxisDeleteHandler(
+        [this](part::AxisId axis_id) {
+            deleteAxis(axis_id);
+        });
     tree_controller_->setDatumEditHandler(
         [this](part::DatumId datum_id) {
             static_cast<void>(
@@ -1291,6 +1352,17 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         1,
         datum_plane_button_);
+
+    axis_button_ =
+        new QPushButton(
+            QStringLiteral("Axis"),
+            shell_);
+    axis_button_->setObjectName(
+        QStringLiteral("axisToolButton"));
+    axis_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        1,
+        axis_button_);
 
     select_sketch_button_ =
         new QPushButton(
@@ -1563,6 +1635,7 @@ void CadWorkbench::buildUi() {
     sketch_interaction_controller_->setStateChangedHandler(
         [this] {
             syncSketchInteractionUi();
+            tryStageAxisFromSketchSelection();
             if (document_session_ != nullptr) {
                 const auto revision =
                     document_session_->document()
@@ -1581,6 +1654,18 @@ void CadWorkbench::buildUi() {
             setStatusText(fromUtf8(message));
         });
 
+    tree_controller_->setAxisSelectionHandler(
+        [this](
+            const std::vector<part::AxisId>& selected,
+            std::optional<part::AxisId> primary) {
+            if (viewport_controller_ != nullptr) {
+                viewport_controller_->
+                    setAxisSelectionFromTree(
+                        selected,
+                        primary);
+            }
+        });
+
     tree_controller_->setProfileSelectionHandler(
         [this](
             const std::vector<part::ProfileId>& selected,
@@ -1595,6 +1680,7 @@ void CadWorkbench::buildUi() {
                         semantic);
             }
             if (primary) {
+                selected_axis_id_.reset();
                 selected_datum_id_.reset();
                 selected_feature_id_.reset();
                 selected_body_id_.reset();
@@ -1612,6 +1698,30 @@ void CadWorkbench::buildUi() {
             }
             syncActionState();
         });
+    viewport_controller_->setAxisSelectionChangedHandler(
+        [this](
+            const std::vector<part::AxisId>& selected,
+            std::optional<part::AxisId> primary) {
+            const auto semantic =
+                selected.size() == 1U && primary
+                    ? primary
+                    : std::nullopt;
+            selected_axis_id_ = semantic;
+            if (semantic) {
+                selected_profile_id_.reset();
+                selected_datum_id_.reset();
+                selected_feature_id_.reset();
+                selected_body_id_.reset();
+                refreshAxisProperties(*semantic);
+            } else if (properties_stack_ != nullptr &&
+                       properties_stack_->currentWidget() ==
+                           axis_properties_page_) {
+                properties_stack_->setCurrentWidget(
+                    document_properties_page_);
+            }
+            syncActionState();
+        });
+
     viewport_controller_->setDatumSelectionChangedHandler(
         [this](
             const std::vector<part::DatumId>& selected,
@@ -1623,6 +1733,7 @@ void CadWorkbench::buildUi() {
             selected_datum_id_ = semantic;
             if (semantic) {
                 selected_profile_id_.reset();
+                selected_axis_id_.reset();
                 selected_feature_id_.reset();
                 selected_body_id_.reset();
                 refreshDatumProperties(*semantic);
@@ -1675,6 +1786,7 @@ void CadWorkbench::buildUi() {
         [this](std::optional<part::BodyId> body_id) {
             selected_body_id_ = body_id;
             if (body_id) {
+                selected_axis_id_.reset();
                 selected_datum_id_.reset();
                 refreshBodyProperties(*body_id);
             }
@@ -1689,6 +1801,7 @@ void CadWorkbench::buildUi() {
                     : std::nullopt;
             selected_feature_id_ = semantic;
             if (semantic) {
+                selected_axis_id_.reset();
                 selected_datum_id_.reset();
             }
             if (viewport_controller_) {
@@ -1884,6 +1997,99 @@ void CadWorkbench::buildUi() {
 
     properties_stack_->addWidget(
         reference_properties_page_);
+
+    axis_properties_page_ =
+        new QWidget(properties_stack_);
+    axis_properties_page_->setObjectName(
+        QStringLiteral("axisPropertiesPage"));
+    auto* axis_properties_root =
+        new QFormLayout(axis_properties_page_);
+
+    axis_name_ =
+        new QLabel(axis_properties_page_);
+    axis_name_->setObjectName(
+        QStringLiteral("axisPropertyName"));
+    axis_identity_ =
+        new QLabel(axis_properties_page_);
+    axis_identity_->setObjectName(
+        QStringLiteral("axisPropertyIdentity"));
+    axis_source_sketch_ =
+        new QLabel(axis_properties_page_);
+    axis_source_sketch_->setObjectName(
+        QStringLiteral("axisPropertySourceSketch"));
+    axis_source_line_ =
+        new QLabel(axis_properties_page_);
+    axis_source_line_->setObjectName(
+        QStringLiteral("axisPropertySourceLine"));
+    axis_visibility_ =
+        new QLabel(axis_properties_page_);
+    axis_visibility_->setObjectName(
+        QStringLiteral("axisPropertyVisibility"));
+    axis_status_ =
+        new QLabel(axis_properties_page_);
+    axis_status_->setObjectName(
+        QStringLiteral("axisPropertyStatus"));
+    axis_diagnostic_ =
+        new QLabel(axis_properties_page_);
+    axis_diagnostic_->setObjectName(
+        QStringLiteral("axisPropertyDiagnostic"));
+    axis_diagnostic_->setWordWrap(true);
+    axis_origin_ =
+        new QLabel(axis_properties_page_);
+    axis_origin_->setObjectName(
+        QStringLiteral("axisPropertyOrigin"));
+    axis_direction_ =
+        new QLabel(axis_properties_page_);
+    axis_direction_->setObjectName(
+        QStringLiteral("axisPropertyDirection"));
+
+    axis_edit_button_ =
+        new QPushButton(
+            QStringLiteral("Edit Axis"),
+            axis_properties_page_);
+    axis_edit_button_->setObjectName(
+        QStringLiteral("editAxisPropertyButton"));
+    axis_delete_button_ =
+        new QPushButton(
+            QStringLiteral("Delete Axis"),
+            axis_properties_page_);
+    axis_delete_button_->setObjectName(
+        QStringLiteral("deleteAxisPropertyButton"));
+
+    axis_properties_root->addRow(
+        QStringLiteral("Name"),
+        axis_name_);
+    axis_properties_root->addRow(
+        QStringLiteral("AxisId"),
+        axis_identity_);
+    axis_properties_root->addRow(
+        QStringLiteral("Source Sketch"),
+        axis_source_sketch_);
+    axis_properties_root->addRow(
+        QStringLiteral("Source Line"),
+        axis_source_line_);
+    axis_properties_root->addRow(
+        QStringLiteral("Visibility"),
+        axis_visibility_);
+    axis_properties_root->addRow(
+        QStringLiteral("Status"),
+        axis_status_);
+    axis_properties_root->addRow(
+        QStringLiteral("Diagnostic"),
+        axis_diagnostic_);
+    axis_properties_root->addRow(
+        QStringLiteral("Origin"),
+        axis_origin_);
+    axis_properties_root->addRow(
+        QStringLiteral("Direction"),
+        axis_direction_);
+    axis_properties_root->addRow(
+        axis_edit_button_);
+    axis_properties_root->addRow(
+        axis_delete_button_);
+
+    properties_stack_->addWidget(
+        axis_properties_page_);
 
     datum_properties_page_ =
         new QWidget(properties_stack_);
@@ -2793,6 +2999,63 @@ void CadWorkbench::buildUi() {
         cancel_line_button_);
 
 
+    axis_operations_widget_ =
+        new QWidget(operations_content);
+    axis_operations_widget_->setObjectName(
+        QStringLiteral("axisOperationsWidget"));
+    auto* axis_operations_layout =
+        new QVBoxLayout(
+            axis_operations_widget_);
+    axis_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    auto* axis_source_form =
+        new QFormLayout;
+    axis_source_label_ =
+        new QLabel(
+            QStringLiteral("<select one Sketch Line>"),
+            axis_operations_widget_);
+    axis_source_label_->setObjectName(
+        QStringLiteral("axisSourceLabel"));
+    axis_source_label_->setWordWrap(true);
+    axis_source_form->addRow(
+        QStringLiteral("Source"),
+        axis_source_label_);
+    axis_operations_layout->addLayout(
+        axis_source_form);
+
+    axis_result_label_ =
+        new QLabel(
+            QStringLiteral("Select exactly one valid Sketch Line."),
+            axis_operations_widget_);
+    axis_result_label_->setObjectName(
+        QStringLiteral("axisResultLabel"));
+    axis_result_label_->setWordWrap(true);
+    axis_operations_layout->addWidget(
+        axis_result_label_);
+
+    axis_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Axis"),
+            axis_operations_widget_);
+    axis_finish_button_->setObjectName(
+        QStringLiteral("axisFinishButton"));
+    axis_operations_layout->addWidget(
+        axis_finish_button_);
+
+    axis_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            axis_operations_widget_);
+    axis_cancel_button_->setObjectName(
+        QStringLiteral("axisCancelButton"));
+    axis_operations_layout->addWidget(
+        axis_cancel_button_);
+
+    axis_operations_widget_->setVisible(false);
+    operations_layout->addWidget(
+        axis_operations_widget_);
+
     datum_plane_operations_widget_ =
         new QWidget(operations_content);
     datum_plane_operations_widget_->setObjectName(
@@ -3566,6 +3829,27 @@ void CadWorkbench::buildUi() {
             }
         });
     QObject::connect(
+        axis_edit_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (selected_axis_id_) {
+                static_cast<void>(
+                    startAxisEdit(
+                        *selected_axis_id_));
+            }
+        });
+    QObject::connect(
+        axis_delete_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (selected_axis_id_) {
+                deleteAxis(
+                    *selected_axis_id_);
+            }
+        });
+    QObject::connect(
         datum_edit_button_,
         &QPushButton::clicked,
         this,
@@ -3849,6 +4133,34 @@ void CadWorkbench::buildUi() {
                 sketch::EntityRole::construction);
         });
 
+
+    QObject::connect(
+        axis_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (axis_draft_) {
+                cancelAxis();
+                return;
+            }
+            static_cast<void>(
+                startAxisTool());
+        });
+    QObject::connect(
+        axis_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                finishAxis());
+        });
+    QObject::connect(
+        axis_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cancelAxis();
+        });
 
     QObject::connect(
         datum_plane_button_,
@@ -4221,6 +4533,8 @@ void CadWorkbench::buildUi() {
         });
 
     syncSketchInteractionUi();
+    syncAxisUi();
+    syncDatumPlaneUi();
     syncExtrudeUi();
 }
 
@@ -4241,6 +4555,7 @@ bool CadWorkbench::activateDocument(
     }
 
     captureActiveViewState();
+    clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
@@ -4263,6 +4578,7 @@ void CadWorkbench::deactivateDocument() {
         captureActiveViewState();
     }
 
+    clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
@@ -4592,6 +4908,443 @@ void CadWorkbench::deleteFeature(
             "Feature deleted — dependents remain authored and are reevaluated from current history."));
 }
 
+bool CadWorkbench::startAxisTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Axis requires an active Part and no conflicting Part command."));
+        return false;
+    }
+
+    axis_draft_ =
+        application::AxisDraft::beginCreate(
+            *document_session);
+    axis_evaluation_.reset();
+
+    if (!active_sketch_id_ &&
+        tree_controller_ != nullptr) {
+        if (const auto sketch_id =
+                tree_controller_->primarySketchId()) {
+            requestEditSketch(*sketch_id);
+        }
+    }
+
+    tryStageAxisFromSketchSelection();
+    refreshAxisEvaluation();
+    syncAxisUi();
+    syncActionState();
+    notifyCadInputContextChanged();
+
+    setStatusText(
+        axis_draft_->source()
+            ? QStringLiteral(
+                  "Axis source acquired — Finish to create one authored Axis.")
+            : QStringLiteral(
+                  "Axis — select exactly one Line in an active Sketch, then Finish."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+bool CadWorkbench::startAxisEdit(
+    part::AxisId axis_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        sketch_support_pick_active_) {
+        return false;
+    }
+
+    const auto* axis =
+        document_session->document()
+            .findAxis(axis_id);
+    if (axis == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Axis is no longer available."));
+        return false;
+    }
+
+    if (active_sketch_id_ &&
+        *active_sketch_id_ !=
+            axis->source.sketch_id) {
+        setStatusText(
+            QStringLiteral(
+                "Finish the active Sketch before editing an Axis from another Sketch."));
+        return false;
+    }
+
+    auto draft =
+        application::AxisDraft::beginEdit(
+            *document_session,
+            axis_id);
+    if (!draft) {
+        return false;
+    }
+    axis_draft_ = std::move(*draft);
+    axis_evaluation_.reset();
+
+    if (!active_sketch_id_ &&
+        document_session->document()
+            .findSketch(
+                axis->source.sketch_id) != nullptr) {
+        requestEditSketch(
+            axis->source.sketch_id);
+    }
+
+    refreshAxisEvaluation();
+    syncAxisUi();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Edit Axis — select a replacement Line to re-source while preserving AxisId, or Finish to keep the current source."));
+    return true;
+}
+
+void CadWorkbench::deleteAxis(
+    part::AxisId axis_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        return;
+    }
+    if (axis_draft_) {
+        cancelAxis();
+    }
+
+    const auto result =
+        document_session->execute(
+            application::DeleteAxisCommand{
+                axis_id,
+                document_session->document()
+                    .revision()});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        return;
+    }
+
+    if (selected_axis_id_ &&
+        *selected_axis_id_ == axis_id) {
+        selected_axis_id_.reset();
+    }
+    refreshActiveContext();
+    syncActionState();
+    notifyDocumentStateChanged();
+    setStatusText(
+        result.changed
+            ? QStringLiteral(
+                  "Axis deleted — downstream authored consumers remain repairable intent.")
+            : QStringLiteral(
+                  "No Axis delete change."));
+}
+
+void CadWorkbench::stageAxisSource(
+    part::SketchLineAxisSource source) {
+    if (!axis_draft_ ||
+        document_session_ == nullptr ||
+        !source.valid()) {
+        return;
+    }
+
+    const auto* sketch =
+        document_session_->document()
+            .findSketch(source.sketch_id);
+    if (sketch == nullptr ||
+        sketch->model.findLine(
+            source.entity_id) == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Axis source must be one existing Sketch Line."));
+        return;
+    }
+
+    if (!axis_draft_->setSource(
+            std::move(source))) {
+        setStatusText(
+            QStringLiteral(
+                "Axis source could not be staged."));
+        return;
+    }
+
+    axis_evaluation_.reset();
+    refreshAxisEvaluation();
+    syncAxisUi();
+    notifyCadInputContextChanged();
+}
+
+void CadWorkbench::tryStageAxisFromSketchSelection() {
+    if (!axis_draft_ ||
+        !sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->active()) {
+        return;
+    }
+
+    const auto sketch_id =
+        sketch_interaction_controller_->
+            activeSketchId();
+    const auto& selected =
+        sketch_interaction_controller_->
+            selectedEntities();
+    if (!sketch_id ||
+        selected.size() != 1U ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    const auto* sketch =
+        document_session_->document()
+            .findSketch(*sketch_id);
+    if (sketch == nullptr ||
+        sketch->model.findLine(
+            selected.front()) == nullptr) {
+        return;
+    }
+
+    stageAxisSource(
+        part::SketchLineAxisSource{
+            *sketch_id,
+            selected.front()});
+}
+
+void CadWorkbench::refreshAxisEvaluation() {
+    axis_evaluation_.reset();
+    if (!axis_draft_ ||
+        document_session_ == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        syncAxisUi();
+        return;
+    }
+
+    axis_evaluation_ =
+        document_session_->evaluateAxisDraft(
+            *axis_draft_,
+            *solid_modeling_kernel_);
+    syncAxisUi();
+}
+
+void CadWorkbench::syncAxisUi() {
+    const bool active =
+        axis_draft_.has_value();
+
+    if (axis_operations_widget_ != nullptr) {
+        axis_operations_widget_->setVisible(active);
+    }
+    if (axis_button_ != nullptr) {
+        axis_button_->setChecked(active);
+    }
+
+    if (axis_source_label_ != nullptr) {
+        if (active &&
+            axis_draft_->source()) {
+            const auto& source =
+                *axis_draft_->source();
+            axis_source_label_->setText(
+                QStringLiteral(
+                    "Sketch %1 / Line %2")
+                    .arg(
+                        fromUtf8(
+                            source.sketch_id.value()),
+                        fromUtf8(
+                            source.entity_id
+                                .serialized())));
+        } else {
+            axis_source_label_->setText(
+                QStringLiteral(
+                    "<select one Sketch Line>"));
+        }
+    }
+
+    QString result_text =
+        QStringLiteral(
+            "Select exactly one valid Sketch Line.");
+    if (active &&
+        axis_evaluation_) {
+        if (axis_evaluation_->committable()) {
+            result_text =
+                QStringLiteral(
+                    "Resolved — ready to Finish.");
+        } else if (
+            axis_evaluation_->axis_status &&
+            axis_evaluation_->axis_diagnostic) {
+            result_text =
+                axisEvaluationStatusText(
+                    *axis_evaluation_->
+                         axis_status) +
+                QStringLiteral(" — ") +
+                axisEvaluationDiagnosticText(
+                    *axis_evaluation_->
+                         axis_diagnostic);
+        } else if (
+            axis_evaluation_->status ==
+            application::
+                AxisDraftEvaluationStatus::
+                    stale_revision) {
+            result_text =
+                QStringLiteral(
+                    "Stale draft — restart Axis.");
+        } else if (
+            axis_draft_->source()) {
+            result_text =
+                QStringLiteral(
+                    "Axis source is not currently resolvable.");
+        }
+    }
+
+    if (axis_result_label_ != nullptr) {
+        axis_result_label_->setText(
+            result_text);
+    }
+    if (axis_finish_button_ != nullptr) {
+        axis_finish_button_->setEnabled(
+            active &&
+            axis_evaluation_ &&
+            axis_evaluation_->committable());
+    }
+    if (axis_cancel_button_ != nullptr) {
+        axis_cancel_button_->setEnabled(active);
+    }
+}
+
+void CadWorkbench::cancelAxis() {
+    if (!axis_draft_) {
+        return;
+    }
+
+    clearAxisRuntimeContext();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Axis cancelled — no authored change."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+bool CadWorkbench::finishAxis() {
+    if (!axis_draft_ ||
+        document_session_ == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        return false;
+    }
+
+    refreshAxisEvaluation();
+    if (!axis_evaluation_ ||
+        !axis_evaluation_->committable()) {
+        setStatusText(
+            QStringLiteral(
+                "Axis Finish requires one currently resolved Sketch Line."));
+        return false;
+    }
+
+    const auto result =
+        application::finishAxisDraft(
+            *document_session_,
+            *axis_draft_,
+            *axis_evaluation_,
+            *solid_modeling_kernel_);
+    if (!result.ok()) {
+        setStatusText(
+            result.diagnostic.empty()
+                ? QStringLiteral(
+                      "Axis Finish was rejected.")
+                : fromUtf8(
+                      result.diagnostic));
+        refreshAxisEvaluation();
+        return false;
+    }
+
+    const auto axis_id =
+        result.axis_id;
+    clearAxisRuntimeContext();
+    refreshActiveContext();
+    syncActionState();
+    notifyCadInputContextChanged();
+    notifyDocumentStateChanged();
+
+    if (axis_id) {
+        selected_axis_id_ = axis_id;
+        refreshAxisProperties(*axis_id);
+    }
+
+    setStatusText(
+        QStringLiteral(
+            "Axis finished — one semantic transaction committed."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::clearAxisRuntimeContext() {
+    axis_draft_.reset();
+    axis_evaluation_.reset();
+    syncAxisUi();
+}
+
+application::CadInputSubmitResult
+CadWorkbench::submitAxisCadInput(
+    std::string_view text) {
+    if (!axis_draft_) {
+        return {
+            false,
+            "No active Axis command."};
+    }
+
+    auto result =
+        application::submitAxisCadInput(
+            *axis_draft_,
+            text,
+            application::CadInputNumberFormat{});
+
+    if (!result.accepted) {
+        return {
+            false,
+            result.diagnostic};
+    }
+
+    switch (result.action) {
+    case application::AxisCadInputAction::none:
+        break;
+    case application::AxisCadInputAction::acquire_source:
+        tryStageAxisFromSketchSelection();
+        if (!axis_draft_->source()) {
+            setStatusText(
+                QStringLiteral(
+                    "Axis SOURCE — select exactly one Line in an active Sketch."));
+        }
+        break;
+    case application::AxisCadInputAction::finish:
+        if (!finishAxis()) {
+            return {
+                false,
+                "Axis Finish requires one currently resolved Sketch Line."};
+        }
+        break;
+    case application::AxisCadInputAction::cancel:
+        cancelAxis();
+        break;
+    }
+
+    return {true, {}};
+}
+
 bool CadWorkbench::startDatumPlaneTool() {
     auto* document_session =
         activeDocumentSession();
@@ -4608,7 +5361,8 @@ bool CadWorkbench::startDatumPlaneTool() {
                 "A Datum Plane operation is already active."));
         return false;
     }
-    if (extrude_profile_pick_active_ ||
+    if (axis_draft_ ||
+        extrude_profile_pick_active_ ||
         extrude_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
@@ -4689,6 +5443,7 @@ bool CadWorkbench::startDatumPlaneEdit(
         return false;
     }
     if (datum_plane_draft_ ||
+        axis_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         active_sketch_id_ ||
@@ -5290,6 +6045,7 @@ bool CadWorkbench::startExtrudeTool() {
         return false;
     }
     if (datum_plane_draft_ ||
+        axis_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5502,11 +6258,12 @@ bool CadWorkbench::startExtrudeEdit(
         return false;
     }
     if (datum_plane_draft_ ||
+        axis_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
             QStringLiteral(
-                "Finish or cancel the active Datum Plane/Sketch context before Edit Extrude."));
+                "Finish or cancel the active Axis/Datum Plane/Sketch context before Edit Extrude."));
         return false;
     }
 
@@ -6083,6 +6840,7 @@ void CadWorkbench::setSketchSelectionRole(
 
 void CadWorkbench::startSketchTool() {
     if (activeDocumentSession() == nullptr ||
+        axis_draft_ ||
         datum_plane_draft_ ||
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
@@ -6120,6 +6878,7 @@ void CadWorkbench::startSketchResupport(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr ||
+        axis_draft_ ||
         datum_plane_draft_ ||
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
@@ -7020,6 +7779,15 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (extrude_profile_pick_generation_ &
                 (extrude_pick_namespace - 1U));
     }
+    if (axis_draft_) {
+        constexpr application::CadInputContextGeneration
+            axis_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 59U};
+        return axis_namespace |
+               (axis_draft_->generation() &
+                (axis_namespace - 1U));
+    }
     if (datum_plane_draft_) {
         constexpr application::CadInputContextGeneration
             datum_plane_namespace =
@@ -7048,6 +7816,9 @@ std::vector<application::CadDynamicInputField>
 CadWorkbench::cadDynamicInputFields() const {
     if (sketch_support_pick_active_ ||
         extrude_profile_pick_active_) {
+        return {};
+    }
+    if (axis_draft_) {
         return {};
     }
     if (datum_plane_draft_) {
@@ -7199,6 +7970,14 @@ CadWorkbench::submitCadDynamicInputRequest(
             false,
             "CAD input semantic context is stale."};
     }
+    if (axis_draft_) {
+        return finishAxis()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Axis Finish was rejected."};
+    }
     if (datum_plane_draft_) {
         return finishDatumPlane()
             ? application::CadInputSubmitResult{
@@ -7293,6 +8072,18 @@ CadWorkbench::submitCadInput(
             "EXTRUDE is waiting for one valid Profile selection; use Tree/viewport or CANCEL."};
     }
 
+    if (axis_draft_) {
+        auto result =
+            submitAxisCadInput(text);
+        if (!result.accepted &&
+            status_ != nullptr &&
+            !result.diagnostic.empty()) {
+            setStatusText(
+                fromUtf8(result.diagnostic));
+        }
+        return result;
+    }
+
     if (datum_plane_draft_) {
         auto result =
             submitDatumPlaneCadInput(text);
@@ -7319,6 +8110,14 @@ CadWorkbench::submitCadInput(
 
     const auto top_level_keyword =
         upperAsciiTrimmed(text);
+    if (top_level_keyword == "AXIS") {
+        return startAxisTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "AXIS could not be activated."};
+    }
     if (top_level_keyword == "DATUMPLANE" ||
         top_level_keyword == "DATUM PLANE") {
         return startDatumPlaneTool()
@@ -7415,6 +8214,13 @@ QString CadWorkbench::cadInputPromptText() const {
                   "Command: RESUPPORT — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc")
             : QStringLiteral(
                   "Command: SKETCH — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc");
+    }
+    if (axis_draft_) {
+        return axis_draft_->source()
+            ? QStringLiteral(
+                  "Command: AXIS — SOURCE · FINISH/CANCEL")
+            : QStringLiteral(
+                  "Command: AXIS — Select exactly one Line in an active Sketch · SOURCE · CANCEL/Esc");
     }
     if (datum_plane_draft_) {
         return datum_plane_draft_->source()
@@ -7888,13 +8694,19 @@ void CadWorkbench::refreshActiveContext() {
     viewport_controller_->setDocumentSession(document_session);
     refreshPartFeatureEvaluationSnapshot();
     reconcileSketchRuntimeContext();
+    if (axis_draft_) {
+        refreshAxisEvaluation();
+    }
     if (datum_plane_draft_) {
         refreshDatumPlaneEvaluation();
     }
     if (extrude_draft_) {
         refreshExtrudePreview();
     }
-    if (selected_datum_id_) {
+    if (selected_axis_id_) {
+        refreshAxisProperties(
+            *selected_axis_id_);
+    } else if (selected_datum_id_) {
         refreshDatumProperties(
             *selected_datum_id_);
     } else if (selected_feature_id_) {
@@ -7909,6 +8721,7 @@ void CadWorkbench::refreshActiveContext() {
 }
 
 void CadWorkbench::clearActiveContext() {
+    clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
@@ -7924,13 +8737,26 @@ void CadWorkbench::clearActiveContext() {
     length_unit_combo_->setEnabled(false);
     syncing_precision_ui_ = false;
     selected_profile_id_.reset();
+    selected_axis_id_.reset();
     selected_datum_id_.reset();
     selected_feature_id_.reset();
     selected_body_id_.reset();
     part_evaluation_revision_.reset();
     body_evaluation_status_.reset();
     feature_evaluation_statuses_.clear();
+    axis_evaluation_statuses_.clear();
     datum_evaluation_statuses_.clear();
+    axis_name_->clear();
+    axis_identity_->clear();
+    axis_source_sketch_->clear();
+    axis_source_line_->clear();
+    axis_visibility_->clear();
+    axis_status_->clear();
+    axis_diagnostic_->clear();
+    axis_origin_->clear();
+    axis_direction_->clear();
+    axis_edit_button_->setEnabled(false);
+    axis_delete_button_->setEnabled(false);
     datum_name_->clear();
     datum_identity_->clear();
     datum_constructor_->setText(
@@ -8245,11 +9071,13 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
         part_evaluation_revision_.reset();
         body_evaluation_status_.reset();
         feature_evaluation_statuses_.clear();
+        axis_evaluation_statuses_.clear();
         datum_evaluation_statuses_.clear();
         return;
     }
 
     feature_evaluation_statuses_.clear();
+    axis_evaluation_statuses_.clear();
     datum_evaluation_statuses_.clear();
     auto body_status =
         document_session_->document()
@@ -8296,6 +9124,30 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                         datum.status,
                         datum.diagnostic});
             }
+        }
+
+        axis_evaluation_statuses_.reserve(
+            document_session_->document()
+                .axes()
+                .size());
+        for (const auto& axis :
+             document_session_->document()
+                 .axes()) {
+            const part::AxisReference reference{
+                part::AuthoredAxisReference{
+                    axis.id}};
+            const auto axis_evaluation =
+                part::resolveAxisReference(
+                    document_session_->document(),
+                    reference,
+                    &evaluation,
+                    &datums);
+            axis_evaluation_statuses_.push_back(
+                AxisEvaluationUiState{
+                    axis.id,
+                    axis_evaluation.status,
+                    axis_evaluation.diagnostic,
+                    axis_evaluation.line});
         }
     } else {
         feature_evaluation_statuses_.reserve(
@@ -8349,11 +9201,142 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                 datum.diagnostic});
     }
 
+    std::vector<AxisTreeEvaluationEntry>
+        axis_entries;
+    axis_entries.reserve(
+        axis_evaluation_statuses_.size());
+    for (const auto& axis :
+         axis_evaluation_statuses_) {
+        axis_entries.push_back(
+            AxisTreeEvaluationEntry{
+                axis.axis_id,
+                axis.status,
+                axis.diagnostic});
+    }
+
     tree_controller_->setEvaluationSnapshot(
         body_status,
         std::move(entries),
-        std::move(datum_entries));
+        std::move(datum_entries),
+        std::move(axis_entries));
 }
+
+void CadWorkbench::refreshAxisProperties(
+    part::AxisId axis_id) {
+    if (properties_stack_ == nullptr ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    const auto* axis =
+        document_session_->document()
+            .findAxis(axis_id);
+    if (axis == nullptr) {
+        selected_axis_id_.reset();
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    selected_axis_id_ = axis_id;
+    axis_name_->setText(
+        axis->name.empty()
+            ? QStringLiteral("Axis %1")
+                  .arg(fromUtf8(
+                      axis->id.serialized()))
+            : fromUtf8(axis->name));
+    axis_identity_->setText(
+        fromUtf8(
+            axis->id.serialized()));
+    axis_source_sketch_->setText(
+        fromUtf8(
+            axis->source.sketch_id.value()));
+    axis_source_line_->setText(
+        fromUtf8(
+            axis->source.entity_id.serialized()));
+    axis_visibility_->setText(
+        axis->visible
+            ? QStringLiteral("Shown")
+            : QStringLiteral("Hidden"));
+
+    const auto evaluation =
+        std::find_if(
+            axis_evaluation_statuses_.begin(),
+            axis_evaluation_statuses_.end(),
+            [axis_id](
+                const AxisEvaluationUiState& item) {
+                return item.axis_id == axis_id;
+            });
+
+    if (evaluation ==
+        axis_evaluation_statuses_.end()) {
+        axis_status_->setText(
+            QStringLiteral("Not evaluated"));
+        axis_diagnostic_->setText(
+            QStringLiteral("—"));
+        axis_origin_->setText(
+            QStringLiteral("—"));
+        axis_direction_->setText(
+            QStringLiteral("—"));
+    } else {
+        axis_status_->setText(
+            axisEvaluationStatusText(
+                evaluation->status));
+        axis_diagnostic_->setText(
+            axisEvaluationDiagnosticText(
+                evaluation->diagnostic));
+
+        if (evaluation->line &&
+            evaluation->line->valid()) {
+            const auto& origin =
+                evaluation->line->origin;
+            const auto& direction =
+                evaluation->line->direction;
+            axis_origin_->setText(
+                QStringLiteral(
+                    "(%1, %2, %3)")
+                    .arg(
+                        QString::number(
+                            origin.x, 'g', 12),
+                        QString::number(
+                            origin.y, 'g', 12),
+                        QString::number(
+                            origin.z, 'g', 12)));
+            axis_direction_->setText(
+                QStringLiteral(
+                    "(%1, %2, %3)")
+                    .arg(
+                        QString::number(
+                            direction.x, 'g', 12),
+                        QString::number(
+                            direction.y, 'g', 12),
+                        QString::number(
+                            direction.z, 'g', 12)));
+        } else {
+            axis_origin_->setText(
+                QStringLiteral("—"));
+            axis_direction_->setText(
+                QStringLiteral("—"));
+        }
+    }
+
+    const bool lifecycle_available =
+        !axis_draft_ &&
+        !datum_plane_draft_ &&
+        !extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !active_sketch_id_ &&
+        !sketch_support_pick_active_;
+    axis_edit_button_->setEnabled(
+        lifecycle_available &&
+        solid_modeling_kernel_ != nullptr);
+    axis_delete_button_->setEnabled(
+        lifecycle_available);
+
+    properties_stack_->setCurrentWidget(
+        axis_properties_page_);
+}
+
 
 void CadWorkbench::refreshDatumProperties(
     part::DatumId datum_id) {
@@ -8925,6 +9908,23 @@ bool CadWorkbench::eventFilter(
         event->type() == QEvent::KeyPress) {
         auto* key_event =
             static_cast<QKeyEvent*>(event);
+
+        if (watched == viewport_widget_ &&
+            axis_draft_) {
+            if (key_event->key() ==
+                Qt::Key_Escape) {
+                cancelAxis();
+                return true;
+            }
+            if (key_event->key() ==
+                    Qt::Key_Return ||
+                key_event->key() ==
+                    Qt::Key_Enter) {
+                static_cast<void>(
+                    finishAxis());
+                return true;
+            }
+        }
 
         if (watched == viewport_widget_ &&
             datum_plane_draft_) {
@@ -10104,6 +11104,7 @@ void CadWorkbench::syncActionState() {
     undo_button_->setEnabled(
         active &&
         !sketch_support_pick_active_ &&
+        !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
@@ -10111,6 +11112,7 @@ void CadWorkbench::syncActionState() {
     redo_button_->setEnabled(
         active &&
         !sketch_support_pick_active_ &&
+        !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
@@ -10136,9 +11138,23 @@ void CadWorkbench::syncActionState() {
         active &&
         !editing_sketch &&
         !sketch_support_pick_active_ &&
+        !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_);
+
+    if (axis_button_ != nullptr) {
+        axis_button_->setVisible(active);
+        axis_button_->setEnabled(
+            active &&
+            !sketch_support_pick_active_ &&
+            !datum_plane_draft_ &&
+            !extrude_profile_pick_active_ &&
+            !extrude_draft_ &&
+            solid_modeling_kernel_ != nullptr);
+        axis_button_->setChecked(
+            axis_draft_.has_value());
+    }
 
     if (datum_plane_button_ != nullptr) {
         datum_plane_button_->setVisible(
@@ -10147,6 +11163,7 @@ void CadWorkbench::syncActionState() {
             active &&
             !editing_sketch &&
             !sketch_support_pick_active_ &&
+            !axis_draft_ &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
             solid_modeling_kernel_ != nullptr);
@@ -10161,6 +11178,7 @@ void CadWorkbench::syncActionState() {
             active &&
             !editing_sketch &&
             !sketch_support_pick_active_ &&
+            !axis_draft_ &&
             !datum_plane_draft_ &&
             !extrude_draft_ &&
             solid_modeling_kernel_ != nullptr);
@@ -10231,9 +11249,29 @@ void CadWorkbench::syncActionState() {
             QStringLiteral("Finish Sketch"));
     }
 
+    const bool axis_lifecycle_available =
+        active &&
+        selected_axis_id_.has_value() &&
+        !axis_draft_ &&
+        !datum_plane_draft_ &&
+        !extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !active_sketch_id_ &&
+        !sketch_support_pick_active_;
+    if (axis_edit_button_ != nullptr) {
+        axis_edit_button_->setEnabled(
+            axis_lifecycle_available &&
+            solid_modeling_kernel_ != nullptr);
+    }
+    if (axis_delete_button_ != nullptr) {
+        axis_delete_button_->setEnabled(
+            axis_lifecycle_available);
+    }
+
     const bool datum_lifecycle_available =
         active &&
         selected_datum_id_.has_value() &&
+        !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
@@ -10250,6 +11288,7 @@ void CadWorkbench::syncActionState() {
     }
 
     syncSketchInteractionUi();
+    syncAxisUi();
     syncDatumPlaneUi();
     syncExtrudeUi();
 }

@@ -4805,6 +4805,8 @@ public:
             return Quantity_Color{0.30, 0.78, 0.36, Quantity_TOC_RGB};
         case viewer::ReferencePresentationKind::z_axis:
             return Quantity_Color{0.28, 0.48, 0.92, Quantity_TOC_RGB};
+        case viewer::ReferencePresentationKind::axis:
+            return Quantity_Color{0.92, 0.70, 0.24, Quantity_TOC_RGB};
         case viewer::ReferencePresentationKind::plane:
             return Quantity_Color{0.42, 0.58, 0.82, Quantity_TOC_RGB};
         case viewer::ReferencePresentationKind::datum_plane:

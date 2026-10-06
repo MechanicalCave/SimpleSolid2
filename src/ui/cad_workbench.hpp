@@ -143,7 +143,8 @@ public:
             expected_context_generation) override;
     [[nodiscard]] bool
     acceptsEmptyCadInput() const noexcept override {
-        return datum_plane_draft_.has_value() ||
+        return axis_draft_.has_value() ||
+               datum_plane_draft_.has_value() ||
                extrude_draft_.has_value() ||
                (sketch_support_pick_active_ &&
                 pending_sketch_support_.has_value());
@@ -173,6 +174,21 @@ private:
         core::LengthUnit unit);
     void applyProfileProperties();
     void deleteSelectedProfile();
+
+    [[nodiscard]] bool startAxisTool();
+    [[nodiscard]] bool startAxisEdit(
+        part::AxisId axis_id);
+    void deleteAxis(part::AxisId axis_id);
+    void cancelAxis();
+    [[nodiscard]] bool finishAxis();
+    void clearAxisRuntimeContext();
+    void tryStageAxisFromSketchSelection();
+    void stageAxisSource(
+        part::SketchLineAxisSource source);
+    void refreshAxisEvaluation();
+    void syncAxisUi();
+    [[nodiscard]] application::CadInputSubmitResult
+    submitAxisCadInput(std::string_view text);
 
     [[nodiscard]] bool startDatumPlaneTool();
     [[nodiscard]] bool startDatumPlaneEdit(
@@ -280,6 +296,8 @@ private:
         std::optional<core::BuiltinReferenceRole> primary);
     void refreshProfileProperties(
         part::ProfileId profile_id);
+    void refreshAxisProperties(
+        part::AxisId axis_id);
     void refreshDatumProperties(
         part::DatumId datum_id);
     void refreshBodyProperties(
@@ -317,6 +335,16 @@ private:
             part::FeatureEvaluationStatus::blocked};
         part::FeatureEvaluationDiagnosticCode diagnostic{
             part::FeatureEvaluationDiagnosticCode::none};
+    };
+
+    struct AxisEvaluationUiState final {
+        part::AxisId axis_id;
+        part::AxisEvaluationStatus status{
+            part::AxisEvaluationStatus::blocked};
+        part::AxisEvaluationDiagnostic diagnostic{
+            part::AxisEvaluationDiagnostic::
+                invalid_reference};
+        std::optional<part::ResolvedAxisLine> line;
     };
 
     struct DatumEvaluationUiState final {
@@ -386,6 +414,7 @@ private:
     QStackedWidget* properties_stack_{};
     QWidget* document_properties_page_{};
     QWidget* reference_properties_page_{};
+    QWidget* axis_properties_page_{};
     QWidget* datum_properties_page_{};
     QWidget* profile_properties_page_{};
     QWidget* body_properties_page_{};
@@ -397,6 +426,17 @@ private:
     QLabel* reference_kind_{};
     QLabel* reference_identity_{};
     QLabel* reference_visibility_{};
+    QLabel* axis_name_{};
+    QLabel* axis_identity_{};
+    QLabel* axis_source_sketch_{};
+    QLabel* axis_source_line_{};
+    QLabel* axis_visibility_{};
+    QLabel* axis_status_{};
+    QLabel* axis_diagnostic_{};
+    QLabel* axis_origin_{};
+    QLabel* axis_direction_{};
+    QPushButton* axis_edit_button_{};
+    QPushButton* axis_delete_button_{};
     QLabel* datum_name_{};
     QLabel* datum_identity_{};
     QLabel* datum_constructor_{};
@@ -422,6 +462,8 @@ private:
     QPushButton* delete_profile_button_{};
     std::optional<part::ProfileId>
         selected_profile_id_;
+    std::optional<part::AxisId>
+        selected_axis_id_;
     std::optional<part::DatumId>
         selected_datum_id_;
     std::optional<part::FeatureId>
@@ -434,6 +476,8 @@ private:
         body_evaluation_status_;
     std::vector<FeatureEvaluationUiState>
         feature_evaluation_statuses_;
+    std::vector<AxisEvaluationUiState>
+        axis_evaluation_statuses_;
     std::vector<DatumEvaluationUiState>
         datum_evaluation_statuses_;
     QLineEdit* number_{};
@@ -508,6 +552,7 @@ private:
     QComboBox* circle_size_mode_combo_{};
     bool syncing_precision_ui_{};
     QPushButton* sketch_button_{};
+    QPushButton* axis_button_{};
     QPushButton* datum_plane_button_{};
     QPushButton* extrude_button_{};
     QPushButton* select_sketch_button_{};
@@ -540,6 +585,17 @@ private:
     QLabel* entity_role_label_{};
     QPushButton* regular_role_button_{};
     QPushButton* construction_role_button_{};
+
+    QWidget* axis_operations_widget_{};
+    QLabel* axis_source_label_{};
+    QLabel* axis_result_label_{};
+    QPushButton* axis_finish_button_{};
+    QPushButton* axis_cancel_button_{};
+    std::optional<application::AxisDraft>
+        axis_draft_;
+    std::optional<
+        application::AxisDraftEvaluationResult>
+        axis_evaluation_;
 
     QWidget* datum_plane_operations_widget_{};
     QComboBox* datum_plane_constructor_combo_{};
