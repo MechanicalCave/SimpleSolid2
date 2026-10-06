@@ -654,6 +654,6 @@ int main() {
             stale_revision);
 
     std::cout
-        << "PM-04B1 Axis lifecycle/draft tests passed\n";
+        << "PM-04B1/PM-04F Axis lifecycle, uniqueness and atomic designation tests passed\n";
     return EXIT_SUCCESS;
 }
