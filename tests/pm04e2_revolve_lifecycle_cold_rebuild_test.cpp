@@ -810,6 +810,266 @@ int main() {
                 .axis.direction.y,
             0.0));
 
+    const auto cold_input_before_edits =
+        final_kernel.inputs.front();
+
+    application::DocumentSession edit_session{
+        path,
+        std::move(*final_load.document),
+        *final_load.checkpoint};
+
+    // PM-04E3: changing the Profile source geometry preserves the ProfileId
+    // and FeatureId but must recompute Revolve from the current authored
+    // boundary. Keep the region closed while moving its upper boundary.
+    CHECK(ids.profile_edges.size() == 4U);
+    const auto profile_edit =
+        edit_session.execute(
+            application::UpdateSketchLinesCommand{
+                ids.sketch_id,
+                edit_session.document().revision(),
+                {
+                    {
+                        ids.profile_edges[1],
+                        {20.0, 10.0},
+                        {20.0, 25.0},
+                    },
+                    {
+                        ids.profile_edges[2],
+                        {20.0, 25.0},
+                        {10.0, 25.0},
+                    },
+                    {
+                        ids.profile_edges[3],
+                        {10.0, 25.0},
+                        {10.0, 10.0},
+                    },
+                }});
+    CHECK(profile_edit.ok());
+    CHECK(
+        edit_session.document().findProfile(
+            ids.profile_id) != nullptr);
+    CHECK(
+        edit_session.document().findAxis(
+            ids.axis_id) != nullptr);
+    CHECK(
+        edit_session.document().findFeature(
+            ids.feature_id) != nullptr);
+
+    ColdRevolveKernel profile_edit_kernel{1001U};
+    const auto profile_edited =
+        evaluate(
+            edit_session.document(),
+            profile_edit_kernel);
+    checkUpToDate(
+        profile_edited,
+        ids.feature_id,
+        1001U);
+    CHECK(profile_edit_kernel.calls == 1U);
+    CHECK(profile_edit_kernel.inputs.size() == 1U);
+    CHECK(
+        profile_edit_kernel.inputs.front() !=
+        cold_input_before_edits);
+    CHECK(
+        near(
+            profile_edit_kernel.inputs.front()
+                .axis.origin.x,
+            cold_input_before_edits.axis.origin.x));
+    CHECK(
+        near(
+            profile_edit_kernel.inputs.front()
+                .axis.origin.y,
+            cold_input_before_edits.axis.origin.y));
+    CHECK(
+        near(
+            profile_edit_kernel.inputs.front()
+                .axis.origin.z,
+            cold_input_before_edits.axis.origin.z));
+    CHECK(
+        near(
+            profile_edit_kernel.inputs.front()
+                .axis.direction.x,
+            cold_input_before_edits.axis.direction.x));
+    CHECK(
+        near(
+            profile_edit_kernel.inputs.front()
+                .axis.direction.y,
+            cold_input_before_edits.axis.direction.y));
+    CHECK(
+        near(
+            profile_edit_kernel.inputs.front()
+                .axis.direction.z,
+            cold_input_before_edits.axis.direction.z));
+
+    const auto profile_edited_input =
+        profile_edit_kernel.inputs.front();
+    const auto local_after_profile_edit =
+        edit_session.document()
+            .findSketch(ids.sketch_id)
+            ->model.state();
+
+    // Re-supporting the common Profile/Axis source Sketch is one semantic
+    // support edit. It preserves every durable ID and local U/V geometry,
+    // while the derived world Profile and Axis are recomputed together.
+    const auto yz_support =
+        part::partSketchSupportForBuiltinPlane(
+            core::BuiltinReferenceRole::
+                yz_plane);
+    CHECK(yz_support.has_value());
+
+    ColdRevolveKernel support_validation_kernel{1002U};
+    const auto support_edit =
+        edit_session.execute(
+            application::SetPartSketchSupportCommand{
+                ids.sketch_id,
+                *yz_support,
+                edit_session.document().revision()},
+            &support_validation_kernel);
+    CHECK(
+        support_edit.ok() &&
+        support_edit.changed);
+    CHECK(
+        support_edit.status ==
+        application::SketchSupportMutationStatus::
+            applied);
+
+    const auto* resupported_sketch =
+        edit_session.document().findSketch(
+            ids.sketch_id);
+    CHECK(resupported_sketch != nullptr);
+    CHECK(resupported_sketch->id == ids.sketch_id);
+    CHECK(
+        resupported_sketch->model.state() ==
+        local_after_profile_edit);
+    CHECK(
+        resupported_sketch->support ==
+        *yz_support);
+    CHECK(
+        edit_session.document()
+            .findProfile(ids.profile_id)
+            ->id == ids.profile_id);
+    CHECK(
+        edit_session.document()
+            .findAxis(ids.axis_id)
+            ->id == ids.axis_id);
+    CHECK(
+        edit_session.document()
+            .findFeature(ids.feature_id)
+            ->id == ids.feature_id);
+
+    ColdRevolveKernel support_edit_kernel{1003U};
+    const auto support_edited =
+        evaluate(
+            edit_session.document(),
+            support_edit_kernel);
+    checkUpToDate(
+        support_edited,
+        ids.feature_id,
+        1003U);
+    CHECK(support_edit_kernel.calls == 1U);
+    CHECK(support_edit_kernel.inputs.size() == 1U);
+    const auto support_edited_input =
+        support_edit_kernel.inputs.front();
+    CHECK(
+        support_edited_input !=
+        profile_edited_input);
+
+    const bool axis_direction_changed =
+        !near(
+            support_edited_input.axis.direction.x,
+            profile_edited_input.axis.direction.x) ||
+        !near(
+            support_edited_input.axis.direction.y,
+            profile_edited_input.axis.direction.y) ||
+        !near(
+            support_edited_input.axis.direction.z,
+            profile_edited_input.axis.direction.z);
+    CHECK(axis_direction_changed);
+
+    // Undo/Redo of the support edit must toggle only derived world meaning;
+    // IDs and local Sketch geometry remain exact.
+    CHECK(edit_session.undo().ok());
+    CHECK(
+        edit_session.document()
+            .findSketch(ids.sketch_id)
+            ->model.state() ==
+        local_after_profile_edit);
+    ColdRevolveKernel undo_support_kernel{1004U};
+    const auto undo_support =
+        evaluate(
+            edit_session.document(),
+            undo_support_kernel);
+    checkUpToDate(
+        undo_support,
+        ids.feature_id,
+        1004U);
+    CHECK(undo_support_kernel.calls == 1U);
+    CHECK(
+        undo_support_kernel.inputs.front() ==
+        profile_edited_input);
+
+    CHECK(edit_session.redo().ok());
+    CHECK(
+        edit_session.document()
+            .findSketch(ids.sketch_id)
+            ->model.state() ==
+        local_after_profile_edit);
+    ColdRevolveKernel redo_support_kernel{1005U};
+    const auto redo_support =
+        evaluate(
+            edit_session.document(),
+            redo_support_kernel);
+    checkUpToDate(
+        redo_support,
+        ids.feature_id,
+        1005U);
+    CHECK(redo_support_kernel.calls == 1U);
+    CHECK(
+        redo_support_kernel.inputs.front() ==
+        support_edited_input);
+
+    // Persist the edited Profile/support meaning and prove another cold
+    // provider rebuild reproduces the same semantic kernel input.
+    CHECK(edit_session.save().ok());
+    auto edited_reload =
+        store.load(path);
+    CHECK(edited_reload.ok());
+    CHECK(
+        edited_reload.document->findSketch(
+            ids.sketch_id) != nullptr);
+    CHECK(
+        edited_reload.document->findProfile(
+            ids.profile_id) != nullptr);
+    CHECK(
+        edited_reload.document->findAxis(
+            ids.axis_id) != nullptr);
+    CHECK(
+        edited_reload.document->findFeature(
+            ids.feature_id) != nullptr);
+    CHECK(
+        edited_reload.document
+            ->findSketch(ids.sketch_id)
+            ->support ==
+        *yz_support);
+    CHECK(
+        edited_reload.document
+            ->findSketch(ids.sketch_id)
+            ->model.state() ==
+        local_after_profile_edit);
+
+    ColdRevolveKernel edited_cold_kernel{2000U};
+    const auto edited_cold =
+        evaluate(
+            *edited_reload.document,
+            edited_cold_kernel);
+    checkUpToDate(
+        edited_cold,
+        ids.feature_id,
+        2000U);
+    CHECK(edited_cold_kernel.calls == 1U);
+    CHECK(
+        edited_cold_kernel.inputs.front() ==
+        support_edited_input);
+
     std::cout
         << "PM-04E2 Revolve lifecycle/cold-rebuild tests passed\n";
     return EXIT_SUCCESS;
