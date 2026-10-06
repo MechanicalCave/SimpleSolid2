@@ -247,6 +247,7 @@ void PartSketchInteractionController::begin(
     structural_revision_.reset();
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
+    line_axis_designation_ = false;
     rectangle_draw_diagonals_ = false;
     circle_size_input_mode_ =
         application::CircleSizeInputMode::diameter;
@@ -278,6 +279,7 @@ void PartSketchInteractionController::end() {
     structural_revision_.reset();
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
+    line_axis_designation_ = false;
     rectangle_draw_diagonals_ = false;
     circle_size_input_mode_ =
         application::CircleSizeInputMode::diameter;
@@ -1726,6 +1728,23 @@ bool PartSketchInteractionController::setCreationRole(
 }
 
 bool PartSketchInteractionController::
+setLineAxisDesignation(bool enabled) {
+    if (!active() ||
+        interaction_.tool() !=
+            sketch::SketchTool::line ||
+        (enabled &&
+         solid_modeling_kernel_ == nullptr)) {
+        return false;
+    }
+    if (line_axis_designation_ == enabled) {
+        return true;
+    }
+    line_axis_designation_ = enabled;
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
 setRectangleDrawDiagonals(bool enabled) {
     if (!active()) {
         return false;
@@ -2221,6 +2240,7 @@ void PartSketchInteractionController::activateLine() {
     if (!active()) return;
 
     resetProfileRuntime();
+    line_axis_designation_ = false;
 
     interaction_.activateLine();
     press_anchor_.reset();
@@ -4631,16 +4651,52 @@ bool PartSketchInteractionController::acceptLineResolvedPoint(
     if (accepted.outcome ==
         sketch::LinePointOutcome::segment_requested &&
         accepted.request) {
-        const auto result =
-            session_->execute(
-                application::AddSketchLineCommand{
-                    *sketch_id_,
-                    accepted.request->start,
-                    accepted.request->end,
-                    creation_role_});
+        bool committed = false;
+        application::DocumentSessionDiagnostic diagnostic;
 
-        const bool committed =
-            result.ok() && result.changed;
+        if (line_axis_designation_) {
+            if (solid_modeling_kernel_ == nullptr) {
+                diagnostic.code =
+                    application::DocumentSessionErrorCode::
+                        invalid_command;
+                diagnostic.message =
+                    "Axis designation requires an active modeling kernel.";
+            } else {
+                const auto result =
+                    session_->execute(
+                        application::
+                            AddSketchLineWithAxisCommand{
+                                *sketch_id_,
+                                session_->document()
+                                    .revision(),
+                                accepted.request->start,
+                                accepted.request->end,
+                                creation_role_,
+                                {},
+                                true},
+                        *solid_modeling_kernel_);
+                committed =
+                    result.ok() && result.changed;
+                diagnostic = result.diagnostic;
+                if (committed) {
+                    // One-shot designation is consumed only by a successful
+                    // atomic Line + Axis commit.
+                    line_axis_designation_ = false;
+                }
+            }
+        } else {
+            const auto result =
+                session_->execute(
+                    application::AddSketchLineCommand{
+                        *sketch_id_,
+                        accepted.request->start,
+                        accepted.request->end,
+                        creation_role_});
+            committed =
+                result.ok() && result.changed;
+            diagnostic = result.diagnostic;
+        }
+
         static_cast<void>(
             interaction_.resolveLineRequest(committed));
 
@@ -4648,9 +4704,9 @@ bool PartSketchInteractionController::acceptLineResolvedPoint(
 
         if (!committed) {
             reportStatus(
-                result.diagnostic.message.empty()
+                diagnostic.message.empty()
                     ? std::string{"Line segment commit failed."}
-                    : result.diagnostic.message);
+                    : diagnostic.message);
             notifyStateChanged();
             return false;
         }
