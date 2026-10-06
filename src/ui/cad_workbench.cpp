@@ -11062,6 +11062,7 @@ void CadWorkbench::syncActionState() {
     undo_button_->setEnabled(
         active &&
         !sketch_support_pick_active_ &&
+        !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
@@ -11069,6 +11070,7 @@ void CadWorkbench::syncActionState() {
     redo_button_->setEnabled(
         active &&
         !sketch_support_pick_active_ &&
+        !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
@@ -11098,6 +11100,19 @@ void CadWorkbench::syncActionState() {
         !extrude_profile_pick_active_ &&
         !extrude_draft_);
 
+    if (axis_button_ != nullptr) {
+        axis_button_->setVisible(active);
+        axis_button_->setEnabled(
+            active &&
+            !sketch_support_pick_active_ &&
+            !datum_plane_draft_ &&
+            !extrude_profile_pick_active_ &&
+            !extrude_draft_ &&
+            solid_modeling_kernel_ != nullptr);
+        axis_button_->setChecked(
+            axis_draft_.has_value());
+    }
+
     if (datum_plane_button_ != nullptr) {
         datum_plane_button_->setVisible(
             !editing_sketch);
@@ -11105,6 +11120,7 @@ void CadWorkbench::syncActionState() {
             active &&
             !editing_sketch &&
             !sketch_support_pick_active_ &&
+            !axis_draft_ &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
             solid_modeling_kernel_ != nullptr);
@@ -11119,6 +11135,7 @@ void CadWorkbench::syncActionState() {
             active &&
             !editing_sketch &&
             !sketch_support_pick_active_ &&
+            !axis_draft_ &&
             !datum_plane_draft_ &&
             !extrude_draft_ &&
             solid_modeling_kernel_ != nullptr);
@@ -11189,9 +11206,29 @@ void CadWorkbench::syncActionState() {
             QStringLiteral("Finish Sketch"));
     }
 
+    const bool axis_lifecycle_available =
+        active &&
+        selected_axis_id_.has_value() &&
+        !axis_draft_ &&
+        !datum_plane_draft_ &&
+        !extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !active_sketch_id_ &&
+        !sketch_support_pick_active_;
+    if (axis_edit_button_ != nullptr) {
+        axis_edit_button_->setEnabled(
+            axis_lifecycle_available &&
+            solid_modeling_kernel_ != nullptr);
+    }
+    if (axis_delete_button_ != nullptr) {
+        axis_delete_button_->setEnabled(
+            axis_lifecycle_available);
+    }
+
     const bool datum_lifecycle_available =
         active &&
         selected_datum_id_.has_value() &&
+        !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
@@ -11208,6 +11245,7 @@ void CadWorkbench::syncActionState() {
     }
 
     syncSketchInteractionUi();
+    syncAxisUi();
     syncDatumPlaneUi();
     syncExtrudeUi();
 }
