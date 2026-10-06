@@ -3812,6 +3812,235 @@ DocumentSessionResult DocumentSession::execute(
         "Part transaction failed while editing Extrude Feature");
 }
 
+CreateRevolveFeatureResult DocumentSession::execute(
+    const CreateRevolveFeatureCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    revision_diverged,
+                "Create Revolve was started from a stale DocumentRevision",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const part::RevolveFeature definition{
+        command.profile_id,
+        command.axis,
+        command.operation,
+        command.extent};
+    if (!part::revolveFeatureStructurallyValid(
+            definition) ||
+        document_.findProfile(
+            command.profile_id) == nullptr) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Revolve contains invalid inputs or missing ProfileId",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applyBodyFeatureIdCursors(after);
+    const auto id =
+        after.body.next_feature_id.allocate();
+    if (!id) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "FeatureId allocation space is exhausted",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    after.body.features.push_back(
+        part::PartFeature{
+            *id,
+            command.name.empty()
+                ? defaultRevolveFeatureName(*id)
+                : command.name,
+            false,
+            definition});
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "Create Revolve candidate violates Part authored-state invariants",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto* target =
+        evaluation.findFeature(*id);
+    if (target == nullptr ||
+        target->status !=
+            part::FeatureEvaluationStatus::
+                up_to_date) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Revolve did not evaluate UpToDate; no authored mutation committed",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            target != nullptr
+                ? std::optional<
+                      part::FeatureEvaluationDiagnosticCode>{
+                      target->diagnostic}
+                : std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating Revolve Feature");
+    if (!committed.ok() ||
+        !committed.changed) {
+        return {
+            committed.changed,
+            std::nullopt,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return {
+        true,
+        *id,
+        part::FeatureEvaluationDiagnosticCode::
+            none,
+        DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EditRevolveFeatureCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Edit Revolve was started from a stale DocumentRevision",
+            path_);
+    }
+
+    const part::RevolveFeature definition{
+        command.profile_id,
+        command.axis,
+        command.operation,
+        command.extent};
+    if (!part::revolveFeatureStructurallyValid(
+            definition) ||
+        document_.findProfile(
+            command.profile_id) == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Revolve contains invalid inputs or missing ProfileId",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* feature =
+        findFeature(
+            after,
+            command.feature_id);
+    if (feature == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Revolve target FeatureId does not exist",
+            path_);
+    }
+    if (feature->suppressed) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Revolve target is Suppressed; unsuppress before editing",
+            path_);
+    }
+    if (std::get_if<part::RevolveFeature>(
+            &feature->definition) == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Revolve target FeatureId is not a Revolve Feature",
+            path_);
+    }
+
+    feature->name = command.name;
+    feature->definition = definition;
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::
+                transaction_failure,
+            "Edit Revolve candidate violates Part authored-state invariants",
+            path_);
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto* target =
+        evaluation.findFeature(
+            command.feature_id);
+    if (target == nullptr ||
+        target->status !=
+            part::FeatureEvaluationStatus::
+                up_to_date) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Revolve target did not evaluate UpToDate; no authored mutation committed",
+            path_);
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Revolve Feature");
+}
+
 DocumentSessionResult DocumentSession::execute(
     const SetFeatureSuppressedCommand& command) {
     if (document_.revision() !=
