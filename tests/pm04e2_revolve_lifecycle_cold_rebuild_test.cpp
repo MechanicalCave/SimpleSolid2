@@ -389,8 +389,7 @@ int main() {
     const auto document_id =
         core::DocumentId::generate();
 
-    AuthoredIds ids;
-    {
+    const auto ids = [&] {
         auto document =
             part::PartDocument::create(
                 document_id);
@@ -406,18 +405,18 @@ int main() {
             *created.checkpoint};
 
         ColdRevolveKernel authoring_kernel{1U};
-        ids =
+        const auto authored =
             authorRevolve(
                 session,
                 authoring_kernel);
 
         CHECK(
             session.document()
-                .findAxis(ids.axis_id) !=
+                .findAxis(authored.axis_id) !=
             nullptr);
         CHECK(
             session.document()
-                .findFeature(ids.feature_id) !=
+                .findFeature(authored.feature_id) !=
             nullptr);
 
         ColdRevolveKernel initial_kernel{2U};
@@ -427,7 +426,7 @@ int main() {
                 initial_kernel);
         checkUpToDate(
             initial,
-            ids.feature_id,
+            authored.feature_id,
             2U);
         CHECK(initial_kernel.calls == 1U);
         CHECK(initial_kernel.inputs.size() == 1U);
@@ -444,7 +443,8 @@ int main() {
 
         CHECK(session.save().ok());
         CHECK(!session.needsSave());
-    }
+        return authored;
+    }();
 
     // True cold rebuild: no prior DocumentSession, evaluation result, runtime
     // solid or provider generation survives the load.
