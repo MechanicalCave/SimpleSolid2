@@ -1,6 +1,6 @@
 # PM-04F — Owner Windows Acceptance
 
-**Status:** READY FOR OWNER — AUTOMATED PASS  
+**Status:** COMPLETED — PASS  
 **Parent Work Contract:** `work/PM-04_AXIS_REVOLVE.md`  
 **Owner amendment:** `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md`  
 **Checkpoint:** PM-04F — Axis-designation remediation / documentation / Product Browser / Owner Windows acceptance  
@@ -10,7 +10,7 @@
 
 This is the final supported-Windows workflow for PM-04 after the Owner-accepted Axis-designation UX amendment.
 
-Automated prerequisites are satisfied on exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`: Windows FULL #1578 attempt 2 PASS (core 25/25, kernel-native 47/47, desktop 104/104) with current documentation and canonical Product Browser verification. This workflow is now ready for Owner execution. Do not close PM-04 from automation alone.
+Automated prerequisites were satisfied on exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`: Windows FULL #1578 attempt 2 PASS (core 25/25, kernel-native 47/47, desktop 104/104) with current documentation and canonical Product Browser verification. The Owner executed the supported Windows workflow on 2026-10-06 and reported **PASS with no errors**.
 
 ## Preconditions
 
@@ -86,7 +86,12 @@ Automated prerequisites are satisfied on exact runtime/docs candidate `8d6f08213
 
 Owner result:
 
-- **PASS** — every required step behaves as described and there is no functional PM-04 blocker; or
-- **FAIL** — report the first failing step plus observed/expected behavior. Do not close PM-04.
+- **PASS — 2026-10-06.** The Owner tested exact runtime candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` on Windows and reported no errors / no functional PM-04 blocker.
+- The Axis-designation UX amendment, Axis lifecycle, Revolve workflow, failure/repair behavior, persistence/cold reconstruction and current documentation are accepted within the bounded PM-04 contract.
+- Presentation polish already explicitly deferred by prior accepted governance (the common neutral translucent Origin/Datum plane fill for PM-06) remains a PM-06 obligation and is not a PM-04 blocker.
 
-Presentation polish already explicitly deferred by prior accepted governance (the common neutral translucent Origin/Datum plane fill for PM-06) remains non-blocking unless this amendment introduces a new regression.
+## Completion boundary
+
+PM-04F is **COMPLETED — PASS**.
+
+PM-04 Axis / Revolve product acceptance is complete and its production mutation authority is closed. PM-05 Edge Features is next in roadmap order but is **NOT ACTIVE** until a separate bounded Work Contract is explicitly Owner-accepted and activated. PM-06 and Projection remain separately gated.

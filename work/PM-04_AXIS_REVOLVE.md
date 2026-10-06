@@ -1,13 +1,13 @@
 # PM-04 — Axis / Revolve
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-06; PM-04F AXIS-DESIGNATION UX AMENDMENT OWNER-ACCEPTED 2026-10-06  
-**Owner amendment:** `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` — bounded Axis authoring UX / source-uniqueness amendment; PM-04F final gates reset  
+**Status:** COMPLETED — PASS; OWNER FINAL WINDOWS ACCEPTANCE 2026-10-06  
+**Owner amendment:** `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` — bounded Axis authoring UX / source-uniqueness amendment, implemented and accepted  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-03 Datum Reference Geometry / Offset Datum Plane COMPLETED — PASS  
-**Production mutation:** AUTHORIZED ONLY WITHIN THIS ACTIVE CONTRACT after activation merge
+**Production mutation:** CLOSED — future production change requires separately accepted authority
 
 ## 1. Goal
 
@@ -751,7 +751,7 @@ Close:
 - final exact-head automated gate;
 - Owner Windows workflow.
 
-**PM-04F Owner amendment automated gate — PASS 2026-10-06:** the amendment is implemented on exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`. Windows FULL #1578 attempt 2 passed core 25/25, kernel-native 47/47 and desktop 104/104, including canonical documentation/Product Browser verification. The sole remaining product gate is the revised Owner Windows PASS in `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md`; PM-04 must not close before that explicit PASS.
+**PM-04F final acceptance — PASS 2026-10-06:** the amendment is implemented on exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`. Windows FULL #1578 attempt 2 passed core 25/25, kernel-native 47/47 and desktop 104/104, including canonical documentation/Product Browser verification. The Owner then executed the supported Windows acceptance workflow on that exact runtime candidate and reported PASS with no errors. PM-04 product acceptance is complete; production mutation authority is closed. PM-05/PM-06 remain separately gated.
 
 ## Documentation Impact
 

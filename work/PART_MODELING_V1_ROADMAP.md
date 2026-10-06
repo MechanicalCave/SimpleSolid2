@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 ACTIVE  
-**Version:** 1.25  
-**Owner acceptance:** 2026-10-06 — exact PM-04 Axis / Revolve Work Contract accepted; v1.25 is activation-state synchronization only  
-**Previous accepted version:** 1.24 — 2026-10-05  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 COMPLETED — PASS; NO LATER PACKAGE ACTIVE  
+**Version:** 1.26  
+**Owner acceptance:** 2026-10-06 — PM-04 final Windows PASS; v1.26 is completion-state synchronization only  
+**Previous accepted version:** 1.25 — 2026-10-06  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-04F — documentation / Product Browser / Owner Windows acceptance under `work/PM-04_AXIS_REVOLVE.md`  
+**Current completed checkpoint:** PM-04 — final Owner Windows acceptance PASS 2026-10-06; no later production package is active  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -128,7 +128,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 4 | **PM-02P — Body Semantic Topology Evidence Gate** | prove complete Face/Edge/Vertex accounting, carrier Surface/Curve/Point semantics, deterministic planar frames, split/merge/delete behavior and prospective dynamic Sketch support before production schema/API | **COMPLETED — PASS; runtime FULL #1387; Owner accepted D2 synthesis 2026-10-04** |
 | 5 | **PM-02 — Body Semantic Topology / Face-Supported Sketch** | production semantic topology catalog and picking plus Sketch/Profile on arbitrary resolved planar Body surfaces, reusing PM-01 Extrude Add/Cut | **COMPLETED — PASS; runtime FULL #1473, docs #1474, Owner final manual Windows PASS 2026-10-05** |
 | 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **COMPLETED — PASS; Owner final Windows PASS 2026-10-05; translucent Origin/Datum plane fill deferred as PM-06 presentation polish** |
-| 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | **ACTIVE — Owner accepted 2026-10-06; exact contract `work/PM-04_AXIS_REVOLVE.md`** |
+| 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | **COMPLETED — PASS; runtime FULL #1578 attempt 2; Owner final Windows PASS 2026-10-06** |
 | 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete edge-feature lifecycle with lineage/refine handling and repair | future separate Work Contract |
 | 9 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
 
@@ -494,7 +494,7 @@ Projection is not a prerequisite for Datum and remains separately gated.
 
 ## 15. PM-04 — Axis / Revolve
 
-**Status:** ACTIVE — Owner accepted the exact bounded Work Contract on 2026-10-06.
+**Status:** COMPLETED — PASS; Owner final Windows acceptance 2026-10-06.
 
 Active authority:
 
@@ -516,7 +516,9 @@ PM-04D Revolve draft / Operations / Command Line / preview is **COMPLETED — PA
 
 PM-04E integrated lifecycle / repair / persistence is **COMPLETED — PASS**. E1 exact candidate `dad92ce54fb0cf69ae96b7210d5f49bfce3f9402` passed Windows FULL #1560 and merged as `a559f7b2d6a667e4d4b34cbfd7af6f2d93cd65e1`; E2 exact candidate `bdf87a29b5cdc27c608023af863e32c44dc55ef1` passed Windows FULL #1562 and merged as `e9a1056da4ec3639458aa1cdf4faacfc1621fcc9`; E3 exact candidate `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` passed Windows FULL #1563 and merged as `1a7e1228a91b23f89bf13f6bb5c07c8abe9afae3`. Completion evidence: `work/PM-04E_REVOLVE_LIFECYCLE_PERSISTENCE_COMPLETION.md`.
 
-Current implementation checkpoint is **PM-04F — documentation / Product Browser / Owner Windows acceptance**. Automated/documentation closure is PASS: the latest runtime-affecting candidate `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` passed Windows FULL #1563, and the final docs/Product Browser candidate `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` passed exact-head Windows DOCS #1565 and merged as `72c40b8cfb39ea63859d5485f80a8adfbba35094`. The only remaining PM-04 gate is explicit Owner PASS for `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md`. Datum Axis, Projection and later packages remain separately gated.
+PM-04F Axis-designation remediation / documentation / final acceptance is **COMPLETED — PASS**. Exact final runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2 with core 25/25, kernel-native 47/47 and desktop 104/104, including canonical documentation/Product Browser verification. The Owner executed the supported Windows acceptance workflow on 2026-10-06 and reported PASS with no errors. Completion evidence is recorded in `work/PM-04_FINAL_ACCEPTANCE_MATRIX.md`.
+
+PM-04 production mutation authority is closed. PM-05 Edge Features is next in roadmap order but remains **NOT ACTIVE** until its own bounded Work Contract is explicitly Owner-accepted and activated. Datum Axis, Projection and PM-06 remain separately gated.
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 

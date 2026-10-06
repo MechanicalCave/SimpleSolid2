@@ -1,6 +1,6 @@
 # PM-04F — Automated Acceptance Matrix
 
-**Status:** AUTOMATED PASS — OWNER WINDOWS PENDING  
+**Status:** COMPLETED — PASS  
 **Parent Work Contract:** `work/PM-04_AXIS_REVOLVE.md`  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
 **Date:** 2026-10-06
@@ -9,7 +9,7 @@
 
 This matrix closes the automated-evidence side of the accepted PM-04 Axis / Revolve package without redefining product or architecture semantics.
 
-PM-04A through PM-04E are already merged and exact-head gated. Owner pre-close review accepted a bounded Axis-designation UX amendment on 2026-10-06. That amendment is now implemented and exact-head gated: final runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2. The only remaining PM-04F product gate is explicit Owner Windows PASS.
+PM-04A through PM-04E are already merged and exact-head gated. Owner pre-close review accepted a bounded Axis-designation UX amendment on 2026-10-06. That amendment is now implemented and exact-head gated: final runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2. The Owner subsequently executed the supported Windows workflow on the exact runtime candidate and reported PASS with no errors. PM-04F product acceptance is complete.
 
 ## Superseding PM-04F Owner amendment
 
@@ -34,7 +34,7 @@ Closure evidence now proves contextual Line Axis designation, atomic Line+Axis a
 | PM-04F docs | `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` | Windows DOCS #1565 PASS | `72c40b8cfb39ea63859d5485f80a8adfbba35094` | internal + PL/EN Product + generated Browser |
 | PM-04F final automated | `8d6f082137a573aab08a4eee3b383a9923d98a49` | Windows FULL #1578 attempt 2 PASS — core 25/25, kernel-native 47/47, desktop 104/104 | pending merge | final Axis-designation runtime/docs candidate |
 | PM-04F Axis-designation amendment | `8d6f082137a573aab08a4eee3b383a9923d98a49` | implementation + exact-head FULL #1578 attempt 2 PASS | pending merge | `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` |
-| PM-04F Owner Windows | `8d6f082137a573aab08a4eee3b383a9923d98a49` | manual PASS required | pending Owner | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
+| PM-04F Owner Windows | `8d6f082137a573aab08a4eee3b383a9923d98a49` | Owner manual Windows PASS — 2026-10-06 | PASS | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
 
 ## Contract matrix
 
@@ -91,7 +91,7 @@ Closure evidence now proves contextual Line Axis designation, atomic Line+Axis a
 | PL/EN Product documentation with paired section structure | exact candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` / Windows FULL #1578 docs verification | PASS |
 | generated Product Browser freshness | exact candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`; FULL #1578 ran canonical docs generator + diff check | PASS |
 | final exact-head automated package gate | `8d6f082137a573aab08a4eee3b383a9923d98a49` / Windows FULL #1578 attempt 2 — core 25/25, kernel-native 47/47, desktop 104/104 | PASS |
-| Owner Windows workflow | `8d6f082137a573aab08a4eee3b383a9923d98a49` | **PENDING OWNER** |
+| Owner Windows workflow | `8d6f082137a573aab08a4eee3b383a9923d98a49` | **PASS — 2026-10-06** |
 
 ## Documentation closure requirements
 
@@ -110,24 +110,22 @@ The PM-04F docs candidate must describe current state, not implementation histor
 
 The Product Browser is generated from canonical Markdown and must not be edited as an independent source.
 
-## Remaining PM-04F gates
+## PM-04F completion result
 
-Automated PM-04F acceptance is complete on exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`.
+PM-04F is **COMPLETED — PASS**.
 
-Windows FULL #1578 attempt 2 passed:
-- core-only: 25/25;
-- kernel-native: 47/47;
-- desktop FULL: 104/104;
-- documentation dispatcher, canonical Product Browser regeneration/diff verification, FAST/SUBSYSTEM selector checks, SR-02 latency evidence and CI-04 warm/comparative evidence all passed.
+Accepted final evidence:
 
-The first #1578 attempt failed only during self-hosted runner action download (`launch.actions.githubusercontent.com:443`) before checkout/build/test; the unchanged exact SHA passed attempt 2. Earlier #1577 exposed and correctly rejected a test-only private-API call; the regression was changed to exercise the public Tree -> Edit Sketch surface before this final gate.
+- runtime/docs authority: `8d6f082137a573aab08a4eee3b383a9923d98a49`;
+- Windows FULL #1578 attempt 2: core 25/25, kernel-native 47/47, desktop FULL 104/104;
+- canonical internal + PL/EN Product documentation and generated Product Browser verification: PASS;
+- Owner supported-Windows acceptance: **PASS — 2026-10-06**, no errors reported.
 
-Remaining mandatory sequence:
+The first #1578 attempt was infrastructure-only and failed before checkout/build/test while downloading a GitHub action; the unchanged exact SHA passed attempt 2. Earlier #1577 correctly caught a test-only private-API use and the regression was repaired to exercise the public Tree -> Edit Sketch workflow before the accepted FULL.
 
-1. execute `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` on exact runtime candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`;
-2. record explicit Owner PASS or FAIL;
-3. only after Owner PASS, merge/close PM-04 implementation and perform governance closeout;
-4. PM-05 and PM-06 remain inactive until PM-04 closeout.
+Work-only closure run #1579 was cancelled twice while the self-hosted runner could not resolve/download `actions/checkout@v4` from `launch.actions.githubusercontent.com:443`. Those cancellations executed no governance/documentation invariant and have no product-evidence meaning. A successful final work-only closure gate remains required for the PR merge; it does not replace or invalidate the accepted runtime authority above.
+
+PM-05 and PM-06 remain inactive pending their own accepted authority.
 
 ## Documentation impact
 
