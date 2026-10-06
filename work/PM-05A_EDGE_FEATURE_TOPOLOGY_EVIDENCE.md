@@ -3,8 +3,8 @@
 **Status:** EVIDENCE PASS — OWNER D2 REVIEW REQUIRED  
 **Authority:** `work/PM-05_EDGE_FEATURES.md` §15 / §26 PM-05A  
 **Baseline:** PM-05 activation `7efc7aa3564be1bb1c5e1afdf30d99e6b4cc5425`  
-**Final evidence candidate:** `be3a4830b9a7ea263a7c17a649b251138050db3a`  
-**Windows FULL:** #1603 — PASS  
+**Final evidence candidate:** `c70980d63d836ea54d1f88be29082023e44b1c38`  
+**Windows FULL:** #1605 — PASS  
 **Production mutation:** PM-05B+ remains BLOCKED pending explicit Owner acceptance of the conclusions in this report
 
 ## 1. Purpose
@@ -27,7 +27,7 @@ This report proposes the D2 production decisions. Nothing below activates PM-05B
 
 ### 2.1 Exact-head verification
 
-Windows FULL #1603 on `be3a4830b9a7ea263a7c17a649b251138050db3a`:
+Windows FULL #1605 on `c70980d63d836ea54d1f88be29082023e44b1c38`:
 
 - core-only: 25/25 PASS;
 - kernel-native: 49/49 PASS;
@@ -35,6 +35,8 @@ Windows FULL #1603 on `be3a4830b9a7ea263a7c17a649b251138050db3a`:
 - FAST/SUBSYSTEM dispatcher checks: PASS;
 - architecture/kernel-boundary guards: PASS;
 - SR-02 / CI-04 evidence: PASS.
+
+The final candidate also strengthens the two PM-05A kernel-native regressions so the accepted provider conclusions are executable assertions: 12/12 normal multi-Edge cases succeed, 14/14 ordinary matrix probes preserve exact explicit membership and reverse-order result invariants, unclaimed new Faces remain zero, and the tangent fixture must expose one-authored-to-two-provider-edge expansion while the explicitly authored two-Edge chain remains exact.
 
 Earlier evidence baselines:
 
