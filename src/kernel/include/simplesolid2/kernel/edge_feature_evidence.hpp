@@ -77,6 +77,7 @@ struct EdgeFeatureProviderEvidence final {
 
     // Provider history/provenance observations for successful results.
     std::size_t new_face_count{};
+    std::size_t modified_inherited_face_count{};
     std::size_t generated_from_selected_edges_face_count{};
     std::size_t generated_from_shared_vertices_face_count{};
     std::size_t unclaimed_new_face_count{};
@@ -117,6 +118,15 @@ struct EdgeFeatureTangentChainEvidence final {
     std::size_t provider_contour_edge_count{};
     bool exact_provider_input_membership{false};
     bool build_succeeded{false};
+
+    // Same geometric tangent chain with both bounded Edges explicitly
+    // registered. This proves whether exact-input enforcement can accept the
+    // full authored contour while rejecting a silently grown partial set.
+    std::size_t full_chain_requested_edge_count{};
+    std::size_t full_chain_provider_contour_edge_count{};
+    bool full_chain_exact_provider_input_membership{false};
+    bool full_chain_build_succeeded{false};
+    bool single_and_full_same_topology_and_volume{false};
 
     friend bool operator==(
         const EdgeFeatureTangentChainEvidence&,
