@@ -751,7 +751,7 @@ Close:
 - final exact-head automated gate;
 - Owner Windows workflow.
 
-**PM-04F Owner amendment gate reset — 2026-10-06:** the pre-amendment #1563 runtime FULL and #1565 DOCS evidence remain valid historical/baseline evidence but are no longer final closure authority. Implement `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md`, then obtain a new exact-head Windows FULL, current internal + PL/EN Product docs, regenerated Product Browser/DOCS verification and the revised Owner Windows PASS before PM-04 may close.
+**PM-04F Owner amendment automated gate — PASS 2026-10-06:** the amendment is implemented on exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`. Windows FULL #1578 attempt 2 passed core 25/25, kernel-native 47/47 and desktop 104/104, including canonical documentation/Product Browser verification. The sole remaining product gate is the revised Owner Windows PASS in `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md`; PM-04 must not close before that explicit PASS.
 
 ## Documentation Impact
 

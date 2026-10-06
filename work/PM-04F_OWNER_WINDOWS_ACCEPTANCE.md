@@ -1,6 +1,6 @@
 # PM-04F — Owner Windows Acceptance
 
-**Status:** PENDING IMPLEMENTATION + OWNER  
+**Status:** READY FOR OWNER — AUTOMATED PASS  
 **Parent Work Contract:** `work/PM-04_AXIS_REVOLVE.md`  
 **Owner amendment:** `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md`  
 **Checkpoint:** PM-04F — Axis-designation remediation / documentation / Product Browser / Owner Windows acceptance  
@@ -10,11 +10,11 @@
 
 This is the final supported-Windows workflow for PM-04 after the Owner-accepted Axis-designation UX amendment.
 
-Do not execute this as final acceptance until the amendment implementation, new exact-head Windows FULL, current documentation and regenerated Product Browser have passed. Do not close PM-04 from automation alone.
+Automated prerequisites are satisfied on exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`: Windows FULL #1578 attempt 2 PASS (core 25/25, kernel-native 47/47, desktop 104/104) with current documentation and canonical Product Browser verification. This workflow is now ready for Owner execution. Do not close PM-04 from automation alone.
 
 ## Preconditions
 
-- use the exact final PM-04F candidate identified by the new Windows FULL and documentation gates;
+- use exact runtime candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` (Windows FULL #1578 attempt 2 PASS);
 - launch through the supported repository Windows workflow;
 - start from a new disposable Project/Part;
 - keep default presentation unless a step explicitly changes visibility.

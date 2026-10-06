@@ -1,6 +1,6 @@
 # PM-04F — Automated Acceptance Matrix
 
-**Status:** PRE-AMENDMENT BASELINE PASS — SUPERSEDED FOR FINAL CLOSURE BY ACCEPTED AXIS-DESIGNATION UX AMENDMENT  
+**Status:** AUTOMATED PASS — OWNER WINDOWS PENDING  
 **Parent Work Contract:** `work/PM-04_AXIS_REVOLVE.md`  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
 **Date:** 2026-10-06
@@ -9,13 +9,13 @@
 
 This matrix closes the automated-evidence side of the accepted PM-04 Axis / Revolve package without redefining product or architecture semantics.
 
-PM-04A through PM-04E are already merged and exact-head gated. The original PM-04F documentation candidate and Owner workflow were prepared and gated, but Owner pre-close review accepted a bounded Axis-designation UX amendment on 2026-10-06. The evidence below remains authoritative for the pre-amendment implementation and unaffected PM-04 semantics; it is not sufficient for final PM-04 closure after the runtime/UI amendment.
+PM-04A through PM-04E are already merged and exact-head gated. Owner pre-close review accepted a bounded Axis-designation UX amendment on 2026-10-06. That amendment is now implemented and exact-head gated: final runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2. The only remaining PM-04F product gate is explicit Owner Windows PASS.
 
 ## Superseding PM-04F Owner amendment
 
 Normative amendment: `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` — ACCEPTED 2026-10-06.
 
-Required new closure evidence includes contextual Line Axis designation, atomic Line+Axis authoring/history, new-authoring source uniqueness with legacy duplicate-source compatibility, removal of the GUI Axis toolbar action, retained AXIS Command Line parity, refreshed documentation/Browser and a new exact-head Windows FULL plus revised Owner Windows PASS.
+Closure evidence now proves contextual Line Axis designation, atomic Line+Axis authoring/history, new-authoring source uniqueness with legacy duplicate-source compatibility, removal of the GUI Axis toolbar action, retained AXIS Command Line parity, refreshed documentation/Browser and exact-head Windows FULL. Revised Owner Windows PASS remains mandatory.
 
 ## Evidence authority
 
@@ -32,9 +32,9 @@ Required new closure evidence includes contextual Line Axis designation, atomic 
 | PM-04E2 | `bdf87a29b5cdc27c608023af863e32c44dc55ef1` | Windows FULL #1562 PASS | `e9a1056da4ec3639458aa1cdf4faacfc1621fcc9` | lifecycle / repair / Save-Reopen / cold rebuild |
 | PM-04E3 | `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` | Windows FULL #1563 PASS | `1a7e1228a91b23f89bf13f6bb5c07c8abe9afae3` | Profile-source and Sketch-support edits |
 | PM-04F docs | `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` | Windows DOCS #1565 PASS | `72c40b8cfb39ea63859d5485f80a8adfbba35094` | internal + PL/EN Product + generated Browser |
-| PM-04F final automated | `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` | exact-head Windows DOCS #1565 PASS; latest runtime-affecting candidate remains FULL #1563 PASS | `72c40b8cfb39ea63859d5485f80a8adfbba35094` | final package automated verification |
-| PM-04F Axis-designation amendment | Owner accepted 2026-10-06 | implementation + new exact-head FULL required | pending | `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` |
-| PM-04F Owner Windows | revised Owner execution after amendment | manual PASS required | pending | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
+| PM-04F final automated | `8d6f082137a573aab08a4eee3b383a9923d98a49` | Windows FULL #1578 attempt 2 PASS — core 25/25, kernel-native 47/47, desktop 104/104 | pending merge | final Axis-designation runtime/docs candidate |
+| PM-04F Axis-designation amendment | `8d6f082137a573aab08a4eee3b383a9923d98a49` | implementation + exact-head FULL #1578 attempt 2 PASS | pending merge | `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` |
+| PM-04F Owner Windows | `8d6f082137a573aab08a4eee3b383a9923d98a49` | manual PASS required | pending Owner | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
 
 ## Contract matrix
 
@@ -51,6 +51,14 @@ Required new closure evidence includes contextual Line Axis designation, atomic 
 | Axis Show/Hide independent from Sketch/modeling | PM-04B2/D2 | PASS |
 | Delete referenced Axis retains Revolve MissingAxis intent | PM-04E2 | PASS |
 | Undo restores exact AxisId and repairs consumer | PM-04E2 | PASS |
+| GUI Axis creation is contextual Line designation; no standalone Axis toolbar button | PM-04F / FULL #1578 | PASS |
+| Regular/Construction geometry role is orthogonal to Axis designation | PM-04F / FULL #1578 | PASS |
+| new Line + Axis commits atomically in one transaction / one Undo step | PM-04F / FULL #1578 | PASS |
+| one-shot Axis designation resets only after successful Line+Axis commit | PM-04F / FULL #1578 | PASS |
+| existing selected Line OFF->ON / ON->OFF preserves Line identity and exact delete/Undo semantics | PM-04F / FULL #1578 | PASS |
+| Create/Re-source rejects duplicate exact source Line with zero partial mutation | PM-04F / FULL #1578 | PASS |
+| pre-amendment duplicate-source Axis state loads without identity rewrite and UI fails closed/indeterminate | PM-04F / FULL #1578 | PASS |
+| `AXIS` Command Line remains available and shares semantic AxisDraft path | PM-04F / FULL #1578 | PASS |
 | Origin X/Y/Z direct AxisReference; no synthetic AxisId | PM-04A/C/D | PASS |
 | hidden source Axis may be runtime-emphasized without authored visibility mutation | PM-04D2 | PASS |
 | Revolve Add first Body Feature | PM-04C/D/E | PASS |
@@ -79,11 +87,11 @@ Required new closure evidence includes contextual Line Axis designation, atomic 
 | no provider identity or geometry-similarity rebinding | PM-04A/C/E | PASS |
 | exact preview delta and committed Body presentation isolation | PM-04D | PASS |
 | schema v13 reconstructs semantic intent without provider continuity | PM-04E1/E2/E3 | PASS |
-| internal as-built documentation | pre-amendment PM-04F docs `5dfd0010...` / #1565 | **UPDATE REQUIRED AFTER AMENDMENT** |
-| PL/EN Product documentation with paired section structure | pre-amendment PM-04F docs `5dfd0010...` / #1565 | **UPDATE REQUIRED AFTER AMENDMENT** |
-| generated Product Browser freshness | pre-amendment repository generator + Windows DOCS #1565 | **REGENERATE / REVERIFY AFTER AMENDMENT** |
-| final exact-head automated package gate | pre-amendment #1563 FULL / #1565 DOCS | **SUPERSEDED — NEW FULL REQUIRED** |
-| Owner Windows workflow | Owner after amendment | **PENDING IMPLEMENTATION + OWNER** |
+| internal as-built documentation | exact candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` / Windows FULL #1578 docs verification | PASS |
+| PL/EN Product documentation with paired section structure | exact candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` / Windows FULL #1578 docs verification | PASS |
+| generated Product Browser freshness | exact candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`; FULL #1578 ran canonical docs generator + diff check | PASS |
+| final exact-head automated package gate | `8d6f082137a573aab08a4eee3b383a9923d98a49` / Windows FULL #1578 attempt 2 — core 25/25, kernel-native 47/47, desktop 104/104 | PASS |
+| Owner Windows workflow | `8d6f082137a573aab08a4eee3b383a9923d98a49` | **PENDING OWNER** |
 
 ## Documentation closure requirements
 
@@ -104,18 +112,22 @@ The Product Browser is generated from canonical Markdown and must not be edited 
 
 ## Remaining PM-04F gates
 
-The pre-amendment #1563 Windows FULL and #1565 Windows DOCS remain baseline evidence. They are not the final gate after the accepted runtime/UI amendment.
+Automated PM-04F acceptance is complete on exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`.
+
+Windows FULL #1578 attempt 2 passed:
+- core-only: 25/25;
+- kernel-native: 47/47;
+- desktop FULL: 104/104;
+- documentation dispatcher, canonical Product Browser regeneration/diff verification, FAST/SUBSYSTEM selector checks, SR-02 latency evidence and CI-04 warm/comparative evidence all passed.
+
+The first #1578 attempt failed only during self-hosted runner action download (`launch.actions.githubusercontent.com:443`) before checkout/build/test; the unchanged exact SHA passed attempt 2. Earlier #1577 exposed and correctly rejected a test-only private-API call; the regression was changed to exercise the public Tree -> Edit Sketch surface before this final gate.
 
 Remaining mandatory sequence:
 
-1. implement `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` without expanding PM-04 scope;
-2. prove focused/subsystem regressions for designation semantics, transaction/history atomicity, uniqueness/legacy compatibility and GUI/CAD Input behavior;
-3. run a new exact-head Windows FULL on the final runtime candidate;
-4. update current-state internal and PL/EN Product documentation, regenerate Product Browser through the canonical generator and pass DOCS verification;
-5. execute the revised `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` on the final supported-Windows candidate;
-6. only after explicit Owner PASS, close PM-04 and advance governance.
-
-PM-05 and PM-06 remain separately gated.
+1. execute `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` on exact runtime candidate `8d6f082137a573aab08a4eee3b383a9923d98a49`;
+2. record explicit Owner PASS or FAIL;
+3. only after Owner PASS, merge/close PM-04 implementation and perform governance closeout;
+4. PM-05 and PM-06 remain inactive until PM-04 closeout.
 
 ## Documentation impact
 
