@@ -5273,6 +5273,7 @@ void CadWorkbench::setFeatureSuppressed(
     if (document_session == nullptr ||
         datum_plane_draft_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5327,6 +5328,7 @@ void CadWorkbench::deleteFeature(
     if (document_session == nullptr ||
         datum_plane_draft_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5388,6 +5390,7 @@ bool CadWorkbench::startAxisTool() {
         datum_plane_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         sketch_support_pick_active_) {
         setStatusText(
             QStringLiteral(
@@ -5436,6 +5439,7 @@ bool CadWorkbench::startAxisEdit(
         datum_plane_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
+        revolve_draft_ ||
         sketch_support_pick_active_) {
         return false;
     }
@@ -5492,6 +5496,12 @@ void CadWorkbench::deleteAxis(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+    if (revolve_draft_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel Revolve before deleting an Axis."));
         return;
     }
     if (axis_draft_) {
