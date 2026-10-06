@@ -361,6 +361,27 @@ ISolidModelingKernel::extrudePreviewMesh(
 }
 
 SolidPresentationResult
+ISolidModelingKernel::revolvePreviewMesh(
+    const AngularRevolveInput& input,
+    RuntimeSolidHandle upstream) noexcept {
+    if (!input.valid()) {
+        return {
+            SolidPresentationStatus::invalid_input,
+            {}};
+    }
+    if (input.operation ==
+            SolidBooleanOperation::cut &&
+        upstream == nullptr) {
+        return {
+            SolidPresentationStatus::invalid_input,
+            {}};
+    }
+    return {
+        SolidPresentationStatus::unsupported,
+        {}};
+}
+
+SolidPresentationResult
 ISolidModelingKernel::presentationMesh(
     RuntimeSolidHandle solid) noexcept {
     return {
