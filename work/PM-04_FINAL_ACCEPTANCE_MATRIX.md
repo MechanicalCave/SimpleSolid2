@@ -6,7 +6,7 @@
 **Owner final Windows acceptance:** PASS — 2026-10-06  
 **Owner-tested runtime/docs candidate:** `8d6f082137a573aab08a4eee3b383a9923d98a49`  
 **Final runtime workflow:** Windows FULL #1578 attempt 2 — PASS  
-**Implementation / closure PR:** #277
+**Implementation / closure PR:** #277 — merged to main as `d4389d59581dd515ac33ef4ea593bf94b40d2829`
 
 ## 1. Automated evidence
 
@@ -56,16 +56,13 @@ No functional PM-04 blocker was reported.
 
 ## 3. CI closure note
 
-Work-only bookkeeping run #1579 was cancelled twice during self-hosted runner **Set up job** while resolving/downloading `actions/checkout@v4` from `launch.actions.githubusercontent.com:443`.
+Work-only bookkeeping run #1579 was cancelled twice during self-hosted runner **Set up job** while resolving/downloading `actions/checkout@v4` from `launch.actions.githubusercontent.com:443`. Those cancellations did not reach governance/documentation invariant execution and have no product-evidence meaning.
 
-Those cancellations:
+Final work-only closure candidate `7bca07e9f165f241fc3cf8de85e00fd3ca97910d` passed Windows CLOSURE #1580: exact checkout, governance/documentation invariants and the final `windows-msvc` aggregate all succeeded.
 
-- occurred after classification selected `closure`;
-- did not reach checkout or execute governance/documentation invariants;
-- do not invalidate the accepted runtime/docs FULL evidence or Owner product PASS;
-- remain a procedural PR-merge gate: #277 must still obtain a successful work-only closure run before merge.
+PR #277 then merged to `main` as `d4389d59581dd515ac33ef4ea593bf94b40d2829`.
 
-No workflow bypass or PM-04-scoped CI rewrite is authorized by this acceptance.
+No workflow bypass or PM-04-scoped CI rewrite was used.
 
 ## 4. Completion boundary
 

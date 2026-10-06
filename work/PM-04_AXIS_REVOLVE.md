@@ -4,7 +4,7 @@
 **Owner amendment:** `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` — bounded Axis authoring UX / source-uniqueness amendment, implemented and accepted  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.26  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-03 Datum Reference Geometry / Offset Datum Plane COMPLETED — PASS  
 **Production mutation:** CLOSED — future production change requires separately accepted authority
