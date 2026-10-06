@@ -1,10 +1,14 @@
 #include <simplesolid2/kernel_occt/edge_feature_evidence.hpp>
 
+#include <BRepAlgoAPI_Cut.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
@@ -16,8 +20,10 @@
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Vertex.hxx>
+#include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
+#include <gp_Vec.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -526,6 +532,463 @@ scenarioEndpoints(
     return {};
 }
 
+[[nodiscard]] bool containsSameSubshape(
+    const TopoDS_Shape& container,
+    const TopoDS_Shape& candidate,
+    TopAbs_ShapeEnum kind) {
+    for (TopExp_Explorer explorer{container, kind};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(candidate)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename Operation>
+[[nodiscard]] std::vector<TopoDS_Edge>
+edgeHistoryDescendants(
+    Operation& operation,
+    const TopoDS_Edge& source,
+    const TopoDS_Shape& result) {
+    std::vector<TopoDS_Edge> descendants;
+
+    const auto append_edges =
+        [&descendants](const TopTools_ListOfShape& shapes) {
+            for (TopTools_ListOfShape::Iterator it{shapes};
+                 it.More();
+                 it.Next()) {
+                const auto& shape = it.Value();
+                if (shape.ShapeType() == TopAbs_EDGE) {
+                    appendUnique(
+                        descendants,
+                        TopoDS::Edge(shape));
+                }
+            }
+        };
+
+    append_edges(operation.Modified(source));
+    append_edges(operation.Generated(source));
+
+    if (!operation.IsDeleted(source) &&
+        containsSameSubshape(
+            result,
+            source,
+            TopAbs_EDGE)) {
+        appendUnique(descendants, source);
+    }
+
+    descendants.erase(
+        std::remove_if(
+            descendants.begin(),
+            descendants.end(),
+            [&result](const TopoDS_Edge& edge) {
+                return !containsSameSubshape(
+                    result,
+                    edge,
+                    TopAbs_EDGE);
+            }),
+        descendants.end());
+    return descendants;
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+referenceStatus(std::size_t candidate_count) noexcept {
+    if (candidate_count == 0U) {
+        return kernel::ReferenceStatus::missing;
+    }
+    if (candidate_count == 1U) {
+        return kernel::ReferenceStatus::resolved;
+    }
+    return kernel::ReferenceStatus::ambiguous;
+}
+
+struct TangentFixture final {
+    TopoDS_Shape shape;
+    TopoDS_Edge selected_edge;
+};
+
+[[nodiscard]] std::optional<TangentFixture>
+buildTangentFixture() {
+    // Evidence-only fixture: the front top boundary is deliberately split into
+    // two collinear segments. It is not proposed as a durable semantic Edge
+    // model; it exists only to observe whether the native edge-feature
+    // provider silently grows one registered Edge into a tangent contour.
+    BRepBuilderAPI_MakePolygon polygon;
+    polygon.Add(gp_Pnt{0.0, 0.0, 0.0});
+    polygon.Add(gp_Pnt{20.0, 0.0, 0.0});
+    polygon.Add(gp_Pnt{40.0, 0.0, 0.0});
+    polygon.Add(gp_Pnt{40.0, 30.0, 0.0});
+    polygon.Add(gp_Pnt{0.0, 30.0, 0.0});
+    polygon.Close();
+    if (!polygon.IsDone()) {
+        return std::nullopt;
+    }
+
+    BRepBuilderAPI_MakeFace face{polygon.Wire()};
+    if (!face.IsDone()) {
+        return std::nullopt;
+    }
+
+    BRepPrimAPI_MakePrism prism{
+        face.Face(),
+        gp_Vec{0.0, 0.0, box_z}};
+    const auto shape = prism.Shape();
+    if (shape.IsNull()) {
+        return std::nullopt;
+    }
+
+    const auto selected =
+        findEdgeByEndpoints(
+            shape,
+            {
+                {0.0, 0.0, box_z},
+                {20.0, 0.0, box_z},
+            });
+    if (!selected) {
+        return std::nullopt;
+    }
+
+    return TangentFixture{
+        shape,
+        *selected};
+}
+
+[[nodiscard]] kernel::EdgeFeatureTangentChainEvidence
+buildTangentChainEvidence(
+    kernel::EdgeFeatureEvidenceOperation operation) {
+    kernel::EdgeFeatureTangentChainEvidence evidence;
+    evidence.operation = operation;
+
+    const auto fixture = buildTangentFixture();
+    if (!fixture) {
+        evidence.source_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+
+    evidence.source_shape =
+        shapeEvidence(fixture->shape);
+    evidence.requested_edge_count = 1U;
+
+    const auto run =
+        execute(
+            operation,
+            fixture->shape,
+            {fixture->selected_edge},
+            normal_parameter);
+
+    evidence.provider_contour_count =
+        run.contour_count;
+    evidence.provider_contour_edge_count =
+        run.contour_edge_count;
+    evidence.exact_provider_input_membership =
+        run.exact_membership;
+    evidence.build_succeeded =
+        run.build_succeeded;
+    return evidence;
+}
+
+[[nodiscard]] kernel::EdgeFeatureUpstreamEvidence
+buildDimensionChangeEvidence(
+    kernel::EdgeFeatureEvidenceOperation operation) {
+    kernel::EdgeFeatureUpstreamEvidence evidence;
+    evidence.operation = operation;
+    evidence.scenario =
+        kernel::EdgeFeatureUpstreamScenario::dimension_change;
+
+    BRepPrimAPI_MakeBox before{
+        40.0,
+        20.0,
+        10.0};
+    BRepPrimAPI_MakeBox after{
+        55.0,
+        25.0,
+        10.0};
+
+    const auto before_shape = before.Shape();
+    const auto after_shape = after.Shape();
+    evidence.source_shape =
+        shapeEvidence(before_shape);
+    evidence.edited_shape =
+        shapeEvidence(after_shape);
+
+    const auto before_edge =
+        findEdgeByEndpoints(
+            before_shape,
+            {
+                {0.0, 0.0, 10.0},
+                {40.0, 0.0, 10.0},
+            });
+    const auto after_edge =
+        findEdgeByEndpoints(
+            after_shape,
+            {
+                {0.0, 0.0, 10.0},
+                {55.0, 0.0, 10.0},
+            });
+
+    evidence.current_edge_candidate_count =
+        after_edge ? 1U : 0U;
+    evidence.reference_status =
+        referenceStatus(
+            evidence.current_edge_candidate_count);
+
+    if (!before_edge || !after_edge) {
+        return evidence;
+    }
+
+    evidence.downstream_attempted = true;
+    const auto run =
+        execute(
+            operation,
+            after_shape,
+            {*after_edge},
+            1.0);
+    evidence.downstream_succeeded =
+        run.build_succeeded;
+    evidence.exact_provider_input_membership =
+        run.exact_membership;
+    return evidence;
+}
+
+[[nodiscard]] kernel::EdgeFeatureUpstreamEvidence
+buildBooleanUpstreamEvidence(
+    kernel::EdgeFeatureEvidenceOperation operation,
+    kernel::EdgeFeatureUpstreamScenario scenario) {
+    kernel::EdgeFeatureUpstreamEvidence evidence;
+    evidence.operation = operation;
+    evidence.scenario = scenario;
+
+    BRepPrimAPI_MakeBox base{
+        40.0,
+        20.0,
+        10.0};
+    const auto source = base.Shape();
+    evidence.source_shape =
+        shapeEvidence(source);
+
+    const auto source_edge =
+        findEdgeByEndpoints(
+            source,
+            {
+                {0.0, 0.0, 10.0},
+                {40.0, 0.0, 10.0},
+            });
+    if (!source_edge) {
+        evidence.edited_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+
+    gp_Pnt tool_origin;
+    double tool_dx{};
+    double tool_dy{};
+    constexpr double tool_dz = 10.0;
+
+    switch (scenario) {
+    case kernel::EdgeFeatureUpstreamScenario::unchanged:
+        tool_origin = gp_Pnt{30.0, 10.0, 5.0};
+        tool_dx = 5.0;
+        tool_dy = 5.0;
+        break;
+    case kernel::EdgeFeatureUpstreamScenario::trim:
+        tool_origin = gp_Pnt{30.0, -5.0, 5.0};
+        tool_dx = 15.0;
+        tool_dy = 10.0;
+        break;
+    case kernel::EdgeFeatureUpstreamScenario::split:
+        tool_origin = gp_Pnt{15.0, -5.0, 5.0};
+        tool_dx = 10.0;
+        tool_dy = 10.0;
+        break;
+    case kernel::EdgeFeatureUpstreamScenario::remove:
+        tool_origin = gp_Pnt{-5.0, -5.0, 5.0};
+        tool_dx = 50.0;
+        tool_dy = 10.0;
+        break;
+    case kernel::EdgeFeatureUpstreamScenario::dimension_change:
+        return buildDimensionChangeEvidence(operation);
+    }
+
+    BRepPrimAPI_MakeBox tool{
+        tool_origin,
+        tool_dx,
+        tool_dy,
+        tool_dz};
+
+    BRepAlgoAPI_Cut cut{
+        source,
+        tool.Shape()};
+    cut.SetFuzzyValue(0.0);
+    cut.Build();
+    if (!cut.IsDone() ||
+        cut.Shape().IsNull()) {
+        evidence.edited_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+
+    const auto result =
+        cut.Shape();
+    evidence.edited_shape =
+        shapeEvidence(result);
+
+    const auto descendants =
+        edgeHistoryDescendants(
+            cut,
+            *source_edge,
+            result);
+    evidence.current_edge_candidate_count =
+        descendants.size();
+    evidence.reference_status =
+        referenceStatus(descendants.size());
+
+    if (descendants.size() != 1U) {
+        return evidence;
+    }
+
+    evidence.downstream_attempted = true;
+    const auto run =
+        execute(
+            operation,
+            result,
+            {descendants.front()},
+            1.0);
+    evidence.downstream_succeeded =
+        run.build_succeeded;
+    evidence.exact_provider_input_membership =
+        run.exact_membership;
+    return evidence;
+}
+
+template <typename FirstOperation, typename SecondOperation>
+[[nodiscard]] kernel::EdgeFeatureChainingEvidence
+buildChainingEvidenceTyped(
+    kernel::EdgeFeatureEvidenceOperation first_kind,
+    kernel::EdgeFeatureEvidenceOperation second_kind) {
+    kernel::EdgeFeatureChainingEvidence evidence;
+    evidence.first_operation = first_kind;
+    evidence.second_operation = second_kind;
+
+    BRepPrimAPI_MakeBox box{
+        box_x,
+        box_y,
+        box_z};
+    const auto source = box.Shape();
+    evidence.source_shape =
+        shapeEvidence(source);
+
+    const auto source_edge =
+        findEdgeByEndpoints(
+            source,
+            {
+                {0.0, 0.0, box_z},
+                {box_x, 0.0, box_z},
+            });
+    if (!source_edge) {
+        return evidence;
+    }
+
+    FirstOperation first{source};
+    first.Add(normal_parameter, *source_edge);
+    first.Build();
+    if (!first.IsDone() ||
+        first.Shape().IsNull()) {
+        return evidence;
+    }
+
+    const auto first_result =
+        first.Shape();
+    evidence.first_result_shape =
+        shapeEvidence(first_result);
+    if (!evidence.first_result_shape.ok()) {
+        return evidence;
+    }
+
+    const auto generated_faces =
+        facesFromList(
+            first.Generated(*source_edge));
+    evidence.first_generated_face_count =
+        generated_faces.size();
+
+    TopTools_IndexedDataMapOfShapeListOfShape
+        edge_faces;
+    TopExp::MapShapesAndAncestors(
+        first_result,
+        TopAbs_EDGE,
+        TopAbs_FACE,
+        edge_faces);
+
+    std::vector<TopoDS_Edge> candidates;
+    for (const auto& face : generated_faces) {
+        for (TopExp_Explorer explorer{
+                 face,
+                 TopAbs_EDGE};
+             explorer.More();
+             explorer.Next()) {
+            const auto edge =
+                TopoDS::Edge(explorer.Current());
+            if (BRep_Tool::Degenerated(edge)) {
+                continue;
+            }
+
+            const auto index =
+                edge_faces.FindIndex(edge);
+            if (index <= 0) {
+                continue;
+            }
+
+            const auto& ancestors =
+                edge_faces.FindFromIndex(index);
+            if (ancestors.Extent() != 2) {
+                continue;
+            }
+            appendUnique(candidates, edge);
+        }
+    }
+
+    evidence.generated_boundary_edge_count =
+        candidates.size();
+
+    constexpr double second_parameter = 0.75;
+    for (const auto& candidate : candidates) {
+        ++evidence.second_operation_attempt_count;
+        const auto run =
+            runOperation<SecondOperation>(
+                first_result,
+                {candidate},
+                second_parameter);
+        if (run.build_succeeded) {
+            ++evidence.second_operation_success_count;
+        }
+    }
+
+    return evidence;
+}
+
+[[nodiscard]] kernel::EdgeFeatureChainingEvidence
+buildChainingEvidence(
+    kernel::EdgeFeatureEvidenceOperation first,
+    kernel::EdgeFeatureEvidenceOperation second) {
+    if (first ==
+            kernel::EdgeFeatureEvidenceOperation::fillet &&
+        second ==
+            kernel::EdgeFeatureEvidenceOperation::chamfer) {
+        return buildChainingEvidenceTyped<
+            BRepFilletAPI_MakeFillet,
+            BRepFilletAPI_MakeChamfer>(
+                first,
+                second);
+    }
+    return buildChainingEvidenceTyped<
+        BRepFilletAPI_MakeChamfer,
+        BRepFilletAPI_MakeFillet>(
+            first,
+            second);
+}
+
 [[nodiscard]] bool sameSignature(
     const std::optional<
         kernel::EdgeFeatureTopologySignature>& first,
@@ -714,6 +1177,44 @@ buildEdgeFeatureProviderMatrixEvidence() noexcept {
     }
 
     return matrix;
+}
+
+kernel::EdgeFeatureLifecycleEvidence
+buildEdgeFeatureLifecycleEvidence() noexcept {
+    kernel::EdgeFeatureLifecycleEvidence evidence;
+
+    try {
+        for (const auto operation : {
+                 kernel::EdgeFeatureEvidenceOperation::fillet,
+                 kernel::EdgeFeatureEvidenceOperation::chamfer}) {
+            evidence.tangent_chain.push_back(
+                buildTangentChainEvidence(operation));
+
+            for (const auto scenario : {
+                     kernel::EdgeFeatureUpstreamScenario::dimension_change,
+                     kernel::EdgeFeatureUpstreamScenario::unchanged,
+                     kernel::EdgeFeatureUpstreamScenario::trim,
+                     kernel::EdgeFeatureUpstreamScenario::split,
+                     kernel::EdgeFeatureUpstreamScenario::remove}) {
+                evidence.upstream.push_back(
+                    buildBooleanUpstreamEvidence(
+                        operation,
+                        scenario));
+            }
+        }
+
+        evidence.chaining.push_back(
+            buildChainingEvidence(
+                kernel::EdgeFeatureEvidenceOperation::fillet,
+                kernel::EdgeFeatureEvidenceOperation::chamfer));
+        evidence.chaining.push_back(
+            buildChainingEvidence(
+                kernel::EdgeFeatureEvidenceOperation::chamfer,
+                kernel::EdgeFeatureEvidenceOperation::fillet));
+        return evidence;
+    } catch (...) {
+        return evidence;
+    }
 }
 
 } // namespace simplesolid2::kernel_occt
