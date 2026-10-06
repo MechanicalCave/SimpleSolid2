@@ -42,6 +42,8 @@
 #include <GeomAbs_CurveType.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <BRepSweep_Prism.hxx>
+#include <BRepSweep_Revol.hxx>
+#include <gp_Ax1.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -74,6 +76,160 @@ constexpr double full_turn =
             frame.u_axis.z * point.u +
             frame.v_axis.z * point.v,
     };
+}
+
+[[nodiscard]] kernel::Point3
+add3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.x + second.x,
+        first.y + second.y,
+        first.z + second.z};
+}
+
+[[nodiscard]] kernel::Point3
+subtract3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.x - second.x,
+        first.y - second.y,
+        first.z - second.z};
+}
+
+[[nodiscard]] kernel::Point3
+scale3(
+    const kernel::Point3& value,
+    double scale) noexcept {
+    return {
+        value.x * scale,
+        value.y * scale,
+        value.z * scale};
+}
+
+[[nodiscard]] double
+dot3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return first.x * second.x +
+           first.y * second.y +
+           first.z * second.z;
+}
+
+[[nodiscard]] kernel::Point3
+cross3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.y * second.z -
+            first.z * second.y,
+        first.z * second.x -
+            first.x * second.z,
+        first.x * second.y -
+            first.y * second.x};
+}
+
+[[nodiscard]] std::optional<kernel::Point3>
+unit3(const kernel::Point3& value) noexcept {
+    const double squared =
+        dot3(value, value);
+    if (!std::isfinite(squared) ||
+        !(squared > 0.0)) {
+        return std::nullopt;
+    }
+    const double length =
+        std::sqrt(squared);
+    if (!std::isfinite(length) ||
+        !(length > 0.0)) {
+        return std::nullopt;
+    }
+    return scale3(value, 1.0 / length);
+}
+
+[[nodiscard]] kernel::Point3
+rotateVectorAroundAxis(
+    const kernel::Point3& value,
+    const kernel::Point3& unit_axis,
+    double angle) noexcept {
+    const double cosine = std::cos(angle);
+    const double sine = std::sin(angle);
+    return add3(
+        add3(
+            scale3(value, cosine),
+            scale3(
+                cross3(unit_axis, value),
+                sine)),
+        scale3(
+            unit_axis,
+            dot3(unit_axis, value) *
+                (1.0 - cosine)));
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+rotatedFrame(
+    const kernel::Frame3& source,
+    const kernel::Axis3& axis,
+    double angle) noexcept {
+    const auto unit_axis =
+        unit3(axis.direction);
+    if (!source.valid() ||
+        !axis.valid() ||
+        !unit_axis ||
+        !std::isfinite(angle)) {
+        return std::nullopt;
+    }
+
+    kernel::Frame3 result;
+    result.origin =
+        add3(
+            axis.origin,
+            rotateVectorAroundAxis(
+                subtract3(
+                    source.origin,
+                    axis.origin),
+                *unit_axis,
+                angle));
+    result.u_axis =
+        rotateVectorAroundAxis(
+            source.u_axis,
+            *unit_axis,
+            angle);
+    result.v_axis =
+        rotateVectorAroundAxis(
+            source.v_axis,
+            *unit_axis,
+            angle);
+    result.normal =
+        rotateVectorAroundAxis(
+            source.normal,
+            *unit_axis,
+            angle);
+    return result.valid()
+        ? std::optional<kernel::Frame3>{
+              result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::optional<kernel::PlanarProfileInput>
+rotatedProfile(
+    const kernel::PlanarProfileInput& source,
+    const kernel::Axis3& axis,
+    double angle) noexcept {
+    const auto frame =
+        rotatedFrame(
+            source.frame,
+            axis,
+            angle);
+    if (!frame) {
+        return std::nullopt;
+    }
+    auto result = source;
+    result.frame = *frame;
+    return result.valid()
+        ? std::optional<kernel::PlanarProfileInput>{
+              std::move(result)}
+        : std::nullopt;
 }
 
 [[nodiscard]] kernel::Point2 linePoint(
