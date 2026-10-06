@@ -1674,6 +1674,7 @@ void CadWorkbench::buildUi() {
             refreshPropertiesContext(primary);
             tryCreateSketchFromSupport(primary);
             tryStageDatumPlaneFromSupport(primary);
+            tryStageRevolveAxisFromBuiltin(primary);
         });
 
     viewport_controller_->setBodyTopologySelectionChangedHandler(
@@ -1785,6 +1786,7 @@ void CadWorkbench::buildUi() {
             syncSketchInteractionUi();
             if (semantic) {
                 tryCompleteExtrudeProfilePick();
+                tryStageRevolveProfile(semantic);
             }
             syncActionState();
         });
@@ -1809,6 +1811,7 @@ void CadWorkbench::buildUi() {
                 properties_stack_->setCurrentWidget(
                     document_properties_page_);
             }
+            tryStageRevolveAxisFromAuthored(semantic);
             syncActionState();
         });
 
@@ -1865,6 +1868,7 @@ void CadWorkbench::buildUi() {
             syncSketchInteractionUi();
             if (semantic) {
                 tryCompleteExtrudeProfilePick();
+                tryStageRevolveProfile(semantic);
             }
             syncActionState();
         });
@@ -1914,8 +1918,21 @@ void CadWorkbench::buildUi() {
         });
     tree_controller_->setFeatureEditHandler(
         [this](part::FeatureId feature_id) {
-            static_cast<void>(
-                startExtrudeEdit(feature_id));
+            if (document_session_ != nullptr) {
+                const auto* feature =
+                    document_session_->document()
+                        .findFeature(feature_id);
+                if (feature != nullptr &&
+                    std::holds_alternative<
+                        part::RevolveFeature>(
+                        feature->definition)) {
+                    static_cast<void>(
+                        startRevolveEdit(feature_id));
+                } else {
+                    static_cast<void>(
+                        startExtrudeEdit(feature_id));
+                }
+            }
         });
     tree_controller_->setFeatureSuppressionHandler(
         [this](
@@ -4184,10 +4201,23 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
-            if (selected_feature_id_) {
-                static_cast<void>(
-                    startExtrudeEdit(
-                        *selected_feature_id_));
+            if (selected_feature_id_ &&
+                document_session_ != nullptr) {
+                const auto feature_id =
+                    *selected_feature_id_;
+                const auto* feature =
+                    document_session_->document()
+                        .findFeature(feature_id);
+                if (feature != nullptr &&
+                    std::holds_alternative<
+                        part::RevolveFeature>(
+                        feature->definition)) {
+                    static_cast<void>(
+                        startRevolveEdit(feature_id));
+                } else {
+                    static_cast<void>(
+                        startExtrudeEdit(feature_id));
+                }
             }
         });
     QObject::connect(
@@ -4997,6 +5027,7 @@ bool CadWorkbench::activateDocument(
     clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
+    clearRevolveRuntimeContext();
     clearSketchRuntimeContext();
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clear();
@@ -5020,6 +5051,7 @@ void CadWorkbench::deactivateDocument() {
     clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
+    clearRevolveRuntimeContext();
     clearSketchRuntimeContext();
     document_session_ = nullptr;
     workspace_root_.clear();
@@ -9908,6 +9940,9 @@ void CadWorkbench::refreshActiveContext() {
     if (extrude_draft_) {
         refreshExtrudePreview();
     }
+    if (revolve_draft_) {
+        refreshRevolvePreview();
+    }
     if (selected_axis_id_) {
         refreshAxisProperties(
             *selected_axis_id_);
@@ -9929,6 +9964,7 @@ void CadWorkbench::clearActiveContext() {
     clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
+    clearRevolveRuntimeContext();
     clearSketchRuntimeContext();
     active_path_->setText(QStringLiteral("No Part is open."));
     active_id_->clear();
