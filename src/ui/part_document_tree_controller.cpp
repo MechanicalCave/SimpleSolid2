@@ -621,24 +621,11 @@ bool PartDocumentTreeController::eventFilter(
                     return true;
                 }
                 if (axisIdForItem(*item)) {
-            tree_->setCurrentItem(item);
-            updateVisibilityActions();
-            QMenu menu{tree_};
-            menu.addAction(edit_axis_action_);
-            if (show_action_->isEnabled() ||
-                hide_action_->isEnabled()) {
-                menu.addSeparator();
-                menu.addAction(show_action_);
-                menu.addAction(hide_action_);
-            }
-            menu.addSeparator();
-            menu.addAction(delete_axis_action_);
-            menu.exec(
-                tree_->viewport()->mapToGlobal(
-                    position));
-            return;
-        }
-        if (datumIdForItem(*item)) {
+                    tree_->setCurrentItem(item);
+                    requestAxisEdit(*item);
+                    return true;
+                }
+                if (datumIdForItem(*item)) {
                     tree_->setCurrentItem(item);
                     requestDatumEdit(*item);
                     return true;
@@ -674,6 +661,7 @@ void PartDocumentTreeController::clear() {
     session_ = nullptr;
     feature_evaluations_.clear();
     datum_evaluations_.clear();
+    axis_evaluations_.clear();
     body_status_ =
         part::BodyEvaluationStatus::empty;
     tree_->clear();
@@ -1954,6 +1942,24 @@ void PartDocumentTreeController::showContextMenu(
                     ? unsuppress_feature_action_
                     : suppress_feature_action_);
             menu.addAction(delete_feature_action_);
+            menu.exec(
+                tree_->viewport()->mapToGlobal(
+                    position));
+            return;
+        }
+        if (axisIdForItem(*item)) {
+            tree_->setCurrentItem(item);
+            updateVisibilityActions();
+            QMenu menu{tree_};
+            menu.addAction(edit_axis_action_);
+            if (show_action_->isEnabled() ||
+                hide_action_->isEnabled()) {
+                menu.addSeparator();
+                menu.addAction(show_action_);
+                menu.addAction(hide_action_);
+            }
+            menu.addSeparator();
+            menu.addAction(delete_axis_action_);
             menu.exec(
                 tree_->viewport()->mapToGlobal(
                     position));
