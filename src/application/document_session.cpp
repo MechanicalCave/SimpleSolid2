@@ -49,6 +49,24 @@ part::PartSketch* findSketch(
         : &*found;
 }
 
+part::PartAxis* findAxis(
+    part::PartAuthoredState& state,
+    part::AxisId id) noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found =
+        std::find_if(
+            state.axes.begin(),
+            state.axes.end(),
+            [id](const part::PartAxis& item) {
+                return item.id == id;
+            });
+    return found == state.axes.end()
+        ? nullptr
+        : &*found;
+}
+
 part::OffsetDatumPlane* findDatumPlane(
     part::PartAuthoredState& state,
     part::DatumId id) noexcept {
@@ -115,6 +133,19 @@ std::string defaultFeatureName(
     return result;
 }
 
+std::string defaultAxisName(
+    part::AxisId id) {
+    const auto serialized = id.serialized();
+    std::string result{"Axis"};
+    if (serialized.size() < 3U) {
+        result.append(
+            3U - serialized.size(),
+            '0');
+    }
+    result += serialized;
+    return result;
+}
+
 std::string defaultProfileName(
     part::ProfileId id) {
     const auto serialized = id.serialized();
@@ -126,6 +157,93 @@ std::string defaultProfileName(
     }
     result += serialized;
     return result;
+}
+
+std::string axisEvaluationMessage(
+    const part::AxisEvaluation& evaluated) {
+    using Diagnostic =
+        part::AxisEvaluationDiagnostic;
+    switch (evaluated.diagnostic) {
+    case Diagnostic::none:
+        return {};
+    case Diagnostic::invalid_reference:
+        return "Axis reference is invalid";
+    case Diagnostic::missing_axis:
+        return "Axis does not exist";
+    case Diagnostic::missing_sketch:
+        return "Axis source Sketch is missing";
+    case Diagnostic::missing_line:
+        return "Axis source Line is missing";
+    case Diagnostic::source_not_line:
+        return "Axis source identity does not identify a Sketch Line";
+    case Diagnostic::sketch_support_missing:
+        return "Axis source Sketch support is missing";
+    case Diagnostic::sketch_support_ambiguous:
+        return "Axis source Sketch support is ambiguous";
+    case Diagnostic::sketch_support_unsupported:
+        return "Axis source Sketch support is unsupported";
+    case Diagnostic::sketch_support_blocked:
+        return "Axis source Sketch support is blocked";
+    case Diagnostic::stale_part_evaluation:
+        return "Axis evaluation requires the current Part evaluation";
+    case Diagnostic::stale_datum_evaluation:
+        return "Axis evaluation requires the current Datum evaluation";
+    case Diagnostic::support_stage_unavailable:
+        return "Axis source Sketch Body stage is unavailable";
+    case Diagnostic::invalid_frame:
+        return "Axis source resolves to an invalid world frame";
+    }
+    return "Axis source could not be resolved";
+}
+
+part::AxisEvaluation evaluateAxisInDocument(
+    const part::PartDocument& document,
+    part::AxisId axis_id,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    const part::AxisReference reference{
+        part::AuthoredAxisReference{axis_id}};
+
+    const auto* axis =
+        document.findAxis(axis_id);
+    if (axis == nullptr) {
+        return part::resolveAxisReference(
+            document,
+            reference);
+    }
+
+    const auto* source =
+        document.findSketch(
+            axis->source.sketch_id);
+    if (source == nullptr ||
+        part::builtinOriginPlaneForSketchSupport(
+            source->support)) {
+        return part::resolveAxisReference(
+            document,
+            reference);
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            document,
+            modeling_kernel);
+
+    if (part::datumPlaneIdForSketchSupport(
+            source->support)) {
+        const auto datums =
+            part::evaluateDatums(
+                document,
+                evaluation);
+        return part::resolveAxisReference(
+            document,
+            reference,
+            &evaluation,
+            &datums);
+    }
+
+    return part::resolveAxisReference(
+        document,
+        reference,
+        &evaluation);
 }
 
 SketchSupportMutationResult supportMutationFailure(
@@ -374,6 +492,8 @@ DocumentSession::DocumentSession(
       saved_state_{document_.state()},
       expected_revision_{document_.revision()} {
     absorbSketchEntityIdCursors(document_.state());
+    axis_id_cursor_.preserve(
+        document_.state().next_axis_id);
     datum_id_cursor_.preserve(
         document_.state().next_datum_id);
     profile_id_cursor_.preserve(
@@ -399,6 +519,8 @@ DocumentSession::DocumentSession(
             "DocumentSession file checkpoint DocumentId mismatch"};
     }
     absorbSketchEntityIdCursors(document_.state());
+    axis_id_cursor_.preserve(
+        document_.state().next_axis_id);
     datum_id_cursor_.preserve(
         document_.state().next_datum_id);
     profile_id_cursor_.preserve(
@@ -427,6 +549,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     }
 
     applySketchEntityIdCursors(after);
+    applyAxisIdCursor(after);
     applyDatumIdCursor(after);
     applyProfileIdCursor(after);
     applyBodyFeatureIdCursors(after);
@@ -450,6 +573,10 @@ DocumentSessionResult DocumentSession::commitCommandState(
     absorbSketchEntityIdCursors(
         prepared_entity_id_cursors,
         pending.after);
+    auto prepared_axis_id_cursor =
+        axis_id_cursor_;
+    prepared_axis_id_cursor.preserve(
+        pending.after.next_axis_id);
     auto prepared_datum_id_cursor =
         datum_id_cursor_;
     prepared_datum_id_cursor.preserve(
@@ -492,6 +619,8 @@ DocumentSessionResult DocumentSession::commitCommandState(
     cursor_ = history_.size();
     sketch_entity_id_cursors_.swap(
         prepared_entity_id_cursors);
+    axis_id_cursor_ =
+        prepared_axis_id_cursor;
     datum_id_cursor_ =
         prepared_datum_id_cursor;
     profile_id_cursor_ =
@@ -2052,6 +2181,399 @@ DocumentSessionResult DocumentSession::execute(
 }
 
 
+AxisDraftEvaluationResult
+DocumentSession::evaluateAxisDraft(
+    const AxisDraft& draft,
+    kernel::ISolidModelingKernel&
+        modeling_kernel) const {
+    AxisDraftEvaluationResult result;
+    result.document_id = draft.documentId();
+    result.source_revision = draft.sourceRevision();
+    result.draft_generation = draft.generation();
+    result.mode = draft.mode();
+    result.authored_axis_id = draft.axisId();
+    result.source = draft.source();
+
+    if (documentId() != draft.documentId()) {
+        result.status =
+            AxisDraftEvaluationStatus::
+                stale_document;
+        return result;
+    }
+    if (document_.revision() !=
+        draft.sourceRevision()) {
+        result.status =
+            AxisDraftEvaluationStatus::
+                stale_revision;
+        return result;
+    }
+    if (!draft.valid() || !draft.source()) {
+        result.status =
+            AxisDraftEvaluationStatus::
+                invalid_draft;
+        return result;
+    }
+
+    auto after = document_.state();
+    applyAxisIdCursor(after);
+
+    part::AxisId target_id;
+    if (draft.mode() == AxisDraftMode::create) {
+        const auto allocated =
+            after.next_axis_id.allocate();
+        if (!allocated) {
+            result.status =
+                AxisDraftEvaluationStatus::
+                    id_exhausted;
+            return result;
+        }
+        target_id = *allocated;
+        after.axes.push_back(
+            part::PartAxis{
+                target_id,
+                defaultAxisName(target_id),
+                *draft.source(),
+                true});
+    } else {
+        const auto authored_id =
+            draft.axisId();
+        if (!authored_id) {
+            result.status =
+                AxisDraftEvaluationStatus::
+                    invalid_draft;
+            return result;
+        }
+        auto* axis =
+            findAxis(after, *authored_id);
+        if (axis == nullptr) {
+            result.status =
+                AxisDraftEvaluationStatus::
+                    missing_axis;
+            return result;
+        }
+        target_id = axis->id;
+        axis->source = *draft.source();
+    }
+
+    result.candidate_axis_id = target_id;
+
+    auto candidate =
+        part::PartDocument::restore(
+            documentId(),
+            std::move(after),
+            document_.revision());
+    if (!candidate.ok()) {
+        result.status =
+            AxisDraftEvaluationStatus::
+                invalid_candidate;
+        return result;
+    }
+
+    const auto evaluated =
+        evaluateAxisInDocument(
+            *candidate.document,
+            target_id,
+            modeling_kernel);
+    result.axis_status = evaluated.status;
+    result.axis_diagnostic = evaluated.diagnostic;
+    result.line = evaluated.line;
+    result.required_body_stage =
+        evaluated.required_body_stage;
+
+    if (evaluated.status !=
+            part::AxisEvaluationStatus::resolved ||
+        !evaluated.line ||
+        !evaluated.line->valid()) {
+        result.status =
+            AxisDraftEvaluationStatus::
+                source_unresolved;
+        result.line.reset();
+        return result;
+    }
+
+    result.status =
+        AxisDraftEvaluationStatus::ok;
+    return result;
+}
+
+CreateAxisResult DocumentSession::execute(
+    const CreateAxisCommand& command,
+    kernel::ISolidModelingKernel&
+        modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    revision_diverged,
+                "Create Axis was started from a stale DocumentRevision",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+    if (!command.source.valid()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Axis contains an invalid Sketch-Line source",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            part::AxisEvaluationDiagnostic::
+                invalid_reference,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applyAxisIdCursor(after);
+    const auto id =
+        after.next_axis_id.allocate();
+    if (!id) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "AxisId allocation space is exhausted",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    after.axes.push_back(
+        part::PartAxis{
+            *id,
+            command.name.empty()
+                ? defaultAxisName(*id)
+                : command.name,
+            command.source,
+            command.visible});
+
+    auto candidate =
+        part::PartDocument::restore(
+            documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "Create Axis produced invalid authored Part state",
+                path_,
+                part::PartCommitErrorCode::
+                    invalid_state);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluated =
+        evaluateAxisInDocument(
+            *candidate.document,
+            *id,
+            modeling_kernel);
+    if (evaluated.status !=
+            part::AxisEvaluationStatus::resolved ||
+        !evaluated.line ||
+        !evaluated.line->valid()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                axisEvaluationMessage(evaluated),
+                path_);
+        return {
+            false,
+            std::nullopt,
+            evaluated.diagnostic,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating Axis");
+    if (!committed.ok()) {
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return {
+        committed.changed,
+        *id,
+        part::AxisEvaluationDiagnostic::none,
+        DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EditAxisCommand& command,
+    kernel::ISolidModelingKernel&
+        modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Edit Axis was started from a stale DocumentRevision",
+            path_);
+    }
+    if (!command.axis_id.valid() ||
+        !command.source.valid()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Axis contains an invalid target or source",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* axis =
+        findAxis(
+            after,
+            command.axis_id);
+    if (axis == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Axis target AxisId does not exist",
+            path_);
+    }
+
+    axis->source = command.source;
+
+    auto candidate =
+        part::PartDocument::restore(
+            documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::
+                transaction_failure,
+            "Edit Axis produced invalid authored Part state",
+            path_,
+            part::PartCommitErrorCode::
+                invalid_state);
+    }
+
+    const auto evaluated =
+        evaluateAxisInDocument(
+            *candidate.document,
+            command.axis_id,
+            modeling_kernel);
+    if (evaluated.status !=
+            part::AxisEvaluationStatus::resolved ||
+        !evaluated.line ||
+        !evaluated.line->valid()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            axisEvaluationMessage(evaluated),
+            path_);
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Axis");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const SetAxisVisibilityCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Axis visibility change was started from a stale DocumentRevision",
+            path_);
+    }
+
+    std::set<part::AxisId> unique_targets;
+    for (const auto id : command.targets) {
+        if (!id.valid() ||
+            document_.findAxis(id) == nullptr) {
+            return failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Axis visibility command contains a missing or invalid AxisId",
+                path_);
+        }
+        unique_targets.insert(id);
+    }
+    if (unique_targets.empty()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Axis visibility command requires at least one AxisId",
+            path_);
+    }
+
+    auto after = document_.state();
+    for (auto& axis : after.axes) {
+        if (unique_targets.contains(axis.id)) {
+            axis.visible = command.visible;
+        }
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while changing Axis visibility");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const DeleteAxisCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Delete Axis was started from a stale DocumentRevision",
+            path_);
+    }
+    if (!command.axis_id.valid()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Delete Axis contains an invalid AxisId",
+            path_);
+    }
+
+    auto after = document_.state();
+    const auto found =
+        std::find_if(
+            after.axes.begin(),
+            after.axes.end(),
+            [&command](const part::PartAxis& axis) {
+                return axis.id ==
+                       command.axis_id;
+            });
+    if (found == after.axes.end()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Delete Axis target AxisId does not exist",
+            path_);
+    }
+
+    after.axes.erase(found);
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while deleting Axis");
+}
+
 ExtrudeDraftEvaluationResult
 DocumentSession::evaluateExtrudeDraft(
     const ExtrudeDraft& draft,
@@ -3096,6 +3618,8 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
     }
     auto adjusted_expected =
         expected_current;
+    applyAxisIdCursor(
+        adjusted_expected);
     applyDatumIdCursor(
         adjusted_expected);
     applyProfileIdCursor(
@@ -3111,6 +3635,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     auto adjusted_target = target;
     applySketchEntityIdCursors(adjusted_target);
+    applyAxisIdCursor(adjusted_target);
     applyDatumIdCursor(adjusted_target);
     applyProfileIdCursor(adjusted_target);
     applyBodyFeatureIdCursors(adjusted_target);
@@ -3128,6 +3653,8 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     expected_revision_ = document_.revision();
     absorbSketchEntityIdCursors(document_.state());
+    axis_id_cursor_.preserve(
+        document_.state().next_axis_id);
     datum_id_cursor_.preserve(
         document_.state().next_datum_id);
     profile_id_cursor_.preserve(
@@ -3182,6 +3709,12 @@ void DocumentSession::applySketchEntityIdCursors(
         hosted.model.preserveEntityIdCursor(
             found->second);
     }
+}
+
+void DocumentSession::applyAxisIdCursor(
+    part::PartAuthoredState& state) const noexcept {
+    state.next_axis_id.preserve(
+        axis_id_cursor_);
 }
 
 void DocumentSession::applyDatumIdCursor(
