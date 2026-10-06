@@ -716,11 +716,18 @@ PM-05 does not include:
 
 ## Documentation impact
 
-Internal docs: required.  
-User/Product docs: required.  
-Generated Product Browser: required.
+Internal docs: required  
+User/Product docs: required  
+Reason: PM-05 introduces durable strict material-Edge references, new Fillet/Chamfer Feature kinds and persistence, multi-Edge connected-corner behavior, kernel operations, Part-toolbar organization and new failure/repair lifecycle.
 
-PM-05 changes persistent Feature kinds, strict Edge reference meaning, kernel operations, toolbar organization, multi-selection interaction, lifecycle and schema version. Documentation must be current before PM-05F can close.
+Before completion:
+
+- internal Part/persistence/kernel/viewer docs describe the as-built MaterialEdgeReference, evaluation/topology lineage, accepted refine/unify policy and Fillet/Chamfer lifecycle;
+- paired PL/EN Product docs describe the accepted constant-radius Fillet and equal-distance Chamfer workflows, explicit multi-selection and repair behavior;
+- Product Browser is regenerated from canonical Markdown;
+- excluded advanced variants and implicit tangent-chain authoring must not be documented as implemented.
+
+PM-05A evidence-only implementation does not by itself require Product documentation of a user-facing feature. PM-05F must make all required documentation current before package closure.
 
 ## 30. Activation state
 
