@@ -3,7 +3,7 @@ status: active
 active_work: "work/PM-05_EDGE_FEATURES.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.28"
+program_roadmap_version: "1.29"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -57,11 +57,12 @@ next:
   - PM-04F Owner amendment `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` is IMPLEMENTED — PASS; exact runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2 with core 25/25, kernel-native 47/47 and desktop 104/104; Owner Windows workflow PASS 2026-10-06
   - PM-04 production mutation authority is CLOSED after final Owner PASS
   - PM-05 Edge Features: Fillet / Chamfer is ACTIVE under Owner-accepted `work/PM-05_EDGE_FEATURES.md`
-  - current active checkpoint is PM-05A — EVIDENCE PASS / OWNER D2 REVIEW REQUIRED; production PM-05B+ remains BLOCKED
-  - PM-05A authorizes bounded evidence/test/provider instrumentation only; durable MaterialEdgeReference, schema v14, production Fillet/Chamfer Features/kernel/UI and PM-05B+ remain BLOCKED pending explicit Owner acceptance of PM-05A conclusions
+  - PM-05A — Edge-feature topology/provider evidence is COMPLETED — PASS after explicit Owner D2 acceptance on 2026-10-06
+  - current active checkpoint is PM-05B — durable MaterialEdgeReference / FilletFeature / ChamferFeature foundation + schema v14; PM-05C+ remains inactive
   - the accepted PM-03 presentation defer remains tracked for PM-06: add one coherent neutral translucent fill treatment to both Origin planes and Datum planes; no Datum semantic/lifecycle work is deferred
   - Projection remains outside the PM-03/PM-04 critical path and requires separate later activation
 notes:
+  - Owner explicitly accepted all PM-05A D2 conclusions (E1, M1, T1, U1, C1, P1-P3, G1-G2, R1, K1) on 2026-10-06 and authorized PM-05B. PM-05B is now the only active production checkpoint: durable MaterialEdgeReference/resolver, canonical multi-Edge Feature definitions, structural validation, schema v14 migration/persistence and application command/draft foundation. PM-05C kernel production operations/topology publication and PM-05D/E/F remain inactive.
   - PM-05A evidence package is merged to main as `aa9e86f6b88ebf429390f7a4764a534b400e757b`. Exact runtime/test candidate `c70980d63d836ea54d1f88be29082023e44b1c38` passed Windows FULL #1605 (core 25/25, kernel-native 49/49, desktop 104/104); final report-sync head `d08b76dae60456df5cd0300ac81c971eb5febc00` passed Windows CLOSURE #1606. `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md` is EVIDENCE PASS and awaits explicit Owner D2 acceptance. PM-05B+ remains blocked.
   - PM-05 Work Contract accepted and activated 2026-10-06. Scope is explicit multi-Edge constant-radius Fillet + equal-distance Chamfer with mandatory common connected-corner behavior and full lifecycle. Current authority is PM-05A evidence only; single-Edge-only production fallback is forbidden. PM-05B+ requires a second explicit Owner acceptance after PM-05A freezes strict MaterialEdgeReference, multi-Edge canonicalization, corner provenance, tangent-propagation behavior, refine/unify policy and generated topology roles.
   - PM-04 is COMPLETED — PASS. Final Axis-designation runtime/docs authority `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2 (core 25/25, kernel-native 47/47, desktop 104/104) with canonical docs/Product Browser verification; Owner final supported-Windows workflow PASS on 2026-10-06 with no errors reported. #1579 closure attempts were infrastructure-only cancellations; final work-only candidate `7bca07e9f165f241fc3cf8de85e00fd3ca97910d` passed Windows CLOSURE #1580 and PR #277 merged to main as `d4389d59581dd515ac33ef4ea593bf94b40d2829`. PM-05/PM-06 remain inactive.
