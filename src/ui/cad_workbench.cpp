@@ -4533,6 +4533,8 @@ void CadWorkbench::buildUi() {
         });
 
     syncSketchInteractionUi();
+    syncAxisUi();
+    syncDatumPlaneUi();
     syncExtrudeUi();
 }
 
@@ -4553,6 +4555,7 @@ bool CadWorkbench::activateDocument(
     }
 
     captureActiveViewState();
+    clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
@@ -4575,6 +4578,7 @@ void CadWorkbench::deactivateDocument() {
         captureActiveViewState();
     }
 
+    clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
@@ -11128,6 +11132,7 @@ void CadWorkbench::syncActionState() {
         active &&
         !editing_sketch &&
         !sketch_support_pick_active_ &&
+        !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_);
