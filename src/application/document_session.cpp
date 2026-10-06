@@ -133,6 +133,19 @@ std::string defaultFeatureName(
     return result;
 }
 
+std::string defaultRevolveFeatureName(
+    part::FeatureId id) {
+    const auto serialized = id.serialized();
+    std::string result{"Revolve"};
+    if (serialized.size() < 3U) {
+        result.append(
+            3U - serialized.size(),
+            '0');
+    }
+    result += serialized;
+    return result;
+}
+
 std::string defaultAxisName(
     part::AxisId id) {
     const auto serialized = id.serialized();
@@ -2841,6 +2854,262 @@ DocumentSession::evaluateExtrudeDraft(
 
     result.status =
         ExtrudeDraftEvaluationStatus::ok;
+    return result;
+}
+
+RevolveDraftEvaluationResult
+DocumentSession::evaluateRevolveDraft(
+    const RevolveDraft& draft,
+    kernel::ISolidModelingKernel&
+        modeling_kernel) const {
+    RevolveDraftEvaluationResult result;
+    result.document_id = draft.documentId();
+    result.source_revision =
+        draft.sourceRevision();
+    result.draft_generation =
+        draft.generation();
+    result.mode =
+        draft.mode();
+    result.profile_id =
+        draft.profileId();
+    result.axis =
+        draft.axis();
+    result.feature_id =
+        draft.featureId();
+    result.operation =
+        draft.operation();
+    result.extent =
+        draft.extent();
+    result.name =
+        draft.name();
+
+    if (documentId() !=
+        draft.documentId()) {
+        result.status =
+            RevolveDraftEvaluationStatus::
+                stale_document;
+        return result;
+    }
+    if (document_.revision() !=
+        draft.sourceRevision()) {
+        result.status =
+            RevolveDraftEvaluationStatus::
+                stale_revision;
+        return result;
+    }
+    if (!draft.profileId() ||
+        !draft.axis() ||
+        !draft.valid()) {
+        result.status =
+            RevolveDraftEvaluationStatus::
+                incomplete_draft;
+        return result;
+    }
+    if (document_.findProfile(
+            *draft.profileId()) == nullptr) {
+        result.status =
+            RevolveDraftEvaluationStatus::
+                missing_profile;
+        return result;
+    }
+
+    auto after =
+        document_.state();
+    applyBodyFeatureIdCursors(after);
+
+    part::FeatureId target_id;
+    const part::RevolveFeature definition{
+        *draft.profileId(),
+        *draft.axis(),
+        draft.operation(),
+        draft.extent()};
+
+    if (draft.mode() ==
+        RevolveDraftMode::create) {
+        const auto id =
+            after.body.next_feature_id
+                .allocate();
+        if (!id) {
+            result.status =
+                RevolveDraftEvaluationStatus::
+                    feature_id_exhausted;
+            return result;
+        }
+        target_id = *id;
+        after.body.features.push_back(
+            part::PartFeature{
+                target_id,
+                draft.name().empty()
+                    ? defaultRevolveFeatureName(
+                          target_id)
+                    : draft.name(),
+                false,
+                definition});
+    } else {
+        if (!draft.featureId()) {
+            result.status =
+                RevolveDraftEvaluationStatus::
+                    incomplete_draft;
+            return result;
+        }
+        auto* feature =
+            findFeature(
+                after,
+                *draft.featureId());
+        if (feature == nullptr) {
+            result.status =
+                RevolveDraftEvaluationStatus::
+                    missing_feature;
+            return result;
+        }
+        if (feature->suppressed) {
+            result.status =
+                RevolveDraftEvaluationStatus::
+                    suppressed_feature;
+            return result;
+        }
+        if (std::get_if<part::RevolveFeature>(
+                &feature->definition) == nullptr) {
+            result.status =
+                RevolveDraftEvaluationStatus::
+                    invalid_candidate;
+            return result;
+        }
+        target_id = feature->id;
+        feature->name =
+            draft.name();
+        feature->definition =
+            definition;
+    }
+
+    auto candidate =
+        part::PartDocument::restore(
+            documentId(),
+            std::move(after),
+            document_.revision());
+    if (!candidate.ok()) {
+        result.status =
+            RevolveDraftEvaluationStatus::
+                invalid_candidate;
+        return result;
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    result.body_status =
+        evaluation.body_status;
+    result.body_solid =
+        evaluation.body_solid;
+
+    const auto* target =
+        evaluation.findFeature(
+            target_id);
+    if (target == nullptr) {
+        result.status =
+            RevolveDraftEvaluationStatus::
+                invalid_candidate;
+        result.body_solid.reset();
+        return result;
+    }
+
+    result.evaluation_diagnostic =
+        target->diagnostic;
+    if (target->status !=
+        part::FeatureEvaluationStatus::
+            up_to_date) {
+        result.status =
+            RevolveDraftEvaluationStatus::
+                target_failed;
+        result.body_solid.reset();
+        return result;
+    }
+
+    // Finish legality is established solely by the complete candidate
+    // evaluation above. Preview is a separate presentation-only exact delta
+    // computed from the exact Body prefix immediately before this Feature.
+    const auto& candidate_features =
+        candidate.document->body().features;
+    const auto target_authored =
+        std::find_if(
+            candidate_features.begin(),
+            candidate_features.end(),
+            [target_id](
+                const part::PartFeature& feature) {
+                return feature.id ==
+                       target_id;
+            });
+
+    if (target_authored !=
+        candidate_features.end()) {
+        const auto target_index =
+            static_cast<std::size_t>(
+                std::distance(
+                    candidate_features.begin(),
+                    target_authored));
+
+        auto upstream_state =
+            candidate.document->state();
+        upstream_state.body.features.erase(
+            upstream_state.body.features.begin() +
+                static_cast<std::ptrdiff_t>(
+                    target_index),
+            upstream_state.body.features.end());
+
+        auto upstream_document =
+            part::PartDocument::restore(
+                documentId(),
+                std::move(upstream_state),
+                document_.revision());
+        if (upstream_document.ok()) {
+            const auto prefix_evaluation =
+                part::evaluatePart(
+                    *upstream_document.document,
+                    modeling_kernel);
+
+            kernel::RuntimeSolidHandle
+                preview_upstream;
+            bool preview_upstream_ready = false;
+            if (prefix_evaluation.body_status ==
+                part::BodyEvaluationStatus::
+                    up_to_date) {
+                preview_upstream =
+                    prefix_evaluation.body_solid;
+                preview_upstream_ready =
+                    preview_upstream != nullptr;
+            } else if (
+                prefix_evaluation.body_status ==
+                part::BodyEvaluationStatus::empty) {
+                preview_upstream_ready = true;
+            }
+
+            const auto datums =
+                part::evaluateDatums(
+                    *candidate.document,
+                    prefix_evaluation);
+            const auto resolved =
+                part::resolveKernelRevolveInput(
+                    *candidate.document,
+                    definition,
+                    &prefix_evaluation,
+                    &datums);
+            if (resolved.ok() &&
+                preview_upstream_ready) {
+                auto preview =
+                    modeling_kernel.revolvePreviewMesh(
+                        *resolved.input,
+                        preview_upstream);
+                if (preview.ok()) {
+                    result.preview_delta_mesh =
+                        std::move(preview.mesh);
+                }
+            }
+        }
+    }
+
+    result.status =
+        RevolveDraftEvaluationStatus::ok;
     return result;
 }
 
