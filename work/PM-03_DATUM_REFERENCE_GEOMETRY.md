@@ -1,13 +1,13 @@
 # PM-03 — Datum Reference Geometry / Offset Datum Plane
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-05  
+**Status:** COMPLETED — PASS; OWNER FINAL WINDOWS ACCEPTANCE 2026-10-05  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.23  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.24  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-02 Body Semantic Topology / Face-Supported Sketch COMPLETED — PASS  
 **Owner UI acceptance:** 2026-10-05 — single Datum Plane tool, Offset constructor, Extrude-style preview/default 10 mm, Command Line parity, intersection overlay, Reference Geometry tree grouping/visibility  
-**Production mutation:** AUTHORIZED ONLY WITHIN THIS ACTIVE CONTRACT after activation merge
+**Production mutation:** CLOSED — future production change requires separately accepted authority
 
 ## 1. Goal
 
@@ -597,9 +597,9 @@ Gate:
 
 ### PM-03F — lifecycle / persistence / docs / Owner acceptance
 
-**State:** ACTIVE
+**State:** COMPLETED — PASS
 
-Close:
+Closed:
 
 - Save/Close/Reopen;
 - true cold rebuild;
@@ -608,6 +608,8 @@ Close:
 - PL/EN product docs;
 - Product Browser regeneration;
 - supported Windows Owner workflow.
+
+Final Owner Windows result on 2026-10-05: **PASS**, with one explicit D2 acceptance amendment. The functional Datum workflow passed; the missing neutral translucent plane fill is accepted as a presentation-only defer to PM-06, where it must be implemented coherently for both Origin and Datum planes. Border/footprint presentation, virtual Body intersection, picking, semantics, lifecycle, persistence and downstream modeling remain accepted and are not deferred.
 
 ## Acceptance
 
@@ -633,7 +635,7 @@ PM-03 cannot complete without automated and manual evidence for at least:
 - default new-draft Offset is 10 mm and Reverse only negates the same signed value;
 - GUI/Command Line use the same Datum Plane draft/semantic command;
 - preview/Cancel/no-op produce no CAD history;
-- plane patch/border and plane/Body virtual intersection are presentation-only;
+- plane footprint/border and plane/Body virtual intersection are presentation-only; the neutral translucent fill portion of the accepted presentation is explicitly deferred to PM-06 together with Origin-plane fill treatment;
 - virtual intersection never becomes Edge/Curve semantics or Projection;
 - stale revision/session/evaluation/presentation cannot commit;
 - Create Sketch on Datum Plane;
@@ -658,7 +660,7 @@ The final Owner workflow should cover:
 4. repeat the same draft through Command Line and verify GUI/Command Line parity;
 5. edit offset positive/negative/zero and verify deterministic orientation;
 6. create Datum Plane from a planar Body Face and verify the persisted source is the semantic planar Surface, not bounded Face/provider identity;
-7. verify the translucent plane patch, border and virtual plane/Body intersection overlay clearly locate the plane; clicking the overlay selects Datum Plane, never an Edge;
+7. verify the finite plane border/footprint and virtual plane/Body intersection overlay clearly locate the plane; clicking the overlay selects Datum Plane, never an Edge. The neutral translucent fill is an Owner-accepted presentation-only defer to PM-06, paired with Origin-plane fill treatment;
 8. create a second Datum Plane from the first Datum Plane;
 9. inspect `Reference Geometry` directly below Origin; verify individual Show/Hide and bulk group Show/Hide with Undo/Redo;
 10. inspect Properties/status;
@@ -680,8 +682,8 @@ Reason: PM-03 introduces durable Datum identity/state, new native persistence, D
 
 Before completion:
 
-- internal Part/persistence/viewer docs describe as-built Datum ownership/evaluation;
-- PL/EN product docs describe Offset Datum Plane and Sketch-on-Datum workflow;
+- internal Part/persistence/viewer docs describe as-built Datum ownership/evaluation and the accepted presentation-only fill defer;
+- PL/EN product docs describe Offset Datum Plane and Sketch-on-Datum workflow truthfully for the current unfilled plane presentation;
 - Product Browser is regenerated from canonical Markdown;
 - deferred Datum Axis/Point must not be documented as implemented.
 
@@ -708,8 +710,8 @@ The Owner accepted the PM-03 D2 scope and the UI/interaction amendments material
 
 This contract is activated only by the governance change that points `work/ACTIVE.yaml` here with `status: active` and passes its repository gate. Production mutation is legal only after that activation change is merged.
 
-Once active, implementation must follow PM-03A through PM-03F in order and remain inside this contract. Any STOP condition or scope expansion returns to Owner review.
+PM-03A through PM-03F completed in order. Owner final Windows acceptance on 2026-10-05 closes this contract with the explicit presentation-only translucent-fill defer recorded above. PM-03 production mutation authority is now closed.
 
-PM-03 completion authorizes only the delivered Offset Datum Plane / Datum-backed Sketch vertical slice.
+PM-03 completion authorizes only the delivered Offset Datum Plane / Datum-backed Sketch vertical slice. No Datum semantic, lifecycle, persistence, repair or downstream-modeling obligation is deferred.
 
-PM-04 Axis / Revolve and Projection remain separately gated.
+PM-04 Axis / Revolve and Projection remain separately gated. The Origin/Datum translucent-fill presentation polish is tracked as a PM-06 final Part-v1 obligation and does not activate PM-04 or any other production package.

@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 ACTIVE  
-**Version:** 1.23  
-**Owner acceptance:** 2026-10-05 — PM-03 bounded Work Contract + UI interaction amendments unchanged; v1.23 is checkpoint-state synchronization only  
-**Previous accepted version:** 1.22 — 2026-10-05  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; NO LATER PACKAGE ACTIVE  
+**Version:** 1.24  
+**Owner acceptance:** 2026-10-05 — PM-03 final Windows PASS + explicit Origin/Datum translucent-fill presentation defer to PM-06  
+**Previous accepted version:** 1.23 — 2026-10-05  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-03F — lifecycle / persistence / docs / Owner acceptance under `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`  
+**Current completed checkpoint:** PM-03 — final Owner Windows acceptance PASS 2026-10-05; no later production package is active  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -127,7 +127,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 3 | **PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut** | durable Body/Feature architecture plus complete Extrude Add/Cut OneSide/Midplane lifecycle | **COMPLETED — PASS; Owner final manual acceptance 2026-10-03; runtime FULL #1369, docs #1370** |
 | 4 | **PM-02P — Body Semantic Topology Evidence Gate** | prove complete Face/Edge/Vertex accounting, carrier Surface/Curve/Point semantics, deterministic planar frames, split/merge/delete behavior and prospective dynamic Sketch support before production schema/API | **COMPLETED — PASS; runtime FULL #1387; Owner accepted D2 synthesis 2026-10-04** |
 | 5 | **PM-02 — Body Semantic Topology / Face-Supported Sketch** | production semantic topology catalog and picking plus Sketch/Profile on arbitrary resolved planar Body surfaces, reusing PM-01 Extrude Add/Cut | **COMPLETED — PASS; runtime FULL #1473, docs #1474, Owner final manual Windows PASS 2026-10-05** |
-| 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **ACTIVE — Owner accepted 2026-10-05; exact contract `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`** |
+| 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **COMPLETED — PASS; Owner final Windows PASS 2026-10-05; translucent Origin/Datum plane fill deferred as PM-06 presentation polish** |
 | 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | future separate Work Contract |
 | 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete edge-feature lifecycle with lineage/refine handling and repair | future separate Work Contract |
 | 9 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
@@ -486,7 +486,9 @@ PM-03D Viewer / intersection overlay / Tree / Properties is **COMPLETED — PASS
 
 PM-03E Datum-backed Sketch + existing Extrude is **COMPLETED — PASS**. Exact candidate `f4c691c50ce28bc311076b94925b719c889e8172` passed Windows FULL #1520 and merged as `66f31391894eb6a0adfb430d4dd78b37e749f150`. Completion evidence: `work/PM-03E_DATUM_BACKED_SKETCH_EXTRUDE_COMPLETION.md`.
 
-Current implementation checkpoint is **PM-03F — lifecycle / persistence / docs / Owner acceptance**.
+PM-03F lifecycle / persistence / docs / Owner acceptance is **COMPLETED — PASS**. F1 exact runtime evidence passed Windows FULL #1522; F2a live Datum draft-preview remediation passed Windows FULL #1523; final docs candidate `439abd15b9e7ec1c4c8b2177cd8ea31f6debda0e` passed workflow #1524 and merged as `4e9ecdb4d51f7f81be799bbc0778b98808799f3d`. Owner final Windows workflow PASS was reported on 2026-10-05.
+
+Owner acceptance explicitly defers one presentation-only item: add a coherent neutral translucent fill to both Origin planes and Datum planes during PM-06 final Part-v1 polish. This does not defer Datum semantics, identity, lifecycle, persistence, repair, picking, intersection overlay or downstream modeling.
 
 Projection is not a prerequisite for Datum and remains separately gated.
 
@@ -536,7 +538,8 @@ PM-06 closes only cross-package product obligations:
 - documentation/product-browser completion;
 - migration matrix;
 - end-to-end Windows acceptance;
-- explicit list of deferred variants/features.
+- explicit list of deferred variants/features;
+- close the Owner-accepted cross-package plane-presentation obligation: one coherent neutral translucent fill treatment for both Origin planes and Datum planes.
 
 It does **not** implement Assembly occurrences, mates, solver, BOM, configurations or inter-document parameter solving.
 
@@ -670,11 +673,11 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.23 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P and PM-02A through PM-02J are COMPLETED — PASS. PM-02 is COMPLETED — PASS. PM-03A, PM-03B, PM-03C, PM-03D and PM-03E are COMPLETED — PASS. PM-03 is ACTIVE at PM-03F.**
+Program v1.24 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02 and PM-03 are COMPLETED — PASS. PM-03A through PM-03F are closed. No later production package is active.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
-PM-02 production mutation authority is closed. Current legal production authority is the Owner-accepted PM-03 Work Contract: **`work/PM-03_DATUM_REFERENCE_GEOMETRY.md`**.
+PM-02 and PM-03 production mutation authority are closed. There is currently **no active production CAD Work Contract**. PM-04 requires its own bounded Work Contract and explicit Owner acceptance before mutation.
 
 PM-02A production accounting is closed: runtime candidate `58368a6ada5f6c30e03cb845682dbf5408ecb763` passed Windows FULL #1397 and was squash-merged to main as `b95f72105b8242eedce9cd79dd8bf910f3ccb715`.
 
@@ -696,4 +699,4 @@ PM-02I lifecycle, repair, persistence and regression matrix is closed: final run
 
 PM-02 is **COMPLETED — PASS**. Final accepted evidence is post-remediation runtime FULL #1473 on `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`, remediation docs DOCS #1474 on `1dbaef95b2ea48f8e529425a154b795984d6551f`, bookkeeping #1476 PASS, and Owner Windows re-test PASS on 2026-10-05 against current main `d8d73e213f24d5b82c5a7a13dbeba07282520a40`.
 
-PM-03 is ACTIVE at PM-03F under the bounded accepted Work Contract. PM-03A, PM-03B, PM-03C, PM-03D and PM-03E are COMPLETED — PASS. PM-04 and all later product packages remain NOT ACTIVE. Projection remains separately gated and outside the PM-02/PM-03 critical path.
+PM-03 is **COMPLETED — PASS**. Final accepted evidence includes F1 Windows FULL #1522, F2a Windows FULL #1523, documentation workflow #1524 on exact docs candidate `439abd15b9e7ec1c4c8b2177cd8ea31f6debda0e` merged as `4e9ecdb4d51f7f81be799bbc0778b98808799f3d`, and Owner final Windows workflow PASS on 2026-10-05. The Owner explicitly accepted the missing neutral translucent plane fill as a presentation-only defer to PM-06, to be fixed coherently for both Origin and Datum planes. PM-04 and all later product packages remain NOT ACTIVE. Projection remains separately gated.
