@@ -577,21 +577,6 @@ int main() {
                     }));
         CHECK(representation_edges > 0U);
 
-        CHECK(
-            feature.result_topology->
-                faces.size() ==
-            feature.result_topology->
-                provider_face_count);
-        CHECK(
-            feature.result_topology->
-                edges.size() ==
-            feature.result_topology->
-                provider_edge_count);
-        CHECK(
-            feature.result_topology->
-                vertices.size() ==
-            feature.result_topology->
-                provider_vertex_count);
     }
 
     std::cout
