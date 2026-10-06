@@ -30,6 +30,7 @@ constexpr int bodyIdData = Qt::UserRole + 44;
 constexpr int featureIdData = Qt::UserRole + 45;
 constexpr int datumIdData = Qt::UserRole + 46;
 constexpr int referenceGeometryGroupData = Qt::UserRole + 47;
+constexpr int axisIdData = Qt::UserRole + 48;
 
 constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
@@ -119,6 +120,58 @@ QString datumDiagnosticText(
     case part::DatumPlaneEvaluationDiagnostic::upstream_datum_unavailable:
         return QStringLiteral("Upstream Datum unavailable");
     case part::DatumPlaneEvaluationDiagnostic::invalid_frame:
+        return QStringLiteral("Invalid frame");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString axisStatusText(
+    part::AxisEvaluationStatus status) {
+    switch (status) {
+    case part::AxisEvaluationStatus::resolved:
+        return QStringLiteral("Resolved");
+    case part::AxisEvaluationStatus::missing:
+        return QStringLiteral("Missing");
+    case part::AxisEvaluationStatus::ambiguous:
+        return QStringLiteral("Ambiguous");
+    case part::AxisEvaluationStatus::unsupported:
+        return QStringLiteral("Unsupported");
+    case part::AxisEvaluationStatus::blocked:
+        return QStringLiteral("Blocked");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString axisDiagnosticText(
+    part::AxisEvaluationDiagnostic diagnostic) {
+    switch (diagnostic) {
+    case part::AxisEvaluationDiagnostic::none:
+        return QStringLiteral("None");
+    case part::AxisEvaluationDiagnostic::invalid_reference:
+        return QStringLiteral("Invalid reference");
+    case part::AxisEvaluationDiagnostic::missing_axis:
+        return QStringLiteral("Missing Axis");
+    case part::AxisEvaluationDiagnostic::missing_sketch:
+        return QStringLiteral("Missing Sketch");
+    case part::AxisEvaluationDiagnostic::missing_line:
+        return QStringLiteral("Missing Line");
+    case part::AxisEvaluationDiagnostic::source_not_line:
+        return QStringLiteral("Source is not a Line");
+    case part::AxisEvaluationDiagnostic::sketch_support_missing:
+        return QStringLiteral("Sketch support missing");
+    case part::AxisEvaluationDiagnostic::sketch_support_ambiguous:
+        return QStringLiteral("Sketch support ambiguous");
+    case part::AxisEvaluationDiagnostic::sketch_support_unsupported:
+        return QStringLiteral("Sketch support unsupported");
+    case part::AxisEvaluationDiagnostic::sketch_support_blocked:
+        return QStringLiteral("Sketch support blocked");
+    case part::AxisEvaluationDiagnostic::stale_part_evaluation:
+        return QStringLiteral("Stale Part evaluation");
+    case part::AxisEvaluationDiagnostic::stale_datum_evaluation:
+        return QStringLiteral("Stale Datum evaluation");
+    case part::AxisEvaluationDiagnostic::support_stage_unavailable:
+        return QStringLiteral("Support stage unavailable");
+    case part::AxisEvaluationDiagnostic::invalid_frame:
         return QStringLiteral("Invalid frame");
     }
     return QStringLiteral("Unknown");
@@ -266,6 +319,16 @@ PartDocumentTreeController::PartDocumentTreeController(
     edit_profile_action_->setObjectName(
         QStringLiteral("editProfileAction"));
 
+    edit_axis_action_ =
+        new QAction(QStringLiteral("Edit Axis"), tree_);
+    edit_axis_action_->setObjectName(
+        QStringLiteral("editAxisAction"));
+
+    delete_axis_action_ =
+        new QAction(QStringLiteral("Delete Axis"), tree_);
+    delete_axis_action_->setObjectName(
+        QStringLiteral("deleteAxisAction"));
+
     edit_datum_action_ =
         new QAction(
             QStringLiteral("Edit Datum Plane"),
@@ -367,6 +430,28 @@ PartDocumentTreeController::PartDocumentTreeController(
             if (auto* item = tree_->currentItem();
                 item != nullptr) {
                 requestProfileEdit(*item);
+            }
+        });
+
+    QObject::connect(
+        edit_axis_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestAxisEdit(*item);
+            }
+        });
+
+    QObject::connect(
+        delete_axis_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestAxisDelete(*item);
             }
         });
 
@@ -567,6 +652,7 @@ void PartDocumentTreeController::clear() {
     session_ = nullptr;
     feature_evaluations_.clear();
     datum_evaluations_.clear();
+    axis_evaluations_.clear();
     body_status_ =
         part::BodyEvaluationStatus::empty;
     tree_->clear();
@@ -676,6 +762,33 @@ PartDocumentTreeController::primaryDatumId() const {
     return selected.empty()
         ? std::nullopt
         : std::optional<part::DatumId>{
+              selected.front()};
+}
+
+std::vector<part::AxisId>
+PartDocumentTreeController::selectedAxisIds() const {
+    std::vector<part::AxisId> ids;
+    for (const auto* item : tree_->selectedItems()) {
+        if (item == nullptr) continue;
+        if (const auto id = axisIdForItem(*item)) {
+            ids.push_back(*id);
+        }
+    }
+    return ids;
+}
+
+std::optional<part::AxisId>
+PartDocumentTreeController::primaryAxisId() const {
+    const auto* current = tree_->currentItem();
+    if (current != nullptr && current->isSelected()) {
+        if (const auto id = axisIdForItem(*current)) {
+            return id;
+        }
+    }
+    const auto selected = selectedAxisIds();
+    return selected.empty()
+        ? std::nullopt
+        : std::optional<part::AxisId>{
               selected.front()};
 }
 
@@ -886,6 +999,62 @@ void PartDocumentTreeController::setDatumSelection(
 }
 
 
+void PartDocumentTreeController::setAxisSelection(
+    const std::vector<part::AxisId>& selected,
+    std::optional<part::AxisId> primary) {
+    const QSignalBlocker blocked{tree_};
+
+    QTreeWidgetItem* first_selected = nullptr;
+    QTreeWidgetItem* primary_item = nullptr;
+
+    const auto visit =
+        [&](auto&& self, QTreeWidgetItem* item) -> void {
+            if (item == nullptr) return;
+            if (const auto id = axisIdForItem(*item)) {
+                const bool should_select =
+                    std::find(
+                        selected.begin(),
+                        selected.end(),
+                        *id) != selected.end();
+                item->setSelected(should_select);
+                if (should_select &&
+                    first_selected == nullptr) {
+                    first_selected = item;
+                }
+                if (should_select &&
+                    primary &&
+                    *primary == *id) {
+                    primary_item = item;
+                }
+            }
+            for (int index = 0;
+                 index < item->childCount();
+                 ++index) {
+                self(self, item->child(index));
+            }
+        };
+
+    for (int index = 0;
+         index < tree_->topLevelItemCount();
+         ++index) {
+        visit(visit, tree_->topLevelItem(index));
+    }
+
+    if (primary_item != nullptr) {
+        tree_->setCurrentItem(
+            primary_item,
+            0,
+            QItemSelectionModel::NoUpdate);
+    } else if (first_selected != nullptr) {
+        tree_->setCurrentItem(
+            first_selected,
+            0,
+            QItemSelectionModel::NoUpdate);
+    }
+    updateVisibilityActions();
+}
+
+
 void PartDocumentTreeController::setFeatureSelection(
     const std::vector<part::FeatureId>& selected,
     std::optional<part::FeatureId> primary) {
@@ -946,12 +1115,16 @@ void PartDocumentTreeController::setEvaluationSnapshot(
     std::vector<FeatureTreeEvaluationEntry>
         feature_evaluations,
     std::vector<DatumTreeEvaluationEntry>
-        datum_evaluations) {
+        datum_evaluations,
+    std::vector<AxisTreeEvaluationEntry>
+        axis_evaluations) {
     body_status_ = body_status;
     feature_evaluations_ =
         std::move(feature_evaluations);
     datum_evaluations_ =
         std::move(datum_evaluations);
+    axis_evaluations_ =
+        std::move(axis_evaluations);
     rebuild(true);
 }
 
@@ -977,6 +1150,20 @@ selectionContainsOnlyDatumReferences() const {
         if (item == nullptr ||
             (!datumIdForItem(*item) &&
              !isReferenceGeometryGroupItem(*item))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool PartDocumentTreeController::
+selectionContainsOnlyAxisReferences() const {
+    const auto selected = tree_->selectedItems();
+    if (selected.empty()) return false;
+
+    for (const auto* item : selected) {
+        if (item == nullptr ||
+            !axisIdForItem(*item)) {
             return false;
         }
     }
@@ -1024,6 +1211,19 @@ selectedDatumVisibilityTargets() const {
     return targets;
 }
 
+std::vector<part::AxisId>
+PartDocumentTreeController::
+selectedAxisVisibilityTargets() const {
+    auto targets = selectedAxisIds();
+    std::sort(targets.begin(), targets.end());
+    targets.erase(
+        std::unique(
+            targets.begin(),
+            targets.end()),
+        targets.end());
+    return targets;
+}
+
 void PartDocumentTreeController::rebuild(
     bool preserve_reference_selection) {
     if (hovered_feature_id_) {
@@ -1041,6 +1241,8 @@ void PartDocumentTreeController::rebuild(
         previously_selected_profiles;
     std::vector<part::DatumId>
         previously_selected_datums;
+    std::vector<part::AxisId>
+        previously_selected_axes;
     bool reference_geometry_group_selected = false;
     std::vector<part::FeatureId>
         previously_selected_features;
@@ -1054,6 +1256,8 @@ void PartDocumentTreeController::rebuild(
             selectedProfileIds();
         previously_selected_datums =
             selectedDatumIds();
+        previously_selected_axes =
+            selectedAxisIds();
         reference_geometry_group_selected =
             referenceGeometryGroupSelected();
         previously_selected_features =
@@ -1380,10 +1584,111 @@ void PartDocumentTreeController::rebuild(
     }
     reference_geometry->setExpanded(true);
 
-    if (!session_->document().sketches().empty()) {
+    if (!session_->document().sketches().empty() ||
+        !session_->document().axes().empty()) {
         auto* sketches = new QTreeWidgetItem(
             root,
             QStringList{QStringLiteral("Sketches")});
+
+        const auto add_axis_item =
+            [&](QTreeWidgetItem* parent,
+                const part::PartAxis& axis) {
+                const auto evaluation =
+                    std::find_if(
+                        axis_evaluations_.begin(),
+                        axis_evaluations_.end(),
+                        [&axis](
+                            const AxisTreeEvaluationEntry& entry) {
+                            return entry.axis_id ==
+                                   axis.id;
+                        });
+                const bool evaluated =
+                    evaluation !=
+                        axis_evaluations_.end();
+                const bool resolved =
+                    evaluated &&
+                    evaluation->status ==
+                        part::AxisEvaluationStatus::
+                            resolved;
+
+                QString label =
+                    axis.name.empty()
+                        ? QStringLiteral("Axis %1")
+                              .arg(
+                                  fromUtf8(
+                                      axis.id.serialized()))
+                        : fromUtf8(axis.name);
+                if (evaluated && !resolved) {
+                    label += QStringLiteral(" [%1]")
+                                 .arg(
+                                     axisStatusText(
+                                         evaluation->status));
+                }
+
+                auto* axis_item =
+                    new QTreeWidgetItem(
+                        parent,
+                        QStringList{label});
+                axis_item->setData(
+                    0,
+                    axisIdData,
+                    fromUtf8(
+                        axis.id.serialized()));
+
+                auto axis_font =
+                    axis_item->font(0);
+                axis_font.setItalic(!axis.visible);
+                axis_font.setBold(
+                    evaluated && !resolved);
+                axis_item->setFont(
+                    0,
+                    axis_font);
+                if (evaluated && !resolved) {
+                    axis_item->setIcon(
+                        0,
+                        tree_->style()->standardIcon(
+                            QStyle::SP_MessageBoxWarning));
+                }
+
+                axis_item->setToolTip(
+                    0,
+                    QStringLiteral(
+                        "AxisId: %1\nSource SketchId: %2\nSource EntityId: %3\nVisibility: %4\nStatus: %5\nDiagnostic: %6")
+                        .arg(
+                            fromUtf8(
+                                axis.id.serialized()),
+                            fromUtf8(
+                                axis.source
+                                    .sketch_id.value()),
+                            fromUtf8(
+                                axis.source
+                                    .entity_id.serialized()),
+                            axis.visible
+                                ? QStringLiteral("Shown")
+                                : QStringLiteral("Hidden"),
+                            evaluated
+                                ? axisStatusText(
+                                      evaluation->status)
+                                : QStringLiteral(
+                                      "Not evaluated"),
+                            evaluated
+                                ? axisDiagnosticText(
+                                      evaluation->diagnostic)
+                                : QStringLiteral("—")));
+
+                if (preserve_reference_selection) {
+                    const bool was_selected =
+                        std::find(
+                            previously_selected_axes
+                                .begin(),
+                            previously_selected_axes
+                                .end(),
+                            axis.id) !=
+                        previously_selected_axes.end();
+                    axis_item->setSelected(
+                        was_selected);
+                }
+            };
 
         std::size_t sketch_index = 0U;
         for (const auto& sketch :
@@ -1453,6 +1758,16 @@ void PartDocumentTreeController::rebuild(
             auto font = item->font(0);
             font.setItalic(!sketch.visible);
             item->setFont(0, font);
+
+            for (const auto& axis :
+                 session_->document().axes()) {
+                if (axis.source.sketch_id ==
+                    sketch.id) {
+                    add_axis_item(
+                        item,
+                        axis);
+                }
+            }
 
             for (const auto& profile :
                  session_->document().profiles()) {
@@ -1537,6 +1852,44 @@ void PartDocumentTreeController::rebuild(
             }
         }
 
+        std::vector<const part::PartAxis*>
+            missing_source_axes;
+        for (const auto& axis :
+             session_->document().axes()) {
+            const auto source =
+                session_->document().findSketch(
+                    axis.source.sketch_id);
+            if (source == nullptr) {
+                missing_source_axes.push_back(&axis);
+            }
+        }
+        if (!missing_source_axes.empty()) {
+            auto* missing =
+                new QTreeWidgetItem(
+                    sketches,
+                    QStringList{
+                        QStringLiteral(
+                            "Axes (Missing Source)")});
+            auto font = missing->font(0);
+            font.setBold(true);
+            missing->setFont(0, font);
+            missing->setIcon(
+                0,
+                tree_->style()->standardIcon(
+                    QStyle::SP_MessageBoxWarning));
+            missing->setToolTip(
+                0,
+                QStringLiteral(
+                    "Authored Axis objects whose source Sketch is missing. Re-source them explicitly; AxisId remains durable."));
+            for (const auto* axis :
+                 missing_source_axes) {
+                add_axis_item(
+                    missing,
+                    *axis);
+            }
+            missing->setExpanded(true);
+        }
+
         sketches->setExpanded(true);
     }
 
@@ -1577,6 +1930,35 @@ void PartDocumentTreeController::updateVisibilityActions() {
                 any_hidden = true;
             }
         }
+    } else if (
+        selectionContainsOnlyAxisReferences()) {
+        const auto targets =
+            selectedAxisVisibilityTargets();
+        for (const auto id : targets) {
+            const auto* axis =
+                session_->document()
+                    .findAxis(id);
+            if (axis == nullptr) {
+                continue;
+            }
+            if (axis->visible) {
+                any_visible = true;
+            } else {
+                any_hidden = true;
+            }
+        }
+    } else if (
+        selectionContainsOnlyAxisReferences()) {
+        const auto targets =
+            selectedAxisVisibilityTargets();
+        if (targets.empty()) return;
+        attempted = true;
+        result = session_->execute(
+            application::
+                SetAxisVisibilityCommand{
+                    targets,
+                    session_->document().revision(),
+                    visible});
     } else if (
         selectionContainsOnlyDatumReferences()) {
         const auto targets =
@@ -1636,6 +2018,30 @@ void PartDocumentTreeController::showContextMenu(
                     ? unsuppress_feature_action_
                     : suppress_feature_action_);
             menu.addAction(delete_feature_action_);
+            menu.exec(
+                tree_->viewport()->mapToGlobal(
+                    position));
+            return;
+        }
+        if (axisIdForItem(*item)) {
+            tree_->setCurrentItem(item);
+            updateVisibilityActions();
+            edit_axis_action_->setEnabled(
+                static_cast<bool>(
+                    axis_edit_handler_));
+            delete_axis_action_->setEnabled(
+                static_cast<bool>(
+                    axis_delete_handler_));
+            QMenu menu{tree_};
+            menu.addAction(edit_axis_action_);
+            if (show_action_->isEnabled() ||
+                hide_action_->isEnabled()) {
+                menu.addSeparator();
+                menu.addAction(show_action_);
+                menu.addAction(hide_action_);
+            }
+            menu.addSeparator();
+            menu.addAction(delete_axis_action_);
             menu.exec(
                 tree_->viewport()->mapToGlobal(
                     position));
@@ -1789,6 +2195,28 @@ void PartDocumentTreeController::requestProfileEdit(
     profile_edit_handler_(*profile_id);
 }
 
+void PartDocumentTreeController::requestAxisEdit(
+    const QTreeWidgetItem& item) {
+    const auto axis_id =
+        axisIdForItem(item);
+    if (!axis_id ||
+        !axis_edit_handler_) {
+        return;
+    }
+    axis_edit_handler_(*axis_id);
+}
+
+void PartDocumentTreeController::requestAxisDelete(
+    const QTreeWidgetItem& item) {
+    const auto axis_id =
+        axisIdForItem(item);
+    if (!axis_id ||
+        !axis_delete_handler_) {
+        return;
+    }
+    axis_delete_handler_(*axis_id);
+}
+
 void PartDocumentTreeController::requestDatumEdit(
     const QTreeWidgetItem& item) {
     const auto datum_id =
@@ -1838,6 +2266,11 @@ void PartDocumentTreeController::notifySelectionChanged() {
         datum_selection_handler_(
             selectedDatumIds(),
             primaryDatumId());
+    }
+    if (axis_selection_handler_) {
+        axis_selection_handler_(
+            selectedAxisIds(),
+            primaryAxisId());
     }
     if (feature_selection_handler_) {
         feature_selection_handler_(
@@ -1942,6 +2375,23 @@ PartDocumentTreeController::datumIdForItem(
     const auto bytes =
         value.toString().toUtf8();
     return part::DatumId::parse(
+        std::string_view{
+            bytes.constData(),
+            static_cast<std::size_t>(
+                bytes.size())});
+}
+
+std::optional<part::AxisId>
+PartDocumentTreeController::axisIdForItem(
+    const QTreeWidgetItem& item) {
+    const auto value =
+        item.data(0, axisIdData);
+    if (!value.isValid()) {
+        return std::nullopt;
+    }
+    const auto bytes =
+        value.toString().toUtf8();
+    return part::AxisId::parse(
         std::string_view{
             bytes.constData(),
             static_cast<std::size_t>(
