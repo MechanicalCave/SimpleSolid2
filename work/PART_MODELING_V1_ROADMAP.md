@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; NO LATER PACKAGE ACTIVE  
-**Version:** 1.24  
-**Owner acceptance:** 2026-10-05 — PM-03 final Windows PASS + explicit Origin/Datum translucent-fill presentation defer to PM-06  
-**Previous accepted version:** 1.23 — 2026-10-05  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 ACTIVE  
+**Version:** 1.25  
+**Owner acceptance:** 2026-10-06 — exact PM-04 Axis / Revolve Work Contract accepted; v1.25 is activation-state synchronization only  
+**Previous accepted version:** 1.24 — 2026-10-05  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current completed checkpoint:** PM-03 — final Owner Windows acceptance PASS 2026-10-05; no later production package is active  
+**Current active checkpoint:** PM-04A — Axis semantic model + persistence under `work/PM-04_AXIS_REVOLVE.md`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -128,7 +128,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 4 | **PM-02P — Body Semantic Topology Evidence Gate** | prove complete Face/Edge/Vertex accounting, carrier Surface/Curve/Point semantics, deterministic planar frames, split/merge/delete behavior and prospective dynamic Sketch support before production schema/API | **COMPLETED — PASS; runtime FULL #1387; Owner accepted D2 synthesis 2026-10-04** |
 | 5 | **PM-02 — Body Semantic Topology / Face-Supported Sketch** | production semantic topology catalog and picking plus Sketch/Profile on arbitrary resolved planar Body surfaces, reusing PM-01 Extrude Add/Cut | **COMPLETED — PASS; runtime FULL #1473, docs #1474, Owner final manual Windows PASS 2026-10-05** |
 | 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **COMPLETED — PASS; Owner final Windows PASS 2026-10-05; translucent Origin/Datum plane fill deferred as PM-06 presentation polish** |
-| 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | future separate Work Contract |
+| 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | **ACTIVE — Owner accepted 2026-10-06; exact contract `work/PM-04_AXIS_REVOLVE.md`** |
 | 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete edge-feature lifecycle with lineage/refine handling and repair | future separate Work Contract |
 | 9 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
 
@@ -333,7 +333,7 @@ The audited design uses O-01...O-12 as a durable decision ledger. Decisions rema
 | O-04 | support-frame construction, re-support and orientation | full stable O/U/V/N rule; preserve local 2D by default; no silent fallback | **FOUNDATION CLOSED by ADR-0014; dynamic carrier-frame amendment accepted by ADR-0016, evidence PM-02P** |
 | O-05 | topology-reference selector, lineage and split/merge guarantees | semantic producer/stage/role lineage, fail closed, user repair; no Face[n]/Edge[n] | **FOUNDATION CLOSED by ADR-0014; topology/carrier extension accepted by ADR-0016; PM-02P PASS and 2026-10-04 Owner D2 acceptance add bounded semantic branch/provenance discrimination for singular Edge/Curve, otherwise Ambiguous** |
 | O-06 | exact variants/inputs per modeling operation | freeze a bounded v1 matrix; lifecycle completeness over variant breadth | **EXTRUDE MATRIX AMENDED/CLOSED for PM-01 by ADR-0015; later operations remain owned by their packages** |
-| O-07 | Sketch Axis representation/editing/direction/visibility | Axis excluded from Profiles; any valid straight Sketch line may still be an axis source without role conversion | PM-04 before Shared-2D mutation |
+| O-07 | Sketch Axis representation/editing/direction/visibility | Origin X/Y/Z are built-in AxisReferences; authored Axis is Part-owned and derived from a Regular/Construction Sketch Line without conversion; independent visibility; no new Shared-2D Axis role | **CLOSED by Owner-accepted PM-04 Work Contract 2026-10-06** |
 | O-08 | Published References/local frames and v1 UI scope | stable typed interface identity; no Assembly implementation | semantics by PM-00B; UI/final scope PM-06 |
 | O-09 | downstream failure commit, Delete, Suppress, retry/history semantics | preserve repairable downstream intent; separate Delete from Suppress; no hidden history entries | **CLOSED by ADR-0014 / PM-00B** |
 | O-10 | visibility, auto-hide, history inspection and performance budgets | visibility never changes evaluation; measure before optimize | **Profile-consumption visibility closed for PM-01 by ADR-0015; later tools/final budget remain owning-package/PM-06 work** |
@@ -494,17 +494,19 @@ Projection is not a prerequisite for Datum and remains separately gated.
 
 ## 15. PM-04 — Axis / Revolve
 
-PM-04 closes O-07 and delivers the accepted Revolve Add/Cut lifecycle using the reference geometry available after PM-03.
+**Status:** ACTIVE — Owner accepted the exact bounded Work Contract on 2026-10-06.
 
-Program constraints:
+Active authority:
 
-- any non-degenerate straight Sketch line may act as a Revolve axis without duplication or forced role conversion;
-- an optional Axis role is excluded from region/profile generation;
-- direction/orientation is semantic and not derived from arbitrary OCCT edge orientation;
-- Revolve references a concrete source identity;
-- full-rotation seam/topology behavior must extend the accepted semantic reference contract rather than bypass it.
+`work/PM-04_AXIS_REVOLVE.md`.
 
-Revolve Add/Cut lifecycle completeness is mandatory for the variants activated by this package.
+PM-04 closes O-07 with two AxisReference variants only: built-in Origin X/Y/Z and Part-owned authored Axis derived from one non-degenerate Sketch Line. Authored Axis has durable AxisId, independent visibility and explicit repair; it does not add a new Shared-2D Axis role and it is not Datum Axis.
+
+The Revolve family is complete within the accepted bounded matrix: Add/Cut, OneSide/Midplane, default 360°, OneSide Reverse, full Create/Edit/preview/Finish/Cancel/Suppress/Delete/Undo/Redo/Save/Reopen/cold-rebuild lifecycle and GUI/Command Line parity. Axis/Profile admission is coplanar and fail-closed; material may touch or lie along the Axis but may not cross it internally.
+
+Full-rotation periodic seams remain accounted representation artifacts unless they are true material boundaries; PM-04 must extend the existing semantic topology catalog rather than bypass it.
+
+Current implementation checkpoint is **PM-04A — Axis semantic model + persistence**. Datum Axis, Projection and later packages remain separately gated.
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 
@@ -673,11 +675,11 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.24 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02 and PM-03 are COMPLETED — PASS. PM-03A through PM-03F are closed. No later production package is active.**
+Program v1.25 is activation-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02 and PM-03 are COMPLETED — PASS. PM-04 is ACTIVE at PM-04A.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
-PM-02 and PM-03 production mutation authority are closed. There is currently **no active production CAD Work Contract**. PM-04 requires its own bounded Work Contract and explicit Owner acceptance before mutation.
+PM-02 and PM-03 production mutation authority are closed. Current legal production authority is the Owner-accepted PM-04 Work Contract: **`work/PM-04_AXIS_REVOLVE.md`**.
 
 PM-02A production accounting is closed: runtime candidate `58368a6ada5f6c30e03cb845682dbf5408ecb763` passed Windows FULL #1397 and was squash-merged to main as `b95f72105b8242eedce9cd79dd8bf910f3ccb715`.
 
@@ -699,4 +701,6 @@ PM-02I lifecycle, repair, persistence and regression matrix is closed: final run
 
 PM-02 is **COMPLETED — PASS**. Final accepted evidence is post-remediation runtime FULL #1473 on `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`, remediation docs DOCS #1474 on `1dbaef95b2ea48f8e529425a154b795984d6551f`, bookkeeping #1476 PASS, and Owner Windows re-test PASS on 2026-10-05 against current main `d8d73e213f24d5b82c5a7a13dbeba07282520a40`.
 
-PM-03 is **COMPLETED — PASS**. Final accepted evidence includes F1 Windows FULL #1522, F2a Windows FULL #1523, documentation workflow #1524 on exact docs candidate `439abd15b9e7ec1c4c8b2177cd8ea31f6debda0e` merged as `4e9ecdb4d51f7f81be799bbc0778b98808799f3d`, and Owner final Windows workflow PASS on 2026-10-05. The Owner explicitly accepted the missing neutral translucent plane fill as a presentation-only defer to PM-06, to be fixed coherently for both Origin and Datum planes. PM-04 and all later product packages remain NOT ACTIVE. Projection remains separately gated.
+PM-03 is **COMPLETED — PASS**. Final accepted evidence includes F1 Windows FULL #1522, F2a Windows FULL #1523, documentation workflow #1524 on exact docs candidate `439abd15b9e7ec1c4c8b2177cd8ea31f6debda0e` merged as `4e9ecdb4d51f7f81be799bbc0778b98808799f3d`, and Owner final Windows workflow PASS on 2026-10-05. The Owner explicitly accepted the missing neutral translucent plane fill as a presentation-only defer to PM-06, to be fixed coherently for both Origin and Datum planes.
+
+PM-04 is ACTIVE at PM-04A under the Owner-accepted Work Contract. Exact contract candidate `cc84e21b3178af73ddb06b58d4482a5aba67abee` passed Windows PR gate #1526 and merged to main as `8c464cb7447b8fef7d07b10cc6f16eb849b0c41e`. PM-05, PM-06 product scope and Projection remain separately gated.
