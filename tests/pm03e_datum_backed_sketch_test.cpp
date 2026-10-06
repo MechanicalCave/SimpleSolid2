@@ -386,7 +386,7 @@ part::SketchPlacement resolvedDatumSketchFrame(
 int main() {
     CHECK(
         part::PartDocumentStore::
-            current_schema_version == 13);
+            current_schema_version == 14);
 
     TestKernel kernel;
     auto fixture = makeFixture(kernel);

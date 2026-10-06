@@ -118,7 +118,7 @@ std::string schema11FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        13);
+        14);
 
     part::AxisIdCursor cursor;
     const auto first = cursor.allocate();
