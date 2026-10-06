@@ -7769,6 +7769,15 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (extrude_profile_pick_generation_ &
                 (extrude_pick_namespace - 1U));
     }
+    if (axis_draft_) {
+        constexpr application::CadInputContextGeneration
+            axis_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 59U};
+        return axis_namespace |
+               (axis_draft_->generation() &
+                (axis_namespace - 1U));
+    }
     if (datum_plane_draft_) {
         constexpr application::CadInputContextGeneration
             datum_plane_namespace =
@@ -7797,6 +7806,9 @@ std::vector<application::CadDynamicInputField>
 CadWorkbench::cadDynamicInputFields() const {
     if (sketch_support_pick_active_ ||
         extrude_profile_pick_active_) {
+        return {};
+    }
+    if (axis_draft_) {
         return {};
     }
     if (datum_plane_draft_) {
@@ -7947,6 +7959,14 @@ CadWorkbench::submitCadDynamicInputRequest(
         return {
             false,
             "CAD input semantic context is stale."};
+    }
+    if (axis_draft_) {
+        return finishAxis()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Axis Finish was rejected."};
     }
     if (datum_plane_draft_) {
         return finishDatumPlane()
