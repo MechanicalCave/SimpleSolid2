@@ -1654,6 +1654,18 @@ void CadWorkbench::buildUi() {
             setStatusText(fromUtf8(message));
         });
 
+    tree_controller_->setAxisSelectionHandler(
+        [this](
+            const std::vector<part::AxisId>& selected,
+            std::optional<part::AxisId> primary) {
+            if (viewport_controller_ != nullptr) {
+                viewport_controller_->
+                    setAxisSelectionFromTree(
+                        selected,
+                        primary);
+            }
+        });
+
     tree_controller_->setProfileSelectionHandler(
         [this](
             const std::vector<part::ProfileId>& selected,
