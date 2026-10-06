@@ -436,6 +436,15 @@ int main(int argc, char* argv[]) {
         },
         &kernel};
     CHECK(viewport != nullptr);
+
+    // The shell intentionally hides the right panel in narrow mode. This
+    // focused UI test asserts actual Operations visibility, so pin the test
+    // to the normal desktop regime instead of depending on the offscreen
+    // platform's default top-level size.
+    workbench.resize(1400, 900);
+    workbench.show();
+    QApplication::processEvents();
+
     CHECK(
         workbench.activateDocument(
             &session,
