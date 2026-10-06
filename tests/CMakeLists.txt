@@ -930,6 +930,33 @@ set_tests_properties(pm04d2.cad_workbench_revolve PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel"
 )
 
+add_executable(pm04e1_revolve_persistence_test
+    pm04e1_revolve_persistence_test.cpp
+)
+
+target_include_directories(pm04e1_revolve_persistence_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
+)
+
+target_link_libraries(pm04e1_revolve_persistence_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_part
+        simplesolid2_persistence
+)
+
+target_compile_features(pm04e1_revolve_persistence_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm04e1.revolve_persistence
+    COMMAND pm04e1_revolve_persistence_test
+)
+
+set_tests_properties(pm04e1.revolve_persistence PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-persistence"
+)
+
 add_executable(pm04b2_axis_tree_viewer_test
     pm04b2_axis_tree_viewer_test.cpp
 )
