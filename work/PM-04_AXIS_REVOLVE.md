@@ -755,7 +755,8 @@ Close:
 ## Documentation Impact
 
 Internal docs: required  
-User/Product docs: required
+User/Product docs: required  
+Reason: PM-04 introduces durable Axis identity/reference semantics, schema migration, a new Revolve Feature family, new failure/repair behavior, new Viewer/Tree/Properties presentation, and user-visible Add/Cut OneSide/Midplane workflows.
 
 Before PM-04 completion documentation must describe:
 
