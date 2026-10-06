@@ -616,6 +616,6 @@ int main(int argc, char* argv[]) {
     CHECK(!currentAxisPresentation(*viewport));
 
     std::cout
-        << "PM-04B2 Axis Tree/Viewer/Properties tests passed\n";
+        << "PM-04B2/PM-04F Axis contextual Tree/Viewer/Properties tests passed\n";
     return EXIT_SUCCESS;
 }
