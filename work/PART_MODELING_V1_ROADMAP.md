@@ -6,7 +6,7 @@
 **Previous accepted version:** 1.24 — 2026-10-05  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-04E — integrated lifecycle / repair / persistence under `work/PM-04_AXIS_REVOLVE.md`  
+**Current active checkpoint:** PM-04F — documentation / Product Browser / Owner Windows acceptance under `work/PM-04_AXIS_REVOLVE.md`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -514,7 +514,9 @@ PM-04C Revolve semantic/kernel operation + topology catalog is **COMPLETED — P
 
 PM-04D Revolve draft / Operations / Command Line / preview is **COMPLETED — PASS**. D1 exact candidate `24975b9bdd8f2e97cc11f2c7fef77bdbc9c48de3` passed Windows FULL #1551 and merged as `84bddafb57eab4f7776b78621b81369c2917899b`; D2 exact candidate `c275045387b7fa928dcc955ba3837565796b1328` passed Windows FULL #1555 and merged as `92348a8af84679ee2ce77b099d9c337dfec2dc84`. Completion evidence: `work/PM-04D_REVOLVE_DRAFT_OPERATIONS_PREVIEW_COMPLETION.md`.
 
-Current implementation checkpoint is **PM-04E — integrated lifecycle / repair / persistence**. Datum Axis, Projection and later packages remain separately gated.
+PM-04E integrated lifecycle / repair / persistence is **COMPLETED — PASS**. E1 exact candidate `dad92ce54fb0cf69ae96b7210d5f49bfce3f9402` passed Windows FULL #1560 and merged as `a559f7b2d6a667e4d4b34cbfd7af6f2d93cd65e1`; E2 exact candidate `bdf87a29b5cdc27c608023af863e32c44dc55ef1` passed Windows FULL #1562 and merged as `e9a1056da4ec3639458aa1cdf4faacfc1621fcc9`; E3 exact candidate `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` passed Windows FULL #1563 and merged as `1a7e1228a91b23f89bf13f6bb5c07c8abe9afae3`. Completion evidence: `work/PM-04E_REVOLVE_LIFECYCLE_PERSISTENCE_COMPLETION.md`.
+
+Current implementation checkpoint is **PM-04F — documentation / Product Browser / Owner Windows acceptance**. Datum Axis, Projection and later packages remain separately gated.
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 
@@ -683,7 +685,7 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.25 is activation-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02 and PM-03 are COMPLETED — PASS. PM-04 is ACTIVE at PM-04E; PM-04A, PM-04B, PM-04C and PM-04D are COMPLETED — PASS.**
+Program v1.25 is activation-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02 and PM-03 are COMPLETED — PASS. PM-04 is ACTIVE at PM-04F; PM-04A, PM-04B, PM-04C, PM-04D and PM-04E are COMPLETED — PASS.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
@@ -711,4 +713,4 @@ PM-02 is **COMPLETED — PASS**. Final accepted evidence is post-remediation run
 
 PM-03 is **COMPLETED — PASS**. Final accepted evidence includes F1 Windows FULL #1522, F2a Windows FULL #1523, documentation workflow #1524 on exact docs candidate `439abd15b9e7ec1c4c8b2177cd8ea31f6debda0e` merged as `4e9ecdb4d51f7f81be799bbc0778b98808799f3d`, and Owner final Windows workflow PASS on 2026-10-05. The Owner explicitly accepted the missing neutral translucent plane fill as a presentation-only defer to PM-06, to be fixed coherently for both Origin and Datum planes.
 
-PM-04 is ACTIVE at PM-04E under the Owner-accepted Work Contract. Exact contract candidate `cc84e21b3178af73ddb06b58d4482a5aba67abee` passed Windows PR gate #1526 and merged to main as `8c464cb7447b8fef7d07b10cc6f16eb849b0c41e`. PM-04A, PM-04B, PM-04C and PM-04D are COMPLETED — PASS; PM-05, PM-06 product scope and Projection remain separately gated.
+PM-04 is ACTIVE at PM-04F under the Owner-accepted Work Contract. Exact contract candidate `cc84e21b3178af73ddb06b58d4482a5aba67abee` passed Windows PR gate #1526 and merged to main as `8c464cb7447b8fef7d07b10cc6f16eb849b0c41e`. PM-04A, PM-04B, PM-04C, PM-04D and PM-04E are COMPLETED — PASS; PM-05, PM-06 product scope and Projection remain separately gated.
