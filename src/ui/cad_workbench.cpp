@@ -5361,7 +5361,8 @@ bool CadWorkbench::startDatumPlaneTool() {
                 "A Datum Plane operation is already active."));
         return false;
     }
-    if (extrude_profile_pick_active_ ||
+    if (axis_draft_ ||
+        extrude_profile_pick_active_ ||
         extrude_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
@@ -5442,6 +5443,7 @@ bool CadWorkbench::startDatumPlaneEdit(
         return false;
     }
     if (datum_plane_draft_ ||
+        axis_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         active_sketch_id_ ||
@@ -6043,6 +6045,7 @@ bool CadWorkbench::startExtrudeTool() {
         return false;
     }
     if (datum_plane_draft_ ||
+        axis_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -6255,11 +6258,12 @@ bool CadWorkbench::startExtrudeEdit(
         return false;
     }
     if (datum_plane_draft_ ||
+        axis_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
             QStringLiteral(
-                "Finish or cancel the active Datum Plane/Sketch context before Edit Extrude."));
+                "Finish or cancel the active Axis/Datum Plane/Sketch context before Edit Extrude."));
         return false;
     }
 
@@ -6836,6 +6840,7 @@ void CadWorkbench::setSketchSelectionRole(
 
 void CadWorkbench::startSketchTool() {
     if (activeDocumentSession() == nullptr ||
+        axis_draft_ ||
         datum_plane_draft_ ||
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
@@ -6873,6 +6878,7 @@ void CadWorkbench::startSketchResupport(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr ||
+        axis_draft_ ||
         datum_plane_draft_ ||
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
