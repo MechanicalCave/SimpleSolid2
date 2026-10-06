@@ -3528,6 +3528,223 @@ OcctSolidModelingKernel::extrude(
 }
 
 
+kernel::SolidModelingResult
+OcctSolidModelingKernel::revolve(
+    const kernel::RevolveInput& input,
+    kernel::RuntimeSolidHandle upstream) noexcept {
+    kernel::SolidModelingResult result;
+    if (!input.valid()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                invalid_input;
+        return result;
+    }
+
+    if (input.operation ==
+            kernel::SolidBooleanOperation::cut &&
+        upstream == nullptr) {
+        result.status =
+            kernel::SolidModelingStatus::
+                missing_upstream;
+        return result;
+    }
+
+    const OcctRuntimeSolid* upstream_occt =
+        nullptr;
+    if (upstream != nullptr) {
+        upstream_occt =
+            dynamic_cast<
+                const OcctRuntimeSolid*>(
+                    upstream.get());
+        if (upstream_occt == nullptr) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_mismatch;
+            return result;
+        }
+    }
+
+    try {
+        const auto tool =
+            buildRevolveTool(input);
+        if (!tool) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        }
+
+        const auto& tool_shape =
+            tool->first;
+        const auto& created =
+            tool->second;
+
+        if (upstream_occt == nullptr) {
+            populateDiagnostics(
+                result,
+                tool_shape);
+            if (result.solid_count != 1U) {
+                result.status =
+                    result.solid_count == 0U
+                        ? kernel::SolidModelingStatus::
+                              empty_result
+                        : kernel::SolidModelingStatus::
+                              multi_solid;
+                return result;
+            }
+            if (!result.brep_valid) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        invalid_brep;
+                return result;
+            }
+
+            const auto solid =
+                singleSolid(tool_shape);
+            if (!solid) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            auto runtime =
+                std::make_shared<
+                    OcctRuntimeSolid>();
+            runtime->solid = *solid;
+
+            publishLineage(
+                result,
+                *runtime,
+                nullptr,
+                created,
+                [&tool_shape](
+                    const TopoDS_Face& source) {
+                    std::vector<TopoDS_Face>
+                        candidates;
+                    if (containsSameFace(
+                            tool_shape,
+                            source)) {
+                        candidates.push_back(
+                            source);
+                    }
+                    return candidates;
+                });
+
+            if (!populateRuntimeTopologyInventory(
+                    result,
+                    *runtime,
+                    runtime->solid)) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            if (!publishSurfaceLineage(
+                    result,
+                    *runtime,
+                    nullptr,
+                    created,
+                    false,
+                    [&tool_shape](
+                        const TopoDS_Face& source) {
+                        std::vector<TopoDS_Face>
+                            candidates;
+                        if (containsSameFace(
+                                tool_shape,
+                                source)) {
+                            candidates.push_back(
+                                source);
+                        }
+                        return candidates;
+                    })) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            if (!populateCurrentTopologySemantics(
+                    result,
+                    *runtime)) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            result.status =
+                kernel::SolidModelingStatus::ok;
+            result.solid =
+                std::move(runtime);
+            return result;
+        }
+
+        if (input.operation ==
+            kernel::SolidBooleanOperation::add) {
+            BRepAlgoAPI_Fuse fuse{
+                upstream_occt->solid,
+                tool_shape};
+            fuse.SetFuzzyValue(0.0);
+            fuse.Build();
+            return finishBoolean(
+                fuse,
+                *upstream_occt,
+                created,
+                input.operation);
+        }
+
+        BRepAlgoAPI_Common overlap{
+            upstream_occt->solid,
+            tool_shape};
+        overlap.SetFuzzyValue(0.0);
+        overlap.Build();
+        if (!overlap.IsDone()) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        }
+        switch (volumePresence(
+                    overlap.Shape())) {
+        case VolumePresence::none:
+            result.status =
+                kernel::SolidModelingStatus::
+                    no_effect;
+            return result;
+        case VolumePresence::invalid:
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        case VolumePresence::positive:
+            break;
+        }
+
+        BRepAlgoAPI_Cut cut{
+            upstream_occt->solid,
+            tool_shape};
+        cut.SetFuzzyValue(0.0);
+        cut.Build();
+        return finishBoolean(
+            cut,
+            *upstream_occt,
+            created,
+            input.operation);
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+}
+
 kernel::SolidPresentationResult
 OcctSolidModelingKernel::extrudePreviewMesh(
     const kernel::LinearExtrudeInput& input,
