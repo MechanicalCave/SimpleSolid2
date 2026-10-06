@@ -714,7 +714,7 @@ PM-05 does not include:
 - Shell / Draft / Pattern / Mirror;
 - Assembly/Drawing implementation.
 
-## 29. Documentation impact
+## Documentation impact
 
 Internal docs: required.  
 User/Product docs: required.  
