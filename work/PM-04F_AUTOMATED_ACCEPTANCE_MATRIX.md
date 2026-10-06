@@ -1,6 +1,6 @@
 # PM-04F — Automated Acceptance Matrix
 
-**Status:** ACTIVE — documentation / Product Browser candidate pending exact-head docs gate  
+**Status:** AUTOMATED PASS — OWNER WINDOWS PENDING  
 **Parent Work Contract:** `work/PM-04_AXIS_REVOLVE.md`  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
 **Date:** 2026-10-06
@@ -25,8 +25,8 @@ PM-04A through PM-04E are already merged and exact-head gated. PM-04F updates cu
 | PM-04E1 | `dad92ce54fb0cf69ae96b7210d5f49bfce3f9402` | Windows FULL #1560 PASS | `a559f7b2d6a667e4d4b34cbfd7af6f2d93cd65e1` | schema v13 / Revolve persistence |
 | PM-04E2 | `bdf87a29b5cdc27c608023af863e32c44dc55ef1` | Windows FULL #1562 PASS | `e9a1056da4ec3639458aa1cdf4faacfc1621fcc9` | lifecycle / repair / Save-Reopen / cold rebuild |
 | PM-04E3 | `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` | Windows FULL #1563 PASS | `1a7e1228a91b23f89bf13f6bb5c07c8abe9afae3` | Profile-source and Sketch-support edits |
-| PM-04F docs | this checkpoint | exact-head Windows DOCS required | pending | internal + PL/EN Product + generated Browser |
-| PM-04F final automated | post-docs main | exact-head automated gate required | pending | final package verification |
+| PM-04F docs | `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` | Windows DOCS #1565 PASS | `72c40b8cfb39ea63859d5485f80a8adfbba35094` | internal + PL/EN Product + generated Browser |
+| PM-04F final automated | `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` | exact-head Windows DOCS #1565 PASS; latest runtime-affecting candidate remains FULL #1563 PASS | `72c40b8cfb39ea63859d5485f80a8adfbba35094` | final package automated verification |
 | PM-04F Owner Windows | Owner execution | manual PASS required | pending | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
 
 ## Contract matrix
@@ -72,10 +72,10 @@ PM-04A through PM-04E are already merged and exact-head gated. PM-04F updates cu
 | no provider identity or geometry-similarity rebinding | PM-04A/C/E | PASS |
 | exact preview delta and committed Body presentation isolation | PM-04D | PASS |
 | schema v13 reconstructs semantic intent without provider continuity | PM-04E1/E2/E3 | PASS |
-| internal as-built documentation | PM-04F docs slice | PENDING exact-head DOCS |
-| PL/EN Product documentation with paired section structure | PM-04F docs slice | PENDING exact-head DOCS |
-| generated Product Browser freshness | PM-04F docs slice | PENDING exact-head DOCS |
-| final exact-head automated package gate | PM-04F final gate | PENDING |
+| internal as-built documentation | PM-04F docs exact candidate `5dfd0010...` / #1565 | PASS |
+| PL/EN Product documentation with paired section structure | PM-04F docs exact candidate `5dfd0010...` / #1565 | PASS |
+| generated Product Browser freshness | repository generator + Windows DOCS #1565 | PASS |
+| final exact-head automated package gate | Windows DOCS #1565 on the final docs/evidence candidate; runtime semantics last changed at PM-04E3 FULL #1563 | PASS |
 | Owner Windows workflow | Owner | **PENDING OWNER** |
 
 ## Documentation closure requirements
@@ -97,11 +97,16 @@ The Product Browser is generated from canonical Markdown and must not be edited 
 
 ## Remaining PM-04F gates
 
-1. complete the current-state canonical docs and generated Product Browser;
-2. pass the exact-head documentation gate and merge the docs slice;
-3. pass the final exact-head automated package gate on post-docs main;
-4. execute `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` on supported Windows;
-5. only after explicit Owner PASS, close PM-04 and advance governance. PM-05/PM-06 remain separately gated.
+Automated PM-04F closure is complete.
+
+The last runtime-affecting candidate, PM-04E3 `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f`, passed Windows FULL #1563. The only intervening merges before the final documentation candidate were governance-only PM-04E→F transition and documentation/evidence. Final documentation candidate `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` passed exact-head Windows DOCS #1565, including repository regeneration/freshness verification for Product Browser, and merged as `72c40b8cfb39ea63859d5485f80a8adfbba35094`.
+
+Therefore no artificial runtime/test mutation is required to manufacture another FULL run. A new automated gate is required only if main changes materially before PM-04 closure or Owner acceptance exposes a defect.
+
+Remaining mandatory gate:
+
+1. execute `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` on supported Windows;
+2. only after explicit Owner PASS, close PM-04 and advance governance. PM-05/PM-06 remain separately gated.
 
 ## Documentation impact
 
