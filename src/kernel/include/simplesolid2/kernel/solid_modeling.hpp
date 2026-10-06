@@ -268,14 +268,23 @@ enum class ExtrudeCapRole {
     positive_cap,
 };
 
-enum class ExtrudeGeneratedFaceRoleKind {
+enum class GeneratedFaceRoleKind {
     cap,
     side,
+    revolve_start_cap,
+    revolve_end_cap,
+    revolve_side,
 };
 
-struct ExtrudeFaceRole final {
-    ExtrudeGeneratedFaceRoleKind kind{
-        ExtrudeGeneratedFaceRoleKind::side};
+// Compatibility alias: existing Extrude code/tests keep the accepted PM-01
+// vocabulary while the underlying provider-neutral role family now also
+// carries PM-04 Revolve topology provenance.
+using ExtrudeGeneratedFaceRoleKind =
+    GeneratedFaceRoleKind;
+
+struct GeneratedFaceRole final {
+    GeneratedFaceRoleKind kind{
+        GeneratedFaceRoleKind::side};
     std::optional<ExtrudeCapRole> cap_role;
     std::optional<BoundaryUseProvenance>
         side_provenance;
@@ -283,9 +292,11 @@ struct ExtrudeFaceRole final {
     [[nodiscard]] bool valid() const noexcept;
 
     friend bool operator==(
-        const ExtrudeFaceRole&,
-        const ExtrudeFaceRole&) = default;
+        const GeneratedFaceRole&,
+        const GeneratedFaceRole&) = default;
 };
+
+using ExtrudeFaceRole = GeneratedFaceRole;
 
 struct LinearExtrudeInput final {
     PlanarProfileInput profile;
@@ -300,6 +311,36 @@ struct LinearExtrudeInput final {
 
     // PM-01 supports exactly OneSide or Midplane semantics.
     [[nodiscard]] bool valid() const noexcept;
+};
+
+struct Axis3 final {
+    Point3 origin;
+    Point3 direction{1.0, 0.0, 0.0};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const Axis3&,
+        const Axis3&) = default;
+};
+
+struct AngularRevolveInput final {
+    PlanarProfileInput profile;
+    Axis3 axis;
+    double start_angle_radians{};
+    double end_angle_radians{};
+    SolidBooleanOperation operation{
+        SolidBooleanOperation::add};
+
+    // PM-04 accepts one authored sweep interval with magnitude
+    // 0 < |end-start| <= 2*pi. OneSide Reverse is represented by a negative
+    // interval; Midplane is represented symmetrically around zero.
+    [[nodiscard]] bool valid() const noexcept;
+    [[nodiscard]] bool fullTurn() const noexcept;
+
+    friend bool operator==(
+        const AngularRevolveInput&,
+        const AngularRevolveInput&) = default;
 };
 
 enum class SolidModelingStatus {
@@ -449,6 +490,14 @@ public:
     extrude(
         const LinearExtrudeInput& input,
         RuntimeSolidHandle upstream = {}) noexcept = 0;
+
+    // Provider-neutral PM-04 rotational solid operation. The default keeps
+    // bounded test providers source-compatible and fails closed for a valid
+    // request until that provider explicitly implements Revolve.
+    [[nodiscard]] virtual SolidModelingResult
+    revolve(
+        const AngularRevolveInput& input,
+        RuntimeSolidHandle upstream = {}) noexcept;
 
     // Presentation-only exact operation delta for Extrude preview:
     // Add => tool - upstream Body, Cut => tool ∩ upstream Body.

@@ -857,6 +857,28 @@ set_tests_properties(pm04b.axis_lifecycle_draft PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part"
 )
 
+add_executable(pm04c1_revolve_semantic_kernel_test
+    pm04c1_revolve_semantic_kernel_test.cpp
+)
+
+target_link_libraries(pm04c1_revolve_semantic_kernel_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_part
+        simplesolid2_kernel
+)
+
+target_compile_features(pm04c1_revolve_semantic_kernel_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm04c1.revolve_semantic_kernel
+    COMMAND pm04c1_revolve_semantic_kernel_test
+)
+
+set_tests_properties(pm04c1.revolve_semantic_kernel PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-kernel"
+)
+
 add_executable(pm04b2_axis_tree_viewer_test
     pm04b2_axis_tree_viewer_test.cpp
 )

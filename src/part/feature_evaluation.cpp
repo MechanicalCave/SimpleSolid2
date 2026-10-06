@@ -1,5 +1,6 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
 
+#include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
 
 #include <simplesolid2/part/feature.hpp>
@@ -8,7 +9,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
+#include <numbers>
+#include <type_traits>
 #include <utility>
 
 namespace simplesolid2::part {
@@ -60,6 +64,14 @@ kernelOperation(
         : kernel::SolidBooleanOperation::add;
 }
 
+[[nodiscard]] kernel::SolidBooleanOperation
+kernelOperation(
+    RevolveOperation operation) noexcept {
+    return operation == RevolveOperation::cut
+        ? kernel::SolidBooleanOperation::cut
+        : kernel::SolidBooleanOperation::add;
+}
+
 [[nodiscard]] FeatureEvaluationDiagnosticCode
 diagnosticForProfileMaterialization(
     ProfileKernelInputStatus status) noexcept {
@@ -89,6 +101,39 @@ diagnosticForProfileMaterialization(
     return FeatureEvaluationDiagnosticCode::
         kernel_invalid_input;
 }
+
+[[nodiscard]] FeatureEvaluationDiagnosticCode
+diagnosticForRevolveInput(
+    RevolveKernelInputStatus status) noexcept {
+    switch (status) {
+    case RevolveKernelInputStatus::resolved:
+        return FeatureEvaluationDiagnosticCode::none;
+    case RevolveKernelInputStatus::missing_profile:
+        return FeatureEvaluationDiagnosticCode::
+            missing_profile;
+    case RevolveKernelInputStatus::profile_unavailable:
+        return FeatureEvaluationDiagnosticCode::
+            profile_unavailable;
+    case RevolveKernelInputStatus::missing_axis:
+        return FeatureEvaluationDiagnosticCode::
+            missing_axis;
+    case RevolveKernelInputStatus::axis_unavailable:
+        return FeatureEvaluationDiagnosticCode::
+            axis_unavailable;
+    case RevolveKernelInputStatus::axis_not_in_profile_plane:
+        return FeatureEvaluationDiagnosticCode::
+            axis_not_in_profile_plane;
+    case RevolveKernelInputStatus::profile_crosses_axis:
+        return FeatureEvaluationDiagnosticCode::
+            profile_crosses_axis;
+    case RevolveKernelInputStatus::invalid_input:
+        return FeatureEvaluationDiagnosticCode::
+            kernel_invalid_input;
+    }
+    return FeatureEvaluationDiagnosticCode::
+        kernel_invalid_input;
+}
+
 
 [[nodiscard]] std::optional<kernel::LinearExtrudeInput>
 makeKernelExtrudeInputFromProfile(
@@ -158,6 +203,499 @@ makeKernelExtrudeInputFromProfile(
         : std::nullopt;
 }
 
+[[nodiscard]] kernel::Point3
+cross3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.y * second.z -
+            first.z * second.y,
+        first.z * second.x -
+            first.x * second.z,
+        first.x * second.y -
+            first.y * second.x};
+}
+
+[[nodiscard]] double
+dot3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return first.x * second.x +
+           first.y * second.y +
+           first.z * second.z;
+}
+
+[[nodiscard]] kernel::Point3
+subtract3(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.x - second.x,
+        first.y - second.y,
+        first.z - second.z};
+}
+
+[[nodiscard]] double
+signedHalfPlaneValue(
+    double a,
+    double b,
+    double c,
+    const kernel::Point2& point) noexcept {
+    return a * point.u +
+           b * point.v +
+           c;
+}
+
+[[nodiscard]] kernel::Point2
+linePoint(
+    const kernel::Line2& line,
+    double parameter) noexcept {
+    return {
+        line.start.u +
+            (line.end.u - line.start.u) *
+                parameter,
+        line.start.v +
+            (line.end.v - line.start.v) *
+                parameter};
+}
+
+[[nodiscard]] double
+positiveAngleDelta(
+    double value) noexcept {
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    auto result =
+        std::fmod(value, full_turn);
+    if (result < 0.0) {
+        result += full_turn;
+    }
+    return result;
+}
+
+[[nodiscard]] bool
+angleOnSweep(
+    double start,
+    double delta,
+    double candidate) noexcept {
+    if (delta > 0.0) {
+        return positiveAngleDelta(
+                   candidate - start) <=
+               delta;
+    }
+    return positiveAngleDelta(
+               start - candidate) <=
+           -delta;
+}
+
+void includeCircularExtrema(
+    double center_u,
+    double center_v,
+    double radius,
+    double start,
+    double delta,
+    bool whole,
+    double a,
+    double b,
+    double c,
+    double& minimum,
+    double& maximum) noexcept {
+    const auto value =
+        [=](double angle) noexcept {
+            return a *
+                       (center_u +
+                        radius *
+                            std::cos(angle)) +
+                   b *
+                       (center_v +
+                        radius *
+                            std::sin(angle)) +
+                   c;
+        };
+
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    const double amplitude =
+        radius *
+        std::sqrt(a * a + b * b);
+    const double center =
+        a * center_u +
+        b * center_v +
+        c;
+
+    if (whole ||
+        std::abs(delta) == full_turn) {
+        minimum =
+            std::min(
+                minimum,
+                center - amplitude);
+        maximum =
+            std::max(
+                maximum,
+                center + amplitude);
+        return;
+    }
+
+    const double end =
+        start + delta;
+    minimum =
+        std::min(
+            minimum,
+            std::min(
+                value(start),
+                value(end)));
+    maximum =
+        std::max(
+            maximum,
+            std::max(
+                value(start),
+                value(end)));
+
+    const double maximum_angle =
+        std::atan2(b, a);
+    const double minimum_angle =
+        maximum_angle +
+        std::numbers::pi_v<double>;
+    for (const double candidate :
+         {maximum_angle, minimum_angle}) {
+        if (!angleOnSweep(
+                start,
+                delta,
+                candidate)) {
+            continue;
+        }
+        const double evaluated =
+            value(candidate);
+        minimum =
+            std::min(
+                minimum,
+                evaluated);
+        maximum =
+            std::max(
+                maximum,
+                evaluated);
+    }
+}
+
+[[nodiscard]] bool
+profileCrossesAxis(
+    const kernel::PlanarProfileInput& profile,
+    const ResolvedAxisLine& axis,
+    bool coplanarity_proven,
+    bool& coplanar) noexcept {
+    const auto plane_normal =
+        cross3(
+            profile.frame.u_axis,
+            profile.frame.v_axis);
+    const auto origin_delta =
+        subtract3(
+            axis.origin,
+            profile.frame.origin);
+    coplanar =
+        coplanarity_proven ||
+        (dot3(
+             plane_normal,
+             origin_delta) == 0.0 &&
+         dot3(
+             plane_normal,
+             axis.direction) == 0.0);
+    if (!coplanar) {
+        return false;
+    }
+
+    // The signed half-plane functional is evaluated directly on Profile-local
+    // U/V geometry but derived from the current world Axis and support frame.
+    // No tolerance/proximity policy or geometry search is introduced.
+    const auto axis_cross_u =
+        cross3(
+            axis.direction,
+            profile.frame.u_axis);
+    const auto axis_cross_v =
+        cross3(
+            axis.direction,
+            profile.frame.v_axis);
+    const auto axis_cross_origin =
+        cross3(
+            axis.direction,
+            subtract3(
+                profile.frame.origin,
+                axis.origin));
+    const double a =
+        dot3(
+            axis_cross_u,
+            plane_normal);
+    const double b =
+        dot3(
+            axis_cross_v,
+            plane_normal);
+    const double c =
+        dot3(
+            axis_cross_origin,
+            plane_normal);
+
+    double minimum =
+        std::numeric_limits<double>::infinity();
+    double maximum =
+        -std::numeric_limits<double>::infinity();
+
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+
+    for (const auto& use :
+         profile.outer.boundary) {
+        std::visit(
+            [&](const auto& curve) {
+                using T =
+                    std::decay_t<decltype(curve)>;
+                if constexpr (
+                    std::is_same_v<
+                        T,
+                        kernel::Line2>) {
+                    const auto first =
+                        linePoint(
+                            curve,
+                            use.start_parameter);
+                    const auto second =
+                        linePoint(
+                            curve,
+                            use.end_parameter);
+                    const double first_value =
+                        signedHalfPlaneValue(
+                            a, b, c, first);
+                    const double second_value =
+                        signedHalfPlaneValue(
+                            a, b, c, second);
+                    minimum =
+                        std::min(
+                            minimum,
+                            std::min(
+                                first_value,
+                                second_value));
+                    maximum =
+                        std::max(
+                            maximum,
+                            std::max(
+                                first_value,
+                                second_value));
+                } else if constexpr (
+                    std::is_same_v<
+                        T,
+                        kernel::Circle2>) {
+                    double start =
+                        full_turn *
+                        use.start_parameter;
+                    double delta{};
+                    if (use.whole_closed_curve) {
+                        delta =
+                            use.follows_source_direction
+                                ? full_turn
+                                : -full_turn;
+                    } else {
+                        const double from =
+                            use.follows_source_direction
+                                ? use.start_parameter
+                                : use.end_parameter;
+                        const double to =
+                            use.follows_source_direction
+                                ? use.end_parameter
+                                : use.start_parameter;
+                        start =
+                            full_turn * from;
+                        delta =
+                            use.crosses_closed_seam
+                                ? (1.0 - from) + to
+                                : to - from;
+                        delta *= full_turn;
+                        if (!use.follows_source_direction) {
+                            delta = -delta;
+                        }
+                    }
+                    includeCircularExtrema(
+                        curve.center.u,
+                        curve.center.v,
+                        curve.radius,
+                        start,
+                        delta,
+                        use.whole_closed_curve,
+                        a,
+                        b,
+                        c,
+                        minimum,
+                        maximum);
+                } else {
+                    const double start =
+                        curve.start_angle +
+                        curve.sweep_angle *
+                            use.start_parameter;
+                    const double delta =
+                        curve.sweep_angle *
+                        (use.end_parameter -
+                         use.start_parameter);
+                    includeCircularExtrema(
+                        curve.center.u,
+                        curve.center.v,
+                        curve.radius,
+                        start,
+                        delta,
+                        false,
+                        a,
+                        b,
+                        c,
+                        minimum,
+                        maximum);
+                }
+            },
+            use.curve);
+    }
+
+    return minimum < 0.0 &&
+           maximum > 0.0;
+}
+
+[[nodiscard]] bool
+originAxisLiesInOriginPlane(
+    core::BuiltinReferenceRole axis,
+    core::BuiltinReferenceRole plane) noexcept {
+    switch (plane) {
+    case core::BuiltinReferenceRole::xy_plane:
+        return axis ==
+                   core::BuiltinReferenceRole::x_axis ||
+               axis ==
+                   core::BuiltinReferenceRole::y_axis;
+    case core::BuiltinReferenceRole::xz_plane:
+        return axis ==
+                   core::BuiltinReferenceRole::x_axis ||
+               axis ==
+                   core::BuiltinReferenceRole::z_axis;
+    case core::BuiltinReferenceRole::yz_plane:
+        return axis ==
+                   core::BuiltinReferenceRole::y_axis ||
+               axis ==
+                   core::BuiltinReferenceRole::z_axis;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] bool
+coplanarityProvenBySupportIdentity(
+    const PartDocument& document,
+    const PartProfile& profile,
+    const AxisReference& reference) noexcept {
+    const auto* profile_sketch =
+        document.findSketch(
+            profile.source_sketch_id);
+    if (profile_sketch == nullptr) {
+        return false;
+    }
+
+    if (const auto origin_axis =
+            builtinOriginAxisForAxisReference(
+                reference)) {
+        const auto origin_plane =
+            builtinOriginPlaneForSketchSupport(
+                profile_sketch->support);
+        return origin_plane &&
+               originAxisLiesInOriginPlane(
+                   *origin_axis,
+                   *origin_plane);
+    }
+
+    const auto axis_id =
+        authoredAxisIdForAxisReference(
+            reference);
+    if (!axis_id) {
+        return false;
+    }
+    const auto* axis =
+        document.findAxis(*axis_id);
+    if (axis == nullptr) {
+        return false;
+    }
+    const auto* axis_sketch =
+        document.findSketch(
+            axis->source.sketch_id);
+    return axis_sketch != nullptr &&
+           axis_sketch->support ==
+               profile_sketch->support;
+}
+
+[[nodiscard]] const BodyStageTopologyCatalog*
+profileSupportTopology(
+    const PartDocument& document,
+    ProfileId profile_id,
+    const PartEvaluation* prefix_evaluation) noexcept {
+    const auto* profile =
+        document.findProfile(profile_id);
+    if (profile == nullptr) {
+        return nullptr;
+    }
+    const auto* sketch =
+        document.findSketch(
+            profile->source_sketch_id);
+    if (sketch == nullptr) {
+        return nullptr;
+    }
+    const auto* surface =
+        bodyPlanarSurfaceReference(
+            sketch->support);
+    if (surface == nullptr) {
+        return nullptr;
+    }
+    if (prefix_evaluation == nullptr ||
+        prefix_evaluation->source_revision !=
+            document.revision() ||
+        surface->stage.kind !=
+            BodyStageKind::after_feature ||
+        !surface->stage.feature_id) {
+        return nullptr;
+    }
+    const auto* feature =
+        prefix_evaluation->findFeature(
+            *surface->stage.feature_id);
+    return feature != nullptr &&
+                   feature->result_topology &&
+                   feature->result_topology->complete() &&
+                   feature->result_topology->stage ==
+                       surface->stage
+        ? &*feature->result_topology
+        : nullptr;
+}
+
+[[nodiscard]] kernel::AngularRevolveInput
+makeKernelRevolveInputFromResolved(
+    kernel::PlanarProfileInput profile,
+    const ResolvedAxisLine& axis,
+    const RevolveFeature& feature) {
+    kernel::AngularRevolveInput result;
+    result.profile = std::move(profile);
+    result.axis = {
+        axis.origin,
+        axis.direction};
+    result.operation =
+        kernelOperation(feature.operation);
+
+    if (const auto* one_sided =
+            std::get_if<
+                OneSidedRevolveExtent>(
+                &feature.extent)) {
+        result.start_angle_radians = 0.0;
+        result.end_angle_radians =
+            one_sided->reversed
+                ? -one_sided->angle.radians
+                : one_sided->angle.radians;
+        return result;
+    }
+
+    const auto& midplane =
+        std::get<MidplaneRevolveExtent>(
+            feature.extent);
+    const double half =
+        midplane.total_angle.radians * 0.5;
+    result.start_angle_radians = -half;
+    result.end_angle_radians = half;
+    return result;
+}
+
 } // namespace
 
 std::optional<kernel::LinearExtrudeInput>
@@ -181,6 +719,119 @@ makeKernelExtrudeInput(
     return makeKernelExtrudeInputFromProfile(
         std::move(*profile.input),
         feature);
+}
+
+RevolveKernelInputResult
+resolveKernelRevolveInput(
+    const PartDocument& document,
+    const RevolveFeature& feature,
+    const PartEvaluation* prefix_evaluation,
+    const DatumEvaluation* datum_evaluation) {
+    RevolveKernelInputResult result;
+
+    if (!revolveFeatureStructurallyValid(
+            feature)) {
+        result.status =
+            RevolveKernelInputStatus::
+                invalid_input;
+        return result;
+    }
+
+    const auto* profile =
+        document.findProfile(
+            feature.profile_id);
+    if (profile == nullptr) {
+        result.status =
+            RevolveKernelInputStatus::
+                missing_profile;
+        return result;
+    }
+
+    const auto* support_topology =
+        profileSupportTopology(
+            document,
+            profile->id,
+            prefix_evaluation);
+    auto materialized =
+        resolveKernelProfileInput(
+            document,
+            profile->id,
+            support_topology,
+            datum_evaluation);
+    if (!materialized.ok()) {
+        result.status =
+            materialized.status ==
+                    ProfileKernelInputStatus::
+                        missing_profile
+                ? RevolveKernelInputStatus::
+                      missing_profile
+                : RevolveKernelInputStatus::
+                      profile_unavailable;
+        return result;
+    }
+
+    const auto axis =
+        resolveAxisReference(
+            document,
+            feature.axis,
+            prefix_evaluation,
+            datum_evaluation);
+    result.required_axis_stage =
+        axis.required_body_stage;
+    if (axis.status !=
+            AxisEvaluationStatus::resolved ||
+        !axis.line) {
+        result.status =
+            axis.diagnostic ==
+                    AxisEvaluationDiagnostic::
+                        missing_axis
+                ? RevolveKernelInputStatus::
+                      missing_axis
+                : RevolveKernelInputStatus::
+                      axis_unavailable;
+        return result;
+    }
+
+    bool coplanar = false;
+    const bool crosses =
+        profileCrossesAxis(
+            *materialized.input,
+            *axis.line,
+            coplanarityProvenBySupportIdentity(
+                document,
+                *profile,
+                feature.axis),
+            coplanar);
+    if (!coplanar) {
+        result.status =
+            RevolveKernelInputStatus::
+                axis_not_in_profile_plane;
+        return result;
+    }
+    if (crosses) {
+        result.status =
+            RevolveKernelInputStatus::
+                profile_crosses_axis;
+        return result;
+    }
+
+    auto input =
+        makeKernelRevolveInputFromResolved(
+            std::move(*materialized.input),
+            *axis.line,
+            feature);
+    if (!input.valid()) {
+        result.status =
+            RevolveKernelInputStatus::
+                invalid_input;
+        return result;
+    }
+
+    result.status =
+        RevolveKernelInputStatus::resolved;
+    result.input =
+        std::move(input);
+    return result;
 }
 
 namespace {
@@ -238,8 +889,8 @@ convertNewFace(
     result.runtime_token =
         source.resolved_token;
 
-    if (source.role.kind ==
-        kernel::ExtrudeGeneratedFaceRoleKind::cap) {
+    switch (source.role.kind) {
+    case kernel::GeneratedFaceRoleKind::cap:
         if (!source.role.cap_role) {
             result.status =
                 kernel::ReferenceStatus::
@@ -251,10 +902,30 @@ convertNewFace(
             partCapRole(
                 *source.role.cap_role);
         return result;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_start_cap:
+        result.address.role =
+            FeatureFaceRoleKind::
+                revolve_start_cap;
+        return result;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_end_cap:
+        result.address.role =
+            FeatureFaceRoleKind::
+                revolve_end_cap;
+        return result;
+    case kernel::GeneratedFaceRoleKind::side:
+        result.address.role =
+            FeatureFaceRoleKind::side;
+        break;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_side:
+        result.address.role =
+            FeatureFaceRoleKind::
+                revolve_side;
+        break;
     }
 
-    result.address.role =
-        FeatureFaceRoleKind::side;
     if (!source.role.side_provenance) {
         result.status =
             kernel::ReferenceStatus::
@@ -309,8 +980,8 @@ convertNewSurface(
     result.current_faces =
         source.current_faces;
 
-    if (source.role.kind ==
-        kernel::ExtrudeGeneratedFaceRoleKind::cap) {
+    switch (source.role.kind) {
+    case kernel::GeneratedFaceRoleKind::cap:
         if (!source.role.cap_role) {
             result.status =
                 kernel::ReferenceStatus::
@@ -327,10 +998,30 @@ convertNewSurface(
             partSurfaceCapRole(
                 *source.role.cap_role);
         return result;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_start_cap:
+        result.address.role =
+            FeatureSurfaceRoleKind::
+                revolve_start_cap;
+        return result;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_end_cap:
+        result.address.role =
+            FeatureSurfaceRoleKind::
+                revolve_end_cap;
+        return result;
+    case kernel::GeneratedFaceRoleKind::side:
+        result.address.role =
+            FeatureSurfaceRoleKind::side;
+        break;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_side:
+        result.address.role =
+            FeatureSurfaceRoleKind::
+                revolve_side;
+        break;
     }
 
-    result.address.role =
-        FeatureSurfaceRoleKind::side;
     if (!source.role.side_provenance) {
         result.status =
             kernel::ReferenceStatus::
@@ -1875,7 +2566,8 @@ bool FeatureFaceAddress::valid() const noexcept {
     if (!producer_feature_id.valid()) {
         return false;
     }
-    if (role == FeatureFaceRoleKind::side) {
+    if (role == FeatureFaceRoleKind::side ||
+        role == FeatureFaceRoleKind::revolve_side) {
         return source_entity.has_value() &&
                source_entity->valid();
     }
@@ -2537,7 +3229,11 @@ PartEvaluation evaluatePart(
         const auto* extrude =
             std::get_if<ExtrudeFeature>(
                 &authored.definition);
-        if (extrude == nullptr) {
+        const auto* revolve =
+            std::get_if<RevolveFeature>(
+                &authored.definition);
+        if (extrude == nullptr &&
+            revolve == nullptr) {
             evaluated.status =
                 FeatureEvaluationStatus::
                     failed;
@@ -2545,18 +3241,19 @@ PartEvaluation evaluatePart(
                 FeatureEvaluationDiagnosticCode::
                     kernel_invalid_input;
             chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
             continue;
         }
 
+        const ProfileId profile_id =
+            extrude != nullptr
+                ? extrude->profile_id
+                : revolve->profile_id;
         const auto* profile =
             document.findProfile(
-                extrude->profile_id);
+                profile_id);
         if (profile == nullptr) {
             evaluated.status =
                 FeatureEvaluationStatus::
@@ -2565,9 +3262,6 @@ PartEvaluation evaluatePart(
                 FeatureEvaluationDiagnosticCode::
                     missing_profile;
             chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
@@ -2602,9 +3296,6 @@ PartEvaluation evaluatePart(
             } else if (
                 datumPlaneIdForSketchSupport(
                     source->support)) {
-                // Same-revision prefix only: a Datum that requires this
-                // Feature or a later stage cannot resolve yet, so the
-                // downstream Feature blocks before any Kernel mutation.
                 support_datums =
                     evaluateDatums(
                         document,
@@ -2612,76 +3303,138 @@ PartEvaluation evaluatePart(
             }
         }
 
-        auto materialized_profile =
-            resolveKernelProfileInput(
-                document,
-                profile->id,
-                support_topology,
-                support_datums
-                    ? &*support_datums
-                    : nullptr);
-        if (!materialized_profile.ok()) {
-            evaluated.status =
-                materialized_profile.status ==
-                        ProfileKernelInputStatus::
-                            invalid_input
-                    ? FeatureEvaluationStatus::failed
-                    : FeatureEvaluationStatus::blocked;
-            evaluated.diagnostic =
-                diagnosticForProfileMaterialization(
-                    materialized_profile.status);
-            chain_broken = true;
-            // The exact current support stage is mandatory. A prior
-            // evaluation's world frame is never reused after Missing,
-            // Ambiguous or Unsupported resolution.
-            current_references.clear();
-            result.features.push_back(
-                std::move(evaluated));
-            continue;
+        // Authored Axis may itself live on a Datum-backed Sketch even when
+        // the consuming Profile does not. Revolve therefore evaluates the
+        // same-revision Datum prefix unconditionally; resolution remains
+        // demand-driven and fail-closed.
+        if (revolve != nullptr &&
+            !support_datums) {
+            support_datums =
+                evaluateDatums(
+                    document,
+                    result);
         }
 
-        if (extrude->operation ==
-                ExtrudeOperation::cut &&
-            current_solid == nullptr) {
-            evaluated.status =
-                FeatureEvaluationStatus::
-                    blocked;
-            evaluated.diagnostic =
-                FeatureEvaluationDiagnosticCode::
-                    missing_upstream_body;
-            chain_broken = true;
-            current_references.clear();
-            result.features.push_back(
-                std::move(evaluated));
-            continue;
+        kernel::SolidModelingResult
+            kernel_result;
+
+        if (extrude != nullptr) {
+            auto materialized_profile =
+                resolveKernelProfileInput(
+                    document,
+                    profile->id,
+                    support_topology,
+                    support_datums
+                        ? &*support_datums
+                        : nullptr);
+            if (!materialized_profile.ok()) {
+                evaluated.status =
+                    materialized_profile.status ==
+                            ProfileKernelInputStatus::
+                                invalid_input
+                        ? FeatureEvaluationStatus::
+                              failed
+                        : FeatureEvaluationStatus::
+                              blocked;
+                evaluated.diagnostic =
+                    diagnosticForProfileMaterialization(
+                        materialized_profile.status);
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            if (extrude->operation ==
+                    ExtrudeOperation::cut &&
+                current_solid == nullptr) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        blocked;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        missing_upstream_body;
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            auto input =
+                makeKernelExtrudeInputFromProfile(
+                    std::move(
+                        *materialized_profile.input),
+                    *extrude);
+            if (!input) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        failed;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        kernel_invalid_input;
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            kernel_result =
+                modeling_kernel.extrude(
+                    *input,
+                    current_solid);
+        } else {
+            if (revolve->operation ==
+                    RevolveOperation::cut &&
+                current_solid == nullptr) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        blocked;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        missing_upstream_body;
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            const auto resolved =
+                resolveKernelRevolveInput(
+                    document,
+                    *revolve,
+                    &result,
+                    support_datums
+                        ? &*support_datums
+                        : nullptr);
+            if (!resolved.ok()) {
+                evaluated.status =
+                    resolved.status ==
+                            RevolveKernelInputStatus::
+                                invalid_input
+                        ? FeatureEvaluationStatus::
+                              failed
+                        : FeatureEvaluationStatus::
+                              blocked;
+                evaluated.diagnostic =
+                    diagnosticForRevolveInput(
+                        resolved.status);
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            kernel_result =
+                modeling_kernel.revolve(
+                    *resolved.input,
+                    current_solid);
         }
 
-        auto input =
-            makeKernelExtrudeInputFromProfile(
-                std::move(
-                    *materialized_profile.input),
-                *extrude);
-        if (!input) {
-            evaluated.status =
-                FeatureEvaluationStatus::
-                    failed;
-            evaluated.diagnostic =
-                FeatureEvaluationDiagnosticCode::
-                    kernel_invalid_input;
-            chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
-            current_references.clear();
-            result.features.push_back(
-                std::move(evaluated));
-            continue;
-        }
-
-        auto kernel_result =
-            modeling_kernel.extrude(
-                *input,
-                current_solid);
         evaluated.kernel_status =
             kernel_result.status;
         if (!kernel_result.ok()) {
@@ -2692,9 +3445,6 @@ PartEvaluation evaluatePart(
                 diagnosticForKernel(
                     kernel_result.status);
             chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));

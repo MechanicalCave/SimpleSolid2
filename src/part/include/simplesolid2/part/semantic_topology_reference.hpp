@@ -43,6 +43,9 @@ enum class FeatureSurfaceRoleKind {
     negative_cap,
     positive_cap,
     side,
+    revolve_start_cap,
+    revolve_end_cap,
+    revolve_side,
 };
 
 struct FeatureSurfaceAddress final {
@@ -59,7 +62,8 @@ struct FeatureSurfaceAddress final {
         if (!producer_feature_id.valid()) {
             return false;
         }
-        if (role == FeatureSurfaceRoleKind::side) {
+        if (role == FeatureSurfaceRoleKind::side ||
+            role == FeatureSurfaceRoleKind::revolve_side) {
             return source_entity.has_value() &&
                    source_entity->valid();
         }

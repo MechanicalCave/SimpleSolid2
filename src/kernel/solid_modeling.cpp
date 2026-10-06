@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <utility>
 #include <vector>
 
@@ -192,17 +193,23 @@ bool BodyPresentation::valid() const noexcept {
     return true;
 }
 
-bool ExtrudeFaceRole::valid() const noexcept {
-    if (kind == ExtrudeGeneratedFaceRoleKind::cap) {
+bool GeneratedFaceRole::valid() const noexcept {
+    if (kind == GeneratedFaceRoleKind::cap) {
         return cap_role.has_value() &&
                capRole(*cap_role) &&
                !side_provenance.has_value();
     }
-    if (kind == ExtrudeGeneratedFaceRoleKind::side) {
+    if (kind == GeneratedFaceRoleKind::side ||
+        kind == GeneratedFaceRoleKind::revolve_side) {
         return !cap_role.has_value() &&
                side_provenance.has_value() &&
                !side_provenance
                     ->source_entity.empty();
+    }
+    if (kind == GeneratedFaceRoleKind::revolve_start_cap ||
+        kind == GeneratedFaceRoleKind::revolve_end_cap) {
+        return !cap_role.has_value() &&
+               !side_provenance.has_value();
     }
     return false;
 }
@@ -252,6 +259,84 @@ bool LinearExtrudeInput::valid() const noexcept {
     return forward_one_side ||
            reverse_one_side ||
            midplane;
+}
+
+bool Axis3::valid() const noexcept {
+    const auto finite_point =
+        [](const Point3& point) noexcept {
+            return std::isfinite(point.x) &&
+                   std::isfinite(point.y) &&
+                   std::isfinite(point.z);
+        };
+    if (!finite_point(origin) ||
+        !finite_point(direction)) {
+        return false;
+    }
+    const double length_squared =
+        direction.x * direction.x +
+        direction.y * direction.y +
+        direction.z * direction.z;
+    return std::isfinite(length_squared) &&
+           length_squared > 0.0;
+}
+
+bool AngularRevolveInput::valid() const noexcept {
+    if (!profile.valid() ||
+        !axis.valid() ||
+        !std::isfinite(start_angle_radians) ||
+        !std::isfinite(end_angle_radians)) {
+        return false;
+    }
+
+    switch (operation) {
+    case SolidBooleanOperation::add:
+    case SolidBooleanOperation::cut:
+        break;
+    default:
+        return false;
+    }
+
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    const double magnitude =
+        std::abs(
+            end_angle_radians -
+            start_angle_radians);
+    return std::isfinite(magnitude) &&
+           magnitude > 0.0 &&
+           magnitude <= full_turn;
+}
+
+bool AngularRevolveInput::fullTurn() const noexcept {
+    if (!valid()) return false;
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    return std::abs(
+               end_angle_radians -
+               start_angle_radians) ==
+           full_turn;
+}
+
+SolidModelingResult
+ISolidModelingKernel::revolve(
+    const AngularRevolveInput& input,
+    RuntimeSolidHandle upstream) noexcept {
+    SolidModelingResult result;
+    if (!input.valid()) {
+        result.status =
+            SolidModelingStatus::invalid_input;
+        return result;
+    }
+    if (input.operation ==
+            SolidBooleanOperation::cut &&
+        upstream == nullptr) {
+        result.status =
+            SolidModelingStatus::missing_upstream;
+        return result;
+    }
+    result.status =
+        SolidModelingStatus::provider_failure;
+    return result;
 }
 
 SolidPresentationResult

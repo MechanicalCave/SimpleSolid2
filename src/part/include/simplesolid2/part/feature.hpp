@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/core/units.hpp>
+#include <simplesolid2/part/axis.hpp>
 #include <simplesolid2/part/body_id.hpp>
 #include <simplesolid2/part/feature_id.hpp>
 #include <simplesolid2/part/profile_id.hpp>
@@ -51,7 +52,49 @@ struct ExtrudeFeature final {
                            const ExtrudeFeature&) = default;
 };
 
-using PartFeatureDefinition = std::variant<ExtrudeFeature>;
+enum class RevolveOperation : std::uint8_t {
+    add,
+    cut,
+};
+
+struct OneSidedRevolveExtent final {
+    core::AngleValue angle;
+    bool reversed{false};
+
+    friend bool operator==(
+        const OneSidedRevolveExtent&,
+        const OneSidedRevolveExtent&) = default;
+};
+
+struct MidplaneRevolveExtent final {
+    core::AngleValue total_angle;
+
+    friend bool operator==(
+        const MidplaneRevolveExtent&,
+        const MidplaneRevolveExtent&) = default;
+};
+
+using RevolveExtent =
+    std::variant<
+        OneSidedRevolveExtent,
+        MidplaneRevolveExtent>;
+
+struct RevolveFeature final {
+    ProfileId profile_id;
+    AxisReference axis;
+    RevolveOperation operation{
+        RevolveOperation::add};
+    RevolveExtent extent;
+
+    friend bool operator==(
+        const RevolveFeature&,
+        const RevolveFeature&) = default;
+};
+
+using PartFeatureDefinition =
+    std::variant<
+        ExtrudeFeature,
+        RevolveFeature>;
 
 struct PartFeature final {
     FeatureId id;
@@ -70,9 +113,13 @@ struct PartBody final {
 
 [[nodiscard]] bool extrudeFeatureStructurallyValid(
     const ExtrudeFeature& feature) noexcept;
+[[nodiscard]] bool revolveFeatureStructurallyValid(
+    const RevolveFeature& feature) noexcept;
 [[nodiscard]] bool partFeatureDefinitionStructurallyValid(
     const PartFeatureDefinition& definition) noexcept;
 [[nodiscard]] std::optional<ProfileId> sourceProfileId(
+    const PartFeature& feature) noexcept;
+[[nodiscard]] const AxisReference* sourceAxisReference(
     const PartFeature& feature) noexcept;
 
 } // namespace simplesolid2::part

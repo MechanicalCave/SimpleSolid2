@@ -452,6 +452,18 @@ bool PartDocument::validAuthoredState(
             return false;
         }
 
+        if (const auto* axis_reference =
+                sourceAxisReference(feature)) {
+            const auto axis_id =
+                authoredAxisIdForAxisReference(
+                    *axis_reference);
+            if (axis_id &&
+                !state.next_axis_id
+                     .containsAllocated(*axis_id)) {
+                return false;
+            }
+        }
+
         for (std::size_t previous = 0U;
              previous < index;
              ++previous) {
@@ -508,6 +520,38 @@ bool PartDocument::validAuthoredState(
                             feature_index]);
                 if (source &&
                     *source == profile.id &&
+                    stage_index >=
+                        feature_index) {
+                    return false;
+                }
+            }
+        }
+
+        // PM-04C bounded Axis dependency floor: an authored Axis inherits the
+        // Body-stage floor of its source Sketch. A Revolve consuming that Axis
+        // must be strictly downstream. Missing/deleted Axis remains repairable
+        // consumer intent and therefore has no source floor to inspect here.
+        for (const auto& axis : state.axes) {
+            if (axis.source.sketch_id !=
+                hosted.id) {
+                continue;
+            }
+            for (std::size_t feature_index = 0U;
+                 feature_index <
+                     state.body.features.size();
+                 ++feature_index) {
+                const auto* axis_reference =
+                    sourceAxisReference(
+                        state.body.features[
+                            feature_index]);
+                if (axis_reference == nullptr) {
+                    continue;
+                }
+                const auto consumed_axis =
+                    authoredAxisIdForAxisReference(
+                        *axis_reference);
+                if (consumed_axis &&
+                    *consumed_axis == axis.id &&
                     stage_index >=
                         feature_index) {
                     return false;
