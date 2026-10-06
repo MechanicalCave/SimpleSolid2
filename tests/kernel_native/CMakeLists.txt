@@ -497,6 +497,27 @@ set_tests_properties(pm02p.e_kernel_lifecycle PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
+add_executable(pm05a_edge_feature_provider_evidence_test
+    pm05a_edge_feature_provider_evidence_test.cpp
+)
+
+target_link_libraries(pm05a_edge_feature_provider_evidence_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm05a_edge_feature_provider_evidence_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05a.edge_feature_provider_evidence
+    COMMAND pm05a_edge_feature_provider_evidence_test
+)
+
+set_tests_properties(pm05a.edge_feature_provider_evidence PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -521,6 +542,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm02p_d_vertex_point_lineage_test
         pm02p_e_kernel_lifecycle_test
         pm04c2_production_revolve_test
+        pm05a_edge_feature_provider_evidence_test
 )
 
 foreach(_forbidden_target IN ITEMS
