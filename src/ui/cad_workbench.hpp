@@ -268,6 +268,8 @@ private:
 
     void setSketchSelectionRole(
         sketch::EntityRole role);
+    void setSketchLineAxisDesignation(
+        bool enabled);
     void startSketchTool();
     void startSketchResupport(
         const sketch::SketchId& sketch_id);
@@ -612,6 +614,8 @@ private:
     QLabel* entity_role_label_{};
     QPushButton* regular_role_button_{};
     QPushButton* construction_role_button_{};
+    QLabel* line_part_reference_label_{};
+    QCheckBox* line_axis_designation_check_{};
 
     QWidget* axis_operations_widget_{};
     QLabel* axis_source_label_{};
