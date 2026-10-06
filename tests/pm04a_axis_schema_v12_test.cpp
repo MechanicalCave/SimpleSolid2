@@ -272,7 +272,8 @@ int main() {
             part::resolveAxisReference(
                 document,
                 authoredAxis(*wrong_kind_axis));
-        CHECK(!evaluated.valid());
+        CHECK(evaluated.valid());
+        CHECK(!evaluated.line.has_value());
         CHECK(
             evaluated.status ==
             part::AxisEvaluationStatus::unsupported);
@@ -301,7 +302,8 @@ int main() {
             part::resolveAxisReference(
                 document,
                 authoredAxis(*regular_axis));
-        CHECK(!evaluated.valid());
+        CHECK(evaluated.valid());
+        CHECK(!evaluated.line.has_value());
         CHECK(
             evaluated.status ==
             part::AxisEvaluationStatus::missing);
@@ -324,7 +326,8 @@ int main() {
             part::resolveAxisReference(
                 document,
                 authoredAxis(*regular_axis));
-        CHECK(!evaluated.valid());
+        CHECK(evaluated.valid());
+        CHECK(!evaluated.line.has_value());
         CHECK(
             evaluated.status ==
             part::AxisEvaluationStatus::missing);
