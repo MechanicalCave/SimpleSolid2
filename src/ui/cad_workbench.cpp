@@ -9180,6 +9180,123 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
         std::move(axis_entries));
 }
 
+void CadWorkbench::refreshAxisProperties(
+    part::AxisId axis_id) {
+    if (properties_stack_ == nullptr ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    const auto* axis =
+        document_session_->document()
+            .findAxis(axis_id);
+    if (axis == nullptr) {
+        selected_axis_id_.reset();
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    selected_axis_id_ = axis_id;
+    axis_name_->setText(
+        axis->name.empty()
+            ? QStringLiteral("Axis %1")
+                  .arg(fromUtf8(
+                      axis->id.serialized()))
+            : fromUtf8(axis->name));
+    axis_identity_->setText(
+        fromUtf8(
+            axis->id.serialized()));
+    axis_source_sketch_->setText(
+        fromUtf8(
+            axis->source.sketch_id.value()));
+    axis_source_line_->setText(
+        fromUtf8(
+            axis->source.entity_id.serialized()));
+    axis_visibility_->setText(
+        axis->visible
+            ? QStringLiteral("Shown")
+            : QStringLiteral("Hidden"));
+
+    const auto evaluation =
+        std::find_if(
+            axis_evaluation_statuses_.begin(),
+            axis_evaluation_statuses_.end(),
+            [axis_id](
+                const AxisEvaluationUiState& item) {
+                return item.axis_id == axis_id;
+            });
+
+    if (evaluation ==
+        axis_evaluation_statuses_.end()) {
+        axis_status_->setText(
+            QStringLiteral("Not evaluated"));
+        axis_diagnostic_->setText(
+            QStringLiteral("—"));
+        axis_origin_->setText(
+            QStringLiteral("—"));
+        axis_direction_->setText(
+            QStringLiteral("—"));
+    } else {
+        axis_status_->setText(
+            axisEvaluationStatusText(
+                evaluation->status));
+        axis_diagnostic_->setText(
+            axisEvaluationDiagnosticText(
+                evaluation->diagnostic));
+
+        if (evaluation->line &&
+            evaluation->line->valid()) {
+            const auto& origin =
+                evaluation->line->origin;
+            const auto& direction =
+                evaluation->line->direction;
+            axis_origin_->setText(
+                QStringLiteral(
+                    "(%1, %2, %3)")
+                    .arg(
+                        QString::number(
+                            origin.x, 'g', 12),
+                        QString::number(
+                            origin.y, 'g', 12),
+                        QString::number(
+                            origin.z, 'g', 12)));
+            axis_direction_->setText(
+                QStringLiteral(
+                    "(%1, %2, %3)")
+                    .arg(
+                        QString::number(
+                            direction.x, 'g', 12),
+                        QString::number(
+                            direction.y, 'g', 12),
+                        QString::number(
+                            direction.z, 'g', 12)));
+        } else {
+            axis_origin_->setText(
+                QStringLiteral("—"));
+            axis_direction_->setText(
+                QStringLiteral("—"));
+        }
+    }
+
+    const bool lifecycle_available =
+        !axis_draft_ &&
+        !datum_plane_draft_ &&
+        !extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !active_sketch_id_ &&
+        !sketch_support_pick_active_;
+    axis_edit_button_->setEnabled(
+        lifecycle_available &&
+        solid_modeling_kernel_ != nullptr);
+    axis_delete_button_->setEnabled(
+        lifecycle_available);
+
+    properties_stack_->setCurrentWidget(
+        axis_properties_page_);
+}
+
+
 void CadWorkbench::refreshDatumProperties(
     part::DatumId datum_id) {
     if (properties_stack_ == nullptr ||
