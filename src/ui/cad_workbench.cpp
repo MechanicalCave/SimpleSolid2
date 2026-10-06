@@ -3766,6 +3766,27 @@ void CadWorkbench::buildUi() {
             }
         });
     QObject::connect(
+        axis_edit_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (selected_axis_id_) {
+                static_cast<void>(
+                    startAxisEdit(
+                        *selected_axis_id_));
+            }
+        });
+    QObject::connect(
+        axis_delete_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (selected_axis_id_) {
+                deleteAxis(
+                    *selected_axis_id_);
+            }
+        });
+    QObject::connect(
         datum_edit_button_,
         &QPushButton::clicked,
         this,
@@ -4049,6 +4070,34 @@ void CadWorkbench::buildUi() {
                 sketch::EntityRole::construction);
         });
 
+
+    QObject::connect(
+        axis_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (axis_draft_) {
+                cancelAxis();
+                return;
+            }
+            static_cast<void>(
+                startAxisTool());
+        });
+    QObject::connect(
+        axis_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                finishAxis());
+        });
+    QObject::connect(
+        axis_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cancelAxis();
+        });
 
     QObject::connect(
         datum_plane_button_,
