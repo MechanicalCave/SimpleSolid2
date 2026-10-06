@@ -1931,6 +1931,35 @@ void PartDocumentTreeController::updateVisibilityActions() {
             }
         }
     } else if (
+        selectionContainsOnlyAxisReferences()) {
+        const auto targets =
+            selectedAxisVisibilityTargets();
+        for (const auto id : targets) {
+            const auto* axis =
+                session_->document()
+                    .findAxis(id);
+            if (axis == nullptr) {
+                continue;
+            }
+            if (axis->visible) {
+                any_visible = true;
+            } else {
+                any_hidden = true;
+            }
+        }
+    } else if (
+        selectionContainsOnlyAxisReferences()) {
+        const auto targets =
+            selectedAxisVisibilityTargets();
+        if (targets.empty()) return;
+        attempted = true;
+        result = session_->execute(
+            application::
+                SetAxisVisibilityCommand{
+                    targets,
+                    session_->document().revision(),
+                    visible});
+    } else if (
         selectionContainsOnlyDatumReferences()) {
         const auto targets =
             selectedDatumVisibilityTargets();
@@ -1989,6 +2018,24 @@ void PartDocumentTreeController::showContextMenu(
                     ? unsuppress_feature_action_
                     : suppress_feature_action_);
             menu.addAction(delete_feature_action_);
+            menu.exec(
+                tree_->viewport()->mapToGlobal(
+                    position));
+            return;
+        }
+        if (axisIdForItem(*item)) {
+            tree_->setCurrentItem(item);
+            updateVisibilityActions();
+            QMenu menu{tree_};
+            menu.addAction(edit_axis_action_);
+            if (show_action_->isEnabled() ||
+                hide_action_->isEnabled()) {
+                menu.addSeparator();
+                menu.addAction(show_action_);
+                menu.addAction(hide_action_);
+            }
+            menu.addSeparator();
+            menu.addAction(delete_axis_action_);
             menu.exec(
                 tree_->viewport()->mapToGlobal(
                     position));
@@ -2142,6 +2189,28 @@ void PartDocumentTreeController::requestProfileEdit(
     profile_edit_handler_(*profile_id);
 }
 
+void PartDocumentTreeController::requestAxisEdit(
+    const QTreeWidgetItem& item) {
+    const auto axis_id =
+        axisIdForItem(item);
+    if (!axis_id ||
+        !axis_edit_handler_) {
+        return;
+    }
+    axis_edit_handler_(*axis_id);
+}
+
+void PartDocumentTreeController::requestAxisDelete(
+    const QTreeWidgetItem& item) {
+    const auto axis_id =
+        axisIdForItem(item);
+    if (!axis_id ||
+        !axis_delete_handler_) {
+        return;
+    }
+    axis_delete_handler_(*axis_id);
+}
+
 void PartDocumentTreeController::requestDatumEdit(
     const QTreeWidgetItem& item) {
     const auto datum_id =
@@ -2191,6 +2260,11 @@ void PartDocumentTreeController::notifySelectionChanged() {
         datum_selection_handler_(
             selectedDatumIds(),
             primaryDatumId());
+    }
+    if (axis_selection_handler_) {
+        axis_selection_handler_(
+            selectedAxisIds(),
+            primaryAxisId());
     }
     if (feature_selection_handler_) {
         feature_selection_handler_(
@@ -2295,6 +2369,23 @@ PartDocumentTreeController::datumIdForItem(
     const auto bytes =
         value.toString().toUtf8();
     return part::DatumId::parse(
+        std::string_view{
+            bytes.constData(),
+            static_cast<std::size_t>(
+                bytes.size())});
+}
+
+std::optional<part::AxisId>
+PartDocumentTreeController::axisIdForItem(
+    const QTreeWidgetItem& item) {
+    const auto value =
+        item.data(0, axisIdData);
+    if (!value.isValid()) {
+        return std::nullopt;
+    }
+    const auto bytes =
+        value.toString().toUtf8();
+    return part::AxisId::parse(
         std::string_view{
             bytes.constData(),
             static_cast<std::size_t>(
