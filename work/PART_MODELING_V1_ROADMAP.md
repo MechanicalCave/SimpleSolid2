@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 COMPLETED — PASS; PM-05 ACTIVE  
-**Version:** 1.27  
-**Owner acceptance:** 2026-10-06 — exact PM-05 Edge Features Work Contract accepted; v1.27 is activation-state synchronization only  
-**Previous accepted version:** 1.26 — 2026-10-06  
+**Version:** 1.28  
+**Owner acceptance:** 2026-10-06 — exact PM-05 Edge Features Work Contract accepted; v1.28 is PM-05A evidence-state synchronization only and does not accept the PM-05A D2 conclusions  
+**Previous accepted version:** 1.27 — 2026-10-06  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-05A — Edge-feature topology/provider evidence under `work/PM-05_EDGE_FEATURES.md`; PM-05B+ production mutation blocked pending PM-05A Owner acceptance  
+**Current active checkpoint:** PM-05A — EVIDENCE PASS / OWNER D2 REVIEW REQUIRED under `work/PM-05_EDGE_FEATURES.md`; PM-05B+ production mutation blocked pending explicit acceptance of `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -522,11 +522,11 @@ PM-04 production mutation authority is closed. PM-05 Edge Features is now **ACTI
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 
-**Status:** ACTIVE — Owner accepted 2026-10-06. Current checkpoint: **PM-05A — Edge-feature topology/provider evidence**.
+**Status:** ACTIVE — Owner accepted 2026-10-06. Current checkpoint: **PM-05A — EVIDENCE PASS / OWNER D2 REVIEW REQUIRED**.
 
 PM-05 adds edge-consuming features only after topology-reference semantics are proven in earlier packages. The accepted production direction is explicit 1..N material-Edge Fillet/Chamfer with mandatory common connected-corner behavior; a single-Edge-only production fallback is forbidden.
 
-PM-05A is a hard evidence gate. It may add bounded provider/test instrumentation, but durable MaterialEdgeReference/schema v14/production Fillet-Chamfer mutation/UI remain blocked until the PM-05A conclusions are explicitly Owner-accepted.
+PM-05A is a hard evidence gate. The evidence package is merged as `aa9e86f6b88ebf429390f7a4764a534b400e757b`; exact runtime/test candidate `c70980d63d836ea54d1f88be29082023e44b1c38` passed Windows FULL #1605 and the final report-sync head `d08b76dae60456df5cd0300ac81c971eb5febc00` passed Windows CLOSURE #1606. The D2 synthesis is `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md`. Durable MaterialEdgeReference/schema v14/production Fillet-Chamfer mutation/UI remain blocked until those conclusions are explicitly Owner-accepted.
 
 It must cover:
 
