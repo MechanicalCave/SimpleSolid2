@@ -2571,7 +2571,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("Extent"),
         feature_extent_);
     feature_root->addRow(
-        QStringLiteral("Distance"),
+        QStringLiteral("Distance / Angle"),
         feature_distance_);
     feature_root->addRow(
         QStringLiteral("Direction"),
@@ -10862,7 +10862,11 @@ void CadWorkbench::refreshFeatureProperties(
     const auto* extrude =
         std::get_if<part::ExtrudeFeature>(
             &feature->definition);
-    if (extrude == nullptr) {
+    const auto* revolve =
+        std::get_if<part::RevolveFeature>(
+            &feature->definition);
+    if (extrude == nullptr &&
+        revolve == nullptr) {
         return;
     }
 
@@ -10871,50 +10875,93 @@ void CadWorkbench::refreshFeatureProperties(
         fromUtf8(feature->name));
     feature_identity_->setText(
         fromUtf8(feature->id.serialized()));
-    feature_operation_->setText(
-        extrude->operation ==
-                part::ExtrudeOperation::cut
-            ? QStringLiteral("Cut")
-            : QStringLiteral("Add"));
 
-    const auto unit =
-        document_session_->document()
-            .lengthUnit();
-    if (const auto* one =
-            std::get_if<
-                part::OneSidedExtrudeExtent>(
-                &extrude->extent)) {
-        feature_extent_->setText(
-            QStringLiteral("One Side"));
-        feature_distance_->setText(
-            formatLengthForPart(
-                one->distance,
-                unit));
-        feature_direction_->setText(
-            one->reversed
-                ? QStringLiteral("Reverse")
-                : QStringLiteral("Forward"));
-    } else if (const auto* midplane =
-                   std::get_if<
-                       part::MidplaneExtrudeExtent>(
-                       &extrude->extent)) {
-        feature_extent_->setText(
-            QStringLiteral("Midplane"));
-        feature_distance_->setText(
-            formatLengthForPart(
-                midplane->total_distance,
-                unit));
-        feature_direction_->setText(
-            QStringLiteral("Centered"));
+    part::ProfileId source_profile_id;
+    if (extrude != nullptr) {
+        source_profile_id =
+            extrude->profile_id;
+        feature_operation_->setText(
+            extrude->operation ==
+                    part::ExtrudeOperation::cut
+                ? QStringLiteral("Cut")
+                : QStringLiteral("Add"));
+
+        const auto unit =
+            document_session_->document()
+                .lengthUnit();
+        if (const auto* one =
+                std::get_if<
+                    part::OneSidedExtrudeExtent>(
+                    &extrude->extent)) {
+            feature_extent_->setText(
+                QStringLiteral("One Side"));
+            feature_distance_->setText(
+                formatLengthForPart(
+                    one->distance,
+                    unit));
+            feature_direction_->setText(
+                one->reversed
+                    ? QStringLiteral("Reverse")
+                    : QStringLiteral("Forward"));
+        } else if (const auto* midplane =
+                       std::get_if<
+                           part::MidplaneExtrudeExtent>(
+                           &extrude->extent)) {
+            feature_extent_->setText(
+                QStringLiteral("Midplane"));
+            feature_distance_->setText(
+                formatLengthForPart(
+                    midplane->total_distance,
+                    unit));
+            feature_direction_->setText(
+                QStringLiteral("Centered"));
+        }
+        feature_edit_button_->setText(
+            QStringLiteral("Edit Extrude"));
+    } else {
+        source_profile_id =
+            revolve->profile_id;
+        feature_operation_->setText(
+            revolve->operation ==
+                    part::RevolveOperation::cut
+                ? QStringLiteral("Cut")
+                : QStringLiteral("Add"));
+        if (const auto* one =
+                std::get_if<
+                    part::OneSidedRevolveExtent>(
+                    &revolve->extent)) {
+            feature_extent_->setText(
+                QStringLiteral("One Side"));
+            feature_distance_->setText(
+                formatAngleForCad(
+                    one->angle));
+            feature_direction_->setText(
+                one->reversed
+                    ? QStringLiteral("Reverse")
+                    : QStringLiteral("Forward"));
+        } else if (const auto* midplane =
+                       std::get_if<
+                           part::MidplaneRevolveExtent>(
+                           &revolve->extent)) {
+            feature_extent_->setText(
+                QStringLiteral("Midplane"));
+            feature_distance_->setText(
+                formatAngleForCad(
+                    midplane->total_angle));
+            feature_direction_->setText(
+                QStringLiteral("Centered"));
+        }
+        feature_edit_button_->setText(
+            QStringLiteral("Edit Revolve"));
     }
 
     feature_source_profile_->setText(
         fromUtf8(
-            extrude->profile_id.serialized()));
+            source_profile_id.serialized()));
     const auto* profile =
         document_session_->document()
             .findProfile(
-                extrude->profile_id);
+                source_profile_id);
     feature_source_sketch_->setText(
         profile != nullptr
             ? fromUtf8(
@@ -10965,6 +11012,7 @@ void CadWorkbench::refreshFeatureProperties(
     const bool lifecycle_available =
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     feature_edit_button_->setEnabled(
