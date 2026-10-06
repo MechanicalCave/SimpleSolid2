@@ -22,6 +22,11 @@ public:
         const kernel::AngularRevolveInput& input,
         kernel::RuntimeSolidHandle upstream = {}) noexcept override;
 
+    [[nodiscard]] kernel::SolidModelingResult
+    revolve(
+        const kernel::AngularRevolveInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override;
+
     [[nodiscard]] kernel::SolidPresentationResult
     extrudePreviewMesh(
         const kernel::LinearExtrudeInput& input,
