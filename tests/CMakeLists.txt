@@ -810,6 +810,32 @@ set_tests_properties(pm03a.datum_schema_v10 PROPERTIES
     LABELS "tier-fast;subsystem-part;subsystem-persistence"
 )
 
+add_executable(pm04a_axis_schema_v12_test
+    pm04a_axis_schema_v12_test.cpp
+)
+
+target_include_directories(pm04a_axis_schema_v12_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
+)
+
+target_link_libraries(pm04a_axis_schema_v12_test
+    PRIVATE
+        simplesolid2_part
+        simplesolid2_persistence
+)
+
+target_compile_features(pm04a_axis_schema_v12_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm04a.axis_schema_v12
+    COMMAND pm04a_axis_schema_v12_test
+)
+
+set_tests_properties(pm04a.axis_schema_v12 PROPERTIES
+    LABELS "tier-fast;subsystem-part;subsystem-persistence"
+)
+
 add_executable(pm03b_datum_evaluation_test
     pm03b_datum_evaluation_test.cpp
 )

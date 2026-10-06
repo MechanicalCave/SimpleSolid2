@@ -3,6 +3,7 @@
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/core/document_reference.hpp>
 #include <simplesolid2/core/units.hpp>
+#include <simplesolid2/part/axis.hpp>
 #include <simplesolid2/part/datum.hpp>
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
@@ -36,6 +37,8 @@ struct PartAuthoredState final {
     DatumIdCursor next_datum_id;
     std::vector<OffsetDatumPlane> datum_planes;
     std::vector<PartSketch> sketches;
+    AxisIdCursor next_axis_id;
+    std::vector<PartAxis> axes;
     ProfileIdCursor next_profile_id;
     std::vector<PartProfile> profiles;
     core::LengthUnit length_unit{
@@ -125,6 +128,17 @@ public:
 
     [[nodiscard]] const PartSketch* findSketch(
         const sketch::SketchId& id) const noexcept;
+
+    [[nodiscard]] AxisIdCursor axisIdCursor() const noexcept {
+        return state_.next_axis_id;
+    }
+
+    [[nodiscard]] const std::vector<PartAxis>& axes() const noexcept {
+        return state_.axes;
+    }
+
+    [[nodiscard]] const PartAxis* findAxis(
+        AxisId id) const noexcept;
 
     [[nodiscard]] ProfileIdCursor profileIdCursor()
         const noexcept {

@@ -101,8 +101,12 @@ std::string schema9FromCurrent(
             package.authored_json);
     CHECK(authored.contains("next_datum_id"));
     CHECK(authored.contains("datum_planes"));
+    CHECK(authored.contains("next_axis_id"));
+    CHECK(authored.contains("axes"));
     authored.erase("next_datum_id");
     authored.erase("datum_planes");
+    authored.erase("next_axis_id");
+    authored.erase("axes");
 
     auto text = authored.dump(2);
     text.push_back('\n');
@@ -123,7 +127,7 @@ std::string schema9FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        11);
+        12);
 
     // DatumId follows the existing Part-local canonical positive-decimal and
     // high-water allocation rules.
@@ -300,7 +304,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 11);
+            .domain_schema_version == 12);
 
     const auto authored =
         nlohmann::json::parse(
@@ -417,7 +421,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 11);
+            .domain_schema_version == 12);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);

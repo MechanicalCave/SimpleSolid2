@@ -57,6 +57,22 @@ const PartSketch* PartDocument::findSketch(
         : &*found;
 }
 
+const PartAxis* PartDocument::findAxis(
+    AxisId id) const noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found = std::find_if(
+        state_.axes.begin(),
+        state_.axes.end(),
+        [id](const PartAxis& item) {
+            return item.id == id;
+        });
+    return found == state_.axes.end()
+        ? nullptr
+        : &*found;
+}
+
 const PartFeature* PartDocument::findFeature(
     FeatureId id) const noexcept {
     if (!id.valid()) {
@@ -349,6 +365,30 @@ bool PartDocument::validAuthoredState(
              ++previous) {
             if (state.sketches[previous].id ==
                 hosted.id) {
+                return false;
+            }
+        }
+    }
+
+    // PM-04A authored Axis identity is durable even when its source Sketch
+    // or Line later disappears. Only structural identity/high-water validity
+    // and duplicate AxisId are reconstruction invariants here; source
+    // availability is derived repairable Axis evaluation state.
+    for (std::size_t index = 0U;
+         index < state.axes.size();
+         ++index) {
+        const auto& axis = state.axes[index];
+        if (!partAxisStructurallyValid(axis) ||
+            !state.next_axis_id
+                 .containsAllocated(axis.id)) {
+            return false;
+        }
+
+        for (std::size_t previous = 0U;
+             previous < index;
+             ++previous) {
+            if (state.axes[previous].id ==
+                axis.id) {
                 return false;
             }
         }

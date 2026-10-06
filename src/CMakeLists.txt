@@ -85,6 +85,9 @@ target_include_directories(simplesolid2_kernel
 target_compile_features(simplesolid2_kernel PUBLIC cxx_std_20)
 
 add_library(simplesolid2_part STATIC
+    part/axis.cpp
+    part/axis_evaluation.cpp
+    part/axis_id.cpp
     part/body_id.cpp
     part/datum.cpp
     part/datum_evaluation.cpp
