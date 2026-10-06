@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <utility>
 #include <vector>
 
@@ -20,7 +21,447 @@ namespace {
     return false;
 }
 
+
+
+constexpr double full_turn =
+    2.0 * std::numbers::pi_v<double>;
+
+[[nodiscard]] bool finitePoint(
+    const Point3& point) noexcept {
+    return std::isfinite(point.x) &&
+           std::isfinite(point.y) &&
+           std::isfinite(point.z);
+}
+
+[[nodiscard]] double dot(
+    const Point3& first,
+    const Point3& second) noexcept {
+    return first.x * second.x +
+           first.y * second.y +
+           first.z * second.z;
+}
+
+[[nodiscard]] Point3 subtract(
+    const Point3& first,
+    const Point3& second) noexcept {
+    return {
+        first.x - second.x,
+        first.y - second.y,
+        first.z - second.z};
+}
+
+struct LocalAxis2 final {
+    double origin_u{};
+    double origin_v{};
+    double direction_u{};
+    double direction_v{};
+};
+
+[[nodiscard]] std::optional<LocalAxis2>
+axisInProfilePlane(
+    const PlanarProfileInput& profile,
+    const Axis3& axis) noexcept {
+    if (!profile.valid() || !axis.valid()) {
+        return std::nullopt;
+    }
+
+    const auto offset =
+        subtract(
+            axis.origin,
+            profile.frame.origin);
+    // PM-04 deliberately introduces no new modeling tolerance. Semantic
+    // frames/axes must agree exactly at this neutral boundary; Viewer/provider
+    // tolerances never relax admission.
+    if (dot(offset, profile.frame.normal) != 0.0 ||
+        dot(axis.direction, profile.frame.normal) != 0.0) {
+        return std::nullopt;
+    }
+
+    LocalAxis2 result;
+    result.origin_u =
+        dot(offset, profile.frame.u_axis);
+    result.origin_v =
+        dot(offset, profile.frame.v_axis);
+    result.direction_u =
+        dot(axis.direction, profile.frame.u_axis);
+    result.direction_v =
+        dot(axis.direction, profile.frame.v_axis);
+    const double length2 =
+        result.direction_u * result.direction_u +
+        result.direction_v * result.direction_v;
+    return std::isfinite(result.origin_u) &&
+                   std::isfinite(result.origin_v) &&
+                   std::isfinite(result.direction_u) &&
+                   std::isfinite(result.direction_v) &&
+                   length2 > 0.0
+        ? std::optional<LocalAxis2>{result}
+        : std::nullopt;
+}
+
+[[nodiscard]] double signedSide(
+    const LocalAxis2& axis,
+    Point2 point) noexcept {
+    return
+        axis.direction_u *
+            (point.v - axis.origin_v) -
+        axis.direction_v *
+            (point.u - axis.origin_u);
+}
+
+struct SideRange final {
+    double minimum{};
+    double maximum{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return std::isfinite(minimum) &&
+               std::isfinite(maximum) &&
+               minimum <= maximum;
+    }
+};
+
+void includeValue(
+    SideRange& range,
+    bool& initialized,
+    double value) noexcept {
+    if (!initialized) {
+        range.minimum = value;
+        range.maximum = value;
+        initialized = true;
+        return;
+    }
+    range.minimum =
+        std::min(range.minimum, value);
+    range.maximum =
+        std::max(range.maximum, value);
+}
+
+[[nodiscard]] bool angleOnSweep(
+    double angle,
+    double start,
+    double delta) noexcept {
+    if (!std::isfinite(angle) ||
+        !std::isfinite(start) ||
+        !std::isfinite(delta) ||
+        delta == 0.0 ||
+        std::abs(delta) > full_turn) {
+        return false;
+    }
+    if (std::abs(delta) == full_turn) {
+        return true;
+    }
+
+    if (delta > 0.0) {
+        double distance =
+            std::fmod(
+                angle - start,
+                full_turn);
+        if (distance < 0.0) {
+            distance += full_turn;
+        }
+        return distance <= delta;
+    }
+
+    double distance =
+        std::fmod(
+            start - angle,
+            full_turn);
+    if (distance < 0.0) {
+        distance += full_turn;
+    }
+    return distance <= -delta;
+}
+
+[[nodiscard]] SideRange circularSideRange(
+    const LocalAxis2& axis,
+    Point2 center,
+    double radius,
+    double start_angle,
+    double delta) noexcept {
+    SideRange range;
+    bool initialized = false;
+
+    const auto value_at =
+        [&](double angle) {
+            return signedSide(
+                axis,
+                {
+                    center.u +
+                        radius * std::cos(angle),
+                    center.v +
+                        radius * std::sin(angle)});
+        };
+
+    includeValue(
+        range,
+        initialized,
+        value_at(start_angle));
+    includeValue(
+        range,
+        initialized,
+        value_at(start_angle + delta));
+
+    const double coefficient_cos =
+        -axis.direction_v * radius;
+    const double coefficient_sin =
+        axis.direction_u * radius;
+    const double maximum_angle =
+        std::atan2(
+            coefficient_sin,
+            coefficient_cos);
+    const double minimum_angle =
+        maximum_angle +
+        std::numbers::pi_v<double>;
+
+    if (angleOnSweep(
+            maximum_angle,
+            start_angle,
+            delta)) {
+        includeValue(
+            range,
+            initialized,
+            value_at(maximum_angle));
+    }
+    if (angleOnSweep(
+            minimum_angle,
+            start_angle,
+            delta)) {
+        includeValue(
+            range,
+            initialized,
+            value_at(minimum_angle));
+    }
+
+    return range;
+}
+
+[[nodiscard]] std::optional<SideRange>
+boundaryUseSideRange(
+    const LocalAxis2& axis,
+    const BoundaryUse2D& use) noexcept {
+    if (!use.valid()) {
+        return std::nullopt;
+    }
+
+    if (const auto* line =
+            std::get_if<Line2>(&use.curve)) {
+        const auto point_at =
+            [line](double parameter) {
+                return Point2{
+                    line->start.u +
+                        (line->end.u -
+                         line->start.u) *
+                            parameter,
+                    line->start.v +
+                        (line->end.v -
+                         line->start.v) *
+                            parameter};
+            };
+        const double first =
+            signedSide(
+                axis,
+                point_at(use.start_parameter));
+        const double second =
+            signedSide(
+                axis,
+                point_at(use.end_parameter));
+        SideRange range{
+            std::min(first, second),
+            std::max(first, second)};
+        return range.valid()
+            ? std::optional<SideRange>{range}
+            : std::nullopt;
+    }
+
+    if (const auto* circle =
+            std::get_if<Circle2>(&use.curve)) {
+        if (!(circle->radius > 0.0) ||
+            !std::isfinite(circle->radius)) {
+            return std::nullopt;
+        }
+
+        if (use.whole_closed_curve) {
+            const double center_side =
+                signedSide(
+                    axis,
+                    circle->center);
+            const double amplitude =
+                circle->radius *
+                std::sqrt(
+                    axis.direction_u *
+                        axis.direction_u +
+                    axis.direction_v *
+                        axis.direction_v);
+            SideRange range{
+                center_side - amplitude,
+                center_side + amplitude};
+            return range.valid()
+                ? std::optional<SideRange>{range}
+                : std::nullopt;
+        }
+
+        const double from =
+            use.follows_source_direction
+                ? use.start_parameter
+                : use.end_parameter;
+        const double to =
+            use.follows_source_direction
+                ? use.end_parameter
+                : use.start_parameter;
+        double delta =
+            use.crosses_closed_seam
+                ? (1.0 - from) + to
+                : to - from;
+        delta *= full_turn;
+        if (!use.follows_source_direction) {
+            delta = -delta;
+        }
+        const auto range =
+            circularSideRange(
+                axis,
+                circle->center,
+                circle->radius,
+                full_turn * from,
+                delta);
+        return range.valid()
+            ? std::optional<SideRange>{range}
+            : std::nullopt;
+    }
+
+    const auto* arc =
+        std::get_if<Arc2>(&use.curve);
+    if (arc == nullptr ||
+        !(arc->radius > 0.0) ||
+        !std::isfinite(arc->radius)) {
+        return std::nullopt;
+    }
+    const double from =
+        use.follows_source_direction
+            ? use.start_parameter
+            : use.end_parameter;
+    const double to =
+        use.follows_source_direction
+            ? use.end_parameter
+            : use.start_parameter;
+    double delta =
+        arc->sweep_angle * (to - from);
+    if (!use.follows_source_direction) {
+        delta = -delta;
+    }
+    const auto range =
+        circularSideRange(
+            axis,
+            arc->center,
+            arc->radius,
+            arc->start_angle +
+                arc->sweep_angle * from,
+            delta);
+    return range.valid()
+        ? std::optional<SideRange>{range}
+        : std::nullopt;
+}
 } // namespace
+
+bool Axis3::valid() const noexcept {
+    if (!finitePoint(origin) ||
+        !finitePoint(direction)) {
+        return false;
+    }
+    const double length2 =
+        direction.x * direction.x +
+        direction.y * direction.y +
+        direction.z * direction.z;
+    return std::isfinite(length2) &&
+           length2 > 0.0;
+}
+
+RevolveProfileAdmission
+classifyRevolveProfileAdmission(
+    const PlanarProfileInput& profile,
+    const Axis3& axis) noexcept {
+    if (!profile.valid() || !axis.valid()) {
+        return RevolveProfileAdmission::
+            invalid_input;
+    }
+
+    const auto local =
+        axisInProfilePlane(profile, axis);
+    if (!local) {
+        return RevolveProfileAdmission::
+            axis_not_in_profile_plane;
+    }
+
+    bool initialized = false;
+    SideRange outer_range;
+    for (const auto& use :
+         profile.outer.boundary) {
+        const auto range =
+            boundaryUseSideRange(
+                *local,
+                use);
+        if (!range) {
+            return RevolveProfileAdmission::
+                invalid_input;
+        }
+        includeValue(
+            outer_range,
+            initialized,
+            range->minimum);
+        includeValue(
+            outer_range,
+            initialized,
+            range->maximum);
+    }
+
+    if (!initialized ||
+        !outer_range.valid()) {
+        return RevolveProfileAdmission::
+            invalid_input;
+    }
+
+    return outer_range.minimum < 0.0 &&
+                   outer_range.maximum > 0.0
+        ? RevolveProfileAdmission::
+              profile_crosses_axis
+        : RevolveProfileAdmission::ok;
+}
+
+bool RevolveInput::fullRotation() const noexcept {
+    const double sweep =
+        end_angle_radians -
+        start_angle_radians;
+    return std::isfinite(sweep) &&
+           std::abs(sweep) == full_turn;
+}
+
+bool RevolveInput::valid() const noexcept {
+    if (!profile.valid() ||
+        !axis.valid() ||
+        !std::isfinite(start_angle_radians) ||
+        !std::isfinite(end_angle_radians)) {
+        return false;
+    }
+    const double sweep =
+        end_angle_radians -
+        start_angle_radians;
+    if (!std::isfinite(sweep) ||
+        sweep == 0.0 ||
+        std::abs(sweep) > full_turn ||
+        classifyRevolveProfileAdmission(
+            profile,
+            axis) !=
+            RevolveProfileAdmission::ok) {
+        return false;
+    }
+    switch (operation) {
+    case SolidBooleanOperation::add:
+    case SolidBooleanOperation::cut:
+        break;
+    default:
+        return false;
+    }
+    return capRole(start_cap_role) &&
+           capRole(end_cap_role);
+}
 
 bool SolidMeshTriangle::valid() const noexcept {
     const auto finite_point =
@@ -252,6 +693,18 @@ bool LinearExtrudeInput::valid() const noexcept {
     return forward_one_side ||
            reverse_one_side ||
            midplane;
+}
+
+SolidModelingResult
+ISolidModelingKernel::revolve(
+    const RevolveInput& input,
+    RuntimeSolidHandle) noexcept {
+    SolidModelingResult result;
+    result.status =
+        input.valid()
+            ? SolidModelingStatus::unsupported
+            : SolidModelingStatus::invalid_input;
+    return result;
 }
 
 SolidPresentationResult
