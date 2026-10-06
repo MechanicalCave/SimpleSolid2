@@ -532,6 +532,12 @@ scenarioEndpoints(
     return {};
 }
 
+[[nodiscard]] OperationRun execute(
+    kernel::EdgeFeatureEvidenceOperation operation,
+    const TopoDS_Shape& source,
+    const std::vector<TopoDS_Edge>& selected,
+    double parameter);
+
 [[nodiscard]] bool containsSameSubshape(
     const TopoDS_Shape& container,
     const TopoDS_Shape& candidate,
