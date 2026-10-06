@@ -118,7 +118,7 @@ std::string schema11FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        12);
+        13);
 
     part::AxisIdCursor cursor;
     const auto first = cursor.allocate();
@@ -381,7 +381,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 12);
+            .domain_schema_version == 13);
 
     const auto authored =
         nlohmann::json::parse(
@@ -413,7 +413,7 @@ int main() {
         reloaded.document->axisIdCursor() ==
         document.axisIdCursor());
 
-    // Exact v11 -> v12 migration adds no synthetic Axis records and preserves
+    // Exact v11 Axis migration adds no synthetic Axis records and preserves
     // all pre-existing authored identities.
     auto legacy_source =
         part::PartDocument::create(
@@ -492,7 +492,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 12);
+            .domain_schema_version == 13);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);
@@ -502,6 +502,6 @@ int main() {
     CHECK(rewritten_authored.at("axes").empty());
 
     std::cout
-        << "PM-04A Axis semantics and schema-v12 tests passed\n";
+        << "PM-04A Axis semantics/schema-v12 compatibility tests passed\n";
     return EXIT_SUCCESS;
 }
