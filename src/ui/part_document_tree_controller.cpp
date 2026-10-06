@@ -49,6 +49,33 @@ QString fromUtf8(std::string_view value) {
 }
 
 
+QString axisReferenceText(
+    const part::AxisReference& reference) {
+    if (const auto role =
+            part::builtinOriginAxisForAxisReference(
+                reference)) {
+        switch (*role) {
+        case core::BuiltinReferenceRole::x_axis:
+            return QStringLiteral("Origin X Axis");
+        case core::BuiltinReferenceRole::y_axis:
+            return QStringLiteral("Origin Y Axis");
+        case core::BuiltinReferenceRole::z_axis:
+            return QStringLiteral("Origin Z Axis");
+        default:
+            break;
+        }
+    }
+    if (const auto axis_id =
+            part::authoredAxisIdForAxisReference(
+                reference)) {
+        return QStringLiteral("AxisId %1")
+            .arg(
+                fromUtf8(
+                    axis_id->serialized()));
+    }
+    return QStringLiteral("<invalid AxisReference>");
+}
+
 QString featureStatusText(
     part::FeatureEvaluationStatus status) {
     switch (status) {
@@ -1326,7 +1353,17 @@ void PartDocumentTreeController::rebuild(
         const auto* extrude =
             std::get_if<part::ExtrudeFeature>(
                 &feature.definition);
-        if (extrude == nullptr) {
+        const auto* revolve =
+            std::get_if<part::RevolveFeature>(
+                &feature.definition);
+        if (extrude == nullptr &&
+            revolve == nullptr) {
+            continue;
+        }
+
+        const auto source_profile_id =
+            part::sourceProfileId(feature);
+        if (!source_profile_id) {
             continue;
         }
 
@@ -1357,15 +1394,27 @@ void PartDocumentTreeController::rebuild(
                 : part::FeatureEvaluationDiagnosticCode::
                       none;
 
+        const bool cut =
+            extrude != nullptr
+                ? extrude->operation ==
+                      part::ExtrudeOperation::cut
+                : revolve->operation ==
+                      part::RevolveOperation::cut;
+        const auto feature_kind =
+            extrude != nullptr
+                ? QStringLiteral("Extrude")
+                : QStringLiteral("Revolve");
+
         QString label =
             feature.name.empty()
-                ? QStringLiteral("Extrude %1")
+                ? QStringLiteral("%1 %2")
                       .arg(
-                          static_cast<qulonglong>(
-                              feature_index))
+                          feature_kind,
+                          QString::number(
+                              static_cast<qulonglong>(
+                                  feature_index)))
                 : fromUtf8(feature.name);
-        label += extrude->operation ==
-                         part::ExtrudeOperation::cut
+        label += cut
                      ? QStringLiteral(" — Cut")
                      : QStringLiteral(" — Add");
         label += QStringLiteral(" [%1]")
@@ -1383,27 +1432,37 @@ void PartDocumentTreeController::rebuild(
 
         const auto* profile =
             session_->document().findProfile(
-                extrude->profile_id);
+                *source_profile_id);
+        QString tooltip =
+            QStringLiteral("FeatureId: ") +
+            fromUtf8(
+                feature.id.serialized()) +
+            QStringLiteral("\nType: ") +
+            feature_kind +
+            QStringLiteral("\nSource ProfileId: ") +
+            fromUtf8(
+                source_profile_id->serialized()) +
+            QStringLiteral("\nSource SketchId: ") +
+            (profile != nullptr
+                 ? fromUtf8(
+                       profile->source_sketch_id
+                           .value())
+                 : QStringLiteral("<missing>"));
+        if (revolve != nullptr) {
+            tooltip +=
+                QStringLiteral("\nAxis: ") +
+                axisReferenceText(
+                    revolve->axis);
+        }
+        tooltip +=
+            QStringLiteral("\nStatus: ") +
+            featureStatusText(status) +
+            QStringLiteral("\nDiagnostic: ") +
+            featureDiagnosticText(
+                diagnostic);
         item->setToolTip(
             0,
-            QStringLiteral("FeatureId: ") +
-                fromUtf8(
-                    feature.id.serialized()) +
-                QStringLiteral("\nSource ProfileId: ") +
-                fromUtf8(
-                    extrude->profile_id
-                        .serialized()) +
-                QStringLiteral("\nSource SketchId: ") +
-                (profile != nullptr
-                     ? fromUtf8(
-                           profile->source_sketch_id
-                               .value())
-                     : QStringLiteral("<missing>")) +
-                QStringLiteral("\nStatus: ") +
-                featureStatusText(status) +
-                QStringLiteral("\nDiagnostic: ") +
-                featureDiagnosticText(
-                    diagnostic));
+            tooltip);
 
         auto font = item->font(0);
         font.setItalic(feature.suppressed);
@@ -2026,6 +2085,12 @@ void PartDocumentTreeController::showContextMenu(
                 return;
             }
 
+            edit_feature_action_->setText(
+                std::holds_alternative<
+                    part::RevolveFeature>(
+                    feature->definition)
+                    ? QStringLiteral("Edit Revolve")
+                    : QStringLiteral("Edit Extrude"));
             edit_feature_action_->setEnabled(
                 !feature->suppressed);
             suppress_feature_action_->setEnabled(
