@@ -33,6 +33,10 @@ enum class FeatureEvaluationDiagnosticCode {
     sketch_support_missing,
     sketch_support_ambiguous,
     sketch_support_unsupported,
+    missing_axis,
+    axis_unavailable,
+    axis_not_in_profile_plane,
+    profile_crosses_axis,
     missing_upstream_body,
     upstream_unavailable,
     kernel_invalid_input,
@@ -372,6 +376,45 @@ struct PartEvaluation final {
     [[nodiscard]] const FeatureEvaluation*
     findFeature(FeatureId id) const noexcept;
 };
+
+enum class RevolveKernelInputStatus {
+    resolved,
+    missing_profile,
+    profile_unavailable,
+    missing_axis,
+    axis_unavailable,
+    axis_not_in_profile_plane,
+    profile_crosses_axis,
+    invalid_input,
+};
+
+struct RevolveKernelInputResult final {
+    RevolveKernelInputStatus status{
+        RevolveKernelInputStatus::invalid_input};
+    std::optional<kernel::AngularRevolveInput>
+        input;
+    std::optional<BodyStageRef>
+        required_axis_stage;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status ==
+                   RevolveKernelInputStatus::resolved &&
+               input.has_value() &&
+               input->valid();
+    }
+};
+
+// Resolves current Profile support + AxisReference and applies the PM-04
+// coplanarity/closed-half-plane admission contract. The supplied Part/Datum
+// evaluations must be same-revision prefix evidence; no last-good geometry is
+// reused. This is transient derived state shared by evaluation and later
+// preview/draft adapters.
+[[nodiscard]] RevolveKernelInputResult
+resolveKernelRevolveInput(
+    const PartDocument& document,
+    const RevolveFeature& feature,
+    const PartEvaluation* prefix_evaluation,
+    const DatumEvaluation* datum_evaluation);
 
 // Builds the exact provider-neutral modeling input for one authored
 // Extrude definition. This is transient derived data shared by evaluation
