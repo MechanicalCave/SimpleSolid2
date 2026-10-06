@@ -766,6 +766,7 @@ void PartViewportController::setSolidModelingKernel(
         body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
     datum_bindings_.clear();
+    axis_bindings_.clear();
     clearBodyTopologyPreselection();
     clearBodyTopologySelection();
     if (had_body_selection) {
@@ -791,6 +792,7 @@ void PartViewportController::setDocumentSession(
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
         datum_bindings_.clear();
+    axis_bindings_.clear();
         transient_profile_reveal_.reset();
         transient_profile_hide_.reset();
         body_scene_revision_.reset();
@@ -831,6 +833,7 @@ void PartViewportController::clear() {
     sketch_entity_bindings_.clear();
     profile_bindings_.clear();
     datum_bindings_.clear();
+    axis_bindings_.clear();
     transient_profile_reveal_.reset();
     transient_profile_hide_.reset();
     body_scene_revision_.reset();
@@ -901,6 +904,7 @@ void PartViewportController::refreshPresentation() {
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
         datum_bindings_.clear();
+    axis_bindings_.clear();
         body_scene_revision_.reset();
         body_scene_cache_.reset();
         datum_evaluation_cache_.reset();
@@ -3102,6 +3106,7 @@ PartViewportController::sketchPointToWorld(
 std::optional<viewer::ReferenceScene>
 PartViewportController::buildReferenceScene() {
     datum_bindings_.clear();
+    axis_bindings_.clear();
 
     viewer::ReferenceScene scene;
     if (session_ == nullptr) return scene;
@@ -3169,6 +3174,7 @@ PartViewportController::buildReferenceScene() {
                     datum.id);
             if (evaluation == nullptr) {
                 datum_bindings_.clear();
+    axis_bindings_.clear();
                 return std::nullopt;
             }
 
@@ -3189,6 +3195,7 @@ PartViewportController::buildReferenceScene() {
                          datum.id)
                      .second) {
                 datum_bindings_.clear();
+    axis_bindings_.clear();
                 return std::nullopt;
             }
 
@@ -3210,6 +3217,7 @@ PartViewportController::buildReferenceScene() {
             reference.visible = true;
             if (!reference.valid()) {
                 datum_bindings_.clear();
+    axis_bindings_.clear();
                 return std::nullopt;
             }
             scene.references.push_back(
@@ -3266,6 +3274,7 @@ PartViewportController::buildReferenceScene() {
 
     if (!scene.valid()) {
         datum_bindings_.clear();
+    axis_bindings_.clear();
         return std::nullopt;
     }
     return scene;
