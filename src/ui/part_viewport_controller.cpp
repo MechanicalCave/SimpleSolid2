@@ -4712,6 +4712,8 @@ void PartViewportController::onBodyTopologyIntent(
     selection.primary_profile.reset();
     selection.datums.clear();
     selection.primary_datum.reset();
+    selection.axes.clear();
+    selection.primary_axis.reset();
 
     if (mode ==
         viewer::SelectionIntentMode::replace) {
