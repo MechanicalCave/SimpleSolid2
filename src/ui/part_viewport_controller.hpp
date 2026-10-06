@@ -401,6 +401,11 @@ public:
         std::optional<part::ProfileId> reveal_profile_id,
         std::optional<part::ProfileId> hide_profile_id);
 
+    // PM-04D: presentation-only source-Axis cue for an active Revolve draft.
+    // This never changes authored Origin/Axis visibility or semantic selection.
+    void setTransientAxisEmphasis(
+        std::optional<part::AxisReference> axis);
+
     [[nodiscard]] bool projectSketchEntitySelection(
         const std::vector<sketch::EntityId>& selected,
         std::optional<sketch::EntityId> primary);
@@ -683,6 +688,8 @@ private:
         transient_profile_reveal_;
     std::optional<part::ProfileId>
         transient_profile_hide_;
+    std::optional<part::AxisReference>
+        transient_axis_emphasis_;
     std::uint64_t next_presentation_token_{
         0x10000U};
     bool sketch_grip_projection_valid_{};
