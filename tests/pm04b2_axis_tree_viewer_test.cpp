@@ -688,11 +688,13 @@ int main(int argc, char* argv[]) {
     const auto new_axis_id =
         session.document().axes().front().id;
     CHECK(new_axis_id != old_axis_id);
+    const part::SketchLineAxisSource
+        expected_selected_line_source{
+            fixture.sketch_id,
+            fixture.line_id};
     CHECK(
         session.document().axes().front().source ==
-        part::SketchLineAxisSource{
-            fixture.sketch_id,
-            fixture.line_id});
+        expected_selected_line_source);
 
     workbench.requestUndo();
     QApplication::processEvents();
