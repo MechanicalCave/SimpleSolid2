@@ -3886,6 +3886,108 @@ OcctSolidModelingKernel::extrudePreviewMesh(
 }
 
 kernel::SolidPresentationResult
+OcctSolidModelingKernel::revolvePreviewMesh(
+    const kernel::AngularRevolveInput& input,
+    kernel::RuntimeSolidHandle upstream) noexcept {
+    kernel::SolidPresentationResult result;
+    if (!input.valid()) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+    if (input.operation ==
+            kernel::SolidBooleanOperation::cut &&
+        upstream == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+
+    const OcctRuntimeSolid* upstream_occt =
+        nullptr;
+    if (upstream != nullptr) {
+        upstream_occt =
+            dynamic_cast<
+                const OcctRuntimeSolid*>(
+                    upstream.get());
+        if (upstream_occt == nullptr) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_mismatch;
+            return result;
+        }
+    }
+
+    try {
+        const auto tool =
+            buildRevolveTool(input);
+        if (!tool) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+        const auto& tool_shape =
+            tool->first;
+
+        TopoDS_Shape delta_shape;
+        if (upstream_occt == nullptr) {
+            delta_shape = tool_shape;
+        } else if (
+            input.operation ==
+            kernel::SolidBooleanOperation::add) {
+            BRepAlgoAPI_Cut delta{
+                tool_shape,
+                upstream_occt->solid};
+            delta.SetFuzzyValue(0.0);
+            delta.Build();
+            if (!delta.IsDone()) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                return result;
+            }
+            delta_shape = delta.Shape();
+        } else {
+            BRepAlgoAPI_Common delta{
+                tool_shape,
+                upstream_occt->solid};
+            delta.SetFuzzyValue(0.0);
+            delta.Build();
+            if (!delta.IsDone()) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                return result;
+            }
+            delta_shape = delta.Shape();
+        }
+
+        if (volumePresence(delta_shape) !=
+            VolumePresence::positive) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+        return presentationMeshForShape(
+            delta_shape);
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        return result;
+    }
+}
+
+kernel::SolidPresentationResult
 OcctSolidModelingKernel::presentationMesh(
     kernel::RuntimeSolidHandle solid) noexcept {
     kernel::SolidPresentationResult result;
