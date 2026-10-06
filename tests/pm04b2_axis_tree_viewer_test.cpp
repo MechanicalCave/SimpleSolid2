@@ -432,7 +432,8 @@ int main(int argc, char* argv[]) {
     CHECK(
         axis_source_sketch->text() ==
         QString::fromStdString(
-            fixture.sketch_id.value()));
+            std::string{
+                fixture.sketch_id.value()}));
     CHECK(
         axis_source_line->text() ==
         QString::fromStdString(
