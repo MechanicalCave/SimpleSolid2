@@ -1162,6 +1162,15 @@ void CadWorkbench::buildUi() {
         [this](const sketch::SketchId& sketch_id) {
             startSketchResupport(sketch_id);
         });
+    tree_controller_->setAxisEditHandler(
+        [this](part::AxisId axis_id) {
+            static_cast<void>(
+                startAxisEdit(axis_id));
+        });
+    tree_controller_->setAxisDeleteHandler(
+        [this](part::AxisId axis_id) {
+            deleteAxis(axis_id);
+        });
     tree_controller_->setDatumEditHandler(
         [this](part::DatumId datum_id) {
             static_cast<void>(
@@ -1563,6 +1572,7 @@ void CadWorkbench::buildUi() {
     sketch_interaction_controller_->setStateChangedHandler(
         [this] {
             syncSketchInteractionUi();
+            tryStageAxisFromSketchSelection();
             if (document_session_ != nullptr) {
                 const auto revision =
                     document_session_->document()
@@ -1595,6 +1605,7 @@ void CadWorkbench::buildUi() {
                         semantic);
             }
             if (primary) {
+                selected_axis_id_.reset();
                 selected_datum_id_.reset();
                 selected_feature_id_.reset();
                 selected_body_id_.reset();
@@ -1612,6 +1623,31 @@ void CadWorkbench::buildUi() {
             }
             syncActionState();
         });
+    viewport_controller_->setAxisSelectionChangedHandler(
+        [this](
+            const std::vector<part::AxisId>& selected,
+            std::optional<part::AxisId> primary) {
+            const auto semantic =
+                selected.size() == 1U && primary
+                    ? primary
+                    : std::nullopt;
+            selected_axis_id_ = semantic;
+            if (semantic) {
+                selected_profile_id_.reset();
+                selected_axis_id_.reset();
+                selected_datum_id_.reset();
+                selected_feature_id_.reset();
+                selected_body_id_.reset();
+                refreshAxisProperties(*semantic);
+            } else if (properties_stack_ != nullptr &&
+                       properties_stack_->currentWidget() ==
+                           axis_properties_page_) {
+                properties_stack_->setCurrentWidget(
+                    document_properties_page_);
+            }
+            syncActionState();
+        });
+
     viewport_controller_->setDatumSelectionChangedHandler(
         [this](
             const std::vector<part::DatumId>& selected,
@@ -1623,6 +1659,7 @@ void CadWorkbench::buildUi() {
             selected_datum_id_ = semantic;
             if (semantic) {
                 selected_profile_id_.reset();
+                selected_axis_id_.reset();
                 selected_feature_id_.reset();
                 selected_body_id_.reset();
                 refreshDatumProperties(*semantic);
@@ -1675,6 +1712,7 @@ void CadWorkbench::buildUi() {
         [this](std::optional<part::BodyId> body_id) {
             selected_body_id_ = body_id;
             if (body_id) {
+                selected_axis_id_.reset();
                 selected_datum_id_.reset();
                 refreshBodyProperties(*body_id);
             }
@@ -1689,6 +1727,7 @@ void CadWorkbench::buildUi() {
                     : std::nullopt;
             selected_feature_id_ = semantic;
             if (semantic) {
+                selected_axis_id_.reset();
                 selected_datum_id_.reset();
             }
             if (viewport_controller_) {
