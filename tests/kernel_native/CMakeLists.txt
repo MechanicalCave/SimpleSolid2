@@ -510,7 +510,7 @@ target_link_libraries(pm05a_edge_feature_provider_evidence_test
 target_compile_features(pm05a_edge_feature_provider_evidence_test PRIVATE cxx_std_20)
 
 # PM-05A evidence-only: emit the refined provider provenance matrix once in
-# the kernel-native build log. Remove after capture into the evidence report.
+# the kernel-native build log for the final PM-05A synthesis capture.
 if(NOT SS2_BUILD_DESKTOP)
     add_custom_command(
         TARGET pm05a_edge_feature_provider_evidence_test
