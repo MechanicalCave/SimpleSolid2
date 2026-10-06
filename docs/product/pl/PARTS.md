@@ -445,12 +445,12 @@ Aby zmienić region istniejącego Profile, zaznacz dokładnie jeden Profile i u�
 
 Command Line i Operations sterują tym samym stanem Profile. Komendy kontekstowe to `ADD`, `SUBTRACT`, `FINISH`, `CANCEL` oraz `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF`, `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` steruje tylko prezentacją Show Islands i nigdy nie wyłącza analizy wysp.
 
-Profile pozostaje semantyką Part opartą na geometrii 2D i jest trwałym źródłem dla operacji bryłowych. Gdy Profile ma politykę widoczności **Automatic**, aktywny Feature zużywający ten Profile ukrywa jego normalną prezentację; po Suppress/Delete ostatniego aktywnego konsumenta Profile pojawia się ponownie. Jawne Show/Hide wymusza odpowiednio stan pokazany/ukryty bez zmiany wyniku modelowania. Podczas Create/Edit Extrude poprawny solid preview tymczasowo ukrywa źródłowy Profile, żeby uniknąć migotania współpłaszczyznowej prezentacji; gdy preview podczas Edit staje się niepoprawny, źródłowy Profile może zostać chwilowo ujawniony diagnostycznie. Te runtime override nie zmieniają authored Visibility.
+Profile pozostaje semantyką Part opartą na geometrii 2D i jest trwałym źródłem dla operacji bryłowych. Gdy Profile ma politykę widoczności **Automatic**, aktywny Feature zużywający ten Profile ukrywa jego normalną prezentację; po Suppress/Delete ostatniego aktywnego konsumenta Profile pojawia się ponownie. Jawne Show/Hide wymusza odpowiednio stan pokazany/ukryty bez zmiany wyniku modelowania. Podczas Create/Edit Extrude lub Revolve poprawny solid preview tymczasowo ukrywa źródłowy Profile, żeby uniknąć migotania współpłaszczyznowej prezentacji; gdy preview podczas Edit staje się niepoprawny, źródłowy Profile może zostać chwilowo ujawniony diagnostycznie. Te runtime override nie zmieniają authored Visibility.
 
 <!-- section-id: product.parts.extrude -->
 ## Body, Feature i Extrude
 
-Każdy obecny Part ma dokładnie jeden trwały **Body**. Body może być pusty albo zawierać uporządkowaną historię Feature. Obecnie jedyną dostępną rodziną Feature jest **Extrude**.
+Każdy obecny Part ma dokładnie jeden trwały **Body**. Body może być pusty albo zawierać uporządkowaną historię Feature. Dostępne produkcyjne rodziny bryłowych Feature to obecnie **Extrude** i **Revolve**. Ta sekcja opisuje Extrude; Axis/Revolve opisuje następna sekcja.
 
 Extrude obsługuje dwie równorzędne drogi aktywacji. **Selection-first:** wybierz dokładnie jeden poprawny Profile i użyj **Extrude** albo wpisz `EXTRUDE`. **Command-first:** uruchom **Extrude** bez zaznaczonego Profile; Workbench przechodzi wtedy do jawnego stanu wyboru i czeka na jeden poprawny Profile wskazany w Tree albo viewport. Ponowne kliknięcie Extrude, **Esc** lub `CANCEL` opuszcza ten stan bez authored mutation. Pierwszy Feature tworzący bryłę w pustym Body musi być **Add**. Kolejne Extrude mogą być **Add** albo **Cut**. Każdy poprawny etap musi nadal dawać dokładnie jedną bryłę; detached Add, no-effect Add/Cut, wycięcie do zera albo wynik wielobryłowy są odrzucane jawnie i nie są zatwierdzane.
 
@@ -468,6 +468,31 @@ Document Tree pokazuje najpierw Origin i źródłowe Sketch/Profile, a **Body** 
 Command Line i GUI sterują tym samym Extrude draftem. Obsługiwane słowa kontekstowe obejmują `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` i `CANCEL`; Length korzysta ze wspólnego unit-aware quantity input.
 
 Body/Feature nie mają osobnego Show/Hide. Suppress jest semantyką modelowania, a nie widocznością. Bieżące Face, Edge i Vertex Body są bezpośrednio wybieralne do inspekcji. Trwałe znaczenie modelowania pozostaje semantyczne i stage-scoped; tokeny Viewera ani kolejność topologii nie są zapisywane jako referencje.
+
+<!-- section-id: product.parts.axis-revolve -->
+## Axis i Revolve
+
+Oś Revolve jest zawsze jawnym semantycznym **AxisReference**. Możesz bezpośrednio użyć wbudowanej **Origin X/Y/Z Axis**; osie Origin zachowują swoją wbudowaną tożsamość i nigdy nie dostają sztucznego AxisId. Możesz też utworzyć Part-owned **Axis** z dokładnie jednej niedegenerowanej Sketch Line. Uruchom **Axis** albo wpisz `AXIS`, wybierz jedną Line w aktywnym Sketchu i wykonaj Finish. Linia źródłowa może być Regular albo Construction i jej rola nie jest zmieniana. Utworzona Axis ma stabilny `AxisId`, pojawia się pod źródłowym Sketchem w Document Tree i ma własny trwały Show/Hide niezależny od widoczności Sketchu.
+
+**Edit Axis** pozwala wskazać inną dopuszczalną Sketch Line przy zachowaniu tego samego AxisId. Przesunięcie/obrót linii źródłowej albo zmiana supportu źródłowego Sketchu ponownie wyprowadza bieżącą oś świata z authored kolejności endpointów Line. Usunięcie źródłowej Line czyni Axis niedostępną do czasu jawnej naprawy. Usunięcie samego obiektu Axis jest dozwolone nawet wtedy, gdy używa go Revolve: Revolve zachowuje brakujący zamiar AxisId i przechodzi w Blocked/Missing zamiast być usuwany lub przepinany. Undo przywraca ten sam AxisId. System nie podstawia automatycznie najbliższej/podobnej Edge ani Line.
+
+**Revolve** obsługuje selection-first i command-first. Nowy Revolve wymaga jednego poprawnego Profile i jednego jawnego AxisReference; Profile i Axis można wskazać w dowolnej kolejności. Uruchom **Revolve** albo wpisz `REVOLVE`. Podczas aktywnego Revolve Origin Axis można też wskazać przez `X`, `Y` albo `Z`; authored Axis wybiera się z Tree/viewportu. Nie istnieje domyślna ani wnioskowana oś.
+
+Nowy Revolve zaczyna się jako **Add**, **One Side**, **360°**, **Reverse off**. Dopuszczalny zakres to **0 < Angle ≤ 360°**:
+
+- **One Side** wykonuje pełny authored Angle w jednym kierunku; **Reverse** odwraca ten kierunek;
+- **Midplane** traktuje Angle jako **całkowity** kąt obrotu, rozłożony symetrycznie wokół płaszczyzny Profile; Reverse nie jest zapisywany w Midplane;
+- **Add** musi dać jeden połączony Body, a **Cut** musi usunąć dodatnią objętość bez usuwania całego Body; detached/no-effect/multi-solid są jawnie odrzucane.
+
+Axis musi leżeć w płaszczyźnie Profile. Materiał Profile musi znajdować się w całości po jednej stronie Axis; dotknięcie Axis, w tym odcinek granicy leżący na Axis, jest dozwolone, natomiast przejście wnętrza materiału przez Axis jest odrzucane. Skew/non-coplanar sweep oraz kąty powyżej 360° nie należą do obecnego narzędzia.
+
+Viewport pozostawia zaakceptowany Body w normalnej prezentacji i pokazuje tylko dokładny materiał dodawany albo usuwany przez preview Revolve. Źródłowy Profile może zostać chwilowo ukryty przy poprawnym preview. Wybrana Axis jest również wyróżniona podczas aktywnej komendy; normalnie ukryta Origin/authored Axis może zostać tymczasowo pokazana dla orientacji przestrzennej. To wyłącznie runtime presentation override i nigdy nie zapisuje Visibility Profile/Axis. Finish waliduje kompletny wynikowy Body i wykonuje dokładnie jedną transakcję; Cancel, niepoprawne dane albo stale draft/evaluation nie zatwierdzają niczego.
+
+Edit istniejącego Revolve korzysta z tego samego draftu, zachowuje `FeatureId` i może zmieniać Profile, AxisReference, Add/Cut, extent, Angle lub One-Side Reverse. Suppress/Unsuppress i Delete korzystają z tego samego ogólnego lifecycle Feature co Extrude. Brakujący Profile, brakująca Axis, niedostępne źródło Axis albo niepoprawna relacja Profile/Axis zachowują authored intent i raportują strukturalny Failed/Blocked zamiast używać last-good geometry.
+
+Przy pełnym obrocie **360°** provider może wytworzyć periodyczną seam topology jako detal reprezentacji, ale sama seam nie staje się trwałą inżynierską Edge tylko dlatego, że kernel ją emituje. Trwałe znaczenie topologii pozostaje semantyczne i stage-scoped.
+
+Podczas aktywnego Revolve Command Line i Operations sterują tym samym draftem. Obsługiwane wejście kontekstowe obejmuje `ADD`, `CUT`, `ONESIDE`, `MIDPLANE`, `REVERSE`, Angle, `X`/`Y`/`Z`, `FINISH` i `CANCEL`.
 
 <!-- section-id: product.parts.body-topology -->
 ## Topologia Body, View Style i inspekcja semantyczna
@@ -522,9 +547,9 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude/Revolve Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed. Authored Sketch-Line Axes są zapisywane z AxisId, tożsamością źródłowego Sketch/Line i widocznością; Revolve zapisuje ProfileId, AxisReference, Add/Cut oraz parametry kąta OneSide/Midplane.
 
-Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
+Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude/Revolve preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
 Ordinary Save pozostaje warunkowy względem dokładnej wersji natywnego pliku wczytanej lub ostatnio zapisanej przez sesję. Usunięty, podmieniony albo zewnętrznie zmieniony target powoduje konflikt Save zamiast cichego nadpisania. In-memory Part, Undo/Redo i lokalne zmiany pozostają wtedy otwarte.
 
@@ -533,11 +558,11 @@ Przy zamykaniu Parta z niezapisanymi zmianami aplikacja wymaga `Save`, `Discard`
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
 
-Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, DatumId, SketchId/ProfileId, BodyId oraz FeatureId. Sketche oparte na Face i Datum zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology/presentation tokeny są budowane od nowa.
+Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, DatumId, SketchId/ProfileId, AxisId, BodyId oraz FeatureId. Sketche oparte na Face i Datum zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology/presentation tokeny są budowane od nowa.
 
-Datumy, Body i jego ordered Extrude Add/Cut są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
+Datumy, authored Axes, Body i jego ordered Extrude/Revolve Add/Cut są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
 
-Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Extrude draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
+Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Axis/Extrude/Revolve draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikty Dokumentu i Save
@@ -551,11 +576,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex oraz jeden trwały Body z ordered Extrude Features.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex Part-owned Sketch-Line Axes oraz jeden trwały Body z ordered Extrude/Revolve Features.
 
-Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
+Solid modeling obejmuje obecnie **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane** oraz **Revolve Add/Cut** z **One Side/Midplane**, jawnym Origin/Authored AxisReference, zakresem **0 < Angle ≤ 360°** i Reverse dla One Side. Dostępne są Edit Extrude/Revolve, Axis create/edit/re-source/show/hide/delete/repair, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
+Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, Body-Edge/Curve ani innych konstruktorów Axis, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, wieloobrotowego (>360°) Revolve, multi-body, Material ani narzędzi Assembly/Drawing.
 
 Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
 
