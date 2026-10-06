@@ -186,6 +186,7 @@ endforeach()
 
 add_library(simplesolid2_kernel_occt STATIC
     kernel_occt/profile_face_evidence.cpp
+    kernel_occt/edge_feature_evidence.cpp
     kernel_occt/solid_modeling_kernel.cpp
 )
 
