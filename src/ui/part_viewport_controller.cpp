@@ -3166,6 +3166,7 @@ PartViewportController::sketchPointToWorld(
 std::optional<viewer::ReferenceScene>
 PartViewportController::buildReferenceScene() {
     datum_bindings_.clear();
+    axis_bindings_.clear();
 
     viewer::ReferenceScene scene;
     if (session_ == nullptr) return scene;
@@ -3213,6 +3214,73 @@ PartViewportController::buildReferenceScene() {
                 role,
                 session_->document()
                     .builtinReferenceVisible(role)));
+    }
+
+    const auto& axes =
+        session_->document().axes();
+    if (!axes.empty()) {
+        if (!part_evaluation_cache_ ||
+            part_evaluation_cache_->source_revision !=
+                session_->document().revision() ||
+            !datum_evaluation_cache_ ||
+            datum_evaluation_cache_->source_revision !=
+                session_->document().revision()) {
+            axis_bindings_.clear();
+            return std::nullopt;
+        }
+
+        for (const auto& axis : axes) {
+            const part::AxisReference semantic{
+                part::AuthoredAxisReference{
+                    axis.id}};
+            const auto evaluation =
+                part::resolveAxisReference(
+                    session_->document(),
+                    semantic,
+                    &*part_evaluation_cache_,
+                    &*datum_evaluation_cache_);
+
+            if (!axis.visible ||
+                evaluation.status !=
+                    part::AxisEvaluationStatus::resolved ||
+                !evaluation.line ||
+                !evaluation.line->valid()) {
+                continue;
+            }
+
+            const auto token =
+                allocatePresentationToken();
+            if (!token ||
+                !axis_bindings_
+                     .emplace(
+                         token->value,
+                         axis.id)
+                     .second) {
+                axis_bindings_.clear();
+                return std::nullopt;
+            }
+
+            viewer::ReferencePresentation
+                reference;
+            reference.token = *token;
+            reference.kind =
+                viewer::ReferencePresentationKind::
+                    axis;
+            reference.origin =
+                viewerPoint(
+                    evaluation.line->origin);
+            reference.u_axis =
+                viewerVector(
+                    evaluation.line->direction);
+            reference.extent = axisExtent;
+            reference.visible = true;
+            if (!reference.valid()) {
+                axis_bindings_.clear();
+                return std::nullopt;
+            }
+            scene.references.push_back(
+                std::move(reference));
+        }
     }
 
     const auto& datums =
@@ -3330,6 +3398,7 @@ PartViewportController::buildReferenceScene() {
 
     if (!scene.valid()) {
         datum_bindings_.clear();
+        axis_bindings_.clear();
         return std::nullopt;
     }
     return scene;
