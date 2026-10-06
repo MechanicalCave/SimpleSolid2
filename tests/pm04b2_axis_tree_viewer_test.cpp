@@ -787,8 +787,22 @@ int main(int argc, char* argv[]) {
         duplicate_workbench.activateDocument(
             &duplicate_session,
             {}));
-    duplicate_workbench.requestEditSketch(
-        fixture.sketch_id);
+    auto* duplicate_tree =
+        duplicate_workbench.findChild<QTreeWidget*>();
+    auto* duplicate_edit_sketch =
+        duplicate_workbench.findChild<QAction*>(
+            QStringLiteral("editSketchAction"));
+    CHECK(duplicate_tree != nullptr);
+    CHECK(duplicate_edit_sketch != nullptr);
+    auto* duplicate_sketch_item =
+        findItem(
+            *duplicate_tree,
+            QStringLiteral("Sketch 1"));
+    CHECK(duplicate_sketch_item != nullptr);
+    selectOnly(
+        *duplicate_tree,
+        duplicate_sketch_item);
+    duplicate_edit_sketch->trigger();
     QApplication::processEvents();
     CHECK(
         duplicate_viewport->sketch_scene.lines.size() ==
