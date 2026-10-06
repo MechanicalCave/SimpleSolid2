@@ -319,6 +319,16 @@ PartDocumentTreeController::PartDocumentTreeController(
     edit_profile_action_->setObjectName(
         QStringLiteral("editProfileAction"));
 
+    edit_axis_action_ =
+        new QAction(QStringLiteral("Edit Axis"), tree_);
+    edit_axis_action_->setObjectName(
+        QStringLiteral("editAxisAction"));
+
+    delete_axis_action_ =
+        new QAction(QStringLiteral("Delete Axis"), tree_);
+    delete_axis_action_->setObjectName(
+        QStringLiteral("deleteAxisAction"));
+
     edit_datum_action_ =
         new QAction(
             QStringLiteral("Edit Datum Plane"),
@@ -420,6 +430,28 @@ PartDocumentTreeController::PartDocumentTreeController(
             if (auto* item = tree_->currentItem();
                 item != nullptr) {
                 requestProfileEdit(*item);
+            }
+        });
+
+    QObject::connect(
+        edit_axis_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestAxisEdit(*item);
+            }
+        });
+
+    QObject::connect(
+        delete_axis_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestAxisDelete(*item);
             }
         });
 
