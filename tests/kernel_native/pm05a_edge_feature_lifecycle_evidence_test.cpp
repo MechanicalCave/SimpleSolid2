@@ -94,6 +94,11 @@ int main() {
         CHECK(tangent.provider_contour_count >= 1U);
         CHECK(tangent.provider_contour_edge_count >= 1U);
         CHECK(tangent.build_succeeded);
+        CHECK(tangent.full_chain_requested_edge_count == 2U);
+        CHECK(tangent.full_chain_provider_contour_edge_count == 2U);
+        CHECK(tangent.full_chain_exact_provider_input_membership);
+        CHECK(tangent.full_chain_build_succeeded);
+        CHECK(tangent.single_and_full_same_topology_and_volume);
 
         std::cout
             << "PM05A_TANGENT"
@@ -106,6 +111,16 @@ int main() {
             << (tangent.exact_provider_input_membership ? 1 : 0)
             << " success="
             << (tangent.build_succeeded ? 1 : 0)
+            << " full_requested="
+            << tangent.full_chain_requested_edge_count
+            << " full_contour_edges="
+            << tangent.full_chain_provider_contour_edge_count
+            << " full_exact="
+            << (tangent.full_chain_exact_provider_input_membership ? 1 : 0)
+            << " full_success="
+            << (tangent.full_chain_build_succeeded ? 1 : 0)
+            << " same_result="
+            << (tangent.single_and_full_same_topology_and_volume ? 1 : 0)
             << '\n';
     }
 
