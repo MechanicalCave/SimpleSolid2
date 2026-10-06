@@ -1,5 +1,6 @@
 #include <simplesolid2/part/feature.hpp>
 
+#include <algorithm>
 #include <numbers>
 
 namespace simplesolid2::part {
@@ -66,6 +67,68 @@ bool revolveFeatureStructurallyValid(
                full_turn;
 }
 
+namespace {
+
+bool edgeSetStructurallyValid(
+    const std::vector<MaterialEdgeReference>& edges) noexcept {
+    if (edges.empty() ||
+        !std::is_sorted(
+            edges.begin(),
+            edges.end())) {
+        return false;
+    }
+
+    const auto& stage = edges.front().stage;
+    for (std::size_t index = 0U;
+         index < edges.size();
+         ++index) {
+        if (!edges[index].valid() ||
+            edges[index].stage != stage) {
+            return false;
+        }
+        if (index > 0U &&
+            edges[index - 1U] ==
+                edges[index]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+bool filletFeatureStructurallyValid(
+    const FilletFeature& feature) noexcept {
+    return edgeSetStructurallyValid(
+               feature.edges) &&
+           feature.radius.finite() &&
+           feature.radius.millimetres > 0.0;
+}
+
+bool chamferFeatureStructurallyValid(
+    const ChamferFeature& feature) noexcept {
+    return edgeSetStructurallyValid(
+               feature.edges) &&
+           feature.distance.finite() &&
+           feature.distance.millimetres > 0.0;
+}
+
+const std::vector<MaterialEdgeReference>*
+sourceMaterialEdges(
+    const PartFeature& feature) noexcept {
+    if (const auto* fillet =
+            std::get_if<FilletFeature>(
+                &feature.definition)) {
+        return &fillet->edges;
+    }
+    if (const auto* chamfer =
+            std::get_if<ChamferFeature>(
+                &feature.definition)) {
+        return &chamfer->edges;
+    }
+    return nullptr;
+}
+
 bool partFeatureDefinitionStructurallyValid(
     const PartFeatureDefinition& definition) noexcept {
     if (const auto* extrude =
@@ -74,12 +137,24 @@ bool partFeatureDefinitionStructurallyValid(
         return extrudeFeatureStructurallyValid(
             *extrude);
     }
-    const auto* revolve =
-        std::get_if<RevolveFeature>(
+    if (const auto* revolve =
+            std::get_if<RevolveFeature>(
+                &definition)) {
+        return revolveFeatureStructurallyValid(
+            *revolve);
+    }
+    if (const auto* fillet =
+            std::get_if<FilletFeature>(
+                &definition)) {
+        return filletFeatureStructurallyValid(
+            *fillet);
+    }
+    const auto* chamfer =
+        std::get_if<ChamferFeature>(
             &definition);
-    return revolve != nullptr &&
-           revolveFeatureStructurallyValid(
-               *revolve);
+    return chamfer != nullptr &&
+           chamferFeatureStructurallyValid(
+               *chamfer);
 }
 
 std::optional<ProfileId> sourceProfileId(
