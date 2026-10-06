@@ -492,6 +492,8 @@ DocumentSession::DocumentSession(
       saved_state_{document_.state()},
       expected_revision_{document_.revision()} {
     absorbSketchEntityIdCursors(document_.state());
+    axis_id_cursor_.preserve(
+        document_.state().next_axis_id);
     datum_id_cursor_.preserve(
         document_.state().next_datum_id);
     profile_id_cursor_.preserve(
@@ -517,6 +519,8 @@ DocumentSession::DocumentSession(
             "DocumentSession file checkpoint DocumentId mismatch"};
     }
     absorbSketchEntityIdCursors(document_.state());
+    axis_id_cursor_.preserve(
+        document_.state().next_axis_id);
     datum_id_cursor_.preserve(
         document_.state().next_datum_id);
     profile_id_cursor_.preserve(
@@ -545,6 +549,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     }
 
     applySketchEntityIdCursors(after);
+    applyAxisIdCursor(after);
     applyDatumIdCursor(after);
     applyProfileIdCursor(after);
     applyBodyFeatureIdCursors(after);
@@ -568,6 +573,10 @@ DocumentSessionResult DocumentSession::commitCommandState(
     absorbSketchEntityIdCursors(
         prepared_entity_id_cursors,
         pending.after);
+    auto prepared_axis_id_cursor =
+        axis_id_cursor_;
+    prepared_axis_id_cursor.preserve(
+        pending.after.next_axis_id);
     auto prepared_datum_id_cursor =
         datum_id_cursor_;
     prepared_datum_id_cursor.preserve(
@@ -610,6 +619,8 @@ DocumentSessionResult DocumentSession::commitCommandState(
     cursor_ = history_.size();
     sketch_entity_id_cursors_.swap(
         prepared_entity_id_cursors);
+    axis_id_cursor_ =
+        prepared_axis_id_cursor;
     datum_id_cursor_ =
         prepared_datum_id_cursor;
     profile_id_cursor_ =
@@ -3214,6 +3225,8 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
     }
     auto adjusted_expected =
         expected_current;
+    applyAxisIdCursor(
+        adjusted_expected);
     applyDatumIdCursor(
         adjusted_expected);
     applyProfileIdCursor(
@@ -3229,6 +3242,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     auto adjusted_target = target;
     applySketchEntityIdCursors(adjusted_target);
+    applyAxisIdCursor(adjusted_target);
     applyDatumIdCursor(adjusted_target);
     applyProfileIdCursor(adjusted_target);
     applyBodyFeatureIdCursors(adjusted_target);
@@ -3246,6 +3260,8 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     expected_revision_ = document_.revision();
     absorbSketchEntityIdCursors(document_.state());
+    axis_id_cursor_.preserve(
+        document_.state().next_axis_id);
     datum_id_cursor_.preserve(
         document_.state().next_datum_id);
     profile_id_cursor_.preserve(
@@ -3300,6 +3316,12 @@ void DocumentSession::applySketchEntityIdCursors(
         hosted.model.preserveEntityIdCursor(
             found->second);
     }
+}
+
+void DocumentSession::applyAxisIdCursor(
+    part::PartAuthoredState& state) const noexcept {
+    state.next_axis_id.preserve(
+        axis_id_cursor_);
 }
 
 void DocumentSession::applyDatumIdCursor(
