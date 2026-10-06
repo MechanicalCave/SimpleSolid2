@@ -6,6 +6,8 @@
 #include <compare>
 #include <cstdint>
 #include <optional>
+#include <variant>
+#include <vector>
 
 namespace simplesolid2::part {
 
@@ -98,6 +100,113 @@ struct SurfaceReference final {
     friend auto operator<=>(
         const SurfaceReference&,
         const SurfaceReference&) = default;
+};
+
+enum class FeatureCurveRoleKind {
+    cap_side,
+    side_side,
+    boolean_intersection,
+    edge_feature_boundary,
+};
+
+struct FeatureCurveAddress final {
+    FeatureId producer_feature_id;
+    FeatureCurveRoleKind role{
+        FeatureCurveRoleKind::boolean_intersection};
+    // Exactly two distinct Surface addresses in canonical semantic order.
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeatureCurveAddress&,
+        const FeatureCurveAddress&) = default;
+    friend auto operator<=>(
+        const FeatureCurveAddress&,
+        const FeatureCurveAddress&) = default;
+};
+
+struct FeaturePointAddress final {
+    FeatureId producer_feature_id;
+    // Current Part-v1 Point meaning is an intersection of exactly three
+    // distinct semantic Surfaces in canonical semantic order.
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeaturePointAddress&,
+        const FeaturePointAddress&) = default;
+    friend auto operator<=>(
+        const FeaturePointAddress&,
+        const FeaturePointAddress&) = default;
+};
+
+struct SingularAtAuthoredStage final {
+    friend bool operator==(
+        const SingularAtAuthoredStage&,
+        const SingularAtAuthoredStage&) = default;
+    friend auto operator<=>(
+        const SingularAtAuthoredStage&,
+        const SingularAtAuthoredStage&) = default;
+};
+
+struct BetweenSemanticPoints final {
+    FeaturePointAddress first;
+    FeaturePointAddress second;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return first.valid() &&
+               second.valid() &&
+               first < second;
+    }
+
+    friend bool operator==(
+        const BetweenSemanticPoints&,
+        const BetweenSemanticPoints&) = default;
+    friend auto operator<=>(
+        const BetweenSemanticPoints&,
+        const BetweenSemanticPoints&) = default;
+};
+
+using EdgeBranchDiscriminator =
+    std::variant<
+        SingularAtAuthoredStage,
+        BetweenSemanticPoints>;
+
+struct MaterialEdgeReference final {
+    BodyStageRef stage;
+    FeatureCurveAddress curve;
+    EdgeBranchDiscriminator branch;
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (!stage.valid() ||
+            stage.kind !=
+                BodyStageKind::after_feature ||
+            !curve.valid()) {
+            return false;
+        }
+        if (std::holds_alternative<
+                SingularAtAuthoredStage>(
+                branch)) {
+            return true;
+        }
+        const auto* endpoints =
+            std::get_if<
+                BetweenSemanticPoints>(
+                &branch);
+        return endpoints != nullptr &&
+               endpoints->valid();
+    }
+
+    friend bool operator==(
+        const MaterialEdgeReference&,
+        const MaterialEdgeReference&) = default;
+    friend auto operator<=>(
+        const MaterialEdgeReference&,
+        const MaterialEdgeReference&) = default;
 };
 
 } // namespace simplesolid2::part
