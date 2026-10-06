@@ -3319,6 +3319,9 @@ PartViewportController::buildBodyScene() {
     if (body_scene_revision_ &&
         *body_scene_revision_ == revision &&
         body_scene_cache_ &&
+        part_evaluation_cache_ &&
+        part_evaluation_cache_->
+                source_revision == revision &&
         datum_evaluation_cache_ &&
         datum_evaluation_cache_->
                 source_revision == revision) {
@@ -3330,6 +3333,7 @@ PartViewportController::buildBodyScene() {
             -> std::optional<viewer::BodyScene> {
             body_scene_revision_.reset();
             body_scene_cache_.reset();
+            part_evaluation_cache_.reset();
             datum_evaluation_cache_.reset();
             body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
@@ -3407,6 +3411,8 @@ PartViewportController::buildBodyScene() {
         clear_stale_body_selection();
         body_scene_revision_ = revision;
         body_scene_cache_ = empty_scene;
+        part_evaluation_cache_ =
+            evaluation;
         datum_evaluation_cache_ =
             datum_evaluation;
         return *body_scene_cache_;
@@ -3609,6 +3615,8 @@ PartViewportController::buildBodyScene() {
     clear_stale_body_selection();
     body_scene_revision_ = revision;
     body_scene_cache_ = scene;
+    part_evaluation_cache_ =
+        evaluation;
     datum_evaluation_cache_ =
         datum_evaluation;
     body_topology_catalog_cache_ = *topology;
