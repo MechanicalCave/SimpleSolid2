@@ -65,6 +65,9 @@ enum class FeatureFaceRoleKind {
     negative_cap,
     positive_cap,
     side,
+    revolve_start_cap,
+    revolve_end_cap,
+    revolve_side,
 };
 
 struct FeatureFaceAddress final {
