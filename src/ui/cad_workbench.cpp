@@ -1301,6 +1301,17 @@ void CadWorkbench::buildUi() {
         1,
         datum_plane_button_);
 
+    axis_button_ =
+        new QPushButton(
+            QStringLiteral("Axis"),
+            shell_);
+    axis_button_->setObjectName(
+        QStringLiteral("axisToolButton"));
+    axis_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        1,
+        axis_button_);
+
     select_sketch_button_ =
         new QPushButton(
             QStringLiteral("Select"),
