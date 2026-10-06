@@ -57,6 +57,7 @@ struct OperationRun final {
     std::optional<kernel::ShapeEvidence> shape;
     std::optional<kernel::EdgeFeatureTopologySignature> signature;
     std::size_t new_face_count{};
+    std::size_t modified_inherited_face_count{};
     std::size_t edge_generated_face_count{};
     std::size_t shared_vertex_generated_face_count{};
     std::size_t unclaimed_new_face_count{};
@@ -360,6 +361,25 @@ void captureGeneratedTopology(
         created_faces.size();
 
     std::vector<TopoDS_Face>
+        modified_inherited_faces;
+    for (TopExp_Explorer explorer{source, TopAbs_FACE};
+         explorer.More();
+         explorer.Next()) {
+        const auto source_face =
+            TopoDS::Face(explorer.Current());
+        const auto modified =
+            facesFromList(
+                operation.Modified(source_face));
+        for (const auto& face : modified) {
+            appendUnique(
+                modified_inherited_faces,
+                face);
+        }
+    }
+    run.modified_inherited_face_count =
+        modified_inherited_faces.size();
+
+    std::vector<TopoDS_Face>
         generated_from_edges;
     run.generated_faces_per_edge.reserve(
         selected.size());
@@ -397,7 +417,10 @@ void captureGeneratedTopology(
         generated_from_vertices.size();
 
     std::vector<TopoDS_Face> claimed =
-        generated_from_edges;
+        modified_inherited_faces;
+    for (const auto& face : generated_from_edges) {
+        appendUnique(claimed, face);
+    }
     for (const auto& face :
          generated_from_vertices) {
         appendUnique(claimed, face);
@@ -538,6 +561,12 @@ scenarioEndpoints(
     const std::vector<TopoDS_Edge>& selected,
     double parameter);
 
+[[nodiscard]] bool sameSignature(
+    const std::optional<
+        kernel::EdgeFeatureTopologySignature>& first,
+    const std::optional<
+        kernel::EdgeFeatureTopologySignature>& second);
+
 [[nodiscard]] bool containsSameSubshape(
     const TopoDS_Shape& container,
     const TopoDS_Shape& candidate,
@@ -612,7 +641,8 @@ referenceStatus(std::size_t candidate_count) noexcept {
 
 struct TangentFixture final {
     TopoDS_Shape shape;
-    TopoDS_Edge selected_edge;
+    TopoDS_Edge first_edge;
+    TopoDS_Edge second_edge;
 };
 
 [[nodiscard]] std::optional<TangentFixture>
@@ -645,20 +675,28 @@ buildTangentFixture() {
         return std::nullopt;
     }
 
-    const auto selected =
+    const auto first =
         findEdgeByEndpoints(
             shape,
             {
                 {0.0, 0.0, box_z},
                 {20.0, 0.0, box_z},
             });
-    if (!selected) {
+    const auto second =
+        findEdgeByEndpoints(
+            shape,
+            {
+                {20.0, 0.0, box_z},
+                {40.0, 0.0, box_z},
+            });
+    if (!first || !second) {
         return std::nullopt;
     }
 
     return TangentFixture{
         shape,
-        *selected};
+        *first,
+        *second};
 }
 
 [[nodiscard]] kernel::EdgeFeatureTangentChainEvidence
@@ -682,7 +720,7 @@ buildTangentChainEvidence(
         execute(
             operation,
             fixture->shape,
-            {fixture->selected_edge},
+            {fixture->first_edge},
             normal_parameter);
 
     evidence.provider_contour_count =
@@ -693,6 +731,29 @@ buildTangentChainEvidence(
         run.exact_membership;
     evidence.build_succeeded =
         run.build_succeeded;
+
+    const auto full_chain =
+        execute(
+            operation,
+            fixture->shape,
+            {
+                fixture->first_edge,
+                fixture->second_edge,
+            },
+            normal_parameter);
+    evidence.full_chain_requested_edge_count = 2U;
+    evidence.full_chain_provider_contour_edge_count =
+        full_chain.contour_edge_count;
+    evidence.full_chain_exact_provider_input_membership =
+        full_chain.exact_membership;
+    evidence.full_chain_build_succeeded =
+        full_chain.build_succeeded;
+    evidence.single_and_full_same_topology_and_volume =
+        run.build_succeeded &&
+        full_chain.build_succeeded &&
+        sameSignature(
+            run.signature,
+            full_chain.signature);
     return evidence;
 }
 
@@ -1111,6 +1172,8 @@ buildEdgeFeatureProviderEvidence(
             forward.signature;
         evidence.new_face_count =
             forward.new_face_count;
+        evidence.modified_inherited_face_count =
+            forward.modified_inherited_face_count;
         evidence.generated_from_selected_edges_face_count =
             forward.edge_generated_face_count;
         evidence.generated_from_shared_vertices_face_count =
