@@ -2644,7 +2644,7 @@ bool parseProfiles(
     return true;
 }
 
-bool parseBodyV8OrV13(
+bool parseBodyV8OrV14(
     const nlohmann::json& value,
     int schema_version,
     BodyIdCursor body_cursor,
@@ -2686,50 +2686,60 @@ bool parseBodyV8OrV13(
             !item.contains("kind") ||
             !item.contains("name") ||
             !item.contains("suppressed") ||
-            !item.contains("profile_id") ||
-            !item.contains("operation") ||
-            !item.contains("extent") ||
             !item["id"].is_string() ||
             !item["kind"].is_string() ||
             !item["name"].is_string() ||
-            !item["suppressed"].is_boolean() ||
-            !item["profile_id"].is_string() ||
-            !item["operation"].is_string()) {
-            error = "Native Part contains malformed Feature record";
+            !item["suppressed"].is_boolean()) {
+            error =
+                "Native Part contains malformed Feature record";
             return false;
         }
 
         const auto feature_id =
-            FeatureId::parse(item["id"].get<std::string>());
-        const auto profile_id =
-            ProfileId::parse(
-                item["profile_id"].get<std::string>());
-        if (!feature_id || !profile_id ||
-            !feature_cursor->containsAllocated(*feature_id) ||
-            !profile_cursor.containsAllocated(*profile_id)) {
+            FeatureId::parse(
+                item["id"].get<std::string>());
+        if (!feature_id ||
+            !feature_cursor->containsAllocated(
+                *feature_id)) {
             error =
-                "Native Part contains invalid Feature identity/reference";
+                "Native Part contains invalid Feature identity";
             return false;
         }
 
         const auto kind =
             item["kind"].get<std::string>();
+
         if (kind == "extrude") {
-            if (item.size() != 7U) {
+            if (item.size() != 7U ||
+                !item.contains("profile_id") ||
+                !item.contains("operation") ||
+                !item.contains("extent") ||
+                !item["profile_id"].is_string() ||
+                !item["operation"].is_string()) {
                 error =
                     "Native Part contains malformed Extrude Feature record";
                 return false;
             }
+
+            const auto profile_id =
+                ProfileId::parse(
+                    item["profile_id"]
+                        .get<std::string>());
             const auto operation =
                 parseExtrudeOperation(
-                    item["operation"].get<std::string>());
-            if (!operation) {
+                    item["operation"]
+                        .get<std::string>());
+            if (!profile_id ||
+                !profile_cursor.containsAllocated(
+                    *profile_id) ||
+                !operation) {
                 error =
-                    "Native Part contains invalid Extrude operation";
+                    "Native Part contains invalid Extrude identity/reference";
                 return false;
             }
 
-            const auto& extent_json = item["extent"];
+            const auto& extent_json =
+                item["extent"];
             if (!extent_json.is_object() ||
                 !extent_json.contains("mode") ||
                 !extent_json.contains("distance_mm") ||
@@ -2767,17 +2777,19 @@ bool parseBodyV8OrV13(
                         "Native Part contains invalid OneSide Extrude direction";
                     return false;
                 }
-                extent = OneSidedExtrudeExtent{
-                    core::LengthValue{distance},
-                    direction == "reverse"};
+                extent =
+                    OneSidedExtrudeExtent{
+                        core::LengthValue{distance},
+                        direction == "reverse"};
             } else if (mode == "midplane") {
                 if (extent_json.size() != 2U) {
                     error =
                         "Native Part Midplane extent contains unexpected fields";
                     return false;
                 }
-                extent = MidplaneExtrudeExtent{
-                    core::LengthValue{distance}};
+                extent =
+                    MidplaneExtrudeExtent{
+                        core::LengthValue{distance}};
             } else {
                 error =
                     "Native Part contains unsupported Extrude extent mode";
@@ -2795,7 +2807,7 @@ bool parseBodyV8OrV13(
             if (!partFeatureDefinitionStructurallyValid(
                     feature.definition)) {
                 error =
-                    "Native Part contains structurally invalid Feature";
+                    "Native Part contains structurally invalid Extrude Feature";
                 return false;
             }
             parsed.features.push_back(
@@ -2803,99 +2815,195 @@ bool parseBodyV8OrV13(
             continue;
         }
 
-        if (kind != "revolve" ||
-            schema_version < 13) {
-            error =
-                "Native Part contains unsupported Feature kind";
-            return false;
-        }
-        if (item.size() != 8U ||
-            !item.contains("axis")) {
-            error =
-                "Native Part contains malformed Revolve Feature record";
-            return false;
-        }
-
-        const auto operation =
-            parseRevolveOperation(
-                item["operation"].get<std::string>());
-        auto axis =
-            parseAxisReferenceV13(
-                item["axis"],
-                axis_cursor,
-                error);
-        if (!operation || !axis) {
-            if (error.empty()) {
+        if (kind == "revolve") {
+            if (schema_version < 13 ||
+                item.size() != 8U ||
+                !item.contains("profile_id") ||
+                !item.contains("axis") ||
+                !item.contains("operation") ||
+                !item.contains("extent") ||
+                !item["profile_id"].is_string() ||
+                !item["operation"].is_string()) {
                 error =
-                    "Native Part contains invalid Revolve operation/reference";
-            }
-            return false;
-        }
-
-        const auto& extent_json = item["extent"];
-        if (!extent_json.is_object() ||
-            !extent_json.contains("mode") ||
-            !extent_json.contains("angle_rad") ||
-            !extent_json["mode"].is_string() ||
-            !extent_json["angle_rad"].is_number()) {
-            error =
-                "Native Part contains malformed Revolve extent";
-            return false;
-        }
-        const double angle =
-            extent_json["angle_rad"].get<double>();
-        if (!std::isfinite(angle) ||
-            angle <= 0.0) {
-            error =
-                "Native Part contains invalid Revolve angle";
-            return false;
-        }
-
-        RevolveExtent extent;
-        const auto mode =
-            extent_json["mode"].get<std::string>();
-        if (mode == "one_side") {
-            if (extent_json.size() != 3U ||
-                !extent_json.contains("reverse") ||
-                !extent_json["reverse"].is_boolean()) {
-                error =
-                    "Native Part contains malformed OneSide Revolve extent";
+                    schema_version < 13
+                        ? "Native Part contains unsupported Feature kind"
+                        : "Native Part contains malformed Revolve Feature record";
                 return false;
             }
-            extent = OneSidedRevolveExtent{
-                core::AngleValue{angle},
-                extent_json["reverse"].get<bool>()};
-        } else if (mode == "midplane") {
-            if (extent_json.size() != 2U) {
-                error =
-                    "Native Part Midplane Revolve extent contains unexpected fields";
+
+            const auto profile_id =
+                ProfileId::parse(
+                    item["profile_id"]
+                        .get<std::string>());
+            const auto operation =
+                parseRevolveOperation(
+                    item["operation"]
+                        .get<std::string>());
+            auto axis =
+                parseAxisReferenceV13(
+                    item["axis"],
+                    axis_cursor,
+                    error);
+            if (!profile_id ||
+                !profile_cursor.containsAllocated(
+                    *profile_id) ||
+                !operation ||
+                !axis) {
+                if (error.empty()) {
+                    error =
+                        "Native Part contains invalid Revolve identity/reference";
+                }
                 return false;
             }
-            extent = MidplaneRevolveExtent{
-                core::AngleValue{angle}};
-        } else {
-            error =
-                "Native Part contains unsupported Revolve extent mode";
-            return false;
+
+            const auto& extent_json =
+                item["extent"];
+            if (!extent_json.is_object() ||
+                !extent_json.contains("mode") ||
+                !extent_json.contains("angle_rad") ||
+                !extent_json["mode"].is_string() ||
+                !extent_json["angle_rad"].is_number()) {
+                error =
+                    "Native Part contains malformed Revolve extent";
+                return false;
+            }
+            const double angle =
+                extent_json["angle_rad"].get<double>();
+            if (!std::isfinite(angle) ||
+                angle <= 0.0) {
+                error =
+                    "Native Part contains invalid Revolve angle";
+                return false;
+            }
+
+            RevolveExtent extent;
+            const auto mode =
+                extent_json["mode"].get<std::string>();
+            if (mode == "one_side") {
+                if (extent_json.size() != 3U ||
+                    !extent_json.contains("reverse") ||
+                    !extent_json["reverse"].is_boolean()) {
+                    error =
+                        "Native Part contains malformed OneSide Revolve extent";
+                    return false;
+                }
+                extent =
+                    OneSidedRevolveExtent{
+                        core::AngleValue{angle},
+                        extent_json["reverse"]
+                            .get<bool>()};
+            } else if (mode == "midplane") {
+                if (extent_json.size() != 2U) {
+                    error =
+                        "Native Part Midplane Revolve extent contains unexpected fields";
+                    return false;
+                }
+                extent =
+                    MidplaneRevolveExtent{
+                        core::AngleValue{angle}};
+            } else {
+                error =
+                    "Native Part contains unsupported Revolve extent mode";
+                return false;
+            }
+
+            PartFeature feature{
+                *feature_id,
+                item["name"].get<std::string>(),
+                item["suppressed"].get<bool>(),
+                RevolveFeature{
+                    *profile_id,
+                    std::move(*axis),
+                    *operation,
+                    std::move(extent)}};
+            if (!partFeatureDefinitionStructurallyValid(
+                    feature.definition)) {
+                error =
+                    "Native Part contains structurally invalid Revolve Feature";
+                return false;
+            }
+            parsed.features.push_back(
+                std::move(feature));
+            continue;
         }
 
-        PartFeature feature{
-            *feature_id,
-            item["name"].get<std::string>(),
-            item["suppressed"].get<bool>(),
-            RevolveFeature{
-                *profile_id,
-                std::move(*axis),
-                *operation,
-                std::move(extent)}};
-        if (!partFeatureDefinitionStructurallyValid(
-                feature.definition)) {
-            error =
-                "Native Part contains structurally invalid Revolve Feature";
-            return false;
+        if ((kind == "fillet" ||
+             kind == "chamfer") &&
+            schema_version >= 14) {
+            const char* parameter_name =
+                kind == "fillet"
+                    ? "radius_mm"
+                    : "distance_mm";
+            if (item.size() != 6U ||
+                !item.contains("edges") ||
+                !item.contains(parameter_name) ||
+                !item["edges"].is_array() ||
+                !item[parameter_name].is_number() ||
+                item["edges"].empty()) {
+                error =
+                    "Native Part contains malformed schema-v14 Edge Feature record";
+                return false;
+            }
+
+            std::vector<MaterialEdgeReference>
+                edges;
+            edges.reserve(
+                item["edges"].size());
+            for (const auto& edge_json :
+                 item["edges"]) {
+                auto edge =
+                    parseMaterialEdgeReferenceV14(
+                        edge_json,
+                        *feature_cursor,
+                        error);
+                if (!edge) {
+                    return false;
+                }
+                edges.push_back(
+                    std::move(*edge));
+            }
+
+            const double parameter =
+                item[parameter_name].get<double>();
+            if (!std::isfinite(parameter) ||
+                parameter <= 0.0) {
+                error =
+                    "Native Part contains invalid schema-v14 Edge Feature parameter";
+                return false;
+            }
+
+            PartFeatureDefinition definition =
+                kind == "fillet"
+                    ? PartFeatureDefinition{
+                          FilletFeature{
+                              std::move(edges),
+                              core::LengthValue{
+                                  parameter}}}
+                    : PartFeatureDefinition{
+                          ChamferFeature{
+                              std::move(edges),
+                              core::LengthValue{
+                                  parameter}}};
+
+            if (!partFeatureDefinitionStructurallyValid(
+                    definition)) {
+                error =
+                    "Native Part contains structurally invalid schema-v14 Edge Feature";
+                return false;
+            }
+
+            parsed.features.push_back(
+                PartFeature{
+                    *feature_id,
+                    item["name"].get<std::string>(),
+                    item["suppressed"].get<bool>(),
+                    std::move(definition)});
+            continue;
         }
-        parsed.features.push_back(
-            std::move(feature));
+
+        error =
+            "Native Part contains unsupported Feature kind";
+        return false;
     }
 
     body = std::move(parsed);
@@ -3120,7 +3228,7 @@ std::optional<PartAuthoredState> parseAuthored(
             return std::nullopt;
         }
         state.next_body_id = *body_cursor;
-        if (!parseBodyV8OrV13(
+        if (!parseBodyV8OrV14(
                 authored["body"],
                 schema_version,
                 *body_cursor,
