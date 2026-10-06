@@ -1,12 +1,12 @@
 # PM-04 — Axis / Revolve
 
-**Status:** PROPOSED / NOT ACTIVE — OWNER REVIEW REQUIRED  
-**Decision class:** D2 production Work Contract candidate  
+**Status:** ACTIVE — OWNER ACCEPTED 2026-10-06  
+**Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.24  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-03 Datum Reference Geometry / Offset Datum Plane COMPLETED — PASS  
-**Production mutation:** NOT AUTHORIZED until this exact contract is Owner-accepted, activated by `work/ACTIVE.yaml`, and its activation gate passes
+**Production mutation:** AUTHORIZED ONLY WITHIN THIS ACTIVE CONTRACT after activation merge
 
 ## 1. Goal
 
@@ -791,7 +791,7 @@ STOP and return to Owner review if implementation would require:
 - a new numerical tolerance policy that changes accepted semantic success/failure outside the existing versioned policy;
 - a dependency direction contrary to Architecture baseline.
 
-## 15. Owner decisions frozen in this candidate
+## 15. Owner-accepted decisions
 
 The Owner has already accepted the following PM-04 design decisions during contract preparation:
 
@@ -809,19 +809,13 @@ The Owner has already accepted the following PM-04 design decisions during contr
 - default new Revolve Angle is 360°;
 - Delete Axis is allowed while referenced; dependent Revolve retains authored intent and becomes MissingAxis/Blocked rather than being deleted or silently rebound.
 
-This section records agreed product/architecture intent but does not activate production mutation. The exact repository contract still requires explicit Owner acceptance as a whole.
+The Owner accepted this exact Work Contract on 2026-10-06. These decisions are now normative within PM-04 and may be changed only by an explicit Owner-accepted amendment.
 
 ## 16. Activation and completion boundary
 
-PM-04 is **not active** merely because this candidate exists.
+The Owner accepted this exact Work Contract on 2026-10-06. The contract becomes active only when the governance change points `work/ACTIVE.yaml` here with `status: active`, passes its exact-head repository gate and is merged.
 
-Activation requires:
-
-1. Owner acceptance of this exact Work Contract;
-2. repository governance change pointing `work/ACTIVE.yaml` to this contract with `status: active`;
-3. successful exact-head activation gate.
-
-Only then may PM-04A production mutation begin.
+Once that activation merge exists, implementation must follow PM-04A through PM-04F in order and remain inside this contract. Any STOP condition or scope expansion returns to Owner review.
 
 PM-04 completion authorizes only:
 
