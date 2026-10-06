@@ -48,8 +48,8 @@ struct EdgeFeatureProviderEvidence final {
     std::size_t requested_edge_count{};
     std::size_t resolved_input_edge_count{};
 
-    // BRepFilletAPI contour inspection after explicit Add() calls and before
-    // Build(). This is evidence for/against silent tangent-chain expansion.
+    // Native-provider contour inspection after explicit Edge registration
+    // and before execution. Evidence for/against silent tangent-chain expansion.
     std::size_t provider_contour_count{};
     std::size_t provider_contour_edge_count{};
     bool exact_provider_input_membership{false};
