@@ -218,6 +218,30 @@ set_tests_properties(pm01b.production_kernel PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;subsystem-part;native"
 )
 
+add_executable(pm04c2_production_revolve_test
+    pm04c2_production_revolve_test.cpp
+)
+
+target_link_libraries(pm04c2_production_revolve_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+        simplesolid2_part
+        simplesolid2_sketch
+)
+
+target_compile_features(pm04c2_production_revolve_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm04c2.production_revolve
+    COMMAND pm04c2_production_revolve_test
+)
+
+set_tests_properties(pm04c2.production_revolve PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;subsystem-part;native"
+)
+
 add_executable(pm02a_production_topology_catalog_test
     pm02a_production_topology_catalog_test.cpp
 )
@@ -496,6 +520,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm02p_c_edge_curve_lineage_test
         pm02p_d_vertex_point_lineage_test
         pm02p_e_kernel_lifecycle_test
+        pm04c2_production_revolve_test
 )
 
 foreach(_forbidden_target IN ITEMS
