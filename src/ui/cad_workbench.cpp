@@ -12436,6 +12436,7 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
@@ -12444,6 +12445,7 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         document_session->canRedo());
     // Save remains available for a clean active Document so an explicit
     // Save can revalidate the native-file checkpoint and report an external
@@ -12469,7 +12471,8 @@ void CadWorkbench::syncActionState() {
         !axis_draft_ &&
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
-        !extrude_draft_);
+        !extrude_draft_ &&
+        !revolve_draft_);
 
     if (axis_button_ != nullptr) {
         axis_button_->setVisible(active);
@@ -12479,6 +12482,7 @@ void CadWorkbench::syncActionState() {
             !datum_plane_draft_ &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
+        !revolve_draft_ &&
             solid_modeling_kernel_ != nullptr);
         axis_button_->setChecked(
             axis_draft_.has_value());
@@ -12494,6 +12498,7 @@ void CadWorkbench::syncActionState() {
             !axis_draft_ &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
+        !revolve_draft_ &&
             solid_modeling_kernel_ != nullptr);
         datum_plane_button_->setChecked(
             datum_plane_draft_.has_value());
@@ -12509,10 +12514,28 @@ void CadWorkbench::syncActionState() {
             !axis_draft_ &&
             !datum_plane_draft_ &&
             !extrude_draft_ &&
+        !revolve_draft_ &&
             solid_modeling_kernel_ != nullptr);
         extrude_button_->setChecked(
             extrude_profile_pick_active_ ||
             extrude_draft_.has_value());
+    }
+
+    if (revolve_button_ != nullptr) {
+        revolve_button_->setVisible(
+            !editing_sketch);
+        revolve_button_->setEnabled(
+            active &&
+            !editing_sketch &&
+            !sketch_support_pick_active_ &&
+            !axis_draft_ &&
+            !datum_plane_draft_ &&
+            !extrude_profile_pick_active_ &&
+            !extrude_draft_ &&
+            !revolve_draft_ &&
+            solid_modeling_kernel_ != nullptr);
+        revolve_button_->setChecked(
+            revolve_draft_.has_value());
     }
 
     select_sketch_button_->setVisible(
@@ -12584,6 +12607,7 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     if (axis_edit_button_ != nullptr) {
@@ -12603,6 +12627,7 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
+        !revolve_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     if (datum_edit_button_ != nullptr) {
@@ -12619,6 +12644,7 @@ void CadWorkbench::syncActionState() {
     syncAxisUi();
     syncDatumPlaneUi();
     syncExtrudeUi();
+    syncRevolveUi();
 }
 
 void CadWorkbench::notifyCadInputContextChanged() {
