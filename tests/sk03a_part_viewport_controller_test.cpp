@@ -2532,5 +2532,205 @@ int main(int argc, char* argv[]) {
         datum_controller.clear();
     }
 
+    // PM-04B2a: authored Axis presentation is a Part semantic reference.
+    // Viewer tokens bind only to AxisId, never to the source Sketch EntityId.
+    {
+        auto axis_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession axis_session{
+            std::filesystem::path{
+                "pm04b2-axis-controller.ss2part"},
+            std::move(axis_document)};
+
+        const auto sketch_created =
+            axis_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(sketch_created.ok());
+        CHECK(sketch_created.sketch_id.has_value());
+
+        const auto line_created =
+            axis_session.execute(
+                application::AddSketchLineCommand{
+                    *sketch_created.sketch_id,
+                    sketch::Point2{2.0, 3.0},
+                    sketch::Point2{8.0, 3.0},
+                    sketch::EntityRole::regular});
+        CHECK(line_created.ok());
+        CHECK(line_created.entity_id.has_value());
+
+        FakeSolidKernel axis_kernel;
+        const auto axis_created =
+            axis_session.execute(
+                application::CreateAxisCommand{
+                    {
+                        *sketch_created.sketch_id,
+                        *line_created.entity_id},
+                    axis_session.document().revision(),
+                    {},
+                    true},
+                axis_kernel);
+        CHECK(axis_created.ok());
+        CHECK(axis_created.axis_id.has_value());
+
+        QTreeWidget axis_tree;
+        ui::PartDocumentTreeController
+            axis_tree_controller{axis_tree};
+        TestViewport axis_viewport;
+        ui::PartViewportController
+            axis_controller{
+                axis_tree_controller,
+                &axis_viewport};
+
+        axis_controller.setDocumentSession(
+            &axis_session);
+
+        QTreeWidgetItem* axis_item = nullptr;
+        QTreeWidgetItemIterator iterator{
+            &axis_tree};
+        while (*iterator != nullptr) {
+            if ((*iterator)->text(0) ==
+                QStringLiteral("Axis001")) {
+                axis_item = *iterator;
+                break;
+            }
+            ++iterator;
+        }
+        CHECK(axis_item != nullptr);
+        CHECK(axis_item->parent() != nullptr);
+        CHECK(
+            axis_item->parent()->text(0) ==
+            QStringLiteral("Sketch 1"));
+
+        const auto axis_reference =
+            std::find_if(
+                axis_viewport.reference_scene_.
+                    references.begin(),
+                axis_viewport.reference_scene_.
+                    references.end(),
+                [](const auto& reference) {
+                    return reference.kind ==
+                        viewer::
+                            ReferencePresentationKind::
+                                axis;
+                });
+        CHECK(
+            axis_reference !=
+            axis_viewport.reference_scene_.
+                references.end());
+        CHECK((
+            axis_reference->origin ==
+            viewer::Point3{2.0, 3.0, 0.0}));
+        CHECK((
+            axis_reference->u_axis ==
+            viewer::Vec3{1.0, 0.0, 0.0}));
+
+        const auto first_axis_token =
+            axis_reference->token;
+        CHECK(
+            axis_controller.axisFor(
+                first_axis_token) ==
+            axis_created.axis_id);
+        CHECK(
+            axis_controller.axisPresentationFor(
+                *axis_created.axis_id) ==
+            first_axis_token);
+        CHECK(
+            !axis_controller.sketchEntityFor(
+                 first_axis_token)
+                 .has_value());
+
+        std::vector<part::AxisId>
+            reported_axes;
+        std::optional<part::AxisId>
+            reported_primary_axis;
+        axis_controller
+            .setAxisSelectionChangedHandler(
+                [&reported_axes,
+                 &reported_primary_axis](
+                    const std::vector<part::AxisId>&
+                        selected,
+                    std::optional<part::AxisId>
+                        primary) {
+                    reported_axes = selected;
+                    reported_primary_axis =
+                        primary;
+                });
+
+        axis_viewport.emitSelectionIntent(
+            viewer::SelectionIntent{
+                first_axis_token,
+                viewer::SelectionIntentMode::
+                    replace});
+        CHECK(
+            reported_axes ==
+            std::vector<part::AxisId>{
+                *axis_created.axis_id});
+        CHECK(
+            reported_primary_axis ==
+            axis_created.axis_id);
+        CHECK(
+            axis_viewport.presentation_selection_.
+                primary ==
+            first_axis_token);
+
+        // Refresh allocates a transient new PresentationToken while the
+        // semantic AxisId selection survives and remaps to that new token.
+        axis_controller.refreshPresentation();
+        CHECK(
+            !axis_controller.axisFor(
+                 first_axis_token)
+                 .has_value());
+        const auto second_axis_token =
+            axis_controller.axisPresentationFor(
+                *axis_created.axis_id);
+        CHECK(second_axis_token.has_value());
+        CHECK(
+            *second_axis_token !=
+            first_axis_token);
+        CHECK(
+            axis_viewport.presentation_selection_.
+                primary ==
+            second_axis_token);
+
+        // Authored visibility controls presentation only; semantic Axis state
+        // remains in the document and no stale line is published.
+        CHECK(
+            axis_session.execute(
+                application::
+                    SetAxisVisibilityCommand{
+                        {*axis_created.axis_id},
+                        axis_session.document()
+                            .revision(),
+                        false})
+                .ok());
+        axis_controller.refreshDocumentTree();
+        axis_controller.refreshPresentation();
+        CHECK(
+            axis_session.document().findAxis(
+                *axis_created.axis_id) !=
+            nullptr);
+        CHECK(
+            !axis_controller.axisPresentationFor(
+                 *axis_created.axis_id)
+                 .has_value());
+        CHECK(
+            std::none_of(
+                axis_viewport.reference_scene_.
+                    references.begin(),
+                axis_viewport.reference_scene_.
+                    references.end(),
+                [](const auto& reference) {
+                    return reference.kind ==
+                        viewer::
+                            ReferencePresentationKind::
+                                axis;
+                }));
+
+        axis_controller.clear();
+    }
+
     return EXIT_SUCCESS;
 }
