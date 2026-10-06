@@ -1,11 +1,11 @@
 # PM-05A — Edge Feature Topology / Provider Evidence
 
-**Status:** EVIDENCE PASS — OWNER D2 REVIEW REQUIRED  
+**Status:** COMPLETED — PASS; OWNER D2 ACCEPTED 2026-10-06  
 **Authority:** `work/PM-05_EDGE_FEATURES.md` §15 / §26 PM-05A  
 **Baseline:** PM-05 activation `7efc7aa3564be1bb1c5e1afdf30d99e6b4cc5425`  
 **Final evidence candidate:** `c70980d63d836ea54d1f88be29082023e44b1c38`  
 **Windows FULL:** #1605 — PASS  
-**Production mutation:** PM-05B+ remains BLOCKED pending explicit Owner acceptance of the conclusions in this report
+**Owner decision:** ACCEPTED 2026-10-06 — conclusions E1, M1, T1, U1, C1, P1-P3, G1-G2, R1 and K1 accepted; PM-05B authorized
 
 ## 1. Purpose
 
@@ -21,7 +21,7 @@ The gate had to freeze:
 6. generated Face/Surface/Edge/Curve/Vertex/Point role families needed for chained edge features;
 7. the supported common-corner matrix.
 
-This report proposes the D2 production decisions. Nothing below activates PM-05B until the Owner explicitly accepts these conclusions.
+This report records the D2 production decisions. The Owner explicitly accepted these conclusions on 2026-10-06 and authorized PM-05B.
 
 ## 2. Automated evidence summary
 
@@ -408,16 +408,12 @@ If the Owner accepts E1/M1/T1/P1-P3/G1-G2/R1/K1, PM-05B may implement only the a
 
 PM-05C remains responsible for production kernel operations and complete topology publication; PM-05D/E/F remain separately ordered.
 
-## 13. Owner decision required
+## 13. Owner decision
 
-PM-05A evidence finds **no blocker** to the accepted full multi-Edge / connected-corner PM-05 direction.
+PM-05A evidence found **no blocker** to the accepted full multi-Edge / connected-corner PM-05 direction.
 
-Recommended Owner decision:
+**OWNER ACCEPTED — 2026-10-06**
 
-**ACCEPT PM-05A conclusions E1, M1, T1, U1, C1, P1-P3, G1-G2, R1 and K1 and authorize PM-05B under the existing Work Contract.**
+The Owner explicitly accepted PM-05A conclusions E1, M1, T1, U1, C1, P1-P3, G1-G2, R1 and K1 and authorized PM-05B under the existing Work Contract.
 
-Until that explicit acceptance is recorded:
-
-- PM-05A remains the active checkpoint;
-- PM-05B+ production mutation remains blocked;
-- no schema v14 / durable FilletFeature / ChamferFeature / production toolbar implementation is authorized.
+PM-05A is therefore COMPLETED — PASS. PM-05B may implement the durable foundation defined in §12. This decision does not authorize PM-05C+ ahead of the ordered checkpoint sequence.

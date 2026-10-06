@@ -3,12 +3,12 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-06  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.28 — PM-05  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.29 — PM-05  
 **Architecture authority:** ADR-0014, ADR-0016, ADR-0017  
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
 **Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** PM-05A evidence is PASS and merged; PM-05B+ durable production mutation remains BLOCKED until explicit Owner acceptance of `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md`
+**Production mutation:** PM-05B durable foundation is AUTHORIZED after explicit Owner acceptance of PM-05A D2 conclusions on 2026-10-06; PM-05C+ remains inactive
 
 ## 1. Goal
 
@@ -750,4 +750,15 @@ Still blocked:
 - production toolbar buttons / Operations / Command Line;
 - PM-05B through PM-05F.
 
-PM-05A produced the required conclusions in `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md`; evidence is PASS and merged. The required second Owner decision is still pending. Only explicit acceptance of that report may authorize PM-05B+ production mutation.
+PM-05A produced the required conclusions in `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md`; evidence is PASS and merged. The Owner explicitly accepted conclusions E1, M1, T1, U1, C1, P1-P3, G1-G2, R1 and K1 on 2026-10-06 and authorized PM-05B.
+
+Current authority is limited to **PM-05B — durable EdgeReference / Feature model / schema v14**:
+
+- durable `MaterialEdgeReference` and resolver support;
+- canonical explicit multi-Edge authored set;
+- `FilletFeature` / `ChamferFeature` durable definitions;
+- structural validation;
+- native Part schema v14 migration/persistence;
+- application command/draft foundation without production provider execution.
+
+PM-05C production kernel Fillet/Chamfer operations and topology publication, PM-05D UI/preview/Command Line, PM-05E lifecycle integration and PM-05F documentation/Owner acceptance remain inactive until their ordered checkpoint transitions.
