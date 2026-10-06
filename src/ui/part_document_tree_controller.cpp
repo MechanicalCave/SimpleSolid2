@@ -30,6 +30,7 @@ constexpr int bodyIdData = Qt::UserRole + 44;
 constexpr int featureIdData = Qt::UserRole + 45;
 constexpr int datumIdData = Qt::UserRole + 46;
 constexpr int referenceGeometryGroupData = Qt::UserRole + 47;
+constexpr int axisIdData = Qt::UserRole + 48;
 
 constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
@@ -119,6 +120,58 @@ QString datumDiagnosticText(
     case part::DatumPlaneEvaluationDiagnostic::upstream_datum_unavailable:
         return QStringLiteral("Upstream Datum unavailable");
     case part::DatumPlaneEvaluationDiagnostic::invalid_frame:
+        return QStringLiteral("Invalid frame");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString axisStatusText(
+    part::AxisEvaluationStatus status) {
+    switch (status) {
+    case part::AxisEvaluationStatus::resolved:
+        return QStringLiteral("Resolved");
+    case part::AxisEvaluationStatus::missing:
+        return QStringLiteral("Missing");
+    case part::AxisEvaluationStatus::ambiguous:
+        return QStringLiteral("Ambiguous");
+    case part::AxisEvaluationStatus::unsupported:
+        return QStringLiteral("Unsupported");
+    case part::AxisEvaluationStatus::blocked:
+        return QStringLiteral("Blocked");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString axisDiagnosticText(
+    part::AxisEvaluationDiagnostic diagnostic) {
+    switch (diagnostic) {
+    case part::AxisEvaluationDiagnostic::none:
+        return QStringLiteral("None");
+    case part::AxisEvaluationDiagnostic::invalid_reference:
+        return QStringLiteral("Invalid reference");
+    case part::AxisEvaluationDiagnostic::missing_axis:
+        return QStringLiteral("Missing Axis");
+    case part::AxisEvaluationDiagnostic::missing_sketch:
+        return QStringLiteral("Missing Sketch");
+    case part::AxisEvaluationDiagnostic::missing_line:
+        return QStringLiteral("Missing Line");
+    case part::AxisEvaluationDiagnostic::source_not_line:
+        return QStringLiteral("Source is not a Line");
+    case part::AxisEvaluationDiagnostic::sketch_support_missing:
+        return QStringLiteral("Sketch support missing");
+    case part::AxisEvaluationDiagnostic::sketch_support_ambiguous:
+        return QStringLiteral("Sketch support ambiguous");
+    case part::AxisEvaluationDiagnostic::sketch_support_unsupported:
+        return QStringLiteral("Sketch support unsupported");
+    case part::AxisEvaluationDiagnostic::sketch_support_blocked:
+        return QStringLiteral("Sketch support blocked");
+    case part::AxisEvaluationDiagnostic::stale_part_evaluation:
+        return QStringLiteral("Stale Part evaluation");
+    case part::AxisEvaluationDiagnostic::stale_datum_evaluation:
+        return QStringLiteral("Stale Datum evaluation");
+    case part::AxisEvaluationDiagnostic::support_stage_unavailable:
+        return QStringLiteral("Support stage unavailable");
+    case part::AxisEvaluationDiagnostic::invalid_frame:
         return QStringLiteral("Invalid frame");
     }
     return QStringLiteral("Unknown");
