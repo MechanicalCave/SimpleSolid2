@@ -2,7 +2,7 @@
 
 **Status:** COMPLETED — PASS  
 **Parent Work Contract:** `work/PM-04_AXIS_REVOLVE.md`  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.26  
 **Date:** 2026-10-06
 
 ## Purpose
@@ -15,7 +15,7 @@ PM-04A through PM-04E are already merged and exact-head gated. Owner pre-close r
 
 Normative amendment: `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` — ACCEPTED 2026-10-06.
 
-Closure evidence now proves contextual Line Axis designation, atomic Line+Axis authoring/history, new-authoring source uniqueness with legacy duplicate-source compatibility, removal of the GUI Axis toolbar action, retained AXIS Command Line parity, refreshed documentation/Browser and exact-head Windows FULL. Revised Owner Windows PASS remains mandatory.
+Closure evidence proves contextual Line Axis designation, atomic Line+Axis authoring/history, new-authoring source uniqueness with legacy duplicate-source compatibility, removal of the GUI Axis toolbar action, retained AXIS Command Line parity, refreshed documentation/Browser, exact-head Windows FULL and final Owner Windows PASS.
 
 ## Evidence authority
 
@@ -32,9 +32,9 @@ Closure evidence now proves contextual Line Axis designation, atomic Line+Axis a
 | PM-04E2 | `bdf87a29b5cdc27c608023af863e32c44dc55ef1` | Windows FULL #1562 PASS | `e9a1056da4ec3639458aa1cdf4faacfc1621fcc9` | lifecycle / repair / Save-Reopen / cold rebuild |
 | PM-04E3 | `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` | Windows FULL #1563 PASS | `1a7e1228a91b23f89bf13f6bb5c07c8abe9afae3` | Profile-source and Sketch-support edits |
 | PM-04F docs | `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` | Windows DOCS #1565 PASS | `72c40b8cfb39ea63859d5485f80a8adfbba35094` | internal + PL/EN Product + generated Browser |
-| PM-04F final automated | `8d6f082137a573aab08a4eee3b383a9923d98a49` | Windows FULL #1578 attempt 2 PASS — core 25/25, kernel-native 47/47, desktop 104/104 | pending merge | final Axis-designation runtime/docs candidate |
-| PM-04F Axis-designation amendment | `8d6f082137a573aab08a4eee3b383a9923d98a49` | implementation + exact-head FULL #1578 attempt 2 PASS | pending merge | `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` |
-| PM-04F Owner Windows | `8d6f082137a573aab08a4eee3b383a9923d98a49` | Owner manual Windows PASS — 2026-10-06 | PASS | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
+| PM-04F final automated | `8d6f082137a573aab08a4eee3b383a9923d98a49` | Windows FULL #1578 attempt 2 PASS — core 25/25, kernel-native 47/47, desktop 104/104 | `d4389d59581dd515ac33ef4ea593bf94b40d2829` | final Axis-designation runtime/docs candidate |
+| PM-04F Axis-designation amendment | `8d6f082137a573aab08a4eee3b383a9923d98a49` | implementation + exact-head FULL #1578 attempt 2 PASS | `d4389d59581dd515ac33ef4ea593bf94b40d2829` | `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` |
+| PM-04F Owner Windows | `8d6f082137a573aab08a4eee3b383a9923d98a49` | Owner manual Windows PASS — 2026-10-06 | `d4389d59581dd515ac33ef4ea593bf94b40d2829` | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
 
 ## Contract matrix
 
@@ -123,7 +123,7 @@ Accepted final evidence:
 
 The first #1578 attempt was infrastructure-only and failed before checkout/build/test while downloading a GitHub action; the unchanged exact SHA passed attempt 2. Earlier #1577 correctly caught a test-only private-API use and the regression was repaired to exercise the public Tree -> Edit Sketch workflow before the accepted FULL.
 
-Work-only closure run #1579 was cancelled twice while the self-hosted runner could not resolve/download `actions/checkout@v4` from `launch.actions.githubusercontent.com:443`. Those cancellations executed no governance/documentation invariant and have no product-evidence meaning. A successful final work-only closure gate remains required for the PR merge; it does not replace or invalidate the accepted runtime authority above.
+Work-only closure run #1579 was cancelled twice while the self-hosted runner could not resolve/download `actions/checkout@v4` from `launch.actions.githubusercontent.com:443`. Those cancellations executed no governance/documentation invariant and have no product-evidence meaning. Final work-only candidate `7bca07e9f165f241fc3cf8de85e00fd3ca97910d` subsequently passed Windows CLOSURE #1580 and PR #277 merged to `main` as `d4389d59581dd515ac33ef4ea593bf94b40d2829`.
 
 PM-05 and PM-06 remain inactive pending their own accepted authority.
 
