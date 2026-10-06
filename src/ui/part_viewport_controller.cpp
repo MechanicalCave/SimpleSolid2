@@ -4126,17 +4126,63 @@ void PartViewportController::onViewportIntent(
     clearBodyTopologyPreselection();
     auto& selection = activeSelection();
 
+    const auto clear_non_body =
+        [&selection]() {
+            selection.selected.clear();
+            selection.primary.reset();
+            selection.profiles.clear();
+            selection.primary_profile.reset();
+            selection.datums.clear();
+            selection.primary_datum.reset();
+            selection.axes.clear();
+            selection.primary_axis.reset();
+        };
+
     if (intent.mode ==
         viewer::SelectionIntentMode::clear) {
-        selection.selected.clear();
-        selection.primary.reset();
-        selection.profiles.clear();
-        selection.primary_profile.reset();
-        selection.datums.clear();
-        selection.primary_datum.reset();
+        clear_non_body();
         selection.body_topology.clear();
         selection.primary_body_topology.reset();
         selection.body_topology_generation = {};
+        applySelectionToSurfaces();
+        notifySelectionChanged();
+        return;
+    }
+
+    if (const auto axis =
+            axisFor(intent.token)) {
+        if (intent.mode ==
+            viewer::SelectionIntentMode::replace) {
+            clear_non_body();
+            selection.body_topology.clear();
+            selection.primary_body_topology.reset();
+            selection.body_topology_generation = {};
+            selection.axes = {*axis};
+            selection.primary_axis = *axis;
+        } else {
+            const auto found =
+                std::find(
+                    selection.axes.begin(),
+                    selection.axes.end(),
+                    *axis);
+            if (found == selection.axes.end()) {
+                selection.axes.push_back(*axis);
+                selection.primary_axis = *axis;
+                selection.primary.reset();
+                selection.primary_profile.reset();
+                selection.primary_datum.reset();
+            } else {
+                selection.axes.erase(found);
+                if (selection.primary_axis &&
+                    *selection.primary_axis == *axis) {
+                    selection.primary_axis =
+                        selection.axes.empty()
+                            ? std::nullopt
+                            : std::optional<part::AxisId>{
+                                  selection.axes.back()};
+                }
+            }
+        }
         applySelectionToSurfaces();
         notifySelectionChanged();
         return;
@@ -4146,10 +4192,7 @@ void PartViewportController::onViewportIntent(
             datumFor(intent.token)) {
         if (intent.mode ==
             viewer::SelectionIntentMode::replace) {
-            selection.selected.clear();
-            selection.primary.reset();
-            selection.profiles.clear();
-            selection.primary_profile.reset();
+            clear_non_body();
             selection.body_topology.clear();
             selection.primary_body_topology.reset();
             selection.body_topology_generation = {};
@@ -4166,6 +4209,7 @@ void PartViewportController::onViewportIntent(
                 selection.primary_datum = *datum;
                 selection.primary.reset();
                 selection.primary_profile.reset();
+                selection.primary_axis.reset();
             } else {
                 selection.datums.erase(found);
                 if (selection.primary_datum &&
@@ -4187,10 +4231,7 @@ void PartViewportController::onViewportIntent(
             profileFor(intent.token)) {
         if (intent.mode ==
             viewer::SelectionIntentMode::replace) {
-            selection.selected.clear();
-            selection.primary.reset();
-            selection.datums.clear();
-            selection.primary_datum.reset();
+            clear_non_body();
             selection.body_topology.clear();
             selection.primary_body_topology.reset();
             selection.body_topology_generation = {};
@@ -4207,6 +4248,7 @@ void PartViewportController::onViewportIntent(
                 selection.primary_profile = *profile;
                 selection.primary.reset();
                 selection.primary_datum.reset();
+                selection.primary_axis.reset();
             } else {
                 selection.profiles.erase(found);
                 if (selection.primary_profile &&
@@ -4229,10 +4271,7 @@ void PartViewportController::onViewportIntent(
 
     if (intent.mode ==
         viewer::SelectionIntentMode::replace) {
-        selection.profiles.clear();
-        selection.primary_profile.reset();
-        selection.datums.clear();
-        selection.primary_datum.reset();
+        clear_non_body();
         selection.body_topology.clear();
         selection.primary_body_topology.reset();
         selection.body_topology_generation = {};
@@ -4249,16 +4288,17 @@ void PartViewportController::onViewportIntent(
             selection.primary = *role;
             selection.primary_profile.reset();
             selection.primary_datum.reset();
+            selection.primary_axis.reset();
         } else {
             selection.selected.erase(found);
             if (selection.primary &&
                 *selection.primary == *role) {
-                if (selection.selected.empty()) {
-                    selection.primary.reset();
-                } else {
-                    selection.primary =
-                        selection.selected.back();
-                }
+                selection.primary =
+                    selection.selected.empty()
+                        ? std::nullopt
+                        : std::optional<
+                              core::BuiltinReferenceRole>{
+                              selection.selected.back()};
             }
         }
     }
