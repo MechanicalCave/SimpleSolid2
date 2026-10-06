@@ -782,8 +782,8 @@ convertNewFace(
     result.runtime_token =
         source.resolved_token;
 
-    if (source.role.kind ==
-        kernel::ExtrudeGeneratedFaceRoleKind::cap) {
+    switch (source.role.kind) {
+    case kernel::GeneratedFaceRoleKind::cap:
         if (!source.role.cap_role) {
             result.status =
                 kernel::ReferenceStatus::
@@ -795,10 +795,30 @@ convertNewFace(
             partCapRole(
                 *source.role.cap_role);
         return result;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_start_cap:
+        result.address.role =
+            FeatureFaceRoleKind::
+                revolve_start_cap;
+        return result;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_end_cap:
+        result.address.role =
+            FeatureFaceRoleKind::
+                revolve_end_cap;
+        return result;
+    case kernel::GeneratedFaceRoleKind::side:
+        result.address.role =
+            FeatureFaceRoleKind::side;
+        break;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_side:
+        result.address.role =
+            FeatureFaceRoleKind::
+                revolve_side;
+        break;
     }
 
-    result.address.role =
-        FeatureFaceRoleKind::side;
     if (!source.role.side_provenance) {
         result.status =
             kernel::ReferenceStatus::
@@ -853,8 +873,8 @@ convertNewSurface(
     result.current_faces =
         source.current_faces;
 
-    if (source.role.kind ==
-        kernel::ExtrudeGeneratedFaceRoleKind::cap) {
+    switch (source.role.kind) {
+    case kernel::GeneratedFaceRoleKind::cap:
         if (!source.role.cap_role) {
             result.status =
                 kernel::ReferenceStatus::
@@ -871,10 +891,30 @@ convertNewSurface(
             partSurfaceCapRole(
                 *source.role.cap_role);
         return result;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_start_cap:
+        result.address.role =
+            FeatureSurfaceRoleKind::
+                revolve_start_cap;
+        return result;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_end_cap:
+        result.address.role =
+            FeatureSurfaceRoleKind::
+                revolve_end_cap;
+        return result;
+    case kernel::GeneratedFaceRoleKind::side:
+        result.address.role =
+            FeatureSurfaceRoleKind::side;
+        break;
+    case kernel::GeneratedFaceRoleKind::
+        revolve_side:
+        result.address.role =
+            FeatureSurfaceRoleKind::
+                revolve_side;
+        break;
     }
 
-    result.address.role =
-        FeatureSurfaceRoleKind::side;
     if (!source.role.side_provenance) {
         result.status =
             kernel::ReferenceStatus::
@@ -2419,7 +2459,8 @@ bool FeatureFaceAddress::valid() const noexcept {
     if (!producer_feature_id.valid()) {
         return false;
     }
-    if (role == FeatureFaceRoleKind::side) {
+    if (role == FeatureFaceRoleKind::side ||
+        role == FeatureFaceRoleKind::revolve_side) {
         return source_entity.has_value() &&
                source_entity->valid();
     }
