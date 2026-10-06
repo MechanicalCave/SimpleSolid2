@@ -7340,6 +7340,37 @@ bool CadWorkbench::startRevolveTool() {
         }
     }
 
+    if (selected_axis_id_) {
+        const auto found =
+            std::find_if(
+                axis_evaluation_statuses_.begin(),
+                axis_evaluation_statuses_.end(),
+                [this](const AxisEvaluationUiState& item) {
+                    return item.axis_id ==
+                        *selected_axis_id_;
+                });
+        if (found != axis_evaluation_statuses_.end() &&
+            found->status ==
+                part::AxisEvaluationStatus::resolved &&
+            found->line) {
+            static_cast<void>(
+                draft.setAxis(
+                    part::AxisReference{
+                        part::AuthoredAxisReference{
+                            *selected_axis_id_}}));
+        }
+    } else if (viewport_controller_ != nullptr) {
+        if (const auto role =
+                viewport_controller_->primarySelection();
+            role && part::isOriginAxis(*role)) {
+            static_cast<void>(
+                draft.setAxis(
+                    part::AxisReference{
+                        part::BuiltinOriginAxisReference{
+                            *role}}));
+        }
+    }
+
     revolve_draft_ = std::move(draft);
     revolve_evaluation_.reset();
     revolve_angle_input_valid_ = true;
@@ -7906,12 +7937,6 @@ CadWorkbench::submitRevolveCadInput(
         return {true, {}};
     }
 
-    if (!revolve_draft_->profileId()) {
-        return {
-            false,
-            "REVOLVE is waiting for one valid Profile selection; use Tree/viewport or CANCEL."};
-    }
-
     const auto set_origin_axis =
         [this](core::BuiltinReferenceRole role) {
             return revolve_draft_->setAxis(
@@ -7948,6 +7973,12 @@ CadWorkbench::submitRevolveCadInput(
             notifyCadInputContextChanged();
         }
         return {true, {}};
+    }
+
+    if (!revolve_draft_->profileId()) {
+        return {
+            false,
+            "REVOLVE is waiting for one valid Profile selection; use Tree/viewport or CANCEL."};
     }
 
     if (!revolve_draft_->axis()) {
@@ -11361,6 +11392,23 @@ bool CadWorkbench::eventFilter(
                     Qt::Key_Enter) {
                 static_cast<void>(
                     finishExtrude());
+                return true;
+            }
+        }
+
+        if (watched == viewport_widget_ &&
+            revolve_draft_) {
+            if (key_event->key() ==
+                Qt::Key_Escape) {
+                cancelRevolve();
+                return true;
+            }
+            if (key_event->key() ==
+                    Qt::Key_Return ||
+                key_event->key() ==
+                    Qt::Key_Enter) {
+                static_cast<void>(
+                    finishRevolve());
                 return true;
             }
         }
