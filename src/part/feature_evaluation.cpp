@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <numbers>
 #include <type_traits>
@@ -615,6 +616,115 @@ makeKernelExtrudeInput(
     return makeKernelExtrudeInputFromProfile(
         std::move(*profile.input),
         feature);
+}
+
+RevolveKernelInputResult
+resolveKernelRevolveInput(
+    const PartDocument& document,
+    const RevolveFeature& feature,
+    const PartEvaluation* prefix_evaluation,
+    const DatumEvaluation* datum_evaluation) {
+    RevolveKernelInputResult result;
+
+    if (!revolveFeatureStructurallyValid(
+            feature)) {
+        result.status =
+            RevolveKernelInputStatus::
+                invalid_input;
+        return result;
+    }
+
+    const auto* profile =
+        document.findProfile(
+            feature.profile_id);
+    if (profile == nullptr) {
+        result.status =
+            RevolveKernelInputStatus::
+                missing_profile;
+        return result;
+    }
+
+    const auto* support_topology =
+        profileSupportTopology(
+            document,
+            profile->id,
+            prefix_evaluation);
+    auto materialized =
+        resolveKernelProfileInput(
+            document,
+            profile->id,
+            support_topology,
+            datum_evaluation);
+    if (!materialized.ok()) {
+        result.status =
+            materialized.status ==
+                    ProfileKernelInputStatus::
+                        missing_profile
+                ? RevolveKernelInputStatus::
+                      missing_profile
+                : RevolveKernelInputStatus::
+                      profile_unavailable;
+        return result;
+    }
+
+    const auto axis =
+        resolveAxisReference(
+            document,
+            feature.axis,
+            prefix_evaluation,
+            datum_evaluation);
+    result.required_axis_stage =
+        axis.required_body_stage;
+    if (axis.status !=
+            AxisEvaluationStatus::resolved ||
+        !axis.line) {
+        result.status =
+            axis.diagnostic ==
+                    AxisEvaluationDiagnostic::
+                        missing_axis
+                ? RevolveKernelInputStatus::
+                      missing_axis
+                : RevolveKernelInputStatus::
+                      axis_unavailable;
+        return result;
+    }
+
+    bool coplanar = false;
+    const bool crosses =
+        profileCrossesAxis(
+            *materialized.input,
+            *axis.line,
+            coplanar);
+    if (!coplanar) {
+        result.status =
+            RevolveKernelInputStatus::
+                axis_not_in_profile_plane;
+        return result;
+    }
+    if (crosses) {
+        result.status =
+            RevolveKernelInputStatus::
+                profile_crosses_axis;
+        return result;
+    }
+
+    auto input =
+        makeKernelRevolveInputFromResolved(
+            std::move(*materialized.input),
+            *axis.line,
+            feature);
+    if (!input.valid()) {
+        result.status =
+            RevolveKernelInputStatus::
+                invalid_input;
+        return result;
+    }
+
+    result.status =
+        RevolveKernelInputStatus::resolved;
+    result.input =
+        std::move(input);
+    return result;
 }
 
 namespace {
