@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 COMPLETED — PASS; NO LATER PACKAGE ACTIVE  
-**Version:** 1.26  
-**Owner acceptance:** 2026-10-06 — PM-04 final Windows PASS; v1.26 is completion-state synchronization only  
-**Previous accepted version:** 1.25 — 2026-10-06  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 COMPLETED — PASS; PM-05 ACTIVE  
+**Version:** 1.27  
+**Owner acceptance:** 2026-10-06 — exact PM-05 Edge Features Work Contract accepted; v1.27 is activation-state synchronization only  
+**Previous accepted version:** 1.26 — 2026-10-06  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current completed checkpoint:** PM-04 — final Owner Windows acceptance PASS 2026-10-06; no later production package is active  
+**Current active checkpoint:** PM-05A — Edge-feature topology/provider evidence under `work/PM-05_EDGE_FEATURES.md`; PM-05B+ production mutation blocked pending PM-05A Owner acceptance  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -129,7 +129,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 5 | **PM-02 — Body Semantic Topology / Face-Supported Sketch** | production semantic topology catalog and picking plus Sketch/Profile on arbitrary resolved planar Body surfaces, reusing PM-01 Extrude Add/Cut | **COMPLETED — PASS; runtime FULL #1473, docs #1474, Owner final manual Windows PASS 2026-10-05** |
 | 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **COMPLETED — PASS; Owner final Windows PASS 2026-10-05; translucent Origin/Datum plane fill deferred as PM-06 presentation polish** |
 | 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | **COMPLETED — PASS; runtime FULL #1578 attempt 2; Owner final Windows PASS 2026-10-06** |
-| 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete edge-feature lifecycle with lineage/refine handling and repair | future separate Work Contract |
+| 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete explicit multi-Edge Fillet/Chamfer lifecycle with connected-corner, lineage/refine handling and repair | **ACTIVE — Owner accepted 2026-10-06; current checkpoint PM-05A evidence only** |
 | 9 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
 
 No package number authorizes mutation by itself.
@@ -518,11 +518,15 @@ PM-04E integrated lifecycle / repair / persistence is **COMPLETED — PASS**. E1
 
 PM-04F Axis-designation remediation / documentation / final acceptance is **COMPLETED — PASS**. Exact final runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2 with core 25/25, kernel-native 47/47 and desktop 104/104, including canonical documentation/Product Browser verification. The Owner executed the supported Windows acceptance workflow on 2026-10-06 and reported PASS with no errors. Completion evidence is recorded in `work/PM-04_FINAL_ACCEPTANCE_MATRIX.md`.
 
-PM-04 production mutation authority is closed. PM-05 Edge Features is next in roadmap order but remains **NOT ACTIVE** until its own bounded Work Contract is explicitly Owner-accepted and activated. Datum Axis, Projection and PM-06 remain separately gated.
+PM-04 production mutation authority is closed. PM-05 Edge Features is now **ACTIVE** under `work/PM-05_EDGE_FEATURES.md`, with PM-05A as the only active checkpoint. Datum Axis, Projection and PM-06 remain separately gated.
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 
-PM-05 adds edge-consuming features only after topology-reference semantics are proven in earlier packages.
+**Status:** ACTIVE — Owner accepted 2026-10-06. Current checkpoint: **PM-05A — Edge-feature topology/provider evidence**.
+
+PM-05 adds edge-consuming features only after topology-reference semantics are proven in earlier packages. The accepted production direction is explicit 1..N material-Edge Fillet/Chamfer with mandatory common connected-corner behavior; a single-Edge-only production fallback is forbidden.
+
+PM-05A is a hard evidence gate. It may add bounded provider/test instrumentation, but durable MaterialEdgeReference/schema v14/production Fillet-Chamfer mutation/UI remain blocked until the PM-05A conclusions are explicitly Owner-accepted.
 
 It must cover:
 
