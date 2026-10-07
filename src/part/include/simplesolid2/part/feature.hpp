@@ -5,6 +5,7 @@
 #include <simplesolid2/part/body_id.hpp>
 #include <simplesolid2/part/feature_id.hpp>
 #include <simplesolid2/part/profile_id.hpp>
+#include <simplesolid2/part/semantic_topology_reference.hpp>
 
 #include <cstdint>
 #include <optional>
@@ -91,10 +92,30 @@ struct RevolveFeature final {
         const RevolveFeature&) = default;
 };
 
+struct FilletFeature final {
+    std::vector<MaterialEdgeReference> edges;
+    core::LengthValue radius;
+
+    friend bool operator==(
+        const FilletFeature&,
+        const FilletFeature&) = default;
+};
+
+struct ChamferFeature final {
+    std::vector<MaterialEdgeReference> edges;
+    core::LengthValue distance;
+
+    friend bool operator==(
+        const ChamferFeature&,
+        const ChamferFeature&) = default;
+};
+
 using PartFeatureDefinition =
     std::variant<
         ExtrudeFeature,
-        RevolveFeature>;
+        RevolveFeature,
+        FilletFeature,
+        ChamferFeature>;
 
 struct PartFeature final {
     FeatureId id;
@@ -115,6 +136,13 @@ struct PartBody final {
     const ExtrudeFeature& feature) noexcept;
 [[nodiscard]] bool revolveFeatureStructurallyValid(
     const RevolveFeature& feature) noexcept;
+[[nodiscard]] bool filletFeatureStructurallyValid(
+    const FilletFeature& feature) noexcept;
+[[nodiscard]] bool chamferFeatureStructurallyValid(
+    const ChamferFeature& feature) noexcept;
+[[nodiscard]] const std::vector<MaterialEdgeReference>*
+sourceMaterialEdges(
+    const PartFeature& feature) noexcept;
 [[nodiscard]] bool partFeatureDefinitionStructurallyValid(
     const PartFeatureDefinition& definition) noexcept;
 [[nodiscard]] std::optional<ProfileId> sourceProfileId(

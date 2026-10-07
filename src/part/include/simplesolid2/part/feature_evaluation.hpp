@@ -133,30 +133,6 @@ struct FeatureSurfaceResolution final {
         const FeatureSurfaceResolution&) = default;
 };
 
-enum class FeatureCurveRoleKind {
-    cap_side,
-    side_side,
-    boolean_intersection,
-};
-
-struct FeatureCurveAddress final {
-    FeatureId producer_feature_id;
-    FeatureCurveRoleKind role{
-        FeatureCurveRoleKind::boolean_intersection};
-    // Exactly two distinct Surface addresses in canonical semantic order.
-    std::vector<FeatureSurfaceAddress>
-        adjacent_surfaces;
-
-    [[nodiscard]] bool valid() const noexcept;
-
-    friend bool operator==(
-        const FeatureCurveAddress&,
-        const FeatureCurveAddress&) = default;
-    friend auto operator<=>(
-        const FeatureCurveAddress&,
-        const FeatureCurveAddress&) = default;
-};
-
 struct FeatureCurveResolution final {
     FeatureCurveAddress address;
     // Semantic carrier status. An inherited Curve may remain Resolved while
@@ -177,23 +153,6 @@ struct FeatureCurveResolution final {
     friend bool operator==(
         const FeatureCurveResolution&,
         const FeatureCurveResolution&) = default;
-};
-
-struct FeaturePointAddress final {
-    FeatureId producer_feature_id;
-    // Current PM-02C supported Point meaning is an intersection of exactly
-    // three distinct semantic Surfaces, kept in canonical semantic order.
-    std::vector<FeatureSurfaceAddress>
-        adjacent_surfaces;
-
-    [[nodiscard]] bool valid() const noexcept;
-
-    friend bool operator==(
-        const FeaturePointAddress&,
-        const FeaturePointAddress&) = default;
-    friend auto operator<=>(
-        const FeaturePointAddress&,
-        const FeaturePointAddress&) = default;
 };
 
 struct FeaturePointResolution final {

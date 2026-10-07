@@ -256,7 +256,7 @@ std::string repackage(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        13);
+        14);
 
     TempDirectory temp;
     part::PartDocumentStore store;
@@ -276,7 +276,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 13);
+            .domain_schema_version == 14);
 
     const auto authored =
         nlohmann::json::parse(
@@ -426,7 +426,7 @@ int main() {
         *duplicate_axis_id);
 
     // A valid schema-v12 document has no Revolve records. Loading it preserves
-    // all old authored identities; the next save writes current schema v13.
+    // all old authored identities; the next save writes current schema v14.
     auto legacy_state =
         fixture.document.state();
     legacy_state.body.features.clear();
@@ -466,7 +466,7 @@ int main() {
         legacy_document.document->state());
 
     const auto migrated_path =
-        temp.path / "MigratedV13.ss2part";
+        temp.path / "MigratedV14.ss2part";
     CHECK(
         store.createNew(
             migrated_path,
@@ -478,7 +478,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 13);
+            .domain_schema_version == 14);
 
     // Revolve is a schema-v13 feature kind. Relabeling a v13 Revolve payload
     // as v12 must fail closed rather than silently interpreting future data.
