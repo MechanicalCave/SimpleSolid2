@@ -449,6 +449,8 @@ public:
     void setBodyTopologyFacePickOnly(bool enabled);
     void setBodyTopologyEdgeDraftMode(bool enabled);
     void clearBodyTopologyToolSelection();
+    [[nodiscard]] bool
+    removePrimaryBodyTopologyToolSelection();
 
     [[nodiscard]] std::optional<
         std::vector<part::MaterialEdgeReference>>
