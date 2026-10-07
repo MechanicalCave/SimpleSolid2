@@ -1,6 +1,6 @@
 # PM-05F — Automated Acceptance Matrix
 
-**Status:** IN PROGRESS — canonical docs/evidence authored; exact-head DOCS/FULL gates pending
+**Status:** DOCS PASS — exact-head Windows FULL and Owner result pending
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Program authority:** work/PART_MODELING_V1_ROADMAP.md v1.29
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
@@ -24,7 +24,7 @@ Owner manual acceptance is deliberately separate and remains PENDING until the O
 | PM-05C2 | e5826858a1ef2580a3c00913f94791653696dc50 | Windows FULL #1660 PASS | 85c7df1395c59a35b1a80fdf446cdb9c2f77775c | production OCCT Fillet/Chamfer + topology lineage |
 | PM-05D | 7f57726b368c8a5011f8007369f3de945ae0d833 | Windows FULL #1697 PASS | 83ece0b03889e11f8dc7769498d949caee3c0be1 | Workbench / Viewer / exact preview / Command Line |
 | PM-05E | 88e07b1a2dbdb6ded73d0c2f90dd0a1443242cbe | Windows FULL #1721 PASS — core 25/25, kernel-native 54/54, desktop 112/112 | 1a1491f7687f32089c1424025123329c74d7b6ca | Edit / repair / lifecycle / persistence / reverse-chain canonical-frame remediation |
-| PM-05F docs | pending exact candidate | Windows DOCS pending | pending | internal + paired PL/EN Product + generated Browser |
+| PM-05F docs | 19700794577a516281fcc3e512c898cc1ececfec | Windows DOCS #1725 PASS | pending merge | internal + paired PL/EN Product + generated Browser |
 | PM-05F final automated | pending exact candidate | Windows FULL pending | pending | cumulative final runtime/docs gate |
 | PM-05F Owner Windows | same final candidate | Owner manual Windows result pending | pending | work/PM-05F_OWNER_WINDOWS_ACCEPTANCE.md |
 
@@ -62,9 +62,9 @@ Owner manual acceptance is deliberately separate and remains PENDING until the O
 | generated Surface provenance persistence | PM-05B3 | PASS |
 | Save/Close/Reopen | PM-05E3 | PASS |
 | true cold reconstruction without provider/runtime identity persistence | pm05e3.edge_feature_cold_rebuild | PASS |
-| current internal as-built docs | PM-05F docs candidate | PENDING GATE |
-| paired PL/EN Product docs | PM-05F docs candidate | PENDING GATE |
-| generated Product Browser freshness | PM-05F docs candidate | PENDING GATE |
+| current internal as-built docs | 19700794577a516281fcc3e512c898cc1ececfec / Windows DOCS #1725 | PASS |
+| paired PL/EN Product docs | 19700794577a516281fcc3e512c898cc1ececfec / Windows DOCS #1725 | PASS |
+| generated Product Browser freshness | 19700794577a516281fcc3e512c898cc1ececfec / Windows DOCS #1725 | PASS |
 | final exact-head automated package gate | PM-05F final candidate | PENDING FULL |
 | Owner supported-Windows workflow | PM-05F final candidate | PENDING OWNER |
 
