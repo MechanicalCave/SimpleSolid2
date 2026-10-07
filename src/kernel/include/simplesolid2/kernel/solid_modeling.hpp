@@ -395,6 +395,9 @@ struct EdgeFeatureGeneratedSurfaceLineage final {
     RuntimeSurfaceToken runtime_token;
     SurfaceKind surface_kind{
         SurfaceKind::other};
+    // For planar PM-05 generated carriers this is transient provider plane
+    // geometry evidence only. Part must re-canonicalize O/U/V/N from semantic
+    // source provenance; provider UV axes are never semantic authority.
     std::optional<Frame3> canonical_frame;
     std::vector<RuntimeFaceToken>
         current_faces;
