@@ -5618,6 +5618,8 @@ void CadWorkbench::setFeatureSuppressed(
         datum_plane_draft_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5673,6 +5675,8 @@ void CadWorkbench::deleteFeature(
         datum_plane_draft_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -6199,6 +6203,8 @@ bool CadWorkbench::startDatumPlaneTool() {
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -6282,6 +6288,8 @@ bool CadWorkbench::startDatumPlaneEdit(
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -6345,6 +6353,8 @@ void CadWorkbench::deleteDatumPlane(
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -8472,6 +8482,8 @@ bool CadWorkbench::startFilletTool() {
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_) {
         return false;
     }
@@ -8547,6 +8559,8 @@ bool CadWorkbench::startChamferTool() {
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_) {
         return false;
     }
@@ -9209,7 +9223,9 @@ void CadWorkbench::startSketchTool() {
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
-        revolve_draft_) {
+        revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_) {
         return;
     }
 
@@ -9248,7 +9264,9 @@ void CadWorkbench::startSketchResupport(
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
-        revolve_draft_) {
+        revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_) {
         return;
     }
     if (active_sketch_id_) {
@@ -12601,6 +12619,24 @@ bool CadWorkbench::eventFilter(
                     Qt::Key_Enter) {
                 static_cast<void>(
                     finishRevolve());
+                return true;
+            }
+        }
+
+        if (watched == viewport_widget_ &&
+            (fillet_draft_ ||
+             chamfer_draft_)) {
+            if (key_event->key() ==
+                Qt::Key_Escape) {
+                cancelEdgeFeature();
+                return true;
+            }
+            if (key_event->key() ==
+                    Qt::Key_Return ||
+                key_event->key() ==
+                    Qt::Key_Enter) {
+                static_cast<void>(
+                    finishEdgeFeature());
                 return true;
             }
         }
