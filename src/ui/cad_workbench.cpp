@@ -12163,8 +12163,16 @@ void CadWorkbench::refreshFeatureProperties(
     const auto* revolve =
         std::get_if<part::RevolveFeature>(
             &feature->definition);
+    const auto* fillet =
+        std::get_if<part::FilletFeature>(
+            &feature->definition);
+    const auto* chamfer =
+        std::get_if<part::ChamferFeature>(
+            &feature->definition);
     if (extrude == nullptr &&
-        revolve == nullptr) {
+        revolve == nullptr &&
+        fillet == nullptr &&
+        chamfer == nullptr) {
         return;
     }
 
@@ -12174,24 +12182,15 @@ void CadWorkbench::refreshFeatureProperties(
     feature_identity_->setText(
         fromUtf8(feature->id.serialized()));
 
-    const auto source_profile =
-        part::sourceProfileId(*feature);
-    if (!source_profile) {
-        return;
-    }
-    const auto source_profile_id =
-        *source_profile;
-
+    const auto unit =
+        document_session_->document()
+            .lengthUnit();
     if (extrude != nullptr) {
         feature_operation_->setText(
             extrude->operation ==
                     part::ExtrudeOperation::cut
                 ? QStringLiteral("Cut")
                 : QStringLiteral("Add"));
-
-        const auto unit =
-            document_session_->document()
-                .lengthUnit();
         if (const auto* one =
                 std::get_if<
                     part::OneSidedExtrudeExtent>(
@@ -12221,7 +12220,7 @@ void CadWorkbench::refreshFeatureProperties(
         }
         feature_edit_button_->setText(
             QStringLiteral("Edit Extrude"));
-    } else {
+    } else if (revolve != nullptr) {
         feature_operation_->setText(
             revolve->operation ==
                     part::RevolveOperation::cut
@@ -12254,21 +12253,61 @@ void CadWorkbench::refreshFeatureProperties(
         }
         feature_edit_button_->setText(
             QStringLiteral("Edit Revolve"));
+    } else if (fillet != nullptr) {
+        feature_operation_->setText(
+            QStringLiteral("Fillet"));
+        feature_extent_->setText(
+            QStringLiteral("Explicit Edges: %1")
+                .arg(
+                    static_cast<qulonglong>(
+                        fillet->edges.size())));
+        feature_distance_->setText(
+            formatLengthForPart(
+                fillet->radius,
+                unit));
+        feature_direction_->setText(
+            QStringLiteral("Constant Radius"));
+        feature_edit_button_->setText(
+            QStringLiteral("Edit Fillet"));
+    } else {
+        feature_operation_->setText(
+            QStringLiteral("Chamfer"));
+        feature_extent_->setText(
+            QStringLiteral("Explicit Edges: %1")
+                .arg(
+                    static_cast<qulonglong>(
+                        chamfer->edges.size())));
+        feature_distance_->setText(
+            formatLengthForPart(
+                chamfer->distance,
+                unit));
+        feature_direction_->setText(
+            QStringLiteral("Equal Distance"));
+        feature_edit_button_->setText(
+            QStringLiteral("Edit Chamfer"));
     }
 
-    feature_source_profile_->setText(
-        fromUtf8(
-            source_profile_id.serialized()));
+    const auto source_profile =
+        part::sourceProfileId(*feature);
+    const part::ProfileId* source_profile_id =
+        source_profile
+            ? &*source_profile
+            : nullptr;
     const auto* profile =
-        document_session_->document()
-            .findProfile(
-                source_profile_id);
+        source_profile_id != nullptr
+            ? document_session_->document()
+                  .findProfile(*source_profile_id)
+            : nullptr;
+    feature_source_profile_->setText(
+        source_profile_id != nullptr
+            ? fromUtf8(
+                  source_profile_id->serialized())
+            : QStringLiteral("—"));
     feature_source_sketch_->setText(
         profile != nullptr
             ? fromUtf8(
-                  profile->source_sketch_id
-                      .value())
-            : QStringLiteral("<missing>"));
+                  profile->source_sketch_id.value())
+            : QStringLiteral("—"));
 
     auto status =
         feature->suppressed
@@ -12310,13 +12349,19 @@ void CadWorkbench::refreshFeatureProperties(
             diagnostic));
     feature_go_to_profile_button_->setEnabled(
         profile != nullptr);
+    const bool edge_feature =
+        fillet != nullptr ||
+        chamfer != nullptr;
     const bool lifecycle_available =
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
+        !fillet_draft_ &&
+        !chamfer_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     feature_edit_button_->setEnabled(
+        !edge_feature &&
         !feature->suppressed &&
         solid_modeling_kernel_ != nullptr &&
         lifecycle_available);
@@ -12325,9 +12370,11 @@ void CadWorkbench::refreshFeatureProperties(
             ? QStringLiteral("Unsuppress Feature")
             : QStringLiteral("Suppress Feature"));
     feature_suppress_button_->setEnabled(
-        lifecycle_available);
+        lifecycle_available &&
+        !edge_feature);
     feature_delete_button_->setEnabled(
-        lifecycle_available);
+        lifecycle_available &&
+        !edge_feature);
 
     const auto contribution =
         viewport_controller_ != nullptr
