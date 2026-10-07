@@ -1121,6 +1121,31 @@ facesFromShape(
     return result;
 }
 
+[[nodiscard]] std::vector<TopoDS_Face>
+facesFromShapeList(
+    const TopTools_ListOfShape& shapes) {
+    std::vector<TopoDS_Face> result;
+    for (TopTools_ListOfShape::Iterator it{shapes};
+         it.More();
+         it.Next()) {
+        for (const auto& face :
+             facesFromShape(it.Value())) {
+            const bool duplicate =
+                std::any_of(
+                    result.begin(),
+                    result.end(),
+                    [&face](
+                        const TopoDS_Face& existing) {
+                        return existing.IsSame(face);
+                    });
+            if (!duplicate) {
+                result.push_back(face);
+            }
+        }
+    }
+    return result;
+}
+
 [[nodiscard]] std::vector<TopoDS_Edge>
 matchingFaceEdges(
     const TopoDS_Face& face,
@@ -2826,7 +2851,7 @@ template <typename Operation>
 
     for (const auto& source : selected) {
         auto faces =
-            facesFromList(
+            facesFromShapeList(
                 operation.Generated(
                     source.edge));
         if (!publish(
@@ -2845,7 +2870,7 @@ template <typename Operation>
              upstream,
              selected)) {
         auto faces =
-            facesFromList(
+            facesFromShapeList(
                 operation.Generated(
                     source.vertex));
         if (faces.empty()) {
