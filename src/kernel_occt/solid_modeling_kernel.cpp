@@ -2683,6 +2683,89 @@ providerPlanarFrame(
     return false;
 }
 
+[[nodiscard]] std::optional<
+    std::vector<kernel::RuntimeSurfaceToken>>
+sourceSurfaceTokensForEdge(
+    const OcctRuntimeSolid& upstream,
+    const TopoDS_Edge& edge) {
+    std::vector<kernel::RuntimeSurfaceToken>
+        result;
+    for (const auto& [token_value, surface] :
+         upstream.tracked_surfaces) {
+        const bool contains =
+            std::any_of(
+                surface.faces.begin(),
+                surface.faces.end(),
+                [&edge](const TopoDS_Face& face) {
+                    return faceContainsEdge(
+                        face,
+                        edge);
+                });
+        if (contains) {
+            result.push_back(
+                kernel::RuntimeSurfaceToken{
+                    token_value});
+        }
+    }
+
+    // A PM-05 material Edge is a boundary between exactly two semantic
+    // Surface carriers. Seams and same-Surface partitions were already
+    // excluded at authoring/resolution.
+    if (result.size() != 2U ||
+        result[0] == result[1]) {
+        return std::nullopt;
+    }
+    return result;
+}
+
+[[nodiscard]] bool generatedFaceTouchesSurface(
+    const OcctRuntimeSolid& runtime,
+    kernel::RuntimeSurfaceToken surface_token,
+    const TopoDS_Face& generated) {
+    const auto found =
+        runtime.tracked_surfaces.find(
+            surface_token.value);
+    if (found ==
+        runtime.tracked_surfaces.end()) {
+        return false;
+    }
+
+    return std::any_of(
+        found->second.faces.begin(),
+        found->second.faces.end(),
+        [&generated](
+            const TopoDS_Face& inherited) {
+            return facesShareResultEdge(
+                generated,
+                inherited);
+        });
+}
+
+[[nodiscard]] bool generatedFaceMatchesSourceEdge(
+    const OcctRuntimeSolid& runtime,
+    const OcctRuntimeSolid& upstream,
+    const SelectedRuntimeEdge& source,
+    const TopoDS_Face& generated) {
+    const auto surfaces =
+        sourceSurfaceTokensForEdge(
+            upstream,
+            source.edge);
+    if (!surfaces) {
+        return false;
+    }
+
+    return std::all_of(
+        surfaces->begin(),
+        surfaces->end(),
+        [&runtime, &generated](
+            kernel::RuntimeSurfaceToken token) {
+            return generatedFaceTouchesSurface(
+                runtime,
+                token,
+                generated);
+        });
+}
+
 struct SharedSelectedVertex final {
     kernel::RuntimeVertexToken token;
     TopoDS_Vertex vertex;
@@ -2858,33 +2941,114 @@ template <typename Operation>
         return true;
     };
 
+    // OCCT's Generated(edge) history is evidence that a Face belongs to
+    // the selected-Edge transition set, but a contour operation is not
+    // required to return a one-Edge/one-list ownership partition. Build the
+    // unique generated set first, then recover P2 source ownership solely from
+    // exact topology: a transition Face must touch the Modified descendants
+    // of both semantic Surface carriers adjacent to exactly one source Edge.
+    std::vector<TopoDS_Face>
+        edge_generated_faces;
     for (const auto& source : selected) {
-        auto faces =
-            facesFromShapeList(
-                operation.Generated(
-                    source.edge));
-        if (!publish(
-                kernel::EdgeFeatureGeneratedSurfaceKind::
-                    edge_transition,
-                source.token,
-                std::nullopt,
-                {},
-                std::move(faces))) {
-            return false;
+        for (const auto& face :
+             facesFromShapeList(
+                 operation.Generated(
+                     source.edge))) {
+            appendUniqueFaceCandidate(
+                edge_generated_faces,
+                face);
         }
     }
+    if (edge_generated_faces.empty()) {
+        return false;
+    }
 
-    for (auto& source :
-         sharedSelectedVertices(
-             upstream,
-             selected)) {
+    const auto shared_vertices =
+        sharedSelectedVertices(
+            upstream,
+            selected);
+    std::vector<std::vector<TopoDS_Face>>
+        corner_faces;
+    corner_faces.reserve(
+        shared_vertices.size());
+    for (const auto& source :
+         shared_vertices) {
         auto faces =
             facesFromShapeList(
                 operation.Generated(
                     source.vertex));
-        if (faces.empty()) {
+        for (const auto& face : faces) {
+            if (std::any_of(
+                    edge_generated_faces.begin(),
+                    edge_generated_faces.end(),
+                    [&face](
+                        const TopoDS_Face& candidate) {
+                        return candidate.IsSame(face);
+                    })) {
+                // P3 requires a distinct corner patch. Competing provider
+                // histories do not justify choosing one durable owner.
+                return false;
+            }
+        }
+        corner_faces.push_back(
+            std::move(faces));
+    }
+
+    std::vector<std::vector<TopoDS_Face>>
+        faces_per_source(
+            selected.size());
+    for (const auto& face :
+         edge_generated_faces) {
+        std::optional<std::size_t>
+            owner;
+        for (std::size_t index = 0U;
+             index < selected.size();
+             ++index) {
+            if (!generatedFaceMatchesSourceEdge(
+                    runtime,
+                    upstream,
+                    selected[index],
+                    face)) {
+                continue;
+            }
+            if (owner) {
+                // More than one semantic source Edge fits this Face: P2 is
+                // ambiguous and must not use provider order as a tie-break.
+                return false;
+            }
+            owner = index;
+        }
+        if (!owner) {
+            return false;
+        }
+        appendUniqueFaceCandidate(
+            faces_per_source[*owner],
+            face);
+    }
+
+    for (std::size_t index = 0U;
+         index < selected.size();
+         ++index) {
+        if (!publish(
+                kernel::EdgeFeatureGeneratedSurfaceKind::
+                    edge_transition,
+                selected[index].token,
+                std::nullopt,
+                {},
+                std::move(
+                    faces_per_source[index]))) {
+            return false;
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < shared_vertices.size();
+         ++index) {
+        if (corner_faces[index].empty()) {
             continue;
         }
+        auto source =
+            shared_vertices[index];
         if (!publish(
                 kernel::EdgeFeatureGeneratedSurfaceKind::
                     corner_transition,
@@ -2892,7 +3056,8 @@ template <typename Operation>
                 source.token,
                 std::move(
                     source.incident_edges),
-                std::move(faces))) {
+                std::move(
+                    corner_faces[index]))) {
             return false;
         }
     }
