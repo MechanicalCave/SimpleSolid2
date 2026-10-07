@@ -4,26 +4,13 @@ SimpleSolid 2.0 is a clean architectural restart of SimpleSolid focused on a coh
 
 ## Current phase
 
-**MAIN v0.1 — Testable Project Hub: complete**
+**Part Modeling v1 — PM-05 Edge Features final acceptance**
 
-Implemented and verified lifecycle:
+The current product includes the Project/Workspace shell, native Part Documents, Shared-2D Sketch/Profile authoring, semantic Body topology, Offset Datum Plane reference geometry, authored Sketch-Line Axis, Extrude, Revolve, and explicit multi-Edge Fillet/Chamfer with edit/repair/lifecycle/persistence.
 
-```text
-App start
-→ Project Hub
-→ Create Project under a selected parent Location / Open existing Project
-→ stable ProjectId + metadata
-→ ProjectSession
-→ empty Workspace Shell
-→ Close
-→ restart
-→ Recent Projects
-→ reopen the same ProjectId
-```
+PM-05A through PM-05E are completed and exact-head gated. PM-05F is the active checkpoint for current documentation, cumulative automated evidence and final supported-Windows Owner acceptance. PM-05 remains active until that explicit Owner PASS; PM-06 remains separately gated.
 
-Create Project now creates a new child Workspace folder under a selected existing parent Location; the Project name and folder name remain separate from ProjectId identity. Existing target folders fail closed and are never adopted by Create.
-
-No subsequent product implementation work is active until the Owner accepts the next explicit work contract. In particular, PH-01 does not authorize Part, Assembly, Drawing, DocumentSession, Viewer, OCCT modeling, or other CAD-domain implementation.
+The repository authority for the exact active scope is always `work/ACTIVE.yaml` and its referenced accepted Work Contract/program roadmap.
 
 ## Run locally
 
