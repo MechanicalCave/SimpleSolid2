@@ -328,21 +328,17 @@ std::optional<ChainPlan> findChainPlan(
                  .result_topology);
 
     for (const auto& seed : seeds) {
-        const auto first_edges =
-            explicitContourReferences(
-                base_evaluation.features.back(),
-                seed,
-                first_operation,
-                first_parameter,
-                kernel);
-        if (!first_edges) {
-            continue;
-        }
+        // Match the accepted PM-05A / PM-05C2b chaining path exactly:
+        // the first Feature consumes one explicit authored source Edge.
+        // Provider-contour expansion is only evidence extraction for the
+        // second operation and never a production fallback.
+        std::vector<part::MaterialEdgeReference>
+            first_edges{seed};
 
         auto first =
             appendEdgeFeature(
                 base,
-                *first_edges,
+                first_edges,
                 first_operation,
                 first_parameter);
         const auto first_evaluation =
@@ -397,7 +393,7 @@ std::optional<ChainPlan> findChainPlan(
                     part::FeatureEvaluationStatus::
                         up_to_date) {
                 return ChainPlan{
-                    *first_edges,
+                    std::move(first_edges),
                     *second_edges,
                     first.feature_id,
                     second.feature_id};
