@@ -40,9 +40,6 @@ enum class FeatureEvaluationDiagnosticCode {
     profile_crosses_axis,
     missing_upstream_body,
     upstream_unavailable,
-    edge_reference_missing,
-    edge_reference_ambiguous,
-    edge_reference_unsupported,
     kernel_invalid_input,
     kernel_provider_mismatch,
     kernel_provider_failure,
@@ -52,6 +49,9 @@ enum class FeatureEvaluationDiagnosticCode {
     empty_result,
     multi_solid,
     topology_integrity_failure,
+    edge_reference_missing,
+    edge_reference_ambiguous,
+    edge_reference_unsupported,
 };
 
 enum class BodyEvaluationStatus {
@@ -334,10 +334,6 @@ struct FeatureEvaluation final {
         FeatureEvaluationDiagnosticCode::none};
     std::optional<kernel::SolidModelingStatus>
         kernel_status;
-    std::optional<std::size_t>
-        failing_edge_input_index;
-    std::optional<kernel::ReferenceStatus>
-        edge_reference_status;
     std::vector<FeatureFaceResolution>
         produced_faces;
     std::vector<FeatureSurfaceResolution>
@@ -354,6 +350,12 @@ struct FeatureEvaluation final {
     // Empty for Failed/Blocked/Suppressed Features. Never serialized.
     std::optional<BodyStageTopologyCatalog>
         result_topology;
+    // PM-05 structured input diagnostics. Appended to preserve existing
+    // positional aggregate initialization of derived FeatureEvaluation data.
+    std::optional<std::size_t>
+        failing_edge_input_index;
+    std::optional<kernel::ReferenceStatus>
+        edge_reference_status;
 };
 
 struct PartEvaluation final {
