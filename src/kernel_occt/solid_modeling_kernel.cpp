@@ -52,6 +52,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <numbers>
@@ -2995,27 +2996,48 @@ template <typename Operation>
     std::vector<std::vector<TopoDS_Face>>
         faces_per_source(
             selected.size());
+    std::size_t diagnostic_face_index = 0U;
     for (const auto& face :
          edge_generated_faces) {
         std::optional<std::size_t>
             owner;
+        std::cerr
+            << "PM05C2_P2_FACE"
+            << " op="
+            << static_cast<int>(
+                   input.operation)
+            << " face="
+            << diagnostic_face_index
+            << " candidates=";
         for (std::size_t index = 0U;
              index < selected.size();
              ++index) {
-            if (!generatedFaceMatchesSourceEdge(
+            const bool matches =
+                generatedFaceMatchesSourceEdge(
                     runtime,
                     upstream,
                     selected[index],
-                    face)) {
+                    face);
+            std::cerr
+                << (matches ? "1" : "0");
+            if (!matches) {
                 continue;
             }
             if (owner) {
-                // More than one semantic source Edge fits this Face: P2 is
-                // ambiguous and must not use provider order as a tie-break.
+                std::cerr
+                    << " ambiguous\n";
                 return false;
             }
             owner = index;
         }
+        std::cerr
+            << " owner="
+            << (owner
+                    ? static_cast<long long>(
+                          *owner)
+                    : -1LL)
+            << "\n";
+        ++diagnostic_face_index;
         if (!owner) {
             return false;
         }
@@ -3023,6 +3045,24 @@ template <typename Operation>
             faces_per_source[*owner],
             face);
     }
+
+    std::cerr
+        << "PM05C2_P2_PARTITION"
+        << " op="
+        << static_cast<int>(
+               input.operation)
+        << " generated="
+        << edge_generated_faces.size()
+        << " selected="
+        << selected.size()
+        << " per_source=";
+    for (const auto& faces :
+         faces_per_source) {
+        std::cerr
+            << faces.size()
+            << ",";
+    }
+    std::cerr << "\n";
 
     for (std::size_t index = 0U;
          index < selected.size();
