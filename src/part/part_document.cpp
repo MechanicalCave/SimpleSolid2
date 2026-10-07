@@ -29,14 +29,22 @@ template <typename ProvenancePredicate>
         return false;
     }
 
+    const auto edge_provenance =
+        [&provenance,
+         cap = *edge.stage.feature_id](
+            FeatureId id) noexcept {
+            return id <= cap &&
+                   provenance(id);
+        };
+
     if (!std::all_of(
             edge.curve.adjacent_surfaces.begin(),
             edge.curve.adjacent_surfaces.end(),
-            [&provenance](
+            [&edge_provenance](
                 const FeatureSurfaceAddress& surface) {
                 return semanticSurfaceHistoryValid(
                     surface,
-                    provenance);
+                    edge_provenance);
             })) {
         return false;
     }
@@ -47,10 +55,10 @@ template <typename ProvenancePredicate>
     return endpoints == nullptr ||
            (semanticPointHistoryValid(
                 endpoints->first,
-                provenance) &&
+                edge_provenance) &&
             semanticPointHistoryValid(
                 endpoints->second,
-                provenance));
+                edge_provenance));
 }
 
 template <typename ProvenancePredicate>
@@ -63,14 +71,22 @@ template <typename ProvenancePredicate>
         return false;
     }
 
+    const auto point_provenance =
+        [&provenance,
+         cap = point.producer_feature_id](
+            FeatureId id) noexcept {
+            return id <= cap &&
+                   provenance(id);
+        };
+
     return std::all_of(
         point.adjacent_surfaces.begin(),
         point.adjacent_surfaces.end(),
-        [&provenance](
+        [&point_provenance](
             const FeatureSurfaceAddress& surface) {
             return semanticSurfaceHistoryValid(
                 surface,
-                provenance);
+                point_provenance);
         });
 }
 
@@ -84,23 +100,31 @@ template <typename ProvenancePredicate>
         return false;
     }
 
+    const auto surface_provenance =
+        [&provenance,
+         cap = surface.producer_feature_id](
+            FeatureId id) noexcept {
+            return id <= cap &&
+                   provenance(id);
+        };
+
     return std::all_of(
                surface.source_edges.begin(),
                surface.source_edges.end(),
-               [&provenance](
+               [&surface_provenance](
                    const MaterialEdgeReference& edge) {
                    return semanticEdgeHistoryValid(
                        edge,
-                       provenance);
+                       surface_provenance);
                }) &&
            std::all_of(
                surface.source_points.begin(),
                surface.source_points.end(),
-               [&provenance](
+               [&surface_provenance](
                    const FeaturePointAddress& point) {
                    return semanticPointHistoryValid(
                        point,
-                       provenance);
+                       surface_provenance);
                });
 }
 
