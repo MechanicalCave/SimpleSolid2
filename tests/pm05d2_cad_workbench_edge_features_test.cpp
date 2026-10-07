@@ -11,6 +11,7 @@
 #include <QPushButton>
 #include <QWidget>
 
+#include <array>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
@@ -294,48 +295,82 @@ void seedSelectionFirst(
     const auto tokens =
         materialEdgeTokens(
             viewport.body_scene);
-    for (const auto token : tokens) {
-        viewport.emitEdge(
-            token,
-            viewer::SelectionIntentMode::replace);
-        QApplication::processEvents();
+    for (std::size_t first = 0U;
+         first + 1U < tokens.size();
+         ++first) {
+        for (std::size_t second = first + 1U;
+             second < tokens.size();
+             ++second) {
+            viewport.emitEdge(
+                tokens[first],
+                viewer::SelectionIntentMode::replace);
+            viewport.emitEdge(
+                tokens[second],
+                viewer::SelectionIntentMode::toggle);
+            QApplication::processEvents();
 
-        tool.click();
-        QApplication::processEvents();
-        CHECK(operations.isVisible());
+            tool.click();
+            QApplication::processEvents();
+            CHECK(operations.isVisible());
 
-        if (selectionLabelHas(
-                &selection_label,
-                1U)) {
-            return;
+            if (selectionLabelHas(
+                    &selection_label,
+                    2U)) {
+                return;
+            }
+
+            cancel.click();
+            QApplication::processEvents();
         }
-
-        cancel.click();
-        QApplication::processEvents();
     }
     CHECK(false);
 }
 
-void selectAtLeastTwoDraftEdges(
+std::optional<
+    std::array<viewer::PresentationToken, 2U>>
+selectPreviewableTwoEdgeDraft(
+    ui::CadWorkbench& workbench,
     TestViewport& viewport,
-    QLabel& selection_label) {
+    QLabel& selection_label,
+    QPushButton& finish) {
     const auto tokens =
         materialEdgeTokens(
             viewport.body_scene);
-    for (const auto token : tokens) {
-        if (selectionLabelHas(
-                &selection_label,
-                2U)) {
-            return;
+
+    for (std::size_t first = 0U;
+         first + 1U < tokens.size();
+         ++first) {
+        for (std::size_t second = first + 1U;
+             second < tokens.size();
+             ++second) {
+            const auto cleared =
+                workbench.submitCadInput(
+                    "CLEAR",
+                    workbench.cadInputContextGeneration());
+            CHECK(cleared.accepted);
+
+            viewport.emitEdge(
+                tokens[first],
+                viewer::SelectionIntentMode::replace);
+            viewport.emitEdge(
+                tokens[second],
+                viewer::SelectionIntentMode::replace);
+            QApplication::processEvents();
+
+            if (selectionLabelHas(
+                    &selection_label,
+                    2U) &&
+                !viewport.solid_preview.empty() &&
+                finish.isEnabled()) {
+                return std::array<
+                    viewer::PresentationToken,
+                    2U>{
+                    tokens[first],
+                    tokens[second]};
+            }
         }
-        viewport.emitEdge(
-            token,
-            viewer::SelectionIntentMode::replace);
-        QApplication::processEvents();
     }
-    CHECK(selectionLabelHas(
-        &selection_label,
-        2U));
+    return std::nullopt;
 }
 
 void verifyCommandFirstFinish(
@@ -384,29 +419,10 @@ void verifyCommandFirstFinish(
         selection_label,
         0U));
 
-    selectAtLeastTwoDraftEdges(
-        viewport,
-        *selection_label);
-    CHECK(selectionLabelHas(
-        selection_label,
-        2U));
-    CHECK(finish->isEnabled() == false);
-
-    result =
-        workbench.submitCadInput(
-            "REMOVE",
-            workbench.cadInputContextGeneration());
-    CHECK(result.accepted);
-    CHECK(selectionLabelHas(
-        selection_label,
-        1U));
-    selectAtLeastTwoDraftEdges(
-        viewport,
-        *selection_label);
-    CHECK(selectionLabelHas(
-        selection_label,
-        2U));
-
+    // Set the shared positive parameter before picking. Each semantic Edge
+    // mutation then re-evaluates the exact whole candidate, allowing this
+    // regression to find a genuinely supported two-Edge set instead of
+    // assuming provider presentation order implies geometric compatibility.
     const auto before_parameter =
         workbench.cadInputContextGeneration();
     result =
@@ -418,6 +434,39 @@ void verifyCommandFirstFinish(
     CHECK(
         workbench.cadInputContextGeneration() !=
         before_parameter);
+    CHECK(finish->isEnabled() == false);
+
+    const auto previewable_pair =
+        selectPreviewableTwoEdgeDraft(
+            workbench,
+            viewport,
+            *selection_label,
+            *finish);
+    CHECK(previewable_pair);
+    CHECK(selectionLabelHas(
+        selection_label,
+        2U));
+    CHECK(!viewport.solid_preview.empty());
+    CHECK(finish->isEnabled());
+
+    // REMOVE must remove exactly the current primary Edge, not clear the
+    // complete explicit authored set. Re-picking that same Edge restores the
+    // proven two-Edge candidate and its exact preview.
+    result =
+        workbench.submitCadInput(
+            "REMOVE",
+            workbench.cadInputContextGeneration());
+    CHECK(result.accepted);
+    CHECK(selectionLabelHas(
+        selection_label,
+        1U));
+    viewport.emitEdge(
+        (*previewable_pair)[1],
+        viewer::SelectionIntentMode::replace);
+    QApplication::processEvents();
+    CHECK(selectionLabelHas(
+        selection_label,
+        2U));
     CHECK(!viewport.solid_preview.empty());
     CHECK(finish->isEnabled());
 
