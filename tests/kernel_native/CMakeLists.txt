@@ -497,6 +497,51 @@ set_tests_properties(pm02p.e_kernel_lifecycle PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
+add_executable(pm05c2b_part_edge_topology_test
+    pm05c2b_part_edge_topology_test.cpp
+)
+
+target_link_libraries(pm05c2b_part_edge_topology_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+        simplesolid2_part
+        simplesolid2_sketch
+)
+
+target_compile_features(pm05c2b_part_edge_topology_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05c2b.part_edge_topology
+    COMMAND pm05c2b_part_edge_topology_test
+)
+
+set_tests_properties(pm05c2b.part_edge_topology PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;subsystem-part;native"
+)
+
+add_executable(pm05c2a_production_edge_provider_test
+    pm05c2a_production_edge_provider_test.cpp
+)
+
+target_link_libraries(pm05c2a_production_edge_provider_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm05c2a_production_edge_provider_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05c2a.production_edge_provider
+    COMMAND pm05c2a_production_edge_provider_test
+)
+
+set_tests_properties(pm05c2a.production_edge_provider PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;native"
+)
+
 add_executable(pm05a_edge_feature_provider_evidence_test
     pm05a_edge_feature_provider_evidence_test.cpp
 )
@@ -563,6 +608,8 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm02p_d_vertex_point_lineage_test
         pm02p_e_kernel_lifecycle_test
         pm04c2_production_revolve_test
+        pm05c2a_production_edge_provider_test
+        pm05c2b_part_edge_topology_test
         pm05a_edge_feature_provider_evidence_test
         pm05a_edge_feature_lifecycle_evidence_test
 )

@@ -1090,6 +1090,505 @@ convertNewSurface(
     return result;
 }
 
+[[nodiscard]] const MaterialEdgeReference*
+authoredEdgeForRuntimeToken(
+    kernel::RuntimeEdgeToken token,
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<MaterialEdgeReference>&
+        authored_edges) noexcept {
+    if (!token.valid() ||
+        input.edges.size() !=
+            authored_edges.size()) {
+        return nullptr;
+    }
+
+    const MaterialEdgeReference* found = nullptr;
+    for (std::size_t index = 0U;
+         index < input.edges.size();
+         ++index) {
+        if (input.edges[index] != token) {
+            continue;
+        }
+        if (found != nullptr ||
+            !authored_edges[index].valid()) {
+            return nullptr;
+        }
+        found = &authored_edges[index];
+    }
+    return found;
+}
+
+[[nodiscard]] std::optional<FeaturePointAddress>
+semanticPointForRuntimeVertex(
+    kernel::RuntimeVertexToken token,
+    const BodyStageTopologyCatalog& upstream) {
+    if (!token.valid() ||
+        !upstream.complete()) {
+        return std::nullopt;
+    }
+
+    const BodyVertexTopologyRecord* vertex = nullptr;
+    for (const auto& item : upstream.vertices) {
+        if (item.runtime_token != token) {
+            continue;
+        }
+        if (vertex != nullptr) {
+            return std::nullopt;
+        }
+        vertex = &item;
+    }
+    if (vertex == nullptr ||
+        vertex->accounting_class !=
+            TopologyAccountingClass::referenceable ||
+        vertex->referenceability !=
+            kernel::ReferenceStatus::resolved ||
+        vertex->point_candidates.size() != 1U) {
+        return std::nullopt;
+    }
+
+    const auto& address =
+        vertex->point_candidates.front();
+    const FeaturePointResolution* point = nullptr;
+    for (const auto& item : upstream.points) {
+        if (item.address != address) {
+            continue;
+        }
+        if (point != nullptr) {
+            return std::nullopt;
+        }
+        point = &item;
+    }
+    if (point == nullptr ||
+        point->status !=
+            kernel::ReferenceStatus::resolved ||
+        point->candidate_vertex_count != 1U ||
+        point->current_vertices.size() != 1U ||
+        point->current_vertices.front() != token) {
+        return std::nullopt;
+    }
+    return address;
+}
+
+constexpr double generated_plane_frame_epsilon =
+    1.0e-12;
+
+[[nodiscard]] double point3Dot(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return first.x * second.x +
+           first.y * second.y +
+           first.z * second.z;
+}
+
+[[nodiscard]] kernel::Point3 point3Scale(
+    const kernel::Point3& value,
+    double factor) noexcept {
+    return {
+        value.x * factor,
+        value.y * factor,
+        value.z * factor};
+}
+
+[[nodiscard]] kernel::Point3 point3Add(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.x + second.x,
+        first.y + second.y,
+        first.z + second.z};
+}
+
+[[nodiscard]] kernel::Point3 point3Subtract(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.x - second.x,
+        first.y - second.y,
+        first.z - second.z};
+}
+
+[[nodiscard]] kernel::Point3 point3Cross(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return {
+        first.y * second.z -
+            first.z * second.y,
+        first.z * second.x -
+            first.x * second.z,
+        first.x * second.y -
+            first.y * second.x};
+}
+
+[[nodiscard]] std::optional<kernel::Point3>
+normalizedPoint3(
+    const kernel::Point3& value) noexcept {
+    const double squared =
+        point3Dot(value, value);
+    if (!std::isfinite(squared) ||
+        squared <=
+            generated_plane_frame_epsilon *
+                generated_plane_frame_epsilon) {
+        return std::nullopt;
+    }
+    const double inverse =
+        1.0 / std::sqrt(squared);
+    return point3Scale(
+        value,
+        inverse);
+}
+
+[[nodiscard]] std::optional<
+    std::vector<kernel::Frame3>>
+resolvedPlanarSourceFrames(
+    const std::vector<FeatureSurfaceAddress>&
+        addresses,
+    const BodyStageTopologyCatalog& upstream) {
+    if (addresses.empty() ||
+        !upstream.complete()) {
+        return std::nullopt;
+    }
+
+    std::vector<kernel::Frame3> frames;
+    for (const auto& address : addresses) {
+        const FeatureSurfaceResolution* found =
+            nullptr;
+        for (const auto& surface :
+             upstream.surfaces) {
+            if (surface.address != address) {
+                continue;
+            }
+            if (found != nullptr) {
+                return std::nullopt;
+            }
+            found = &surface;
+        }
+        if (found == nullptr ||
+            found->status !=
+                kernel::ReferenceStatus::resolved) {
+            return std::nullopt;
+        }
+
+        if (found->surface_kind ==
+            kernel::SurfaceKind::plane) {
+            if (!found->canonical_frame ||
+                !found->canonical_frame->valid()) {
+                return std::nullopt;
+            }
+            frames.push_back(
+                *found->canonical_frame);
+        } else if (found->canonical_frame) {
+            return std::nullopt;
+        }
+    }
+    return frames;
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+canonicalGeneratedPlaneFrame(
+    const kernel::Frame3& provider_plane,
+    const std::vector<kernel::Frame3>&
+        semantic_frames) {
+    if (!provider_plane.valid() ||
+        semantic_frames.empty()) {
+        return std::nullopt;
+    }
+
+    auto normal =
+        normalizedPoint3(
+            provider_plane.normal);
+    if (!normal) {
+        return std::nullopt;
+    }
+
+    // Provider plane UV axes are never semantic authority. Use them only to
+    // carry the current plane equation; orient N from ordered upstream
+    // semantic frames.
+    bool normal_oriented = false;
+    for (const auto& frame :
+         semantic_frames) {
+        const kernel::Point3 references[] = {
+            frame.normal,
+            frame.u_axis,
+            frame.v_axis};
+        for (const auto& reference :
+             references) {
+            const double alignment =
+                point3Dot(
+                    *normal,
+                    reference);
+            if (std::abs(alignment) <=
+                generated_plane_frame_epsilon) {
+                continue;
+            }
+            if (alignment < 0.0) {
+                *normal =
+                    point3Scale(
+                        *normal,
+                        -1.0);
+            }
+            normal_oriented = true;
+            break;
+        }
+        if (normal_oriented) {
+            break;
+        }
+    }
+    if (!normal_oriented) {
+        return std::nullopt;
+    }
+
+    std::vector<kernel::Point3>
+        semantic_seeds;
+    for (std::size_t first = 0U;
+         first < semantic_frames.size();
+         ++first) {
+        for (std::size_t second = first + 1U;
+             second < semantic_frames.size();
+             ++second) {
+            semantic_seeds.push_back(
+                point3Cross(
+                    semantic_frames[first].normal,
+                    semantic_frames[second].normal));
+        }
+    }
+    for (const auto& frame :
+         semantic_frames) {
+        semantic_seeds.push_back(
+            frame.u_axis);
+        semantic_seeds.push_back(
+            frame.v_axis);
+        semantic_seeds.push_back(
+            frame.normal);
+    }
+
+    std::optional<kernel::Point3> u_axis;
+    for (const auto& seed :
+         semantic_seeds) {
+        const auto projected =
+            point3Subtract(
+                seed,
+                point3Scale(
+                    *normal,
+                    point3Dot(
+                        seed,
+                        *normal)));
+        u_axis =
+            normalizedPoint3(
+                projected);
+        if (u_axis) {
+            break;
+        }
+    }
+    if (!u_axis) {
+        return std::nullopt;
+    }
+
+    const auto v_axis =
+        normalizedPoint3(
+            point3Cross(
+                *normal,
+                *u_axis));
+    if (!v_axis) {
+        return std::nullopt;
+    }
+
+    const auto& anchor =
+        semantic_frames.front().origin;
+    const auto provider_delta =
+        point3Subtract(
+            provider_plane.origin,
+            anchor);
+    const auto origin =
+        point3Add(
+            anchor,
+            point3Scale(
+                *normal,
+                point3Dot(
+                    provider_delta,
+                    *normal)));
+
+    kernel::Frame3 result{
+        origin,
+        *u_axis,
+        *v_axis,
+        *normal};
+    return result.valid()
+        ? std::optional<kernel::Frame3>{
+              result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::optional<FeatureSurfaceResolution>
+convertEdgeFeatureSurface(
+    FeatureId producer,
+    const kernel::EdgeFeatureGeneratedSurfaceLineage&
+        source,
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<MaterialEdgeReference>&
+        authored_edges,
+    const BodyStageTopologyCatalog& upstream) {
+    if (!producer.valid() ||
+        !source.valid() ||
+        source.operation != input.operation ||
+        input.edges.size() !=
+            authored_edges.size()) {
+        return std::nullopt;
+    }
+
+    FeatureSurfaceResolution result;
+    result.address.producer_feature_id =
+        producer;
+    result.status =
+        kernel::ReferenceStatus::resolved;
+    result.strict_face_status =
+        source.current_faces.size() == 1U
+            ? kernel::ReferenceStatus::resolved
+            : kernel::ReferenceStatus::ambiguous;
+    result.candidate_face_count =
+        source.current_faces.size();
+    result.surface_kind =
+        source.surface_kind;
+    result.runtime_token =
+        source.runtime_token;
+    result.current_faces =
+        source.current_faces;
+
+    switch (source.kind) {
+    case kernel::EdgeFeatureGeneratedSurfaceKind::
+            edge_transition: {
+        if (!source.source_edge) {
+            return std::nullopt;
+        }
+        const auto* authored =
+            authoredEdgeForRuntimeToken(
+                *source.source_edge,
+                input,
+                authored_edges);
+        if (authored == nullptr) {
+            return std::nullopt;
+        }
+        result.address.role =
+            source.operation ==
+                    kernel::EdgeFeatureOperation::
+                        fillet
+                ? FeatureSurfaceRoleKind::
+                      fillet_surface
+                : FeatureSurfaceRoleKind::
+                      chamfer_surface;
+        result.address.source_edges =
+            {*authored};
+        break;
+    }
+    case kernel::EdgeFeatureGeneratedSurfaceKind::
+            corner_transition: {
+        if (!source.source_vertex) {
+            return std::nullopt;
+        }
+        const auto point =
+            semanticPointForRuntimeVertex(
+                *source.source_vertex,
+                upstream);
+        if (!point) {
+            return std::nullopt;
+        }
+
+        result.address.role =
+            FeatureSurfaceRoleKind::
+                corner_transition;
+        result.address.source_points =
+            {*point};
+
+        for (const auto token :
+             source.incident_source_edges) {
+            const auto* authored =
+                authoredEdgeForRuntimeToken(
+                    token,
+                    input,
+                    authored_edges);
+            if (authored == nullptr) {
+                return std::nullopt;
+            }
+            result.address.source_edges.push_back(
+                *authored);
+        }
+        std::sort(
+            result.address.source_edges.begin(),
+            result.address.source_edges.end());
+        if (std::adjacent_find(
+                result.address.source_edges.begin(),
+                result.address.source_edges.end()) !=
+            result.address.source_edges.end()) {
+            return std::nullopt;
+        }
+        break;
+    }
+    }
+
+    if (result.surface_kind ==
+        kernel::SurfaceKind::plane) {
+        if (!source.canonical_frame ||
+            !source.canonical_frame->valid()) {
+            return std::nullopt;
+        }
+
+        const std::vector<FeatureSurfaceAddress>*
+            frame_sources = nullptr;
+        if (result.address.role ==
+                FeatureSurfaceRoleKind::
+                    fillet_surface ||
+            result.address.role ==
+                FeatureSurfaceRoleKind::
+                    chamfer_surface) {
+            if (result.address.source_edges.size() !=
+                1U) {
+                return std::nullopt;
+            }
+            frame_sources =
+                &result.address.source_edges.front()
+                     .curve.adjacent_surfaces;
+        } else if (
+            result.address.role ==
+            FeatureSurfaceRoleKind::
+                corner_transition) {
+            if (result.address.source_points.size() !=
+                1U) {
+                return std::nullopt;
+            }
+            frame_sources =
+                &result.address.source_points.front()
+                     .adjacent_surfaces;
+        }
+
+        if (frame_sources == nullptr) {
+            return std::nullopt;
+        }
+        const auto semantic_frames =
+            resolvedPlanarSourceFrames(
+                *frame_sources,
+                upstream);
+        if (!semantic_frames ||
+            semantic_frames->empty()) {
+            return std::nullopt;
+        }
+
+        result.canonical_frame =
+            canonicalGeneratedPlaneFrame(
+                *source.canonical_frame,
+                *semantic_frames);
+        if (!result.canonical_frame) {
+            return std::nullopt;
+        }
+    } else {
+        result.canonical_frame.reset();
+    }
+
+    if (!result.address.valid() ||
+        !result.valid()) {
+        return std::nullopt;
+    }
+    return result;
+}
+
 void propagateCurrentReferences(
     std::vector<FeatureFaceResolution>& references,
     const std::vector<
@@ -1243,6 +1742,19 @@ void propagateCurrentReferences(
     return !isSideSurface(address);
 }
 
+[[nodiscard]] bool isEdgeFeatureSurface(
+    const FeatureSurfaceAddress& address) noexcept {
+    return address.role ==
+               FeatureSurfaceRoleKind::
+                   fillet_surface ||
+           address.role ==
+               FeatureSurfaceRoleKind::
+                   chamfer_surface ||
+           address.role ==
+               FeatureSurfaceRoleKind::
+                   corner_transition;
+}
+
 struct SemanticSurfaceObservation final {
     FeatureSurfaceAddress address;
     kernel::SurfaceKind kind{
@@ -1370,6 +1882,30 @@ curveRelationForObservation(
             .address.producer_feature_id ==
         semantic_surfaces[1]
             .address.producer_feature_id;
+    const bool first_edge_feature =
+        isEdgeFeatureSurface(
+            semantic_surfaces[0].address);
+    const bool second_edge_feature =
+        isEdgeFeatureSurface(
+            semantic_surfaces[1].address);
+
+    if (first_edge_feature ||
+        second_edge_feature) {
+        result.role =
+            FeatureCurveRoleKind::
+                edge_feature_boundary;
+        switch (observation.provider_curve_kind) {
+        case kernel::CurveKind::line:
+        case kernel::CurveKind::circle:
+            result.curve_kind =
+                observation.provider_curve_kind;
+            return result;
+        case kernel::CurveKind::other:
+            provider_mismatch = true;
+            return std::nullopt;
+        }
+    }
+
     const bool first_cap =
         isCapSurface(
             semantic_surfaces[0].address);
@@ -4166,7 +4702,8 @@ PartEvaluation evaluatePart(
         }
 
         evaluated.produced_surfaces.reserve(
-            kernel_result.new_surfaces.size());
+            kernel_result.new_surfaces.size() +
+            kernel_result.edge_feature_surfaces.size());
         for (const auto& surface :
              kernel_result.new_surfaces) {
             if (surface.continued_into) {
@@ -4191,6 +4728,61 @@ PartEvaluation evaluatePart(
             candidate_surfaces.push_back(
                 std::move(converted));
         }
+        if (!kernel_result.edge_feature_surfaces.empty()) {
+            if (!edge_feature_input ||
+                !current_topology ||
+                (fillet == nullptr &&
+                 chamfer == nullptr)) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        failed;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        topology_integrity_failure;
+                chain_broken = true;
+            } else {
+                const auto& authored_edges =
+                    fillet != nullptr
+                        ? fillet->edges
+                        : chamfer->edges;
+                for (const auto& surface :
+                     kernel_result
+                         .edge_feature_surfaces) {
+                    auto converted =
+                        convertEdgeFeatureSurface(
+                            authored.id,
+                            surface,
+                            *edge_feature_input,
+                            authored_edges,
+                            *current_topology);
+                    if (!converted) {
+                        evaluated.status =
+                            FeatureEvaluationStatus::
+                                failed;
+                        evaluated.diagnostic =
+                            FeatureEvaluationDiagnosticCode::
+                                topology_integrity_failure;
+                        chain_broken = true;
+                        break;
+                    }
+                    evaluated.produced_surfaces
+                        .push_back(*converted);
+                    candidate_surfaces.push_back(
+                        std::move(*converted));
+                }
+            }
+        } else if (edge_feature_input) {
+            // A successful PM-05 provider result without generated transition
+            // Surface history cannot publish a complete semantic Body stage.
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    topology_integrity_failure;
+            chain_broken = true;
+        }
+
         if (chain_broken) {
             current_references.clear();
             current_surfaces.clear();

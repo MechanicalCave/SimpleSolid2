@@ -10,6 +10,8 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepGProp.hxx>
+#include <BRepFilletAPI_MakeChamfer.hxx>
+#include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepTools.hxx>
@@ -33,7 +35,9 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <gp_Ax2.hxx>
+#include <gp_Ax3.hxx>
 #include <gp_Circ.hxx>
+#include <gp_Pln.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
@@ -876,7 +880,8 @@ template <typename Operation>
 descendantFaces(
     Operation& operation,
     const TopoDS_Face& source,
-    const TopoDS_Shape& result) {
+    const TopoDS_Shape& result,
+    bool include_generated = true) {
     std::vector<TopoDS_Face> descendants;
 
     const auto& modified =
@@ -888,13 +893,15 @@ descendantFaces(
             result);
     }
 
-    const auto& generated =
-        operation.Generated(source);
-    for (const auto& item : generated) {
-        appendUniqueFace(
-            descendants,
-            item,
-            result);
+    if (include_generated) {
+        const auto& generated =
+            operation.Generated(source);
+        for (const auto& item : generated) {
+            appendUniqueFace(
+                descendants,
+                item,
+                result);
+        }
     }
 
     if (descendants.empty() &&
@@ -1022,7 +1029,8 @@ template <typename Operation>
 descendantEdges(
     Operation& operation,
     const TopoDS_Edge& source,
-    const TopoDS_Shape& result) {
+    const TopoDS_Shape& result,
+    bool include_generated = true) {
     std::vector<TopoDS_Edge> descendants;
 
     const auto& modified =
@@ -1034,13 +1042,15 @@ descendantEdges(
             result);
     }
 
-    const auto& generated =
-        operation.Generated(source);
-    for (const auto& item : generated) {
-        appendUniqueEdge(
-            descendants,
-            item,
-            result);
+    if (include_generated) {
+        const auto& generated =
+            operation.Generated(source);
+        for (const auto& item : generated) {
+            appendUniqueEdge(
+                descendants,
+                item,
+                result);
+        }
     }
 
     if (descendants.empty() &&
@@ -1056,7 +1066,8 @@ template <typename Operation>
 descendantVertices(
     Operation& operation,
     const TopoDS_Vertex& source,
-    const TopoDS_Shape& result) {
+    const TopoDS_Shape& result,
+    bool include_generated = true) {
     std::vector<TopoDS_Vertex> descendants;
 
     const auto& modified =
@@ -1068,13 +1079,15 @@ descendantVertices(
             result);
     }
 
-    const auto& generated =
-        operation.Generated(source);
-    for (const auto& item : generated) {
-        appendUniqueVertex(
-            descendants,
-            item,
-            result);
+    if (include_generated) {
+        const auto& generated =
+            operation.Generated(source);
+        for (const auto& item : generated) {
+            appendUniqueVertex(
+                descendants,
+                item,
+                result);
+        }
     }
 
     if (descendants.empty() &&
@@ -1112,6 +1125,31 @@ facesFromShape(
                 });
         if (!duplicate) {
             result.push_back(face);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] std::vector<TopoDS_Face>
+facesFromShapeList(
+    const TopTools_ListOfShape& shapes) {
+    std::vector<TopoDS_Face> result;
+    for (TopTools_ListOfShape::Iterator it{shapes};
+         it.More();
+         it.Next()) {
+        for (const auto& face :
+             facesFromShape(it.Value())) {
+            const bool duplicate =
+                std::any_of(
+                    result.begin(),
+                    result.end(),
+                    [&face](
+                        const TopoDS_Face& existing) {
+                        return existing.IsSame(face);
+                    });
+            if (!duplicate) {
+                result.push_back(face);
+            }
         }
     }
     return result;
@@ -1872,6 +1910,86 @@ inventoryEdgeToken(
     return std::nullopt;
 }
 
+struct SelectedRuntimeEdge final {
+    kernel::RuntimeEdgeToken token;
+    TopoDS_Edge edge;
+};
+
+[[nodiscard]] std::optional<
+    std::vector<SelectedRuntimeEdge>>
+selectedRuntimeEdges(
+    const OcctRuntimeSolid& upstream,
+    const std::vector<kernel::RuntimeEdgeToken>&
+        requested) {
+    std::vector<SelectedRuntimeEdge> result;
+    result.reserve(requested.size());
+    for (const auto token : requested) {
+        const auto found =
+            upstream.inventory_edges.find(
+                token.value);
+        if (!token.valid() ||
+            found ==
+                upstream.inventory_edges.end()) {
+            return std::nullopt;
+        }
+        result.push_back(
+            {token, found->second});
+    }
+    return result;
+}
+
+template <typename Operation>
+[[nodiscard]] bool captureExactEdgeFeatureMembership(
+    Operation& operation,
+    const OcctRuntimeSolid& upstream,
+    const std::vector<kernel::RuntimeEdgeToken>&
+        requested,
+    kernel::SolidModelingResult& result) {
+    kernel::EdgeFeatureInputMembership membership;
+
+    for (Standard_Integer contour = 1;
+         contour <= operation.NbContours();
+         ++contour) {
+        const auto edge_count =
+            operation.NbEdges(contour);
+        for (Standard_Integer index = 1;
+             index <= edge_count;
+             ++index) {
+            const auto edge =
+                operation.Edge(
+                    contour,
+                    index);
+            const auto token =
+                inventoryEdgeToken(
+                    upstream,
+                    edge);
+            if (!token) {
+                return false;
+            }
+            if (std::find(
+                    membership
+                        .provider_contour_edges
+                        .begin(),
+                    membership
+                        .provider_contour_edges
+                        .end(),
+                    *token) ==
+                membership
+                    .provider_contour_edges
+                    .end()) {
+                membership
+                    .provider_contour_edges
+                    .push_back(*token);
+            }
+        }
+    }
+
+    result.edge_feature_input_membership =
+        std::move(membership);
+    return result.edge_feature_input_membership
+               ->exactFor(requested);
+}
+
 [[nodiscard]] std::optional<kernel::RuntimeVertexToken>
 inventoryVertexToken(
     const OcctRuntimeSolid& runtime,
@@ -2028,6 +2146,7 @@ struct SurfaceCandidateClaim final {
                second_plane.Location()) <=
            tolerance;
 }
+
 
 [[nodiscard]] bool surfaceClaimsHaveCertifiedContinuation(
     const SurfaceCandidateClaim& created,
@@ -2512,6 +2631,471 @@ providerCurveKind(
     return false;
 }
 
+[[nodiscard]] std::optional<kernel::Frame3>
+providerPlanarFrame(
+    const TopoDS_Face& face) {
+    BRepAdaptor_Surface surface{face, true};
+    if (surface.GetType() !=
+        GeomAbs_Plane) {
+        return std::nullopt;
+    }
+
+    const gp_Pln plane =
+        surface.Plane();
+    const gp_Ax3 axes =
+        plane.Position();
+    kernel::Frame3 frame;
+    frame.origin = {
+        axes.Location().X(),
+        axes.Location().Y(),
+        axes.Location().Z()};
+    const auto& provider_u =
+        axes.XDirection();
+    const auto& provider_n =
+        axes.Direction();
+    frame.u_axis = {
+        provider_u.X(),
+        provider_u.Y(),
+        provider_u.Z()};
+    frame.normal = {
+        provider_n.X(),
+        provider_n.Y(),
+        provider_n.Z()};
+    // gp_Ax3 may be indirect for an oriented Face. This is only transient
+    // current-plane evidence. Part reconstructs semantic O/U/V/N from source
+    // provenance, so provider Y/UV orientation is never semantic authority.
+    frame.v_axis = {
+        provider_n.Y() * provider_u.Z() -
+            provider_n.Z() * provider_u.Y(),
+        provider_n.Z() * provider_u.X() -
+            provider_n.X() * provider_u.Z(),
+        provider_n.X() * provider_u.Y() -
+            provider_n.Y() * provider_u.X()};
+    return frame.valid()
+        ? std::optional<kernel::Frame3>{frame}
+        : std::nullopt;
+}
+
+[[nodiscard]] bool faceTrackedBySurface(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Face& face) {
+    for (const auto& [token, tracked] :
+         runtime.tracked_surfaces) {
+        static_cast<void>(token);
+        if (std::any_of(
+                tracked.faces.begin(),
+                tracked.faces.end(),
+                [&face](const TopoDS_Face& item) {
+                    return item.IsSame(face);
+                })) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] std::optional<
+    std::vector<kernel::RuntimeSurfaceToken>>
+sourceSurfaceTokensForEdge(
+    const OcctRuntimeSolid& upstream,
+    const TopoDS_Edge& edge) {
+    std::vector<kernel::RuntimeSurfaceToken>
+        result;
+    for (const auto& [token_value, surface] :
+         upstream.tracked_surfaces) {
+        const bool contains =
+            std::any_of(
+                surface.faces.begin(),
+                surface.faces.end(),
+                [&edge](const TopoDS_Face& face) {
+                    return faceContainsEdge(
+                        face,
+                        edge);
+                });
+        if (contains) {
+            result.push_back(
+                kernel::RuntimeSurfaceToken{
+                    token_value});
+        }
+    }
+
+    // A PM-05 material Edge is a boundary between exactly two semantic
+    // Surface carriers. Seams and same-Surface partitions were already
+    // excluded at authoring/resolution.
+    if (result.size() != 2U ||
+        result[0] == result[1]) {
+        return std::nullopt;
+    }
+    return result;
+}
+
+[[nodiscard]] bool generatedFaceTouchesSurface(
+    const OcctRuntimeSolid& runtime,
+    kernel::RuntimeSurfaceToken surface_token,
+    const TopoDS_Face& generated) {
+    const auto found =
+        runtime.tracked_surfaces.find(
+            surface_token.value);
+    if (found ==
+        runtime.tracked_surfaces.end()) {
+        return false;
+    }
+
+    return std::any_of(
+        found->second.faces.begin(),
+        found->second.faces.end(),
+        [&generated](
+            const TopoDS_Face& inherited) {
+            return facesShareResultEdge(
+                generated,
+                inherited);
+        });
+}
+
+[[nodiscard]] bool generatedFaceMatchesSourceEdge(
+    const OcctRuntimeSolid& runtime,
+    const OcctRuntimeSolid& upstream,
+    const SelectedRuntimeEdge& source,
+    const TopoDS_Face& generated) {
+    const auto surfaces =
+        sourceSurfaceTokensForEdge(
+            upstream,
+            source.edge);
+    if (!surfaces) {
+        return false;
+    }
+
+    return std::all_of(
+        surfaces->begin(),
+        surfaces->end(),
+        [&runtime, &generated](
+            kernel::RuntimeSurfaceToken token) {
+            return generatedFaceTouchesSurface(
+                runtime,
+                token,
+                generated);
+        });
+}
+
+struct SharedSelectedVertex final {
+    kernel::RuntimeVertexToken token;
+    TopoDS_Vertex vertex;
+    std::vector<kernel::RuntimeEdgeToken>
+        incident_edges;
+};
+
+[[nodiscard]] std::vector<SharedSelectedVertex>
+sharedSelectedVertices(
+    const OcctRuntimeSolid& upstream,
+    const std::vector<SelectedRuntimeEdge>&
+        selected) {
+    std::vector<SharedSelectedVertex> result;
+    for (const auto& [token_value, vertex] :
+         upstream.inventory_vertices) {
+        SharedSelectedVertex candidate;
+        candidate.token =
+            kernel::RuntimeVertexToken{
+                token_value};
+        candidate.vertex = vertex;
+
+        for (const auto& edge : selected) {
+            if (edgeContainsVertex(
+                    edge.edge,
+                    vertex)) {
+                candidate.incident_edges
+                    .push_back(edge.token);
+            }
+        }
+
+        if (candidate.incident_edges.size() >= 2U) {
+            result.push_back(
+                std::move(candidate));
+        }
+    }
+    return result;
+}
+
+template <typename Operation>
+[[nodiscard]] bool publishEdgeFeatureGeneratedSurfaces(
+    kernel::SolidModelingResult& result,
+    OcctRuntimeSolid& runtime,
+    const OcctRuntimeSolid& upstream,
+    Operation& operation,
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<SelectedRuntimeEdge>&
+        selected) {
+    result.edge_feature_surfaces.clear();
+
+    const auto publish =
+        [&result, &runtime, &input](
+            kernel::EdgeFeatureGeneratedSurfaceKind
+                kind,
+            std::optional<kernel::RuntimeEdgeToken>
+                source_edge,
+            std::optional<kernel::RuntimeVertexToken>
+                source_vertex,
+            std::vector<kernel::RuntimeEdgeToken>
+                incident_edges,
+            std::vector<TopoDS_Face> faces)
+            -> bool {
+        if (faces.empty()) {
+            return false;
+        }
+
+        const auto surface_kind =
+            providerSurfaceKind(
+                faces.front());
+        if (!std::all_of(
+                faces.begin(),
+                faces.end(),
+                [surface_kind](
+                    const TopoDS_Face& face) {
+                    return providerSurfaceKind(
+                               face) ==
+                           surface_kind;
+                })) {
+            return false;
+        }
+
+        if (surface_kind ==
+            kernel::SurfaceKind::plane) {
+            for (std::size_t index = 1U;
+                 index < faces.size();
+                 ++index) {
+                if (!planarFacesSameDomain(
+                        faces.front(),
+                        faces[index])) {
+                    return false;
+                }
+            }
+        }
+
+        for (const auto& face : faces) {
+            if (faceTrackedBySurface(
+                    runtime,
+                    face)) {
+                return false;
+            }
+        }
+
+        std::optional<kernel::Frame3>
+            canonical_frame;
+        if (surface_kind ==
+            kernel::SurfaceKind::plane) {
+            canonical_frame =
+                providerPlanarFrame(
+                    faces.front());
+            if (!canonical_frame) {
+                return false;
+            }
+        }
+
+        const auto token =
+            allocateRuntimeToken<
+                kernel::RuntimeSurfaceToken>(
+                runtime.next_surface_token);
+        if (!token) {
+            return false;
+        }
+
+        std::vector<kernel::RuntimeFaceToken>
+            current_faces;
+        current_faces.reserve(
+            faces.size());
+        for (const auto& face : faces) {
+            const auto face_token =
+                inventoryFaceToken(
+                    runtime,
+                    face);
+            if (!face_token) {
+                return false;
+            }
+            current_faces.push_back(
+                *face_token);
+        }
+
+        kernel::EdgeFeatureGeneratedSurfaceLineage
+            lineage;
+        lineage.operation =
+            input.operation;
+        lineage.kind = kind;
+        lineage.runtime_token = *token;
+        lineage.surface_kind =
+            surface_kind;
+        lineage.canonical_frame =
+            canonical_frame;
+        lineage.current_faces =
+            current_faces;
+        lineage.source_edge =
+            source_edge;
+        lineage.source_vertex =
+            source_vertex;
+        lineage.incident_source_edges =
+            std::move(incident_edges);
+        if (!lineage.valid()) {
+            return false;
+        }
+
+        if (!runtime.tracked_surfaces.emplace(
+                token->value,
+                OcctRuntimeSolid::TrackedSurface{
+                    surface_kind,
+                    canonical_frame,
+                    std::move(faces)})
+                 .second) {
+            return false;
+        }
+        result.edge_feature_surfaces.push_back(
+            std::move(lineage));
+        return true;
+    };
+
+    // OCCT's Generated(edge) history is evidence that a Face belongs to
+    // the selected-Edge transition set, but a contour operation is not
+    // required to return a one-Edge/one-list ownership partition. Build the
+    // unique generated set first, then recover P2 source ownership solely from
+    // exact topology: a transition Face must touch the Modified descendants
+    // of both semantic Surface carriers adjacent to exactly one source Edge.
+    std::vector<TopoDS_Face>
+        edge_generated_faces;
+    for (const auto& source : selected) {
+        for (const auto& face :
+             facesFromShapeList(
+                 operation.Generated(
+                     source.edge))) {
+            appendUniqueFaceCandidate(
+                edge_generated_faces,
+                face);
+        }
+    }
+    if (edge_generated_faces.empty()) {
+        return false;
+    }
+
+    const auto shared_vertices =
+        sharedSelectedVertices(
+            upstream,
+            selected);
+    std::vector<std::vector<TopoDS_Face>>
+        corner_faces;
+    corner_faces.reserve(
+        shared_vertices.size());
+    for (const auto& source :
+         shared_vertices) {
+        auto faces =
+            facesFromShapeList(
+                operation.Generated(
+                    source.vertex));
+        for (const auto& face : faces) {
+            if (std::any_of(
+                    edge_generated_faces.begin(),
+                    edge_generated_faces.end(),
+                    [&face](
+                        const TopoDS_Face& candidate) {
+                        return candidate.IsSame(face);
+                    })) {
+                // P3 requires a distinct corner patch. Competing provider
+                // histories do not justify choosing one durable owner.
+                return false;
+            }
+        }
+        corner_faces.push_back(
+            std::move(faces));
+    }
+
+    std::vector<std::vector<TopoDS_Face>>
+        faces_per_source(
+            selected.size());
+    for (const auto& face :
+         edge_generated_faces) {
+        std::optional<std::size_t>
+            owner;
+        for (std::size_t index = 0U;
+             index < selected.size();
+             ++index) {
+            if (!generatedFaceMatchesSourceEdge(
+                    runtime,
+                    upstream,
+                    selected[index],
+                    face)) {
+                continue;
+            }
+            if (owner) {
+                // More than one semantic source Edge fits this Face: P2 is
+                // ambiguous and must not use provider order as a tie-break.
+                return false;
+            }
+            owner = index;
+        }
+        if (!owner) {
+            return false;
+        }
+        appendUniqueFaceCandidate(
+            faces_per_source[*owner],
+            face);
+    }
+
+    for (std::size_t index = 0U;
+         index < selected.size();
+         ++index) {
+        if (!publish(
+                kernel::EdgeFeatureGeneratedSurfaceKind::
+                    edge_transition,
+                selected[index].token,
+                std::nullopt,
+                {},
+                std::move(
+                    faces_per_source[index]))) {
+            return false;
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < shared_vertices.size();
+         ++index) {
+        if (corner_faces[index].empty()) {
+            continue;
+        }
+        auto source =
+            shared_vertices[index];
+        if (!publish(
+                kernel::EdgeFeatureGeneratedSurfaceKind::
+                    corner_transition,
+                std::nullopt,
+                source.token,
+                std::move(
+                    source.incident_edges),
+                std::move(
+                    corner_faces[index]))) {
+            return false;
+        }
+    }
+
+    for (const auto& [face_token, face] :
+         runtime.inventory_faces) {
+        static_cast<void>(face_token);
+        std::size_t owners = 0U;
+        for (const auto& [surface_token, tracked] :
+             runtime.tracked_surfaces) {
+            static_cast<void>(surface_token);
+            if (std::any_of(
+                    tracked.faces.begin(),
+                    tracked.faces.end(),
+                    [&face](
+                        const TopoDS_Face& item) {
+                        return item.IsSame(face);
+                    })) {
+                ++owners;
+            }
+        }
+        if (owners != 1U) {
+            return false;
+        }
+    }
+
+    return !result.edge_feature_surfaces.empty();
+}
+
 template <typename Token>
 void appendUniqueToken(
     std::vector<Token>& values,
@@ -2584,7 +3168,8 @@ template <typename Operation>
     const OcctRuntimeSolid& upstream,
     const OcctRuntimeSolid& runtime,
     Operation& operation,
-    const TopoDS_Shape& shape) {
+    const TopoDS_Shape& shape,
+    bool include_generated = true) {
     std::vector<
         RuntimeRealizationClaim<
             kernel::RuntimeEdgeToken>>
@@ -2604,7 +3189,8 @@ template <typename Operation>
             descendantEdges(
                 operation,
                 edge,
-                shape);
+                shape,
+                include_generated);
         for (const auto& descendant :
              descendants) {
             const auto token =
@@ -2656,7 +3242,8 @@ template <typename Operation>
             descendantVertices(
                 operation,
                 vertex,
-                shape);
+                shape,
+                include_generated);
         for (const auto& descendant :
              descendants) {
             const auto token =
@@ -3782,6 +4369,264 @@ OcctSolidModelingKernel::revolve(
         return result;
     }
 }
+
+template <typename Operation>
+[[nodiscard]] kernel::SolidModelingResult
+finishEdgeFeature(
+    Operation& operation,
+    const OcctRuntimeSolid& upstream,
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<SelectedRuntimeEdge>&
+        selected) {
+    kernel::SolidModelingResult result;
+    if (!captureExactEdgeFeatureMembership(
+            operation,
+            upstream,
+            input.edges,
+            result)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    operation.Build();
+    if (!operation.IsDone()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    const auto shape = operation.Shape();
+    if (shape.IsNull()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    populateDiagnostics(
+        result,
+        shape);
+    if (result.solid_count == 0U) {
+        result.status =
+            kernel::SolidModelingStatus::
+                empty_result;
+        return result;
+    }
+    if (result.solid_count > 1U) {
+        result.status =
+            kernel::SolidModelingStatus::
+                multi_solid;
+        return result;
+    }
+    if (!result.brep_valid) {
+        result.status =
+            kernel::SolidModelingStatus::
+                invalid_brep;
+        return result;
+    }
+
+    const auto solid =
+        singleSolid(shape);
+    if (!solid) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (upstreamExteriorUnchanged(
+            operation,
+            upstream.solid,
+            shape)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                no_effect;
+        return result;
+    }
+
+    auto runtime =
+        std::make_shared<OcctRuntimeSolid>();
+    runtime->solid = *solid;
+
+    // C2a preserves all inherited runtime semantic carriers. Generated
+    // Fillet/Chamfer Surface claims are published separately in C2b.
+    publishLineage(
+        result,
+        *runtime,
+        &upstream,
+        {},
+        [&operation, &shape](
+            const TopoDS_Face& source) {
+            return descendantFaces(
+                operation,
+                source,
+                shape,
+                false);
+        });
+
+    if (!populateRuntimeTopologyInventory(
+            result,
+            *runtime,
+            runtime->solid)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishSurfaceLineage(
+            result,
+            *runtime,
+            &upstream,
+            {},
+            false,
+            [&operation, &shape](
+                const TopoDS_Face& source) {
+                return descendantFaces(
+                operation,
+                source,
+                shape,
+                false);
+            })) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishEdgeFeatureGeneratedSurfaces(
+            result,
+            *runtime,
+            upstream,
+            operation,
+            input,
+            selected)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishCurrentSubshapeLineage(
+            result,
+            upstream,
+            *runtime,
+            operation,
+            shape,
+            false)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!populateCurrentTopologySemantics(
+            result,
+            *runtime)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    result.status =
+        kernel::SolidModelingStatus::ok;
+    result.solid = std::move(runtime);
+    return result;
+}
+
+
+kernel::SolidModelingResult
+OcctSolidModelingKernel::edgeFeature(
+    const kernel::EdgeFeatureInput& input,
+    kernel::RuntimeSolidHandle upstream) noexcept {
+    kernel::SolidModelingResult result;
+    if (!input.valid()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                invalid_input;
+        return result;
+    }
+    if (upstream == nullptr) {
+        result.status =
+            kernel::SolidModelingStatus::
+                missing_upstream;
+        return result;
+    }
+
+    const auto* upstream_occt =
+        dynamic_cast<const OcctRuntimeSolid*>(
+            upstream.get());
+    if (upstream_occt == nullptr) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    const auto selected =
+        selectedRuntimeEdges(
+            *upstream_occt,
+            input.edges);
+    if (!selected) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    try {
+        switch (input.operation) {
+        case kernel::EdgeFeatureOperation::fillet: {
+            BRepFilletAPI_MakeFillet operation{
+                upstream_occt->solid};
+            for (const auto& item : *selected) {
+                operation.Add(
+                    input.parameter_mm,
+                    item.edge);
+            }
+            return finishEdgeFeature(
+                operation,
+                *upstream_occt,
+                input,
+                *selected);
+        }
+        case kernel::EdgeFeatureOperation::chamfer: {
+            BRepFilletAPI_MakeChamfer operation{
+                upstream_occt->solid};
+            for (const auto& item : *selected) {
+                operation.Add(
+                    input.parameter_mm,
+                    item.edge);
+            }
+            return finishEdgeFeature(
+                operation,
+                *upstream_occt,
+                input,
+                *selected);
+        }
+        }
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    result.status =
+        kernel::SolidModelingStatus::
+            invalid_input;
+    return result;
+}
+
 
 kernel::SolidPresentationResult
 OcctSolidModelingKernel::extrudePreviewMesh(

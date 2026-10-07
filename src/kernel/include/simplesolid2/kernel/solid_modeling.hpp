@@ -381,6 +381,40 @@ struct EdgeFeatureInputMembership final {
         const EdgeFeatureInputMembership&) = default;
 };
 
+enum class EdgeFeatureGeneratedSurfaceKind {
+    edge_transition,
+    corner_transition,
+};
+
+struct EdgeFeatureGeneratedSurfaceLineage final {
+    EdgeFeatureOperation operation{
+        EdgeFeatureOperation::fillet};
+    EdgeFeatureGeneratedSurfaceKind kind{
+        EdgeFeatureGeneratedSurfaceKind::
+            edge_transition};
+    RuntimeSurfaceToken runtime_token;
+    SurfaceKind surface_kind{
+        SurfaceKind::other};
+    // For planar PM-05 generated carriers this is transient provider plane
+    // geometry evidence only. Part must re-canonicalize O/U/V/N from semantic
+    // source provenance; provider UV axes are never semantic authority.
+    std::optional<Frame3> canonical_frame;
+    std::vector<RuntimeFaceToken>
+        current_faces;
+    std::optional<RuntimeEdgeToken>
+        source_edge;
+    std::optional<RuntimeVertexToken>
+        source_vertex;
+    std::vector<RuntimeEdgeToken>
+        incident_source_edges;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const EdgeFeatureGeneratedSurfaceLineage&,
+        const EdgeFeatureGeneratedSurfaceLineage&) = default;
+};
+
 enum class SolidModelingStatus {
     ok,
     invalid_input,
@@ -511,6 +545,9 @@ struct SolidModelingResult final {
     // meaning of existing positional aggregate initializers.
     std::optional<EdgeFeatureInputMembership>
         edge_feature_input_membership;
+
+    std::vector<EdgeFeatureGeneratedSurfaceLineage>
+        edge_feature_surfaces;
 
     [[nodiscard]] bool ok() const noexcept {
         return status == SolidModelingStatus::ok &&
