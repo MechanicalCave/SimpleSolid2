@@ -402,14 +402,41 @@ The Viewer derives a finite translucent Datum patch/border from the current reso
 
 A Datum Plane may host a standard Sketch. The Sketch persists only DatumId support and keeps local U/V geometry authored independently of the current world frame. Profile evaluation and existing Extrude Add/Cut consume the currently resolved Datum-backed Sketch through the same stage-aware evaluator. Missing, Ambiguous, Unsupported or Blocked Datum support publishes no stale frame and prevents stale downstream modeling. Repair is explicit through Datum source/offset edit or Change Sketch Support.
 
+<!-- section-id: internal.part-documents.edge-features -->
+## PM-05 Fillet / Chamfer and strict material Edge semantics
+
+The current Body supports two edge-consuming ordered Features in addition to Extrude/Revolve:
+
+- FilletFeature — one canonical explicit set of 1..N MaterialEdgeReference values plus one common positive Radius;
+- ChamferFeature — one canonical explicit set of 1..N MaterialEdgeReference values plus one common positive Distance.
+
+A MaterialEdgeReference is durable Part meaning, not a provider subshape handle. It stores the exact BodyStageRef, one FeatureCurveAddress and an EdgeBranchDiscriminator. The branch discriminator is either SingularAtAuthoredStage or BetweenSemanticPoints(first, second). BetweenSemanticPoints stores two defensible semantic Point addresses in canonical order and distinguishes bounded branches of one Curve family without using XYZ, length, nearest geometry, provider ordinals or Viewer tokens.
+
+All references in one edge Feature consume exactly the same predecessor Body stage. The set is structurally deduplicated and canonical-sorted, so user click order has no authored meaning.
+
+Authoring admission is strict. A picked runtime Edge must be fully accounted, material/referenceable, singularly resolvable in the exact current stage, and neither a periodic seam nor an ADR-0017 same-Surface representation partition. Multi-branch Curves are authorable only when semantic endpoint Points uniquely discriminate the bounded branch; otherwise authoring fails closed as Unsupported.
+
+Resolution is always stage-scoped. SingularAtAuthoredStage resolves to exactly one current descendant, becomes Missing when none exists and Ambiguous after a semantic split. BetweenSemanticPoints uses semantic Point provenance rather than coordinates and likewise requires exactly one current branch. A later geometrically similar Edge never revives Missing intent. Merge/split cases do not choose first, nearest, longest or provider-order winners.
+
+One Feature is one exact provider operation over the complete explicit runtime Edge set. The OCCT adapter checks provider contour membership before accepting the operation: the provider-discovered contour union must equal the explicitly resolved authored set. Native tangent propagation therefore cannot silently enlarge authored intent. Users may explicitly select a complete tangent chain, but PM-05 v1 has no implicit Tangent Chain authoring mode.
+
+Successful output is topology-accounted rather than treated as an opaque B-Rep. Generated semantic Surface roles include Fillet surface, Chamfer surface and corner transition. Ordinary generated engineering boundaries use edge_feature_boundary Curve meaning and can become later strict material Edge inputs when semantic branch discrimination is defensible. Corner provenance is derived from producer FeatureId, semantic Point meaning and the canonical incident authored Edge set; provider Face/Edge order is never durable authority.
+
+PM-05 v1 deliberately performs no generic post-operation healing, no global same-domain unification, no fuzzy escalation and no iterative tolerance widening. The raw successful provider result is accounted directly. Provider history is transient reconstruction evidence only.
+
+Evaluation keeps reference resolution separate from geometry execution: Missing/Ambiguous/Unsupported input makes the Feature Blocked with failing input index and reference status; all inputs Resolved but impossible Radius/Distance or provider result makes it Failed; successful provider result plus complete semantic topology publication makes it UpToDate. Suppressed keeps authored FeatureId/inputs but contributes no current geometry. No stale last-good B-Rep becomes current Body truth or downstream input.
+
+Create and Edit use the same revision-bound edge-feature draft/evaluation path. Edit preserves FeatureId, restores the complete Edge set and parameter, and presents/picks against the Feature's exact upstream stage rather than the final Body. Repair is explicit: unresolved intent remains authored until the user explicitly removes/replaces it. Cancel performs zero authored mutation; successful Finish/Edit is one semantic transaction and one Undo step.
+
+Save/Reopen persists only semantic intent in schema v14. Runtime topology tokens, OCCT handles, provider history and Viewer identity are rebuilt. Cold reconstruction is proven for both Fillet -> Chamfer and Chamfer -> Fillet. During proven continuation of the same planar semantic Surface, Part retains its existing canonical planar frame; provider U/V orientation is runtime geometry and is not allowed to replace semantic frame authority.
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Part-owned Sketch-Line Axes; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude/Revolve Features.
+The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Part-owned Sketch-Line Axes; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude/Revolve/Fillet/Chamfer Features.
 
-Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane plus Revolve Add/Cut with OneSide/Midplane, explicit Origin/Authored AxisReference and `0 < Angle <= 360 degrees`. Axis and Feature Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, explicit Axis repair, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v13 semantic support, Datum/Axis references and the ordered Body without persisted B-Rep, topology catalogs, derived Datum/Axis frames or runtime tokens.
+Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane; Revolve Add/Cut with OneSide/Midplane, explicit Origin/Authored AxisReference and `0 < Angle <= 360 degrees`; constant-radius Fillet; and equal-distance Chamfer over one explicit canonical set of strict material Edges. Axis and Feature Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, explicit Axis repair, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v14 semantic support, Datum/Axis references, strict MaterialEdgeReference intent and the ordered Body without persisted B-Rep, topology catalogs, provider history, derived Datum/Axis frames or runtime tokens.
 
-Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360-degree) Revolve, multi-body modeling, Material, Assembly and Drawing.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, variable-radius/full-round/face Fillet, asymmetric/distance-angle Chamfer, automatic tangent-chain authoring, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360-degree) Revolve, multi-body modeling, Material, Assembly and Drawing.
 
 Authored constraints/dimensions/solver, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB convergence and clipboard/cross-Sketch Copy also remain outside the current surface.
 

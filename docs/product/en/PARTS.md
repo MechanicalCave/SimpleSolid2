@@ -450,7 +450,7 @@ Profile remains Part semantics based on authored 2D geometry and is now a durabl
 <!-- section-id: product.parts.extrude -->
 ## Body, Feature and Extrude
 
-Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The production solid Feature families currently available are **Extrude** and **Revolve**. This section describes Extrude; Axis/Revolve is described next.
+Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The production solid Feature families currently available are **Extrude**, **Revolve**, **Fillet** and **Chamfer**. This section describes Extrude; Axis/Revolve and edge Features are described next.
 
 Extrude supports two equivalent activation paths. **Selection-first:** select exactly one valid Profile and use **Extrude** or enter `EXTRUDE`. **Command-first:** start **Extrude** with no Profile selected; the Workbench enters an explicit selection state and waits for one valid Profile chosen in Tree or viewport. Clicking Extrude again, pressing **Esc**, or entering `CANCEL` leaves that state without authored mutation. The first Feature that creates a solid in an Empty Body must be **Add**. Later Extrudes may be **Add** or **Cut**. Every successful stage must still produce exactly one solid; detached Add, no-effect Add/Cut, a Cut that removes the whole solid, or a multi-solid result is rejected explicitly and is not committed.
 
@@ -500,6 +500,33 @@ At a full **360°** sweep, provider periodic seam topology may exist as represen
 
 While Revolve is active, Command Line and Operations drive the same draft. Supported contextual input includes `ADD`, `CUT`, `ONESIDE`, `MIDPLANE`, `REVERSE`, Angle input, `X`/`Y`/`Z`, `FINISH` and `CANCEL`.
 
+<!-- section-id: product.parts.edge-features -->
+## Fillet and Chamfer
+
+Part provides two explicit Edge-modifying Features in the Modify group: Fillet and Chamfer.
+
+- Fillet is a constant-radius blend. One Feature uses one common Radius > 0 for every selected Edge.
+- Chamfer is an equal-distance chamfer. One Feature uses one common Distance > 0 for every selected Edge.
+
+Both tools accept one or more explicit material Edges. Multi-Edge is normal production behavior: disconnected Edges, connected Edges and common connected corners can be authored in one Feature when the requested geometry is valid. The selected Edge set is the authored intent; SimpleSolid does not silently add tangent neighbors, choose similar geometry or use selection order as modeling meaning.
+
+You can work selection-first or command-first. Select admissible Body Edges and press Fillet / Chamfer, or start the tool first and then click Edges in the viewport. While the tool is active, clicking an admissible Edge toggles its membership. Operations shows the selected Edge count and provides Clear; the primary selected input can also be removed without restarting the tool. Only current semantic material Edges are accepted. Periodic seam representation and same-Surface partition Edges are not authorable inputs.
+
+Operations shows the shared Radius or Distance and current preview status. Changing the value or Edge set refreshes an exact preview of the complete candidate Body. All explicit Edges are applied together as one Feature operation; there is no partial-success Feature. An excessive Radius/Distance or another geometric provider failure reports Failed and cannot be finished. Finish creates exactly one durable Feature / one Undo step. Cancel or a rejected/stale Finish creates no authored Feature.
+
+The Command Line uses the same modeling path. Enter FILLET or CHAMFER; contextual parameter input, Edge selection, clear/remove, FINISH and CANCEL operate on the same draft as the GUI.
+
+A finished Fillet/Chamfer appears in the ordered Body history with a stable FeatureId. Edit Fillet / Edit Chamfer restores the complete authored Edge set and Radius/Distance and preserves that FeatureId. Edit presents the exact Body stage immediately before the Feature, so replacement Edges are selected from the correct history context rather than from later geometry. Cancelled Edit leaves the previous Feature unchanged; successful Edit is one Undo step.
+
+Edge references are semantic and strict. After an upstream change: one surviving semantic Edge recomputes; removed Edge becomes Missing / Blocked; split or merged meaning with no unique strict winner becomes Ambiguous / Blocked; non-referenceable meaning becomes Unsupported / Blocked.
+
+Repair is explicit. Edit identifies the failing input and lets you remove or replace it; SimpleSolid never chooses the nearest, longest, first or most similar Edge automatically. A Failed/Blocked Feature keeps its authored FeatureId, Edge set, parameter and name.
+
+Suppress preserves the Feature and inputs but removes its modeling contribution. Unsuppress reevaluates it from current authored state. Delete removes the authored Feature; downstream Features then resolve or fail against the changed ordered history. Undo/Redo restores exact authored identities and input sets.
+
+Fillet and Chamfer can consume ordinary generated engineering Edges from earlier edge Features. Both Fillet -> Chamfer and Chamfer -> Fillet are supported where geometry is valid. Save/Close/Reopen reconstructs these chains from semantic intent; previous-process OCCT/Viewer topology handles are not stored.
+
+Current PM-05 variants are intentionally bounded. There is no variable-radius/full-round/face Fillet, per-Edge radius/distance, distance-angle or asymmetric two-distance Chamfer, automatic tangent-chain/loop authoring, generic healing mode or multi-body edge Feature behavior.
 <!-- section-id: product.parts.body-topology -->
 ## Body topology, View Style and semantic inspection
 
@@ -555,7 +582,7 @@ The next normal full Viewer refresh automatically retries presentation from the 
 
 `Save` writes the current authored Part state: Document properties, Origin visibility, durable Offset Datum Planes with `DatumId`/source/signed Offset/visibility, Sketches with semantic Origin/Body-Surface/Datum support and local geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude/Revolve Features, stable identities, parameters and Suppressed state. Authored Sketch-Line Axes persist with AxisId, source Sketch/Line identity and visibility; Revolve persists its ProfileId, AxisReference, Add/Cut operation and OneSide/Midplane angle parameters.
 
-The current B-Rep solid, evaluated topology catalog, derived Body-Surface/Datum support frames, transient Datum/Extrude/Revolve preview, virtual intersection lines, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
+The current B-Rep solid, evaluated topology catalog, derived Body-Surface/Datum support frames, transient Datum/Extrude/Revolve/Fillet/Chamfer preview, virtual intersection lines, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
 
 Ordinary Save remains conditional on the exact native file version loaded or last saved by the session. A removed, replaced or externally changed target reports a Save conflict rather than being silently overwritten. The in-memory Part, Undo/Redo and local changes stay open.
 
@@ -566,9 +593,9 @@ Closing a dirty Part requires `Save`, `Discard` or `Cancel`. Closing the complet
 
 After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, DatumId, SketchId/ProfileId, AxisId, BodyId and FeatureId values. Face- and Datum-supported Sketches keep their semantic support and local U/V geometry even though runtime topology/presentation token values are rebuilt.
 
-Datums, authored Axes, the Body and ordered Extrude/Revolve Add/Cut Features are evaluated from scratch from authored state. Datum sources, signed Offsets and authored visibility remain persisted, while world frames and virtual intersections are derived again. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers.
+Datums, authored Axes, the Body and ordered Extrude/Revolve/Fillet/Chamfer Features are evaluated from scratch from authored state. Datum sources, signed Offsets and authored visibility remain persisted, while world frames and virtual intersections are derived again. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers.
 
-Undo/Redo history, active selection, active Sketch/Datum/Axis/Extrude/Revolve draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
+Undo/Redo history, active selection, active Sketch/Datum/Axis/Extrude/Revolve/Fillet/Chamfer draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
 
 <!-- section-id: product.parts.conflicts -->
 ## Document and Save conflicts
@@ -582,11 +609,11 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides persistent Sketch support on Origin planes, planar Body Faces and Offset Datum Planes; construction Offset Datum Planes in `Reference Geometry`; Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; direct Face/Edge/Vertex inspection; Part-owned Sketch-Line Axes; and one durable Body with ordered Extrude/Revolve Features.
+The current Part provides persistent Sketch support on Origin planes, planar Body Faces and Offset Datum Planes; construction Offset Datum Planes in `Reference Geometry`; Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; direct Face/Edge/Vertex inspection; Part-owned Sketch-Line Axes; and one durable Body with ordered Extrude/Revolve/Fillet/Chamfer Features.
 
-Solid modeling currently includes **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**, plus **Revolve Add/Cut** with **One Side/Midplane**, explicit Origin/Authored AxisReference, **0 < Angle ≤ 360°** and One-Side Reverse. Edit Extrude/Revolve, Axis create/edit/re-source/show/hide/delete/repair, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum Edit/Show/Hide, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
+Solid modeling currently includes **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**, **Revolve Add/Cut** with **One Side/Midplane**, explicit Origin/Authored AxisReference, **0 < Angle ≤ 360°** and One-Side Reverse, plus constant-radius **Fillet** and equal-distance **Chamfer** over explicit one-or-more material Edge sets. Edit Extrude/Revolve/Fillet/Chamfer, explicit Missing/Ambiguous/Unsupported Edge repair, Axis create/edit/re-source/show/hide/delete/repair, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum Edit/Show/Hide, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
 
-Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360°) Revolve, multi-body, Material, Assembly or Drawing tools.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, advanced Fillet/Chamfer variants (variable radius, face/full-round, distance-angle/asymmetric), automatic tangent-chain authoring, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360°) Revolve, multi-body, Material, Assembly or Drawing tools.
 
 On the Sketch side, authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy and final ordinary-Select RMB convergence remain outside the current surface.
 
