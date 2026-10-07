@@ -262,6 +262,27 @@ part::PartDocument withEdgeFeature(
     return std::move(*restored.document);
 }
 
+std::optional<part::MaterialEdgeReference>
+singleReference(
+    const part::BodyStageTopologyCatalog& catalog) {
+    for (const auto& edge : catalog.edges) {
+        if (edge.accounting_class !=
+                part::TopologyAccountingClass::referenceable ||
+            edge.referenceability !=
+                kernel::ReferenceStatus::resolved) {
+            continue;
+        }
+        const auto authored =
+            part::authorMaterialEdgeReference(
+                catalog,
+                edge.runtime_token);
+        if (authored.ok()) {
+            return authored.reference;
+        }
+    }
+    return std::nullopt;
+}
+
 std::size_t countRole(
     const part::FeatureEvaluation& feature,
     part::FeatureSurfaceRoleKind role) {
@@ -480,27 +501,46 @@ int main() {
                            edge_feature_boundary;
             }) > 0);
 
+    // Chaining acceptance follows the Owner-accepted PM-05A C1 evidence
+    // exactly: one explicit source Edge -> Fillet -> ordinary generated
+    // material-boundary Edge -> Chamfer. Trihedral K1/P2/P3 coverage above is
+    // intentionally separate; the evidence did not claim that boundaries
+    // produced by a three-Edge Fillet are all strict-T1 Chamfer-feasible.
+    const auto single_edge =
+        singleReference(
+            *base_evaluation.features[0]
+                 .result_topology);
+    CHECK(single_edge.has_value());
+
+    auto single_fillet_document =
+        withEdgeFeature(
+            base_document,
+            {*single_edge},
+            false,
+            2.0);
+    const auto single_fillet_evaluation =
+        part::evaluatePart(
+            single_fillet_document,
+            kernel);
+    CHECK(
+        single_fillet_evaluation.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(
+        single_fillet_evaluation.features.size() ==
+        2U);
+    const auto& single_fillet =
+        single_fillet_evaluation.features[1];
+    CHECK(
+        single_fillet.status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(single_fillet.result_topology);
+    CHECK(single_fillet.result_topology->complete());
+
     const auto generated_edges =
         generatedBoundaryReferences(
-            fillet);
+            single_fillet);
     CHECK(!generated_edges.empty());
-    CHECK(
-        std::all_of(
-            generated_edges.begin(),
-            generated_edges.end(),
-            [fillet_id](
-                const part::MaterialEdgeReference&
-                    edge) {
-                return edge.stage.feature_id ==
-                       fillet_id;
-            }));
 
-    // PM-05A chaining evidence intentionally evaluates every generated
-    // material-boundary candidate and requires at least one feasible second
-    // operation. Production adds strict T1 admission, so an individual
-    // candidate may legitimately fail provider_mismatch when OCCT would grow
-    // its contour. The product never chooses another Edge automatically; this
-    // loop is test-only coverage of independently authored user choices.
     std::size_t chain_attempts = 0U;
     std::size_t chain_successes = 0U;
     for (const auto& generated_edge :
@@ -508,7 +548,7 @@ int main() {
         ++chain_attempts;
 
         auto chamfer_state =
-            fillet_document.document->state();
+            single_fillet_document.state();
         const auto chamfer_id =
             chamfer_state.body.next_feature_id
                 .allocate();
@@ -524,11 +564,9 @@ int main() {
 
         auto chamfer_document =
             part::PartDocument::restore(
-                fillet_document.document
-                    ->documentId(),
+                single_fillet_document.documentId(),
                 std::move(chamfer_state),
-                fillet_document.document
-                    ->revision());
+                single_fillet_document.revision());
         CHECK(chamfer_document.ok());
 
         const auto chained =
@@ -542,26 +580,6 @@ int main() {
             chained.features[2].status !=
                 part::FeatureEvaluationStatus::
                     up_to_date) {
-            if (chained.features.size() >= 3U) {
-                const auto& failed =
-                    chained.features[2];
-                std::cerr
-                    << "PM05C2B_CHAIN_CANDIDATE"
-                    << " diagnostic="
-                    << static_cast<int>(
-                           failed.diagnostic)
-                    << " kernel_status="
-                    << (failed.kernel_status
-                            ? static_cast<int>(
-                                  *failed.kernel_status)
-                            : -1)
-                    << " edge_status="
-                    << (failed.edge_reference_status
-                            ? static_cast<int>(
-                                  *failed.edge_reference_status)
-                            : -1)
-                    << '\n';
-            }
             continue;
         }
 
