@@ -160,6 +160,9 @@ int main() {
         CHECK(preview.committable());
         CHECK(preview.previewSolidAvailable());
         CHECK(
+            preview.target_status ==
+            part::FeatureEvaluationStatus::up_to_date);
+        CHECK(
             preview.operation ==
             kernel::EdgeFeatureOperation::fillet);
         CHECK(
@@ -239,6 +242,9 @@ int main() {
                 kernel);
         CHECK(preview.committable());
         CHECK(preview.previewSolidAvailable());
+        CHECK(
+            preview.target_status ==
+            part::FeatureEvaluationStatus::up_to_date);
         CHECK(
             preview.operation ==
             kernel::EdgeFeatureOperation::chamfer);
