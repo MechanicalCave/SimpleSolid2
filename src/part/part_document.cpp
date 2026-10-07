@@ -162,8 +162,147 @@ bool PartDocument::validAuthoredState(
         return false;
     }
 
+    std::function<bool(
+        const FeatureSurfaceAddress&,
+        FeatureId)>
+        semantic_surface_history_valid;
+    std::function<bool(
+        const FeaturePointAddress&,
+        FeatureId)>
+        semantic_point_history_valid;
+    std::function<bool(
+        const MaterialEdgeReference&,
+        FeatureId)>
+        semantic_edge_history_valid;
+
+    semantic_point_history_valid =
+        [&state,
+         &semantic_surface_history_valid](
+            const FeaturePointAddress& point,
+            FeatureId cap) {
+            if (!point.valid() ||
+                !state.body.next_feature_id
+                     .containsAllocated(
+                         point.producer_feature_id) ||
+                point.producer_feature_id > cap) {
+                return false;
+            }
+            return std::all_of(
+                point.adjacent_surfaces.begin(),
+                point.adjacent_surfaces.end(),
+                [&semantic_surface_history_valid,
+                 cap](
+                    const FeatureSurfaceAddress& surface) {
+                    return semantic_surface_history_valid(
+                        surface,
+                        cap);
+                });
+        };
+
+    semantic_edge_history_valid =
+        [&state,
+         &semantic_surface_history_valid,
+         &semantic_point_history_valid](
+            const MaterialEdgeReference& edge,
+            FeatureId cap) {
+            if (!edge.valid() ||
+                !edge.stage.feature_id ||
+                !state.body.next_feature_id
+                     .containsAllocated(
+                         *edge.stage.feature_id) ||
+                *edge.stage.feature_id > cap ||
+                !state.body.next_feature_id
+                     .containsAllocated(
+                         edge.curve
+                             .producer_feature_id) ||
+                edge.curve.producer_feature_id >
+                    *edge.stage.feature_id) {
+                return false;
+            }
+
+            if (!std::all_of(
+                    edge.curve
+                        .adjacent_surfaces.begin(),
+                    edge.curve
+                        .adjacent_surfaces.end(),
+                    [&semantic_surface_history_valid,
+                     &edge](
+                        const FeatureSurfaceAddress& surface) {
+                        return semantic_surface_history_valid(
+                            surface,
+                            *edge.stage.feature_id);
+                    })) {
+                return false;
+            }
+
+            const auto* endpoints =
+                std::get_if<
+                    BetweenSemanticPoints>(
+                    &edge.branch);
+            return endpoints == nullptr ||
+                   (semantic_point_history_valid(
+                        endpoints->first,
+                        *edge.stage.feature_id) &&
+                    semantic_point_history_valid(
+                        endpoints->second,
+                        *edge.stage.feature_id));
+        };
+
+    semantic_surface_history_valid =
+        [&state,
+         &semantic_edge_history_valid,
+         &semantic_point_history_valid](
+            const FeatureSurfaceAddress& surface,
+            FeatureId cap) {
+            if (!surface.valid() ||
+                !state.body.next_feature_id
+                     .containsAllocated(
+                         surface.producer_feature_id) ||
+                surface.producer_feature_id > cap) {
+                return false;
+            }
+
+            if (!std::all_of(
+                    surface.source_edges.begin(),
+                    surface.source_edges.end(),
+                    [&semantic_edge_history_valid,
+                     &surface](
+                        const MaterialEdgeReference& edge) {
+                        return semantic_edge_history_valid(
+                            edge,
+                            surface.producer_feature_id);
+                    })) {
+                return false;
+            }
+
+            const FeatureId point_cap =
+                surface.source_edges.empty() ||
+                        !surface.source_edges.front()
+                             .stage.feature_id
+                    ? surface.producer_feature_id
+                    : *surface.source_edges.front()
+                           .stage.feature_id;
+            return std::all_of(
+                surface.source_points.begin(),
+                surface.source_points.end(),
+                [&semantic_point_history_valid,
+                 point_cap](
+                    const FeaturePointAddress& point) {
+                    return semantic_point_history_valid(
+                        point,
+                        point_cap);
+                });
+        };
+
     const auto valid_surface_reference =
-        [&state](const SurfaceReference& surface) {
+        [&state,
+         &semantic_surface_history_valid](
+            const SurfaceReference& surface) {
+            if (!surface.valid() ||
+                !surface.stage.feature_id) {
+                return false;
+            }
+
             const auto producer =
                 std::find_if(
                     state.body.features.begin(),
@@ -178,15 +317,17 @@ bool PartDocument::validAuthoredState(
                     state.body.features.begin(),
                     state.body.features.end(),
                     [&surface](const PartFeature& feature) {
-                        return surface.stage.feature_id &&
-                               feature.id ==
-                                   *surface.stage.feature_id;
+                        return feature.id ==
+                               *surface.stage.feature_id;
                     });
             return producer !=
                        state.body.features.end() &&
                    stage !=
                        state.body.features.end() &&
-                   producer <= stage;
+                   producer <= stage &&
+                   semantic_surface_history_valid(
+                       surface.surface,
+                       *surface.stage.feature_id);
         };
 
     for (std::size_t index = 0U;
