@@ -76,6 +76,21 @@ For Fillet and control Chamfer, capture:
 
 A second fixture should represent the Owner's complex-part class: mixed straight/curved/generated engineering Edges, including a Chamfer -> multi-Edge Fillet sequence analogous to the earlier project.
 
+## Root cause A — adjacent multi-Edge Fillet publication
+
+Focused cube matrix evidence on candidate `588e523b80593490208ece2425822d8f71064c58` reproduces the Owner symptom deterministically:
+
+- all 66 two-Edge Chamfer sets: product PASS;
+- 42/66 two-Edge Fillet sets: PASS;
+- all 24 geometrically adjacent two-Edge Fillet sets: provider PASS but product FAIL;
+- all 8 trihedral three-Edge Fillet sets: product PASS;
+- every failing adjacent pair has exact provider input membership and one generated edge-feature boundary with provider `CurveKind::other`;
+- failure occurs after successful provider execution as Part `topology_integrity_failure`.
+
+The Part curve-stage classifier previously treated `CurveKind::other` adjacent to a Fillet/Chamfer generated Surface as a provider contradiction. That policy is too strong. A local transition spline is a legitimate result boundary even when PM-05 v1 has no durable Curve vocabulary for authoring it later.
+
+Bounded remediation: keep the Edge in complete topology accounting as `semantically_unsupported` / non-authorable, while allowing the valid Body/Feature to remain UpToDate. No heuristic identity is invented.
+
 ## Remediation decision rule
 
 - **Provider Build succeeds, semantic publication fails:** fix Part/topology publication; do not change provider construction policy unnecessarily.

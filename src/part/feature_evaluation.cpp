@@ -1918,7 +1918,15 @@ curveRelationForObservation(
                 observation.provider_curve_kind;
             return result;
         case kernel::CurveKind::other:
-            provider_mismatch = true;
+            // A valid edge-feature corner may create a local transition
+            // boundary whose provider Curve is outside the current durable
+            // line/circle semantic vocabulary (for example a spline between
+            // two adjacent Fillet patches). This is not a provider
+            // contradiction and must not invalidate an otherwise valid
+            // solid. The complete runtime Edge remains topology-accounted as
+            // semantically_unsupported; it simply cannot be authored as a
+            // later strict MaterialEdgeReference until a defensible durable
+            // Curve meaning exists.
             return std::nullopt;
         }
     }

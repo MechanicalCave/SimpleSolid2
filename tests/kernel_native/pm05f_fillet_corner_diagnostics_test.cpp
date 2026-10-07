@@ -295,6 +295,7 @@ struct CaseResult final {
     std::optional<kernel::SolidModelingStatus>
         product_kernel_status;
     bool product_topology_complete{false};
+    std::size_t product_unsupported_edge_count{};
 };
 
 CaseResult runCase(
@@ -416,6 +417,18 @@ CaseResult runCase(
     result.product_topology_complete =
         feature.result_topology &&
         feature.result_topology->complete();
+    if (feature.result_topology) {
+        result.product_unsupported_edge_count =
+            static_cast<std::size_t>(
+                std::count_if(
+                    feature.result_topology->edges.begin(),
+                    feature.result_topology->edges.end(),
+                    [](const auto& edge) {
+                        return edge.accounting_class ==
+                               part::TopologyAccountingClass::
+                                   semantically_unsupported;
+                    }));
+    }
     return result;
 }
 
@@ -464,6 +477,8 @@ void printCase(
                 : -1)
         << " product_topology_complete="
         << (result.product_topology_complete ? 1 : 0)
+        << " product_unsupported_edges="
+        << result.product_unsupported_edge_count
         << '\n';
 }
 
@@ -683,6 +698,8 @@ int main() {
                                   *fillet_pair
                                        .product_kernel_status)
                             : -1)
+                    << " product_unsupported_edges="
+                    << fillet_pair.product_unsupported_edge_count
                     << '\n';
             }
 
