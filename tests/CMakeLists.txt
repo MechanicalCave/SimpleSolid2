@@ -930,6 +930,47 @@ set_tests_properties(pm04d2.cad_workbench_revolve PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel"
 )
 
+add_executable(pm05b2_edge_feature_draft_test
+    pm05b2_edge_feature_draft_test.cpp
+)
+
+target_link_libraries(pm05b2_edge_feature_draft_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_part
+)
+
+target_compile_features(pm05b2_edge_feature_draft_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05b2.edge_feature_draft
+    COMMAND pm05b2_edge_feature_draft_test
+)
+
+set_tests_properties(pm05b2.edge_feature_draft PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-part"
+)
+
+add_executable(pm05b2_strict_edge_resolver_test
+    pm05b2_strict_edge_resolver_test.cpp
+)
+
+target_link_libraries(pm05b2_strict_edge_resolver_test
+    PRIVATE
+        simplesolid2_part
+)
+
+target_compile_features(pm05b2_strict_edge_resolver_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05b2.strict_edge_resolver
+    COMMAND pm05b2_strict_edge_resolver_test
+)
+
+set_tests_properties(pm05b2.strict_edge_resolver PROPERTIES
+    LABELS "tier-fast;subsystem-part;subsystem-kernel"
+)
+
 add_executable(pm05b1_edge_feature_schema_v14_test
     pm05b1_edge_feature_schema_v14_test.cpp
 )

@@ -224,6 +224,11 @@ struct BodyVertexTopologyRecord final {
         kernel::ReferenceStatus::unsupported};
     std::vector<FeaturePointAddress>
         point_candidates;
+    // Runtime-only material Edge incidence. This is derived from the current
+    // provider stage solely to resolve semantic Point-pair branch
+    // discriminators. It is never authored or serialized.
+    std::vector<kernel::RuntimeEdgeToken>
+        incident_material_edges;
     std::size_t incident_material_edge_count{};
     // Current provider XYZ is diagnostic only, never identity.
     std::optional<kernel::Point3>
@@ -255,6 +260,50 @@ struct BodyStageTopologyCatalog final {
         const BodyStageTopologyCatalog&,
         const BodyStageTopologyCatalog&) = default;
 };
+
+struct MaterialEdgeResolution final {
+    kernel::ReferenceStatus status{
+        kernel::ReferenceStatus::unsupported};
+    std::vector<kernel::RuntimeEdgeToken>
+        current_edges;
+
+    [[nodiscard]] bool resolved() const noexcept {
+        return status ==
+                   kernel::ReferenceStatus::resolved &&
+               current_edges.size() == 1U &&
+               current_edges.front().valid();
+    }
+};
+
+struct MaterialEdgeAuthoringResult final {
+    kernel::ReferenceStatus status{
+        kernel::ReferenceStatus::unsupported};
+    std::optional<MaterialEdgeReference> reference;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status ==
+                   kernel::ReferenceStatus::resolved &&
+               reference.has_value() &&
+               reference->valid();
+    }
+};
+
+// Resolve one durable strict material Edge only in its declared Body stage.
+// Invalid/mismatched runtime context returns nullopt. Missing/Ambiguous/
+// Unsupported are semantic resolution outcomes and never trigger geometry,
+// provider-order, or nearest-match fallback.
+[[nodiscard]] std::optional<MaterialEdgeResolution>
+resolveMaterialEdgeReference(
+    const MaterialEdgeReference& reference,
+    const BodyStageTopologyCatalog& catalog);
+
+// Convert one current runtime material Edge into durable semantic intent.
+// Multi-branch Curve families require two defensible semantic endpoint Points;
+// otherwise authoring fails closed as Unsupported.
+[[nodiscard]] MaterialEdgeAuthoringResult
+authorMaterialEdgeReference(
+    const BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeEdgeToken edge);
 
 struct FeatureContribution final {
     // Set-valued current contribution query. These runtime tokens identify
