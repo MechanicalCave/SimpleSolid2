@@ -688,6 +688,12 @@ public:
     [[nodiscard]] CreateEdgeFeatureResult execute(
         const CreateChamferFeatureCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditFilletFeatureCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditChamferFeatureCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
 
     [[nodiscard]] DocumentSessionResult execute(
         const SetFeatureSuppressedCommand& command);

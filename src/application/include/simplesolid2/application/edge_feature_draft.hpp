@@ -18,6 +18,11 @@ class DocumentSession;
 
 using EdgeFeatureDraftGeneration = std::uint64_t;
 
+enum class EdgeFeatureDraftMode : std::uint8_t {
+    create,
+    edit,
+};
+
 struct CreateFilletFeatureCommand final {
     std::vector<part::MaterialEdgeReference> edges;
     core::DocumentRevision expected_revision;
@@ -28,6 +33,26 @@ struct CreateFilletFeatureCommand final {
 };
 
 struct CreateChamferFeatureCommand final {
+    std::vector<part::MaterialEdgeReference> edges;
+    core::DocumentRevision expected_revision;
+    core::LengthValue distance;
+    std::string name;
+
+    [[nodiscard]] bool valid() const noexcept;
+};
+
+struct EditFilletFeatureCommand final {
+    part::FeatureId feature_id;
+    std::vector<part::MaterialEdgeReference> edges;
+    core::DocumentRevision expected_revision;
+    core::LengthValue radius;
+    std::string name;
+
+    [[nodiscard]] bool valid() const noexcept;
+};
+
+struct EditChamferFeatureCommand final {
+    part::FeatureId feature_id;
     std::vector<part::MaterialEdgeReference> edges;
     core::DocumentRevision expected_revision;
     core::LengthValue distance;
@@ -47,6 +72,11 @@ public:
         std::vector<part::MaterialEdgeReference>
             edges);
 
+    [[nodiscard]] static std::optional<FilletDraft>
+    beginEdit(
+        const DocumentSession& session,
+        part::FeatureId feature_id);
+
     [[nodiscard]] const core::DocumentId&
     documentId() const noexcept {
         return document_id_;
@@ -60,6 +90,16 @@ public:
     [[nodiscard]] EdgeFeatureDraftGeneration
     generation() const noexcept {
         return generation_;
+    }
+
+    [[nodiscard]] EdgeFeatureDraftMode
+    mode() const noexcept {
+        return mode_;
+    }
+
+    [[nodiscard]] std::optional<part::FeatureId>
+    featureId() const noexcept {
+        return feature_id_;
     }
 
     [[nodiscard]] const std::optional<
@@ -101,6 +141,10 @@ public:
         CreateFilletFeatureCommand>
     command() const;
 
+    [[nodiscard]] std::optional<
+        EditFilletFeatureCommand>
+    editCommand() const;
+
 private:
     FilletDraft(
         core::DocumentId document_id,
@@ -114,6 +158,9 @@ private:
     core::DocumentId document_id_;
     core::DocumentRevision source_revision_;
     EdgeFeatureDraftGeneration generation_{1U};
+    EdgeFeatureDraftMode mode_{
+        EdgeFeatureDraftMode::create};
+    std::optional<part::FeatureId> feature_id_;
     std::optional<part::BodyStageRef>
         required_stage_;
     std::vector<part::MaterialEdgeReference>
@@ -133,6 +180,11 @@ public:
         std::vector<part::MaterialEdgeReference>
             edges);
 
+    [[nodiscard]] static std::optional<ChamferDraft>
+    beginEdit(
+        const DocumentSession& session,
+        part::FeatureId feature_id);
+
     [[nodiscard]] const core::DocumentId&
     documentId() const noexcept {
         return document_id_;
@@ -146,6 +198,16 @@ public:
     [[nodiscard]] EdgeFeatureDraftGeneration
     generation() const noexcept {
         return generation_;
+    }
+
+    [[nodiscard]] EdgeFeatureDraftMode
+    mode() const noexcept {
+        return mode_;
+    }
+
+    [[nodiscard]] std::optional<part::FeatureId>
+    featureId() const noexcept {
+        return feature_id_;
     }
 
     [[nodiscard]] const std::optional<
@@ -187,6 +249,10 @@ public:
         CreateChamferFeatureCommand>
     command() const;
 
+    [[nodiscard]] std::optional<
+        EditChamferFeatureCommand>
+    editCommand() const;
+
 private:
     ChamferDraft(
         core::DocumentId document_id,
@@ -200,6 +266,9 @@ private:
     core::DocumentId document_id_;
     core::DocumentRevision source_revision_;
     EdgeFeatureDraftGeneration generation_{1U};
+    EdgeFeatureDraftMode mode_{
+        EdgeFeatureDraftMode::create};
+    std::optional<part::FeatureId> feature_id_;
     std::optional<part::BodyStageRef>
         required_stage_;
     std::vector<part::MaterialEdgeReference>
@@ -215,6 +284,8 @@ enum class EdgeFeatureDraftEvaluationStatus : std::uint8_t {
     stale_revision,
     incomplete_draft,
     feature_id_exhausted,
+    missing_feature,
+    suppressed_feature,
     invalid_candidate,
     target_failed,
 };
@@ -225,10 +296,14 @@ struct EdgeFeatureDraftEvaluationResult final {
     std::optional<core::DocumentId> document_id;
     core::DocumentRevision source_revision;
     EdgeFeatureDraftGeneration draft_generation{};
+    EdgeFeatureDraftMode mode{
+        EdgeFeatureDraftMode::create};
+    std::optional<part::FeatureId> feature_id;
     kernel::EdgeFeatureOperation operation{
         kernel::EdgeFeatureOperation::fillet};
     std::vector<part::MaterialEdgeReference> edges;
     std::optional<core::LengthValue> parameter;
+    std::string name;
     part::BodyEvaluationStatus body_status{
         part::BodyEvaluationStatus::unavailable};
     kernel::RuntimeSolidHandle body_solid;
