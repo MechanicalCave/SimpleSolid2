@@ -85,6 +85,7 @@ struct BodyPresentationGeneration final {
 enum class BodyScenePurpose : std::uint8_t {
     current_body,
     diagnostic_prefix,
+    tool_stage,
 };
 
 enum class BodyTopologyPresentationKind : std::uint8_t {
