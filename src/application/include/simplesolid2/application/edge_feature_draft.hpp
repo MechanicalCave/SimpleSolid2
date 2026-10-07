@@ -241,6 +241,8 @@ struct EdgeFeatureDraftEvaluationResult final {
         failing_edge_input_index;
     std::optional<kernel::ReferenceStatus>
         edge_reference_status;
+    std::optional<part::FeatureEvaluationStatus>
+        target_status;
 
     [[nodiscard]] bool committable() const noexcept {
         return status ==
