@@ -1770,6 +1770,10 @@ void CadWorkbench::buildUi() {
     viewport_controller_->setBodyTopologySelectionChangedHandler(
         [this](std::optional<BodyTopologyInspection> inspection) {
             if (!inspection) {
+                if (fillet_draft_ ||
+                    chamfer_draft_) {
+                    tryStageEdgeFeatureSelection();
+                }
                 syncActionState();
                 return;
             }
