@@ -2019,15 +2019,23 @@ void CadWorkbench::buildUi() {
                 const auto* feature =
                     document_session_->document()
                         .findFeature(feature_id);
-                if (feature != nullptr &&
-                    std::holds_alternative<
+                if (feature == nullptr) {
+                    return;
+                }
+                if (std::holds_alternative<
                         part::RevolveFeature>(
                         feature->definition)) {
                     static_cast<void>(
                         startRevolveEdit(feature_id));
-                } else {
+                } else if (std::holds_alternative<
+                               part::ExtrudeFeature>(
+                               feature->definition)) {
                     static_cast<void>(
                         startExtrudeEdit(feature_id));
+                } else {
+                    setStatusText(
+                        QStringLiteral(
+                            "Fillet/Chamfer Edit is owned by PM-05E and is not active in PM-05D."));
                 }
             }
         });
@@ -4437,15 +4445,23 @@ void CadWorkbench::buildUi() {
                 const auto* feature =
                     document_session_->document()
                         .findFeature(feature_id);
-                if (feature != nullptr &&
-                    std::holds_alternative<
+                if (feature == nullptr) {
+                    return;
+                }
+                if (std::holds_alternative<
                         part::RevolveFeature>(
                         feature->definition)) {
                     static_cast<void>(
                         startRevolveEdit(feature_id));
-                } else {
+                } else if (std::holds_alternative<
+                               part::ExtrudeFeature>(
+                               feature->definition)) {
                     static_cast<void>(
                         startExtrudeEdit(feature_id));
+                } else {
+                    setStatusText(
+                        QStringLiteral(
+                            "Fillet/Chamfer Edit is owned by PM-05E and is not active in PM-05D."));
                 }
             }
         });
@@ -5637,6 +5653,15 @@ void CadWorkbench::setFeatureSuppressed(
                 "Feature is no longer available."));
         return;
     }
+    if (std::holds_alternative<part::FilletFeature>(
+            feature->definition) ||
+        std::holds_alternative<part::ChamferFeature>(
+            feature->definition)) {
+        setStatusText(
+            QStringLiteral(
+                "Fillet/Chamfer Suppress lifecycle is owned by PM-05E and is not active in PM-05D."));
+        return;
+    }
     if (feature->suppressed == suppressed) {
         refreshFeatureProperties(
             feature_id);
@@ -5692,6 +5717,15 @@ void CadWorkbench::deleteFeature(
         setStatusText(
             QStringLiteral(
                 "Feature is no longer available."));
+        return;
+    }
+    if (std::holds_alternative<part::FilletFeature>(
+            feature->definition) ||
+        std::holds_alternative<part::ChamferFeature>(
+            feature->definition)) {
+        setStatusText(
+            QStringLiteral(
+                "Fillet/Chamfer Delete lifecycle is owned by PM-05E and is not active in PM-05D."));
         return;
     }
     const auto source_profile =
