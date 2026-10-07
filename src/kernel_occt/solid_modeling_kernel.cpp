@@ -2834,9 +2834,7 @@ template <typename Operation>
         const auto surface_kind =
             providerSurfaceKind(
                 faces.front());
-        if (surface_kind ==
-            kernel::SurfaceKind::other ||
-            !std::all_of(
+        if (!std::all_of(
                 faces.begin(),
                 faces.end(),
                 [surface_kind](
