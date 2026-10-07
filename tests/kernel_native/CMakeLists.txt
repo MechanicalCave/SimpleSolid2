@@ -633,6 +633,30 @@ set_tests_properties(pm05e1.edge_feature_edit PROPERTIES
     LABELS "tier-full-only;subsystem-application;subsystem-kernel;subsystem-part;native"
 )
 
+add_executable(pm05e3_edge_feature_cold_rebuild_test
+    pm05e3_edge_feature_cold_rebuild_test.cpp
+)
+
+target_link_libraries(pm05e3_edge_feature_cold_rebuild_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+        simplesolid2_part
+        simplesolid2_sketch
+)
+
+target_compile_features(pm05e3_edge_feature_cold_rebuild_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05e3.edge_feature_cold_rebuild
+    COMMAND pm05e3_edge_feature_cold_rebuild_test
+)
+
+set_tests_properties(pm05e3.edge_feature_cold_rebuild PROPERTIES
+    LABELS "tier-full-only;subsystem-application;subsystem-kernel;subsystem-part;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -661,6 +685,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm05c2b_part_edge_topology_test
         pm05d1_edge_feature_draft_preview_test
         pm05e1_edge_feature_edit_test
+        pm05e3_edge_feature_cold_rebuild_test
         pm05a_edge_feature_provider_evidence_test
         pm05a_edge_feature_lifecycle_evidence_test
 )
