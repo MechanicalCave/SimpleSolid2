@@ -1082,6 +1082,26 @@ set_tests_properties(pm05b2.strict_edge_resolver PROPERTIES
     LABELS "tier-fast;subsystem-part;subsystem-kernel"
 )
 
+add_executable(pm05e4_edge_lifecycle_matrix_test
+    pm05e4_edge_lifecycle_matrix_test.cpp
+)
+
+target_link_libraries(pm05e4_edge_lifecycle_matrix_test
+    PRIVATE
+        simplesolid2_part
+)
+
+target_compile_features(pm05e4_edge_lifecycle_matrix_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05e4.edge_lifecycle_matrix
+    COMMAND pm05e4_edge_lifecycle_matrix_test
+)
+
+set_tests_properties(pm05e4.edge_lifecycle_matrix PROPERTIES
+    LABELS "tier-fast;subsystem-part;subsystem-kernel"
+)
+
 add_executable(pm05b1_edge_feature_schema_v14_test
     pm05b1_edge_feature_schema_v14_test.cpp
 )
