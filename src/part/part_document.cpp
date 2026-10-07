@@ -5,46 +5,92 @@
 namespace simplesolid2::part {
 namespace {
 
-template <typename ProvenancePredicate>
+struct SemanticProvenanceBounds final {
+    const PartAuthoredState* state;
+    FeatureId cap;
+    std::optional<FeatureId> strict_before;
+    std::optional<std::size_t>
+        present_before_index;
+
+    [[nodiscard]] bool accepts(
+        FeatureId id) const noexcept {
+        if (state == nullptr ||
+            !state->body.next_feature_id
+                 .containsAllocated(id) ||
+            id > cap ||
+            (strict_before &&
+             !(id < *strict_before))) {
+            return false;
+        }
+
+        if (!present_before_index) {
+            return true;
+        }
+
+        const auto found =
+            std::find_if(
+                state->body.features.begin(),
+                state->body.features.end(),
+                [id](const PartFeature& item) {
+                    return item.id == id;
+                });
+        if (found ==
+            state->body.features.end()) {
+            // Deleted historical provenance remains repairable durable intent.
+            return true;
+        }
+
+        return static_cast<std::size_t>(
+                   std::distance(
+                       state->body.features.begin(),
+                       found)) <
+               *present_before_index;
+    }
+
+    [[nodiscard]] SemanticProvenanceBounds
+    narrowedTo(FeatureId new_cap) const noexcept {
+        auto result = *this;
+        if (new_cap < result.cap) {
+            result.cap = new_cap;
+        }
+        return result;
+    }
+};
+
 [[nodiscard]] bool semanticSurfaceHistoryValid(
     const FeatureSurfaceAddress& surface,
-    const ProvenancePredicate& provenance) noexcept;
+    const SemanticProvenanceBounds& bounds) noexcept;
 
-template <typename ProvenancePredicate>
 [[nodiscard]] bool semanticPointHistoryValid(
     const FeaturePointAddress& point,
-    const ProvenancePredicate& provenance) noexcept;
+    const SemanticProvenanceBounds& bounds) noexcept;
 
-template <typename ProvenancePredicate>
 [[nodiscard]] bool semanticEdgeHistoryValid(
     const MaterialEdgeReference& edge,
-    const ProvenancePredicate& provenance) noexcept {
+    const SemanticProvenanceBounds& bounds) noexcept {
     if (!edge.valid() ||
         !edge.stage.feature_id ||
-        !provenance(*edge.stage.feature_id) ||
-        !provenance(
+        !bounds.accepts(
+            *edge.stage.feature_id) ||
+        !bounds.accepts(
             edge.curve.producer_feature_id) ||
         edge.curve.producer_feature_id >
             *edge.stage.feature_id) {
         return false;
     }
 
-    const auto edge_provenance =
-        [&provenance,
-         cap = *edge.stage.feature_id](
-            FeatureId id) noexcept {
-            return id <= cap &&
-                   provenance(id);
-        };
+    const auto edge_bounds =
+        bounds.narrowedTo(
+            *edge.stage.feature_id);
 
     if (!std::all_of(
             edge.curve.adjacent_surfaces.begin(),
             edge.curve.adjacent_surfaces.end(),
-            [&edge_provenance](
+            [&edge_bounds](
                 const FeatureSurfaceAddress& surface) {
                 return semanticSurfaceHistoryValid(
                     surface,
-                    edge_provenance);
+                    edge_bounds);
             })) {
         return false;
     }
@@ -55,76 +101,66 @@ template <typename ProvenancePredicate>
     return endpoints == nullptr ||
            (semanticPointHistoryValid(
                 endpoints->first,
-                edge_provenance) &&
+                edge_bounds) &&
             semanticPointHistoryValid(
                 endpoints->second,
-                edge_provenance));
+                edge_bounds));
 }
 
-template <typename ProvenancePredicate>
 [[nodiscard]] bool semanticPointHistoryValid(
     const FeaturePointAddress& point,
-    const ProvenancePredicate& provenance) noexcept {
+    const SemanticProvenanceBounds& bounds) noexcept {
     if (!point.valid() ||
-        !provenance(
+        !bounds.accepts(
             point.producer_feature_id)) {
         return false;
     }
 
-    const auto point_provenance =
-        [&provenance,
-         cap = point.producer_feature_id](
-            FeatureId id) noexcept {
-            return id <= cap &&
-                   provenance(id);
-        };
+    const auto point_bounds =
+        bounds.narrowedTo(
+            point.producer_feature_id);
 
     return std::all_of(
         point.adjacent_surfaces.begin(),
         point.adjacent_surfaces.end(),
-        [&point_provenance](
+        [&point_bounds](
             const FeatureSurfaceAddress& surface) {
             return semanticSurfaceHistoryValid(
                 surface,
-                point_provenance);
+                point_bounds);
         });
 }
 
-template <typename ProvenancePredicate>
 [[nodiscard]] bool semanticSurfaceHistoryValid(
     const FeatureSurfaceAddress& surface,
-    const ProvenancePredicate& provenance) noexcept {
+    const SemanticProvenanceBounds& bounds) noexcept {
     if (!surface.valid() ||
-        !provenance(
+        !bounds.accepts(
             surface.producer_feature_id)) {
         return false;
     }
 
-    const auto surface_provenance =
-        [&provenance,
-         cap = surface.producer_feature_id](
-            FeatureId id) noexcept {
-            return id <= cap &&
-                   provenance(id);
-        };
+    const auto surface_bounds =
+        bounds.narrowedTo(
+            surface.producer_feature_id);
 
     return std::all_of(
                surface.source_edges.begin(),
                surface.source_edges.end(),
-               [&surface_provenance](
+               [&surface_bounds](
                    const MaterialEdgeReference& edge) {
                    return semanticEdgeHistoryValid(
                        edge,
-                       surface_provenance);
+                       surface_bounds);
                }) &&
            std::all_of(
                surface.source_points.begin(),
                surface.source_points.end(),
-               [&surface_provenance](
+               [&surface_bounds](
                    const FeaturePointAddress& point) {
                    return semanticPointHistoryValid(
                        point,
-                       surface_provenance);
+                       surface_bounds);
                });
 }
 
@@ -320,17 +356,15 @@ bool PartDocument::validAuthoredState(
                 return false;
             }
 
-            const auto provenance =
-                [&state,
-                 cap = *surface.stage.feature_id](
-                    FeatureId id) noexcept {
-                    return state.body.next_feature_id
-                               .containsAllocated(id) &&
-                           id <= cap;
-                };
+            const SemanticProvenanceBounds
+                bounds{
+                    &state,
+                    *surface.stage.feature_id,
+                    std::nullopt,
+                    std::nullopt};
             return semanticSurfaceHistoryValid(
                 surface.surface,
-                provenance);
+                bounds);
         };
 
     for (std::size_t index = 0U;
@@ -611,27 +645,6 @@ bool PartDocument::validAuthoredState(
                 return false;
             }
 
-            const auto present_before =
-                [&state, index](FeatureId id) {
-                    const auto found =
-                        std::find_if(
-                            state.body.features.begin(),
-                            state.body.features.end(),
-                            [id](
-                                const PartFeature& item) {
-                                return item.id == id;
-                            });
-                    if (found ==
-                        state.body.features.end()) {
-                        return true;
-                    }
-                    return static_cast<std::size_t>(
-                               std::distance(
-                                   state.body.features.begin(),
-                                   found)) <
-                           index;
-                };
-
             // A deleted consumed stage remains durable repairable intent.
             // When the stage still exists, it must be the exact immediately
             // preceding Body stage. Availability itself is B2 resolver state.
@@ -656,20 +669,12 @@ bool PartDocument::validAuthoredState(
                 return false;
             }
 
-            const auto provenance_is_historical =
-                [&state,
-                 &feature,
-                 &stage_feature_id,
-                 &present_before](
-                    FeatureId producer) {
-                    return state.body.next_feature_id
-                               .containsAllocated(
-                                   producer) &&
-                           producer < feature.id &&
-                           producer <=
-                               *stage_feature_id &&
-                           present_before(producer);
-                };
+            const SemanticProvenanceBounds
+                provenance_bounds{
+                    &state,
+                    *stage_feature_id,
+                    feature.id,
+                    index};
 
             for (const auto& edge :
                  *material_edges) {
@@ -677,7 +682,7 @@ bool PartDocument::validAuthoredState(
                         material_edges->front().stage ||
                     !semanticEdgeHistoryValid(
                         edge,
-                        provenance_is_historical)) {
+                        provenance_bounds)) {
                     return false;
                 }
             }
