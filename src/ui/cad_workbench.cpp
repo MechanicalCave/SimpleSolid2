@@ -230,8 +230,18 @@ QString featureEvaluationDiagnosticText(
         return QStringLiteral("—");
     case part::FeatureEvaluationDiagnosticCode::missing_profile:
         return QStringLiteral("Missing Profile");
+    case part::FeatureEvaluationDiagnosticCode::profile_unavailable:
+        return QStringLiteral("Profile unavailable");
     case part::FeatureEvaluationDiagnosticCode::unresolved_profile:
         return QStringLiteral("Unresolved Profile");
+    case part::FeatureEvaluationDiagnosticCode::missing_axis:
+        return QStringLiteral("Missing Axis");
+    case part::FeatureEvaluationDiagnosticCode::axis_unavailable:
+        return QStringLiteral("Axis unavailable");
+    case part::FeatureEvaluationDiagnosticCode::axis_not_in_profile_plane:
+        return QStringLiteral("Axis not in Profile plane");
+    case part::FeatureEvaluationDiagnosticCode::profile_crosses_axis:
+        return QStringLiteral("Profile crosses Axis");
     case part::FeatureEvaluationDiagnosticCode::sketch_support_missing:
         return QStringLiteral("Sketch support missing");
     case part::FeatureEvaluationDiagnosticCode::sketch_support_ambiguous:
@@ -260,6 +270,12 @@ QString featureEvaluationDiagnosticText(
         return QStringLiteral("Multi-solid result");
     case part::FeatureEvaluationDiagnosticCode::topology_integrity_failure:
         return QStringLiteral("Topology integrity failure");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_missing:
+        return QStringLiteral("Edge reference Missing");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_ambiguous:
+        return QStringLiteral("Edge reference Ambiguous");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_unsupported:
+        return QStringLiteral("Edge reference Unsupported");
     }
     return QStringLiteral("Unknown");
 }
