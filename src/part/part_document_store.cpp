@@ -127,6 +127,12 @@ const char* surfaceRoleName(
         return "revolve_end_cap";
     case FeatureSurfaceRoleKind::revolve_side:
         return "revolve_side";
+    case FeatureSurfaceRoleKind::fillet_surface:
+        return "fillet_surface";
+    case FeatureSurfaceRoleKind::chamfer_surface:
+        return "chamfer_surface";
+    case FeatureSurfaceRoleKind::corner_transition:
+        return "corner_transition";
     }
     return "";
 }
@@ -156,6 +162,15 @@ parseSurfaceRole(std::string_view value) noexcept {
     }
     if (value == "revolve_side") {
         return FeatureSurfaceRoleKind::revolve_side;
+    }
+    if (value == "fillet_surface") {
+        return FeatureSurfaceRoleKind::fillet_surface;
+    }
+    if (value == "chamfer_surface") {
+        return FeatureSurfaceRoleKind::chamfer_surface;
+    }
+    if (value == "corner_transition") {
+        return FeatureSurfaceRoleKind::corner_transition;
     }
     return std::nullopt;
 }
@@ -193,16 +208,33 @@ parseCurveRole(std::string_view value) noexcept {
     return std::nullopt;
 }
 
+nlohmann::json featurePointAddressJson(
+    const FeaturePointAddress& point);
+std::optional<FeaturePointAddress>
+parseFeaturePointAddressV14(
+    const nlohmann::json& value,
+    FeatureIdCursor feature_cursor,
+    std::string& error);
+nlohmann::json materialEdgeReferenceJson(
+    const MaterialEdgeReference& edge);
+std::optional<MaterialEdgeReference>
+parseMaterialEdgeReferenceV14(
+    const nlohmann::json& value,
+    FeatureIdCursor feature_cursor,
+    std::string& error);
+
 nlohmann::json featureSurfaceAddressJson(
     const FeatureSurfaceAddress& surface) {
     if (!surface.valid()) {
         return nlohmann::json{};
     }
+
     nlohmann::json result{
         {"producer_feature_id",
          surface.producer_feature_id.serialized()},
         {"role", surfaceRoleName(surface.role)},
     };
+
     if (surface.role ==
             FeatureSurfaceRoleKind::side ||
         surface.role ==
@@ -215,7 +247,52 @@ nlohmann::json featureSurfaceAddressJson(
             surface.use_index;
         result["hole"] =
             surface.hole;
+        return result;
     }
+
+    if (surface.role ==
+            FeatureSurfaceRoleKind::fillet_surface ||
+        surface.role ==
+            FeatureSurfaceRoleKind::chamfer_surface) {
+        auto source =
+            materialEdgeReferenceJson(
+                surface.source_edges.front());
+        if (source.empty()) {
+            return nlohmann::json{};
+        }
+        result["source_edge"] =
+            std::move(source);
+        return result;
+    }
+
+    if (surface.role ==
+        FeatureSurfaceRoleKind::corner_transition) {
+        auto point =
+            featurePointAddressJson(
+                surface.source_points.front());
+        if (point.empty()) {
+            return nlohmann::json{};
+        }
+
+        nlohmann::json edges =
+            nlohmann::json::array();
+        for (const auto& edge :
+             surface.source_edges) {
+            auto source =
+                materialEdgeReferenceJson(edge);
+            if (source.empty()) {
+                return nlohmann::json{};
+            }
+            edges.push_back(
+                std::move(source));
+        }
+
+        result["source_point"] =
+            std::move(point);
+        result["incident_edges"] =
+            std::move(edges);
+    }
+
     return result;
 }
 
@@ -256,6 +333,12 @@ parseFeatureSurfaceAddressV14(
     const bool sided =
         *role == FeatureSurfaceRoleKind::side ||
         *role == FeatureSurfaceRoleKind::revolve_side;
+    const bool edge_generated =
+        *role == FeatureSurfaceRoleKind::fillet_surface ||
+        *role == FeatureSurfaceRoleKind::chamfer_surface;
+    const bool corner_generated =
+        *role == FeatureSurfaceRoleKind::corner_transition;
+
     if (sided) {
         if (value.size() != 6U ||
             !value.contains("source_entity") ||
@@ -286,6 +369,58 @@ parseFeatureSurfaceAddressV14(
             value["use_index"].get<std::uint32_t>();
         result.hole =
             value["hole"].get<bool>();
+    } else if (edge_generated) {
+        if (value.size() != 3U ||
+            !value.contains("source_edge")) {
+            error =
+                "Native Part contains malformed schema-v14 edge-generated Surface provenance";
+            return std::nullopt;
+        }
+        auto source =
+            parseMaterialEdgeReferenceV14(
+                value["source_edge"],
+                feature_cursor,
+                error);
+        if (!source) {
+            return std::nullopt;
+        }
+        result.source_edges.push_back(
+            std::move(*source));
+    } else if (corner_generated) {
+        if (value.size() != 4U ||
+            !value.contains("source_point") ||
+            !value.contains("incident_edges") ||
+            !value["incident_edges"].is_array() ||
+            value["incident_edges"].size() < 2U) {
+            error =
+                "Native Part contains malformed schema-v14 corner-transition Surface provenance";
+            return std::nullopt;
+        }
+
+        auto point =
+            parseFeaturePointAddressV14(
+                value["source_point"],
+                feature_cursor,
+                error);
+        if (!point) {
+            return std::nullopt;
+        }
+        result.source_points.push_back(
+            std::move(*point));
+
+        for (const auto& edge_json :
+             value["incident_edges"]) {
+            auto edge =
+                parseMaterialEdgeReferenceV14(
+                    edge_json,
+                    feature_cursor,
+                    error);
+            if (!edge) {
+                return std::nullopt;
+            }
+            result.source_edges.push_back(
+                std::move(*edge));
+        }
     } else if (value.size() != 2U) {
         error =
             "Native Part contains unexpected schema-v14 FeatureSurfaceAddress fields";
@@ -672,25 +807,11 @@ nlohmann::json sketchSupportJson(
         return nlohmann::json{};
     }
 
-    nlohmann::json surface{
-        {"producer_feature_id",
-         reference->surface
-             .producer_feature_id.serialized()},
-        {"role",
-         surfaceRoleName(
-             reference->surface.role)},
-    };
-    if (reference->surface.role ==
-        FeatureSurfaceRoleKind::side) {
-        surface["source_entity"] =
-            reference->surface
-                .source_entity->serialized();
-        surface["loop_index"] =
-            reference->surface.loop_index;
-        surface["use_index"] =
-            reference->surface.use_index;
-        surface["hole"] =
-            reference->surface.hole;
+    auto surface =
+        featureSurfaceAddressJson(
+            reference->surface);
+    if (surface.empty()) {
+        return nlohmann::json{};
     }
 
     return nlohmann::json{
@@ -1926,6 +2047,83 @@ parseSketchSupportV11(
         error);
 }
 
+std::optional<PartSketchSupport>
+parseSketchSupportV14(
+    const nlohmann::json& value,
+    FeatureIdCursor feature_cursor,
+    std::string& error) {
+    if (!value.is_object() ||
+        !value.contains("kind") ||
+        !value["kind"].is_string()) {
+        error =
+            "Native Part contains malformed schema-v14 Sketch support";
+        return std::nullopt;
+    }
+
+    if (value["kind"].get<std::string>() !=
+        "body_planar_surface") {
+        return parseSketchSupportV11(
+            value,
+            error);
+    }
+
+    if (value.size() != 3U ||
+        !value.contains("stage") ||
+        !value.contains("surface")) {
+        error =
+            "Native Part contains malformed schema-v14 Body Surface Sketch support";
+        return std::nullopt;
+    }
+
+    const auto& stage_json = value["stage"];
+    if (!stage_json.is_object() ||
+        stage_json.size() != 2U ||
+        !stage_json.contains("kind") ||
+        !stage_json.contains("feature_id") ||
+        !stage_json["kind"].is_string() ||
+        !stage_json["feature_id"].is_string() ||
+        stage_json["kind"].get<std::string>() !=
+            "after_feature") {
+        error =
+            "Native Part contains malformed schema-v14 Sketch support stage";
+        return std::nullopt;
+    }
+
+    const auto stage_feature =
+        FeatureId::parse(
+            stage_json["feature_id"]
+                .get<std::string>());
+    if (!stage_feature ||
+        !feature_cursor.containsAllocated(
+            *stage_feature)) {
+        error =
+            "Native Part contains invalid schema-v14 Sketch support stage FeatureId";
+        return std::nullopt;
+    }
+
+    auto surface =
+        parseFeatureSurfaceAddressV14(
+            value["surface"],
+            feature_cursor,
+            error);
+    if (!surface) {
+        return std::nullopt;
+    }
+
+    auto support =
+        partSketchSupportForBodyPlanarSurface(
+            SurfaceReference{
+                BodyStageRef{
+                    BodyStageKind::after_feature,
+                    *stage_feature},
+                std::move(*surface)});
+    if (!support) {
+        error =
+            "Native Part contains invalid schema-v14 Body Surface Sketch support";
+    }
+    return support;
+}
+
 std::optional<PlaneReference>
 parsePlaneReferenceV10(
     const nlohmann::json& value,
@@ -1989,9 +2187,47 @@ parsePlaneReferenceV10(
     return std::nullopt;
 }
 
+std::optional<PlaneReference>
+parsePlaneReferenceV14(
+    const nlohmann::json& value,
+    FeatureIdCursor feature_cursor,
+    std::string& error) {
+    if (value.is_object() &&
+        value.contains("kind") &&
+        value["kind"].is_string() &&
+        value["kind"].get<std::string>() ==
+            "body_planar_surface") {
+        auto support =
+            parseSketchSupportV14(
+                value,
+                feature_cursor,
+                error);
+        if (!support) {
+            return std::nullopt;
+        }
+        const auto* surface =
+            bodyPlanarSurfaceReference(
+                *support);
+        if (surface == nullptr) {
+            error =
+                "Native Part contains invalid schema-v14 Body Surface PlaneReference";
+            return std::nullopt;
+        }
+        return PlaneReference{
+            BodyPlanarSurfacePlaneReference{
+                *surface}};
+    }
+
+    return parsePlaneReferenceV10(
+        value,
+        error);
+}
+
 bool parseDatumPlanesV10(
     const nlohmann::json& value,
+    int schema_version,
     DatumIdCursor cursor,
+    FeatureIdCursor feature_cursor,
     std::vector<OffsetDatumPlane>& datum_planes,
     std::string& error) {
     if (!value.is_array()) {
@@ -2028,9 +2264,14 @@ bool parseDatumPlanesV10(
         const auto id =
             DatumId::parse(serialized_id);
         auto source =
-            parsePlaneReferenceV10(
-                item["source"],
-                error);
+            schema_version >= 14
+                ? parsePlaneReferenceV14(
+                      item["source"],
+                      feature_cursor,
+                      error)
+                : parsePlaneReferenceV10(
+                      item["source"],
+                      error);
         const auto offset =
             item["offset_mm"].get<double>();
 
@@ -2104,6 +2345,7 @@ parseLegacyOriginSketchSupport(
 bool parseSketches(
     const nlohmann::json& sketches_json,
     int schema_version,
+    const FeatureIdCursor* feature_cursor,
     std::vector<PartSketch>& sketches,
     std::string& error) {
     if (!sketches_json.is_array()) {
@@ -2118,6 +2360,14 @@ bool parseSketches(
         schema_version >= 9;
     const bool schema_v11 =
         schema_version >= 11;
+    const bool schema_v14 =
+        schema_version >= 14;
+    if (schema_v14 &&
+        feature_cursor == nullptr) {
+        error =
+            "Native Part schema-v14 Sketch support is missing FeatureId authority";
+        return false;
+    }
     const std::size_t expected_fields =
         schema_v9
             ? 4U
@@ -2160,17 +2410,22 @@ bool parseSketches(
         }
 
         auto support =
-            schema_v11
-                ? parseSketchSupportV11(
+            schema_v14
+                ? parseSketchSupportV14(
                       item["support"],
+                      *feature_cursor,
                       error)
-                : (schema_v9
-                       ? parseSketchSupportV9(
+                : (schema_v11
+                       ? parseSketchSupportV11(
                              item["support"],
                              error)
-                       : parseLegacyOriginSketchSupport(
-                             item["support"],
-                             error));
+                       : (schema_v9
+                              ? parseSketchSupportV9(
+                                    item["support"],
+                                    error)
+                              : parseLegacyOriginSketchSupport(
+                                    item["support"],
+                                    error)));
         if (!support) {
             return false;
         }
@@ -3151,10 +3406,38 @@ std::optional<PartAuthoredState> parseAuthored(
         state.length_unit = *length_unit;
     }
 
+    std::optional<FeatureIdCursor>
+        feature_reference_cursor;
+    if (schema_version >= 14) {
+        const auto& body_json =
+            authored["body"];
+        if (!body_json.is_object() ||
+            !body_json.contains(
+                "next_feature_id") ||
+            !body_json["next_feature_id"]
+                 .is_string()) {
+            error =
+                "Native Part schema-v14 Body is missing next_feature_id reference authority";
+            return std::nullopt;
+        }
+        feature_reference_cursor =
+            FeatureIdCursor::parse(
+                body_json["next_feature_id"]
+                    .get<std::string>());
+        if (!feature_reference_cursor) {
+            error =
+                "Native Part schema-v14 next_feature_id is invalid";
+            return std::nullopt;
+        }
+    }
+
     if (!legacy_v1 &&
         !parseSketches(
             authored["sketches"],
             schema_version,
+            feature_reference_cursor
+                ? &*feature_reference_cursor
+                : nullptr,
             state.sketches,
             error)) {
         return std::nullopt;
@@ -3253,7 +3536,9 @@ std::optional<PartAuthoredState> parseAuthored(
         state.next_datum_id = *cursor;
         if (!parseDatumPlanesV10(
                 authored["datum_planes"],
+                schema_version,
                 *cursor,
+                state.body.next_feature_id,
                 state.datum_planes,
                 error)) {
             return std::nullopt;
