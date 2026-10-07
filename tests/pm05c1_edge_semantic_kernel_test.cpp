@@ -172,7 +172,9 @@ public:
                 kernel::GeneratedFaceRole role,
                 kernel::SurfaceKind kind,
                 kernel::RuntimeFaceToken face,
-                kernel::RuntimeSurfaceToken surface) {
+                kernel::RuntimeSurfaceToken surface,
+                std::optional<kernel::Frame3>
+                    canonical_frame) {
                 result.current_faces.push_back(face);
                 result.new_faces.push_back(
                     {
@@ -188,7 +190,7 @@ public:
                         kernel::ReferenceStatus::resolved,
                         1U,
                         kind,
-                        std::nullopt,
+                        std::move(canonical_frame),
                         surface,
                         {face},
                     });
@@ -207,7 +209,8 @@ public:
             },
             kernel::SurfaceKind::plane,
             cap_face,
-            cap_surface);
+            cap_surface,
+            input.profile.frame);
         publish(
             {
                 kernel::GeneratedFaceRoleKind::side,
@@ -217,7 +220,12 @@ public:
             },
             kernel::SurfaceKind::plane,
             side_face,
-            side_surface);
+            side_surface,
+            kernel::Frame3{
+                {0.0, 0.0, 0.0},
+                {1.0, 0.0, 0.0},
+                {0.0, 0.0, 1.0},
+                {0.0, -1.0, 0.0}});
 
         const kernel::RuntimeEdgeToken edge{41U};
         result.current_edges = {edge};
