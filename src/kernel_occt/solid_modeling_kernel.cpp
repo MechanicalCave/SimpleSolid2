@@ -37,7 +37,11 @@
 #include <gp_Ax2.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Circ.hxx>
+#include <gp_Cone.hxx>
+#include <gp_Cylinder.hxx>
 #include <gp_Pln.hxx>
+#include <gp_Sphere.hxx>
+#include <gp_Torus.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
@@ -52,7 +56,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <iostream>
 #include <map>
 #include <memory>
 #include <numbers>
@@ -2148,6 +2151,202 @@ struct SurfaceCandidateClaim final {
            tolerance;
 }
 
+
+[[nodiscard]] double carrierTolerance(
+    const TopoDS_Face& first,
+    const TopoDS_Face& second) noexcept {
+    return std::max(
+        {
+            Precision::Confusion(),
+            BRep_Tool::Tolerance(first),
+            BRep_Tool::Tolerance(second),
+        });
+}
+
+[[nodiscard]] bool sameAxisLine(
+    const gp_Ax1& first,
+    const gp_Ax1& second,
+    double linear_tolerance) {
+    const auto& first_direction =
+        first.Direction();
+    const auto& second_direction =
+        second.Direction();
+    if (!first_direction.IsParallel(
+            second_direction,
+            Precision::Angular())) {
+        return false;
+    }
+
+    const gp_Vec offset{
+        first.Location(),
+        second.Location()};
+    return offset.Crossed(
+               gp_Vec{first_direction})
+               .Magnitude() <=
+           linear_tolerance;
+}
+
+[[nodiscard]] bool facesSameCarrier(
+    const TopoDS_Face& source,
+    const TopoDS_Face& candidate) {
+    if (source.IsSame(candidate)) {
+        return true;
+    }
+
+    const auto source_kind =
+        providerSurfaceKind(source);
+    if (source_kind !=
+        providerSurfaceKind(candidate)) {
+        return false;
+    }
+
+    if (source_kind ==
+        kernel::SurfaceKind::plane) {
+        return planarFacesSameDomain(
+            source,
+            candidate);
+    }
+
+    const BRepAdaptor_Surface source_surface{
+        source,
+        true};
+    const BRepAdaptor_Surface candidate_surface{
+        candidate,
+        true};
+    const double linear_tolerance =
+        carrierTolerance(
+            source,
+            candidate);
+
+    switch (source_kind) {
+    case kernel::SurfaceKind::cylinder: {
+        const auto first =
+            source_surface.Cylinder();
+        const auto second =
+            candidate_surface.Cylinder();
+        return sameAxisLine(
+                   first.Axis(),
+                   second.Axis(),
+                   linear_tolerance) &&
+               std::abs(
+                   first.Radius() -
+                   second.Radius()) <=
+                   linear_tolerance;
+    }
+    case kernel::SurfaceKind::cone: {
+        const auto first =
+            source_surface.Cone();
+        const auto second =
+            candidate_surface.Cone();
+        if (first.Apex().Distance(
+                second.Apex()) >
+                linear_tolerance ||
+            !first.Axis().Direction()
+                 .IsParallel(
+                     second.Axis()
+                         .Direction(),
+                     Precision::Angular())) {
+            return false;
+        }
+
+        const double direction_dot =
+            first.Axis().Direction().Dot(
+                second.Axis().Direction());
+        return direction_dot >= 0.0
+            ? std::abs(
+                  first.SemiAngle() -
+                  second.SemiAngle()) <=
+                  Precision::Angular()
+            : std::abs(
+                  first.SemiAngle() +
+                  second.SemiAngle()) <=
+                  Precision::Angular();
+    }
+    case kernel::SurfaceKind::sphere: {
+        const auto first =
+            source_surface.Sphere();
+        const auto second =
+            candidate_surface.Sphere();
+        return first.Location().Distance(
+                   second.Location()) <=
+                   linear_tolerance &&
+               std::abs(
+                   first.Radius() -
+                   second.Radius()) <=
+                   linear_tolerance;
+    }
+    case kernel::SurfaceKind::torus: {
+        const auto first =
+            source_surface.Torus();
+        const auto second =
+            candidate_surface.Torus();
+        return sameAxisLine(
+                   first.Axis(),
+                   second.Axis(),
+                   linear_tolerance) &&
+               first.Location().Distance(
+                   second.Location()) <=
+                   linear_tolerance &&
+               std::abs(
+                   first.MajorRadius() -
+                   second.MajorRadius()) <=
+                   linear_tolerance &&
+               std::abs(
+                   first.MinorRadius() -
+                   second.MinorRadius()) <=
+                   linear_tolerance;
+    }
+    case kernel::SurfaceKind::plane:
+        return planarFacesSameDomain(
+            source,
+            candidate);
+    case kernel::SurfaceKind::other:
+        // No provider-neutral carrier parameters exist for Other. Provider
+        // Modified history alone cannot make a different provider Face an
+        // inherited semantic carrier. Exact same-Face continuity was handled
+        // above; any other case fails closed.
+        return false;
+    }
+    return false;
+}
+
+template <typename Operation>
+[[nodiscard]] std::vector<TopoDS_Face>
+edgeFeatureInheritedFaces(
+    Operation& operation,
+    const TopoDS_Face& source,
+    const TopoDS_Shape& result) {
+    std::vector<TopoDS_Face> inherited;
+    for (const auto& item :
+         operation.Modified(source)) {
+        appendUniqueFace(
+            inherited,
+            item,
+            result);
+    }
+
+    inherited.erase(
+        std::remove_if(
+            inherited.begin(),
+            inherited.end(),
+            [&source](
+                const TopoDS_Face& candidate) {
+                return !facesSameCarrier(
+                    source,
+                    candidate);
+            }),
+        inherited.end());
+
+    if (inherited.empty() &&
+        !operation.IsDeleted(source) &&
+        containsSameFace(
+            result,
+            source)) {
+        inherited.push_back(source);
+    }
+    return inherited;
+}
+
 [[nodiscard]] bool surfaceClaimsHaveCertifiedContinuation(
     const SurfaceCandidateClaim& created,
     const SurfaceCandidateClaim& inherited) {
@@ -2828,30 +3027,8 @@ template <typename Operation>
                 incident_edges,
             std::vector<TopoDS_Face> faces)
             -> bool {
-        const auto fail_publish =
-            [&input, kind, source_edge](
-                const char* reason) {
-                std::cerr
-                    << "PM05C2_PUBLISH_FAIL"
-                    << " op="
-                    << static_cast<int>(
-                           input.operation)
-                    << " kind="
-                    << static_cast<int>(kind)
-                    << " source_edge="
-                    << (source_edge
-                            ? static_cast<unsigned long long>(
-                                  source_edge->value)
-                            : 0ULL)
-                    << " reason="
-                    << reason
-                    << "\n";
-                return false;
-            };
-
         if (faces.empty()) {
-            return fail_publish(
-                "empty_faces");
+            return false;
         }
 
         const auto surface_kind =
@@ -2866,8 +3043,7 @@ template <typename Operation>
                                face) ==
                            surface_kind;
                 })) {
-            return fail_publish(
-                "mixed_surface_kind");
+            return false;
         }
 
         if (surface_kind ==
@@ -2878,8 +3054,7 @@ template <typename Operation>
                 if (!planarFacesSameDomain(
                         faces.front(),
                         faces[index])) {
-                    return fail_publish(
-                        "plane_domain_mismatch");
+                    return false;
                 }
             }
         }
@@ -2888,8 +3063,7 @@ template <typename Operation>
             if (faceTrackedBySurface(
                     runtime,
                     face)) {
-                return fail_publish(
-                    "already_tracked");
+                return false;
             }
         }
 
@@ -2901,8 +3075,7 @@ template <typename Operation>
                 providerPlanarFrame(
                     faces.front());
             if (!canonical_frame) {
-                return fail_publish(
-                    "plane_frame");
+                return false;
             }
         }
 
@@ -2911,8 +3084,7 @@ template <typename Operation>
                 kernel::RuntimeSurfaceToken>(
                 runtime.next_surface_token);
         if (!token) {
-            return fail_publish(
-                "surface_token");
+            return false;
         }
 
         std::vector<kernel::RuntimeFaceToken>
@@ -2925,8 +3097,7 @@ template <typename Operation>
                     runtime,
                     face);
             if (!face_token) {
-                return fail_publish(
-                    "face_token");
+                return false;
             }
             current_faces.push_back(
                 *face_token);
@@ -2951,8 +3122,7 @@ template <typename Operation>
         lineage.incident_source_edges =
             std::move(incident_edges);
         if (!lineage.valid()) {
-            return fail_publish(
-                "lineage_valid");
+            return false;
         }
 
         if (!runtime.tracked_surfaces.emplace(
@@ -2962,8 +3132,7 @@ template <typename Operation>
                     canonical_frame,
                     std::move(faces)})
                  .second) {
-            return fail_publish(
-                "surface_token_collision");
+            return false;
         }
         result.edge_feature_surfaces.push_back(
             std::move(lineage));
@@ -3026,48 +3195,27 @@ template <typename Operation>
     std::vector<std::vector<TopoDS_Face>>
         faces_per_source(
             selected.size());
-    std::size_t diagnostic_face_index = 0U;
     for (const auto& face :
          edge_generated_faces) {
         std::optional<std::size_t>
             owner;
-        std::cerr
-            << "PM05C2_P2_FACE"
-            << " op="
-            << static_cast<int>(
-                   input.operation)
-            << " face="
-            << diagnostic_face_index
-            << " candidates=";
         for (std::size_t index = 0U;
              index < selected.size();
              ++index) {
-            const bool matches =
-                generatedFaceMatchesSourceEdge(
+            if (!generatedFaceMatchesSourceEdge(
                     runtime,
                     upstream,
                     selected[index],
-                    face);
-            std::cerr
-                << (matches ? "1" : "0");
-            if (!matches) {
+                    face)) {
                 continue;
             }
             if (owner) {
-                std::cerr
-                    << " ambiguous\n";
+                // More than one semantic source Edge fits this Face: P2 is
+                // ambiguous and must not use provider order as a tie-break.
                 return false;
             }
             owner = index;
         }
-        std::cerr
-            << " owner="
-            << (owner
-                    ? static_cast<long long>(
-                          *owner)
-                    : -1LL)
-            << "\n";
-        ++diagnostic_face_index;
         if (!owner) {
             return false;
         }
@@ -3075,24 +3223,6 @@ template <typename Operation>
             faces_per_source[*owner],
             face);
     }
-
-    std::cerr
-        << "PM05C2_P2_PARTITION"
-        << " op="
-        << static_cast<int>(
-               input.operation)
-        << " generated="
-        << edge_generated_faces.size()
-        << " selected="
-        << selected.size()
-        << " per_source=";
-    for (const auto& faces :
-         faces_per_source) {
-        std::cerr
-            << faces.size()
-            << ",";
-    }
-    std::cerr << "\n";
 
     for (std::size_t index = 0U;
          index < selected.size();
@@ -4519,11 +4649,10 @@ finishEdgeFeature(
         {},
         [&operation, &shape](
             const TopoDS_Face& source) {
-            return descendantFaces(
+            return edgeFeatureInheritedFaces(
                 operation,
                 source,
-                shape,
-                false);
+                shape);
         });
 
     if (!populateRuntimeTopologyInventory(
@@ -4544,11 +4673,10 @@ finishEdgeFeature(
             false,
             [&operation, &shape](
                 const TopoDS_Face& source) {
-                return descendantFaces(
+                return edgeFeatureInheritedFaces(
                 operation,
                 source,
-                shape,
-                false);
+                shape);
             })) {
         result.status =
             kernel::SolidModelingStatus::
