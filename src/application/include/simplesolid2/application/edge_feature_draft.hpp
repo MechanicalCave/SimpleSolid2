@@ -295,5 +295,4 @@ finishChamferDraft(
     const EdgeFeatureDraftEvaluationResult& evaluation,
     kernel::ISolidModelingKernel& modeling_kernel);
 
-
 } // namespace simplesolid2::application
