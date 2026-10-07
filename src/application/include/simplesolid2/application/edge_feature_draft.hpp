@@ -326,9 +326,12 @@ struct EdgeFeatureDraftEvaluationResult final {
 
     [[nodiscard]] bool previewSolidAvailable()
         const noexcept {
+        // Edit preview is stage-local authority for the target Feature. A
+        // valid edited stage may coexist with intentionally Blocked downstream
+        // Features, so final Body status must not suppress that exact preview.
         return committable() &&
-               body_status ==
-                   part::BodyEvaluationStatus::
+               target_status ==
+                   part::FeatureEvaluationStatus::
                        up_to_date &&
                preview_mesh.has_value() &&
                preview_mesh->valid();
