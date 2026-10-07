@@ -158,26 +158,38 @@ generatedBoundaryReferences(
     if (!feature.result_topology) {
         return result;
     }
-    for (const auto& curve :
-         feature.produced_curves) {
-        if (curve.address.role !=
-                part::FeatureCurveRoleKind::
-                    edge_feature_boundary ||
-            curve.status !=
-                kernel::ReferenceStatus::resolved ||
-            curve.strict_edge_status !=
-                kernel::ReferenceStatus::resolved ||
-            curve.current_edges.size() != 1U) {
+
+    // Enumerate current bounded material Edges, not only Curve families whose
+    // strict realization is globally singular. A multi-branch generated
+    // Curve may still contain individually authorable bounded Edges through
+    // BetweenSemanticPoints discrimination; that is production
+    // MaterialEdgeReference semantics, not a test fallback.
+    for (const auto& edge :
+         feature.result_topology->edges) {
+        const bool generated_boundary =
+            std::any_of(
+                edge.curve_candidates.begin(),
+                edge.curve_candidates.end(),
+                [&feature](const auto& address) {
+                    return address.producer_feature_id ==
+                               feature.feature_id &&
+                           address.role ==
+                               part::FeatureCurveRoleKind::
+                                   edge_feature_boundary;
+                });
+        if (!generated_boundary) {
             continue;
         }
+
         const auto authored =
             part::authorMaterialEdgeReference(
                 *feature.result_topology,
-                curve.current_edges.front());
+                edge.runtime_token);
         if (authored.ok()) {
             result.push_back(*authored.reference);
         }
     }
+
     std::sort(result.begin(), result.end());
     result.erase(
         std::unique(result.begin(), result.end()),
