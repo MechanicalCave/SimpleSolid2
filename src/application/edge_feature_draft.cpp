@@ -473,4 +473,153 @@ finishChamferDraft(
         {}};
 }
 
+
+EdgeFeatureDraftFinishResult
+finishFilletDraft(
+    DocumentSession& session,
+    const FilletDraft& draft,
+    const FilletDraftEvaluationResult& evaluation,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (!draft.currentFor(session)) {
+        return {
+            EdgeFeatureDraftFinishStatus::stale_context,
+            false,
+            std::nullopt,
+            "Fillet draft context is stale."};
+    }
+    if (!draft.valid() ||
+        !draft.radius()) {
+        return {
+            EdgeFeatureDraftFinishStatus::invalid_draft,
+            false,
+            std::nullopt,
+            "Fillet draft is incomplete or invalid."};
+    }
+
+    const bool exact_evaluation =
+        evaluation.committable() &&
+        evaluation.document_id &&
+        *evaluation.document_id ==
+            draft.documentId() &&
+        evaluation.source_revision ==
+            draft.sourceRevision() &&
+        evaluation.draft_generation ==
+            draft.generation() &&
+        evaluation.edges ==
+            draft.edges() &&
+        evaluation.radius ==
+            draft.radius() &&
+        evaluation.name ==
+            draft.name();
+
+    if (!exact_evaluation) {
+        return {
+            EdgeFeatureDraftFinishStatus::stale_evaluation,
+            false,
+            std::nullopt,
+            "Fillet Finish requires the current successful draft evaluation."};
+    }
+
+    const auto command =
+        draft.command();
+    if (!command) {
+        return {
+            EdgeFeatureDraftFinishStatus::invalid_draft,
+            false,
+            std::nullopt,
+            "Fillet draft cannot produce a valid command."};
+    }
+
+    const auto result =
+        session.execute(
+            *command,
+            modeling_kernel);
+    if (!result.ok()) {
+        return {
+            EdgeFeatureDraftFinishStatus::rejected,
+            false,
+            std::nullopt,
+            result.diagnostic.message};
+    }
+    return {
+        EdgeFeatureDraftFinishStatus::committed,
+        result.changed,
+        result.feature_id,
+        {}};
+}
+
+EdgeFeatureDraftFinishResult
+finishChamferDraft(
+    DocumentSession& session,
+    const ChamferDraft& draft,
+    const ChamferDraftEvaluationResult& evaluation,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (!draft.currentFor(session)) {
+        return {
+            EdgeFeatureDraftFinishStatus::stale_context,
+            false,
+            std::nullopt,
+            "Chamfer draft context is stale."};
+    }
+    if (!draft.valid() ||
+        !draft.distance()) {
+        return {
+            EdgeFeatureDraftFinishStatus::invalid_draft,
+            false,
+            std::nullopt,
+            "Chamfer draft is incomplete or invalid."};
+    }
+
+    const bool exact_evaluation =
+        evaluation.committable() &&
+        evaluation.document_id &&
+        *evaluation.document_id ==
+            draft.documentId() &&
+        evaluation.source_revision ==
+            draft.sourceRevision() &&
+        evaluation.draft_generation ==
+            draft.generation() &&
+        evaluation.edges ==
+            draft.edges() &&
+        evaluation.distance ==
+            draft.distance() &&
+        evaluation.name ==
+            draft.name();
+
+    if (!exact_evaluation) {
+        return {
+            EdgeFeatureDraftFinishStatus::stale_evaluation,
+            false,
+            std::nullopt,
+            "Chamfer Finish requires the current successful draft evaluation."};
+    }
+
+    const auto command =
+        draft.command();
+    if (!command) {
+        return {
+            EdgeFeatureDraftFinishStatus::invalid_draft,
+            false,
+            std::nullopt,
+            "Chamfer draft cannot produce a valid command."};
+    }
+
+    const auto result =
+        session.execute(
+            *command,
+            modeling_kernel);
+    if (!result.ok()) {
+        return {
+            EdgeFeatureDraftFinishStatus::rejected,
+            false,
+            std::nullopt,
+            result.diagnostic.message};
+    }
+    return {
+        EdgeFeatureDraftFinishStatus::committed,
+        result.changed,
+        result.feature_id,
+        {}};
+}
+
 } // namespace simplesolid2::application
