@@ -1401,6 +1401,16 @@ void CadWorkbench::buildUi() {
     editor_surface_ = editor_container;
     shell_->setEditorSurface(editor_surface_);
 
+    part_create_tools_label_ =
+        new QLabel(
+            QStringLiteral("Create:"),
+            shell_);
+    part_create_tools_label_->setObjectName(
+        QStringLiteral("partCreateToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        0,
+        part_create_tools_label_);
+
     sketch_button_ =
         new QPushButton(
             QStringLiteral("Sketch"),
@@ -1408,8 +1418,19 @@ void CadWorkbench::buildUi() {
     sketch_button_->setObjectName(
         QStringLiteral("sketchToolButton"));
     shell_->editorToolsLayout().insertWidget(
-        0,
+        1,
         sketch_button_);
+
+    datum_plane_button_ =
+        new QPushButton(
+            QStringLiteral("Datum Plane"),
+            shell_);
+    datum_plane_button_->setObjectName(
+        QStringLiteral("datumPlaneToolButton"));
+    datum_plane_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        2,
+        datum_plane_button_);
 
     extrude_button_ =
         new QPushButton(
@@ -1419,7 +1440,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("extrudeToolButton"));
     extrude_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        1,
+        3,
         extrude_button_);
 
     revolve_button_ =
@@ -1430,19 +1451,40 @@ void CadWorkbench::buildUi() {
         QStringLiteral("revolveToolButton"));
     revolve_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        1,
+        4,
         revolve_button_);
 
-    datum_plane_button_ =
-        new QPushButton(
-            QStringLiteral("Datum Plane"),
+    part_modify_tools_label_ =
+        new QLabel(
+            QStringLiteral("Modify:"),
             shell_);
-    datum_plane_button_->setObjectName(
-        QStringLiteral("datumPlaneToolButton"));
-    datum_plane_button_->setCheckable(true);
+    part_modify_tools_label_->setObjectName(
+        QStringLiteral("partModifyToolsLabel"));
     shell_->editorToolsLayout().insertWidget(
-        1,
-        datum_plane_button_);
+        5,
+        part_modify_tools_label_);
+
+    fillet_button_ =
+        new QPushButton(
+            QStringLiteral("Fillet"),
+            shell_);
+    fillet_button_->setObjectName(
+        QStringLiteral("filletToolButton"));
+    fillet_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        6,
+        fillet_button_);
+
+    chamfer_button_ =
+        new QPushButton(
+            QStringLiteral("Chamfer"),
+            shell_);
+    chamfer_button_->setObjectName(
+        QStringLiteral("chamferToolButton"));
+    chamfer_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        7,
+        chamfer_button_);
 
     select_sketch_button_ =
         new QPushButton(
