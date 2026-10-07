@@ -4592,6 +4592,49 @@ void PartViewportController::clearBodyTopologyToolSelection() {
     notifySelectionChanged();
 }
 
+bool PartViewportController::
+removePrimaryBodyTopologyToolSelection() {
+    if (session_ == nullptr ||
+        !body_topology_edge_draft_mode_) {
+        return false;
+    }
+
+    auto& selection = activeSelection();
+    if (selection.body_topology.empty()) {
+        return false;
+    }
+
+    auto target =
+        selection.primary_body_topology;
+    if (!target) {
+        target = selection.body_topology.back();
+    }
+
+    const auto found =
+        std::find(
+            selection.body_topology.begin(),
+            selection.body_topology.end(),
+            *target);
+    if (found == selection.body_topology.end()) {
+        return false;
+    }
+
+    selection.body_topology.erase(found);
+    selection.primary_body_topology =
+        selection.body_topology.empty()
+            ? std::nullopt
+            : std::optional<
+                  viewer::PresentationToken>{
+                  selection.body_topology.back()};
+    if (selection.body_topology.empty()) {
+        selection.body_topology_generation = {};
+    }
+
+    applySelectionToSurfaces();
+    notifySelectionChanged();
+    return true;
+}
+
 std::optional<std::vector<part::MaterialEdgeReference>>
 PartViewportController::selectedMaterialEdgeReferences() const {
     if (!body_scene_cache_ ||
