@@ -285,6 +285,9 @@ struct CaseResult final {
     bool provider_brep_valid{false};
     std::size_t provider_solid_count{};
     std::size_t generated_surface_count{};
+    std::size_t edge_feature_boundary_other_count{};
+    std::size_t edge_feature_boundary_line_count{};
+    std::size_t edge_feature_boundary_circle_count{};
     part::FeatureEvaluationStatus product_status{
         part::FeatureEvaluationStatus::blocked};
     part::FeatureEvaluationDiagnosticCode product_diagnostic{
@@ -342,6 +345,47 @@ CaseResult runCase(
         result.provider_solid_count = provider.solid_count;
         result.generated_surface_count =
             provider.edge_feature_surfaces.size();
+
+        std::vector<kernel::RuntimeSurfaceToken>
+            generated_surface_tokens;
+        generated_surface_tokens.reserve(
+            provider.edge_feature_surfaces.size());
+        for (const auto& surface :
+             provider.edge_feature_surfaces) {
+            generated_surface_tokens.push_back(
+                surface.runtime_token);
+        }
+
+        for (const auto& observation :
+             provider.current_edge_semantics) {
+            const bool touches_edge_feature_surface =
+                std::any_of(
+                    observation.adjacent_surfaces.begin(),
+                    observation.adjacent_surfaces.end(),
+                    [&generated_surface_tokens](
+                        kernel::RuntimeSurfaceToken token) {
+                        return std::find(
+                                   generated_surface_tokens.begin(),
+                                   generated_surface_tokens.end(),
+                                   token) !=
+                               generated_surface_tokens.end();
+                    });
+            if (!touches_edge_feature_surface) {
+                continue;
+            }
+            switch (observation.provider_curve_kind) {
+            case kernel::CurveKind::line:
+                ++result.edge_feature_boundary_line_count;
+                break;
+            case kernel::CurveKind::circle:
+                ++result.edge_feature_boundary_circle_count;
+                break;
+            case kernel::CurveKind::other:
+                ++result.edge_feature_boundary_other_count;
+                break;
+            }
+        }
+
         if (provider.edge_feature_input_membership) {
             result.provider_contour_count =
                 provider.edge_feature_input_membership
@@ -404,6 +448,12 @@ void printCase(
         << " solid_count=" << result.provider_solid_count
         << " generated_surfaces="
         << result.generated_surface_count
+        << " edge_boundary_line="
+        << result.edge_feature_boundary_line_count
+        << " edge_boundary_circle="
+        << result.edge_feature_boundary_circle_count
+        << " edge_boundary_other="
+        << result.edge_feature_boundary_other_count
         << " product_status="
         << static_cast<int>(result.product_status)
         << " product_diagnostic="
@@ -615,6 +665,12 @@ int main() {
                     << fillet_pair.provider_contour_count
                     << " exact_membership="
                     << (fillet_pair.exact_membership ? 1 : 0)
+                    << " edge_boundary_line="
+                    << fillet_pair.edge_feature_boundary_line_count
+                    << " edge_boundary_circle="
+                    << fillet_pair.edge_feature_boundary_circle_count
+                    << " edge_boundary_other="
+                    << fillet_pair.edge_feature_boundary_other_count
                     << " product_status="
                     << static_cast<int>(
                            fillet_pair.product_status)
