@@ -500,6 +500,33 @@ Przy pełnym obrocie **360°** provider może wytworzyć periodyczną seam topol
 
 Podczas aktywnego Revolve Command Line i Operations sterują tym samym draftem. Obsługiwane wejście kontekstowe obejmuje `ADD`, `CUT`, `ONESIDE`, `MIDPLANE`, `REVERSE`, Angle, `X`/`Y`/`Z`, `FINISH` i `CANCEL`.
 
+<!-- section-id: product.parts.edge-features -->
+## Fillet i Chamfer
+
+Part udostępnia dwa narzędzia modyfikujące Edge w grupie Modify: Fillet i Chamfer.
+
+- Fillet jest zaokrągleniem o stałym promieniu. Jeden Feature używa jednego wspólnego Radius > 0 dla wszystkich wybranych Edge.
+- Chamfer jest fazą o równych odległościach. Jeden Feature używa jednego wspólnego Distance > 0 dla wszystkich wybranych Edge.
+
+Oba narzędzia przyjmują jeden lub wiele jawnie wybranych material Edges. Multi-Edge jest normalnym zachowaniem produkcyjnym: rozłączne Edge, połączone Edge i typowe wspólne naroża mogą należeć do jednego Feature, jeżeli żądana geometria jest wykonalna. Authored intent stanowi dokładnie wybrany zestaw Edge; SimpleSolid nie dodaje po cichu tangent neighbors, nie wybiera podobnej geometrii i nie traktuje kolejności kliknięć jako znaczenia modelowego.
+
+Możesz pracować selection-first albo command-first. Zaznacz poprawne Edge Body i uruchom Fillet / Chamfer, albo najpierw uruchom narzędzie, a potem klikaj Edge w viewporcie. Podczas aktywnego narzędzia kliknięcie poprawnego Edge przełącza jego członkostwo. Operations pokazuje liczbę wybranych Edge i udostępnia Clear; primary selected input można także usunąć bez restartu narzędzia. Akceptowane są wyłącznie bieżące semantyczne material Edges. Periodic seam oraz Edge będący partition tej samej Surface nie mogą być authored input.
+
+Operations pokazuje wspólny Radius lub Distance oraz stan preview. Zmiana wartości albo zestawu Edge odświeża dokładne preview kompletnego candidate Body. Wszystkie jawne Edge są wykonywane razem jako jedna operacja Feature; nie ma częściowo udanego Feature. Zbyt duży Radius/Distance albo inny geometryczny błąd providera daje Failed i blokuje Finish. Finish tworzy dokładnie jeden trwały Feature / jeden krok Undo. Cancel lub odrzucony/stale Finish nie tworzy authored Feature.
+
+Command Line używa tej samej ścieżki modelowania. Wpisz FILLET albo CHAMFER; kontekstowa zmiana parametru, wybór Edge, clear/remove, FINISH i CANCEL sterują tym samym draftem co GUI.
+
+Zakończony Fillet/Chamfer pojawia się w uporządkowanej historii Body ze stabilnym FeatureId. Edit Fillet / Edit Chamfer odtwarza kompletny authored zestaw Edge i Radius/Distance oraz zachowuje ten FeatureId. Edit prezentuje dokładny etap Body bezpośrednio przed Feature, dlatego replacement Edge wybierasz we właściwym kontekście historii, a nie z późniejszej geometrii. Cancelled Edit pozostawia poprzedni Feature bez zmian; poprawny Edit jest jednym krokiem Undo.
+
+Referencje Edge są semantyczne i ścisłe. Po zmianie upstream: jeden zachowany semantyczny Edge przelicza Feature; usunięty Edge daje Missing / Blocked; split albo merge bez jednego ścisłego zwycięzcy daje Ambiguous / Blocked; znaczenie niepodlegające referencji daje Unsupported / Blocked.
+
+Repair jest jawny. Edit wskazuje failing input i pozwala go usunąć albo zastąpić; SimpleSolid nigdy automatycznie nie wybiera najbliższego, najdłuższego, pierwszego ani najbardziej podobnego Edge. Feature Failed/Blocked zachowuje authored FeatureId, zestaw Edge, parametr i nazwę.
+
+Suppress zachowuje Feature i inputy, ale usuwa jego wkład z bieżącej ewaluacji. Unsuppress przelicza go z aktualnego authored state. Delete usuwa authored Feature; downstream Features rozwiązują się albo zawodzą względem zmienionej uporządkowanej historii. Undo/Redo przywraca dokładne authored identities i zestawy inputów.
+
+Fillet i Chamfer mogą używać zwykłych generated engineering Edges z wcześniejszych edge Features. Obsługiwane są zarówno Fillet -> Chamfer, jak i Chamfer -> Fillet, gdy geometria jest poprawna. Save/Close/Reopen odbudowuje te łańcuchy z semantycznego intentu; uchwyty topologii OCCT/Viewera z poprzedniego procesu nie są zapisywane.
+
+Bieżące warianty PM-05 są celowo ograniczone. Nie ma variable-radius/full-round/face Fillet, osobnych Radius/Distance per Edge, distance-angle ani asymmetric two-distance Chamfer, automatycznego tangent-chain/loop authoring, ogólnego healing mode ani multi-body edge Features.
 <!-- section-id: product.parts.body-topology -->
 ## Topologia Body, View Style i inspekcja semantyczna
 
@@ -553,9 +580,9 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude/Revolve Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed. Authored Sketch-Line Axes są zapisywane z AxisId, tożsamością źródłowego Sketch/Line i widocznością; Revolve zapisuje ProfileId, AxisReference, Add/Cut oraz parametry kąta OneSide/Midplane.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude/Revolve/Fillet/Chamfer Features, ich stabilnymi identyfikatorami, parametrami, ścisłymi semantycznymi zestawami Edge tam, gdzie dotyczą, i stanem Suppressed. Authored Sketch-Line Axes są zapisywane z AxisId, tożsamością źródłowego Sketch/Line i widocznością; Revolve zapisuje ProfileId, AxisReference, Add/Cut oraz parametry kąta OneSide/Midplane.
 
-Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude/Revolve preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
+Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude/Revolve/Fillet/Chamfer preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
 Ordinary Save pozostaje warunkowy względem dokładnej wersji natywnego pliku wczytanej lub ostatnio zapisanej przez sesję. Usunięty, podmieniony albo zewnętrznie zmieniony target powoduje konflikt Save zamiast cichego nadpisania. In-memory Part, Undo/Redo i lokalne zmiany pozostają wtedy otwarte.
 
@@ -566,9 +593,9 @@ Przy zamykaniu Parta z niezapisanymi zmianami aplikacja wymaga `Save`, `Discard`
 
 Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, DatumId, SketchId/ProfileId, AxisId, BodyId oraz FeatureId. Sketche oparte na Face i Datum zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology/presentation tokeny są budowane od nowa.
 
-Datumy, authored Axes, Body i jego ordered Extrude/Revolve Add/Cut są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
+Datumy, authored Axes, Body i jego ordered Extrude/Revolve/Fillet/Chamfer Features są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
 
-Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Axis/Extrude/Revolve draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
+Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Axis/Extrude/Revolve/Fillet/Chamfer draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikty Dokumentu i Save
@@ -582,11 +609,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex Part-owned Sketch-Line Axes oraz jeden trwały Body z ordered Extrude/Revolve Features.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex Part-owned Sketch-Line Axes oraz jeden trwały Body z ordered Extrude/Revolve/Fillet/Chamfer Features.
 
-Solid modeling obejmuje obecnie **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane** oraz **Revolve Add/Cut** z **One Side/Midplane**, jawnym Origin/Authored AxisReference, zakresem **0 < Angle ≤ 360°** i Reverse dla One Side. Dostępne są Edit Extrude/Revolve, Axis create/edit/re-source/show/hide/delete/repair, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
+Solid modeling obejmuje obecnie **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**, **Revolve Add/Cut** z **One Side/Midplane**, jawnym Origin/Authored AxisReference, zakresem **0 < Angle ≤ 360°** i Reverse dla One Side, a także stałopromieniowy **Fillet** i równodystansowy **Chamfer** na jawnych zestawach co najmniej jednego material Edge. Dostępne są Edit Extrude/Revolve/Fillet/Chamfer, jawny repair Missing/Ambiguous/Unsupported Edge, Axis create/edit/re-source/show/hide/delete/repair, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, Body-Edge/Curve ani innych konstruktorów Axis, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, wieloobrotowego (>360°) Revolve, multi-body, Material ani narzędzi Assembly/Drawing.
+Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, Body-Edge/Curve ani innych konstruktorów Axis, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, zaawansowanych wariantów Fillet/Chamfer (variable radius, face/full-round, distance-angle/asymmetric), automatycznego tangent-chain authoring, innych operacji bryłowych, dowolnego reorder/insertion Feature, wieloobrotowego (>360°) Revolve, multi-body, Material ani narzędzi Assembly/Drawing.
 
 Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
 
