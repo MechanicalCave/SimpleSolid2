@@ -2,6 +2,7 @@
 
 #include <simplesolid2/application/axis_draft.hpp>
 #include <simplesolid2/application/datum_plane_draft.hpp>
+#include <simplesolid2/application/edge_feature_draft.hpp>
 #include <simplesolid2/application/extrude_draft.hpp>
 #include <simplesolid2/application/revolve_draft.hpp>
 #include <simplesolid2/core/units.hpp>
@@ -510,6 +511,21 @@ struct CreateRevolveFeatureResult final {
     }
 };
 
+
+struct CreateEdgeFeatureResult final {
+    bool changed{false};
+    std::optional<part::FeatureId> feature_id;
+    std::optional<
+        part::FeatureEvaluationDiagnosticCode>
+        evaluation_diagnostic;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code ==
+               DocumentSessionErrorCode::none;
+    }
+};
+
 class DocumentSession final {
 public:
     DocumentSession(
@@ -624,6 +640,17 @@ public:
         const RevolveDraft& draft,
         kernel::ISolidModelingKernel& modeling_kernel) const;
 
+
+    [[nodiscard]] EdgeFeatureDraftEvaluationResult
+    evaluateFilletDraft(
+        const FilletDraft& draft,
+        kernel::ISolidModelingKernel& modeling_kernel) const;
+
+    [[nodiscard]] EdgeFeatureDraftEvaluationResult
+    evaluateChamferDraft(
+        const ChamferDraft& draft,
+        kernel::ISolidModelingKernel& modeling_kernel) const;
+
     [[nodiscard]] DatumPlaneDraftEvaluationResult
     evaluateDatumPlaneDraft(
         const DatumPlaneDraft& draft,
@@ -652,6 +679,14 @@ public:
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const EditRevolveFeatureCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+
+
+    [[nodiscard]] CreateEdgeFeatureResult execute(
+        const CreateFilletFeatureCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] CreateEdgeFeatureResult execute(
+        const CreateChamferFeatureCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
 
     [[nodiscard]] DocumentSessionResult execute(
