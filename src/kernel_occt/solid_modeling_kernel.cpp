@@ -35,7 +35,9 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <gp_Ax2.hxx>
+#include <gp_Ax3.hxx>
 #include <gp_Circ.hxx>
+#include <gp_Pln.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
@@ -2594,6 +2596,298 @@ providerCurveKind(
     return false;
 }
 
+[[nodiscard]] std::optional<kernel::Frame3>
+providerPlanarFrame(
+    const TopoDS_Face& face) {
+    BRepAdaptor_Surface surface{face, true};
+    if (surface.GetType() !=
+        GeomAbs_Plane) {
+        return std::nullopt;
+    }
+
+    const gp_Pln plane =
+        surface.Plane();
+    const gp_Ax3 axes =
+        plane.Position();
+    kernel::Frame3 frame;
+    frame.origin = {
+        axes.Location().X(),
+        axes.Location().Y(),
+        axes.Location().Z()};
+    frame.u_axis = {
+        axes.XDirection().X(),
+        axes.XDirection().Y(),
+        axes.XDirection().Z()};
+    frame.v_axis = {
+        axes.YDirection().X(),
+        axes.YDirection().Y(),
+        axes.YDirection().Z()};
+    frame.normal = {
+        axes.Direction().X(),
+        axes.Direction().Y(),
+        axes.Direction().Z()};
+    return frame.valid()
+        ? std::optional<kernel::Frame3>{frame}
+        : std::nullopt;
+}
+
+[[nodiscard]] bool faceTrackedBySurface(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Face& face) {
+    for (const auto& [token, tracked] :
+         runtime.tracked_surfaces) {
+        static_cast<void>(token);
+        if (std::any_of(
+                tracked.faces.begin(),
+                tracked.faces.end(),
+                [&face](const TopoDS_Face& item) {
+                    return item.IsSame(face);
+                })) {
+            return true;
+        }
+    }
+    return false;
+}
+
+struct SharedSelectedVertex final {
+    kernel::RuntimeVertexToken token;
+    TopoDS_Vertex vertex;
+    std::vector<kernel::RuntimeEdgeToken>
+        incident_edges;
+};
+
+[[nodiscard]] std::vector<SharedSelectedVertex>
+sharedSelectedVertices(
+    const OcctRuntimeSolid& upstream,
+    const std::vector<SelectedRuntimeEdge>&
+        selected) {
+    std::vector<SharedSelectedVertex> result;
+    for (const auto& [token_value, vertex] :
+         upstream.inventory_vertices) {
+        SharedSelectedVertex candidate;
+        candidate.token =
+            kernel::RuntimeVertexToken{
+                token_value};
+        candidate.vertex = vertex;
+
+        for (const auto& edge : selected) {
+            if (edgeContainsVertex(
+                    edge.edge,
+                    vertex)) {
+                candidate.incident_edges
+                    .push_back(edge.token);
+            }
+        }
+
+        if (candidate.incident_edges.size() >= 2U) {
+            result.push_back(
+                std::move(candidate));
+        }
+    }
+    return result;
+}
+
+template <typename Operation>
+[[nodiscard]] bool publishEdgeFeatureGeneratedSurfaces(
+    kernel::SolidModelingResult& result,
+    OcctRuntimeSolid& runtime,
+    const OcctRuntimeSolid& upstream,
+    Operation& operation,
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<SelectedRuntimeEdge>&
+        selected) {
+    result.edge_feature_surfaces.clear();
+
+    const auto publish =
+        [&result, &runtime, &input](
+            kernel::EdgeFeatureGeneratedSurfaceKind
+                kind,
+            std::optional<kernel::RuntimeEdgeToken>
+                source_edge,
+            std::optional<kernel::RuntimeVertexToken>
+                source_vertex,
+            std::vector<kernel::RuntimeEdgeToken>
+                incident_edges,
+            std::vector<TopoDS_Face> faces)
+            -> bool {
+        if (faces.empty()) {
+            return false;
+        }
+
+        const auto surface_kind =
+            providerSurfaceKind(
+                faces.front());
+        if (surface_kind ==
+            kernel::SurfaceKind::other ||
+            !std::all_of(
+                faces.begin(),
+                faces.end(),
+                [surface_kind](
+                    const TopoDS_Face& face) {
+                    return providerSurfaceKind(
+                               face) ==
+                           surface_kind;
+                })) {
+            return false;
+        }
+
+        if (surface_kind ==
+            kernel::SurfaceKind::plane) {
+            for (std::size_t index = 1U;
+                 index < faces.size();
+                 ++index) {
+                if (!planarFacesSameDomain(
+                        faces.front(),
+                        faces[index])) {
+                    return false;
+                }
+            }
+        }
+
+        for (const auto& face : faces) {
+            if (faceTrackedBySurface(
+                    runtime,
+                    face)) {
+                return false;
+            }
+        }
+
+        std::optional<kernel::Frame3>
+            canonical_frame;
+        if (surface_kind ==
+            kernel::SurfaceKind::plane) {
+            canonical_frame =
+                providerPlanarFrame(
+                    faces.front());
+            if (!canonical_frame) {
+                return false;
+            }
+        }
+
+        const auto token =
+            allocateRuntimeToken<
+                kernel::RuntimeSurfaceToken>(
+                runtime.next_surface_token);
+        if (!token) {
+            return false;
+        }
+
+        std::vector<kernel::RuntimeFaceToken>
+            current_faces;
+        current_faces.reserve(
+            faces.size());
+        for (const auto& face : faces) {
+            const auto face_token =
+                inventoryFaceToken(
+                    runtime,
+                    face);
+            if (!face_token) {
+                return false;
+            }
+            current_faces.push_back(
+                *face_token);
+        }
+
+        kernel::EdgeFeatureGeneratedSurfaceLineage
+            lineage;
+        lineage.operation =
+            input.operation;
+        lineage.kind = kind;
+        lineage.runtime_token = *token;
+        lineage.surface_kind =
+            surface_kind;
+        lineage.canonical_frame =
+            canonical_frame;
+        lineage.current_faces =
+            current_faces;
+        lineage.source_edge =
+            source_edge;
+        lineage.source_vertex =
+            source_vertex;
+        lineage.incident_source_edges =
+            std::move(incident_edges);
+        if (!lineage.valid()) {
+            return false;
+        }
+
+        if (!runtime.tracked_surfaces.emplace(
+                token->value,
+                OcctRuntimeSolid::TrackedSurface{
+                    surface_kind,
+                    canonical_frame,
+                    std::move(faces)})
+                 .second) {
+            return false;
+        }
+        result.edge_feature_surfaces.push_back(
+            std::move(lineage));
+        return true;
+    };
+
+    for (const auto& source : selected) {
+        auto faces =
+            facesFromList(
+                operation.Generated(
+                    source.edge));
+        if (!publish(
+                kernel::EdgeFeatureGeneratedSurfaceKind::
+                    edge_transition,
+                source.token,
+                std::nullopt,
+                {},
+                std::move(faces))) {
+            return false;
+        }
+    }
+
+    for (auto& source :
+         sharedSelectedVertices(
+             upstream,
+             selected)) {
+        auto faces =
+            facesFromList(
+                operation.Generated(
+                    source.vertex));
+        if (faces.empty()) {
+            continue;
+        }
+        if (!publish(
+                kernel::EdgeFeatureGeneratedSurfaceKind::
+                    corner_transition,
+                std::nullopt,
+                source.token,
+                std::move(
+                    source.incident_edges),
+                std::move(faces))) {
+            return false;
+        }
+    }
+
+    for (const auto& [face_token, face] :
+         runtime.inventory_faces) {
+        static_cast<void>(face_token);
+        std::size_t owners = 0U;
+        for (const auto& [surface_token, tracked] :
+             runtime.tracked_surfaces) {
+            static_cast<void>(surface_token);
+            if (std::any_of(
+                    tracked.faces.begin(),
+                    tracked.faces.end(),
+                    [&face](
+                        const TopoDS_Face& item) {
+                        return item.IsSame(face);
+                    })) {
+                ++owners;
+            }
+        }
+        if (owners != 1U) {
+            return false;
+        }
+    }
+
+    return !result.edge_feature_surfaces.empty();
+}
+
 template <typename Token>
 void appendUniqueToken(
     std::vector<Token>& values,
@@ -3870,7 +4164,9 @@ template <typename Operation>
 finishEdgeFeature(
     Operation& operation,
     const OcctRuntimeSolid& upstream,
-    const kernel::EdgeFeatureInput& input) {
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<SelectedRuntimeEdge>&
+        selected) {
     kernel::SolidModelingResult result;
     if (!captureExactEdgeFeatureMembership(
             operation,
@@ -3988,6 +4284,19 @@ finishEdgeFeature(
         return result;
     }
 
+    if (!publishEdgeFeatureGeneratedSurfaces(
+            result,
+            *runtime,
+            upstream,
+            operation,
+            input,
+            selected)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
     if (!publishCurrentSubshapeLineage(
             result,
             upstream,
@@ -4068,7 +4377,8 @@ OcctSolidModelingKernel::edgeFeature(
             return finishEdgeFeature(
                 operation,
                 *upstream_occt,
-                input);
+                input,
+                *selected);
         }
         case kernel::EdgeFeatureOperation::chamfer: {
             BRepFilletAPI_MakeChamfer operation{
@@ -4081,7 +4391,8 @@ OcctSolidModelingKernel::edgeFeature(
             return finishEdgeFeature(
                 operation,
                 *upstream_occt,
-                input);
+                input,
+                *selected);
         }
         }
     } catch (const Standard_Failure&) {

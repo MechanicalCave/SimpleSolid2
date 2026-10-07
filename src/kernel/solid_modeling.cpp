@@ -395,6 +395,81 @@ bool EdgeFeatureInputMembership::exactFor(
     return true;
 }
 
+bool EdgeFeatureGeneratedSurfaceLineage::valid()
+    const noexcept {
+    switch (operation) {
+    case EdgeFeatureOperation::fillet:
+    case EdgeFeatureOperation::chamfer:
+        break;
+    default:
+        return false;
+    }
+
+    if (!runtime_token.valid() ||
+        current_faces.empty()) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < current_faces.size();
+         ++index) {
+        if (!current_faces[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < current_faces.size();
+             ++other) {
+            if (current_faces[index] ==
+                current_faces[other]) {
+                return false;
+            }
+        }
+    }
+
+    if (surface_kind == SurfaceKind::plane) {
+        if (!canonical_frame ||
+            !canonical_frame->valid()) {
+            return false;
+        }
+    } else if (canonical_frame) {
+        return false;
+    }
+
+    switch (kind) {
+    case EdgeFeatureGeneratedSurfaceKind::
+            edge_transition:
+        return source_edge &&
+               source_edge->valid() &&
+               !source_vertex &&
+               incident_source_edges.empty();
+    case EdgeFeatureGeneratedSurfaceKind::
+            corner_transition:
+        if (source_edge ||
+            !source_vertex ||
+            !source_vertex->valid() ||
+            incident_source_edges.size() < 2U) {
+            return false;
+        }
+        for (std::size_t index = 0U;
+             index < incident_source_edges.size();
+             ++index) {
+            if (!incident_source_edges[index].valid()) {
+                return false;
+            }
+            for (std::size_t other = index + 1U;
+                 other <
+                     incident_source_edges.size();
+                 ++other) {
+                if (incident_source_edges[index] ==
+                    incident_source_edges[other]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 bool AngularRevolveInput::fullTurn() const noexcept {
     if (!valid()) return false;
     constexpr double full_turn =
