@@ -295,6 +295,87 @@ singleEdgeCandidates(
     return result;
 }
 
+std::optional<std::vector<part::MaterialEdgeReference>>
+explicitContourReferences(
+    const part::FeatureEvaluation& upstream_feature,
+    const part::MaterialEdgeReference& seed,
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    if (!upstream_feature.result_topology ||
+        !upstream_feature.result_solid) {
+        return std::nullopt;
+    }
+
+    const auto seed_resolution =
+        part::resolveMaterialEdgeReference(
+            seed,
+            *upstream_feature.result_topology);
+    if (!seed_resolution ||
+        !seed_resolution->resolved()) {
+        return std::nullopt;
+    }
+
+    const kernel::EdgeFeatureInput probe{
+        kernel::EdgeFeatureOperation::chamfer,
+        {seed_resolution->current_edges.front()},
+        0.75};
+    CHECK(probe.valid());
+
+    const auto probe_result =
+        kernel.edgeFeature(
+            probe,
+            upstream_feature.result_solid);
+    if (!probe_result.edge_feature_input_membership ||
+        !probe_result.edge_feature_input_membership
+             ->valid()) {
+        return std::nullopt;
+    }
+
+    const auto& contour =
+        probe_result.edge_feature_input_membership
+            ->provider_contour_edges;
+    CHECK(!contour.empty());
+    CHECK(
+        std::find(
+            contour.begin(),
+            contour.end(),
+            seed_resolution
+                ->current_edges.front()) !=
+        contour.end());
+
+    std::vector<part::MaterialEdgeReference>
+        authored;
+    authored.reserve(contour.size());
+    for (const auto token : contour) {
+        const auto result =
+            part::authorMaterialEdgeReference(
+                *upstream_feature.result_topology,
+                token);
+        if (!result.ok()) {
+            return std::nullopt;
+        }
+        authored.push_back(
+            *result.reference);
+    }
+
+    std::sort(
+        authored.begin(),
+        authored.end());
+    authored.erase(
+        std::unique(
+            authored.begin(),
+            authored.end()),
+        authored.end());
+    if (authored.empty()) {
+        return std::nullopt;
+    }
+
+    // This helper is test-only evidence extraction. It proves that the native
+    // contour required by T1 can be expressed completely as durable semantic
+    // authored intent. Product code never expands one authored Edge into this
+    // set automatically.
+    return authored;
+}
+
 std::size_t countRole(
     const part::FeatureEvaluation& feature,
     part::FeatureSurfaceRoleKind role) {
@@ -570,34 +651,24 @@ int main() {
             generatedBoundaryReferences(
                 single_fillet);
         CHECK(!generated_edges.empty());
-        CHECK(generated_edges.size() <= 16U);
 
-        // PM-05A C1 proved raw provider feasibility for individual generated
-        // boundary Edges, but that evidence did not apply T1 to the second
-        // operation. Production must never accept provider contour growth.
-        // Therefore exercise every explicit non-empty authored subset of the
-        // generated semantic Edge set and require at least one exact-T1
-        // feasible chain. This is test enumeration only; the product never
-        // adds an Edge that the user did not author.
-        const std::uint64_t subset_count =
-            std::uint64_t{1}
-            << generated_edges.size();
-        for (std::uint64_t mask = 1U;
-             mask < subset_count;
-             ++mask) {
-            std::vector<part::MaterialEdgeReference>
-                chamfer_edges;
-            for (std::size_t index = 0U;
-                 index < generated_edges.size();
-                 ++index) {
-                if ((mask &
-                     (std::uint64_t{1} << index)) !=
-                    0U) {
-                    chamfer_edges.push_back(
-                        generated_edges[index]);
-                }
+        // PM-05A C1 proved that an ordinary generated boundary can feed the
+        // opposite operation, while T1 independently requires the complete
+        // native contour to be explicit authored intent. Probe only the
+        // runtime membership induced by each generated seed, then require that
+        // every contour member can be re-authored as a durable semantic Edge.
+        // The second Part Feature is created from exactly that semantic set;
+        // no production fallback or automatic contour expansion is involved.
+        for (const auto& generated_edge :
+             generated_edges) {
+            const auto explicit_edges =
+                explicitContourReferences(
+                    single_fillet,
+                    generated_edge,
+                    kernel);
+            if (!explicit_edges) {
+                continue;
             }
-            CHECK(!chamfer_edges.empty());
             ++chain_attempts;
 
             auto chamfer_state =
@@ -612,7 +683,7 @@ int main() {
                     "Chamfer001",
                     false,
                     part::ChamferFeature{
-                        std::move(chamfer_edges),
+                        *explicit_edges,
                         core::LengthValue{0.75}}});
 
             auto chamfer_document =
