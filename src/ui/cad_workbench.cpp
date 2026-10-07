@@ -8829,7 +8829,20 @@ void CadWorkbench::cancelEdgeFeature() {
         fillet_draft_
             ? QStringLiteral("Fillet")
             : QStringLiteral("Chamfer");
+    const auto edit_feature_id =
+        fillet_draft_ &&
+                fillet_draft_->mode() ==
+                    application::EdgeFeatureDraftMode::edit
+            ? fillet_draft_->featureId()
+            : chamfer_draft_ &&
+                      chamfer_draft_->mode() ==
+                          application::EdgeFeatureDraftMode::edit
+                ? chamfer_draft_->featureId()
+                : std::nullopt;
     clearEdgeFeatureRuntimeContext();
+    if (edit_feature_id) {
+        navigateToFeature(*edit_feature_id);
+    }
     syncActionState();
     notifyCadInputContextChanged();
     setStatusText(
