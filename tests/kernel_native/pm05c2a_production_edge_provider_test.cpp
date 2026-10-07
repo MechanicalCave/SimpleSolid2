@@ -99,10 +99,12 @@ connectedPair(
 }
 
 void verifyCompleteInventory(
+    const char* stage,
     const kernel::SolidModelingResult& result) {
     if (!result.ok()) {
         std::cerr
             << "PM05C2A_RESULT"
+            << " stage=" << stage
             << " status="
             << static_cast<int>(result.status)
             << " brep=" << (result.brep_valid ? 1 : 0)
