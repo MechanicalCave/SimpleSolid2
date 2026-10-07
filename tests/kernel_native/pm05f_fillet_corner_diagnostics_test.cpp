@@ -134,6 +134,105 @@ trihedralReferences(
     return {};
 }
 
+struct AuthorableEdge final {
+    kernel::RuntimeEdgeToken token;
+    part::MaterialEdgeReference reference;
+};
+
+std::vector<AuthorableEdge> authorableEdges(
+    const part::BodyStageTopologyCatalog& catalog) {
+    std::vector<AuthorableEdge> result;
+    for (const auto& edge : catalog.edges) {
+        if (edge.accounting_class !=
+                part::TopologyAccountingClass::referenceable ||
+            edge.referenceability !=
+                kernel::ReferenceStatus::resolved ||
+            edge.periodic_seam ||
+            edge.representation_partition) {
+            continue;
+        }
+        const auto authored =
+            part::authorMaterialEdgeReference(
+                catalog,
+                edge.runtime_token);
+        if (!authored.ok()) {
+            continue;
+        }
+        result.push_back(
+            {edge.runtime_token, *authored.reference});
+    }
+    std::sort(
+        result.begin(),
+        result.end(),
+        [](const auto& first, const auto& second) {
+            return first.reference < second.reference;
+        });
+    return result;
+}
+
+bool shareVertex(
+    const part::BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeEdgeToken first,
+    kernel::RuntimeEdgeToken second) {
+    for (const auto& vertex : catalog.vertices) {
+        const auto& incident =
+            vertex.incident_material_edges;
+        if (std::find(
+                incident.begin(),
+                incident.end(),
+                first) != incident.end() &&
+            std::find(
+                incident.begin(),
+                incident.end(),
+                second) != incident.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<std::vector<part::MaterialEdgeReference>>
+trihedralSets(
+    const part::BodyStageTopologyCatalog& catalog) {
+    std::vector<std::vector<part::MaterialEdgeReference>> result;
+    for (const auto& vertex : catalog.vertices) {
+        if (vertex.referenceability !=
+                kernel::ReferenceStatus::resolved ||
+            vertex.incident_material_edges.size() != 3U) {
+            continue;
+        }
+        std::vector<part::MaterialEdgeReference> refs;
+        for (const auto token :
+             vertex.incident_material_edges) {
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    catalog,
+                    token);
+            if (!authored.ok()) {
+                refs.clear();
+                break;
+            }
+            refs.push_back(*authored.reference);
+        }
+        if (refs.size() != 3U) {
+            continue;
+        }
+        std::sort(refs.begin(), refs.end());
+        if (std::adjacent_find(
+                refs.begin(),
+                refs.end()) != refs.end()) {
+            continue;
+        }
+        if (std::find(
+                result.begin(),
+                result.end(),
+                refs) == result.end()) {
+            result.push_back(std::move(refs));
+        }
+    }
+    return result;
+}
+
 part::PartDocument withEdgeFeature(
     const part::PartDocument& source,
     std::vector<part::MaterialEdgeReference> edges,
@@ -445,15 +544,234 @@ int main() {
         chamfer_three.product_status ==
         part::FeatureEvaluationStatus::up_to_date);
 
+    const auto all_edges =
+        authorableEdges(
+            *base_eval.features[0].result_topology);
+    CHECK(all_edges.size() == 12U);
+
+    std::size_t pair_count = 0U;
+    std::size_t adjacent_pair_count = 0U;
+    std::size_t fillet_pair_successes = 0U;
+    std::size_t chamfer_pair_successes = 0U;
+    std::size_t adjacent_fillet_failures = 0U;
+
+    for (std::size_t first = 0U;
+         first + 1U < all_edges.size();
+         ++first) {
+        for (std::size_t second = first + 1U;
+             second < all_edges.size();
+             ++second) {
+            ++pair_count;
+            const bool adjacent_pair =
+                shareVertex(
+                    *base_eval.features[0].result_topology,
+                    all_edges[first].token,
+                    all_edges[second].token);
+            if (adjacent_pair) {
+                ++adjacent_pair_count;
+            }
+
+            const std::vector<part::MaterialEdgeReference>
+                pair_refs{
+                    all_edges[first].reference,
+                    all_edges[second].reference};
+
+            const auto fillet_pair =
+                runCase(
+                    base,
+                    base_eval.features[0],
+                    pair_refs,
+                    kernel::EdgeFeatureOperation::fillet,
+                    kernel);
+            const bool fillet_ok =
+                fillet_pair.product_status ==
+                    part::FeatureEvaluationStatus::up_to_date &&
+                fillet_pair.product_topology_complete;
+            if (fillet_ok) {
+                ++fillet_pair_successes;
+            } else {
+                if (adjacent_pair) {
+                    ++adjacent_fillet_failures;
+                }
+                std::cerr
+                    << "PM05F_CUBE_PAIR_FAIL"
+                    << " op=fillet"
+                    << " i=" << first
+                    << " j=" << second
+                    << " token_i="
+                    << all_edges[first].token.value
+                    << " token_j="
+                    << all_edges[second].token.value
+                    << " adjacent="
+                    << (adjacent_pair ? 1 : 0)
+                    << " input_resolved="
+                    << (fillet_pair.input_resolved ? 1 : 0)
+                    << " provider_status="
+                    << static_cast<int>(
+                           fillet_pair.provider_status)
+                    << " provider_ok="
+                    << (fillet_pair.provider_ok ? 1 : 0)
+                    << " provider_contour_edges="
+                    << fillet_pair.provider_contour_count
+                    << " exact_membership="
+                    << (fillet_pair.exact_membership ? 1 : 0)
+                    << " product_status="
+                    << static_cast<int>(
+                           fillet_pair.product_status)
+                    << " product_diagnostic="
+                    << static_cast<int>(
+                           fillet_pair.product_diagnostic)
+                    << " product_kernel_status="
+                    << (fillet_pair.product_kernel_status
+                            ? static_cast<int>(
+                                  *fillet_pair
+                                       .product_kernel_status)
+                            : -1)
+                    << '\n';
+            }
+
+            const auto chamfer_pair =
+                runCase(
+                    base,
+                    base_eval.features[0],
+                    pair_refs,
+                    kernel::EdgeFeatureOperation::chamfer,
+                    kernel);
+            const bool chamfer_ok =
+                chamfer_pair.product_status ==
+                    part::FeatureEvaluationStatus::up_to_date &&
+                chamfer_pair.product_topology_complete;
+            if (chamfer_ok) {
+                ++chamfer_pair_successes;
+            } else {
+                std::cerr
+                    << "PM05F_CUBE_PAIR_FAIL"
+                    << " op=chamfer"
+                    << " i=" << first
+                    << " j=" << second
+                    << " token_i="
+                    << all_edges[first].token.value
+                    << " token_j="
+                    << all_edges[second].token.value
+                    << " adjacent="
+                    << (adjacent_pair ? 1 : 0)
+                    << " provider_status="
+                    << static_cast<int>(
+                           chamfer_pair.provider_status)
+                    << " product_status="
+                    << static_cast<int>(
+                           chamfer_pair.product_status)
+                    << " product_diagnostic="
+                    << static_cast<int>(
+                           chamfer_pair.product_diagnostic)
+                    << '\n';
+            }
+        }
+    }
+
+    const auto triples =
+        trihedralSets(
+            *base_eval.features[0].result_topology);
+    CHECK(triples.size() == 8U);
+    std::size_t fillet_triple_successes = 0U;
+    std::size_t chamfer_triple_successes = 0U;
+    for (std::size_t index = 0U;
+         index < triples.size();
+         ++index) {
+        const auto fillet_triple =
+            runCase(
+                base,
+                base_eval.features[0],
+                triples[index],
+                kernel::EdgeFeatureOperation::fillet,
+                kernel);
+        if (fillet_triple.product_status ==
+                part::FeatureEvaluationStatus::up_to_date &&
+            fillet_triple.product_topology_complete) {
+            ++fillet_triple_successes;
+        } else {
+            std::cerr
+                << "PM05F_CUBE_TRIPLE_FAIL"
+                << " op=fillet"
+                << " triple=" << index
+                << " provider_status="
+                << static_cast<int>(
+                       fillet_triple.provider_status)
+                << " provider_ok="
+                << (fillet_triple.provider_ok ? 1 : 0)
+                << " product_status="
+                << static_cast<int>(
+                       fillet_triple.product_status)
+                << " product_diagnostic="
+                << static_cast<int>(
+                       fillet_triple.product_diagnostic)
+                << '\n';
+        }
+
+        const auto chamfer_triple =
+            runCase(
+                base,
+                base_eval.features[0],
+                triples[index],
+                kernel::EdgeFeatureOperation::chamfer,
+                kernel);
+        if (chamfer_triple.product_status ==
+                part::FeatureEvaluationStatus::up_to_date &&
+            chamfer_triple.product_topology_complete) {
+            ++chamfer_triple_successes;
+        } else {
+            std::cerr
+                << "PM05F_CUBE_TRIPLE_FAIL"
+                << " op=chamfer"
+                << " triple=" << index
+                << " provider_status="
+                << static_cast<int>(
+                       chamfer_triple.provider_status)
+                << " product_status="
+                << static_cast<int>(
+                       chamfer_triple.product_status)
+                << " product_diagnostic="
+                << static_cast<int>(
+                       chamfer_triple.product_diagnostic)
+                << '\n';
+        }
+    }
+
+    std::cout
+        << "PM05F_FILLET_CUBE_MATRIX"
+        << " edges=" << all_edges.size()
+        << " pairs=" << pair_count
+        << " adjacent_pairs=" << adjacent_pair_count
+        << " fillet_pair_successes="
+        << fillet_pair_successes
+        << " chamfer_pair_successes="
+        << chamfer_pair_successes
+        << " adjacent_fillet_failures="
+        << adjacent_fillet_failures
+        << " trihedral_sets=" << triples.size()
+        << " fillet_triple_successes="
+        << fillet_triple_successes
+        << " chamfer_triple_successes="
+        << chamfer_triple_successes
+        << '\n';
+
+    // A 40x30x20 box with 2 mm Fillet / 1.5 mm Chamfer has ample geometric
+    // clearance. Every two-Edge set and every trihedral corner is expected to
+    // be constructible. Any failure here is a deterministic product defect,
+    // not an excessive-parameter case.
+    CHECK(pair_count == 66U);
+    CHECK(adjacent_pair_count == 24U);
+    CHECK(fillet_pair_successes == pair_count);
+    CHECK(chamfer_pair_successes == pair_count);
+    CHECK(adjacent_fillet_failures == 0U);
+    CHECK(fillet_triple_successes == triples.size());
+    CHECK(chamfer_triple_successes == triples.size());
+
     std::cout
         << "PM05F_FILLET_DIAGNOSTIC_PASS"
         << " raw_adjacent_build=1"
         << " raw_trihedral_build=1"
-        << " adjacent_product_ok="
-        << (fillet_two.product_status ==
-                    part::FeatureEvaluationStatus::up_to_date
-                ? 1
-                : 0)
+        << " exhaustive_cube_matrix=1"
         << '\n';
     return EXIT_SUCCESS;
 }
