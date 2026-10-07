@@ -392,6 +392,21 @@ void verifyCommandFirstFinish(
         2U));
     CHECK(finish->isEnabled() == false);
 
+    result =
+        workbench.submitCadInput(
+            "REMOVE",
+            workbench.cadInputContextGeneration());
+    CHECK(result.accepted);
+    CHECK(selectionLabelHas(
+        selection_label,
+        1U));
+    selectAtLeastTwoDraftEdges(
+        viewport,
+        *selection_label);
+    CHECK(selectionLabelHas(
+        selection_label,
+        2U));
+
     const auto before_parameter =
         workbench.cadInputContextGeneration();
     result =
