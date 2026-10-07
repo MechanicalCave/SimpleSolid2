@@ -180,6 +180,9 @@ int main() {
     CHECK(
         fillet.edge_feature_input_membership
             ->exactFor(pair));
+    CHECK(
+        fillet.edge_feature_surfaces.size() >=
+        pair.size());
     verifyInheritedRuntimeLineage(
         base,
         fillet);
@@ -225,6 +228,9 @@ int main() {
     CHECK(
         chamfer.edge_feature_input_membership
             ->exactFor(pair));
+    CHECK(
+        chamfer.edge_feature_surfaces.size() >=
+        pair.size());
     verifyInheritedRuntimeLineage(
         base,
         chamfer);
@@ -278,6 +284,6 @@ int main() {
         << " t1_exact=1"
         << " order_invariant=1"
         << " global_token_registry=0"
-        << " generated_semantic_surfaces=0\n";
+        << " generated_runtime_surfaces=1\n";
     return EXIT_SUCCESS;
 }
