@@ -22,6 +22,30 @@ requiredStageForCreate(
         features.back().id};
 }
 
+[[nodiscard]] std::optional<part::BodyStageRef>
+requiredStageForEdit(
+    const DocumentSession& session,
+    part::FeatureId feature_id) {
+    const auto& features =
+        session.document().body().features;
+    const auto target =
+        std::find_if(
+            features.begin(),
+            features.end(),
+            [feature_id](const part::PartFeature& feature) {
+                return feature.id == feature_id;
+            });
+    if (target == features.end() ||
+        target == features.begin()) {
+        return std::nullopt;
+    }
+
+    const auto previous = std::prev(target);
+    return part::BodyStageRef{
+        part::BodyStageKind::after_feature,
+        previous->id};
+}
+
 [[nodiscard]] bool canonicalizeEdges(
     std::vector<part::MaterialEdgeReference>&
         edges,
@@ -144,29 +168,40 @@ FilletDraft::beginEdit(
     auto draft = FilletDraft{
         session.documentId(),
         session.document().revision(),
-        fillet->edges.front().stage};
+        requiredStageForEdit(session, feature_id)};
     draft.mode_ = EdgeFeatureDraftMode::edit;
     draft.feature_id_ = feature_id;
     draft.edges_ = fillet->edges;
     draft.radius_ = fillet->radius;
     draft.name_ = feature->name;
-    return draft.valid()
+
+    // Existing durable intent may point at a consumed stage that has since
+    // been deleted. Opening Edit preserves that intent; replacement Edges are
+    // still constrained by setEdges() to the current required predecessor.
+    return part::filletFeatureStructurallyValid(
+               part::FilletFeature{
+                   draft.edges_,
+                   *draft.radius_})
         ? std::optional<FilletDraft>{std::move(draft)}
         : std::nullopt;
 }
 
 bool FilletDraft::valid() const noexcept {
     if (!radius_ ||
-        !required_stage_ ||
-        edges_.empty()) {
+        edges_.empty() ||
+        !part::filletFeatureStructurallyValid(
+            part::FilletFeature{
+                edges_,
+                *radius_})) {
         return false;
     }
-    return part::filletFeatureStructurallyValid(
-               part::FilletFeature{
-                   edges_,
-                   *radius_}) &&
-           edges_.front().stage ==
-               *required_stage_;
+    if (mode_ == EdgeFeatureDraftMode::create) {
+        return required_stage_ &&
+               edges_.front().stage ==
+                   *required_stage_;
+    }
+    return feature_id_ &&
+           feature_id_->valid();
 }
 
 bool FilletDraft::currentFor(
@@ -325,29 +360,37 @@ ChamferDraft::beginEdit(
     auto draft = ChamferDraft{
         session.documentId(),
         session.document().revision(),
-        chamfer->edges.front().stage};
+        requiredStageForEdit(session, feature_id)};
     draft.mode_ = EdgeFeatureDraftMode::edit;
     draft.feature_id_ = feature_id;
     draft.edges_ = chamfer->edges;
     draft.distance_ = chamfer->distance;
     draft.name_ = feature->name;
-    return draft.valid()
+
+    return part::chamferFeatureStructurallyValid(
+               part::ChamferFeature{
+                   draft.edges_,
+                   *draft.distance_})
         ? std::optional<ChamferDraft>{std::move(draft)}
         : std::nullopt;
 }
 
 bool ChamferDraft::valid() const noexcept {
     if (!distance_ ||
-        !required_stage_ ||
-        edges_.empty()) {
+        edges_.empty() ||
+        !part::chamferFeatureStructurallyValid(
+            part::ChamferFeature{
+                edges_,
+                *distance_})) {
         return false;
     }
-    return part::chamferFeatureStructurallyValid(
-               part::ChamferFeature{
-                   edges_,
-                   *distance_}) &&
-           edges_.front().stage ==
-               *required_stage_;
+    if (mode_ == EdgeFeatureDraftMode::create) {
+        return required_stage_ &&
+               edges_.front().stage ==
+                   *required_stage_;
+    }
+    return feature_id_ &&
+           feature_id_->valid();
 }
 
 bool ChamferDraft::currentFor(
