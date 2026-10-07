@@ -1789,6 +1789,10 @@ void CadWorkbench::buildUi() {
                         std::nullopt);
             }
             refreshTopologyProperties(*inspection);
+            if (fillet_draft_ ||
+                chamfer_draft_) {
+                tryStageEdgeFeatureSelection();
+            }
             if (sketch_support_pick_active_) {
                 tryCreateSketchFromBodyTopology(
                     *inspection);
