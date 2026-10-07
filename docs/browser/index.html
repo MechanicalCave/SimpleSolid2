@@ -1145,6 +1145,22 @@ Camera orientation and projection are independent. Cube orientation actions and 
 
 Navigation changes are runtime-only and do not increment DocumentRevision, set needsSave or create CAD Undo entries.
 
+<!-- section-id: internal.cad-workbench-viewer.edge-features -->
+## Fillet / Chamfer interaction and stage-scoped Edge acquisition
+
+Normal Part mode groups solid actions as Create: Sketch / Datum Plane / Extrude / Revolve and Modify: Fillet / Chamfer.
+
+Fillet/Chamfer use the same Body topology presentation and semantic acquisition authority as ordinary inspection; the Viewer never owns authored Edge identity. Selection-first and command-first entry are both supported. During an active edge-feature draft the topology tool mode restricts acquisition to admissible material Edges from the draft's exact required Body stage. Click toggles membership in the explicit set, duplicate authored inputs are impossible, and Operations exposes selected count plus Clear/Remove behavior. Periodic seams, same-Surface representation partitions, Unsupported/Ambiguous/non-referenceable candidates and stale evaluation generations are rejected rather than coerced.
+
+Operations owns one common Radius for Fillet or one common Distance for Chamfer. Parameter and Edge-set changes mutate only the transient draft and refresh exact candidate evaluation. The preview represents the complete candidate Body produced by applying the full explicit Edge set in one provider feature operation. There is no sequential per-Edge visual/modeling path and no best-effort partial preview. Finish is enabled only for an exact-current committable evaluation; stale DocumentId/revision/draft generation loses publication authority. Cancel clears the transient preview and produces no authored mutation.
+
+FILLET and CHAMFER Command Line commands are adapters over the same draft. Their contextual input changes the same parameter/selection state and uses the same Finish/Cancel/rejection path as Operations.
+
+Editing an existing Fillet/Chamfer restores its complete semantic Edge set, parameter and FeatureId. The Workbench asks PartViewportController to present the Feature's exact upstream Body stage, not the current final Body. That stage scene is reconstructed from the same-revision FeatureEvaluation result solid/topology; its runtime tokens remain transient. Existing resolved authored inputs can be reselected in the stage scene, while Missing/Ambiguous/Unsupported intent remains visible in the draft/diagnostic until explicitly removed or replaced. No nearest/similar final-Body Edge is substituted.
+
+Structured edge-feature diagnostics keep reference failure separate from provider/modeling failure. UI status identifies the failing 1-based input where applicable and reports Missing, Ambiguous or Unsupported distinctly. A resolved Edge set followed by impossible Radius/Distance or provider failure is reported as Failed rather than as reference failure.
+
+Feature Suppress/Unsuppress/Delete remain the generic ordered Part Feature lifecycle. Edit/repair Cancel restores normal Feature selection without changing authored state. Undo/Redo rebuilds presentation from restored semantic state and does not restore stale Viewer/provider tokens.
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
@@ -1152,9 +1168,9 @@ The Qt/OCCT reference provider renders a Datum Plane through the existing refere
 
 The active Datum draft preview is deliberately different from committed Datum presentation. The provider renders its finite footprint/border and optional intersection segments as deactivated, non-pickable transient objects with no presentation token. Replacing or clearing that preview cannot change committed Datum token→DatumId mappings or Body selection state. Once Finish commits, the draft preview is removed and ordinary committed Datum presentation is rebuilt from authored state.
 
-The concrete Qt/OCCT provider presents the current derived topology-aware Body scene and a separately replaceable transient Extrude/Revolve solid preview alongside Origin/Axis/Datum, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. `PartViewportController` may present that prefix diagnostically so lower UpToDate history remains visible. This does not change final Body truth: final semantic reference authority remains unavailable, downstream active Features remain Blocked and mutating topology-reference actions cannot consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
+The concrete Qt/OCCT provider presents the current derived topology-aware Body scene and separately replaceable transient Extrude/Revolve operation previews and Fillet/Chamfer whole-candidate solid previews alongside Origin/Axis/Datum, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. `PartViewportController` may present that prefix diagnostically so lower UpToDate history remains visible. This does not change final Body truth: final semantic reference authority remains unavailable, downstream active Features remain Blocked and mutating topology-reference actions cannot consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
 
-The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude and Revolve draft evaluation compute the complete candidate Body and that candidate remains the authority for whether Finish is legal. Separately, the modeling provider derives an exact runtime-only operation delta from the same neutral operation input and the ordered Body stage immediately before the target Feature: Add preview is `tool - upstream Body`, while Cut preview is `tool ∩ upstream Body`. Revolve preview uses the same resolved `AngularRevolveInput` semantics as committed modeling; the public preview API is presentation-only and cannot define modeling success. The accepted Body therefore remains visible in its normal opaque/default presentation and only material that would actually be added or removed is overlaid translucently. The delta crosses the public boundary only as provider-neutral presentation mesh and carries no durable CAD identity. In the Qt/OCCT provider the committed Body and transient preview each own an independent `Prs3d_ShadingAspect` before `Display()`; Body color/opacity and Add/Cut preview color/transparency are never assigned through shared context-linked shading state. Replacing or clearing preview therefore cannot recolor the committed Body. Polygon offset remains scoped to the preview object only. A valid solid preview transiently hides its source Profile to avoid coplanar z-fighting; if preview becomes invalid during Edit, the Profile may be revealed for diagnosis. Revolve additionally emphasizes/reveals its source Axis as a runtime cue. Finish, Cancel and context exit clear these runtime overrides without changing authored Profile or Axis visibility policy.
+The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude, Revolve, Fillet and Chamfer draft evaluation compute the complete candidate Body and that candidate remains the authority for whether Finish is legal. Separately, the modeling provider derives an exact runtime-only operation delta from the same neutral operation input and the ordered Body stage immediately before the target Feature: Add preview is `tool - upstream Body`, while Cut preview is `tool ∩ upstream Body`. Revolve preview uses the same resolved `AngularRevolveInput` semantics as committed modeling; the public preview API is presentation-only and cannot define modeling success. The accepted Body therefore remains visible in its normal opaque/default presentation and only material that would actually be added or removed is overlaid translucently. The delta crosses the public boundary only as provider-neutral presentation mesh and carries no durable CAD identity. In the Qt/OCCT provider the committed Body and transient preview each own an independent `Prs3d_ShadingAspect` before `Display()`; Body color/opacity and Add/Cut preview color/transparency are never assigned through shared context-linked shading state. Replacing or clearing preview therefore cannot recolor the committed Body. Polygon offset remains scoped to the preview object only. A valid solid preview transiently hides its source Profile to avoid coplanar z-fighting; if preview becomes invalid during Edit, the Profile may be revealed for diagnosis. Revolve additionally emphasizes/reveals its source Axis as a runtime cue. Finish, Cancel and context exit clear these runtime overrides without changing authored Profile or Axis visibility policy.
 
 Typing into the Extrude distance or Revolve angle field mutates the transient draft immediately but debounces the expensive candidate evaluation/tessellation by 90 ms. A pending preview is flushed before Enter/Finish so commit authority still uses an exact-current successful evaluation. Command-line and discrete option changes keep immediate preview evaluation.
 
@@ -1818,14 +1834,41 @@ The Viewer derives a finite translucent Datum patch/border from the current reso
 
 A Datum Plane may host a standard Sketch. The Sketch persists only DatumId support and keeps local U/V geometry authored independently of the current world frame. Profile evaluation and existing Extrude Add/Cut consume the currently resolved Datum-backed Sketch through the same stage-aware evaluator. Missing, Ambiguous, Unsupported or Blocked Datum support publishes no stale frame and prevents stale downstream modeling. Repair is explicit through Datum source/offset edit or Change Sketch Support.
 
+<!-- section-id: internal.part-documents.edge-features -->
+## PM-05 Fillet / Chamfer and strict material Edge semantics
+
+The current Body supports two edge-consuming ordered Features in addition to Extrude/Revolve:
+
+- FilletFeature — one canonical explicit set of 1..N MaterialEdgeReference values plus one common positive Radius;
+- ChamferFeature — one canonical explicit set of 1..N MaterialEdgeReference values plus one common positive Distance.
+
+A MaterialEdgeReference is durable Part meaning, not a provider subshape handle. It stores the exact BodyStageRef, one FeatureCurveAddress and an EdgeBranchDiscriminator. The branch discriminator is either SingularAtAuthoredStage or BetweenSemanticPoints(first, second). BetweenSemanticPoints stores two defensible semantic Point addresses in canonical order and distinguishes bounded branches of one Curve family without using XYZ, length, nearest geometry, provider ordinals or Viewer tokens.
+
+All references in one edge Feature consume exactly the same predecessor Body stage. The set is structurally deduplicated and canonical-sorted, so user click order has no authored meaning.
+
+Authoring admission is strict. A picked runtime Edge must be fully accounted, material/referenceable, singularly resolvable in the exact current stage, and neither a periodic seam nor an ADR-0017 same-Surface representation partition. Multi-branch Curves are authorable only when semantic endpoint Points uniquely discriminate the bounded branch; otherwise authoring fails closed as Unsupported.
+
+Resolution is always stage-scoped. SingularAtAuthoredStage resolves to exactly one current descendant, becomes Missing when none exists and Ambiguous after a semantic split. BetweenSemanticPoints uses semantic Point provenance rather than coordinates and likewise requires exactly one current branch. A later geometrically similar Edge never revives Missing intent. Merge/split cases do not choose first, nearest, longest or provider-order winners.
+
+One Feature is one exact provider operation over the complete explicit runtime Edge set. The OCCT adapter checks provider contour membership before accepting the operation: the provider-discovered contour union must equal the explicitly resolved authored set. Native tangent propagation therefore cannot silently enlarge authored intent. Users may explicitly select a complete tangent chain, but PM-05 v1 has no implicit Tangent Chain authoring mode.
+
+Successful output is topology-accounted rather than treated as an opaque B-Rep. Generated semantic Surface roles include Fillet surface, Chamfer surface and corner transition. Ordinary generated engineering boundaries use edge_feature_boundary Curve meaning and can become later strict material Edge inputs when semantic branch discrimination is defensible. Corner provenance is derived from producer FeatureId, semantic Point meaning and the canonical incident authored Edge set; provider Face/Edge order is never durable authority.
+
+PM-05 v1 deliberately performs no generic post-operation healing, no global same-domain unification, no fuzzy escalation and no iterative tolerance widening. The raw successful provider result is accounted directly. Provider history is transient reconstruction evidence only.
+
+Evaluation keeps reference resolution separate from geometry execution: Missing/Ambiguous/Unsupported input makes the Feature Blocked with failing input index and reference status; all inputs Resolved but impossible Radius/Distance or provider result makes it Failed; successful provider result plus complete semantic topology publication makes it UpToDate. Suppressed keeps authored FeatureId/inputs but contributes no current geometry. No stale last-good B-Rep becomes current Body truth or downstream input.
+
+Create and Edit use the same revision-bound edge-feature draft/evaluation path. Edit preserves FeatureId, restores the complete Edge set and parameter, and presents/picks against the Feature's exact upstream stage rather than the final Body. Repair is explicit: unresolved intent remains authored until the user explicitly removes/replaces it. Cancel performs zero authored mutation; successful Finish/Edit is one semantic transaction and one Undo step.
+
+Save/Reopen persists only semantic intent in schema v14. Runtime topology tokens, OCCT handles, provider history and Viewer identity are rebuilt. Cold reconstruction is proven for both Fillet -> Chamfer and Chamfer -> Fillet. During proven continuation of the same planar semantic Surface, Part retains its existing canonical planar frame; provider U/V orientation is runtime geometry and is not allowed to replace semantic frame authority.
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Part-owned Sketch-Line Axes; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude/Revolve Features.
+The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Part-owned Sketch-Line Axes; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude/Revolve/Fillet/Chamfer Features.
 
-Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane plus Revolve Add/Cut with OneSide/Midplane, explicit Origin/Authored AxisReference and `0 < Angle <= 360 degrees`. Axis and Feature Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, explicit Axis repair, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v13 semantic support, Datum/Axis references and the ordered Body without persisted B-Rep, topology catalogs, derived Datum/Axis frames or runtime tokens.
+Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane; Revolve Add/Cut with OneSide/Midplane, explicit Origin/Authored AxisReference and `0 < Angle <= 360 degrees`; constant-radius Fillet; and equal-distance Chamfer over one explicit canonical set of strict material Edges. Axis and Feature Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, explicit Axis repair, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v14 semantic support, Datum/Axis references, strict MaterialEdgeReference intent and the ordered Body without persisted B-Rep, topology catalogs, provider history, derived Datum/Axis frames or runtime tokens.
 
-Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360-degree) Revolve, multi-body modeling, Material, Assembly and Drawing.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, variable-radius/full-round/face Fillet, asymmetric/distance-angle Chamfer, automatic tangent-chain authoring, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360-degree) Revolve, multi-body modeling, Material, Assembly and Drawing.
 
 Authored constraints/dimensions/solver, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB convergence and clipboard/cross-Sketch Copy also remain outside the current surface.
 
@@ -1875,7 +1918,7 @@ Part001.ss2part
 
 The common manifest contains format/container metadata, Document kind/identity and Part domain schema version. Shared persistence owns package safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part writer is schema **v13**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1, the AxisId high-water cursor with authored Sketch-Line Axis records, one Body with ordered Features, and the DatumId high-water cursor with ordered Offset Datum Plane records.
+The current Part writer is schema **v14**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1, the AxisId high-water cursor with authored Sketch-Line Axis records, one Body with ordered Features, and the DatumId high-water cursor with ordered Offset Datum Plane records.
 
 Each Datum Plane persists stable DatumId, one semantic source, one signed offset in millimetres and authored visibility. Source encoding is provider-neutral: an Origin source stores a built-in XY/XZ/YZ role; a Body source stores explicit `BodyStageRef` plus semantic planar `SurfaceReference`; a Datum source stores only the earlier source DatumId. Derived O/U/V/N frame, runtime provider/topology identity, Viewer token, plane patch and Body-intersection overlay are never authored payload.
 
@@ -1883,9 +1926,13 @@ Sketches persist stable SketchId, semantic support, visibility, canonical Entity
 
 Each authored Axis persists stable AxisId, name, source SketchId + Line EntityId and authored visibility. The evaluated infinite world line is derived and not stored. Origin X/Y/Z remain built-in references and are never materialized as synthetic Axis records.
 
-The Body persists BodyId, FeatureId cursor and ordered Feature records. Extrude records preserve stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane distance parameters. Revolve records preserve stable FeatureId, name, suppression, source ProfileId, provider-neutral AxisReference, Add/Cut operation and OneSide/Midplane angle parameters; authored angles are stored explicitly in radians. Evaluated B-Rep, OCCT handles, runtime topology tokens, Axis/Datum/Feature evaluation statuses, previews and tessellation are not authored payload.
+The Body persists BodyId, FeatureId cursor and ordered Feature records. Extrude records preserve stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane distance parameters. Revolve records preserve stable FeatureId, name, suppression, source ProfileId, provider-neutral AxisReference, Add/Cut operation and OneSide/Midplane angle parameters; authored angles are stored explicitly in radians.
 
-Legacy schemas remain readable according to their existing migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement and removes redundant placement on a later successful Save. Loading schema v9 preserves existing Document/Body/Sketch identity and creates no synthetic Datum records. Schema v10 introduced durable Datum records; schema v11 added DatumId Sketch support; schema v12 introduced AxisId high-water plus authored Axis records without creating synthetic Origin axes; schema v13 added Revolve Feature records. A later successful Save publishes current schema v13. Invalid IDs, malformed Axis/Revolve references, illegal dependency/cycle state or invalid Sketch support fail closed through Part-domain reconstruction.
+Fillet and Chamfer records preserve stable FeatureId, name, suppression, a canonical non-empty set of strict MaterialEdgeReference values from one consumed Body stage, and one common positive Radius/Distance in canonical millimetres. Each MaterialEdgeReference stores only BodyStageRef + FeatureCurveAddress + EdgeBranchDiscriminator; the discriminator is SingularAtAuthoredStage or a canonical BetweenSemanticPoints pair. No TopoDS_Edge, runtime Edge token, Viewer token, provider ordinal, XYZ/length/nearest-match identity or provider-history object is serialized.
+
+Evaluated B-Rep, OCCT handles, runtime topology tokens, Axis/Datum/Feature evaluation statuses, previews, provider contour/history and tessellation are not authored payload.
+
+Legacy schemas remain readable according to their existing migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement and removes redundant placement on a later successful Save. Loading schema v9 preserves existing Document/Body/Sketch identity and creates no synthetic Datum records. Schema v10 introduced durable Datum records; schema v11 added DatumId Sketch support; schema v12 introduced AxisId high-water plus authored Axis records without creating synthetic Origin axes; schema v13 added Revolve Feature records; schema v14 added strict MaterialEdgeReference plus Fillet/Chamfer Feature records. v1..v13 retain their existing meanings and acquire no synthetic edge Features during migration. A later successful Save publishes current schema v14. Invalid IDs, malformed Axis/Revolve/MaterialEdge references, non-canonical or duplicate edge sets, illegal consumed-stage ordering, illegal dependency/cycle state or invalid Sketch support fail closed through Part-domain reconstruction.
 
 DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera, current Datum frames and all provider/runtime geometry remain non-persistent.
 
@@ -1936,11 +1983,11 @@ The following are derived/runtime and intentionally disposable:
 - Part Feature evaluation snapshots and UpToDate/Failed/Blocked/Suppressed diagnostics;
 - Datum evaluation status, current O/U/V/N frames, Axis evaluation status/current world lines and transitive Body-stage dependency floors;
 - runtime solid/B-Rep handles, Face/Edge/Vertex tokens, evaluated topology catalogs, canonical carrier frames and provider history;
-- Extrude/Revolve and Datum Plane preview presentation plus temporary source-Profile reveal and transient Revolve source-Axis emphasis;
+- Extrude/Revolve/Fillet/Chamfer and Datum Plane preview presentation plus temporary source-Profile reveal and transient Revolve source-Axis emphasis;
 - Viewer Datum plane patch/border, owner-bound Body-intersection overlay, presentation objects, tessellation, detection/picking tokens and camera state;
 - active selection, hover, grips, Dynamic Input/Polar/OSNAP tracking state and CAD input buffer.
 
-A clean reopen must recover authored semantic state without any of these objects. Current lifecycle coverage saves through the guarded `DocumentSession` path, destroys the loaded session/provider state, reloads schema-v13 authored data and rebuilds Body-Surface/Datum references, Datum-backed Sketch/Profile support, authored Axes and ordered Extrude/Revolve Add/Cut features with a deliberately different runtime/provider generation. Runtime token values may change; DatumId, AxisId, ProfileId, FeatureId, semantic sources, signed Offset, visibility and Sketch support must not.
+A clean reopen must recover authored semantic state without any of these objects. Current lifecycle coverage saves through the guarded `DocumentSession` path, destroys the loaded session/provider state, reloads schema-v14 authored data and rebuilds Body-Surface/Datum references, Datum-backed Sketch/Profile support, authored Axes, strict material Edge references and ordered Extrude/Revolve/Fillet/Chamfer features with a deliberately different runtime/provider generation. Runtime token/provider-history values may change; DatumId, AxisId, ProfileId, FeatureId, semantic Edge sets/parameters, semantic sources, signed Offset, visibility and Sketch support must not.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity and container safety
@@ -1951,7 +1998,7 @@ A rename or move inside the Workspace does not change DocumentId. Duplicate nati
 
 Schema-v6 loading rejects malformed/non-canonical identity strings, duplicate EntityIds across primitive kinds, EntityIds outside `next_entity_id`, malformed/unknown entity kind or role, invalid/non-finite geometry and invalid primitive parameters. The same local EntityId in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
 
-Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Axis loading validates canonical AxisId/high-water, unique IDs, valid source Sketch/Line identity and authored visibility. Schema-v13 Revolve loading validates ProfileId, AxisReference, operation and extent; a missing but previously allocated AxisId may remain repairable authored intent, while never-allocated IDs fail closed. Earlier schema validation remains intact for backward read compatibility.
+Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Axis loading validates canonical AxisId/high-water, unique IDs, valid source Sketch/Line identity and authored visibility. Schema-v13 Revolve loading validates ProfileId, AxisReference, operation and extent; a missing but previously allocated AxisId may remain repairable authored intent, while never-allocated IDs fail closed. Schema-v14 Fillet/Chamfer loading validates FeatureId/high-water, parameter, canonical unique MaterialEdgeReference set, shared consumed stage and semantic branch discriminator; Missing/Ambiguous/Unsupported runtime resolution remains repairable authored intent rather than a load-time identity rewrite. Earlier schema validation remains intact for backward read compatibility.
 
 After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid semantic Sketch support, illegal support/consumer ordering, malformed legacy migration state or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family.
 
@@ -1964,7 +2011,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 
 Current persistence does not store Undo/Redo history, evaluated B-Rep, Viewer state, runtime topology/provider identity, caches or active edit context.
 
-The native format does not encode Datum Axis/Point, Projection, Body-Edge/Curve Axis constructors, generic authored Edge/Vertex feature inputs, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics. Planar Body-Surface Sketch support is encoded semantically in v9, Datum support in v11, authored Sketch-Line Axis in v12 and Revolve in v13; evaluated topology, runtime repair candidates and provider identity remain derived.
+The native format does not encode Datum Axis/Point, Projection, Body-Edge/Curve Axis constructors, generic authored Edge/Vertex feature inputs, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics. Planar Body-Surface Sketch support is encoded semantically in v9, Datum support in v11, authored Sketch-Line Axis in v12, Revolve in v13 and strict Fillet/Chamfer material-Edge intent in v14; evaluated topology, runtime repair candidates, provider contour/history and provider identity remain derived.
 
 Save remains whole-file conditional replacement rather than an in-place feature database or event log.
 </script>
@@ -2983,7 +3030,7 @@ Profile remains Part semantics based on authored 2D geometry and is now a durabl
 <!-- section-id: product.parts.extrude -->
 ## Body, Feature and Extrude
 
-Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The production solid Feature families currently available are **Extrude** and **Revolve**. This section describes Extrude; Axis/Revolve is described next.
+Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The production solid Feature families currently available are **Extrude**, **Revolve**, **Fillet** and **Chamfer**. This section describes Extrude; Axis/Revolve and edge Features are described next.
 
 Extrude supports two equivalent activation paths. **Selection-first:** select exactly one valid Profile and use **Extrude** or enter `EXTRUDE`. **Command-first:** start **Extrude** with no Profile selected; the Workbench enters an explicit selection state and waits for one valid Profile chosen in Tree or viewport. Clicking Extrude again, pressing **Esc**, or entering `CANCEL` leaves that state without authored mutation. The first Feature that creates a solid in an Empty Body must be **Add**. Later Extrudes may be **Add** or **Cut**. Every successful stage must still produce exactly one solid; detached Add, no-effect Add/Cut, a Cut that removes the whole solid, or a multi-solid result is rejected explicitly and is not committed.
 
@@ -3033,6 +3080,33 @@ At a full **360°** sweep, provider periodic seam topology may exist as represen
 
 While Revolve is active, Command Line and Operations drive the same draft. Supported contextual input includes `ADD`, `CUT`, `ONESIDE`, `MIDPLANE`, `REVERSE`, Angle input, `X`/`Y`/`Z`, `FINISH` and `CANCEL`.
 
+<!-- section-id: product.parts.edge-features -->
+## Fillet and Chamfer
+
+Part provides two explicit Edge-modifying Features in the Modify group: Fillet and Chamfer.
+
+- Fillet is a constant-radius blend. One Feature uses one common Radius > 0 for every selected Edge.
+- Chamfer is an equal-distance chamfer. One Feature uses one common Distance > 0 for every selected Edge.
+
+Both tools accept one or more explicit material Edges. Multi-Edge is normal production behavior: disconnected Edges, connected Edges and common connected corners can be authored in one Feature when the requested geometry is valid. The selected Edge set is the authored intent; SimpleSolid does not silently add tangent neighbors, choose similar geometry or use selection order as modeling meaning.
+
+You can work selection-first or command-first. Select admissible Body Edges and press Fillet / Chamfer, or start the tool first and then click Edges in the viewport. While the tool is active, clicking an admissible Edge toggles its membership. Operations shows the selected Edge count and provides Clear; the primary selected input can also be removed without restarting the tool. Only current semantic material Edges are accepted. Periodic seam representation and same-Surface partition Edges are not authorable inputs.
+
+Operations shows the shared Radius or Distance and current preview status. Changing the value or Edge set refreshes an exact preview of the complete candidate Body. All explicit Edges are applied together as one Feature operation; there is no partial-success Feature. An excessive Radius/Distance or another geometric provider failure reports Failed and cannot be finished. Finish creates exactly one durable Feature / one Undo step. Cancel or a rejected/stale Finish creates no authored Feature.
+
+The Command Line uses the same modeling path. Enter FILLET or CHAMFER; contextual parameter input, Edge selection, clear/remove, FINISH and CANCEL operate on the same draft as the GUI.
+
+A finished Fillet/Chamfer appears in the ordered Body history with a stable FeatureId. Edit Fillet / Edit Chamfer restores the complete authored Edge set and Radius/Distance and preserves that FeatureId. Edit presents the exact Body stage immediately before the Feature, so replacement Edges are selected from the correct history context rather than from later geometry. Cancelled Edit leaves the previous Feature unchanged; successful Edit is one Undo step.
+
+Edge references are semantic and strict. After an upstream change: one surviving semantic Edge recomputes; removed Edge becomes Missing / Blocked; split or merged meaning with no unique strict winner becomes Ambiguous / Blocked; non-referenceable meaning becomes Unsupported / Blocked.
+
+Repair is explicit. Edit identifies the failing input and lets you remove or replace it; SimpleSolid never chooses the nearest, longest, first or most similar Edge automatically. A Failed/Blocked Feature keeps its authored FeatureId, Edge set, parameter and name.
+
+Suppress preserves the Feature and inputs but removes its modeling contribution. Unsuppress reevaluates it from current authored state. Delete removes the authored Feature; downstream Features then resolve or fail against the changed ordered history. Undo/Redo restores exact authored identities and input sets.
+
+Fillet and Chamfer can consume ordinary generated engineering Edges from earlier edge Features. Both Fillet -> Chamfer and Chamfer -> Fillet are supported where geometry is valid. Save/Close/Reopen reconstructs these chains from semantic intent; previous-process OCCT/Viewer topology handles are not stored.
+
+Current PM-05 variants are intentionally bounded. There is no variable-radius/full-round/face Fillet, per-Edge radius/distance, distance-angle or asymmetric two-distance Chamfer, automatic tangent-chain/loop authoring, generic healing mode or multi-body edge Feature behavior.
 <!-- section-id: product.parts.body-topology -->
 ## Body topology, View Style and semantic inspection
 
@@ -3088,7 +3162,7 @@ The next normal full Viewer refresh automatically retries presentation from the 
 
 `Save` writes the current authored Part state: Document properties, Origin visibility, durable Offset Datum Planes with `DatumId`/source/signed Offset/visibility, Sketches with semantic Origin/Body-Surface/Datum support and local geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude/Revolve Features, stable identities, parameters and Suppressed state. Authored Sketch-Line Axes persist with AxisId, source Sketch/Line identity and visibility; Revolve persists its ProfileId, AxisReference, Add/Cut operation and OneSide/Midplane angle parameters.
 
-The current B-Rep solid, evaluated topology catalog, derived Body-Surface/Datum support frames, transient Datum/Extrude/Revolve preview, virtual intersection lines, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
+The current B-Rep solid, evaluated topology catalog, derived Body-Surface/Datum support frames, transient Datum/Extrude/Revolve/Fillet/Chamfer preview, virtual intersection lines, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
 
 Ordinary Save remains conditional on the exact native file version loaded or last saved by the session. A removed, replaced or externally changed target reports a Save conflict rather than being silently overwritten. The in-memory Part, Undo/Redo and local changes stay open.
 
@@ -3099,9 +3173,9 @@ Closing a dirty Part requires `Save`, `Discard` or `Cancel`. Closing the complet
 
 After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, DatumId, SketchId/ProfileId, AxisId, BodyId and FeatureId values. Face- and Datum-supported Sketches keep their semantic support and local U/V geometry even though runtime topology/presentation token values are rebuilt.
 
-Datums, authored Axes, the Body and ordered Extrude/Revolve Add/Cut Features are evaluated from scratch from authored state. Datum sources, signed Offsets and authored visibility remain persisted, while world frames and virtual intersections are derived again. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers.
+Datums, authored Axes, the Body and ordered Extrude/Revolve/Fillet/Chamfer Features are evaluated from scratch from authored state. Datum sources, signed Offsets and authored visibility remain persisted, while world frames and virtual intersections are derived again. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers.
 
-Undo/Redo history, active selection, active Sketch/Datum/Axis/Extrude/Revolve draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
+Undo/Redo history, active selection, active Sketch/Datum/Axis/Extrude/Revolve/Fillet/Chamfer draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
 
 <!-- section-id: product.parts.conflicts -->
 ## Document and Save conflicts
@@ -3115,11 +3189,11 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides persistent Sketch support on Origin planes, planar Body Faces and Offset Datum Planes; construction Offset Datum Planes in `Reference Geometry`; Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; direct Face/Edge/Vertex inspection; Part-owned Sketch-Line Axes; and one durable Body with ordered Extrude/Revolve Features.
+The current Part provides persistent Sketch support on Origin planes, planar Body Faces and Offset Datum Planes; construction Offset Datum Planes in `Reference Geometry`; Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; direct Face/Edge/Vertex inspection; Part-owned Sketch-Line Axes; and one durable Body with ordered Extrude/Revolve/Fillet/Chamfer Features.
 
-Solid modeling currently includes **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**, plus **Revolve Add/Cut** with **One Side/Midplane**, explicit Origin/Authored AxisReference, **0 < Angle ≤ 360°** and One-Side Reverse. Edit Extrude/Revolve, Axis create/edit/re-source/show/hide/delete/repair, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum Edit/Show/Hide, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
+Solid modeling currently includes **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**, **Revolve Add/Cut** with **One Side/Midplane**, explicit Origin/Authored AxisReference, **0 < Angle ≤ 360°** and One-Side Reverse, plus constant-radius **Fillet** and equal-distance **Chamfer** over explicit one-or-more material Edge sets. Edit Extrude/Revolve/Fillet/Chamfer, explicit Missing/Ambiguous/Unsupported Edge repair, Axis create/edit/re-source/show/hide/delete/repair, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum Edit/Show/Hide, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
 
-Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360°) Revolve, multi-body, Material, Assembly or Drawing tools.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, Body-Edge/Curve or other Axis constructors, non-planar standard Sketch mapping, Projection, advanced Fillet/Chamfer variants (variable radius, face/full-round, distance-angle/asymmetric), automatic tangent-chain authoring, other solid operations, arbitrary Feature reorder/insertion, multi-turn (>360°) Revolve, multi-body, Material, Assembly or Drawing tools.
 
 On the Sketch side, authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy and final ordinary-Select RMB convergence remain outside the current surface.
 
@@ -3797,6 +3871,33 @@ Przy pełnym obrocie **360°** provider może wytworzyć periodyczną seam topol
 
 Podczas aktywnego Revolve Command Line i Operations sterują tym samym draftem. Obsługiwane wejście kontekstowe obejmuje `ADD`, `CUT`, `ONESIDE`, `MIDPLANE`, `REVERSE`, Angle, `X`/`Y`/`Z`, `FINISH` i `CANCEL`.
 
+<!-- section-id: product.parts.edge-features -->
+## Fillet i Chamfer
+
+Part udostępnia dwa narzędzia modyfikujące Edge w grupie Modify: Fillet i Chamfer.
+
+- Fillet jest zaokrągleniem o stałym promieniu. Jeden Feature używa jednego wspólnego Radius > 0 dla wszystkich wybranych Edge.
+- Chamfer jest fazą o równych odległościach. Jeden Feature używa jednego wspólnego Distance > 0 dla wszystkich wybranych Edge.
+
+Oba narzędzia przyjmują jeden lub wiele jawnie wybranych material Edges. Multi-Edge jest normalnym zachowaniem produkcyjnym: rozłączne Edge, połączone Edge i typowe wspólne naroża mogą należeć do jednego Feature, jeżeli żądana geometria jest wykonalna. Authored intent stanowi dokładnie wybrany zestaw Edge; SimpleSolid nie dodaje po cichu tangent neighbors, nie wybiera podobnej geometrii i nie traktuje kolejności kliknięć jako znaczenia modelowego.
+
+Możesz pracować selection-first albo command-first. Zaznacz poprawne Edge Body i uruchom Fillet / Chamfer, albo najpierw uruchom narzędzie, a potem klikaj Edge w viewporcie. Podczas aktywnego narzędzia kliknięcie poprawnego Edge przełącza jego członkostwo. Operations pokazuje liczbę wybranych Edge i udostępnia Clear; primary selected input można także usunąć bez restartu narzędzia. Akceptowane są wyłącznie bieżące semantyczne material Edges. Periodic seam oraz Edge będący partition tej samej Surface nie mogą być authored input.
+
+Operations pokazuje wspólny Radius lub Distance oraz stan preview. Zmiana wartości albo zestawu Edge odświeża dokładne preview kompletnego candidate Body. Wszystkie jawne Edge są wykonywane razem jako jedna operacja Feature; nie ma częściowo udanego Feature. Zbyt duży Radius/Distance albo inny geometryczny błąd providera daje Failed i blokuje Finish. Finish tworzy dokładnie jeden trwały Feature / jeden krok Undo. Cancel lub odrzucony/stale Finish nie tworzy authored Feature.
+
+Command Line używa tej samej ścieżki modelowania. Wpisz FILLET albo CHAMFER; kontekstowa zmiana parametru, wybór Edge, clear/remove, FINISH i CANCEL sterują tym samym draftem co GUI.
+
+Zakończony Fillet/Chamfer pojawia się w uporządkowanej historii Body ze stabilnym FeatureId. Edit Fillet / Edit Chamfer odtwarza kompletny authored zestaw Edge i Radius/Distance oraz zachowuje ten FeatureId. Edit prezentuje dokładny etap Body bezpośrednio przed Feature, dlatego replacement Edge wybierasz we właściwym kontekście historii, a nie z późniejszej geometrii. Cancelled Edit pozostawia poprzedni Feature bez zmian; poprawny Edit jest jednym krokiem Undo.
+
+Referencje Edge są semantyczne i ścisłe. Po zmianie upstream: jeden zachowany semantyczny Edge przelicza Feature; usunięty Edge daje Missing / Blocked; split albo merge bez jednego ścisłego zwycięzcy daje Ambiguous / Blocked; znaczenie niepodlegające referencji daje Unsupported / Blocked.
+
+Repair jest jawny. Edit wskazuje failing input i pozwala go usunąć albo zastąpić; SimpleSolid nigdy automatycznie nie wybiera najbliższego, najdłuższego, pierwszego ani najbardziej podobnego Edge. Feature Failed/Blocked zachowuje authored FeatureId, zestaw Edge, parametr i nazwę.
+
+Suppress zachowuje Feature i inputy, ale usuwa jego wkład z bieżącej ewaluacji. Unsuppress przelicza go z aktualnego authored state. Delete usuwa authored Feature; downstream Features rozwiązują się albo zawodzą względem zmienionej uporządkowanej historii. Undo/Redo przywraca dokładne authored identities i zestawy inputów.
+
+Fillet i Chamfer mogą używać zwykłych generated engineering Edges z wcześniejszych edge Features. Obsługiwane są zarówno Fillet -> Chamfer, jak i Chamfer -> Fillet, gdy geometria jest poprawna. Save/Close/Reopen odbudowuje te łańcuchy z semantycznego intentu; uchwyty topologii OCCT/Viewera z poprzedniego procesu nie są zapisywane.
+
+Bieżące warianty PM-05 są celowo ograniczone. Nie ma variable-radius/full-round/face Fillet, osobnych Radius/Distance per Edge, distance-angle ani asymmetric two-distance Chamfer, automatycznego tangent-chain/loop authoring, ogólnego healing mode ani multi-body edge Features.
 <!-- section-id: product.parts.body-topology -->
 ## Topologia Body, View Style i inspekcja semantyczna
 
@@ -3850,9 +3951,9 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude/Revolve Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed. Authored Sketch-Line Axes są zapisywane z AxisId, tożsamością źródłowego Sketch/Line i widocznością; Revolve zapisuje ProfileId, AxisReference, Add/Cut oraz parametry kąta OneSide/Midplane.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude/Revolve/Fillet/Chamfer Features, ich stabilnymi identyfikatorami, parametrami, ścisłymi semantycznymi zestawami Edge tam, gdzie dotyczą, i stanem Suppressed. Authored Sketch-Line Axes są zapisywane z AxisId, tożsamością źródłowego Sketch/Line i widocznością; Revolve zapisuje ProfileId, AxisReference, Add/Cut oraz parametry kąta OneSide/Midplane.
 
-Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude/Revolve preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
+Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude/Revolve/Fillet/Chamfer preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
 Ordinary Save pozostaje warunkowy względem dokładnej wersji natywnego pliku wczytanej lub ostatnio zapisanej przez sesję. Usunięty, podmieniony albo zewnętrznie zmieniony target powoduje konflikt Save zamiast cichego nadpisania. In-memory Part, Undo/Redo i lokalne zmiany pozostają wtedy otwarte.
 
@@ -3863,9 +3964,9 @@ Przy zamykaniu Parta z niezapisanymi zmianami aplikacja wymaga `Save`, `Discard`
 
 Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, DatumId, SketchId/ProfileId, AxisId, BodyId oraz FeatureId. Sketche oparte na Face i Datum zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology/presentation tokeny są budowane od nowa.
 
-Datumy, authored Axes, Body i jego ordered Extrude/Revolve Add/Cut są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
+Datumy, authored Axes, Body i jego ordered Extrude/Revolve/Fillet/Chamfer Features są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
 
-Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Axis/Extrude/Revolve draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
+Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Axis/Extrude/Revolve/Fillet/Chamfer draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikty Dokumentu i Save
@@ -3879,11 +3980,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex Part-owned Sketch-Line Axes oraz jeden trwały Body z ordered Extrude/Revolve Features.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex Part-owned Sketch-Line Axes oraz jeden trwały Body z ordered Extrude/Revolve/Fillet/Chamfer Features.
 
-Solid modeling obejmuje obecnie **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane** oraz **Revolve Add/Cut** z **One Side/Midplane**, jawnym Origin/Authored AxisReference, zakresem **0 < Angle ≤ 360°** i Reverse dla One Side. Dostępne są Edit Extrude/Revolve, Axis create/edit/re-source/show/hide/delete/repair, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
+Solid modeling obejmuje obecnie **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**, **Revolve Add/Cut** z **One Side/Midplane**, jawnym Origin/Authored AxisReference, zakresem **0 < Angle ≤ 360°** i Reverse dla One Side, a także stałopromieniowy **Fillet** i równodystansowy **Chamfer** na jawnych zestawach co najmniej jednego material Edge. Dostępne są Edit Extrude/Revolve/Fillet/Chamfer, jawny repair Missing/Ambiguous/Unsupported Edge, Axis create/edit/re-source/show/hide/delete/repair, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, Body-Edge/Curve ani innych konstruktorów Axis, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, wieloobrotowego (>360°) Revolve, multi-body, Material ani narzędzi Assembly/Drawing.
+Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, Body-Edge/Curve ani innych konstruktorów Axis, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, zaawansowanych wariantów Fillet/Chamfer (variable radius, face/full-round, distance-angle/asymmetric), automatycznego tangent-chain authoring, innych operacji bryłowych, dowolnego reorder/insertion Feature, wieloobrotowego (>360°) Revolve, multi-body, Material ani narzędzi Assembly/Drawing.
 
 Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
 
