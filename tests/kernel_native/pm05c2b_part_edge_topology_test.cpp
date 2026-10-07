@@ -262,9 +262,11 @@ part::PartDocument withEdgeFeature(
     return std::move(*restored.document);
 }
 
-std::optional<part::MaterialEdgeReference>
-singleReference(
+std::vector<part::MaterialEdgeReference>
+singleEdgeCandidates(
     const part::BodyStageTopologyCatalog& catalog) {
+    std::vector<part::MaterialEdgeReference>
+        result;
     for (const auto& edge : catalog.edges) {
         if (edge.accounting_class !=
                 part::TopologyAccountingClass::referenceable ||
@@ -277,10 +279,20 @@ singleReference(
                 catalog,
                 edge.runtime_token);
         if (authored.ok()) {
-            return authored.reference;
+            result.push_back(
+                *authored.reference);
         }
     }
-    return std::nullopt;
+
+    std::sort(
+        result.begin(),
+        result.end());
+    result.erase(
+        std::unique(
+            result.begin(),
+            result.end()),
+        result.end());
+    return result;
 }
 
 std::size_t countRole(
@@ -506,96 +518,121 @@ int main() {
     // material-boundary Edge -> Chamfer. Trihedral K1/P2/P3 coverage above is
     // intentionally separate; the evidence did not claim that boundaries
     // produced by a three-Edge Fillet are all strict-T1 Chamfer-feasible.
-    const auto single_edge =
-        singleReference(
+    const auto source_edge_candidates =
+        singleEdgeCandidates(
             *base_evaluation.features[0]
                  .result_topology);
-    CHECK(single_edge.has_value());
+    CHECK(!source_edge_candidates.empty());
 
-    auto single_fillet_document =
-        withEdgeFeature(
-            base_document,
-            {*single_edge},
-            false,
-            2.0);
-    const auto single_fillet_evaluation =
-        part::evaluatePart(
-            single_fillet_document,
-            kernel);
-    CHECK(
-        single_fillet_evaluation.body_status ==
-        part::BodyEvaluationStatus::up_to_date);
-    CHECK(
-        single_fillet_evaluation.features.size() ==
-        2U);
-    const auto& single_fillet =
-        single_fillet_evaluation.features[1];
-    CHECK(
-        single_fillet.status ==
-        part::FeatureEvaluationStatus::up_to_date);
-    CHECK(single_fillet.result_topology);
-    CHECK(single_fillet.result_topology->complete());
-
-    const auto generated_edges =
-        generatedBoundaryReferences(
-            single_fillet);
-    CHECK(!generated_edges.empty());
-
+    // PM-05A C1 is an existence proof for a valid single-edge Fillet ->
+    // generated boundary -> Chamfer chain. Do not let catalog/runtime
+    // enumeration order silently pick which authored source Edge represents
+    // that evidence. Each attempt below is a separate explicit authored
+    // Feature sequence; the product itself never substitutes an Edge.
+    std::size_t source_attempts = 0U;
+    std::size_t fillet_successes = 0U;
     std::size_t chain_attempts = 0U;
     std::size_t chain_successes = 0U;
-    for (const auto& generated_edge :
-         generated_edges) {
-        ++chain_attempts;
 
-        auto chamfer_state =
-            single_fillet_document.state();
-        const auto chamfer_id =
-            chamfer_state.body.next_feature_id
-                .allocate();
-        CHECK(chamfer_id.has_value());
-        chamfer_state.body.features.push_back(
-            part::PartFeature{
-                *chamfer_id,
-                "Chamfer001",
+    for (const auto& source_edge :
+         source_edge_candidates) {
+        ++source_attempts;
+
+        auto single_fillet_document =
+            withEdgeFeature(
+                base_document,
+                {source_edge},
                 false,
-                part::ChamferFeature{
-                    {generated_edge},
-                    core::LengthValue{0.75}}});
-
-        auto chamfer_document =
-            part::PartDocument::restore(
-                single_fillet_document.documentId(),
-                std::move(chamfer_state),
-                single_fillet_document.revision());
-        CHECK(chamfer_document.ok());
-
-        const auto chained =
+                2.0);
+        const auto single_fillet_evaluation =
             part::evaluatePart(
-                *chamfer_document.document,
+                single_fillet_document,
                 kernel);
-        if (chained.body_status !=
+        if (single_fillet_evaluation.body_status !=
                 part::BodyEvaluationStatus::
                     up_to_date ||
-            chained.features.size() != 3U ||
-            chained.features[2].status !=
+            single_fillet_evaluation.features.size() !=
+                2U ||
+            single_fillet_evaluation.features[1].status !=
                 part::FeatureEvaluationStatus::
                     up_to_date) {
             continue;
         }
+        ++fillet_successes;
 
-        CHECK(chained.features[2].result_topology);
+        const auto& single_fillet =
+            single_fillet_evaluation.features[1];
+        CHECK(single_fillet.result_topology);
         CHECK(
-            chained.features[2]
-                .result_topology->complete());
-        CHECK(
-            countRole(
-                chained.features[2],
-                part::FeatureSurfaceRoleKind::
-                    chamfer_surface) >= 1U);
-        ++chain_successes;
-        break;
+            single_fillet.result_topology->complete());
+
+        const auto generated_edges =
+            generatedBoundaryReferences(
+                single_fillet);
+        for (const auto& generated_edge :
+             generated_edges) {
+            ++chain_attempts;
+
+            auto chamfer_state =
+                single_fillet_document.state();
+            const auto chamfer_id =
+                chamfer_state.body.next_feature_id
+                    .allocate();
+            CHECK(chamfer_id.has_value());
+            chamfer_state.body.features.push_back(
+                part::PartFeature{
+                    *chamfer_id,
+                    "Chamfer001",
+                    false,
+                    part::ChamferFeature{
+                        {generated_edge},
+                        core::LengthValue{0.75}}});
+
+            auto chamfer_document =
+                part::PartDocument::restore(
+                    single_fillet_document
+                        .documentId(),
+                    std::move(chamfer_state),
+                    single_fillet_document
+                        .revision());
+            CHECK(chamfer_document.ok());
+
+            const auto chained =
+                part::evaluatePart(
+                    *chamfer_document.document,
+                    kernel);
+            if (chained.body_status !=
+                    part::BodyEvaluationStatus::
+                        up_to_date ||
+                chained.features.size() != 3U ||
+                chained.features[2].status !=
+                    part::FeatureEvaluationStatus::
+                        up_to_date) {
+                continue;
+            }
+
+            CHECK(
+                chained.features[2]
+                    .result_topology);
+            CHECK(
+                chained.features[2]
+                    .result_topology->complete());
+            CHECK(
+                countRole(
+                    chained.features[2],
+                    part::FeatureSurfaceRoleKind::
+                        chamfer_surface) >= 1U);
+            ++chain_successes;
+            break;
+        }
+
+        if (chain_successes > 0U) {
+            break;
+        }
     }
 
+    CHECK(source_attempts > 0U);
+    CHECK(fillet_successes > 0U);
     CHECK(chain_attempts > 0U);
     CHECK(chain_successes > 0U);
 
@@ -608,6 +645,8 @@ int main() {
         << " provider_uv_authority=0"
         << " generated_boundary=1"
         << " fillet_to_chamfer_chain=1"
+        << " source_attempts=" << source_attempts
+        << " fillet_successes=" << fillet_successes
         << " chain_attempts=" << chain_attempts
         << " chain_successes=" << chain_successes
         << " xyz_identity=0\n";
