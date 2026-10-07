@@ -1954,156 +1954,6 @@ template <typename Operation>
                ->exactFor(requested);
 }
 
-template <typename Operation>
-[[nodiscard]] kernel::SolidModelingResult
-finishEdgeFeature(
-    Operation& operation,
-    const OcctRuntimeSolid& upstream,
-    const kernel::EdgeFeatureInput& input) {
-    kernel::SolidModelingResult result;
-    if (!captureExactEdgeFeatureMembership(
-            operation,
-            upstream,
-            input.edges,
-            result)) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_mismatch;
-        return result;
-    }
-
-    operation.Build();
-    if (!operation.IsDone()) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    }
-
-    const auto shape = operation.Shape();
-    if (shape.IsNull()) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    }
-
-    populateDiagnostics(
-        result,
-        shape);
-    if (result.solid_count == 0U) {
-        result.status =
-            kernel::SolidModelingStatus::
-                empty_result;
-        return result;
-    }
-    if (result.solid_count > 1U) {
-        result.status =
-            kernel::SolidModelingStatus::
-                multi_solid;
-        return result;
-    }
-    if (!result.brep_valid) {
-        result.status =
-            kernel::SolidModelingStatus::
-                invalid_brep;
-        return result;
-    }
-
-    const auto solid =
-        singleSolid(shape);
-    if (!solid) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    }
-
-    if (upstreamExteriorUnchanged(
-            operation,
-            upstream.solid,
-            shape)) {
-        result.status =
-            kernel::SolidModelingStatus::
-                no_effect;
-        return result;
-    }
-
-    auto runtime =
-        std::make_shared<OcctRuntimeSolid>();
-    runtime->solid = *solid;
-
-    // C2a preserves all inherited runtime semantic carriers. Generated
-    // Fillet/Chamfer Surface claims are published separately in C2b.
-    publishLineage(
-        result,
-        *runtime,
-        &upstream,
-        {},
-        [&operation, &shape](
-            const TopoDS_Face& source) {
-            return descendantFaces(
-                operation,
-                source,
-                shape);
-        });
-
-    if (!populateRuntimeTopologyInventory(
-            result,
-            *runtime,
-            runtime->solid)) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    }
-
-    if (!publishSurfaceLineage(
-            result,
-            *runtime,
-            &upstream,
-            {},
-            false,
-            [&operation, &shape](
-                const TopoDS_Face& source) {
-                return descendantFaces(
-                    operation,
-                    source,
-                    shape);
-            })) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    }
-
-    if (!publishCurrentSubshapeLineage(
-            result,
-            upstream,
-            *runtime,
-            operation,
-            shape)) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    }
-
-    if (!populateCurrentTopologySemantics(
-            result,
-            *runtime)) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    }
-
-    result.status =
-        kernel::SolidModelingStatus::ok;
-    result.solid = std::move(runtime);
-    return result;
-}
-
 [[nodiscard]] std::optional<kernel::RuntimeVertexToken>
 inventoryVertexToken(
     const OcctRuntimeSolid& runtime,
@@ -4014,6 +3864,157 @@ OcctSolidModelingKernel::revolve(
         return result;
     }
 }
+
+template <typename Operation>
+[[nodiscard]] kernel::SolidModelingResult
+finishEdgeFeature(
+    Operation& operation,
+    const OcctRuntimeSolid& upstream,
+    const kernel::EdgeFeatureInput& input) {
+    kernel::SolidModelingResult result;
+    if (!captureExactEdgeFeatureMembership(
+            operation,
+            upstream,
+            input.edges,
+            result)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    operation.Build();
+    if (!operation.IsDone()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    const auto shape = operation.Shape();
+    if (shape.IsNull()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    populateDiagnostics(
+        result,
+        shape);
+    if (result.solid_count == 0U) {
+        result.status =
+            kernel::SolidModelingStatus::
+                empty_result;
+        return result;
+    }
+    if (result.solid_count > 1U) {
+        result.status =
+            kernel::SolidModelingStatus::
+                multi_solid;
+        return result;
+    }
+    if (!result.brep_valid) {
+        result.status =
+            kernel::SolidModelingStatus::
+                invalid_brep;
+        return result;
+    }
+
+    const auto solid =
+        singleSolid(shape);
+    if (!solid) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (upstreamExteriorUnchanged(
+            operation,
+            upstream.solid,
+            shape)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                no_effect;
+        return result;
+    }
+
+    auto runtime =
+        std::make_shared<OcctRuntimeSolid>();
+    runtime->solid = *solid;
+
+    // C2a preserves all inherited runtime semantic carriers. Generated
+    // Fillet/Chamfer Surface claims are published separately in C2b.
+    publishLineage(
+        result,
+        *runtime,
+        &upstream,
+        {},
+        [&operation, &shape](
+            const TopoDS_Face& source) {
+            return descendantFaces(
+                operation,
+                source,
+                shape);
+        });
+
+    if (!populateRuntimeTopologyInventory(
+            result,
+            *runtime,
+            runtime->solid)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishSurfaceLineage(
+            result,
+            *runtime,
+            &upstream,
+            {},
+            false,
+            [&operation, &shape](
+                const TopoDS_Face& source) {
+                return descendantFaces(
+                    operation,
+                    source,
+                    shape);
+            })) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishCurrentSubshapeLineage(
+            result,
+            upstream,
+            *runtime,
+            operation,
+            shape)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!populateCurrentTopologySemantics(
+            result,
+            *runtime)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    result.status =
+        kernel::SolidModelingStatus::ok;
+    result.solid = std::move(runtime);
+    return result;
+}
+
 
 kernel::SolidModelingResult
 OcctSolidModelingKernel::edgeFeature(
