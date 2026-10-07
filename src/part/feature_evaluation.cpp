@@ -1090,6 +1090,200 @@ convertNewSurface(
     return result;
 }
 
+[[nodiscard]] const MaterialEdgeReference*
+authoredEdgeForRuntimeToken(
+    kernel::RuntimeEdgeToken token,
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<MaterialEdgeReference>&
+        authored_edges) noexcept {
+    if (!token.valid() ||
+        input.edges.size() !=
+            authored_edges.size()) {
+        return nullptr;
+    }
+
+    const MaterialEdgeReference* found = nullptr;
+    for (std::size_t index = 0U;
+         index < input.edges.size();
+         ++index) {
+        if (input.edges[index] != token) {
+            continue;
+        }
+        if (found != nullptr ||
+            !authored_edges[index].valid()) {
+            return nullptr;
+        }
+        found = &authored_edges[index];
+    }
+    return found;
+}
+
+[[nodiscard]] std::optional<FeaturePointAddress>
+semanticPointForRuntimeVertex(
+    kernel::RuntimeVertexToken token,
+    const BodyStageTopologyCatalog& upstream) {
+    if (!token.valid() ||
+        !upstream.complete()) {
+        return std::nullopt;
+    }
+
+    const BodyVertexTopologyRecord* vertex = nullptr;
+    for (const auto& item : upstream.vertices) {
+        if (item.runtime_token != token) {
+            continue;
+        }
+        if (vertex != nullptr) {
+            return std::nullopt;
+        }
+        vertex = &item;
+    }
+    if (vertex == nullptr ||
+        vertex->accounting_class !=
+            TopologyAccountingClass::referenceable ||
+        vertex->referenceability !=
+            kernel::ReferenceStatus::resolved ||
+        vertex->point_candidates.size() != 1U) {
+        return std::nullopt;
+    }
+
+    const auto& address =
+        vertex->point_candidates.front();
+    const FeaturePointResolution* point = nullptr;
+    for (const auto& item : upstream.points) {
+        if (item.address != address) {
+            continue;
+        }
+        if (point != nullptr) {
+            return std::nullopt;
+        }
+        point = &item;
+    }
+    if (point == nullptr ||
+        point->status !=
+            kernel::ReferenceStatus::resolved ||
+        point->candidate_vertex_count != 1U ||
+        point->current_vertices.size() != 1U ||
+        point->current_vertices.front() != token) {
+        return std::nullopt;
+    }
+    return address;
+}
+
+[[nodiscard]] std::optional<FeatureSurfaceResolution>
+convertEdgeFeatureSurface(
+    FeatureId producer,
+    const kernel::EdgeFeatureGeneratedSurfaceLineage&
+        source,
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<MaterialEdgeReference>&
+        authored_edges,
+    const BodyStageTopologyCatalog& upstream) {
+    if (!producer.valid() ||
+        !source.valid() ||
+        source.operation != input.operation ||
+        input.edges.size() !=
+            authored_edges.size()) {
+        return std::nullopt;
+    }
+
+    FeatureSurfaceResolution result;
+    result.address.producer_feature_id =
+        producer;
+    result.status =
+        kernel::ReferenceStatus::resolved;
+    result.strict_face_status =
+        source.current_faces.size() == 1U
+            ? kernel::ReferenceStatus::resolved
+            : kernel::ReferenceStatus::ambiguous;
+    result.candidate_face_count =
+        source.current_faces.size();
+    result.surface_kind =
+        source.surface_kind;
+    result.canonical_frame =
+        source.canonical_frame;
+    result.runtime_token =
+        source.runtime_token;
+    result.current_faces =
+        source.current_faces;
+
+    switch (source.kind) {
+    case kernel::EdgeFeatureGeneratedSurfaceKind::
+            edge_transition: {
+        if (!source.source_edge) {
+            return std::nullopt;
+        }
+        const auto* authored =
+            authoredEdgeForRuntimeToken(
+                *source.source_edge,
+                input,
+                authored_edges);
+        if (authored == nullptr) {
+            return std::nullopt;
+        }
+        result.address.role =
+            source.operation ==
+                    kernel::EdgeFeatureOperation::
+                        fillet
+                ? FeatureSurfaceRoleKind::
+                      fillet_surface
+                : FeatureSurfaceRoleKind::
+                      chamfer_surface;
+        result.address.source_edges =
+            {*authored};
+        break;
+    }
+    case kernel::EdgeFeatureGeneratedSurfaceKind::
+            corner_transition: {
+        if (!source.source_vertex) {
+            return std::nullopt;
+        }
+        const auto point =
+            semanticPointForRuntimeVertex(
+                *source.source_vertex,
+                upstream);
+        if (!point) {
+            return std::nullopt;
+        }
+
+        result.address.role =
+            FeatureSurfaceRoleKind::
+                corner_transition;
+        result.address.source_points =
+            {*point};
+
+        for (const auto token :
+             source.incident_source_edges) {
+            const auto* authored =
+                authoredEdgeForRuntimeToken(
+                    token,
+                    input,
+                    authored_edges);
+            if (authored == nullptr) {
+                return std::nullopt;
+            }
+            result.address.source_edges.push_back(
+                *authored);
+        }
+        std::sort(
+            result.address.source_edges.begin(),
+            result.address.source_edges.end());
+        if (std::adjacent_find(
+                result.address.source_edges.begin(),
+                result.address.source_edges.end()) !=
+            result.address.source_edges.end()) {
+            return std::nullopt;
+        }
+        break;
+    }
+    }
+
+    if (!result.address.valid() ||
+        !result.valid()) {
+        return std::nullopt;
+    }
+    return result;
+}
+
 void propagateCurrentReferences(
     std::vector<FeatureFaceResolution>& references,
     const std::vector<
@@ -1243,6 +1437,19 @@ void propagateCurrentReferences(
     return !isSideSurface(address);
 }
 
+[[nodiscard]] bool isEdgeFeatureSurface(
+    const FeatureSurfaceAddress& address) noexcept {
+    return address.role ==
+               FeatureSurfaceRoleKind::
+                   fillet_surface ||
+           address.role ==
+               FeatureSurfaceRoleKind::
+                   chamfer_surface ||
+           address.role ==
+               FeatureSurfaceRoleKind::
+                   corner_transition;
+}
+
 struct SemanticSurfaceObservation final {
     FeatureSurfaceAddress address;
     kernel::SurfaceKind kind{
@@ -1370,6 +1577,30 @@ curveRelationForObservation(
             .address.producer_feature_id ==
         semantic_surfaces[1]
             .address.producer_feature_id;
+    const bool first_edge_feature =
+        isEdgeFeatureSurface(
+            semantic_surfaces[0].address);
+    const bool second_edge_feature =
+        isEdgeFeatureSurface(
+            semantic_surfaces[1].address);
+
+    if (first_edge_feature ||
+        second_edge_feature) {
+        result.role =
+            FeatureCurveRoleKind::
+                edge_feature_boundary;
+        switch (observation.provider_curve_kind) {
+        case kernel::CurveKind::line:
+        case kernel::CurveKind::circle:
+            result.curve_kind =
+                observation.provider_curve_kind;
+            return result;
+        case kernel::CurveKind::other:
+            provider_mismatch = true;
+            return std::nullopt;
+        }
+    }
+
     const bool first_cap =
         isCapSurface(
             semantic_surfaces[0].address);
@@ -4166,7 +4397,8 @@ PartEvaluation evaluatePart(
         }
 
         evaluated.produced_surfaces.reserve(
-            kernel_result.new_surfaces.size());
+            kernel_result.new_surfaces.size() +
+            kernel_result.edge_feature_surfaces.size());
         for (const auto& surface :
              kernel_result.new_surfaces) {
             if (surface.continued_into) {
@@ -4191,6 +4423,61 @@ PartEvaluation evaluatePart(
             candidate_surfaces.push_back(
                 std::move(converted));
         }
+        if (!kernel_result.edge_feature_surfaces.empty()) {
+            if (!edge_feature_input ||
+                !current_topology ||
+                (fillet == nullptr &&
+                 chamfer == nullptr)) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        failed;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        topology_integrity_failure;
+                chain_broken = true;
+            } else {
+                const auto& authored_edges =
+                    fillet != nullptr
+                        ? fillet->edges
+                        : chamfer->edges;
+                for (const auto& surface :
+                     kernel_result
+                         .edge_feature_surfaces) {
+                    auto converted =
+                        convertEdgeFeatureSurface(
+                            authored.id,
+                            surface,
+                            *edge_feature_input,
+                            authored_edges,
+                            *current_topology);
+                    if (!converted) {
+                        evaluated.status =
+                            FeatureEvaluationStatus::
+                                failed;
+                        evaluated.diagnostic =
+                            FeatureEvaluationDiagnosticCode::
+                                topology_integrity_failure;
+                        chain_broken = true;
+                        break;
+                    }
+                    evaluated.produced_surfaces
+                        .push_back(*converted);
+                    candidate_surfaces.push_back(
+                        std::move(*converted));
+                }
+            }
+        } else if (edge_feature_input) {
+            // A successful PM-05 provider result without generated transition
+            // Surface history cannot publish a complete semantic Body stage.
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    topology_integrity_failure;
+            chain_broken = true;
+        }
+
         if (chain_broken) {
             current_references.clear();
             current_surfaces.clear();
