@@ -494,11 +494,6 @@ struct SolidModelingResult final {
     std::vector<InheritedVertexRealizationLineage>
         inherited_vertex_realizations;
 
-    // Present only for a PM-05 edge operation. A successful provider result
-    // without exact explicit-input membership is rejected by Part evaluation.
-    std::optional<EdgeFeatureInputMembership>
-        edge_feature_input_membership;
-
     // PM-01 semantic Face lineage remains separate from complete inventory.
     std::vector<InheritedFaceLineage>
         inherited_faces;
@@ -511,6 +506,11 @@ struct SolidModelingResult final {
         inherited_surfaces;
     std::vector<NewSurfaceLineage>
         new_surfaces;
+
+    // Present only for a PM-05 edge operation. Appended to preserve source
+    // meaning of existing positional aggregate initializers.
+    std::optional<EdgeFeatureInputMembership>
+        edge_feature_input_membership;
 
     [[nodiscard]] bool ok() const noexcept {
         return status == SolidModelingStatus::ok &&
