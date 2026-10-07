@@ -415,6 +415,25 @@ int main() {
             split->status ==
             kernel::ReferenceStatus::ambiguous);
         CHECK(split->current_edges.size() == 2U);
+
+        // An ambiguous semantic endpoint cannot be disambiguated indirectly
+        // by Edge connectivity. That would silently select one Point
+        // descendant/merge winner.
+        catalog =
+            branchedCatalog(v);
+        catalog.points[0].status =
+            kernel::ReferenceStatus::ambiguous;
+        CHECK(catalog.complete());
+        const auto ambiguous_point =
+            part::resolveMaterialEdgeReference(
+                reference,
+                catalog);
+        CHECK(ambiguous_point.has_value());
+        CHECK(
+            ambiguous_point->status ==
+            kernel::ReferenceStatus::ambiguous);
+        CHECK(
+            !ambiguous_point->resolved());
     }
 
     // Multi-branch authoring without two defensible semantic endpoint Points

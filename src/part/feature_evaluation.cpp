@@ -3258,6 +3258,14 @@ resolveMaterialEdgeReference(
             kernel::ReferenceStatus::missing,
             {}};
     }
+    if (first->status ==
+            kernel::ReferenceStatus::ambiguous ||
+        second->status ==
+            kernel::ReferenceStatus::ambiguous) {
+        return MaterialEdgeResolution{
+            kernel::ReferenceStatus::ambiguous,
+            {}};
+    }
 
     std::vector<kernel::RuntimeEdgeToken>
         candidates;
