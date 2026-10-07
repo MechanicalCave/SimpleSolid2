@@ -499,6 +499,64 @@ QString revolveEvaluationText(
     return QStringLiteral("Revolve unavailable.");
 }
 
+
+QString edgeFeatureEvaluationText(
+    const application::EdgeFeatureDraftEvaluationResult&
+        evaluation,
+    QStringView feature_name) {
+    using Status =
+        application::EdgeFeatureDraftEvaluationStatus;
+    switch (evaluation.status) {
+    case Status::ok:
+        return evaluation.previewSolidAvailable()
+            ? QStringLiteral("Preview ready.")
+            : QStringLiteral(
+                  "Candidate valid; preview unavailable.");
+    case Status::incomplete_draft:
+        return QStringLiteral(
+            "Select one or more material Edges and enter a positive parameter.");
+    case Status::stale_document:
+    case Status::stale_revision:
+        return QStringLiteral(
+            "%1 draft is stale; cancel and restart.")
+            .arg(feature_name);
+    case Status::feature_id_exhausted:
+        return QStringLiteral(
+            "Feature identity space is exhausted.");
+    case Status::invalid_candidate:
+        return QStringLiteral(
+            "%1 candidate is invalid.")
+            .arg(feature_name);
+    case Status::target_failed: {
+        QString detail =
+            evaluation.evaluation_diagnostic
+                ? featureEvaluationDiagnosticText(
+                      *evaluation.evaluation_diagnostic)
+                : QStringLiteral(
+                      "modeling evaluation failed");
+        if (evaluation.failing_edge_input_index) {
+            detail += QStringLiteral(
+                          " · Edge input %1")
+                          .arg(
+                              static_cast<qulonglong>(
+                                  *evaluation
+                                       .failing_edge_input_index +
+                                  1U));
+        }
+        if (evaluation.target_status) {
+            detail += QStringLiteral(" · %1")
+                          .arg(
+                              featureEvaluationStatusText(
+                                  *evaluation.target_status));
+        }
+        return QStringLiteral("%1 rejected: %2")
+            .arg(feature_name, detail);
+    }
+    }
+    return QStringLiteral("%1 unavailable.")
+        .arg(feature_name);
+}
+
 std::string toUtf8(const QString& value) {
     const auto bytes = value.toUtf8();
     return std::string{
