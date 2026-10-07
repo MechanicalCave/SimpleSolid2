@@ -1695,10 +1695,28 @@ void propagateCurrentReferences(
             item.surface_kind) {
             return false;
         }
+
+        // A provider planar frame carries the current plane equation, but its
+        // U/V basis is not semantic authority (ADR-0016 / PM-05C2b). The
+        // existing Part Surface reference already owns the canonical frame
+        // for this evaluation. Downstream trimming must preserve that frame
+        // when provider history proves the same Surface survives.
         if (item.surface_status ==
-                kernel::ReferenceStatus::resolved &&
-            reference.canonical_frame !=
+                kernel::ReferenceStatus::resolved) {
+            if (reference.surface_kind ==
+                    kernel::SurfaceKind::plane) {
+                if (!reference.canonical_frame ||
+                    !reference.canonical_frame->valid() ||
+                    !item.canonical_frame ||
+                    !item.canonical_frame->valid()) {
+                    return false;
+                }
+            } else if (
+                reference.canonical_frame ||
                 item.canonical_frame) {
+                return false;
+            }
+        } else if (item.canonical_frame) {
             return false;
         }
 
@@ -1708,8 +1726,6 @@ void propagateCurrentReferences(
             item.strict_face_status;
         reference.candidate_face_count =
             item.candidate_face_count;
-        reference.canonical_frame =
-            item.canonical_frame;
         reference.current_faces =
             item.current_faces;
         seen[found->second] = true;
@@ -1717,6 +1733,7 @@ void propagateCurrentReferences(
         if (item.surface_status !=
             kernel::ReferenceStatus::resolved) {
             reference.runtime_token.reset();
+            reference.canonical_frame.reset();
         }
     }
 

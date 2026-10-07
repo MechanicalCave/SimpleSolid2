@@ -212,8 +212,18 @@ QString featureDiagnosticText(
         return QStringLiteral("None");
     case part::FeatureEvaluationDiagnosticCode::missing_profile:
         return QStringLiteral("Missing Profile");
+    case part::FeatureEvaluationDiagnosticCode::profile_unavailable:
+        return QStringLiteral("Profile unavailable");
     case part::FeatureEvaluationDiagnosticCode::unresolved_profile:
         return QStringLiteral("Unresolved Profile");
+    case part::FeatureEvaluationDiagnosticCode::missing_axis:
+        return QStringLiteral("Missing Axis");
+    case part::FeatureEvaluationDiagnosticCode::axis_unavailable:
+        return QStringLiteral("Axis unavailable");
+    case part::FeatureEvaluationDiagnosticCode::axis_not_in_profile_plane:
+        return QStringLiteral("Axis not in Profile plane");
+    case part::FeatureEvaluationDiagnosticCode::profile_crosses_axis:
+        return QStringLiteral("Profile crosses Axis");
     case part::FeatureEvaluationDiagnosticCode::sketch_support_missing:
         return QStringLiteral("Sketch support missing");
     case part::FeatureEvaluationDiagnosticCode::sketch_support_ambiguous:
@@ -240,6 +250,14 @@ QString featureDiagnosticText(
         return QStringLiteral("Empty result");
     case part::FeatureEvaluationDiagnosticCode::multi_solid:
         return QStringLiteral("Multi-solid result");
+    case part::FeatureEvaluationDiagnosticCode::topology_integrity_failure:
+        return QStringLiteral("Topology integrity failure");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_missing:
+        return QStringLiteral("Edge reference Missing");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_ambiguous:
+        return QStringLiteral("Edge reference Ambiguous");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_unsupported:
+        return QStringLiteral("Edge reference Unsupported");
     }
     return QStringLiteral("Unknown");
 }
@@ -1357,14 +1375,24 @@ void PartDocumentTreeController::rebuild(
         const auto* revolve =
             std::get_if<part::RevolveFeature>(
                 &feature.definition);
+        const auto* fillet =
+            std::get_if<part::FilletFeature>(
+                &feature.definition);
+        const auto* chamfer =
+            std::get_if<part::ChamferFeature>(
+                &feature.definition);
         if (extrude == nullptr &&
-            revolve == nullptr) {
+            revolve == nullptr &&
+            fillet == nullptr &&
+            chamfer == nullptr) {
             continue;
         }
 
         const auto source_profile_id =
             part::sourceProfileId(feature);
-        if (!source_profile_id) {
+        if ((extrude != nullptr ||
+             revolve != nullptr) &&
+            !source_profile_id) {
             continue;
         }
 
@@ -1395,16 +1423,25 @@ void PartDocumentTreeController::rebuild(
                 : part::FeatureEvaluationDiagnosticCode::
                       none;
 
+        const bool profile_feature =
+            extrude != nullptr ||
+            revolve != nullptr;
         const bool cut =
             extrude != nullptr
                 ? extrude->operation ==
                       part::ExtrudeOperation::cut
-                : revolve->operation ==
-                      part::RevolveOperation::cut;
+                : revolve != nullptr
+                    ? revolve->operation ==
+                          part::RevolveOperation::cut
+                    : false;
         const auto feature_kind =
             extrude != nullptr
                 ? QStringLiteral("Extrude")
-                : QStringLiteral("Revolve");
+                : revolve != nullptr
+                    ? QStringLiteral("Revolve")
+                    : fillet != nullptr
+                        ? QStringLiteral("Fillet")
+                        : QStringLiteral("Chamfer");
 
         QString label =
             feature.name.empty()
@@ -1415,9 +1452,24 @@ void PartDocumentTreeController::rebuild(
                               static_cast<qulonglong>(
                                   feature_index)))
                 : fromUtf8(feature.name);
-        label += cut
-                     ? QStringLiteral(" — Cut")
-                     : QStringLiteral(" — Add");
+        if (profile_feature) {
+            label += cut
+                         ? QStringLiteral(" — Cut")
+                         : QStringLiteral(" — Add");
+        } else {
+            const auto edge_count =
+                fillet != nullptr
+                    ? fillet->edges.size()
+                    : chamfer->edges.size();
+            label += QStringLiteral(" — %1 Edge%2")
+                         .arg(
+                             static_cast<qulonglong>(
+                                 edge_count))
+                         .arg(
+                             edge_count == 1U
+                                 ? QString{}
+                                 : QStringLiteral("s"));
+        }
         label += QStringLiteral(" [%1]")
                      .arg(
                          featureStatusText(status));
@@ -1432,28 +1484,56 @@ void PartDocumentTreeController::rebuild(
                 feature.id.serialized()));
 
         const auto* profile =
-            session_->document().findProfile(
-                *source_profile_id);
+            source_profile_id
+                ? session_->document().findProfile(
+                      *source_profile_id)
+                : nullptr;
         QString tooltip =
             QStringLiteral("FeatureId: ") +
             fromUtf8(
                 feature.id.serialized()) +
             QStringLiteral("\nType: ") +
-            feature_kind +
-            QStringLiteral("\nSource ProfileId: ") +
-            fromUtf8(
-                source_profile_id->serialized()) +
-            QStringLiteral("\nSource SketchId: ") +
-            (profile != nullptr
-                 ? fromUtf8(
-                       profile->source_sketch_id
-                           .value())
-                 : QStringLiteral("<missing>"));
+            feature_kind;
+        if (source_profile_id) {
+            tooltip +=
+                QStringLiteral("\nSource ProfileId: ") +
+                fromUtf8(
+                    source_profile_id->serialized()) +
+                QStringLiteral("\nSource SketchId: ") +
+                (profile != nullptr
+                     ? fromUtf8(
+                           profile->source_sketch_id
+                               .value())
+                     : QStringLiteral("<missing>"));
+        }
         if (revolve != nullptr) {
             tooltip +=
                 QStringLiteral("\nAxis: ") +
                 axisReferenceText(
                     revolve->axis);
+        }
+        if (fillet != nullptr) {
+            tooltip +=
+                QStringLiteral("\nExplicit Edges: %1\nRadius: %2 mm")
+                    .arg(
+                        static_cast<qulonglong>(
+                            fillet->edges.size()))
+                    .arg(
+                        fillet->radius.millimetres,
+                        0,
+                        'g',
+                        12);
+        } else if (chamfer != nullptr) {
+            tooltip +=
+                QStringLiteral("\nExplicit Edges: %1\nDistance: %2 mm")
+                    .arg(
+                        static_cast<qulonglong>(
+                            chamfer->edges.size()))
+                    .arg(
+                        chamfer->distance.millimetres,
+                        0,
+                        'g',
+                        12);
         }
         tooltip +=
             QStringLiteral("\nStatus: ") +
@@ -2086,12 +2166,21 @@ void PartDocumentTreeController::showContextMenu(
                 return;
             }
 
-            edit_feature_action_->setText(
+            const auto edit_text =
                 std::holds_alternative<
-                    part::RevolveFeature>(
+                    part::ExtrudeFeature>(
                     feature->definition)
-                    ? QStringLiteral("Edit Revolve")
-                    : QStringLiteral("Edit Extrude"));
+                    ? QStringLiteral("Edit Extrude")
+                    : std::holds_alternative<
+                          part::RevolveFeature>(
+                          feature->definition)
+                        ? QStringLiteral("Edit Revolve")
+                        : std::holds_alternative<
+                              part::FilletFeature>(
+                              feature->definition)
+                            ? QStringLiteral("Edit Fillet")
+                            : QStringLiteral("Edit Chamfer");
+            edit_feature_action_->setText(edit_text);
             edit_feature_action_->setEnabled(
                 !feature->suppressed);
             suppress_feature_action_->setEnabled(

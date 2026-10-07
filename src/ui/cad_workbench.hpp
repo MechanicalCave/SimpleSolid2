@@ -272,6 +272,9 @@ private:
 
     [[nodiscard]] bool startFilletTool();
     [[nodiscard]] bool startChamferTool();
+    [[nodiscard]] bool startEdgeFeatureEdit(
+        part::FeatureId feature_id);
+    void clearEdgeFeatureSelection();
     void cancelEdgeFeature();
     [[nodiscard]] bool finishEdgeFeature();
     void clearEdgeFeatureRuntimeContext();
@@ -732,8 +735,11 @@ private:
     std::optional<
         application::EdgeFeatureDraftEvaluationResult>
         edge_feature_evaluation_;
+    std::vector<part::MaterialEdgeReference>
+        edge_feature_unresolved_edit_edges_;
     bool edge_feature_parameter_input_valid_{true};
     bool syncing_edge_feature_ui_{};
+    bool syncing_edge_feature_selection_{};
 
     QWidget* profile_operations_widget_{};
     QPushButton* profile_add_area_button_{};

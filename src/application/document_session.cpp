@@ -3390,10 +3390,13 @@ DocumentSession::evaluateFilletDraft(
     result.document_id = draft.documentId();
     result.source_revision = draft.sourceRevision();
     result.draft_generation = draft.generation();
+    result.mode = draft.mode();
+    result.feature_id = draft.featureId();
     result.operation =
         kernel::EdgeFeatureOperation::fillet;
     result.edges = draft.edges();
     result.parameter = draft.radius();
+    result.name = draft.name();
 
     if (documentId() != draft.documentId()) {
         result.status =
@@ -3410,7 +3413,9 @@ DocumentSession::evaluateFilletDraft(
     }
     if (!draft.valid() ||
         !draft.radius() ||
-        !draft.requiredStage()) {
+        (draft.mode() ==
+             EdgeFeatureDraftMode::create &&
+         !draft.requiredStage())) {
         result.status =
             EdgeFeatureDraftEvaluationStatus::
                 incomplete_draft;
@@ -3419,26 +3424,62 @@ DocumentSession::evaluateFilletDraft(
 
     auto after = document_.state();
     applyBodyFeatureIdCursors(after);
-    const auto id =
-        after.body.next_feature_id.allocate();
-    if (!id) {
-        result.status =
-            EdgeFeatureDraftEvaluationStatus::
-                feature_id_exhausted;
-        return result;
-    }
 
+    part::FeatureId target_id;
     const part::FilletFeature definition{
         draft.edges(),
         *draft.radius()};
-    after.body.features.push_back(
-        part::PartFeature{
-            *id,
-            draft.name().empty()
-                ? defaultFilletFeatureName(*id)
-                : draft.name(),
-            false,
-            definition});
+    if (draft.mode() ==
+        EdgeFeatureDraftMode::create) {
+        const auto id =
+            after.body.next_feature_id.allocate();
+        if (!id) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    feature_id_exhausted;
+            return result;
+        }
+        target_id = *id;
+        after.body.features.push_back(
+            part::PartFeature{
+                target_id,
+                draft.name().empty()
+                    ? defaultFilletFeatureName(target_id)
+                    : draft.name(),
+                false,
+                definition});
+    } else {
+        if (!draft.featureId()) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    incomplete_draft;
+            return result;
+        }
+        auto* feature =
+            findFeature(after, *draft.featureId());
+        if (feature == nullptr) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    missing_feature;
+            return result;
+        }
+        if (feature->suppressed) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    suppressed_feature;
+            return result;
+        }
+        if (std::get_if<part::FilletFeature>(
+                &feature->definition) == nullptr) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    invalid_candidate;
+            return result;
+        }
+        target_id = feature->id;
+        feature->name = draft.name();
+        feature->definition = definition;
+    }
 
     auto candidate =
         part::PartDocument::restore(
@@ -3460,7 +3501,7 @@ DocumentSession::evaluateFilletDraft(
     result.body_solid = evaluation.body_solid;
 
     const auto* target =
-        evaluation.findFeature(*id);
+        evaluation.findFeature(target_id);
     if (target == nullptr) {
         result.status =
             EdgeFeatureDraftEvaluationStatus::
@@ -3487,10 +3528,13 @@ DocumentSession::evaluateFilletDraft(
         return result;
     }
 
-    if (result.body_solid != nullptr) {
+    // Preview the exact successful target stage. During Edit the final Body
+    // may be unavailable because downstream Features are Blocked by the
+    // candidate, but that must not erase a valid target-stage preview.
+    if (target->result_solid != nullptr) {
         auto preview =
             modeling_kernel.presentationMesh(
-                result.body_solid);
+                target->result_solid);
         if (preview.ok()) {
             result.preview_mesh =
                 std::move(preview.mesh);
@@ -3511,10 +3555,13 @@ DocumentSession::evaluateChamferDraft(
     result.document_id = draft.documentId();
     result.source_revision = draft.sourceRevision();
     result.draft_generation = draft.generation();
+    result.mode = draft.mode();
+    result.feature_id = draft.featureId();
     result.operation =
         kernel::EdgeFeatureOperation::chamfer;
     result.edges = draft.edges();
     result.parameter = draft.distance();
+    result.name = draft.name();
 
     if (documentId() != draft.documentId()) {
         result.status =
@@ -3531,7 +3578,9 @@ DocumentSession::evaluateChamferDraft(
     }
     if (!draft.valid() ||
         !draft.distance() ||
-        !draft.requiredStage()) {
+        (draft.mode() ==
+             EdgeFeatureDraftMode::create &&
+         !draft.requiredStage())) {
         result.status =
             EdgeFeatureDraftEvaluationStatus::
                 incomplete_draft;
@@ -3540,26 +3589,62 @@ DocumentSession::evaluateChamferDraft(
 
     auto after = document_.state();
     applyBodyFeatureIdCursors(after);
-    const auto id =
-        after.body.next_feature_id.allocate();
-    if (!id) {
-        result.status =
-            EdgeFeatureDraftEvaluationStatus::
-                feature_id_exhausted;
-        return result;
-    }
 
+    part::FeatureId target_id;
     const part::ChamferFeature definition{
         draft.edges(),
         *draft.distance()};
-    after.body.features.push_back(
-        part::PartFeature{
-            *id,
-            draft.name().empty()
-                ? defaultChamferFeatureName(*id)
-                : draft.name(),
-            false,
-            definition});
+    if (draft.mode() ==
+        EdgeFeatureDraftMode::create) {
+        const auto id =
+            after.body.next_feature_id.allocate();
+        if (!id) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    feature_id_exhausted;
+            return result;
+        }
+        target_id = *id;
+        after.body.features.push_back(
+            part::PartFeature{
+                target_id,
+                draft.name().empty()
+                    ? defaultChamferFeatureName(target_id)
+                    : draft.name(),
+                false,
+                definition});
+    } else {
+        if (!draft.featureId()) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    incomplete_draft;
+            return result;
+        }
+        auto* feature =
+            findFeature(after, *draft.featureId());
+        if (feature == nullptr) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    missing_feature;
+            return result;
+        }
+        if (feature->suppressed) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    suppressed_feature;
+            return result;
+        }
+        if (std::get_if<part::ChamferFeature>(
+                &feature->definition) == nullptr) {
+            result.status =
+                EdgeFeatureDraftEvaluationStatus::
+                    invalid_candidate;
+            return result;
+        }
+        target_id = feature->id;
+        feature->name = draft.name();
+        feature->definition = definition;
+    }
 
     auto candidate =
         part::PartDocument::restore(
@@ -3581,7 +3666,7 @@ DocumentSession::evaluateChamferDraft(
     result.body_solid = evaluation.body_solid;
 
     const auto* target =
-        evaluation.findFeature(*id);
+        evaluation.findFeature(target_id);
     if (target == nullptr) {
         result.status =
             EdgeFeatureDraftEvaluationStatus::
@@ -3608,10 +3693,13 @@ DocumentSession::evaluateChamferDraft(
         return result;
     }
 
-    if (result.body_solid != nullptr) {
+    // Preview the exact successful target stage. During Edit the final Body
+    // may be unavailable because downstream Features are Blocked by the
+    // candidate, but that must not erase a valid target-stage preview.
+    if (target->result_solid != nullptr) {
         auto preview =
             modeling_kernel.presentationMesh(
-                result.body_solid);
+                target->result_solid);
         if (preview.ok()) {
             result.preview_mesh =
                 std::move(preview.mesh);
@@ -4804,6 +4892,150 @@ CreateEdgeFeatureResult DocumentSession::execute(
         part::FeatureEvaluationDiagnosticCode::
             none,
         DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EditFilletFeatureCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Edit Fillet was started from a stale DocumentRevision",
+            path_);
+    }
+    if (!command.valid()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Fillet contains invalid Edge inputs or Radius",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* feature = findFeature(after, command.feature_id);
+    if (feature == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Fillet target FeatureId does not exist",
+            path_);
+    }
+    if (feature->suppressed) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Fillet target is Suppressed; unsuppress before editing",
+            path_);
+    }
+    if (std::get_if<part::FilletFeature>(
+            &feature->definition) == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Fillet target FeatureId is not a Fillet Feature",
+            path_);
+    }
+
+    feature->name = command.name;
+    feature->definition =
+        part::FilletFeature{command.edges, command.radius};
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Edit Fillet candidate violates Part authored-state invariants",
+            path_);
+    }
+
+    const auto evaluation =
+        part::evaluatePart(*candidate.document, modeling_kernel);
+    const auto* target =
+        evaluation.findFeature(command.feature_id);
+    if (target == nullptr ||
+        target->status !=
+            part::FeatureEvaluationStatus::up_to_date) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Fillet target did not evaluate UpToDate; no authored mutation committed",
+            path_);
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Fillet Feature");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EditChamferFeatureCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Edit Chamfer was started from a stale DocumentRevision",
+            path_);
+    }
+    if (!command.valid()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Chamfer contains invalid Edge inputs or Distance",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* feature = findFeature(after, command.feature_id);
+    if (feature == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Chamfer target FeatureId does not exist",
+            path_);
+    }
+    if (feature->suppressed) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Chamfer target is Suppressed; unsuppress before editing",
+            path_);
+    }
+    if (std::get_if<part::ChamferFeature>(
+            &feature->definition) == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Chamfer target FeatureId is not a Chamfer Feature",
+            path_);
+    }
+
+    feature->name = command.name;
+    feature->definition =
+        part::ChamferFeature{command.edges, command.distance};
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Edit Chamfer candidate violates Part authored-state invariants",
+            path_);
+    }
+
+    const auto evaluation =
+        part::evaluatePart(*candidate.document, modeling_kernel);
+    const auto* target =
+        evaluation.findFeature(command.feature_id);
+    if (target == nullptr ||
+        target->status !=
+            part::FeatureEvaluationStatus::up_to_date) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Chamfer target did not evaluate UpToDate; no authored mutation committed",
+            path_);
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Chamfer Feature");
 }
 
 DocumentSessionResult DocumentSession::execute(

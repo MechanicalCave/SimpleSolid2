@@ -230,8 +230,18 @@ QString featureEvaluationDiagnosticText(
         return QStringLiteral("—");
     case part::FeatureEvaluationDiagnosticCode::missing_profile:
         return QStringLiteral("Missing Profile");
+    case part::FeatureEvaluationDiagnosticCode::profile_unavailable:
+        return QStringLiteral("Profile unavailable");
     case part::FeatureEvaluationDiagnosticCode::unresolved_profile:
         return QStringLiteral("Unresolved Profile");
+    case part::FeatureEvaluationDiagnosticCode::missing_axis:
+        return QStringLiteral("Missing Axis");
+    case part::FeatureEvaluationDiagnosticCode::axis_unavailable:
+        return QStringLiteral("Axis unavailable");
+    case part::FeatureEvaluationDiagnosticCode::axis_not_in_profile_plane:
+        return QStringLiteral("Axis not in Profile plane");
+    case part::FeatureEvaluationDiagnosticCode::profile_crosses_axis:
+        return QStringLiteral("Profile crosses Axis");
     case part::FeatureEvaluationDiagnosticCode::sketch_support_missing:
         return QStringLiteral("Sketch support missing");
     case part::FeatureEvaluationDiagnosticCode::sketch_support_ambiguous:
@@ -260,6 +270,12 @@ QString featureEvaluationDiagnosticText(
         return QStringLiteral("Multi-solid result");
     case part::FeatureEvaluationDiagnosticCode::topology_integrity_failure:
         return QStringLiteral("Topology integrity failure");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_missing:
+        return QStringLiteral("Edge reference Missing");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_ambiguous:
+        return QStringLiteral("Edge reference Ambiguous");
+    case part::FeatureEvaluationDiagnosticCode::edge_reference_unsupported:
+        return QStringLiteral("Edge reference Unsupported");
     }
     return QStringLiteral("Unknown");
 }
@@ -523,6 +539,12 @@ QString edgeFeatureEvaluationText(
     case Status::feature_id_exhausted:
         return QStringLiteral(
             "Feature identity space is exhausted.");
+    case Status::missing_feature:
+        return QStringLiteral(
+            "Edited Feature is missing.");
+    case Status::suppressed_feature:
+        return QStringLiteral(
+            "Suppressed Feature cannot be edited.");
     case Status::invalid_candidate:
         return QStringLiteral(
             "%1 candidate is invalid.")
@@ -2036,10 +2058,15 @@ void CadWorkbench::buildUi() {
                                feature->definition)) {
                     static_cast<void>(
                         startExtrudeEdit(feature_id));
-                } else {
-                    setStatusText(
-                        QStringLiteral(
-                            "Fillet/Chamfer Edit is owned by PM-05E and is not active in PM-05D."));
+                } else if (
+                    std::holds_alternative<
+                        part::FilletFeature>(
+                        feature->definition) ||
+                    std::holds_alternative<
+                        part::ChamferFeature>(
+                        feature->definition)) {
+                    static_cast<void>(
+                        startEdgeFeatureEdit(feature_id));
                 }
             }
         });
@@ -4462,10 +4489,15 @@ void CadWorkbench::buildUi() {
                                feature->definition)) {
                     static_cast<void>(
                         startExtrudeEdit(feature_id));
-                } else {
-                    setStatusText(
-                        QStringLiteral(
-                            "Fillet/Chamfer Edit is owned by PM-05E and is not active in PM-05D."));
+                } else if (
+                    std::holds_alternative<
+                        part::FilletFeature>(
+                        feature->definition) ||
+                    std::holds_alternative<
+                        part::ChamferFeature>(
+                        feature->definition)) {
+                    static_cast<void>(
+                        startEdgeFeatureEdit(feature_id));
                 }
             }
         });
@@ -5204,11 +5236,7 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
-            if (viewport_controller_ != nullptr) {
-                viewport_controller_->
-                    clearBodyTopologyToolSelection();
-            }
-            tryStageEdgeFeatureSelection();
+            clearEdgeFeatureSelection();
         });
     QObject::connect(
         edge_feature_parameter_edit_,
@@ -5657,15 +5685,6 @@ void CadWorkbench::setFeatureSuppressed(
                 "Feature is no longer available."));
         return;
     }
-    if (std::holds_alternative<part::FilletFeature>(
-            feature->definition) ||
-        std::holds_alternative<part::ChamferFeature>(
-            feature->definition)) {
-        setStatusText(
-            QStringLiteral(
-                "Fillet/Chamfer Suppress lifecycle is owned by PM-05E and is not active in PM-05D."));
-        return;
-    }
     if (feature->suppressed == suppressed) {
         refreshFeatureProperties(
             feature_id);
@@ -5721,15 +5740,6 @@ void CadWorkbench::deleteFeature(
         setStatusText(
             QStringLiteral(
                 "Feature is no longer available."));
-        return;
-    }
-    if (std::holds_alternative<part::FilletFeature>(
-            feature->definition) ||
-        std::holds_alternative<part::ChamferFeature>(
-            feature->definition)) {
-        setStatusText(
-            QStringLiteral(
-                "Fillet/Chamfer Delete lifecycle is owned by PM-05E and is not active in PM-05D."));
         return;
     }
     const auto source_profile =
@@ -8657,6 +8667,175 @@ bool CadWorkbench::startChamferTool() {
     return true;
 }
 
+bool CadWorkbench::startEdgeFeatureEdit(
+    part::FeatureId feature_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        viewport_controller_ == nullptr ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
+        sketch_support_pick_active_ ||
+        axis_draft_ ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        revolve_draft_ ||
+        active_sketch_id_) {
+        return false;
+    }
+
+    const auto* feature =
+        document_session->document()
+            .findFeature(feature_id);
+    if (feature == nullptr ||
+        feature->suppressed) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Edge Feature is unavailable or Suppressed."));
+        return false;
+    }
+
+    std::optional<application::FilletDraft> fillet;
+    std::optional<application::ChamferDraft> chamfer;
+    if (std::holds_alternative<
+            part::FilletFeature>(
+            feature->definition)) {
+        fillet =
+            application::FilletDraft::beginEdit(
+                *document_session,
+                feature_id);
+    } else if (
+        std::holds_alternative<
+            part::ChamferFeature>(
+            feature->definition)) {
+        chamfer =
+            application::ChamferDraft::beginEdit(
+                *document_session,
+                feature_id);
+    } else {
+        return false;
+    }
+
+    const auto required_stage =
+        fillet
+            ? fillet->requiredStage()
+            : chamfer
+                ? chamfer->requiredStage()
+                : std::nullopt;
+    if (!required_stage) {
+        setStatusText(
+            QStringLiteral(
+                "Edge Feature Edit has no current upstream Body stage."));
+        return false;
+    }
+
+    syncing_edge_feature_selection_ = true;
+    viewport_controller_->
+        setBodyTopologyEdgeDraftMode(true);
+    if (!viewport_controller_->
+             setBodyTopologyToolStage(
+                 *required_stage)) {
+        viewport_controller_->
+            setBodyTopologyEdgeDraftMode(false);
+        syncing_edge_feature_selection_ = false;
+        setStatusText(
+            QStringLiteral(
+                "Edge Feature upstream Body stage is unavailable; repair cannot start."));
+        return false;
+    }
+
+    fillet_draft_ = std::move(fillet);
+    chamfer_draft_ = std::move(chamfer);
+    edge_feature_evaluation_.reset();
+    edge_feature_parameter_input_valid_ = true;
+
+    const auto& authored_edges =
+        fillet_draft_
+            ? fillet_draft_->edges()
+            : chamfer_draft_->edges();
+    const auto unresolved =
+        viewport_controller_->
+            restoreMaterialEdgeToolSelection(
+                authored_edges);
+    if (!unresolved) {
+        syncing_edge_feature_selection_ = false;
+        clearEdgeFeatureRuntimeContext();
+        setStatusText(
+            QStringLiteral(
+                "Edge Feature authored selection could not be reconstructed for Edit."));
+        return false;
+    }
+    edge_feature_unresolved_edit_edges_ =
+        *unresolved;
+    syncing_edge_feature_selection_ = false;
+
+    if (edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        const auto parameter =
+            fillet_draft_
+                ? fillet_draft_->radius()
+                : chamfer_draft_->distance();
+        edge_feature_parameter_edit_->setText(
+            parameter
+                ? formatLengthForPart(
+                      *parameter,
+                      document_session->document()
+                          .lengthUnit())
+                : QString{});
+    }
+
+    refreshEdgeFeaturePreview();
+    syncActionState();
+    syncEdgeFeatureUi();
+    notifyCadInputContextChanged();
+
+    const auto kind =
+        fillet_draft_
+            ? QStringLiteral("Fillet")
+            : QStringLiteral("Chamfer");
+    setStatusText(
+        edge_feature_unresolved_edit_edges_.empty()
+            ? QStringLiteral(
+                  "Edit %1 active — FeatureId and exact upstream Body stage are preserved.")
+                  .arg(kind)
+            : QStringLiteral(
+                  "Edit %1 active — %2 authored Edge input(s) are unresolved; use Clear and explicitly reselect repair Edges.")
+                  .arg(kind)
+                  .arg(static_cast<qulonglong>(
+                      edge_feature_unresolved_edit_edges_
+                          .size())));
+    return true;
+}
+
+void CadWorkbench::clearEdgeFeatureSelection() {
+    if (!fillet_draft_ &&
+        !chamfer_draft_) {
+        return;
+    }
+
+    edge_feature_unresolved_edit_edges_.clear();
+    const bool applied =
+        fillet_draft_
+            ? fillet_draft_->setEdges({})
+            : chamfer_draft_->setEdges({});
+    if (!applied) {
+        return;
+    }
+
+    edge_feature_evaluation_.reset();
+    syncing_edge_feature_selection_ = true;
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            clearBodyTopologyToolSelection();
+    }
+    syncing_edge_feature_selection_ = false;
+    refreshEdgeFeaturePreview();
+    notifyCadInputContextChanged();
+}
+
 void CadWorkbench::cancelEdgeFeature() {
     if (!fillet_draft_ &&
         !chamfer_draft_) {
@@ -8666,7 +8845,20 @@ void CadWorkbench::cancelEdgeFeature() {
         fillet_draft_
             ? QStringLiteral("Fillet")
             : QStringLiteral("Chamfer");
+    const auto edit_feature_id =
+        fillet_draft_ &&
+                fillet_draft_->mode() ==
+                    application::EdgeFeatureDraftMode::edit
+            ? fillet_draft_->featureId()
+            : chamfer_draft_ &&
+                      chamfer_draft_->mode() ==
+                          application::EdgeFeatureDraftMode::edit
+                ? chamfer_draft_->featureId()
+                : std::nullopt;
     clearEdgeFeatureRuntimeContext();
+    if (edit_feature_id) {
+        navigateToFeature(*edit_feature_id);
+    }
     syncActionState();
     notifyCadInputContextChanged();
     setStatusText(
@@ -8754,12 +8946,19 @@ void CadWorkbench::clearEdgeFeatureRuntimeContext() {
     fillet_draft_.reset();
     chamfer_draft_.reset();
     edge_feature_evaluation_.reset();
+    edge_feature_unresolved_edit_edges_.clear();
     edge_feature_parameter_input_valid_ = true;
+    syncing_edge_feature_selection_ = true;
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clearSolidPreview();
         viewport_controller_->
             setBodyTopologyEdgeDraftMode(false);
+        static_cast<void>(
+            viewport_controller_->
+                setBodyTopologyToolStage(
+                    std::nullopt));
     }
+    syncing_edge_feature_selection_ = false;
     if (edge_feature_parameter_edit_ != nullptr) {
         const QSignalBlocker blocked{
             edge_feature_parameter_edit_};
@@ -8769,7 +8968,8 @@ void CadWorkbench::clearEdgeFeatureRuntimeContext() {
 }
 
 void CadWorkbench::tryStageEdgeFeatureSelection() {
-    if ((!fillet_draft_ &&
+    if (syncing_edge_feature_selection_ ||
+        (!fillet_draft_ &&
          !chamfer_draft_) ||
         viewport_controller_ == nullptr) {
         return;
@@ -8783,6 +8983,20 @@ void CadWorkbench::tryStageEdgeFeatureSelection() {
         edges = *selected;
     }
 
+    const bool editing =
+        fillet_draft_
+            ? fillet_draft_->mode() ==
+                  application::EdgeFeatureDraftMode::edit
+            : chamfer_draft_->mode() ==
+                  application::EdgeFeatureDraftMode::edit;
+    if (editing &&
+        !edge_feature_unresolved_edit_edges_.empty()) {
+        edges.insert(
+            edges.end(),
+            edge_feature_unresolved_edit_edges_.begin(),
+            edge_feature_unresolved_edit_edges_.end());
+    }
+
     const bool applied =
         fillet_draft_
             ? fillet_draft_->setEdges(
@@ -8790,9 +9004,21 @@ void CadWorkbench::tryStageEdgeFeatureSelection() {
             : chamfer_draft_->setEdges(
                   std::move(edges));
     if (!applied) {
+        syncing_edge_feature_selection_ = true;
+        const auto restored =
+            viewport_controller_->
+                restoreMaterialEdgeToolSelection(
+                    fillet_draft_
+                        ? fillet_draft_->edges()
+                        : chamfer_draft_->edges());
+        if (restored) {
+            edge_feature_unresolved_edit_edges_ =
+                *restored;
+        }
+        syncing_edge_feature_selection_ = false;
         setStatusText(
             QStringLiteral(
-                "Edge selection is stale, duplicated or not valid for the Feature's consumed Body stage."));
+                "Edge selection is stale, duplicated or not valid for the current consumed Body stage. Clear unresolved intent before replacement."));
         return;
     }
 
@@ -8919,19 +9145,39 @@ void CadWorkbench::syncEdgeFeatureUi() {
         fillet
             ? fillet_draft_->edges().size()
             : chamfer_draft_->edges().size();
+    const bool editing =
+        fillet
+            ? fillet_draft_->mode() ==
+                  application::EdgeFeatureDraftMode::edit
+            : chamfer_draft_->mode() ==
+                  application::EdgeFeatureDraftMode::edit;
 
     if (edge_feature_title_label_ != nullptr) {
         edge_feature_title_label_->setText(
-            fillet
-                ? QStringLiteral("FILLET")
-                : QStringLiteral("CHAMFER"));
+            editing
+                ? (fillet
+                       ? QStringLiteral("EDIT FILLET")
+                       : QStringLiteral("EDIT CHAMFER"))
+                : (fillet
+                       ? QStringLiteral("FILLET")
+                       : QStringLiteral("CHAMFER")));
     }
     if (edge_feature_selection_label_ != nullptr) {
         edge_feature_selection_label_->setText(
-            QStringLiteral("Selected edges: %1")
-                .arg(
-                    static_cast<qulonglong>(
-                        edge_count)));
+            edge_feature_unresolved_edit_edges_.empty()
+                ? QStringLiteral("Selected edges: %1")
+                      .arg(
+                          static_cast<qulonglong>(
+                              edge_count))
+                : QStringLiteral(
+                      "Selected edges: %1 · unresolved: %2")
+                      .arg(
+                          static_cast<qulonglong>(
+                              edge_count))
+                      .arg(
+                          static_cast<qulonglong>(
+                              edge_feature_unresolved_edit_edges_
+                                  .size())));
     }
     if (edge_feature_parameter_name_label_ != nullptr) {
         edge_feature_parameter_name_label_->setText(
@@ -8941,9 +9187,13 @@ void CadWorkbench::syncEdgeFeatureUi() {
     }
     if (edge_feature_finish_button_ != nullptr) {
         edge_feature_finish_button_->setText(
-            fillet
-                ? QStringLiteral("Finish Fillet")
-                : QStringLiteral("Finish Chamfer"));
+            editing
+                ? (fillet
+                       ? QStringLiteral("Finish Edit Fillet")
+                       : QStringLiteral("Finish Edit Chamfer"))
+                : (fillet
+                       ? QStringLiteral("Finish Fillet")
+                       : QStringLiteral("Finish Chamfer")));
         edge_feature_finish_button_->setEnabled(
             edge_feature_parameter_input_valid_ &&
             edge_feature_evaluation_ &&
@@ -9021,11 +9271,7 @@ CadWorkbench::submitEdgeFeatureCadInput(
         return {true, {}};
     }
     if (keyword == "CLEAR") {
-        if (viewport_controller_ != nullptr) {
-            viewport_controller_->
-                clearBodyTopologyToolSelection();
-        }
-        tryStageEdgeFeatureSelection();
+        clearEdgeFeatureSelection();
         return {true, {}};
     }
     if (keyword == "REMOVE") {
@@ -12356,9 +12602,6 @@ void CadWorkbench::refreshFeatureProperties(
             diagnostic));
     feature_go_to_profile_button_->setEnabled(
         profile != nullptr);
-    const bool edge_feature =
-        fillet != nullptr ||
-        chamfer != nullptr;
     const bool lifecycle_available =
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
@@ -12368,7 +12611,6 @@ void CadWorkbench::refreshFeatureProperties(
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     feature_edit_button_->setEnabled(
-        !edge_feature &&
         !feature->suppressed &&
         solid_modeling_kernel_ != nullptr &&
         lifecycle_available);
@@ -12377,11 +12619,9 @@ void CadWorkbench::refreshFeatureProperties(
             ? QStringLiteral("Unsuppress Feature")
             : QStringLiteral("Suppress Feature"));
     feature_suppress_button_->setEnabled(
-        lifecycle_available &&
-        !edge_feature);
+        lifecycle_available);
     feature_delete_button_->setEnabled(
-        lifecycle_available &&
-        !edge_feature);
+        lifecycle_available);
 
     const auto contribution =
         viewport_controller_ != nullptr

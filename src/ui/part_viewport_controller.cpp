@@ -758,6 +758,7 @@ void PartViewportController::setSolidModelingKernel(
 
     solid_modeling_kernel_ =
         modeling_kernel;
+    body_topology_tool_stage_.reset();
     body_scene_revision_.reset();
     body_scene_cache_.reset();
     part_evaluation_cache_.reset();
@@ -797,6 +798,7 @@ void PartViewportController::setDocumentSession(
         transient_profile_reveal_.reset();
         transient_profile_hide_.reset();
     transient_axis_emphasis_.reset();
+        body_topology_tool_stage_.reset();
         body_scene_revision_.reset();
         body_scene_cache_.reset();
         part_evaluation_cache_.reset();
@@ -840,6 +842,7 @@ void PartViewportController::clear() {
     transient_profile_reveal_.reset();
     transient_profile_hide_.reset();
     transient_axis_emphasis_.reset();
+    body_topology_tool_stage_.reset();
     body_scene_revision_.reset();
     body_scene_cache_.reset();
     part_evaluation_cache_.reset();
@@ -3558,7 +3561,26 @@ PartViewportController::buildBodyScene() {
     viewer::BodyScenePurpose purpose =
         viewer::BodyScenePurpose::current_body;
 
-    if (evaluation.body_status ==
+    if (body_topology_tool_stage_) {
+        const auto stage =
+            std::find_if(
+                evaluation.features.begin(),
+                evaluation.features.end(),
+                [this](
+                    const part::FeatureEvaluation& feature) {
+                    return feature.result_solid != nullptr &&
+                           feature.result_topology &&
+                           feature.result_topology->complete() &&
+                           feature.result_topology->stage ==
+                               *body_topology_tool_stage_;
+                });
+        if (stage != evaluation.features.end()) {
+            presentation_solid = stage->result_solid;
+            topology = &*stage->result_topology;
+            purpose =
+                viewer::BodyScenePurpose::tool_stage;
+        }
+    } else if (evaluation.body_status ==
             part::BodyEvaluationStatus::
                 up_to_date &&
         evaluation.body_solid != nullptr &&
@@ -4389,10 +4411,15 @@ PartViewportController::bodyTopologyAddressFor(
 
 bool PartViewportController::bodyTopologyOrdinaryPickable(
     const BodyTopologyBinding& binding) const {
+    const bool authoring_scene =
+        body_scene_cache_ &&
+        (body_scene_cache_->purpose ==
+             viewer::BodyScenePurpose::current_body ||
+         (body_topology_edge_draft_mode_ &&
+          body_scene_cache_->purpose ==
+              viewer::BodyScenePurpose::tool_stage));
     if (!binding.valid() ||
-        !body_scene_cache_ ||
-        body_scene_cache_->purpose !=
-            viewer::BodyScenePurpose::current_body ||
+        !authoring_scene ||
         binding.generation !=
             body_scene_cache_->generation ||
         !body_topology_catalog_cache_) {
@@ -4462,8 +4489,11 @@ bool PartViewportController::bodyTopologyQueryCurrent(
            query.completed &&
            query.generation.valid() &&
            body_scene_cache_.has_value() &&
-           body_scene_cache_->purpose ==
-               viewer::BodyScenePurpose::current_body &&
+           (body_scene_cache_->purpose ==
+                viewer::BodyScenePurpose::current_body ||
+            (body_topology_edge_draft_mode_ &&
+             body_scene_cache_->purpose ==
+                 viewer::BodyScenePurpose::tool_stage)) &&
            query.generation ==
                body_scene_cache_->generation;
 }
@@ -4583,6 +4613,120 @@ void PartViewportController::setBodyTopologyEdgeDraftMode(
     clearBodyTopologyPreselection();
 }
 
+bool PartViewportController::setBodyTopologyToolStage(
+    std::optional<part::BodyStageRef> stage) {
+    if (stage &&
+        (!body_topology_edge_draft_mode_ ||
+         !stage->valid() ||
+         stage->kind !=
+             part::BodyStageKind::after_feature)) {
+        return false;
+    }
+
+    const auto prior =
+        body_topology_tool_stage_;
+    body_topology_tool_stage_ =
+        std::move(stage);
+    body_scene_revision_.reset();
+    clearBodyTopologyPreselection();
+    clearBodyTopologySelection();
+    refreshPresentation();
+
+    if (!body_topology_tool_stage_) {
+        return true;
+    }
+
+    const bool ready =
+        body_scene_cache_ &&
+        body_scene_cache_->purpose ==
+            viewer::BodyScenePurpose::tool_stage &&
+        body_topology_catalog_cache_ &&
+        body_topology_catalog_cache_->complete() &&
+        body_topology_catalog_cache_->stage ==
+            *body_topology_tool_stage_;
+    if (ready) {
+        return true;
+    }
+
+    body_topology_tool_stage_ = prior;
+    body_scene_revision_.reset();
+    clearBodyTopologyPreselection();
+    clearBodyTopologySelection();
+    refreshPresentation();
+    return false;
+}
+
+std::optional<std::vector<part::MaterialEdgeReference>>
+PartViewportController::restoreMaterialEdgeToolSelection(
+    const std::vector<
+        part::MaterialEdgeReference>& references) {
+    if (!body_topology_edge_draft_mode_ ||
+        !body_scene_cache_ ||
+        !body_scene_cache_->generation.valid() ||
+        (body_scene_cache_->purpose !=
+             viewer::BodyScenePurpose::current_body &&
+         body_scene_cache_->purpose !=
+             viewer::BodyScenePurpose::tool_stage) ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return std::nullopt;
+    }
+
+    std::vector<viewer::PresentationToken> tokens;
+    std::vector<part::MaterialEdgeReference> unresolved;
+    tokens.reserve(references.size());
+    unresolved.reserve(references.size());
+
+    for (const auto& reference : references) {
+        if (!reference.valid() ||
+            reference.stage !=
+                body_topology_catalog_cache_->stage) {
+            unresolved.push_back(reference);
+            continue;
+        }
+
+        const auto resolution =
+            part::resolveMaterialEdgeReference(
+                reference,
+                *body_topology_catalog_cache_);
+        if (!resolution ||
+            !resolution->resolved()) {
+            unresolved.push_back(reference);
+            continue;
+        }
+
+        const auto token =
+            bodyPresentationTokenFor(
+                viewer::BodyTopologyPresentationKind::edge,
+                resolution->current_edges.front().value);
+        if (!token) {
+            return std::nullopt;
+        }
+        if (std::find(
+                tokens.begin(),
+                tokens.end(),
+                *token) == tokens.end()) {
+            tokens.push_back(*token);
+        }
+    }
+
+    auto& selection = activeSelection();
+    selection.body_topology =
+        std::move(tokens);
+    selection.primary_body_topology =
+        selection.body_topology.empty()
+            ? std::nullopt
+            : std::optional<viewer::PresentationToken>{
+                  selection.body_topology.back()};
+    selection.body_topology_generation =
+        selection.body_topology.empty()
+            ? viewer::BodyPresentationGeneration{}
+            : body_scene_cache_->generation;
+    applySelectionToSurfaces();
+    notifySelectionChanged();
+    return unresolved;
+}
+
 void PartViewportController::clearBodyTopologyToolSelection() {
     if (session_ == nullptr) {
         return;
@@ -4637,9 +4781,14 @@ removePrimaryBodyTopologyToolSelection() {
 
 std::optional<std::vector<part::MaterialEdgeReference>>
 PartViewportController::selectedMaterialEdgeReferences() const {
-    if (!body_scene_cache_ ||
-        body_scene_cache_->purpose !=
-            viewer::BodyScenePurpose::current_body ||
+    const bool authoring_scene =
+        body_scene_cache_ &&
+        (body_scene_cache_->purpose ==
+             viewer::BodyScenePurpose::current_body ||
+         (body_topology_edge_draft_mode_ &&
+          body_scene_cache_->purpose ==
+              viewer::BodyScenePurpose::tool_stage));
+    if (!authoring_scene ||
         !body_scene_cache_->generation.valid() ||
         !body_topology_catalog_cache_ ||
         !body_topology_catalog_cache_->complete()) {
@@ -4798,8 +4947,11 @@ void PartViewportController::onBodyTopologyCycleIntent(
     if (!body_topology_candidate_stack_ ||
         !body_topology_candidate_stack_->valid() ||
         !body_scene_cache_ ||
-        body_scene_cache_->purpose !=
-            viewer::BodyScenePurpose::current_body ||
+        (body_scene_cache_->purpose !=
+             viewer::BodyScenePurpose::current_body &&
+         !(body_topology_edge_draft_mode_ &&
+           body_scene_cache_->purpose ==
+               viewer::BodyScenePurpose::tool_stage)) ||
         body_topology_candidate_stack_->generation !=
             body_scene_cache_->generation) {
         clearBodyTopologyPreselection();

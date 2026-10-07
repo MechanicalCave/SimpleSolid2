@@ -22,6 +22,30 @@ requiredStageForCreate(
         features.back().id};
 }
 
+[[nodiscard]] std::optional<part::BodyStageRef>
+requiredStageForEdit(
+    const DocumentSession& session,
+    part::FeatureId feature_id) {
+    const auto& features =
+        session.document().body().features;
+    const auto target =
+        std::find_if(
+            features.begin(),
+            features.end(),
+            [feature_id](const part::PartFeature& feature) {
+                return feature.id == feature_id;
+            });
+    if (target == features.end() ||
+        target == features.begin()) {
+        return std::nullopt;
+    }
+
+    const auto previous = std::prev(target);
+    return part::BodyStageRef{
+        part::BodyStageKind::after_feature,
+        previous->id};
+}
+
 [[nodiscard]] bool canonicalizeEdges(
     std::vector<part::MaterialEdgeReference>&
         edges,
@@ -74,6 +98,24 @@ bool CreateChamferFeatureCommand::valid()
             distance});
 }
 
+bool EditFilletFeatureCommand::valid()
+    const noexcept {
+    return feature_id.valid() &&
+           part::filletFeatureStructurallyValid(
+               part::FilletFeature{
+                   edges,
+                   radius});
+}
+
+bool EditChamferFeatureCommand::valid()
+    const noexcept {
+    return feature_id.valid() &&
+           part::chamferFeatureStructurallyValid(
+               part::ChamferFeature{
+                   edges,
+                   distance});
+}
+
 FilletDraft::FilletDraft(
     core::DocumentId document_id,
     core::DocumentRevision source_revision,
@@ -107,18 +149,59 @@ FilletDraft::beginCreate(
     return draft;
 }
 
-bool FilletDraft::valid() const noexcept {
-    if (!radius_ ||
-        !required_stage_ ||
-        edges_.empty()) {
-        return false;
+std::optional<FilletDraft>
+FilletDraft::beginEdit(
+    const DocumentSession& session,
+    part::FeatureId feature_id) {
+    const auto* feature =
+        session.document().findFeature(feature_id);
+    if (feature == nullptr || feature->suppressed) {
+        return std::nullopt;
     }
+    const auto* fillet =
+        std::get_if<part::FilletFeature>(
+            &feature->definition);
+    if (fillet == nullptr || fillet->edges.empty()) {
+        return std::nullopt;
+    }
+
+    auto draft = FilletDraft{
+        session.documentId(),
+        session.document().revision(),
+        requiredStageForEdit(session, feature_id)};
+    draft.mode_ = EdgeFeatureDraftMode::edit;
+    draft.feature_id_ = feature_id;
+    draft.edges_ = fillet->edges;
+    draft.radius_ = fillet->radius;
+    draft.name_ = feature->name;
+
+    // Existing durable intent may point at a consumed stage that has since
+    // been deleted. Opening Edit preserves that intent; replacement Edges are
+    // still constrained by setEdges() to the current required predecessor.
     return part::filletFeatureStructurallyValid(
                part::FilletFeature{
-                   edges_,
-                   *radius_}) &&
-           edges_.front().stage ==
-               *required_stage_;
+                   draft.edges_,
+                   *draft.radius_})
+        ? std::optional<FilletDraft>{std::move(draft)}
+        : std::nullopt;
+}
+
+bool FilletDraft::valid() const noexcept {
+    if (!radius_ ||
+        edges_.empty() ||
+        !part::filletFeatureStructurallyValid(
+            part::FilletFeature{
+                edges_,
+                *radius_})) {
+        return false;
+    }
+    if (mode_ == EdgeFeatureDraftMode::create) {
+        return required_stage_ &&
+               edges_.front().stage ==
+                   *required_stage_;
+    }
+    return feature_id_ &&
+           feature_id_->valid();
 }
 
 bool FilletDraft::currentFor(
@@ -190,7 +273,8 @@ bool FilletDraft::setName(
 
 std::optional<CreateFilletFeatureCommand>
 FilletDraft::command() const {
-    if (!valid()) {
+    if (mode_ != EdgeFeatureDraftMode::create ||
+        !valid()) {
         return std::nullopt;
     }
     CreateFilletFeatureCommand result{
@@ -201,6 +285,25 @@ FilletDraft::command() const {
     return result.valid()
         ? std::optional<
               CreateFilletFeatureCommand>{
+              std::move(result)}
+        : std::nullopt;
+}
+
+std::optional<EditFilletFeatureCommand>
+FilletDraft::editCommand() const {
+    if (mode_ != EdgeFeatureDraftMode::edit ||
+        !feature_id_ ||
+        !valid()) {
+        return std::nullopt;
+    }
+    EditFilletFeatureCommand result{
+        *feature_id_,
+        edges_,
+        source_revision_,
+        *radius_,
+        name_};
+    return result.valid()
+        ? std::optional<EditFilletFeatureCommand>{
               std::move(result)}
         : std::nullopt;
 }
@@ -238,18 +341,56 @@ ChamferDraft::beginCreate(
     return draft;
 }
 
-bool ChamferDraft::valid() const noexcept {
-    if (!distance_ ||
-        !required_stage_ ||
-        edges_.empty()) {
-        return false;
+std::optional<ChamferDraft>
+ChamferDraft::beginEdit(
+    const DocumentSession& session,
+    part::FeatureId feature_id) {
+    const auto* feature =
+        session.document().findFeature(feature_id);
+    if (feature == nullptr || feature->suppressed) {
+        return std::nullopt;
     }
+    const auto* chamfer =
+        std::get_if<part::ChamferFeature>(
+            &feature->definition);
+    if (chamfer == nullptr || chamfer->edges.empty()) {
+        return std::nullopt;
+    }
+
+    auto draft = ChamferDraft{
+        session.documentId(),
+        session.document().revision(),
+        requiredStageForEdit(session, feature_id)};
+    draft.mode_ = EdgeFeatureDraftMode::edit;
+    draft.feature_id_ = feature_id;
+    draft.edges_ = chamfer->edges;
+    draft.distance_ = chamfer->distance;
+    draft.name_ = feature->name;
+
     return part::chamferFeatureStructurallyValid(
                part::ChamferFeature{
-                   edges_,
-                   *distance_}) &&
-           edges_.front().stage ==
-               *required_stage_;
+                   draft.edges_,
+                   *draft.distance_})
+        ? std::optional<ChamferDraft>{std::move(draft)}
+        : std::nullopt;
+}
+
+bool ChamferDraft::valid() const noexcept {
+    if (!distance_ ||
+        edges_.empty() ||
+        !part::chamferFeatureStructurallyValid(
+            part::ChamferFeature{
+                edges_,
+                *distance_})) {
+        return false;
+    }
+    if (mode_ == EdgeFeatureDraftMode::create) {
+        return required_stage_ &&
+               edges_.front().stage ==
+                   *required_stage_;
+    }
+    return feature_id_ &&
+           feature_id_->valid();
 }
 
 bool ChamferDraft::currentFor(
@@ -321,7 +462,8 @@ bool ChamferDraft::setName(
 
 std::optional<CreateChamferFeatureCommand>
 ChamferDraft::command() const {
-    if (!valid()) {
+    if (mode_ != EdgeFeatureDraftMode::create ||
+        !valid()) {
         return std::nullopt;
     }
     CreateChamferFeatureCommand result{
@@ -332,6 +474,25 @@ ChamferDraft::command() const {
     return result.valid()
         ? std::optional<
               CreateChamferFeatureCommand>{
+              std::move(result)}
+        : std::nullopt;
+}
+
+std::optional<EditChamferFeatureCommand>
+ChamferDraft::editCommand() const {
+    if (mode_ != EdgeFeatureDraftMode::edit ||
+        !feature_id_ ||
+        !valid()) {
+        return std::nullopt;
+    }
+    EditChamferFeatureCommand result{
+        *feature_id_,
+        edges_,
+        source_revision_,
+        *distance_,
+        name_};
+    return result.valid()
+        ? std::optional<EditChamferFeatureCommand>{
               std::move(result)}
         : std::nullopt;
 }
@@ -354,8 +515,7 @@ finishFilletDraft(
             "Fillet draft context is stale."};
     }
 
-    const auto command = draft.command();
-    if (!command || !draft.radius()) {
+    if (!draft.valid() || !draft.radius()) {
         return {
             EdgeFeatureDraftFinishStatus::invalid_draft,
             false,
@@ -372,12 +532,18 @@ finishFilletDraft(
             draft.sourceRevision() &&
         evaluation.draft_generation ==
             draft.generation() &&
+        evaluation.mode ==
+            draft.mode() &&
+        evaluation.feature_id ==
+            draft.featureId() &&
         evaluation.operation ==
             kernel::EdgeFeatureOperation::fillet &&
         evaluation.edges ==
             draft.edges() &&
         evaluation.parameter ==
-            draft.radius();
+            draft.radius() &&
+        evaluation.name ==
+            draft.name();
 
     if (!exact_evaluation) {
         return {
@@ -387,10 +553,42 @@ finishFilletDraft(
             "Fillet Finish requires the current successful draft evaluation."};
     }
 
+    if (draft.mode() ==
+        EdgeFeatureDraftMode::create) {
+        const auto command = draft.command();
+        if (!command) {
+            return {
+                EdgeFeatureDraftFinishStatus::invalid_draft,
+                false,
+                std::nullopt,
+                "Fillet create draft has no valid command."};
+        }
+        const auto result =
+            session.execute(*command, modeling_kernel);
+        if (!result.ok()) {
+            return {
+                EdgeFeatureDraftFinishStatus::rejected,
+                false,
+                std::nullopt,
+                result.diagnostic.message};
+        }
+        return {
+            EdgeFeatureDraftFinishStatus::committed,
+            result.changed,
+            result.feature_id,
+            {}};
+    }
+
+    const auto command = draft.editCommand();
+    if (!command || !draft.featureId()) {
+        return {
+            EdgeFeatureDraftFinishStatus::invalid_draft,
+            false,
+            std::nullopt,
+            "Fillet edit draft has no valid FeatureId/command."};
+    }
     const auto result =
-        session.execute(
-            *command,
-            modeling_kernel);
+        session.execute(*command, modeling_kernel);
     if (!result.ok()) {
         return {
             EdgeFeatureDraftFinishStatus::rejected,
@@ -401,7 +599,7 @@ finishFilletDraft(
     return {
         EdgeFeatureDraftFinishStatus::committed,
         result.changed,
-        result.feature_id,
+        draft.featureId(),
         {}};
 }
 
@@ -422,8 +620,7 @@ finishChamferDraft(
             "Chamfer draft context is stale."};
     }
 
-    const auto command = draft.command();
-    if (!command || !draft.distance()) {
+    if (!draft.valid() || !draft.distance()) {
         return {
             EdgeFeatureDraftFinishStatus::invalid_draft,
             false,
@@ -440,12 +637,18 @@ finishChamferDraft(
             draft.sourceRevision() &&
         evaluation.draft_generation ==
             draft.generation() &&
+        evaluation.mode ==
+            draft.mode() &&
+        evaluation.feature_id ==
+            draft.featureId() &&
         evaluation.operation ==
             kernel::EdgeFeatureOperation::chamfer &&
         evaluation.edges ==
             draft.edges() &&
         evaluation.parameter ==
-            draft.distance();
+            draft.distance() &&
+        evaluation.name ==
+            draft.name();
 
     if (!exact_evaluation) {
         return {
@@ -455,10 +658,42 @@ finishChamferDraft(
             "Chamfer Finish requires the current successful draft evaluation."};
     }
 
+    if (draft.mode() ==
+        EdgeFeatureDraftMode::create) {
+        const auto command = draft.command();
+        if (!command) {
+            return {
+                EdgeFeatureDraftFinishStatus::invalid_draft,
+                false,
+                std::nullopt,
+                "Chamfer create draft has no valid command."};
+        }
+        const auto result =
+            session.execute(*command, modeling_kernel);
+        if (!result.ok()) {
+            return {
+                EdgeFeatureDraftFinishStatus::rejected,
+                false,
+                std::nullopt,
+                result.diagnostic.message};
+        }
+        return {
+            EdgeFeatureDraftFinishStatus::committed,
+            result.changed,
+            result.feature_id,
+            {}};
+    }
+
+    const auto command = draft.editCommand();
+    if (!command || !draft.featureId()) {
+        return {
+            EdgeFeatureDraftFinishStatus::invalid_draft,
+            false,
+            std::nullopt,
+            "Chamfer edit draft has no valid FeatureId/command."};
+    }
     const auto result =
-        session.execute(
-            *command,
-            modeling_kernel);
+        session.execute(*command, modeling_kernel);
     if (!result.ok()) {
         return {
             EdgeFeatureDraftFinishStatus::rejected,
@@ -469,7 +704,7 @@ finishChamferDraft(
     return {
         EdgeFeatureDraftFinishStatus::committed,
         result.changed,
-        result.feature_id,
+        draft.featureId(),
         {}};
 }
 
