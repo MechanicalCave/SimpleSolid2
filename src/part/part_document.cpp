@@ -1,6 +1,7 @@
 #include <simplesolid2/part/part_document.hpp>
 
 #include <algorithm>
+#include <functional>
 
 namespace simplesolid2::part {
 
@@ -526,15 +527,17 @@ bool PartDocument::validAuthoredState(
                            present_before(producer);
                 };
 
-            const auto surface_is_historical =
-                [&provenance_is_historical](
-                    const FeatureSurfaceAddress& surface) {
-                    return surface.valid() &&
-                           provenance_is_historical(
-                               surface.producer_feature_id);
-                };
+            std::function<bool(
+                const FeatureSurfaceAddress&)>
+                surface_is_historical;
+            std::function<bool(
+                const FeaturePointAddress&)>
+                point_is_historical;
+            std::function<bool(
+                const MaterialEdgeReference&)>
+                edge_is_historical;
 
-            const auto point_is_historical =
+            point_is_historical =
                 [&provenance_is_historical,
                  &surface_is_historical](
                     const FeaturePointAddress& point) {
@@ -549,31 +552,79 @@ bool PartDocument::validAuthoredState(
                         surface_is_historical);
                 };
 
+            edge_is_historical =
+                [&provenance_is_historical,
+                 &surface_is_historical,
+                 &point_is_historical](
+                    const MaterialEdgeReference& edge) {
+                    if (!edge.valid() ||
+                        !edge.stage.feature_id ||
+                        !provenance_is_historical(
+                            *edge.stage.feature_id) ||
+                        !provenance_is_historical(
+                            edge.curve
+                                .producer_feature_id) ||
+                        edge.curve.producer_feature_id >
+                            *edge.stage.feature_id ||
+                        !std::all_of(
+                            edge.curve
+                                .adjacent_surfaces.begin(),
+                            edge.curve
+                                .adjacent_surfaces.end(),
+                            surface_is_historical)) {
+                        return false;
+                    }
+
+                    const auto* endpoints =
+                        std::get_if<
+                            BetweenSemanticPoints>(
+                            &edge.branch);
+                    return endpoints == nullptr ||
+                           (point_is_historical(
+                                endpoints->first) &&
+                            point_is_historical(
+                                endpoints->second));
+                };
+
+            surface_is_historical =
+                [&provenance_is_historical,
+                 &edge_is_historical,
+                 &point_is_historical](
+                    const FeatureSurfaceAddress& surface) {
+                    if (!surface.valid() ||
+                        !provenance_is_historical(
+                            surface.producer_feature_id)) {
+                        return false;
+                    }
+                    if (!std::all_of(
+                            surface.source_edges.begin(),
+                            surface.source_edges.end(),
+                            edge_is_historical) ||
+                        !std::all_of(
+                            surface.source_points.begin(),
+                            surface.source_points.end(),
+                            point_is_historical)) {
+                        return false;
+                    }
+
+                    if (!surface.source_edges.empty()) {
+                        const auto source_stage =
+                            surface.source_edges.front()
+                                .stage.feature_id;
+                        if (!source_stage ||
+                            !(*source_stage <
+                              surface.producer_feature_id)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+
             for (const auto& edge :
                  *material_edges) {
                 if (edge.stage !=
                         material_edges->front().stage ||
-                    !provenance_is_historical(
-                        edge.curve
-                            .producer_feature_id) ||
-                    !std::all_of(
-                        edge.curve
-                            .adjacent_surfaces.begin(),
-                        edge.curve
-                            .adjacent_surfaces.end(),
-                        surface_is_historical)) {
-                    return false;
-                }
-
-                if (const auto* endpoints =
-                        std::get_if<
-                            BetweenSemanticPoints>(
-                            &edge.branch);
-                    endpoints != nullptr &&
-                    (!point_is_historical(
-                         endpoints->first) ||
-                     !point_is_historical(
-                         endpoints->second))) {
+                    !edge_is_historical(edge)) {
                     return false;
                 }
             }
