@@ -8520,8 +8520,6 @@ bool CadWorkbench::startFilletTool() {
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
-        fillet_draft_ ||
-        chamfer_draft_ ||
         active_sketch_id_) {
         return false;
     }
@@ -8597,8 +8595,6 @@ bool CadWorkbench::startChamferTool() {
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
-        fillet_draft_ ||
-        chamfer_draft_ ||
         active_sketch_id_) {
         return false;
     }
@@ -9032,6 +9028,17 @@ CadWorkbench::submitEdgeFeatureCadInput(
         tryStageEdgeFeatureSelection();
         return {true, {}};
     }
+    if (keyword == "REMOVE") {
+        if (viewport_controller_ == nullptr ||
+            !viewport_controller_->
+                 removePrimaryBodyTopologyToolSelection()) {
+            return {
+                false,
+                "REMOVE requires at least one selected material Edge."};
+        }
+        tryStageEdgeFeatureSelection();
+        return {true, {}};
+    }
     if (keyword.empty() ||
         keyword == "FINISH") {
         return finishEdgeFeature()
@@ -9054,8 +9061,8 @@ CadWorkbench::submitEdgeFeatureCadInput(
         return {
             false,
             fillet
-                ? "FILLET expects CLEAR, FINISH, CANCEL or a positive Radius."
-                : "CHAMFER expects CLEAR, FINISH, CANCEL or a positive Distance."};
+                ? "FILLET expects REMOVE, CLEAR, FINISH, CANCEL or a positive Radius."
+                : "CHAMFER expects REMOVE, CLEAR, FINISH, CANCEL or a positive Distance."};
     }
 
     if (!setEdgeFeatureParameter(
@@ -10848,11 +10855,11 @@ QString CadWorkbench::cadInputPromptText() const {
 
     if (fillet_draft_) {
         return QStringLiteral(
-            "Command: FILLET — toggle material Edges · Radius · CLEAR · FINISH/CANCEL");
+            "Command: FILLET — toggle material Edges · Radius · REMOVE/CLEAR · FINISH/CANCEL");
     }
     if (chamfer_draft_) {
         return QStringLiteral(
-            "Command: CHAMFER — toggle material Edges · Distance · CLEAR · FINISH/CANCEL");
+            "Command: CHAMFER — toggle material Edges · Distance · REMOVE/CLEAR · FINISH/CANCEL");
     }
 
     if (!sketch_interaction_controller_ ||
