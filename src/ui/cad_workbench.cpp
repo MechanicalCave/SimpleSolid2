@@ -5371,6 +5371,7 @@ bool CadWorkbench::activateDocument(
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearRevolveRuntimeContext();
+    clearEdgeFeatureRuntimeContext();
     clearSketchRuntimeContext();
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clear();
@@ -5395,6 +5396,7 @@ void CadWorkbench::deactivateDocument() {
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearRevolveRuntimeContext();
+    clearEdgeFeatureRuntimeContext();
     clearSketchRuntimeContext();
     document_session_ = nullptr;
     workspace_root_.clear();
@@ -11265,6 +11267,10 @@ void CadWorkbench::refreshActiveContext() {
     if (revolve_draft_) {
         refreshRevolvePreview();
     }
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        refreshEdgeFeaturePreview();
+    }
     if (selected_axis_id_) {
         refreshAxisProperties(
             *selected_axis_id_);
@@ -11287,6 +11293,7 @@ void CadWorkbench::clearActiveContext() {
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearRevolveRuntimeContext();
+    clearEdgeFeatureRuntimeContext();
     clearSketchRuntimeContext();
     active_path_->setText(QStringLiteral("No Part is open."));
     active_id_->clear();
