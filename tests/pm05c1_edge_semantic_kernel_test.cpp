@@ -336,6 +336,7 @@ EvalFixture makeEvalFixture(bool reference_existing_edge) {
         part::makeProfileRegionIntent(
             regions.regions.front());
     CHECK(intent.has_value());
+    CHECK(intent->outer.boundary.size() >= 2U);
 
     const auto profile =
         session.execute(
@@ -370,13 +371,17 @@ EvalFixture makeEvalFixture(bool reference_existing_edge) {
             *base_id,
             part::FeatureSurfaceRoleKind::
                 profile_cap);
+    const std::size_t boundary_index =
+        reference_existing_edge ? 0U : 1U;
     part::FeatureSurfaceAddress side{
         *base_id,
         part::FeatureSurfaceRoleKind::side,
-        rectangle.entity_ids.at(
-            reference_existing_edge ? 0U : 1U),
+        intent->outer.boundary
+            .at(boundary_index)
+            .source_entity,
         0U,
-        reference_existing_edge ? 0U : 1U,
+        static_cast<std::uint32_t>(
+            boundary_index),
         false};
     CHECK(side.valid());
 
