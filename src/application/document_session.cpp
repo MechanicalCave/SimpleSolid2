@@ -3469,6 +3469,8 @@ DocumentSession::evaluateFilletDraft(
         return result;
     }
 
+    result.target_status =
+        target->status;
     result.evaluation_diagnostic =
         target->diagnostic;
     result.failing_edge_input_index =
@@ -3588,6 +3590,8 @@ DocumentSession::evaluateChamferDraft(
         return result;
     }
 
+    result.target_status =
+        target->status;
     result.evaluation_diagnostic =
         target->diagnostic;
     result.failing_edge_input_index =
