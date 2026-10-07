@@ -3623,6 +3623,115 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         revolve_operations_widget_);
 
+    edge_feature_operations_widget_ =
+        new QWidget(operations_content);
+    edge_feature_operations_widget_->setObjectName(
+        QStringLiteral("edgeFeatureOperationsWidget"));
+    auto* edge_feature_operations_layout =
+        new QVBoxLayout(
+            edge_feature_operations_widget_);
+    edge_feature_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    edge_feature_title_label_ =
+        new QLabel(
+            QStringLiteral("FILLET"),
+            edge_feature_operations_widget_);
+    edge_feature_title_label_->setObjectName(
+        QStringLiteral("edgeFeatureTitleLabel"));
+    edge_feature_operations_layout->addWidget(
+        edge_feature_title_label_);
+
+    auto* edge_feature_selection_row =
+        new QWidget(edge_feature_operations_widget_);
+    auto* edge_feature_selection_layout =
+        new QHBoxLayout(edge_feature_selection_row);
+    edge_feature_selection_layout->setContentsMargins(
+        0, 0, 0, 0);
+    edge_feature_selection_label_ =
+        new QLabel(
+            QStringLiteral("Selected edges: 0"),
+            edge_feature_selection_row);
+    edge_feature_selection_label_->setObjectName(
+        QStringLiteral("edgeFeatureSelectionLabel"));
+    edge_feature_clear_button_ =
+        new QPushButton(
+            QStringLiteral("Clear"),
+            edge_feature_selection_row);
+    edge_feature_clear_button_->setObjectName(
+        QStringLiteral("edgeFeatureClearButton"));
+    edge_feature_selection_layout->addWidget(
+        edge_feature_selection_label_);
+    edge_feature_selection_layout->addStretch();
+    edge_feature_selection_layout->addWidget(
+        edge_feature_clear_button_);
+    edge_feature_operations_layout->addWidget(
+        edge_feature_selection_row);
+
+    auto* edge_feature_parameter_form =
+        new QFormLayout;
+    edge_feature_parameter_name_label_ =
+        new QLabel(
+            QStringLiteral("Radius"),
+            edge_feature_operations_widget_);
+    edge_feature_parameter_edit_ =
+        new QLineEdit(
+            edge_feature_operations_widget_);
+    edge_feature_parameter_edit_->setObjectName(
+        QStringLiteral("edgeFeatureParameterEdit"));
+    edge_feature_parameter_edit_->setPlaceholderText(
+        QStringLiteral("positive length"));
+    edge_feature_parameter_form->addRow(
+        edge_feature_parameter_name_label_,
+        edge_feature_parameter_edit_);
+    edge_feature_operations_layout->addLayout(
+        edge_feature_parameter_form);
+
+    edge_feature_preview_timer_ =
+        new QTimer(this);
+    edge_feature_preview_timer_->setSingleShot(true);
+    edge_feature_preview_timer_->setInterval(90);
+    QObject::connect(
+        edge_feature_preview_timer_,
+        &QTimer::timeout,
+        this,
+        [this] {
+            refreshEdgeFeaturePreview();
+        });
+
+    edge_feature_result_label_ =
+        new QLabel(
+            QStringLiteral(
+                "Select one or more material Edges and enter a positive parameter."),
+            edge_feature_operations_widget_);
+    edge_feature_result_label_->setObjectName(
+        QStringLiteral("edgeFeatureResultLabel"));
+    edge_feature_result_label_->setWordWrap(true);
+    edge_feature_operations_layout->addWidget(
+        edge_feature_result_label_);
+
+    edge_feature_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish"),
+            edge_feature_operations_widget_);
+    edge_feature_finish_button_->setObjectName(
+        QStringLiteral("edgeFeatureFinishButton"));
+    edge_feature_operations_layout->addWidget(
+        edge_feature_finish_button_);
+
+    edge_feature_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            edge_feature_operations_widget_);
+    edge_feature_cancel_button_->setObjectName(
+        QStringLiteral("edgeFeatureCancelButton"));
+    edge_feature_operations_layout->addWidget(
+        edge_feature_cancel_button_);
+
+    edge_feature_operations_widget_->setVisible(false);
+    operations_layout->addWidget(
+        edge_feature_operations_widget_);
+
     profile_operations_widget_ =
         new QWidget(operations_content);
     profile_operations_widget_->setObjectName(
