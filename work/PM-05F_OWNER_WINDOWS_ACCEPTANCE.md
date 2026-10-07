@@ -1,16 +1,30 @@
 # PM-05F — Owner Windows Acceptance
 
-**Status:** READY FOR OWNER — RESULT PENDING
+**Status:** OWNER FAIL — BOUNDED REMEDIATION ACTIVE
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
 **Date prepared:** 2026-10-07
-**Exact final candidate:** pending PM-05F final Windows FULL
+**Candidate manually exercised:** `7721863e22269474f8f4cca6315eafed86396eff` (documentation-final main; final FULL had not yet been dispatched because manual testing exposed a blocker first)
 
 ## Purpose
 
 This is the final supported-Windows product workflow for PM-05 Edge Features: Fillet / Chamfer.
 
-The Owner result remains intentionally PENDING until the exact final runtime/docs candidate passes the PM-05F Windows FULL gate and the Owner reports the manual outcome. Automated evidence cannot self-accept this package.
+The Owner manually exercised the current product candidate on 2026-10-07 before final FULL dispatch and reported a functional blocker. This is an explicit FAIL for the current acceptance attempt. PM-05F remains active for bounded remediation; automated evidence cannot self-accept the package.
+
+## Owner-reported blocker — 2026-10-07
+
+Observed product behavior:
+
+- Chamfer behaves acceptably on a simple cube;
+- Fillet can fail already for two selected adjacent cube Edges;
+- adding the third Edge incident to the same vertex can temporarily make the Fillet valid;
+- adding another Edge can make it fail again;
+- on a more complex part with mixed straight/curved and generated topology, only simple single straight Edges were reliably Fillet-able.
+
+The Owner also explicitly clarified the expected engineering semantics: if the requested Fillet/Chamfer requires local modification of the selected Edge endpoints, adjacent Edges, vertices or Faces at a 3/4/5-edge junction, that local topology adaptation is preferable to rejecting an otherwise constructible operation. Such adaptation must not silently add durable authored inputs.
+
+Accepted remediation policy: **strict authored intent, permissive local topology**. See `work/PM-05F_FILLET_LOCAL_TOPOLOGY_REMEDIATION.md`.
 
 ## Preconditions
 
@@ -85,11 +99,9 @@ The Owner result remains intentionally PENDING until the exact final runtime/doc
 
 ## Result
 
-Owner result: PENDING.
+Owner result: **FAIL — remediation required before repeat acceptance**.
 
-When testing is complete, report either PASS — no PM-05 functional blocker found on the exact final candidate — or FAIL with the failing workflow step, observed behavior and reproducible conditions.
-
-A FAIL returns PM-05F to bounded remediation followed by a fresh exact-head FULL and repeat Owner workflow. Only explicit Owner PASS closes PM-05.
+This acceptance attempt has returned PM-05F to bounded remediation. After remediation, the exact replacement candidate must pass a fresh Windows FULL and the Owner workflow must be repeated. Only a later explicit Owner PASS closes PM-05.
 
 ## Completion boundary
 

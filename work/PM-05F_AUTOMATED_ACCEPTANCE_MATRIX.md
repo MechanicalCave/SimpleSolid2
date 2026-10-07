@@ -1,6 +1,6 @@
 # PM-05F — Automated Acceptance Matrix
 
-**Status:** DOCS PASS — exact-head Windows FULL and Owner result pending
+**Status:** DOCS PASS / OWNER FAIL — Fillet bounded remediation active; fresh exact-head FULL and repeat Owner workflow required
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Program authority:** work/PART_MODELING_V1_ROADMAP.md v1.29
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
@@ -10,7 +10,7 @@
 
 This matrix closes the automated-evidence side of PM-05 without redefining accepted Fillet/Chamfer semantics. PM-05A through PM-05E are already completed and merged. PM-05F makes current documentation authoritative, regenerates the Product Browser, runs one final exact-head Windows FULL and prepares the supported-Windows Owner workflow.
 
-Owner manual acceptance is deliberately separate and remains PENDING until the Owner reports the result.
+Owner manual acceptance reported FAIL on 2026-10-07 before final FULL dispatch due to unstable multi-Edge Fillet behavior. Existing DOCS PASS remains valid as documentation evidence, but final automated/package acceptance is blocked until bounded remediation receives fresh exact-head evidence.
 
 ## Evidence authority
 
@@ -26,7 +26,7 @@ Owner manual acceptance is deliberately separate and remains PENDING until the O
 | PM-05E | 88e07b1a2dbdb6ded73d0c2f90dd0a1443242cbe | Windows FULL #1721 PASS — core 25/25, kernel-native 54/54, desktop 112/112 | 1a1491f7687f32089c1424025123329c74d7b6ca | Edit / repair / lifecycle / persistence / reverse-chain canonical-frame remediation |
 | PM-05F docs | 19700794577a516281fcc3e512c898cc1ececfec | Windows DOCS #1725 PASS; synchronized matrix head d08e97c19e2717dbb9e4bc81adf9d11ac1925f84 passed DOCS #1726 | 685bf3f797aa022582952906e8f24cf6d668f2bb | internal + paired PL/EN Product + generated Browser |
 | PM-05F final automated | pending exact candidate | Windows FULL pending | pending | cumulative final runtime/docs gate |
-| PM-05F Owner Windows | same final candidate | Owner manual Windows result pending | pending | work/PM-05F_OWNER_WINDOWS_ACCEPTANCE.md |
+| PM-05F Owner Windows attempt 1 | 7721863e22269474f8f4cca6315eafed86396eff | OWNER FAIL — multi-Edge Fillet blocker | not closable | work/PM-05F_OWNER_WINDOWS_ACCEPTANCE.md |
 
 ## Contract matrix
 
@@ -65,8 +65,8 @@ Owner manual acceptance is deliberately separate and remains PENDING until the O
 | current internal as-built docs | 19700794577a516281fcc3e512c898cc1ececfec / Windows DOCS #1725 | PASS |
 | paired PL/EN Product docs | 19700794577a516281fcc3e512c898cc1ececfec / Windows DOCS #1725 | PASS |
 | generated Product Browser freshness | 19700794577a516281fcc3e512c898cc1ececfec / Windows DOCS #1725 | PASS |
-| final exact-head automated package gate | PM-05F final candidate | PENDING FULL |
-| Owner supported-Windows workflow | PM-05F final candidate | PENDING OWNER |
+| final exact-head automated package gate | post-remediation PM-05F replacement candidate | PENDING FULL |
+| Owner supported-Windows workflow | post-remediation PM-05F replacement candidate | FAIL — REPEAT REQUIRED |
 
 ## Documentation closure requirements
 

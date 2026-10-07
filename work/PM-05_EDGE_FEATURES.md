@@ -290,16 +290,24 @@ Requirements:
 - display/pick/tessellation tolerances are not modeling inputs;
 - runtime provider Edge tokens are transient adapter inputs only.
 
-### Tangent propagation
+### Tangent propagation and local topology accommodation
 
-PM-05A must explicitly characterize whether the provider silently propagates a selected Edge into a tangent contour/chain.
+PM-05A originally characterized whether the provider propagates a registered Edge into a tangent contour/chain. The production contract remains **strict authored-input semantics**: the durable Feature stores exactly the semantic material Edge set explicitly authored by the user, in canonical order. No provider-discovered neighbor becomes a durable authored input, and automatic tangent-chain/loop authoring remains excluded.
 
-The production contract is explicit-input semantics. Therefore either:
+**Owner amendment accepted 2026-10-07 during PM-05F manual acceptance:** provider execution contour and local result topology are not the same thing as authored input identity.
 
-1. the provider path can be bounded to exactly the authored material Edge set; or
-2. any unavoidable propagation must be elevated to an explicit separately Owner-accepted authored semantic rule before PM-05B.
+The provider may therefore use additional transient contour members or modify/split/trim adjacent local topology when required to construct a valid Fillet/Chamfer corner, provided all of the following hold:
 
-Silent provider-driven input expansion is forbidden.
+1. every explicit authored Edge resolves and participates in the requested operation;
+2. any additional provider contour/corner participation is runtime-only construction evidence and is never persisted or silently added to the Feature input set;
+3. the effect is a local geometric/topological accommodation of the explicitly requested operation, not unrelated disconnected expansion;
+4. the complete candidate result is shown by exact preview before Finish;
+5. the resulting solid is valid and receives complete semantic topology accounting;
+6. no nearest/similar/first/longest/provider-order rebinding is introduced.
+
+The previous production requirement that native provider contour membership must be set-equal to the authored Edge set is superseded by this amendment. Exact set equality may remain diagnostic evidence, but it is not by itself a validity condition for provider execution.
+
+Silent **authored-input** expansion remains forbidden. Local provider construction freedom is allowed.
 
 ## 13. Refine / unify / healing policy
 
@@ -774,3 +782,5 @@ Current authority is limited to **PM-05F — documentation / cumulative automate
 - only explicit Owner PASS closes PM-05.
 
 PM-05F does not authorize PM-06, new Fillet/Chamfer variants, new schema/modeling semantics, implicit tangent-chain authoring, or any scope outside the accepted PM-05 Work Contract. Any acceptance-discovered runtime remediation must remain bounded to the already accepted PM-05 semantics and receive fresh exact-head evidence.
+
+Owner manual acceptance on 2026-10-07 found a Fillet blocker and explicitly accepted the strict-intent/permissive-local-topology amendment above. PM-05F is therefore in bounded remediation. PM-05 cannot close until the remediation passes fresh exact-head automated evidence and the Owner repeats the supported-Windows workflow with an explicit PASS.
