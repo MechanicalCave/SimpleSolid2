@@ -327,6 +327,11 @@ std::optional<ChainPlan> findChainPlan(
             *base_evaluation.features.back()
                  .result_topology);
 
+    std::size_t first_successes = 0U;
+    std::size_t generated_candidates = 0U;
+    std::size_t contour_authoring_successes = 0U;
+    std::size_t second_evaluation_successes = 0U;
+
     for (const auto& seed : seeds) {
         // Match the accepted PM-05A / PM-05C2b chaining path exactly:
         // the first Feature consumes one explicit authored source Edge.
@@ -355,10 +360,12 @@ std::optional<ChainPlan> findChainPlan(
                 part::FeatureEvaluationStatus::up_to_date) {
             continue;
         }
+        ++first_successes;
 
         const auto generated =
             generatedBoundaryReferences(
                 *first_target);
+        generated_candidates += generated.size();
         for (const auto& generated_seed :
              generated) {
             const auto second_edges =
@@ -371,6 +378,7 @@ std::optional<ChainPlan> findChainPlan(
             if (!second_edges) {
                 continue;
             }
+            ++contour_authoring_successes;
 
             auto second =
                 appendEdgeFeature(
@@ -392,6 +400,7 @@ std::optional<ChainPlan> findChainPlan(
                 second_target->status ==
                     part::FeatureEvaluationStatus::
                         up_to_date) {
+                ++second_evaluation_successes;
                 return ChainPlan{
                     std::move(first_edges),
                     *second_edges,
@@ -400,6 +409,25 @@ std::optional<ChainPlan> findChainPlan(
             }
         }
     }
+
+    const auto opName =
+        [](kernel::EdgeFeatureOperation op) {
+            return op == kernel::EdgeFeatureOperation::fillet
+                ? "fillet"
+                : "chamfer";
+        };
+    std::cerr
+        << "PM05E3_CHAIN_SEARCH_FAIL"
+        << " first=" << opName(first_operation)
+        << " second=" << opName(second_operation)
+        << " seeds=" << seeds.size()
+        << " first_successes=" << first_successes
+        << " generated_candidates=" << generated_candidates
+        << " contour_authoring_successes="
+        << contour_authoring_successes
+        << " second_evaluation_successes="
+        << second_evaluation_successes
+        << '\n';
     return std::nullopt;
 }
 
