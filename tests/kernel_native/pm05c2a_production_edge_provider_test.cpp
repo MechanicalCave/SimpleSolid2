@@ -1,6 +1,4 @@
-#include <simplesolid2/kernel/edge_feature_evidence.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
-#include <simplesolid2/kernel_occt/edge_feature_evidence.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 
 #include <algorithm>
@@ -186,30 +184,6 @@ class ForeignSolid final
 } // namespace
 
 int main() {
-    const auto chamfer_evidence =
-        kernel_occt::buildEdgeFeatureProviderEvidence(
-            kernel::EdgeFeatureEvidenceOperation::chamfer,
-            kernel::EdgeFeatureProbeScenario::adjacent_pair);
-    std::cerr
-        << "PM05C2A_CHAMFER_EVIDENCE"
-        << " requested="
-        << chamfer_evidence.requested_edge_count
-        << " edge_claimed="
-        << chamfer_evidence
-               .generated_from_selected_edges_face_count
-        << " vertex_claimed="
-        << chamfer_evidence
-               .generated_from_shared_vertices_face_count
-        << " unclaimed="
-        << chamfer_evidence.unclaimed_new_face_count
-        << " per_edge=";
-    for (const auto count :
-         chamfer_evidence
-             .generated_faces_per_selected_edge) {
-        std::cerr << count << ",";
-    }
-    std::cerr << '\n';
-
     kernel_occt::OcctSolidModelingKernel provider;
 
     const auto base =

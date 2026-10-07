@@ -1446,8 +1446,6 @@ convertEdgeFeatureSurface(
         source.current_faces.size();
     result.surface_kind =
         source.surface_kind;
-    result.canonical_frame =
-        source.canonical_frame;
     result.runtime_token =
         source.runtime_token;
     result.current_faces =

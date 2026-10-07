@@ -144,6 +144,124 @@ trihedralReferences(
     return {};
 }
 
+class RotatedGeneratedPlaneFrameKernel final
+    : public kernel::ISolidModelingKernel {
+public:
+    kernel::SolidModelingResult extrude(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        return provider_.extrude(
+            input,
+            std::move(upstream));
+    }
+
+    kernel::SolidModelingResult edgeFeature(
+        const kernel::EdgeFeatureInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        auto result =
+            provider_.edgeFeature(
+                input,
+                std::move(upstream));
+        if (!result.ok()) {
+            return result;
+        }
+
+        for (auto& surface :
+             result.edge_feature_surfaces) {
+            if (surface.surface_kind !=
+                    kernel::SurfaceKind::plane ||
+                !surface.canonical_frame) {
+                continue;
+            }
+
+            const auto original =
+                *surface.canonical_frame;
+            surface.canonical_frame->u_axis =
+                original.v_axis;
+            surface.canonical_frame->v_axis = {
+                -original.u_axis.x,
+                -original.u_axis.y,
+                -original.u_axis.z};
+            CHECK(surface.canonical_frame->valid());
+        }
+        return result;
+    }
+
+private:
+    kernel_occt::OcctSolidModelingKernel
+        provider_;
+};
+
+using PlanarFrameEvidence =
+    std::vector<
+        std::pair<
+            part::FeatureSurfaceAddress,
+            kernel::Frame3>>;
+
+PlanarFrameEvidence generatedPlanarFrames(
+    const part::FeatureEvaluation& feature) {
+    PlanarFrameEvidence result;
+    for (const auto& surface :
+         feature.produced_surfaces) {
+        if (surface.surface_kind !=
+                kernel::SurfaceKind::plane) {
+            continue;
+        }
+        CHECK(surface.canonical_frame);
+        CHECK(surface.canonical_frame->valid());
+        result.emplace_back(
+            surface.address,
+            *surface.canonical_frame);
+    }
+    std::sort(
+        result.begin(),
+        result.end(),
+        [](const auto& first, const auto& second) {
+            return first.first < second.first;
+        });
+    return result;
+}
+
+part::PartDocument withEdgeFeature(
+    const part::PartDocument& source,
+    std::vector<part::MaterialEdgeReference> edges,
+    bool chamfer,
+    double parameter) {
+    auto state = source.state();
+    const auto feature_id =
+        state.body.next_feature_id.allocate();
+    CHECK(feature_id.has_value());
+    if (chamfer) {
+        state.body.features.push_back(
+            part::PartFeature{
+                *feature_id,
+                "ChamferProbe",
+                false,
+                part::ChamferFeature{
+                    std::move(edges),
+                    core::LengthValue{
+                        parameter}}});
+    } else {
+        state.body.features.push_back(
+            part::PartFeature{
+                *feature_id,
+                "FilletProbe",
+                false,
+                part::FilletFeature{
+                    std::move(edges),
+                    core::LengthValue{
+                        parameter}}});
+    }
+
+    auto restored =
+        part::PartDocument::restore(
+            source.documentId(),
+            std::move(state),
+            source.revision());
+    CHECK(restored.ok());
+    return std::move(*restored.document);
+}
+
 std::size_t countRole(
     const part::FeatureEvaluation& feature,
     part::FeatureSurfaceRoleKind role) {
@@ -225,6 +343,85 @@ int main() {
             *base_evaluation.features[0]
                  .result_topology);
     CHECK(fillet_edges.size() == 3U);
+
+    // Symmetric common-corner production proof for Chamfer. C2 must not only
+    // execute the native operation; it must publish the same P2/P3 semantic
+    // topology families and a complete Part catalog.
+    auto trihedral_chamfer_document =
+        withEdgeFeature(
+            base_document,
+            fillet_edges,
+            true,
+            1.5);
+    const auto trihedral_chamfer =
+        part::evaluatePart(
+            trihedral_chamfer_document,
+            kernel);
+    CHECK(
+        trihedral_chamfer.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(
+        trihedral_chamfer.features.size() ==
+        2U);
+    const auto& chamfer_feature =
+        trihedral_chamfer.features[1];
+    CHECK(
+        chamfer_feature.status ==
+        part::FeatureEvaluationStatus::
+            up_to_date);
+    CHECK(chamfer_feature.result_topology);
+    CHECK(
+        chamfer_feature.result_topology
+            ->complete());
+    CHECK(
+        countRole(
+            chamfer_feature,
+            part::FeatureSurfaceRoleKind::
+                chamfer_surface) == 3U);
+    CHECK(
+        countRole(
+            chamfer_feature,
+            part::FeatureSurfaceRoleKind::
+                corner_transition) >= 1U);
+    CHECK(
+        std::count_if(
+            chamfer_feature.produced_curves.begin(),
+            chamfer_feature.produced_curves.end(),
+            [](const auto& curve) {
+                return curve.address.role ==
+                       part::FeatureCurveRoleKind::
+                           edge_feature_boundary;
+            }) > 0);
+
+    // ADR-0016: provider UV axes are not semantic frame authority. Rotate
+    // every provider-reported generated planar U/V basis while preserving its
+    // plane equation; Part must reconstruct identical canonical frames from
+    // upstream semantic provenance.
+    RotatedGeneratedPlaneFrameKernel
+        rotated_provider;
+    const auto rotated_chamfer =
+        part::evaluatePart(
+            trihedral_chamfer_document,
+            rotated_provider);
+    CHECK(
+        rotated_chamfer.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(
+        rotated_chamfer.features.size() ==
+        2U);
+    CHECK(
+        rotated_chamfer.features[1].status ==
+        part::FeatureEvaluationStatus::
+            up_to_date);
+
+    const auto baseline_frames =
+        generatedPlanarFrames(
+            chamfer_feature);
+    const auto rotated_frames =
+        generatedPlanarFrames(
+            rotated_chamfer.features[1]);
+    CHECK(!baseline_frames.empty());
+    CHECK(rotated_frames == baseline_frames);
 
     auto fillet_state =
         base_document.state();
@@ -389,6 +586,8 @@ int main() {
         << " trihedral_edges=3"
         << " p2=1"
         << " p3=1"
+        << " trihedral_chamfer=1"
+        << " provider_uv_authority=0"
         << " generated_boundary=1"
         << " fillet_to_chamfer_chain=1"
         << " chain_attempts=" << chain_attempts
