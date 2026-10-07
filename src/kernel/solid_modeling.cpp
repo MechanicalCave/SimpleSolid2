@@ -314,6 +314,14 @@ bool EdgeFeatureInput::valid() const noexcept {
         return false;
     }
 
+    switch (operation) {
+    case EdgeFeatureOperation::fillet:
+    case EdgeFeatureOperation::chamfer:
+        break;
+    default:
+        return false;
+    }
+
     for (std::size_t index = 0U;
          index < edges.size();
          ++index) {
