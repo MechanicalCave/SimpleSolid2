@@ -10,6 +10,8 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepGProp.hxx>
+#include <BRepFilletAPI_MakeChamfer.hxx>
+#include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepTools.hxx>
@@ -1870,6 +1872,236 @@ inventoryEdgeToken(
         }
     }
     return std::nullopt;
+}
+
+struct SelectedRuntimeEdge final {
+    kernel::RuntimeEdgeToken token;
+    TopoDS_Edge edge;
+};
+
+[[nodiscard]] std::optional<
+    std::vector<SelectedRuntimeEdge>>
+selectedRuntimeEdges(
+    const OcctRuntimeSolid& upstream,
+    const std::vector<kernel::RuntimeEdgeToken>&
+        requested) {
+    std::vector<SelectedRuntimeEdge> result;
+    result.reserve(requested.size());
+    for (const auto token : requested) {
+        const auto found =
+            upstream.inventory_edges.find(
+                token.value);
+        if (!token.valid() ||
+            found ==
+                upstream.inventory_edges.end()) {
+            return std::nullopt;
+        }
+        result.push_back(
+            {token, found->second});
+    }
+    return result;
+}
+
+template <typename Operation>
+[[nodiscard]] bool captureExactEdgeFeatureMembership(
+    Operation& operation,
+    const OcctRuntimeSolid& upstream,
+    const std::vector<kernel::RuntimeEdgeToken>&
+        requested,
+    kernel::SolidModelingResult& result) {
+    kernel::EdgeFeatureInputMembership membership;
+
+    for (Standard_Integer contour = 1;
+         contour <= operation.NbContours();
+         ++contour) {
+        const auto edge_count =
+            operation.NbEdges(contour);
+        for (Standard_Integer index = 1;
+             index <= edge_count;
+             ++index) {
+            const auto edge =
+                operation.Edge(
+                    contour,
+                    index);
+            const auto token =
+                inventoryEdgeToken(
+                    upstream,
+                    edge);
+            if (!token) {
+                return false;
+            }
+            if (std::find(
+                    membership
+                        .provider_contour_edges
+                        .begin(),
+                    membership
+                        .provider_contour_edges
+                        .end(),
+                    *token) ==
+                membership
+                    .provider_contour_edges
+                    .end()) {
+                membership
+                    .provider_contour_edges
+                    .push_back(*token);
+            }
+        }
+    }
+
+    result.edge_feature_input_membership =
+        std::move(membership);
+    return result.edge_feature_input_membership
+               ->exactFor(requested);
+}
+
+template <typename Operation>
+[[nodiscard]] kernel::SolidModelingResult
+finishEdgeFeature(
+    Operation& operation,
+    const OcctRuntimeSolid& upstream,
+    const kernel::EdgeFeatureInput& input) {
+    kernel::SolidModelingResult result;
+    if (!captureExactEdgeFeatureMembership(
+            operation,
+            upstream,
+            input.edges,
+            result)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    operation.Build();
+    if (!operation.IsDone()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    const auto shape = operation.Shape();
+    if (shape.IsNull()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    populateDiagnostics(
+        result,
+        shape);
+    if (result.solid_count == 0U) {
+        result.status =
+            kernel::SolidModelingStatus::
+                empty_result;
+        return result;
+    }
+    if (result.solid_count > 1U) {
+        result.status =
+            kernel::SolidModelingStatus::
+                multi_solid;
+        return result;
+    }
+    if (!result.brep_valid) {
+        result.status =
+            kernel::SolidModelingStatus::
+                invalid_brep;
+        return result;
+    }
+
+    const auto solid =
+        singleSolid(shape);
+    if (!solid) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (upstreamExteriorUnchanged(
+            operation,
+            upstream.solid,
+            shape)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                no_effect;
+        return result;
+    }
+
+    auto runtime =
+        std::make_shared<OcctRuntimeSolid>();
+    runtime->solid = *solid;
+
+    // C2a preserves all inherited runtime semantic carriers. Generated
+    // Fillet/Chamfer Surface claims are published separately in C2b.
+    publishLineage(
+        result,
+        *runtime,
+        &upstream,
+        {},
+        [&operation, &shape](
+            const TopoDS_Face& source) {
+            return descendantFaces(
+                operation,
+                source,
+                shape);
+        });
+
+    if (!populateRuntimeTopologyInventory(
+            result,
+            *runtime,
+            runtime->solid)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishSurfaceLineage(
+            result,
+            *runtime,
+            &upstream,
+            {},
+            false,
+            [&operation, &shape](
+                const TopoDS_Face& source) {
+                return descendantFaces(
+                    operation,
+                    source,
+                    shape);
+            })) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishCurrentSubshapeLineage(
+            result,
+            upstream,
+            *runtime,
+            operation,
+            shape)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!populateCurrentTopologySemantics(
+            result,
+            *runtime)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    result.status =
+        kernel::SolidModelingStatus::ok;
+    result.solid = std::move(runtime);
+    return result;
 }
 
 [[nodiscard]] std::optional<kernel::RuntimeVertexToken>
@@ -3782,6 +4014,93 @@ OcctSolidModelingKernel::revolve(
         return result;
     }
 }
+
+kernel::SolidModelingResult
+OcctSolidModelingKernel::edgeFeature(
+    const kernel::EdgeFeatureInput& input,
+    kernel::RuntimeSolidHandle upstream) noexcept {
+    kernel::SolidModelingResult result;
+    if (!input.valid()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                invalid_input;
+        return result;
+    }
+    if (upstream == nullptr) {
+        result.status =
+            kernel::SolidModelingStatus::
+                missing_upstream;
+        return result;
+    }
+
+    const auto* upstream_occt =
+        dynamic_cast<const OcctRuntimeSolid*>(
+            upstream.get());
+    if (upstream_occt == nullptr) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    const auto selected =
+        selectedRuntimeEdges(
+            *upstream_occt,
+            input.edges);
+    if (!selected) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    try {
+        switch (input.operation) {
+        case kernel::EdgeFeatureOperation::fillet: {
+            BRepFilletAPI_MakeFillet operation{
+                upstream_occt->solid};
+            for (const auto& item : *selected) {
+                operation.Add(
+                    input.parameter_mm,
+                    item.edge);
+            }
+            return finishEdgeFeature(
+                operation,
+                *upstream_occt,
+                input);
+        }
+        case kernel::EdgeFeatureOperation::chamfer: {
+            BRepFilletAPI_MakeChamfer operation{
+                upstream_occt->solid};
+            for (const auto& item : *selected) {
+                operation.Add(
+                    input.parameter_mm,
+                    item.edge);
+            }
+            return finishEdgeFeature(
+                operation,
+                *upstream_occt,
+                input);
+        }
+        }
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    result.status =
+        kernel::SolidModelingStatus::
+            invalid_input;
+    return result;
+}
+
 
 kernel::SolidPresentationResult
 OcctSolidModelingKernel::extrudePreviewMesh(
