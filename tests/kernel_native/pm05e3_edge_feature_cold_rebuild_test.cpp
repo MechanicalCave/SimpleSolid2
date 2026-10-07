@@ -351,6 +351,14 @@ std::optional<ChainPlan> findChainPlan(
         first_second_kernel_status;
     std::optional<kernel::ReferenceStatus>
         first_second_reference_status;
+    std::optional<std::size_t>
+        first_second_surface_count;
+    std::optional<std::size_t>
+        first_second_curve_count;
+    std::optional<std::size_t>
+        first_second_point_count;
+    std::optional<bool>
+        first_second_result_topology;
 
     for (const auto& seed : seeds) {
         // Match the accepted PM-05A / PM-05C2b chaining path exactly:
@@ -438,6 +446,14 @@ std::optional<ChainPlan> findChainPlan(
                     second_target->kernel_status;
                 first_second_reference_status =
                     second_target->edge_reference_status;
+                first_second_surface_count =
+                    second_target->produced_surfaces.size();
+                first_second_curve_count =
+                    second_target->produced_curves.size();
+                first_second_point_count =
+                    second_target->produced_points.size();
+                first_second_result_topology =
+                    second_target->result_topology.has_value();
             }
         }
     }
@@ -474,6 +490,22 @@ std::optional<ChainPlan> findChainPlan(
         << " first_second_reference_status="
         << (first_second_reference_status
                 ? static_cast<int>(*first_second_reference_status)
+                : -1)
+        << " first_second_surfaces="
+        << (first_second_surface_count
+                ? static_cast<long long>(*first_second_surface_count)
+                : -1)
+        << " first_second_curves="
+        << (first_second_curve_count
+                ? static_cast<long long>(*first_second_curve_count)
+                : -1)
+        << " first_second_points="
+        << (first_second_point_count
+                ? static_cast<long long>(*first_second_point_count)
+                : -1)
+        << " first_second_result_topology="
+        << (first_second_result_topology
+                ? (*first_second_result_topology ? 1 : 0)
                 : -1)
         << '\n';
     return std::nullopt;
