@@ -3380,6 +3380,245 @@ DocumentSession::evaluateRevolveDraft(
     return result;
 }
 
+
+EdgeFeatureDraftEvaluationResult
+DocumentSession::evaluateFilletDraft(
+    const FilletDraft& draft,
+    kernel::ISolidModelingKernel&
+        modeling_kernel) const {
+    EdgeFeatureDraftEvaluationResult result;
+    result.document_id = draft.documentId();
+    result.source_revision = draft.sourceRevision();
+    result.draft_generation = draft.generation();
+    result.operation =
+        kernel::EdgeFeatureOperation::fillet;
+    result.edges = draft.edges();
+    result.parameter = draft.radius();
+
+    if (documentId() != draft.documentId()) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                stale_document;
+        return result;
+    }
+    if (document_.revision() !=
+        draft.sourceRevision()) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                stale_revision;
+        return result;
+    }
+    if (!draft.valid() ||
+        !draft.radius() ||
+        !draft.requiredStage()) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                incomplete_draft;
+        return result;
+    }
+
+    auto after = document_.state();
+    applyBodyFeatureIdCursors(after);
+    const auto id =
+        after.body.next_feature_id.allocate();
+    if (!id) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                feature_id_exhausted;
+        return result;
+    }
+
+    const part::FilletFeature definition{
+        draft.edges(),
+        *draft.radius()};
+    after.body.features.push_back(
+        part::PartFeature{
+            *id,
+            draft.name().empty()
+                ? defaultFilletFeatureName(*id)
+                : draft.name(),
+            false,
+            definition});
+
+    auto candidate =
+        part::PartDocument::restore(
+            documentId(),
+            std::move(after),
+            document_.revision());
+    if (!candidate.ok()) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                invalid_candidate;
+        return result;
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    result.body_status = evaluation.body_status;
+    result.body_solid = evaluation.body_solid;
+
+    const auto* target =
+        evaluation.findFeature(*id);
+    if (target == nullptr) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                invalid_candidate;
+        result.body_solid.reset();
+        return result;
+    }
+
+    result.evaluation_diagnostic =
+        target->diagnostic;
+    result.failing_edge_input_index =
+        target->failing_edge_input_index;
+    result.edge_reference_status =
+        target->edge_reference_status;
+    if (target->status !=
+        part::FeatureEvaluationStatus::
+            up_to_date) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                target_failed;
+        result.body_solid.reset();
+        return result;
+    }
+
+    if (result.body_solid != nullptr) {
+        auto preview =
+            modeling_kernel.presentationMesh(
+                result.body_solid);
+        if (preview.ok()) {
+            result.preview_mesh =
+                std::move(preview.mesh);
+        }
+    }
+
+    result.status =
+        EdgeFeatureDraftEvaluationStatus::ok;
+    return result;
+}
+
+EdgeFeatureDraftEvaluationResult
+DocumentSession::evaluateChamferDraft(
+    const ChamferDraft& draft,
+    kernel::ISolidModelingKernel&
+        modeling_kernel) const {
+    EdgeFeatureDraftEvaluationResult result;
+    result.document_id = draft.documentId();
+    result.source_revision = draft.sourceRevision();
+    result.draft_generation = draft.generation();
+    result.operation =
+        kernel::EdgeFeatureOperation::chamfer;
+    result.edges = draft.edges();
+    result.parameter = draft.distance();
+
+    if (documentId() != draft.documentId()) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                stale_document;
+        return result;
+    }
+    if (document_.revision() !=
+        draft.sourceRevision()) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                stale_revision;
+        return result;
+    }
+    if (!draft.valid() ||
+        !draft.distance() ||
+        !draft.requiredStage()) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                incomplete_draft;
+        return result;
+    }
+
+    auto after = document_.state();
+    applyBodyFeatureIdCursors(after);
+    const auto id =
+        after.body.next_feature_id.allocate();
+    if (!id) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                feature_id_exhausted;
+        return result;
+    }
+
+    const part::ChamferFeature definition{
+        draft.edges(),
+        *draft.distance()};
+    after.body.features.push_back(
+        part::PartFeature{
+            *id,
+            draft.name().empty()
+                ? defaultChamferFeatureName(*id)
+                : draft.name(),
+            false,
+            definition});
+
+    auto candidate =
+        part::PartDocument::restore(
+            documentId(),
+            std::move(after),
+            document_.revision());
+    if (!candidate.ok()) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                invalid_candidate;
+        return result;
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    result.body_status = evaluation.body_status;
+    result.body_solid = evaluation.body_solid;
+
+    const auto* target =
+        evaluation.findFeature(*id);
+    if (target == nullptr) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                invalid_candidate;
+        result.body_solid.reset();
+        return result;
+    }
+
+    result.evaluation_diagnostic =
+        target->diagnostic;
+    result.failing_edge_input_index =
+        target->failing_edge_input_index;
+    result.edge_reference_status =
+        target->edge_reference_status;
+    if (target->status !=
+        part::FeatureEvaluationStatus::
+            up_to_date) {
+        result.status =
+            EdgeFeatureDraftEvaluationStatus::
+                target_failed;
+        result.body_solid.reset();
+        return result;
+    }
+
+    if (result.body_solid != nullptr) {
+        auto preview =
+            modeling_kernel.presentationMesh(
+                result.body_solid);
+        if (preview.ok()) {
+            result.preview_mesh =
+                std::move(preview.mesh);
+        }
+    }
+
+    result.status =
+        EdgeFeatureDraftEvaluationStatus::ok;
+    return result;
+}
+
 DatumPlaneDraftEvaluationResult
 DocumentSession::evaluateDatumPlaneDraft(
     const DatumPlaneDraft& draft,
