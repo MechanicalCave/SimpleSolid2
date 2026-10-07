@@ -56,6 +56,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <numbers>
@@ -3027,8 +3028,20 @@ template <typename Operation>
                 incident_edges,
             std::vector<TopoDS_Face> faces)
             -> bool {
+        const auto fail_publish =
+            [&input, kind, source_edge](
+                const char* reason) {
+                std::cerr
+                    << "PM05C2_PUBLISH_FAIL"
+                    << " op=" << static_cast<int>(input.operation)
+                    << " kind=" << static_cast<int>(kind)
+                    << " source_edge="
+                    << (source_edge ? source_edge->value : 0U)
+                    << " reason=" << reason << '\n';
+                return false;
+            };
         if (faces.empty()) {
-            return false;
+            return fail_publish("empty_faces");
         }
 
         const auto surface_kind =
@@ -3043,7 +3056,7 @@ template <typename Operation>
                                face) ==
                            surface_kind;
                 })) {
-            return false;
+            return fail_publish("mixed_surface_kind");
         }
 
         if (surface_kind ==
@@ -3054,7 +3067,7 @@ template <typename Operation>
                 if (!planarFacesSameDomain(
                         faces.front(),
                         faces[index])) {
-                    return false;
+                    return fail_publish("plane_domain_mismatch");
                 }
             }
         }
@@ -3063,7 +3076,7 @@ template <typename Operation>
             if (faceTrackedBySurface(
                     runtime,
                     face)) {
-                return false;
+                return fail_publish("already_tracked");
             }
         }
 
@@ -3075,7 +3088,7 @@ template <typename Operation>
                 providerPlanarFrame(
                     faces.front());
             if (!canonical_frame) {
-                return false;
+                return fail_publish("plane_frame");
             }
         }
 
@@ -3084,7 +3097,7 @@ template <typename Operation>
                 kernel::RuntimeSurfaceToken>(
                 runtime.next_surface_token);
         if (!token) {
-            return false;
+            return fail_publish("surface_token");
         }
 
         std::vector<kernel::RuntimeFaceToken>
@@ -3097,7 +3110,7 @@ template <typename Operation>
                     runtime,
                     face);
             if (!face_token) {
-                return false;
+                return fail_publish("face_token");
             }
             current_faces.push_back(
                 *face_token);
@@ -3122,7 +3135,7 @@ template <typename Operation>
         lineage.incident_source_edges =
             std::move(incident_edges);
         if (!lineage.valid()) {
-            return false;
+            return fail_publish("lineage_valid");
         }
 
         if (!runtime.tracked_surfaces.emplace(
@@ -3132,7 +3145,7 @@ template <typename Operation>
                     canonical_frame,
                     std::move(faces)})
                  .second) {
-            return false;
+            return fail_publish("surface_token_collision");
         }
         result.edge_feature_surfaces.push_back(
             std::move(lineage));
