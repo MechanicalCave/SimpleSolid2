@@ -4547,6 +4547,261 @@ DocumentSessionResult DocumentSession::execute(
         "Part transaction failed while editing Revolve Feature");
 }
 
+
+CreateEdgeFeatureResult DocumentSession::execute(
+    const CreateFilletFeatureCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    revision_diverged,
+                "Create Fillet was started from a stale DocumentRevision",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+    if (!command.valid()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Fillet contains invalid Edge inputs or Radius",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applyBodyFeatureIdCursors(after);
+    const auto id =
+        after.body.next_feature_id.allocate();
+    if (!id) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "FeatureId allocation space is exhausted",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    after.body.features.push_back(
+        part::PartFeature{
+            *id,
+            command.name.empty()
+                ? defaultFilletFeatureName(*id)
+                : command.name,
+            false,
+            part::FilletFeature{
+                command.edges,
+                command.radius}});
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "Create Fillet candidate violates Part authored-state invariants",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto* target =
+        evaluation.findFeature(*id);
+    if (target == nullptr ||
+        target->status !=
+            part::FeatureEvaluationStatus::
+                up_to_date) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Fillet did not evaluate UpToDate; no authored mutation committed",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            target != nullptr
+                ? std::optional<
+                      part::FeatureEvaluationDiagnosticCode>{
+                      target->diagnostic}
+                : std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating Fillet Feature");
+    if (!committed.ok() ||
+        !committed.changed) {
+        return {
+            committed.changed,
+            std::nullopt,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return {
+        true,
+        *id,
+        part::FeatureEvaluationDiagnosticCode::
+            none,
+        DocumentSessionDiagnostic{}};
+}
+
+CreateEdgeFeatureResult DocumentSession::execute(
+    const CreateChamferFeatureCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    revision_diverged,
+                "Create Chamfer was started from a stale DocumentRevision",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+    if (!command.valid()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Chamfer contains invalid Edge inputs or Distance",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applyBodyFeatureIdCursors(after);
+    const auto id =
+        after.body.next_feature_id.allocate();
+    if (!id) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "FeatureId allocation space is exhausted",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    after.body.features.push_back(
+        part::PartFeature{
+            *id,
+            command.name.empty()
+                ? defaultChamferFeatureName(*id)
+                : command.name,
+            false,
+            part::ChamferFeature{
+                command.edges,
+                command.distance}});
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "Create Chamfer candidate violates Part authored-state invariants",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto* target =
+        evaluation.findFeature(*id);
+    if (target == nullptr ||
+        target->status !=
+            part::FeatureEvaluationStatus::
+                up_to_date) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Chamfer did not evaluate UpToDate; no authored mutation committed",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            target != nullptr
+                ? std::optional<
+                      part::FeatureEvaluationDiagnosticCode>{
+                      target->diagnostic}
+                : std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating Chamfer Feature");
+    if (!committed.ok() ||
+        !committed.changed) {
+        return {
+            committed.changed,
+            std::nullopt,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return {
+        true,
+        *id,
+        part::FeatureEvaluationDiagnosticCode::
+            none,
+        DocumentSessionDiagnostic{}};
+}
+
 DocumentSessionResult DocumentSession::execute(
     const SetFeatureSuppressedCommand& command) {
     if (document_.revision() !=
