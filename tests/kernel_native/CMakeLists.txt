@@ -584,6 +584,31 @@ set_tests_properties(pm05a.edge_feature_lifecycle_evidence PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
+
+add_executable(pm05d1_edge_feature_draft_preview_test
+    pm05d1_edge_feature_draft_preview_test.cpp
+)
+
+target_link_libraries(pm05d1_edge_feature_draft_preview_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+        simplesolid2_part
+        simplesolid2_sketch
+)
+
+target_compile_features(pm05d1_edge_feature_draft_preview_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05d1.edge_feature_draft_preview
+    COMMAND pm05d1_edge_feature_draft_preview_test
+)
+
+set_tests_properties(pm05d1.edge_feature_draft_preview PROPERTIES
+    LABELS "tier-full-only;subsystem-application;subsystem-kernel;subsystem-part;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -610,6 +635,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm04c2_production_revolve_test
         pm05c2a_production_edge_provider_test
         pm05c2b_part_edge_topology_test
+        pm05d1_edge_feature_draft_preview_test
         pm05a_edge_feature_provider_evidence_test
         pm05a_edge_feature_lifecycle_evidence_test
 )
