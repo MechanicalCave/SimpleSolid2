@@ -499,6 +499,64 @@ QString revolveEvaluationText(
     return QStringLiteral("Revolve unavailable.");
 }
 
+
+QString edgeFeatureEvaluationText(
+    const application::EdgeFeatureDraftEvaluationResult&
+        evaluation,
+    QStringView feature_name) {
+    using Status =
+        application::EdgeFeatureDraftEvaluationStatus;
+    switch (evaluation.status) {
+    case Status::ok:
+        return evaluation.previewSolidAvailable()
+            ? QStringLiteral("Preview ready.")
+            : QStringLiteral(
+                  "Candidate valid; preview unavailable.");
+    case Status::incomplete_draft:
+        return QStringLiteral(
+            "Select one or more material Edges and enter a positive parameter.");
+    case Status::stale_document:
+    case Status::stale_revision:
+        return QStringLiteral(
+            "%1 draft is stale; cancel and restart.")
+            .arg(feature_name);
+    case Status::feature_id_exhausted:
+        return QStringLiteral(
+            "Feature identity space is exhausted.");
+    case Status::invalid_candidate:
+        return QStringLiteral(
+            "%1 candidate is invalid.")
+            .arg(feature_name);
+    case Status::target_failed: {
+        QString detail =
+            evaluation.evaluation_diagnostic
+                ? featureEvaluationDiagnosticText(
+                      *evaluation.evaluation_diagnostic)
+                : QStringLiteral(
+                      "modeling evaluation failed");
+        if (evaluation.failing_edge_input_index) {
+            detail += QStringLiteral(
+                          " · Edge input %1")
+                          .arg(
+                              static_cast<qulonglong>(
+                                  *evaluation
+                                       .failing_edge_input_index +
+                                  1U));
+        }
+        if (evaluation.target_status) {
+            detail += QStringLiteral(" · %1")
+                          .arg(
+                              featureEvaluationStatusText(
+                                  *evaluation.target_status));
+        }
+        return QStringLiteral("%1 rejected: %2")
+            .arg(feature_name, detail);
+    }
+    }
+    return QStringLiteral("%1 unavailable.")
+        .arg(feature_name);
+}
+
 std::string toUtf8(const QString& value) {
     const auto bytes = value.toUtf8();
     return std::string{
@@ -1401,6 +1459,16 @@ void CadWorkbench::buildUi() {
     editor_surface_ = editor_container;
     shell_->setEditorSurface(editor_surface_);
 
+    part_create_tools_label_ =
+        new QLabel(
+            QStringLiteral("Create:"),
+            shell_);
+    part_create_tools_label_->setObjectName(
+        QStringLiteral("partCreateToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        0,
+        part_create_tools_label_);
+
     sketch_button_ =
         new QPushButton(
             QStringLiteral("Sketch"),
@@ -1408,8 +1476,19 @@ void CadWorkbench::buildUi() {
     sketch_button_->setObjectName(
         QStringLiteral("sketchToolButton"));
     shell_->editorToolsLayout().insertWidget(
-        0,
+        1,
         sketch_button_);
+
+    datum_plane_button_ =
+        new QPushButton(
+            QStringLiteral("Datum Plane"),
+            shell_);
+    datum_plane_button_->setObjectName(
+        QStringLiteral("datumPlaneToolButton"));
+    datum_plane_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        2,
+        datum_plane_button_);
 
     extrude_button_ =
         new QPushButton(
@@ -1419,7 +1498,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("extrudeToolButton"));
     extrude_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        1,
+        3,
         extrude_button_);
 
     revolve_button_ =
@@ -1430,19 +1509,40 @@ void CadWorkbench::buildUi() {
         QStringLiteral("revolveToolButton"));
     revolve_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        1,
+        4,
         revolve_button_);
 
-    datum_plane_button_ =
-        new QPushButton(
-            QStringLiteral("Datum Plane"),
+    part_modify_tools_label_ =
+        new QLabel(
+            QStringLiteral("Modify:"),
             shell_);
-    datum_plane_button_->setObjectName(
-        QStringLiteral("datumPlaneToolButton"));
-    datum_plane_button_->setCheckable(true);
+    part_modify_tools_label_->setObjectName(
+        QStringLiteral("partModifyToolsLabel"));
     shell_->editorToolsLayout().insertWidget(
-        1,
-        datum_plane_button_);
+        5,
+        part_modify_tools_label_);
+
+    fillet_button_ =
+        new QPushButton(
+            QStringLiteral("Fillet"),
+            shell_);
+    fillet_button_->setObjectName(
+        QStringLiteral("filletToolButton"));
+    fillet_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        6,
+        fillet_button_);
+
+    chamfer_button_ =
+        new QPushButton(
+            QStringLiteral("Chamfer"),
+            shell_);
+    chamfer_button_->setObjectName(
+        QStringLiteral("chamferToolButton"));
+    chamfer_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        7,
+        chamfer_button_);
 
     select_sketch_button_ =
         new QPushButton(
@@ -1670,6 +1770,10 @@ void CadWorkbench::buildUi() {
     viewport_controller_->setBodyTopologySelectionChangedHandler(
         [this](std::optional<BodyTopologyInspection> inspection) {
             if (!inspection) {
+                if (fillet_draft_ ||
+                    chamfer_draft_) {
+                    tryStageEdgeFeatureSelection();
+                }
                 syncActionState();
                 return;
             }
@@ -1689,6 +1793,10 @@ void CadWorkbench::buildUi() {
                         std::nullopt);
             }
             refreshTopologyProperties(*inspection);
+            if (fillet_draft_ ||
+                chamfer_draft_) {
+                tryStageEdgeFeatureSelection();
+            }
             if (sketch_support_pick_active_) {
                 tryCreateSketchFromBodyTopology(
                     *inspection);
@@ -1915,15 +2023,23 @@ void CadWorkbench::buildUi() {
                 const auto* feature =
                     document_session_->document()
                         .findFeature(feature_id);
-                if (feature != nullptr &&
-                    std::holds_alternative<
+                if (feature == nullptr) {
+                    return;
+                }
+                if (std::holds_alternative<
                         part::RevolveFeature>(
                         feature->definition)) {
                     static_cast<void>(
                         startRevolveEdit(feature_id));
-                } else {
+                } else if (std::holds_alternative<
+                               part::ExtrudeFeature>(
+                               feature->definition)) {
                     static_cast<void>(
                         startExtrudeEdit(feature_id));
+                } else {
+                    setStatusText(
+                        QStringLiteral(
+                            "Fillet/Chamfer Edit is owned by PM-05E and is not active in PM-05D."));
                 }
             }
         });
@@ -3581,6 +3697,115 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         revolve_operations_widget_);
 
+    edge_feature_operations_widget_ =
+        new QWidget(operations_content);
+    edge_feature_operations_widget_->setObjectName(
+        QStringLiteral("edgeFeatureOperationsWidget"));
+    auto* edge_feature_operations_layout =
+        new QVBoxLayout(
+            edge_feature_operations_widget_);
+    edge_feature_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    edge_feature_title_label_ =
+        new QLabel(
+            QStringLiteral("FILLET"),
+            edge_feature_operations_widget_);
+    edge_feature_title_label_->setObjectName(
+        QStringLiteral("edgeFeatureTitleLabel"));
+    edge_feature_operations_layout->addWidget(
+        edge_feature_title_label_);
+
+    auto* edge_feature_selection_row =
+        new QWidget(edge_feature_operations_widget_);
+    auto* edge_feature_selection_layout =
+        new QHBoxLayout(edge_feature_selection_row);
+    edge_feature_selection_layout->setContentsMargins(
+        0, 0, 0, 0);
+    edge_feature_selection_label_ =
+        new QLabel(
+            QStringLiteral("Selected edges: 0"),
+            edge_feature_selection_row);
+    edge_feature_selection_label_->setObjectName(
+        QStringLiteral("edgeFeatureSelectionLabel"));
+    edge_feature_clear_button_ =
+        new QPushButton(
+            QStringLiteral("Clear"),
+            edge_feature_selection_row);
+    edge_feature_clear_button_->setObjectName(
+        QStringLiteral("edgeFeatureClearButton"));
+    edge_feature_selection_layout->addWidget(
+        edge_feature_selection_label_);
+    edge_feature_selection_layout->addStretch();
+    edge_feature_selection_layout->addWidget(
+        edge_feature_clear_button_);
+    edge_feature_operations_layout->addWidget(
+        edge_feature_selection_row);
+
+    auto* edge_feature_parameter_form =
+        new QFormLayout;
+    edge_feature_parameter_name_label_ =
+        new QLabel(
+            QStringLiteral("Radius"),
+            edge_feature_operations_widget_);
+    edge_feature_parameter_edit_ =
+        new QLineEdit(
+            edge_feature_operations_widget_);
+    edge_feature_parameter_edit_->setObjectName(
+        QStringLiteral("edgeFeatureParameterEdit"));
+    edge_feature_parameter_edit_->setPlaceholderText(
+        QStringLiteral("positive length"));
+    edge_feature_parameter_form->addRow(
+        edge_feature_parameter_name_label_,
+        edge_feature_parameter_edit_);
+    edge_feature_operations_layout->addLayout(
+        edge_feature_parameter_form);
+
+    edge_feature_preview_timer_ =
+        new QTimer(this);
+    edge_feature_preview_timer_->setSingleShot(true);
+    edge_feature_preview_timer_->setInterval(90);
+    QObject::connect(
+        edge_feature_preview_timer_,
+        &QTimer::timeout,
+        this,
+        [this] {
+            refreshEdgeFeaturePreview();
+        });
+
+    edge_feature_result_label_ =
+        new QLabel(
+            QStringLiteral(
+                "Select one or more material Edges and enter a positive parameter."),
+            edge_feature_operations_widget_);
+    edge_feature_result_label_->setObjectName(
+        QStringLiteral("edgeFeatureResultLabel"));
+    edge_feature_result_label_->setWordWrap(true);
+    edge_feature_operations_layout->addWidget(
+        edge_feature_result_label_);
+
+    edge_feature_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish"),
+            edge_feature_operations_widget_);
+    edge_feature_finish_button_->setObjectName(
+        QStringLiteral("edgeFeatureFinishButton"));
+    edge_feature_operations_layout->addWidget(
+        edge_feature_finish_button_);
+
+    edge_feature_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            edge_feature_operations_widget_);
+    edge_feature_cancel_button_->setObjectName(
+        QStringLiteral("edgeFeatureCancelButton"));
+    edge_feature_operations_layout->addWidget(
+        edge_feature_cancel_button_);
+
+    edge_feature_operations_widget_->setVisible(false);
+    operations_layout->addWidget(
+        edge_feature_operations_widget_);
+
     profile_operations_widget_ =
         new QWidget(operations_content);
     profile_operations_widget_->setObjectName(
@@ -4224,15 +4449,23 @@ void CadWorkbench::buildUi() {
                 const auto* feature =
                     document_session_->document()
                         .findFeature(feature_id);
-                if (feature != nullptr &&
-                    std::holds_alternative<
+                if (feature == nullptr) {
+                    return;
+                }
+                if (std::holds_alternative<
                         part::RevolveFeature>(
                         feature->definition)) {
                     static_cast<void>(
                         startRevolveEdit(feature_id));
-                } else {
+                } else if (std::holds_alternative<
+                               part::ExtrudeFeature>(
+                               feature->definition)) {
                     static_cast<void>(
                         startExtrudeEdit(feature_id));
+                } else {
+                    setStatusText(
+                        QStringLiteral(
+                            "Fillet/Chamfer Edit is owned by PM-05E and is not active in PM-05D."));
                 }
             }
         });
@@ -4943,6 +5176,106 @@ void CadWorkbench::buildUi() {
         });
 
     QObject::connect(
+        fillet_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (fillet_draft_ || chamfer_draft_) {
+                cancelEdgeFeature();
+                return;
+            }
+            static_cast<void>(
+                startFilletTool());
+        });
+    QObject::connect(
+        chamfer_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (fillet_draft_ || chamfer_draft_) {
+                cancelEdgeFeature();
+                return;
+            }
+            static_cast<void>(
+                startChamferTool());
+        });
+    QObject::connect(
+        edge_feature_clear_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (viewport_controller_ != nullptr) {
+                viewport_controller_->
+                    clearBodyTopologyToolSelection();
+            }
+            tryStageEdgeFeatureSelection();
+        });
+    QObject::connect(
+        edge_feature_parameter_edit_,
+        &QLineEdit::textChanged,
+        this,
+        [this](const QString& text_value) {
+            if (syncing_edge_feature_ui_ ||
+                (!fillet_draft_ &&
+                 !chamfer_draft_) ||
+                document_session_ == nullptr) {
+                return;
+            }
+
+            const auto parsed =
+                application::parseBareCadDistance(
+                    toUtf8(text_value),
+                    application::CadInputNumberFormat{
+                        toUtf8(
+                            QLocale{}.decimalPoint()),
+                        document_session_->document()
+                            .lengthUnit()});
+            if (!parsed || !(*parsed > 0.0)) {
+                edge_feature_parameter_input_valid_ =
+                    false;
+                edge_feature_evaluation_.reset();
+                if (edge_feature_preview_timer_ != nullptr) {
+                    edge_feature_preview_timer_->stop();
+                }
+                if (viewport_controller_ != nullptr) {
+                    viewport_controller_->clearSolidPreview();
+                }
+                syncEdgeFeatureUi();
+                return;
+            }
+
+            static_cast<void>(
+                setEdgeFeatureParameter(
+                    core::LengthValue{*parsed},
+                    toUtf8(text_value),
+                    false));
+        });
+    QObject::connect(
+        edge_feature_parameter_edit_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] {
+            flushEdgeFeaturePreview();
+            static_cast<void>(
+                finishEdgeFeature());
+        });
+    QObject::connect(
+        edge_feature_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                finishEdgeFeature());
+        });
+    QObject::connect(
+        edge_feature_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cancelEdgeFeature();
+        });
+
+    QObject::connect(
         profile_add_area_button_,
         &QPushButton::clicked,
         this,
@@ -5058,6 +5391,7 @@ bool CadWorkbench::activateDocument(
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearRevolveRuntimeContext();
+    clearEdgeFeatureRuntimeContext();
     clearSketchRuntimeContext();
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clear();
@@ -5082,6 +5416,7 @@ void CadWorkbench::deactivateDocument() {
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearRevolveRuntimeContext();
+    clearEdgeFeatureRuntimeContext();
     clearSketchRuntimeContext();
     document_session_ = nullptr;
     workspace_root_.clear();
@@ -5303,6 +5638,8 @@ void CadWorkbench::setFeatureSuppressed(
         datum_plane_draft_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5318,6 +5655,15 @@ void CadWorkbench::setFeatureSuppressed(
         setStatusText(
             QStringLiteral(
                 "Feature is no longer available."));
+        return;
+    }
+    if (std::holds_alternative<part::FilletFeature>(
+            feature->definition) ||
+        std::holds_alternative<part::ChamferFeature>(
+            feature->definition)) {
+        setStatusText(
+            QStringLiteral(
+                "Fillet/Chamfer Suppress lifecycle is owned by PM-05E and is not active in PM-05D."));
         return;
     }
     if (feature->suppressed == suppressed) {
@@ -5358,6 +5704,8 @@ void CadWorkbench::deleteFeature(
         datum_plane_draft_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5373,6 +5721,15 @@ void CadWorkbench::deleteFeature(
         setStatusText(
             QStringLiteral(
                 "Feature is no longer available."));
+        return;
+    }
+    if (std::holds_alternative<part::FilletFeature>(
+            feature->definition) ||
+        std::holds_alternative<part::ChamferFeature>(
+            feature->definition)) {
+        setStatusText(
+            QStringLiteral(
+                "Fillet/Chamfer Delete lifecycle is owned by PM-05E and is not active in PM-05D."));
         return;
     }
     const auto source_profile =
@@ -5884,6 +6241,8 @@ bool CadWorkbench::startDatumPlaneTool() {
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -5967,6 +6326,8 @@ bool CadWorkbench::startDatumPlaneEdit(
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -6030,6 +6391,8 @@ void CadWorkbench::deleteDatumPlane(
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
@@ -8143,6 +8506,575 @@ CadWorkbench::submitRevolveCadInput(
               "Revolve Angle could not be applied."};
 }
 
+
+bool CadWorkbench::startFilletTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
+        sketch_support_pick_active_ ||
+        axis_draft_ ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        revolve_draft_ ||
+        active_sketch_id_) {
+        return false;
+    }
+    if (document_session->document()
+            .body().features.empty()) {
+        setStatusText(
+            QStringLiteral(
+                "Fillet requires an existing evaluated Body."));
+        return false;
+    }
+
+    const auto selected =
+        viewport_controller_ != nullptr
+            ? viewport_controller_->
+                  selectedMaterialEdgeReferences()
+            : std::nullopt;
+    if (selected) {
+        fillet_draft_ =
+            application::FilletDraft::beginCreate(
+                *document_session,
+                *selected);
+        if (!fillet_draft_) {
+            setStatusText(
+                QStringLiteral(
+                    "Selected Edges cannot seed Fillet at the current Body stage."));
+            return false;
+        }
+    } else {
+        fillet_draft_ =
+            application::FilletDraft::beginCreate(
+                *document_session);
+    }
+
+    edge_feature_evaluation_.reset();
+    edge_feature_parameter_input_valid_ = true;
+    if (edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        edge_feature_parameter_edit_->clear();
+    }
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyEdgeDraftMode(true);
+        viewport_controller_->clearSolidPreview();
+    }
+    tryStageEdgeFeatureSelection();
+    syncActionState();
+    syncEdgeFeatureUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        selected
+            ? QStringLiteral(
+                  "Fillet active — selected material Edges seeded; enter Radius or toggle more Edges.")
+            : QStringLiteral(
+                  "Fillet active — select/toggle one or more material Edges, then enter Radius."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+bool CadWorkbench::startChamferTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
+        sketch_support_pick_active_ ||
+        axis_draft_ ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        revolve_draft_ ||
+        active_sketch_id_) {
+        return false;
+    }
+    if (document_session->document()
+            .body().features.empty()) {
+        setStatusText(
+            QStringLiteral(
+                "Chamfer requires an existing evaluated Body."));
+        return false;
+    }
+
+    const auto selected =
+        viewport_controller_ != nullptr
+            ? viewport_controller_->
+                  selectedMaterialEdgeReferences()
+            : std::nullopt;
+    if (selected) {
+        chamfer_draft_ =
+            application::ChamferDraft::beginCreate(
+                *document_session,
+                *selected);
+        if (!chamfer_draft_) {
+            setStatusText(
+                QStringLiteral(
+                    "Selected Edges cannot seed Chamfer at the current Body stage."));
+            return false;
+        }
+    } else {
+        chamfer_draft_ =
+            application::ChamferDraft::beginCreate(
+                *document_session);
+    }
+
+    edge_feature_evaluation_.reset();
+    edge_feature_parameter_input_valid_ = true;
+    if (edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        edge_feature_parameter_edit_->clear();
+    }
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyEdgeDraftMode(true);
+        viewport_controller_->clearSolidPreview();
+    }
+    tryStageEdgeFeatureSelection();
+    syncActionState();
+    syncEdgeFeatureUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        selected
+            ? QStringLiteral(
+                  "Chamfer active — selected material Edges seeded; enter Distance or toggle more Edges.")
+            : QStringLiteral(
+                  "Chamfer active — select/toggle one or more material Edges, then enter Distance."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::cancelEdgeFeature() {
+    if (!fillet_draft_ &&
+        !chamfer_draft_) {
+        return;
+    }
+    const auto name =
+        fillet_draft_
+            ? QStringLiteral("Fillet")
+            : QStringLiteral("Chamfer");
+    clearEdgeFeatureRuntimeContext();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "%1 cancelled — no authored change.")
+            .arg(name));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+bool CadWorkbench::finishEdgeFeature() {
+    flushEdgeFeaturePreview();
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        (!fillet_draft_ &&
+         !chamfer_draft_) ||
+        !edge_feature_evaluation_ ||
+        !edge_feature_parameter_input_valid_ ||
+        !edge_feature_evaluation_->committable()) {
+        setStatusText(
+            QStringLiteral(
+                "Edge Feature cannot finish until the Edge set, parameter and exact preview candidate are valid."));
+        return false;
+    }
+
+    const bool fillet =
+        fillet_draft_.has_value();
+    const auto result =
+        fillet
+            ? application::finishFilletDraft(
+                  *document_session,
+                  *fillet_draft_,
+                  *edge_feature_evaluation_,
+                  *solid_modeling_kernel_)
+            : application::finishChamferDraft(
+                  *document_session,
+                  *chamfer_draft_,
+                  *edge_feature_evaluation_,
+                  *solid_modeling_kernel_);
+    if (!result.ok()) {
+        setStatusText(
+            result.diagnostic.empty()
+                ? QStringLiteral(
+                      "%1 Finish was rejected.")
+                      .arg(
+                          fillet
+                              ? QStringLiteral("Fillet")
+                              : QStringLiteral("Chamfer"))
+                : fromUtf8(result.diagnostic));
+        refreshEdgeFeaturePreview();
+        return false;
+    }
+
+    const auto committed_feature_id =
+        result.feature_id;
+    const auto name =
+        fillet
+            ? QStringLiteral("Fillet")
+            : QStringLiteral("Chamfer");
+    clearEdgeFeatureRuntimeContext();
+    refreshActiveContext();
+    if (committed_feature_id) {
+        navigateToFeature(*committed_feature_id);
+    }
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "%1 finished — Feature committed.")
+            .arg(name));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::clearEdgeFeatureRuntimeContext() {
+    if (edge_feature_preview_timer_ != nullptr) {
+        edge_feature_preview_timer_->stop();
+    }
+    fillet_draft_.reset();
+    chamfer_draft_.reset();
+    edge_feature_evaluation_.reset();
+    edge_feature_parameter_input_valid_ = true;
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->clearSolidPreview();
+        viewport_controller_->
+            setBodyTopologyEdgeDraftMode(false);
+    }
+    if (edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        edge_feature_parameter_edit_->clear();
+    }
+    syncEdgeFeatureUi();
+}
+
+void CadWorkbench::tryStageEdgeFeatureSelection() {
+    if ((!fillet_draft_ &&
+         !chamfer_draft_) ||
+        viewport_controller_ == nullptr) {
+        return;
+    }
+
+    const auto selected =
+        viewport_controller_->
+            selectedMaterialEdgeReferences();
+    std::vector<part::MaterialEdgeReference> edges;
+    if (selected) {
+        edges = *selected;
+    }
+
+    const bool applied =
+        fillet_draft_
+            ? fillet_draft_->setEdges(
+                  std::move(edges))
+            : chamfer_draft_->setEdges(
+                  std::move(edges));
+    if (!applied) {
+        setStatusText(
+            QStringLiteral(
+                "Edge selection is stale, duplicated or not valid for the Feature's consumed Body stage."));
+        return;
+    }
+
+    edge_feature_evaluation_.reset();
+    refreshEdgeFeaturePreview();
+    notifyCadInputContextChanged();
+}
+
+bool CadWorkbench::setEdgeFeatureParameter(
+    core::LengthValue parameter,
+    std::optional<std::string_view> display_text,
+    bool refresh_now) {
+    if ((!fillet_draft_ &&
+         !chamfer_draft_) ||
+        !parameter.finite() ||
+        !(parameter.millimetres > 0.0)) {
+        return false;
+    }
+
+    const bool applied =
+        fillet_draft_
+            ? fillet_draft_->setRadius(parameter)
+            : chamfer_draft_->setDistance(parameter);
+    if (!applied) {
+        return false;
+    }
+
+    edge_feature_parameter_input_valid_ = true;
+    if (display_text &&
+        edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        edge_feature_parameter_edit_->setText(
+            fromUtf8(*display_text));
+    }
+
+    edge_feature_evaluation_.reset();
+    if (refresh_now) {
+        refreshEdgeFeaturePreview();
+    } else {
+        scheduleEdgeFeaturePreview();
+        syncEdgeFeatureUi();
+    }
+    notifyCadInputContextChanged();
+    return true;
+}
+
+void CadWorkbench::scheduleEdgeFeaturePreview() {
+    if (edge_feature_preview_timer_ == nullptr) {
+        refreshEdgeFeaturePreview();
+        return;
+    }
+    edge_feature_preview_timer_->start();
+}
+
+void CadWorkbench::flushEdgeFeaturePreview() {
+    if (edge_feature_preview_timer_ == nullptr ||
+        !edge_feature_preview_timer_->isActive()) {
+        return;
+    }
+    edge_feature_preview_timer_->stop();
+    refreshEdgeFeaturePreview();
+}
+
+void CadWorkbench::refreshEdgeFeaturePreview() {
+    if (edge_feature_preview_timer_ != nullptr) {
+        edge_feature_preview_timer_->stop();
+    }
+    edge_feature_evaluation_.reset();
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->clearSolidPreview();
+    }
+
+    if ((!fillet_draft_ &&
+         !chamfer_draft_) ||
+        !edge_feature_parameter_input_valid_ ||
+        document_session_ == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        syncEdgeFeatureUi();
+        return;
+    }
+
+    auto evaluation =
+        fillet_draft_
+            ? document_session_->evaluateFilletDraft(
+                  *fillet_draft_,
+                  *solid_modeling_kernel_)
+            : document_session_->evaluateChamferDraft(
+                  *chamfer_draft_,
+                  *solid_modeling_kernel_);
+
+    if (evaluation.previewSolidAvailable() &&
+        viewport_controller_ != nullptr) {
+        // Tone is presentation-only. The geometry is the exact complete
+        // candidate Body returned by the shared semantic evaluation path.
+        if (!viewport_controller_->setSolidPreview(
+                *evaluation.preview_mesh,
+                viewer::SolidPreviewTone::additive)) {
+            evaluation.preview_mesh.reset();
+        }
+    }
+
+    edge_feature_evaluation_ =
+        std::move(evaluation);
+    syncEdgeFeatureUi();
+}
+
+void CadWorkbench::syncEdgeFeatureUi() {
+    const bool active =
+        fillet_draft_.has_value() ||
+        chamfer_draft_.has_value();
+    if (edge_feature_operations_widget_ != nullptr) {
+        edge_feature_operations_widget_->setVisible(
+            active);
+    }
+    if (!active) {
+        return;
+    }
+
+    syncing_edge_feature_ui_ = true;
+    const bool fillet =
+        fillet_draft_.has_value();
+    const auto edge_count =
+        fillet
+            ? fillet_draft_->edges().size()
+            : chamfer_draft_->edges().size();
+
+    if (edge_feature_title_label_ != nullptr) {
+        edge_feature_title_label_->setText(
+            fillet
+                ? QStringLiteral("FILLET")
+                : QStringLiteral("CHAMFER"));
+    }
+    if (edge_feature_selection_label_ != nullptr) {
+        edge_feature_selection_label_->setText(
+            QStringLiteral("Selected edges: %1")
+                .arg(
+                    static_cast<qulonglong>(
+                        edge_count)));
+    }
+    if (edge_feature_parameter_name_label_ != nullptr) {
+        edge_feature_parameter_name_label_->setText(
+            fillet
+                ? QStringLiteral("Radius")
+                : QStringLiteral("Distance"));
+    }
+    if (edge_feature_finish_button_ != nullptr) {
+        edge_feature_finish_button_->setText(
+            fillet
+                ? QStringLiteral("Finish Fillet")
+                : QStringLiteral("Finish Chamfer"));
+        edge_feature_finish_button_->setEnabled(
+            edge_feature_parameter_input_valid_ &&
+            edge_feature_evaluation_ &&
+            edge_feature_evaluation_->committable());
+    }
+    if (edge_feature_clear_button_ != nullptr) {
+        edge_feature_clear_button_->setEnabled(
+            edge_count != 0U);
+    }
+    if (edge_feature_result_label_ != nullptr) {
+        if (!edge_feature_parameter_input_valid_) {
+            edge_feature_result_label_->setText(
+                QStringLiteral(
+                    "%1 must be a positive length.")
+                    .arg(
+                        fillet
+                            ? QStringLiteral("Radius")
+                            : QStringLiteral("Distance")));
+        } else if (edge_feature_evaluation_) {
+            edge_feature_result_label_->setText(
+                edgeFeatureEvaluationText(
+                    *edge_feature_evaluation_,
+                    fillet
+                        ? QStringView{
+                              u"Fillet"}
+                        : QStringView{
+                              u"Chamfer"}));
+        } else {
+            edge_feature_result_label_->setText(
+                QStringLiteral(
+                    "Select one or more current material Edges and enter a positive %1.")
+                    .arg(
+                        fillet
+                            ? QStringLiteral("Radius")
+                            : QStringLiteral("Distance")));
+        }
+    }
+    if (operations_placeholder_ != nullptr) {
+        operations_placeholder_->setText(
+            QStringLiteral("%1 — %2 edge(s)")
+                .arg(
+                    fillet
+                        ? QStringLiteral("Fillet")
+                        : QStringLiteral("Chamfer"))
+                .arg(
+                    static_cast<qulonglong>(
+                        edge_count)));
+    }
+
+    syncing_edge_feature_ui_ = false;
+}
+
+application::CadInputSubmitResult
+CadWorkbench::submitEdgeFeatureCadInput(
+    std::string_view text) {
+    if ((!fillet_draft_ &&
+         !chamfer_draft_) ||
+        document_session_ == nullptr) {
+        return {
+            false,
+            "No active Fillet/Chamfer draft."};
+    }
+
+    const bool fillet =
+        fillet_draft_.has_value();
+    const auto keyword =
+        upperAsciiTrimmed(text);
+    if (keyword == "CANCEL" ||
+        keyword == "ESC") {
+        cancelEdgeFeature();
+        return {true, {}};
+    }
+    if ((fillet && keyword == "FILLET") ||
+        (!fillet && keyword == "CHAMFER")) {
+        return {true, {}};
+    }
+    if (keyword == "CLEAR") {
+        if (viewport_controller_ != nullptr) {
+            viewport_controller_->
+                clearBodyTopologyToolSelection();
+        }
+        tryStageEdgeFeatureSelection();
+        return {true, {}};
+    }
+    if (keyword == "REMOVE") {
+        if (viewport_controller_ == nullptr ||
+            !viewport_controller_->
+                 removePrimaryBodyTopologyToolSelection()) {
+            return {
+                false,
+                "REMOVE requires at least one selected material Edge."};
+        }
+        tryStageEdgeFeatureSelection();
+        return {true, {}};
+    }
+    if (keyword.empty() ||
+        keyword == "FINISH") {
+        return finishEdgeFeature()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Edge Feature Finish was rejected."};
+    }
+
+    const auto parsed =
+        application::parseBareCadDistance(
+            text,
+            application::CadInputNumberFormat{
+                toUtf8(
+                    QLocale{}.decimalPoint()),
+                document_session_->document()
+                    .lengthUnit()});
+    if (!parsed || !(*parsed > 0.0)) {
+        return {
+            false,
+            fillet
+                ? "FILLET expects REMOVE, CLEAR, FINISH, CANCEL or a positive Radius."
+                : "CHAMFER expects REMOVE, CLEAR, FINISH, CANCEL or a positive Distance."};
+    }
+
+    if (!setEdgeFeatureParameter(
+            core::LengthValue{*parsed},
+            text)) {
+        return {
+            false,
+            "Edge Feature parameter could not be applied."};
+    }
+    return {true, {}};
+}
+
 void CadWorkbench::setSketchSelectionRole(
     sketch::EntityRole role) {
     if (!sketch_interaction_controller_ ||
@@ -8336,7 +9268,9 @@ void CadWorkbench::startSketchTool() {
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
-        revolve_draft_) {
+        revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_) {
         return;
     }
 
@@ -8375,7 +9309,9 @@ void CadWorkbench::startSketchResupport(
         sketch_support_pick_active_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
-        revolve_draft_) {
+        revolve_draft_ ||
+        fillet_draft_ ||
+        chamfer_draft_) {
         return;
     }
     if (active_sketch_id_) {
@@ -9308,6 +10244,24 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (revolve_draft_->generation() &
                 (revolve_namespace - 1U));
     }
+    if (fillet_draft_) {
+        constexpr application::CadInputContextGeneration
+            fillet_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 56U};
+        return fillet_namespace |
+               (fillet_draft_->generation() &
+                (fillet_namespace - 1U));
+    }
+    if (chamfer_draft_) {
+        constexpr application::CadInputContextGeneration
+            chamfer_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 57U};
+        return chamfer_namespace |
+               (chamfer_draft_->generation() &
+                (chamfer_namespace - 1U));
+    }
     return sketch_interaction_controller_
                ? sketch_interaction_controller_->
                      cadInputContextGeneration()
@@ -9346,6 +10300,18 @@ CadWorkbench::cadDynamicInputFields() const {
                     CadDynamicInputFieldSemantic::
                         angle,
                 "Angle"}};
+    }
+
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        return {
+            application::CadDynamicInputField{
+                application::
+                    CadDynamicInputFieldSemantic::
+                        distance,
+                fillet_draft_
+                    ? "Radius"
+                    : "Distance"}};
     }
 
     if (!sketch_interaction_controller_ ||
@@ -9472,6 +10438,36 @@ CadWorkbench::lockCadDynamicInputField(
         return {true, {}};
     }
 
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        if (index != 0U ||
+            document_session_ == nullptr) {
+            return {
+                false,
+                "Fillet/Chamfer has one length parameter field."};
+        }
+        const auto distance =
+            application::parseBareCadDistance(
+                text,
+                application::CadInputNumberFormat{
+                    toUtf8(
+                        QLocale{}.decimalPoint()),
+                    document_session_->document()
+                        .lengthUnit()});
+        if (!distance ||
+            !(*distance > 0.0) ||
+            !setEdgeFeatureParameter(
+                core::LengthValue{*distance},
+                text)) {
+            return {
+                false,
+                fillet_draft_
+                    ? "Fillet Radius expects a positive Length."
+                    : "Chamfer Distance expects a positive Length."};
+        }
+        return {true, {}};
+    }
+
     if (!sketch_interaction_controller_) {
         return {
             false,
@@ -9542,6 +10538,16 @@ CadWorkbench::submitCadDynamicInputRequest(
             : application::CadInputSubmitResult{
                   false,
                   "Revolve Finish was rejected."};
+    }
+
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        return finishEdgeFeature()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Edge Feature Finish was rejected."};
     }
 
     if (!sketch_interaction_controller_ ||
@@ -9668,6 +10674,19 @@ CadWorkbench::submitCadInput(
         return result;
     }
 
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        auto result =
+            submitEdgeFeatureCadInput(text);
+        if (!result.accepted &&
+            status_ != nullptr &&
+            !result.diagnostic.empty()) {
+            setStatusText(
+                fromUtf8(result.diagnostic));
+        }
+        return result;
+    }
+
     const auto top_level_keyword =
         upperAsciiTrimmed(text);
     if (top_level_keyword == "AXIS") {
@@ -9702,6 +10721,22 @@ CadWorkbench::submitCadInput(
             : application::CadInputSubmitResult{
                   false,
                   "REVOLVE could not be activated."};
+    }
+    if (top_level_keyword == "FILLET") {
+        return startFilletTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "FILLET could not be activated."};
+    }
+    if (top_level_keyword == "CHAMFER") {
+        return startChamferTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "CHAMFER could not be activated."};
     }
     if (top_level_keyword == "SKETCH") {
         startSketchTool();
@@ -9816,6 +10851,15 @@ QString CadWorkbench::cadInputPromptText() const {
         }
         return QStringLiteral(
             "Command: REVOLVE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Angle · FINISH/CANCEL");
+    }
+
+    if (fillet_draft_) {
+        return QStringLiteral(
+            "Command: FILLET — toggle material Edges · Radius · REMOVE/CLEAR · FINISH/CANCEL");
+    }
+    if (chamfer_draft_) {
+        return QStringLiteral(
+            "Command: CHAMFER — toggle material Edges · Distance · REMOVE/CLEAR · FINISH/CANCEL");
     }
 
     if (!sketch_interaction_controller_ ||
@@ -10286,6 +11330,10 @@ void CadWorkbench::refreshActiveContext() {
     if (revolve_draft_) {
         refreshRevolvePreview();
     }
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        refreshEdgeFeaturePreview();
+    }
     if (selected_axis_id_) {
         refreshAxisProperties(
             *selected_axis_id_);
@@ -10308,6 +11356,7 @@ void CadWorkbench::clearActiveContext() {
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
     clearRevolveRuntimeContext();
+    clearEdgeFeatureRuntimeContext();
     clearSketchRuntimeContext();
     active_path_->setText(QStringLiteral("No Part is open."));
     active_id_->clear();
@@ -11121,8 +12170,16 @@ void CadWorkbench::refreshFeatureProperties(
     const auto* revolve =
         std::get_if<part::RevolveFeature>(
             &feature->definition);
+    const auto* fillet =
+        std::get_if<part::FilletFeature>(
+            &feature->definition);
+    const auto* chamfer =
+        std::get_if<part::ChamferFeature>(
+            &feature->definition);
     if (extrude == nullptr &&
-        revolve == nullptr) {
+        revolve == nullptr &&
+        fillet == nullptr &&
+        chamfer == nullptr) {
         return;
     }
 
@@ -11132,24 +12189,15 @@ void CadWorkbench::refreshFeatureProperties(
     feature_identity_->setText(
         fromUtf8(feature->id.serialized()));
 
-    const auto source_profile =
-        part::sourceProfileId(*feature);
-    if (!source_profile) {
-        return;
-    }
-    const auto source_profile_id =
-        *source_profile;
-
+    const auto unit =
+        document_session_->document()
+            .lengthUnit();
     if (extrude != nullptr) {
         feature_operation_->setText(
             extrude->operation ==
                     part::ExtrudeOperation::cut
                 ? QStringLiteral("Cut")
                 : QStringLiteral("Add"));
-
-        const auto unit =
-            document_session_->document()
-                .lengthUnit();
         if (const auto* one =
                 std::get_if<
                     part::OneSidedExtrudeExtent>(
@@ -11179,7 +12227,7 @@ void CadWorkbench::refreshFeatureProperties(
         }
         feature_edit_button_->setText(
             QStringLiteral("Edit Extrude"));
-    } else {
+    } else if (revolve != nullptr) {
         feature_operation_->setText(
             revolve->operation ==
                     part::RevolveOperation::cut
@@ -11212,21 +12260,61 @@ void CadWorkbench::refreshFeatureProperties(
         }
         feature_edit_button_->setText(
             QStringLiteral("Edit Revolve"));
+    } else if (fillet != nullptr) {
+        feature_operation_->setText(
+            QStringLiteral("Fillet"));
+        feature_extent_->setText(
+            QStringLiteral("Explicit Edges: %1")
+                .arg(
+                    static_cast<qulonglong>(
+                        fillet->edges.size())));
+        feature_distance_->setText(
+            formatLengthForPart(
+                fillet->radius,
+                unit));
+        feature_direction_->setText(
+            QStringLiteral("Constant Radius"));
+        feature_edit_button_->setText(
+            QStringLiteral("Edit Fillet"));
+    } else {
+        feature_operation_->setText(
+            QStringLiteral("Chamfer"));
+        feature_extent_->setText(
+            QStringLiteral("Explicit Edges: %1")
+                .arg(
+                    static_cast<qulonglong>(
+                        chamfer->edges.size())));
+        feature_distance_->setText(
+            formatLengthForPart(
+                chamfer->distance,
+                unit));
+        feature_direction_->setText(
+            QStringLiteral("Equal Distance"));
+        feature_edit_button_->setText(
+            QStringLiteral("Edit Chamfer"));
     }
 
-    feature_source_profile_->setText(
-        fromUtf8(
-            source_profile_id.serialized()));
+    const auto source_profile =
+        part::sourceProfileId(*feature);
+    const part::ProfileId* source_profile_id =
+        source_profile
+            ? &*source_profile
+            : nullptr;
     const auto* profile =
-        document_session_->document()
-            .findProfile(
-                source_profile_id);
+        source_profile_id != nullptr
+            ? document_session_->document()
+                  .findProfile(*source_profile_id)
+            : nullptr;
+    feature_source_profile_->setText(
+        source_profile_id != nullptr
+            ? fromUtf8(
+                  source_profile_id->serialized())
+            : QStringLiteral("—"));
     feature_source_sketch_->setText(
         profile != nullptr
             ? fromUtf8(
-                  profile->source_sketch_id
-                      .value())
-            : QStringLiteral("<missing>"));
+                  profile->source_sketch_id.value())
+            : QStringLiteral("—"));
 
     auto status =
         feature->suppressed
@@ -11268,13 +12356,19 @@ void CadWorkbench::refreshFeatureProperties(
             diagnostic));
     feature_go_to_profile_button_->setEnabled(
         profile != nullptr);
+    const bool edge_feature =
+        fillet != nullptr ||
+        chamfer != nullptr;
     const bool lifecycle_available =
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
+        !fillet_draft_ &&
+        !chamfer_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     feature_edit_button_->setEnabled(
+        !edge_feature &&
         !feature->suppressed &&
         solid_modeling_kernel_ != nullptr &&
         lifecycle_available);
@@ -11283,9 +12377,11 @@ void CadWorkbench::refreshFeatureProperties(
             ? QStringLiteral("Unsuppress Feature")
             : QStringLiteral("Suppress Feature"));
     feature_suppress_button_->setEnabled(
-        lifecycle_available);
+        lifecycle_available &&
+        !edge_feature);
     feature_delete_button_->setEnabled(
-        lifecycle_available);
+        lifecycle_available &&
+        !edge_feature);
 
     const auto contribution =
         viewport_controller_ != nullptr
@@ -11615,6 +12711,24 @@ bool CadWorkbench::eventFilter(
                     Qt::Key_Enter) {
                 static_cast<void>(
                     finishRevolve());
+                return true;
+            }
+        }
+
+        if (watched == viewport_widget_ &&
+            (fillet_draft_ ||
+             chamfer_draft_)) {
+            if (key_event->key() ==
+                Qt::Key_Escape) {
+                cancelEdgeFeature();
+                return true;
+            }
+            if (key_event->key() ==
+                    Qt::Key_Return ||
+                key_event->key() ==
+                    Qt::Key_Enter) {
+                static_cast<void>(
+                    finishEdgeFeature());
                 return true;
             }
         }
@@ -12872,6 +13986,9 @@ void CadWorkbench::syncSketchInteractionUi() {
 void CadWorkbench::syncActionState() {
     const auto* document_session = activeDocumentSession();
     const bool active = document_session != nullptr;
+    const bool edge_feature_active =
+        fillet_draft_.has_value() ||
+        chamfer_draft_.has_value();
 
     apply_button_->setEnabled(active);
     undo_button_->setEnabled(
@@ -12882,6 +13999,7 @@ void CadWorkbench::syncActionState() {
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
+        !edge_feature_active &&
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
@@ -12891,6 +14009,7 @@ void CadWorkbench::syncActionState() {
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
+        !edge_feature_active &&
         document_session->canRedo());
     // Save remains available for a clean active Document so an explicit
     // Save can revalidate the native-file checkpoint and report an external
@@ -12917,7 +14036,8 @@ void CadWorkbench::syncActionState() {
         !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
-        !revolve_draft_);
+        !revolve_draft_ &&
+        !edge_feature_active);
 
     if (axis_button_ != nullptr) {
         axis_button_->setVisible(active);
@@ -12928,6 +14048,7 @@ void CadWorkbench::syncActionState() {
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
         !revolve_draft_ &&
+        !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         axis_button_->setChecked(
             axis_draft_.has_value());
@@ -12944,6 +14065,7 @@ void CadWorkbench::syncActionState() {
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
         !revolve_draft_ &&
+        !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         datum_plane_button_->setChecked(
             datum_plane_draft_.has_value());
@@ -12960,6 +14082,7 @@ void CadWorkbench::syncActionState() {
             !datum_plane_draft_ &&
             !extrude_draft_ &&
         !revolve_draft_ &&
+        !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         extrude_button_->setChecked(
             extrude_profile_pick_active_ ||
@@ -12978,9 +14101,49 @@ void CadWorkbench::syncActionState() {
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
             !revolve_draft_ &&
+        !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         revolve_button_->setChecked(
             revolve_draft_.has_value());
+    }
+
+    if (part_create_tools_label_ != nullptr) {
+        part_create_tools_label_->setVisible(
+            !editing_sketch);
+    }
+    if (part_modify_tools_label_ != nullptr) {
+        part_modify_tools_label_->setVisible(
+            !editing_sketch);
+    }
+    const bool edge_feature_tool_available =
+        active &&
+        !editing_sketch &&
+        !sketch_support_pick_active_ &&
+        !axis_draft_ &&
+        !datum_plane_draft_ &&
+        !extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !revolve_draft_ &&
+        solid_modeling_kernel_ != nullptr &&
+        !document_session->document()
+             .body().features.empty();
+    if (fillet_button_ != nullptr) {
+        fillet_button_->setVisible(
+            !editing_sketch);
+        fillet_button_->setEnabled(
+            edge_feature_tool_available &&
+            !chamfer_draft_);
+        fillet_button_->setChecked(
+            fillet_draft_.has_value());
+    }
+    if (chamfer_button_ != nullptr) {
+        chamfer_button_->setVisible(
+            !editing_sketch);
+        chamfer_button_->setEnabled(
+            edge_feature_tool_available &&
+            !fillet_draft_);
+        chamfer_button_->setChecked(
+            chamfer_draft_.has_value());
     }
 
     select_sketch_button_->setVisible(
@@ -13053,6 +14216,7 @@ void CadWorkbench::syncActionState() {
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
+        !edge_feature_active &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     if (axis_edit_button_ != nullptr) {
@@ -13073,6 +14237,7 @@ void CadWorkbench::syncActionState() {
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
+        !edge_feature_active &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
     if (datum_edit_button_ != nullptr) {
@@ -13090,6 +14255,7 @@ void CadWorkbench::syncActionState() {
     syncDatumPlaneUi();
     syncExtrudeUi();
     syncRevolveUi();
+    syncEdgeFeatureUi();
 }
 
 void CadWorkbench::notifyCadInputContextChanged() {

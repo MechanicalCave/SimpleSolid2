@@ -2,7 +2,9 @@
 
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/core/units.hpp>
+#include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/part/feature.hpp>
+#include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/semantic_topology_reference.hpp>
 
 #include <cstdint>
@@ -205,5 +207,92 @@ private:
     std::optional<core::LengthValue> distance_;
     std::string name_;
 };
+
+
+enum class EdgeFeatureDraftEvaluationStatus : std::uint8_t {
+    ok,
+    stale_document,
+    stale_revision,
+    incomplete_draft,
+    feature_id_exhausted,
+    invalid_candidate,
+    target_failed,
+};
+
+struct EdgeFeatureDraftEvaluationResult final {
+    EdgeFeatureDraftEvaluationStatus status{
+        EdgeFeatureDraftEvaluationStatus::incomplete_draft};
+    std::optional<core::DocumentId> document_id;
+    core::DocumentRevision source_revision;
+    EdgeFeatureDraftGeneration draft_generation{};
+    kernel::EdgeFeatureOperation operation{
+        kernel::EdgeFeatureOperation::fillet};
+    std::vector<part::MaterialEdgeReference> edges;
+    std::optional<core::LengthValue> parameter;
+    part::BodyEvaluationStatus body_status{
+        part::BodyEvaluationStatus::unavailable};
+    kernel::RuntimeSolidHandle body_solid;
+    std::optional<kernel::SolidPresentationMesh>
+        preview_mesh;
+    std::optional<
+        part::FeatureEvaluationDiagnosticCode>
+        evaluation_diagnostic;
+    std::optional<std::size_t>
+        failing_edge_input_index;
+    std::optional<kernel::ReferenceStatus>
+        edge_reference_status;
+    std::optional<part::FeatureEvaluationStatus>
+        target_status;
+
+    [[nodiscard]] bool committable() const noexcept {
+        return status ==
+               EdgeFeatureDraftEvaluationStatus::ok;
+    }
+
+    [[nodiscard]] bool previewSolidAvailable()
+        const noexcept {
+        return committable() &&
+               body_status ==
+                   part::BodyEvaluationStatus::
+                       up_to_date &&
+               preview_mesh.has_value() &&
+               preview_mesh->valid();
+    }
+};
+
+enum class EdgeFeatureDraftFinishStatus : std::uint8_t {
+    committed,
+    stale_context,
+    stale_evaluation,
+    invalid_draft,
+    rejected,
+};
+
+struct EdgeFeatureDraftFinishResult final {
+    EdgeFeatureDraftFinishStatus status{
+        EdgeFeatureDraftFinishStatus::rejected};
+    bool changed{};
+    std::optional<part::FeatureId> feature_id;
+    std::string diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status ==
+               EdgeFeatureDraftFinishStatus::committed;
+    }
+};
+
+[[nodiscard]] EdgeFeatureDraftFinishResult
+finishFilletDraft(
+    DocumentSession& session,
+    const FilletDraft& draft,
+    const EdgeFeatureDraftEvaluationResult& evaluation,
+    kernel::ISolidModelingKernel& modeling_kernel);
+
+[[nodiscard]] EdgeFeatureDraftFinishResult
+finishChamferDraft(
+    DocumentSession& session,
+    const ChamferDraft& draft,
+    const EdgeFeatureDraftEvaluationResult& evaluation,
+    kernel::ISolidModelingKernel& modeling_kernel);
 
 } // namespace simplesolid2::application

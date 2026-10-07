@@ -4486,6 +4486,12 @@ PartViewportController::rankedBodyTopologyCandidates(
                     face) {
             continue;
         }
+        if (body_topology_edge_draft_mode_ &&
+            candidate.kind !=
+                viewer::BodyTopologyPresentationKind::
+                    edge) {
+            continue;
+        }
         const auto found =
             body_topology_bindings_.find(
                 candidate.token.value);
@@ -4498,6 +4504,19 @@ PartViewportController::rankedBodyTopologyCandidates(
             !bodyTopologyOrdinaryPickable(
                 found->second)) {
             continue;
+        }
+        if (body_topology_edge_draft_mode_) {
+            if (!body_topology_catalog_cache_) {
+                continue;
+            }
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *body_topology_catalog_cache_,
+                    kernel::RuntimeEdgeToken{
+                        found->second.runtime_token_value});
+            if (!authored.ok()) {
+                continue;
+            }
         }
         candidates.push_back(candidate);
     }
@@ -4549,6 +4568,119 @@ void PartViewportController::setBodyTopologyFacePickOnly(
     }
     body_topology_face_pick_only_ = enabled;
     clearBodyTopologyPreselection();
+}
+
+
+void PartViewportController::setBodyTopologyEdgeDraftMode(
+    bool enabled) {
+    if (body_topology_edge_draft_mode_ == enabled) {
+        return;
+    }
+    body_topology_edge_draft_mode_ = enabled;
+    if (enabled) {
+        body_topology_face_pick_only_ = false;
+    }
+    clearBodyTopologyPreselection();
+}
+
+void PartViewportController::clearBodyTopologyToolSelection() {
+    if (session_ == nullptr) {
+        return;
+    }
+    clearBodyTopologySelection();
+    applySelectionToSurfaces();
+    notifySelectionChanged();
+}
+
+bool PartViewportController::
+removePrimaryBodyTopologyToolSelection() {
+    if (session_ == nullptr ||
+        !body_topology_edge_draft_mode_) {
+        return false;
+    }
+
+    auto& selection = activeSelection();
+    if (selection.body_topology.empty()) {
+        return false;
+    }
+
+    auto target =
+        selection.primary_body_topology;
+    if (!target) {
+        target = selection.body_topology.back();
+    }
+
+    const auto found =
+        std::find(
+            selection.body_topology.begin(),
+            selection.body_topology.end(),
+            *target);
+    if (found == selection.body_topology.end()) {
+        return false;
+    }
+
+    selection.body_topology.erase(found);
+    selection.primary_body_topology =
+        selection.body_topology.empty()
+            ? std::nullopt
+            : std::optional<
+                  viewer::PresentationToken>{
+                  selection.body_topology.back()};
+    if (selection.body_topology.empty()) {
+        selection.body_topology_generation = {};
+    }
+
+    applySelectionToSurfaces();
+    notifySelectionChanged();
+    return true;
+}
+
+std::optional<std::vector<part::MaterialEdgeReference>>
+PartViewportController::selectedMaterialEdgeReferences() const {
+    if (!body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_scene_cache_->generation.valid() ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return std::nullopt;
+    }
+
+    const auto selected =
+        bodyTopologySelection();
+    if (selected.empty()) {
+        return std::nullopt;
+    }
+
+    std::vector<part::MaterialEdgeReference> result;
+    result.reserve(selected.size());
+    for (const auto& address : selected) {
+        if (!address.valid() ||
+            address.kind !=
+                viewer::BodyTopologyPresentationKind::edge ||
+            address.generation !=
+                body_scene_cache_->generation) {
+            return std::nullopt;
+        }
+
+        const auto authored =
+            part::authorMaterialEdgeReference(
+                *body_topology_catalog_cache_,
+                kernel::RuntimeEdgeToken{
+                    address.runtime_token_value});
+        if (!authored.ok()) {
+            return std::nullopt;
+        }
+        result.push_back(*authored.reference);
+    }
+
+    std::sort(result.begin(), result.end());
+    const auto unique_end =
+        std::unique(result.begin(), result.end());
+    if (unique_end != result.end()) {
+        return std::nullopt;
+    }
+    return result;
 }
 
 void PartViewportController::clearBodyTopologyPreselection() {
@@ -4746,6 +4878,12 @@ void PartViewportController::onBodyTopologyIntent(
         }
     }
     auto& selection = activeSelection();
+    const auto effective_mode =
+        body_topology_edge_draft_mode_ &&
+                mode ==
+                    viewer::SelectionIntentMode::replace
+            ? viewer::SelectionIntentMode::toggle
+            : mode;
 
     selection.selected.clear();
     selection.primary.reset();
@@ -4756,12 +4894,12 @@ void PartViewportController::onBodyTopologyIntent(
     selection.axes.clear();
     selection.primary_axis.reset();
 
-    if (mode ==
+    if (effective_mode ==
         viewer::SelectionIntentMode::replace) {
         selection.body_topology = {chosen};
         selection.primary_body_topology =
             chosen;
-    } else if (mode ==
+    } else if (effective_mode ==
                viewer::SelectionIntentMode::toggle) {
         if (selection.body_topology_generation !=
             query.generation) {

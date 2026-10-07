@@ -447,6 +447,14 @@ public:
     }
 
     void setBodyTopologyFacePickOnly(bool enabled);
+    void setBodyTopologyEdgeDraftMode(bool enabled);
+    void clearBodyTopologyToolSelection();
+    [[nodiscard]] bool
+    removePrimaryBodyTopologyToolSelection();
+
+    [[nodiscard]] std::optional<
+        std::vector<part::MaterialEdgeReference>>
+    selectedMaterialEdgeReferences() const;
 
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
@@ -648,6 +656,7 @@ private:
     std::optional<BodyTopologyCandidateStack>
         body_topology_candidate_stack_;
     bool body_topology_face_pick_only_{false};
+    bool body_topology_edge_draft_mode_{false};
     std::uint64_t next_body_scene_generation_{1U};
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};

@@ -930,6 +930,37 @@ set_tests_properties(pm04d2.cad_workbench_revolve PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel"
 )
 
+add_executable(pm05d2_cad_workbench_edge_features_test
+    pm05d2_cad_workbench_edge_features_test.cpp
+)
+
+target_include_directories(pm05d2_cad_workbench_edge_features_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(pm05d2_cad_workbench_edge_features_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel_occt
+        simplesolid2_part
+        simplesolid2_ui
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(pm05d2_cad_workbench_edge_features_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05d2.cad_workbench_edge_features
+    COMMAND pm05d2_cad_workbench_edge_features_test
+)
+
+set_tests_properties(pm05d2.cad_workbench_edge_features PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel"
+)
+
 add_executable(pm05c1_edge_semantic_kernel_test
     pm05c1_edge_semantic_kernel_test.cpp
 )
