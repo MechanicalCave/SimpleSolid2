@@ -880,7 +880,8 @@ template <typename Operation>
 descendantFaces(
     Operation& operation,
     const TopoDS_Face& source,
-    const TopoDS_Shape& result) {
+    const TopoDS_Shape& result,
+    bool include_generated = true) {
     std::vector<TopoDS_Face> descendants;
 
     const auto& modified =
@@ -892,13 +893,15 @@ descendantFaces(
             result);
     }
 
-    const auto& generated =
-        operation.Generated(source);
-    for (const auto& item : generated) {
-        appendUniqueFace(
-            descendants,
-            item,
-            result);
+    if (include_generated) {
+        const auto& generated =
+            operation.Generated(source);
+        for (const auto& item : generated) {
+            appendUniqueFace(
+                descendants,
+                item,
+                result);
+        }
     }
 
     if (descendants.empty() &&
@@ -1026,7 +1029,8 @@ template <typename Operation>
 descendantEdges(
     Operation& operation,
     const TopoDS_Edge& source,
-    const TopoDS_Shape& result) {
+    const TopoDS_Shape& result,
+    bool include_generated = true) {
     std::vector<TopoDS_Edge> descendants;
 
     const auto& modified =
@@ -1038,13 +1042,15 @@ descendantEdges(
             result);
     }
 
-    const auto& generated =
-        operation.Generated(source);
-    for (const auto& item : generated) {
-        appendUniqueEdge(
-            descendants,
-            item,
-            result);
+    if (include_generated) {
+        const auto& generated =
+            operation.Generated(source);
+        for (const auto& item : generated) {
+            appendUniqueEdge(
+                descendants,
+                item,
+                result);
+        }
     }
 
     if (descendants.empty() &&
@@ -1060,7 +1066,8 @@ template <typename Operation>
 descendantVertices(
     Operation& operation,
     const TopoDS_Vertex& source,
-    const TopoDS_Shape& result) {
+    const TopoDS_Shape& result,
+    bool include_generated = true) {
     std::vector<TopoDS_Vertex> descendants;
 
     const auto& modified =
@@ -1072,13 +1079,15 @@ descendantVertices(
             result);
     }
 
-    const auto& generated =
-        operation.Generated(source);
-    for (const auto& item : generated) {
-        appendUniqueVertex(
-            descendants,
-            item,
-            result);
+    if (include_generated) {
+        const auto& generated =
+            operation.Generated(source);
+        for (const auto& item : generated) {
+            appendUniqueVertex(
+                descendants,
+                item,
+                result);
+        }
     }
 
     if (descendants.empty() &&
@@ -2985,7 +2994,8 @@ template <typename Operation>
     const OcctRuntimeSolid& upstream,
     const OcctRuntimeSolid& runtime,
     Operation& operation,
-    const TopoDS_Shape& shape) {
+    const TopoDS_Shape& shape,
+    bool include_generated = true) {
     std::vector<
         RuntimeRealizationClaim<
             kernel::RuntimeEdgeToken>>
@@ -3005,7 +3015,8 @@ template <typename Operation>
             descendantEdges(
                 operation,
                 edge,
-                shape);
+                shape,
+                include_generated);
         for (const auto& descendant :
              descendants) {
             const auto token =
@@ -3057,7 +3068,8 @@ template <typename Operation>
             descendantVertices(
                 operation,
                 vertex,
-                shape);
+                shape,
+                include_generated);
         for (const auto& descendant :
              descendants) {
             const auto token =
@@ -4277,7 +4289,8 @@ finishEdgeFeature(
             return descendantFaces(
                 operation,
                 source,
-                shape);
+                shape,
+                false);
         });
 
     if (!populateRuntimeTopologyInventory(
@@ -4299,9 +4312,10 @@ finishEdgeFeature(
             [&operation, &shape](
                 const TopoDS_Face& source) {
                 return descendantFaces(
-                    operation,
-                    source,
-                    shape);
+                operation,
+                source,
+                shape,
+                false);
             })) {
         result.status =
             kernel::SolidModelingStatus::
@@ -4327,7 +4341,8 @@ finishEdgeFeature(
             upstream,
             *runtime,
             operation,
-            shape)) {
+            shape,
+            false)) {
         result.status =
             kernel::SolidModelingStatus::
                 provider_failure;
