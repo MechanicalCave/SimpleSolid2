@@ -2,6 +2,7 @@
 
 #include <simplesolid2/application/cad_input.hpp>
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/application/edge_feature_draft.hpp>
 #include <simplesolid2/application/revolve_draft.hpp>
 #include <simplesolid2/sketch/sketch_id.hpp>
 #include <simplesolid2/viewer/camera_state.hpp>
@@ -148,6 +149,8 @@ public:
                datum_plane_draft_.has_value() ||
                extrude_draft_.has_value() ||
                revolve_draft_.has_value() ||
+               fillet_draft_.has_value() ||
+               chamfer_draft_.has_value() ||
                (sketch_support_pick_active_ &&
                 pending_sketch_support_.has_value());
     }
@@ -265,6 +268,25 @@ private:
         bool refresh_now = true);
     [[nodiscard]] application::CadInputSubmitResult
     submitRevolveCadInput(std::string_view text);
+
+
+    [[nodiscard]] bool startFilletTool();
+    [[nodiscard]] bool startChamferTool();
+    void cancelEdgeFeature();
+    [[nodiscard]] bool finishEdgeFeature();
+    void clearEdgeFeatureRuntimeContext();
+    void tryStageEdgeFeatureSelection();
+    void refreshEdgeFeaturePreview();
+    void scheduleEdgeFeaturePreview();
+    void flushEdgeFeaturePreview();
+    void syncEdgeFeatureUi();
+    [[nodiscard]] bool setEdgeFeatureParameter(
+        core::LengthValue parameter,
+        std::optional<std::string_view> display_text =
+            std::nullopt,
+        bool refresh_now = true);
+    [[nodiscard]] application::CadInputSubmitResult
+    submitEdgeFeatureCadInput(std::string_view text);
 
     void setSketchSelectionRole(
         sketch::EntityRole role);
@@ -584,6 +606,10 @@ private:
     QPushButton* datum_plane_button_{};
     QPushButton* extrude_button_{};
     QPushButton* revolve_button_{};
+    QLabel* part_create_tools_label_{};
+    QLabel* part_modify_tools_label_{};
+    QPushButton* fillet_button_{};
+    QPushButton* chamfer_button_{};
     QPushButton* select_sketch_button_{};
     QLabel* create_tools_label_{};
     QPushButton* line_sketch_button_{};
@@ -687,6 +713,27 @@ private:
         revolve_evaluation_;
     bool revolve_angle_input_valid_{true};
     bool syncing_revolve_ui_{};
+
+
+    QWidget* edge_feature_operations_widget_{};
+    QLabel* edge_feature_title_label_{};
+    QLabel* edge_feature_selection_label_{};
+    QPushButton* edge_feature_clear_button_{};
+    QLabel* edge_feature_parameter_name_label_{};
+    QLineEdit* edge_feature_parameter_edit_{};
+    QTimer* edge_feature_preview_timer_{};
+    QLabel* edge_feature_result_label_{};
+    QPushButton* edge_feature_finish_button_{};
+    QPushButton* edge_feature_cancel_button_{};
+    std::optional<application::FilletDraft>
+        fillet_draft_;
+    std::optional<application::ChamferDraft>
+        chamfer_draft_;
+    std::optional<
+        application::EdgeFeatureDraftEvaluationResult>
+        edge_feature_evaluation_;
+    bool edge_feature_parameter_input_valid_{true};
+    bool syncing_edge_feature_ui_{};
 
     QWidget* profile_operations_widget_{};
     QPushButton* profile_add_area_button_{};
