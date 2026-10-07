@@ -10179,6 +10179,24 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (revolve_draft_->generation() &
                 (revolve_namespace - 1U));
     }
+    if (fillet_draft_) {
+        constexpr application::CadInputContextGeneration
+            fillet_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 56U};
+        return fillet_namespace |
+               (fillet_draft_->generation() &
+                (fillet_namespace - 1U));
+    }
+    if (chamfer_draft_) {
+        constexpr application::CadInputContextGeneration
+            chamfer_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 57U};
+        return chamfer_namespace |
+               (chamfer_draft_->generation() &
+                (chamfer_namespace - 1U));
+    }
     return sketch_interaction_controller_
                ? sketch_interaction_controller_->
                      cadInputContextGeneration()
@@ -10217,6 +10235,18 @@ CadWorkbench::cadDynamicInputFields() const {
                     CadDynamicInputFieldSemantic::
                         angle,
                 "Angle"}};
+    }
+
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        return {
+            application::CadDynamicInputField{
+                application::
+                    CadDynamicInputFieldSemantic::
+                        distance,
+                fillet_draft_
+                    ? "Radius"
+                    : "Distance"}};
     }
 
     if (!sketch_interaction_controller_ ||
@@ -10343,6 +10373,36 @@ CadWorkbench::lockCadDynamicInputField(
         return {true, {}};
     }
 
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        if (index != 0U ||
+            document_session_ == nullptr) {
+            return {
+                false,
+                "Fillet/Chamfer has one length parameter field."};
+        }
+        const auto distance =
+            application::parseBareCadDistance(
+                text,
+                application::CadInputNumberFormat{
+                    toUtf8(
+                        QLocale{}.decimalPoint()),
+                    document_session_->document()
+                        .lengthUnit()});
+        if (!distance ||
+            !(*distance > 0.0) ||
+            !setEdgeFeatureParameter(
+                core::LengthValue{*distance},
+                text)) {
+            return {
+                false,
+                fillet_draft_
+                    ? "Fillet Radius expects a positive Length."
+                    : "Chamfer Distance expects a positive Length."};
+        }
+        return {true, {}};
+    }
+
     if (!sketch_interaction_controller_) {
         return {
             false,
@@ -10413,6 +10473,16 @@ CadWorkbench::submitCadDynamicInputRequest(
             : application::CadInputSubmitResult{
                   false,
                   "Revolve Finish was rejected."};
+    }
+
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        return finishEdgeFeature()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Edge Feature Finish was rejected."};
     }
 
     if (!sketch_interaction_controller_ ||
@@ -10539,6 +10609,19 @@ CadWorkbench::submitCadInput(
         return result;
     }
 
+    if (fillet_draft_ ||
+        chamfer_draft_) {
+        auto result =
+            submitEdgeFeatureCadInput(text);
+        if (!result.accepted &&
+            status_ != nullptr &&
+            !result.diagnostic.empty()) {
+            setStatusText(
+                fromUtf8(result.diagnostic));
+        }
+        return result;
+    }
+
     const auto top_level_keyword =
         upperAsciiTrimmed(text);
     if (top_level_keyword == "AXIS") {
@@ -10573,6 +10656,22 @@ CadWorkbench::submitCadInput(
             : application::CadInputSubmitResult{
                   false,
                   "REVOLVE could not be activated."};
+    }
+    if (top_level_keyword == "FILLET") {
+        return startFilletTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "FILLET could not be activated."};
+    }
+    if (top_level_keyword == "CHAMFER") {
+        return startChamferTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "CHAMFER could not be activated."};
     }
     if (top_level_keyword == "SKETCH") {
         startSketchTool();
@@ -10687,6 +10786,15 @@ QString CadWorkbench::cadInputPromptText() const {
         }
         return QStringLiteral(
             "Command: REVOLVE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Angle · FINISH/CANCEL");
+    }
+
+    if (fillet_draft_) {
+        return QStringLiteral(
+            "Command: FILLET — toggle material Edges · Radius · CLEAR · FINISH/CANCEL");
+    }
+    if (chamfer_draft_) {
+        return QStringLiteral(
+            "Command: CHAMFER — toggle material Edges · Distance · CLEAR · FINISH/CANCEL");
     }
 
     if (!sketch_interaction_controller_ ||
