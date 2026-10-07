@@ -8,7 +8,7 @@
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
 **Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** PM-05A, PM-05B and PM-05C are COMPLETED — PASS; PM-05D Workbench / toolbar / Viewer / preview / Command Line is the current authorized checkpoint after PM-05C exact-head PASS and completion synchronization; PM-05E/F remain inactive
+**Production mutation:** PM-05A, PM-05B, PM-05C and PM-05D are COMPLETED — PASS; PM-05E edit / repair / lifecycle / persistence is the current authorized checkpoint after PM-05D exact-head PASS and completion synchronization; PM-05F remains inactive
 
 ## 1. Goal
 
@@ -748,19 +748,26 @@ PM-05C — kernel operations / evaluation / topology lineage is **COMPLETED — 
 - C2 exact candidate `e5826858a1ef2580a3c00913f94791653696dc50` passed Windows FULL #1660 and merged as `85c7df1395c59a35b1a80fdf446cdb9c2f77775c`;
 - completion evidence is `work/PM-05C_EDGE_FEATURE_KERNEL_EVALUATION_TOPOLOGY_COMPLETION.md`.
 
-Current authority is limited to **PM-05D — Workbench / toolbar / Viewer / preview / Command Line**:
+PM-05D — Workbench / toolbar / Viewer / preview / Command Line is **COMPLETED — PASS**:
 
-- Part toolbar `Create:` / `Modify:` grouping with Fillet / Chamfer in Modify;
-- semantic multi-Edge preselection and picking;
-- selection-first and command-first workflows through the shared PM-05 draft/validation meaning;
-- Operations panels;
-- exact transient preview against the Feature's exact upstream stage;
-- `FILLET` / `CHAMFER` Command Line parity;
-- no authored mutation before Finish and no bypass of the closed C resolver/T1/evaluator semantics.
+- exact candidate `7f57726b368c8a5011f8007369f3de945ae0d833` passed Windows FULL #1697 with core-only 25/25, kernel-native 52/52 and desktop 110/110;
+- final aggregate `windows-msvc`: PASS;
+- squash merge #290 is `83ece0b03889e11f8dc7769498d949caee3c0be1`;
+- completion evidence is `work/PM-05D_WORKBENCH_VIEWER_PREVIEW_COMMAND_LINE_COMPLETION.md`.
 
-Still blocked until their ordered checkpoint transitions:
+Current authority is limited to **PM-05E — edit / repair / lifecycle / persistence**:
 
-- PM-05E edit / repair / lifecycle / Save-Reopen-cold-rebuild integration;
+- Edit Edge set/parameter while preserving `FeatureId`;
+- explicit repair for Missing/Ambiguous/Unsupported edge intent;
+- Delete / Suppress lifecycle for Fillet and Chamfer;
+- Undo / Redo integration;
+- upstream preserve / split / merge / remove behavior through the accepted strict resolver;
+- Save / Close / Reopen and true cold reconstruction with no runtime topology identity persistence;
+- Fillet -> Chamfer and Chamfer -> Fillet chaining;
+- no bypass of the closed B/C/D semantic reference, evaluator, T1, preview or Finish meanings.
+
+Still blocked until its ordered checkpoint transition:
+
 - PM-05F documentation / cumulative automated evidence / Owner Windows acceptance.
 
-PM-05D does not authorize edit/repair lifecycle completion, persistence/cold-rebuild closure, final documentation/Owner acceptance, or any scope outside the accepted PM-05 Work Contract.
+PM-05E does not authorize final PM-05 documentation/Owner acceptance, PM-06 work, or any scope outside the accepted PM-05 Work Contract.

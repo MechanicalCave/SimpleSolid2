@@ -6,7 +6,7 @@
 **Previous accepted version:** 1.28 — 2026-10-06  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-05D — Workbench / toolbar / Viewer / preview / Command Line under `work/PM-05_EDGE_FEATURES.md`; PM-05E/F inactive  
+**Current active checkpoint:** PM-05E — edit / repair / lifecycle / persistence under `work/PM-05_EDGE_FEATURES.md`; PM-05F inactive  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -129,7 +129,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 5 | **PM-02 — Body Semantic Topology / Face-Supported Sketch** | production semantic topology catalog and picking plus Sketch/Profile on arbitrary resolved planar Body surfaces, reusing PM-01 Extrude Add/Cut | **COMPLETED — PASS; runtime FULL #1473, docs #1474, Owner final manual Windows PASS 2026-10-05** |
 | 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **COMPLETED — PASS; Owner final Windows PASS 2026-10-05; translucent Origin/Datum plane fill deferred as PM-06 presentation polish** |
 | 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | **COMPLETED — PASS; runtime FULL #1578 attempt 2; Owner final Windows PASS 2026-10-06** |
-| 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete explicit multi-Edge Fillet/Chamfer lifecycle with connected-corner, lineage/refine handling and repair | **ACTIVE — Owner accepted 2026-10-06; PM-05A/B/C COMPLETED — PASS; current checkpoint PM-05D** |
+| 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete explicit multi-Edge Fillet/Chamfer lifecycle with connected-corner, lineage/refine handling and repair | **ACTIVE — Owner accepted 2026-10-06; PM-05A/B/C/D COMPLETED — PASS; current checkpoint PM-05E** |
 | 9 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
 
 No package number authorizes mutation by itself.
@@ -518,11 +518,11 @@ PM-04E integrated lifecycle / repair / persistence is **COMPLETED — PASS**. E1
 
 PM-04F Axis-designation remediation / documentation / final acceptance is **COMPLETED — PASS**. Exact final runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2 with core 25/25, kernel-native 47/47 and desktop 104/104, including canonical documentation/Product Browser verification. The Owner executed the supported Windows acceptance workflow on 2026-10-06 and reported PASS with no errors. Completion evidence is recorded in `work/PM-04_FINAL_ACCEPTANCE_MATRIX.md`.
 
-PM-04 production mutation authority is closed. PM-05 Edge Features is **ACTIVE** under `work/PM-05_EDGE_FEATURES.md`; PM-05A, PM-05B and PM-05C are COMPLETED — PASS and PM-05D is the only active checkpoint. Datum Axis, Projection and PM-06 remain separately gated.
+PM-04 production mutation authority is closed. PM-05 Edge Features is **ACTIVE** under `work/PM-05_EDGE_FEATURES.md`; PM-05A, PM-05B, PM-05C and PM-05D are COMPLETED — PASS and PM-05E is the only active checkpoint. Datum Axis, Projection and PM-06 remain separately gated.
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 
-**Status:** ACTIVE — Owner accepted 2026-10-06. PM-05A/B/C are COMPLETED — PASS. Current checkpoint: **PM-05D — Workbench / toolbar / Viewer / preview / Command Line**.
+**Status:** ACTIVE — Owner accepted 2026-10-06. PM-05A/B/C/D are COMPLETED — PASS. Current checkpoint: **PM-05E — edit / repair / lifecycle / persistence**.
 
 PM-05 adds edge-consuming features only after topology-reference semantics are proven in earlier packages. The accepted production direction is explicit 1..N material-Edge Fillet/Chamfer with mandatory common connected-corner behavior; a single-Edge-only production fallback is forbidden.
 
@@ -532,7 +532,9 @@ PM-05B is COMPLETED — PASS. B1 exact candidate `abb758a17e52849db4345e03dc8491
 
 PM-05C is COMPLETED — PASS. C1 exact candidate `2f55b8382b6fe8022ad26843a7f0eb4dcb15bd1c` passed Windows FULL #1632 and merged as `9547b986ccbd4dc7533c446c797eb5c4886ad0a6`; C2 exact candidate `e5826858a1ef2580a3c00913f94791653696dc50` passed Windows FULL #1660 and merged as `85c7df1395c59a35b1a80fdf446cdb9c2f77775c`. Completion evidence: `work/PM-05C_EDGE_FEATURE_KERNEL_EVALUATION_TOPOLOGY_COMPLETION.md`.
 
-PM-05D may now implement the accepted Workbench / toolbar / Viewer / exact-preview / Command Line checkpoint on top of the closed C kernel/evaluation/topology semantics. PM-05E/F remain separately ordered and inactive.
+PM-05D is COMPLETED — PASS. Exact candidate `7f57726b368c8a5011f8007369f3de945ae0d833` passed Windows FULL #1697 with final `windows-msvc` aggregate PASS and merged as `83ece0b03889e11f8dc7769498d949caee3c0be1` (#290). Completion evidence: `work/PM-05D_WORKBENCH_VIEWER_PREVIEW_COMMAND_LINE_COMPLETION.md`.
+
+PM-05E may now implement the accepted edit / repair / lifecycle / persistence checkpoint on top of the closed D product interaction path. PM-05F remains separately ordered and inactive.
 
 It must cover:
 
