@@ -8,7 +8,7 @@
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
 **Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** PM-05A, PM-05B, PM-05C and PM-05D are COMPLETED — PASS; PM-05E edit / repair / lifecycle / persistence is the current authorized checkpoint after PM-05D exact-head PASS and completion synchronization; PM-05F remains inactive
+**Production mutation:** PM-05A, PM-05B, PM-05C, PM-05D and PM-05E are COMPLETED — PASS; PM-05F documentation / cumulative automated evidence / Owner Windows acceptance is the current authorized checkpoint after PM-05E exact-head PASS and completion synchronization
 
 ## 1. Goal
 
@@ -755,19 +755,22 @@ PM-05D — Workbench / toolbar / Viewer / preview / Command Line is **COMPLETED 
 - squash merge #290 is `83ece0b03889e11f8dc7769498d949caee3c0be1`;
 - completion evidence is `work/PM-05D_WORKBENCH_VIEWER_PREVIEW_COMMAND_LINE_COMPLETION.md`.
 
-Current authority is limited to **PM-05E — edit / repair / lifecycle / persistence**:
+PM-05E — edit / repair / lifecycle / persistence is **COMPLETED — PASS**:
 
-- Edit Edge set/parameter while preserving `FeatureId`;
-- explicit repair for Missing/Ambiguous/Unsupported edge intent;
-- Delete / Suppress lifecycle for Fillet and Chamfer;
-- Undo / Redo integration;
-- upstream preserve / split / merge / remove behavior through the accepted strict resolver;
-- Save / Close / Reopen and true cold reconstruction with no runtime topology identity persistence;
-- Fillet -> Chamfer and Chamfer -> Fillet chaining;
-- no bypass of the closed B/C/D semantic reference, evaluator, T1, preview or Finish meanings.
+- exact candidate `88e07b1a2dbdb6ded73d0c2f90dd0a1443242cbe` passed Windows FULL #1721;
+- core-only 25/25, kernel-native 54/54 and desktop 112/112 PASS;
+- final aggregate `windows-msvc`: PASS;
+- squash merge #292 is `1a1491f7687f32089c1424025123329c74d7b6ca`;
+- completion evidence is `work/PM-05E_EDGE_FEATURE_LIFECYCLE_PERSISTENCE_COMPLETION.md`.
 
-Still blocked until its ordered checkpoint transition:
+Current authority is limited to **PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance**:
 
-- PM-05F documentation / cumulative automated evidence / Owner Windows acceptance.
+- make required internal documentation current with the as-built strict MaterialEdgeReference, topology-lineage, exact-stage edit/repair and persistence behavior;
+- make paired PL/EN Product docs current for constant-radius Fillet and equal-distance Chamfer workflows, explicit multi-selection, Edit/repair and lifecycle behavior;
+- regenerate Product Browser from canonical Markdown;
+- publish the cumulative PM-05 automated acceptance matrix against the accepted §27 minimums;
+- run the final exact-head Windows FULL gate for the final runtime/docs candidate;
+- execute the supported-Windows Owner acceptance workflow;
+- only explicit Owner PASS closes PM-05.
 
-PM-05E does not authorize final PM-05 documentation/Owner acceptance, PM-06 work, or any scope outside the accepted PM-05 Work Contract.
+PM-05F does not authorize PM-06, new Fillet/Chamfer variants, new schema/modeling semantics, implicit tangent-chain authoring, or any scope outside the accepted PM-05 Work Contract. Any acceptance-discovered runtime remediation must remain bounded to the already accepted PM-05 semantics and receive fresh exact-head evidence.
