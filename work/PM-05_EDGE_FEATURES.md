@@ -8,7 +8,7 @@
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
 **Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** PM-05B durable foundation is AUTHORIZED after explicit Owner acceptance of PM-05A D2 conclusions on 2026-10-06; PM-05C+ remains inactive
+**Production mutation:** PM-05A and PM-05B are COMPLETED — PASS; PM-05C kernel operations / evaluation / topology lineage is the current authorized checkpoint after PM-05B exact-head PASS and completion synchronization; PM-05D/E/F remain inactive
 
 ## 1. Goal
 
@@ -733,32 +733,30 @@ PM-05A evidence-only implementation does not by itself require Product documenta
 
 This exact Work Contract was explicitly Owner-accepted on 2026-10-06.
 
-PM-05 is ACTIVE only at **PM-05A — Edge-feature topology/provider evidence**.
+PM-05A — Edge-feature topology/provider evidence is **COMPLETED — PASS**. The Owner explicitly accepted conclusions E1, M1, T1, U1, C1, P1-P3, G1-G2, R1 and K1 on 2026-10-06.
 
-Authorized now:
+PM-05B — durable EdgeReference / Feature model / schema v14 is **COMPLETED — PASS**:
 
-- bounded provider/evaluation evidence;
-- test-only or evidence-only adapter instrumentation needed to observe Fillet/Chamfer provider history/topology;
-- semantic experiments that do not persist a production Fillet/Chamfer Feature and do not expose a production Fillet/Chamfer GUI command.
+- B1 exact candidate `abb758a17e52849db4345e03dc84915543718ad4` passed Windows FULL #1613 and merged as `bfe197b78ff1bc81a8e2e4bd26f2f3e204b429ab`;
+- B2 exact candidate `9b6c6318599ec85300c7b3ebb0ebc24720d5c287` passed Windows FULL #1617 and merged as `13e2c14505be6d25b733b95c71ca891d16a7e4b4`;
+- B3 generated-Surface provenance exact candidate `384835c58c5823e5f5ac20c619eb960f3a5acb7a` passed Windows FULL #1624 and merged as `cab3cea663a07102e1749d08dc027a85764db790`;
+- completion evidence is `work/PM-05B_DURABLE_EDGE_REFERENCE_SCHEMA_RESOLVER_COMPLETION.md`.
 
-Still blocked:
+Current authority is limited to **PM-05C — kernel operations / evaluation / topology lineage**:
 
-- durable `MaterialEdgeReference` schema/API;
-- schema v14 persistence;
-- `FilletFeature` / `ChamferFeature` in production `PartFeatureDefinition`;
-- production kernel/evaluation mutation path;
-- production toolbar buttons / Operations / Command Line;
-- PM-05B through PM-05F.
+- provider-neutral and production Fillet/Chamfer kernel operations;
+- one exact multi-Edge operation against the declared upstream Body stage;
+- T1 exact explicit-input membership enforcement with no silent tangent-chain growth;
+- ordered Part evaluation with Resolved/Missing/Ambiguous/Unsupported input handling and Failed/Blocked distinction;
+- complete successful-stage Face/Edge/Vertex accounting;
+- generated Fillet/Chamfer Surface/Curve/Point semantic role families from accepted P1-P3/G1-G2 provenance;
+- deterministic inherited Edge/Vertex survival/trim/split/remove behavior;
+- accepted R1 policy: no generic refine/unify/healing/fuzzy escalation.
 
-PM-05A produced the required conclusions in `work/PM-05A_EDGE_FEATURE_TOPOLOGY_EVIDENCE.md`; evidence is PASS and merged. The Owner explicitly accepted conclusions E1, M1, T1, U1, C1, P1-P3, G1-G2, R1 and K1 on 2026-10-06 and authorized PM-05B.
+Still blocked until their ordered checkpoint transitions:
 
-Current authority is limited to **PM-05B — durable EdgeReference / Feature model / schema v14**:
+- PM-05D toolbar / Operations / Viewer preview / Command Line;
+- PM-05E edit / repair / lifecycle / Save-Reopen-cold-rebuild integration;
+- PM-05F documentation / cumulative automated evidence / Owner Windows acceptance.
 
-- durable `MaterialEdgeReference` and resolver support;
-- canonical explicit multi-Edge authored set;
-- `FilletFeature` / `ChamferFeature` durable definitions;
-- structural validation;
-- native Part schema v14 migration/persistence;
-- application command/draft foundation without production provider execution.
-
-PM-05C production kernel Fillet/Chamfer operations and topology publication, PM-05D UI/preview/Command Line, PM-05E lifecycle integration and PM-05F documentation/Owner acceptance remain inactive until their ordered checkpoint transitions.
+PM-05C does not authorize product UI exposure, preview/Finish wiring, edit/repair lifecycle completion, or any scope outside the accepted PM-05 Work Contract.
