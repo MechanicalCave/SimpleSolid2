@@ -9,6 +9,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QWidget>
 
 #include <cstdlib>
@@ -251,6 +253,134 @@ application::DocumentSession makeBaseSession(
     return session;
 }
 
+part::MaterialEdgeReference missingEdgeReference(
+    part::FeatureId base_id) {
+    part::FeatureSurfaceAddress first{
+        base_id,
+        part::FeatureSurfaceRoleKind::profile_cap,
+        std::nullopt,
+        0U,
+        0U,
+        false};
+    part::FeatureSurfaceAddress second{
+        base_id,
+        part::FeatureSurfaceRoleKind::negative_cap,
+        std::nullopt,
+        0U,
+        0U,
+        false};
+    CHECK(first.valid());
+    CHECK(second.valid());
+
+    std::vector<part::FeatureSurfaceAddress> surfaces{
+        std::move(first),
+        std::move(second)};
+    std::sort(surfaces.begin(), surfaces.end());
+
+    part::FeatureCurveAddress curve{
+        base_id,
+        part::FeatureCurveRoleKind::cap_side,
+        std::move(surfaces)};
+    CHECK(curve.valid());
+
+    part::MaterialEdgeReference result{
+        {
+            part::BodyStageKind::after_feature,
+            base_id},
+        std::move(curve),
+        part::SingularAtAuthoredStage{}};
+    CHECK(result.valid());
+    return result;
+}
+
+std::pair<application::DocumentSession, part::FeatureId>
+makeMissingRepairSession(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    auto base = makeBaseSession(kernel);
+    auto state = base.document().state();
+    const auto base_id =
+        state.body.features.front().id;
+    const auto feature_id =
+        state.body.next_feature_id.allocate();
+    CHECK(feature_id);
+
+    state.body.features.push_back(
+        part::PartFeature{
+            *feature_id,
+            "RepairFillet",
+            false,
+            part::FilletFeature{
+                {missingEdgeReference(base_id)},
+                core::LengthValue{1.0}}});
+
+    auto restored =
+        part::PartDocument::restore(
+            base.documentId(),
+            std::move(state),
+            base.document().revision());
+    CHECK(restored.ok());
+
+    const auto evaluation =
+        part::evaluatePart(
+            *restored.document,
+            kernel);
+    const auto* target =
+        evaluation.findFeature(*feature_id);
+    CHECK(target != nullptr);
+    CHECK(
+        target->status ==
+        part::FeatureEvaluationStatus::blocked);
+    CHECK(
+        target->diagnostic ==
+        part::FeatureEvaluationDiagnosticCode::
+            edge_reference_missing);
+    CHECK(
+        target->edge_reference_status ==
+        kernel::ReferenceStatus::missing);
+
+    return {
+        application::DocumentSession{
+            {},
+            std::move(*restored.document)},
+        *feature_id};
+}
+
+QTreeWidgetItem* featureTreeItem(
+    QTreeWidget& tree,
+    part::FeatureId feature_id) {
+    constexpr int feature_id_data =
+        Qt::UserRole + 45;
+    const auto serialized =
+        QString::fromStdString(
+            feature_id.serialized());
+    std::vector<QTreeWidgetItem*> pending;
+    for (int index = 0;
+         index < tree.topLevelItemCount();
+         ++index) {
+        pending.push_back(
+            tree.topLevelItem(index));
+    }
+    while (!pending.empty()) {
+        auto* item = pending.back();
+        pending.pop_back();
+        if (item != nullptr &&
+            item->data(0, feature_id_data)
+                    .toString() ==
+                serialized) {
+            return item;
+        }
+        if (item != nullptr) {
+            for (int child = 0;
+                 child < item->childCount();
+                 ++child) {
+                pending.push_back(
+                    item->child(child));
+            }
+        }
+    }
+    return nullptr;
+}
+
 std::vector<viewer::PresentationToken>
 materialEdgeTokens(const viewer::BodyScene& scene) {
     std::vector<viewer::PresentationToken> result;
@@ -306,9 +436,12 @@ int main(int argc, char* argv[]) {
     auto* remove =
         workbench.findChild<QPushButton*>(
             QStringLiteral("featureDeleteButton"));
+    auto* tree =
+        workbench.findChild<QTreeWidget*>();
     CHECK(
         operations && title && parameter &&
-        finish && cancel && edit && suppress && remove);
+        finish && cancel && edit && suppress && remove &&
+        tree);
 
     auto session = makeBaseSession(kernel);
     const auto base_id =
@@ -363,6 +496,7 @@ int main(int argc, char* argv[]) {
             &authored->definition);
     CHECK(original != nullptr);
     CHECK(original->radius.millimetres == 1.0);
+    CHECK(featureTreeItem(*tree, feature_id) != nullptr);
     CHECK(edit->isEnabled());
     CHECK(suppress->isEnabled());
     CHECK(remove->isEnabled());
@@ -470,12 +604,96 @@ int main(int argc, char* argv[]) {
     CHECK(edited != nullptr);
     CHECK(edited->radius.millimetres == 1.5);
 
+    // Explicit repair: a structurally valid authored Edge whose semantic
+    // curve is Missing must never auto-rebind. Reopen through the Tree,
+    // preserve the failing intent until Clear, then require one explicit
+    // current-stage Edge pick and keep the same FeatureId.
+    auto repair_fixture =
+        makeMissingRepairSession(kernel);
+    auto repair_session =
+        std::move(repair_fixture.first);
+    const auto repair_feature_id =
+        repair_fixture.second;
+    CHECK(
+        workbench.activateDocument(
+            &repair_session,
+            {}));
+    QApplication::processEvents();
+
+    auto* repair_item =
+        featureTreeItem(
+            *tree,
+            repair_feature_id);
+    CHECK(repair_item != nullptr);
+    tree->setCurrentItem(repair_item);
+    repair_item->setSelected(true);
+    QApplication::processEvents();
+    CHECK(edit->isEnabled());
+    edit->click();
+    QApplication::processEvents();
+    CHECK(operations->isVisible());
+    CHECK(title->text() == QStringLiteral("EDIT FILLET"));
+    CHECK(!finish->isEnabled());
+
+    result =
+        workbench.submitCadInput(
+            "CLEAR",
+            workbench.cadInputContextGeneration());
+    CHECK(result.accepted);
+    CHECK(!finish->isEnabled());
+
+    bool repair_selected = false;
+    for (const auto token :
+         materialEdgeTokens(viewport->body_scene)) {
+        viewport->emitEdge(token);
+        QApplication::processEvents();
+        if (!viewport->solid_preview.empty() &&
+            finish->isEnabled()) {
+            repair_selected = true;
+            break;
+        }
+        result =
+            workbench.submitCadInput(
+                "CLEAR",
+                workbench.cadInputContextGeneration());
+        CHECK(result.accepted);
+    }
+    CHECK(repair_selected);
+
+    finish->click();
+    QApplication::processEvents();
+    const auto* repaired =
+        repair_session.document().findFeature(
+            repair_feature_id);
+    CHECK(repaired != nullptr);
+    CHECK(repaired->id == repair_feature_id);
+    const auto* repaired_fillet =
+        std::get_if<part::FilletFeature>(
+            &repaired->definition);
+    CHECK(repaired_fillet != nullptr);
+    CHECK(repaired_fillet->edges.size() == 1U);
+    CHECK(
+        repaired_fillet->edges.front() !=
+        missingEdgeReference(
+            repair_session.document()
+                .body().features.front().id));
+    const auto repaired_evaluation =
+        part::evaluatePart(
+            repair_session.document(),
+            kernel);
+    CHECK(
+        repaired_evaluation.findFeature(
+            repair_feature_id)->status ==
+        part::FeatureEvaluationStatus::up_to_date);
+
     std::cout
         << "PM05E2_CAD_WORKBENCH_EDGE_LIFECYCLE_PASS"
         << " tool_stage=1"
         << " cancel_zero_mutation=1"
         << " stable_feature_id=1"
         << " suppress=1"
-        << " delete_undo=1\n";
+        << " delete_undo=1"
+        << " tree_reopen=1"
+        << " missing_repair=1\n";
     return EXIT_SUCCESS;
 }
