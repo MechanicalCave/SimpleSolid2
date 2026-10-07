@@ -100,6 +100,27 @@ connectedPair(
 
 void verifyCompleteInventory(
     const kernel::SolidModelingResult& result) {
+    if (!result.ok()) {
+        std::cerr
+            << "PM05C2A_RESULT"
+            << " status="
+            << static_cast<int>(result.status)
+            << " brep=" << (result.brep_valid ? 1 : 0)
+            << " solids=" << result.solid_count
+            << " faces=" << result.face_count
+            << " edges=" << result.edge_count
+            << " vertices=" << result.vertex_count
+            << " inherited_surfaces="
+            << result.inherited_surfaces.size()
+            << " generated_surfaces="
+            << result.edge_feature_surfaces.size()
+            << " membership="
+            << (result.edge_feature_input_membership
+                    ? result.edge_feature_input_membership
+                          ->provider_contour_edges.size()
+                    : 0U)
+            << '\n';
+    }
     CHECK(result.ok());
     CHECK(
         result.current_faces.size() ==
