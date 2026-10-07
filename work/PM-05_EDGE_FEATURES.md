@@ -8,7 +8,7 @@
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
 **Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** PM-05A and PM-05B are COMPLETED — PASS; PM-05C kernel operations / evaluation / topology lineage is the current authorized checkpoint after PM-05B exact-head PASS and completion synchronization; PM-05D/E/F remain inactive
+**Production mutation:** PM-05A, PM-05B and PM-05C are COMPLETED — PASS; PM-05D Workbench / toolbar / Viewer / preview / Command Line is the current authorized checkpoint after PM-05C exact-head PASS and completion synchronization; PM-05E/F remain inactive
 
 ## 1. Goal
 
@@ -742,21 +742,25 @@ PM-05B — durable EdgeReference / Feature model / schema v14 is **COMPLETED —
 - B3 generated-Surface provenance exact candidate `384835c58c5823e5f5ac20c619eb960f3a5acb7a` passed Windows FULL #1624 and merged as `cab3cea663a07102e1749d08dc027a85764db790`;
 - completion evidence is `work/PM-05B_DURABLE_EDGE_REFERENCE_SCHEMA_RESOLVER_COMPLETION.md`.
 
-Current authority is limited to **PM-05C — kernel operations / evaluation / topology lineage**:
+PM-05C — kernel operations / evaluation / topology lineage is **COMPLETED — PASS**:
 
-- provider-neutral and production Fillet/Chamfer kernel operations;
-- one exact multi-Edge operation against the declared upstream Body stage;
-- T1 exact explicit-input membership enforcement with no silent tangent-chain growth;
-- ordered Part evaluation with Resolved/Missing/Ambiguous/Unsupported input handling and Failed/Blocked distinction;
-- complete successful-stage Face/Edge/Vertex accounting;
-- generated Fillet/Chamfer Surface/Curve/Point semantic role families from accepted P1-P3/G1-G2 provenance;
-- deterministic inherited Edge/Vertex survival/trim/split/remove behavior;
-- accepted R1 policy: no generic refine/unify/healing/fuzzy escalation.
+- C1 exact candidate `2f55b8382b6fe8022ad26843a7f0eb4dcb15bd1c` passed Windows FULL #1632 and merged as `9547b986ccbd4dc7533c446c797eb5c4886ad0a6`;
+- C2 exact candidate `e5826858a1ef2580a3c00913f94791653696dc50` passed Windows FULL #1660 and merged as `85c7df1395c59a35b1a80fdf446cdb9c2f77775c`;
+- completion evidence is `work/PM-05C_EDGE_FEATURE_KERNEL_EVALUATION_TOPOLOGY_COMPLETION.md`.
+
+Current authority is limited to **PM-05D — Workbench / toolbar / Viewer / preview / Command Line**:
+
+- Part toolbar `Create:` / `Modify:` grouping with Fillet / Chamfer in Modify;
+- semantic multi-Edge preselection and picking;
+- selection-first and command-first workflows through the shared PM-05 draft/validation meaning;
+- Operations panels;
+- exact transient preview against the Feature's exact upstream stage;
+- `FILLET` / `CHAMFER` Command Line parity;
+- no authored mutation before Finish and no bypass of the closed C resolver/T1/evaluator semantics.
 
 Still blocked until their ordered checkpoint transitions:
 
-- PM-05D toolbar / Operations / Viewer preview / Command Line;
 - PM-05E edit / repair / lifecycle / Save-Reopen-cold-rebuild integration;
 - PM-05F documentation / cumulative automated evidence / Owner Windows acceptance.
 
-PM-05C does not authorize product UI exposure, preview/Finish wiring, edit/repair lifecycle completion, or any scope outside the accepted PM-05 Work Contract.
+PM-05D does not authorize edit/repair lifecycle completion, persistence/cold-rebuild closure, final documentation/Owner acceptance, or any scope outside the accepted PM-05 Work Contract.
