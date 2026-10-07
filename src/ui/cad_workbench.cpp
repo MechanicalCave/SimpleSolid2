@@ -8452,6 +8452,564 @@ CadWorkbench::submitRevolveCadInput(
               "Revolve Angle could not be applied."};
 }
 
+
+bool CadWorkbench::startFilletTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
+        sketch_support_pick_active_ ||
+        axis_draft_ ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        revolve_draft_ ||
+        active_sketch_id_) {
+        return false;
+    }
+    if (document_session->document()
+            .body().features.empty()) {
+        setStatusText(
+            QStringLiteral(
+                "Fillet requires an existing evaluated Body."));
+        return false;
+    }
+
+    const auto selected =
+        viewport_controller_ != nullptr
+            ? viewport_controller_->
+                  selectedMaterialEdgeReferences()
+            : std::nullopt;
+    if (selected) {
+        fillet_draft_ =
+            application::FilletDraft::beginCreate(
+                *document_session,
+                *selected);
+        if (!fillet_draft_) {
+            setStatusText(
+                QStringLiteral(
+                    "Selected Edges cannot seed Fillet at the current Body stage."));
+            return false;
+        }
+    } else {
+        fillet_draft_ =
+            application::FilletDraft::beginCreate(
+                *document_session);
+    }
+
+    edge_feature_evaluation_.reset();
+    edge_feature_parameter_input_valid_ = true;
+    if (edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        edge_feature_parameter_edit_->clear();
+    }
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyEdgeDraftMode(true);
+        viewport_controller_->clearSolidPreview();
+    }
+    tryStageEdgeFeatureSelection();
+    syncActionState();
+    syncEdgeFeatureUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        selected
+            ? QStringLiteral(
+                  "Fillet active — selected material Edges seeded; enter Radius or toggle more Edges.")
+            : QStringLiteral(
+                  "Fillet active — select/toggle one or more material Edges, then enter Radius."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+bool CadWorkbench::startChamferTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        fillet_draft_ ||
+        chamfer_draft_ ||
+        sketch_support_pick_active_ ||
+        axis_draft_ ||
+        datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        revolve_draft_ ||
+        active_sketch_id_) {
+        return false;
+    }
+    if (document_session->document()
+            .body().features.empty()) {
+        setStatusText(
+            QStringLiteral(
+                "Chamfer requires an existing evaluated Body."));
+        return false;
+    }
+
+    const auto selected =
+        viewport_controller_ != nullptr
+            ? viewport_controller_->
+                  selectedMaterialEdgeReferences()
+            : std::nullopt;
+    if (selected) {
+        chamfer_draft_ =
+            application::ChamferDraft::beginCreate(
+                *document_session,
+                *selected);
+        if (!chamfer_draft_) {
+            setStatusText(
+                QStringLiteral(
+                    "Selected Edges cannot seed Chamfer at the current Body stage."));
+            return false;
+        }
+    } else {
+        chamfer_draft_ =
+            application::ChamferDraft::beginCreate(
+                *document_session);
+    }
+
+    edge_feature_evaluation_.reset();
+    edge_feature_parameter_input_valid_ = true;
+    if (edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        edge_feature_parameter_edit_->clear();
+    }
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyEdgeDraftMode(true);
+        viewport_controller_->clearSolidPreview();
+    }
+    tryStageEdgeFeatureSelection();
+    syncActionState();
+    syncEdgeFeatureUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        selected
+            ? QStringLiteral(
+                  "Chamfer active — selected material Edges seeded; enter Distance or toggle more Edges.")
+            : QStringLiteral(
+                  "Chamfer active — select/toggle one or more material Edges, then enter Distance."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::cancelEdgeFeature() {
+    if (!fillet_draft_ &&
+        !chamfer_draft_) {
+        return;
+    }
+    const auto name =
+        fillet_draft_
+            ? QStringLiteral("Fillet")
+            : QStringLiteral("Chamfer");
+    clearEdgeFeatureRuntimeContext();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "%1 cancelled — no authored change.")
+            .arg(name));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+bool CadWorkbench::finishEdgeFeature() {
+    flushEdgeFeaturePreview();
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        (!fillet_draft_ &&
+         !chamfer_draft_) ||
+        !edge_feature_evaluation_ ||
+        !edge_feature_parameter_input_valid_ ||
+        !edge_feature_evaluation_->committable()) {
+        setStatusText(
+            QStringLiteral(
+                "Edge Feature cannot finish until the Edge set, parameter and exact preview candidate are valid."));
+        return false;
+    }
+
+    const bool fillet =
+        fillet_draft_.has_value();
+    const auto result =
+        fillet
+            ? application::finishFilletDraft(
+                  *document_session,
+                  *fillet_draft_,
+                  *edge_feature_evaluation_,
+                  *solid_modeling_kernel_)
+            : application::finishChamferDraft(
+                  *document_session,
+                  *chamfer_draft_,
+                  *edge_feature_evaluation_,
+                  *solid_modeling_kernel_);
+    if (!result.ok()) {
+        setStatusText(
+            result.diagnostic.empty()
+                ? QStringLiteral(
+                      "%1 Finish was rejected.")
+                      .arg(
+                          fillet
+                              ? QStringLiteral("Fillet")
+                              : QStringLiteral("Chamfer"))
+                : fromUtf8(result.diagnostic));
+        refreshEdgeFeaturePreview();
+        return false;
+    }
+
+    const auto committed_feature_id =
+        result.feature_id;
+    const auto name =
+        fillet
+            ? QStringLiteral("Fillet")
+            : QStringLiteral("Chamfer");
+    clearEdgeFeatureRuntimeContext();
+    refreshActiveContext();
+    if (committed_feature_id) {
+        navigateToFeature(*committed_feature_id);
+    }
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "%1 finished — Feature committed.")
+            .arg(name));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::clearEdgeFeatureRuntimeContext() {
+    if (edge_feature_preview_timer_ != nullptr) {
+        edge_feature_preview_timer_->stop();
+    }
+    fillet_draft_.reset();
+    chamfer_draft_.reset();
+    edge_feature_evaluation_.reset();
+    edge_feature_parameter_input_valid_ = true;
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->clearSolidPreview();
+        viewport_controller_->
+            setBodyTopologyEdgeDraftMode(false);
+    }
+    if (edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        edge_feature_parameter_edit_->clear();
+    }
+    syncEdgeFeatureUi();
+}
+
+void CadWorkbench::tryStageEdgeFeatureSelection() {
+    if ((!fillet_draft_ &&
+         !chamfer_draft_) ||
+        viewport_controller_ == nullptr) {
+        return;
+    }
+
+    const auto selected =
+        viewport_controller_->
+            selectedMaterialEdgeReferences();
+    std::vector<part::MaterialEdgeReference> edges;
+    if (selected) {
+        edges = *selected;
+    }
+
+    const bool applied =
+        fillet_draft_
+            ? fillet_draft_->setEdges(
+                  std::move(edges))
+            : chamfer_draft_->setEdges(
+                  std::move(edges));
+    if (!applied) {
+        setStatusText(
+            QStringLiteral(
+                "Edge selection is stale, duplicated or not valid for the Feature's consumed Body stage."));
+        return;
+    }
+
+    edge_feature_evaluation_.reset();
+    refreshEdgeFeaturePreview();
+    notifyCadInputContextChanged();
+}
+
+bool CadWorkbench::setEdgeFeatureParameter(
+    core::LengthValue parameter,
+    std::optional<std::string_view> display_text,
+    bool refresh_now) {
+    if ((!fillet_draft_ &&
+         !chamfer_draft_) ||
+        !parameter.finite() ||
+        !(parameter.millimetres > 0.0)) {
+        return false;
+    }
+
+    const bool applied =
+        fillet_draft_
+            ? fillet_draft_->setRadius(parameter)
+            : chamfer_draft_->setDistance(parameter);
+    if (!applied) {
+        return false;
+    }
+
+    edge_feature_parameter_input_valid_ = true;
+    if (display_text &&
+        edge_feature_parameter_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            edge_feature_parameter_edit_};
+        edge_feature_parameter_edit_->setText(
+            fromUtf8(*display_text));
+    }
+
+    edge_feature_evaluation_.reset();
+    if (refresh_now) {
+        refreshEdgeFeaturePreview();
+    } else {
+        scheduleEdgeFeaturePreview();
+        syncEdgeFeatureUi();
+    }
+    notifyCadInputContextChanged();
+    return true;
+}
+
+void CadWorkbench::scheduleEdgeFeaturePreview() {
+    if (edge_feature_preview_timer_ == nullptr) {
+        refreshEdgeFeaturePreview();
+        return;
+    }
+    edge_feature_preview_timer_->start();
+}
+
+void CadWorkbench::flushEdgeFeaturePreview() {
+    if (edge_feature_preview_timer_ == nullptr ||
+        !edge_feature_preview_timer_->isActive()) {
+        return;
+    }
+    edge_feature_preview_timer_->stop();
+    refreshEdgeFeaturePreview();
+}
+
+void CadWorkbench::refreshEdgeFeaturePreview() {
+    if (edge_feature_preview_timer_ != nullptr) {
+        edge_feature_preview_timer_->stop();
+    }
+    edge_feature_evaluation_.reset();
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->clearSolidPreview();
+    }
+
+    if ((!fillet_draft_ &&
+         !chamfer_draft_) ||
+        !edge_feature_parameter_input_valid_ ||
+        document_session_ == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        syncEdgeFeatureUi();
+        return;
+    }
+
+    auto evaluation =
+        fillet_draft_
+            ? document_session_->evaluateFilletDraft(
+                  *fillet_draft_,
+                  *solid_modeling_kernel_)
+            : document_session_->evaluateChamferDraft(
+                  *chamfer_draft_,
+                  *solid_modeling_kernel_);
+
+    if (evaluation.previewSolidAvailable() &&
+        viewport_controller_ != nullptr) {
+        // Tone is presentation-only. The geometry is the exact complete
+        // candidate Body returned by the shared semantic evaluation path.
+        if (!viewport_controller_->setSolidPreview(
+                *evaluation.preview_mesh,
+                viewer::SolidPreviewTone::additive)) {
+            evaluation.preview_mesh.reset();
+        }
+    }
+
+    edge_feature_evaluation_ =
+        std::move(evaluation);
+    syncEdgeFeatureUi();
+}
+
+void CadWorkbench::syncEdgeFeatureUi() {
+    const bool active =
+        fillet_draft_.has_value() ||
+        chamfer_draft_.has_value();
+    if (edge_feature_operations_widget_ != nullptr) {
+        edge_feature_operations_widget_->setVisible(
+            active);
+    }
+    if (!active) {
+        return;
+    }
+
+    syncing_edge_feature_ui_ = true;
+    const bool fillet =
+        fillet_draft_.has_value();
+    const auto edge_count =
+        fillet
+            ? fillet_draft_->edges().size()
+            : chamfer_draft_->edges().size();
+
+    if (edge_feature_title_label_ != nullptr) {
+        edge_feature_title_label_->setText(
+            fillet
+                ? QStringLiteral("FILLET")
+                : QStringLiteral("CHAMFER"));
+    }
+    if (edge_feature_selection_label_ != nullptr) {
+        edge_feature_selection_label_->setText(
+            QStringLiteral("Selected edges: %1")
+                .arg(
+                    static_cast<qulonglong>(
+                        edge_count)));
+    }
+    if (edge_feature_parameter_name_label_ != nullptr) {
+        edge_feature_parameter_name_label_->setText(
+            fillet
+                ? QStringLiteral("Radius")
+                : QStringLiteral("Distance"));
+    }
+    if (edge_feature_finish_button_ != nullptr) {
+        edge_feature_finish_button_->setText(
+            fillet
+                ? QStringLiteral("Finish Fillet")
+                : QStringLiteral("Finish Chamfer"));
+        edge_feature_finish_button_->setEnabled(
+            edge_feature_parameter_input_valid_ &&
+            edge_feature_evaluation_ &&
+            edge_feature_evaluation_->committable());
+    }
+    if (edge_feature_clear_button_ != nullptr) {
+        edge_feature_clear_button_->setEnabled(
+            edge_count != 0U);
+    }
+    if (edge_feature_result_label_ != nullptr) {
+        if (!edge_feature_parameter_input_valid_) {
+            edge_feature_result_label_->setText(
+                QStringLiteral(
+                    "%1 must be a positive length.")
+                    .arg(
+                        fillet
+                            ? QStringLiteral("Radius")
+                            : QStringLiteral("Distance")));
+        } else if (edge_feature_evaluation_) {
+            edge_feature_result_label_->setText(
+                edgeFeatureEvaluationText(
+                    *edge_feature_evaluation_,
+                    fillet
+                        ? QStringView{
+                              u"Fillet"}
+                        : QStringView{
+                              u"Chamfer"}));
+        } else {
+            edge_feature_result_label_->setText(
+                QStringLiteral(
+                    "Select one or more current material Edges and enter a positive %1.")
+                    .arg(
+                        fillet
+                            ? QStringLiteral("Radius")
+                            : QStringLiteral("Distance")));
+        }
+    }
+    if (operations_placeholder_ != nullptr) {
+        operations_placeholder_->setText(
+            QStringLiteral("%1 — %2 edge(s)")
+                .arg(
+                    fillet
+                        ? QStringLiteral("Fillet")
+                        : QStringLiteral("Chamfer"))
+                .arg(
+                    static_cast<qulonglong>(
+                        edge_count)));
+    }
+
+    syncing_edge_feature_ui_ = false;
+}
+
+application::CadInputSubmitResult
+CadWorkbench::submitEdgeFeatureCadInput(
+    std::string_view text) {
+    if ((!fillet_draft_ &&
+         !chamfer_draft_) ||
+        document_session_ == nullptr) {
+        return {
+            false,
+            "No active Fillet/Chamfer draft."};
+    }
+
+    const bool fillet =
+        fillet_draft_.has_value();
+    const auto keyword =
+        upperAsciiTrimmed(text);
+    if (keyword == "CANCEL" ||
+        keyword == "ESC") {
+        cancelEdgeFeature();
+        return {true, {}};
+    }
+    if ((fillet && keyword == "FILLET") ||
+        (!fillet && keyword == "CHAMFER")) {
+        return {true, {}};
+    }
+    if (keyword == "CLEAR") {
+        if (viewport_controller_ != nullptr) {
+            viewport_controller_->
+                clearBodyTopologyToolSelection();
+        }
+        tryStageEdgeFeatureSelection();
+        return {true, {}};
+    }
+    if (keyword.empty() ||
+        keyword == "FINISH") {
+        return finishEdgeFeature()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Edge Feature Finish was rejected."};
+    }
+
+    const auto parsed =
+        application::parseBareCadDistance(
+            text,
+            application::CadInputNumberFormat{
+                toUtf8(
+                    QLocale{}.decimalPoint()),
+                document_session_->document()
+                    .lengthUnit()});
+    if (!parsed || !(*parsed > 0.0)) {
+        return {
+            false,
+            fillet
+                ? "FILLET expects CLEAR, FINISH, CANCEL or a positive Radius."
+                : "CHAMFER expects CLEAR, FINISH, CANCEL or a positive Distance."};
+    }
+
+    if (!setEdgeFeatureParameter(
+            core::LengthValue{*parsed},
+            text)) {
+        return {
+            false,
+            "Edge Feature parameter could not be applied."};
+    }
+    return {true, {}};
+}
+
 void CadWorkbench::setSketchSelectionRole(
     sketch::EntityRole role) {
     if (!sketch_interaction_controller_ ||
