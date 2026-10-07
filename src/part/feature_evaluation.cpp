@@ -999,6 +999,8 @@ convertNewSurface(
         source.candidate_face_count;
     result.surface_kind =
         source.surface_kind;
+    result.canonical_frame =
+        source.canonical_frame;
     result.runtime_token =
         source.resolved_token;
     result.current_faces =
