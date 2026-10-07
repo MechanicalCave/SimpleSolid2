@@ -318,8 +318,10 @@ std::optional<ChainPlan> findChainPlan(
         return std::nullopt;
     }
 
-    constexpr double first_parameter = 0.75;
-    constexpr double second_parameter = 0.5;
+    // Reuse the Owner-accepted PM-05A chaining evidence parameters:
+    // normal first operation = 2.0 mm, generated-boundary second = 0.75 mm.
+    constexpr double first_parameter = 2.0;
+    constexpr double second_parameter = 0.75;
     const auto seeds =
         singleEdgeCandidates(
             *base_evaluation.features.back()
@@ -428,8 +430,10 @@ ChainResult authorAndSaveChain(
             kernel);
     CHECK(plan);
 
-    constexpr double first_parameter = 0.75;
-    constexpr double second_parameter = 0.5;
+    // Reuse the Owner-accepted PM-05A chaining evidence parameters:
+    // normal first operation = 2.0 mm, generated-boundary second = 0.75 mm.
+    constexpr double first_parameter = 2.0;
+    constexpr double second_parameter = 0.75;
 
     part::FeatureId first_id;
     if (first_operation ==
