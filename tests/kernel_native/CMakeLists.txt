@@ -681,6 +681,30 @@ set_tests_properties(pm05f.fillet_corner_diagnostics PROPERTIES
     LABELS "tier-full-only;subsystem-application;subsystem-kernel;subsystem-part;native"
 )
 
+add_executable(pm05f_fillet_complex_fixture_test
+    pm05f_fillet_complex_fixture_test.cpp
+)
+
+target_link_libraries(pm05f_fillet_complex_fixture_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+        simplesolid2_part
+        simplesolid2_sketch
+)
+
+target_compile_features(pm05f_fillet_complex_fixture_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05f.fillet_complex_fixture
+    COMMAND pm05f_fillet_complex_fixture_test
+)
+
+set_tests_properties(pm05f.fillet_complex_fixture PROPERTIES
+    LABELS "tier-full-only;subsystem-application;subsystem-kernel;subsystem-part;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -711,6 +735,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm05e1_edge_feature_edit_test
         pm05e3_edge_feature_cold_rebuild_test
         pm05f_fillet_corner_diagnostics_test
+        pm05f_fillet_complex_fixture_test
         pm05a_edge_feature_provider_evidence_test
         pm05a_edge_feature_lifecycle_evidence_test
 )
