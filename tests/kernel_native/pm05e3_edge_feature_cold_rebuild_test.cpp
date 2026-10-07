@@ -343,6 +343,14 @@ std::optional<ChainPlan> findChainPlan(
     std::size_t generated_candidates = 0U;
     std::size_t contour_authoring_successes = 0U;
     std::size_t second_evaluation_successes = 0U;
+    std::optional<part::FeatureEvaluationStatus>
+        first_second_status;
+    std::optional<part::FeatureEvaluationDiagnosticCode>
+        first_second_diagnostic;
+    std::optional<kernel::SolidModelingStatus>
+        first_second_kernel_status;
+    std::optional<kernel::ReferenceStatus>
+        first_second_reference_status;
 
     for (const auto& seed : seeds) {
         // Match the accepted PM-05A / PM-05C2b chaining path exactly:
@@ -419,6 +427,18 @@ std::optional<ChainPlan> findChainPlan(
                     first.feature_id,
                     second.feature_id};
             }
+
+            if (!first_second_status &&
+                second_target != nullptr) {
+                first_second_status =
+                    second_target->status;
+                first_second_diagnostic =
+                    second_target->diagnostic;
+                first_second_kernel_status =
+                    second_target->kernel_status;
+                first_second_reference_status =
+                    second_target->edge_reference_status;
+            }
         }
     }
 
@@ -439,6 +459,22 @@ std::optional<ChainPlan> findChainPlan(
         << contour_authoring_successes
         << " second_evaluation_successes="
         << second_evaluation_successes
+        << " first_second_status="
+        << (first_second_status
+                ? static_cast<int>(*first_second_status)
+                : -1)
+        << " first_second_diagnostic="
+        << (first_second_diagnostic
+                ? static_cast<int>(*first_second_diagnostic)
+                : -1)
+        << " first_second_kernel_status="
+        << (first_second_kernel_status
+                ? static_cast<int>(*first_second_kernel_status)
+                : -1)
+        << " first_second_reference_status="
+        << (first_second_reference_status
+                ? static_cast<int>(*first_second_reference_status)
+                : -1)
         << '\n';
     return std::nullopt;
 }
