@@ -3,7 +3,9 @@
 #include <simplesolid2/part/feature_id.hpp>
 #include <simplesolid2/sketch/entity_id.hpp>
 
+#include <algorithm>
 #include <compare>
+#include <tuple>
 #include <cstdint>
 #include <optional>
 #include <variant>
@@ -48,7 +50,13 @@ enum class FeatureSurfaceRoleKind {
     revolve_start_cap,
     revolve_end_cap,
     revolve_side,
+    fillet_surface,
+    chamfer_surface,
+    corner_transition,
 };
+
+struct FeaturePointAddress;
+struct MaterialEdgeReference;
 
 struct FeatureSurfaceAddress final {
     FeatureId producer_feature_id;
@@ -60,24 +68,29 @@ struct FeatureSurfaceAddress final {
     std::uint32_t use_index{};
     bool hole{false};
 
-    [[nodiscard]] bool valid() const noexcept {
-        if (!producer_feature_id.valid()) {
-            return false;
-        }
-        if (role == FeatureSurfaceRoleKind::side ||
-            role == FeatureSurfaceRoleKind::revolve_side) {
-            return source_entity.has_value() &&
-                   source_entity->valid();
-        }
-        return !source_entity.has_value();
-    }
+    // PM-05A P2/P3 durable generated-Surface provenance. These are semantic
+    // references only. Runtime/provider topology handles never enter this
+    // value graph.
+    //
+    // fillet_surface / chamfer_surface:
+    //   exactly one source MaterialEdgeReference.
+    //
+    // corner_transition:
+    //   exactly one source FeaturePointAddress plus a canonical set of at
+    //   least two participating authored MaterialEdgeReferences.
+    std::vector<MaterialEdgeReference>
+        source_edges;
+    std::vector<FeaturePointAddress>
+        source_points;
+
+    [[nodiscard]] bool valid() const noexcept;
 
     friend bool operator==(
         const FeatureSurfaceAddress&,
-        const FeatureSurfaceAddress&) = default;
-    friend auto operator<=>(
+        const FeatureSurfaceAddress&);
+    friend std::strong_ordering operator<=>(
         const FeatureSurfaceAddress&,
-        const FeatureSurfaceAddress&) = default;
+        const FeatureSurfaceAddress&);
 };
 
 // Durable provider-neutral semantic reference to one Surface carrier in one
@@ -208,5 +221,126 @@ struct MaterialEdgeReference final {
         const MaterialEdgeReference&,
         const MaterialEdgeReference&) = default;
 };
+
+inline bool FeatureSurfaceAddress::valid() const noexcept {
+    if (!producer_feature_id.valid()) {
+        return false;
+    }
+
+    const bool clean_generated_payload =
+        !source_entity.has_value() &&
+        loop_index == 0U &&
+        use_index == 0U &&
+        !hole;
+
+    if (role == FeatureSurfaceRoleKind::side ||
+        role == FeatureSurfaceRoleKind::revolve_side) {
+        return source_entity.has_value() &&
+               source_entity->valid() &&
+               source_edges.empty() &&
+               source_points.empty();
+    }
+
+    if (role == FeatureSurfaceRoleKind::fillet_surface ||
+        role == FeatureSurfaceRoleKind::chamfer_surface) {
+        if (!clean_generated_payload ||
+            source_edges.size() != 1U ||
+            !source_points.empty()) {
+            return false;
+        }
+        const auto& source =
+            source_edges.front();
+        return source.valid() &&
+               source.stage.feature_id.has_value() &&
+               *source.stage.feature_id <
+                   producer_feature_id;
+    }
+
+    if (role == FeatureSurfaceRoleKind::corner_transition) {
+        if (!clean_generated_payload ||
+            source_points.size() != 1U ||
+            source_edges.size() < 2U ||
+            !source_points.front().valid() ||
+            !std::is_sorted(
+                source_edges.begin(),
+                source_edges.end()) ||
+            std::adjacent_find(
+                source_edges.begin(),
+                source_edges.end()) !=
+                source_edges.end()) {
+            return false;
+        }
+
+        const auto stage =
+            source_edges.front().stage;
+        if (!stage.feature_id ||
+            !(*stage.feature_id <
+              producer_feature_id) ||
+            source_points.front()
+                    .producer_feature_id >
+                *stage.feature_id) {
+            return false;
+        }
+
+        return std::all_of(
+            source_edges.begin(),
+            source_edges.end(),
+            [&stage](
+                const MaterialEdgeReference& edge) {
+                return edge.valid() &&
+                       edge.stage == stage;
+            });
+    }
+
+    return !source_entity.has_value() &&
+           source_edges.empty() &&
+           source_points.empty();
+}
+
+inline bool operator==(
+    const FeatureSurfaceAddress& first,
+    const FeatureSurfaceAddress& second) {
+    return std::tie(
+               first.producer_feature_id,
+               first.role,
+               first.source_entity,
+               first.loop_index,
+               first.use_index,
+               first.hole,
+               first.source_edges,
+               first.source_points) ==
+           std::tie(
+               second.producer_feature_id,
+               second.role,
+               second.source_entity,
+               second.loop_index,
+               second.use_index,
+               second.hole,
+               second.source_edges,
+               second.source_points);
+}
+
+inline std::strong_ordering operator<=>(
+    const FeatureSurfaceAddress& first,
+    const FeatureSurfaceAddress& second) {
+    return std::tie(
+               first.producer_feature_id,
+               first.role,
+               first.source_entity,
+               first.loop_index,
+               first.use_index,
+               first.hole,
+               first.source_edges,
+               first.source_points) <=>
+           std::tie(
+               second.producer_feature_id,
+               second.role,
+               second.source_entity,
+               second.loop_index,
+               second.use_index,
+               second.hole,
+               second.source_edges,
+               second.source_points);
+}
 
 } // namespace simplesolid2::part
