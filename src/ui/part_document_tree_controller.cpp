@@ -2166,12 +2166,21 @@ void PartDocumentTreeController::showContextMenu(
                 return;
             }
 
-            edit_feature_action_->setText(
+            const auto edit_text =
                 std::holds_alternative<
-                    part::RevolveFeature>(
+                    part::ExtrudeFeature>(
                     feature->definition)
-                    ? QStringLiteral("Edit Revolve")
-                    : QStringLiteral("Edit Extrude"));
+                    ? QStringLiteral("Edit Extrude")
+                    : std::holds_alternative<
+                          part::RevolveFeature>(
+                          feature->definition)
+                        ? QStringLiteral("Edit Revolve")
+                        : std::holds_alternative<
+                              part::FilletFeature>(
+                              feature->definition)
+                            ? QStringLiteral("Edit Fillet")
+                            : QStringLiteral("Edit Chamfer");
+            edit_feature_action_->setText(edit_text);
             edit_feature_action_->setEnabled(
                 !feature->suppressed);
             suppress_feature_action_->setEnabled(
