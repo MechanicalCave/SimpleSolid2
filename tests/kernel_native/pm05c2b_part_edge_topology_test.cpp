@@ -569,8 +569,35 @@ int main() {
         const auto generated_edges =
             generatedBoundaryReferences(
                 single_fillet);
-        for (const auto& generated_edge :
-             generated_edges) {
+        CHECK(!generated_edges.empty());
+        CHECK(generated_edges.size() <= 16U);
+
+        // PM-05A C1 proved raw provider feasibility for individual generated
+        // boundary Edges, but that evidence did not apply T1 to the second
+        // operation. Production must never accept provider contour growth.
+        // Therefore exercise every explicit non-empty authored subset of the
+        // generated semantic Edge set and require at least one exact-T1
+        // feasible chain. This is test enumeration only; the product never
+        // adds an Edge that the user did not author.
+        const std::uint64_t subset_count =
+            std::uint64_t{1}
+            << generated_edges.size();
+        for (std::uint64_t mask = 1U;
+             mask < subset_count;
+             ++mask) {
+            std::vector<part::MaterialEdgeReference>
+                chamfer_edges;
+            for (std::size_t index = 0U;
+                 index < generated_edges.size();
+                 ++index) {
+                if ((mask &
+                     (std::uint64_t{1} << index)) !=
+                    0U) {
+                    chamfer_edges.push_back(
+                        generated_edges[index]);
+                }
+            }
+            CHECK(!chamfer_edges.empty());
             ++chain_attempts;
 
             auto chamfer_state =
@@ -585,7 +612,7 @@ int main() {
                     "Chamfer001",
                     false,
                     part::ChamferFeature{
-                        {generated_edge},
+                        std::move(chamfer_edges),
                         core::LengthValue{0.75}}});
 
             auto chamfer_document =
