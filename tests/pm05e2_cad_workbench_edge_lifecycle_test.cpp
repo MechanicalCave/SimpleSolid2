@@ -13,6 +13,7 @@
 #include <QTreeWidgetItem>
 #include <QWidget>
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
