@@ -1517,7 +1517,8 @@ struct CurrentEdgeMeaning final {
 struct CurrentVertexMeaning final {
     kernel::RuntimeVertexToken token;
     std::optional<PointRelation> relation;
-    std::size_t incident_material_edge_count{};
+    std::vector<kernel::RuntimeEdgeToken>
+        incident_material_edges;
     std::optional<kernel::Point3>
         provider_point;
 };
@@ -2029,9 +2030,7 @@ buildPointStage(
                 pointRelationForObservation(
                     observation,
                     surfaces),
-                observation
-                    .incident_material_edges
-                    .size(),
+                observation.incident_material_edges,
                 observation.provider_point,
             });
     }
@@ -2241,8 +2240,10 @@ buildPointStage(
     for (const auto& meaning : meanings) {
         BodyVertexTopologyRecord record;
         record.runtime_token = meaning.token;
+        record.incident_material_edges =
+            meaning.incident_material_edges;
         record.incident_material_edge_count =
-            meaning.incident_material_edge_count;
+            record.incident_material_edges.size();
         record.provider_point =
             meaning.provider_point;
 
@@ -2876,6 +2877,12 @@ bool BodyVertexTopologyRecord::valid() const noexcept {
             }
         }
     }
+    if (incident_material_edge_count !=
+            incident_material_edges.size() ||
+        !uniqueValidTokens(
+            incident_material_edges)) {
+        return false;
+    }
     if (provider_point &&
         (!std::isfinite(provider_point->x) ||
          !std::isfinite(provider_point->y) ||
@@ -3029,6 +3036,416 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
 
 bool BodyStageTopologyCatalog::complete() const noexcept {
     return valid();
+}
+
+namespace {
+
+[[nodiscard]] const FeatureCurveResolution*
+findCurveResolution(
+    const BodyStageTopologyCatalog& catalog,
+    const FeatureCurveAddress& address) noexcept {
+    const auto found =
+        std::find_if(
+            catalog.curves.begin(),
+            catalog.curves.end(),
+            [&address](
+                const FeatureCurveResolution& item) {
+                return item.address == address;
+            });
+    return found == catalog.curves.end()
+        ? nullptr
+        : &*found;
+}
+
+[[nodiscard]] const FeaturePointResolution*
+findPointResolution(
+    const BodyStageTopologyCatalog& catalog,
+    const FeaturePointAddress& address) noexcept {
+    const auto found =
+        std::find_if(
+            catalog.points.begin(),
+            catalog.points.end(),
+            [&address](
+                const FeaturePointResolution& item) {
+                return item.address == address;
+            });
+    return found == catalog.points.end()
+        ? nullptr
+        : &*found;
+}
+
+[[nodiscard]] const BodyEdgeTopologyRecord*
+findEdgeRecord(
+    const BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeEdgeToken token) noexcept {
+    const auto found =
+        std::find_if(
+            catalog.edges.begin(),
+            catalog.edges.end(),
+            [token](
+                const BodyEdgeTopologyRecord& item) {
+                return item.runtime_token == token;
+            });
+    return found == catalog.edges.end()
+        ? nullptr
+        : &*found;
+}
+
+[[nodiscard]] const BodyVertexTopologyRecord*
+findVertexRecord(
+    const BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeVertexToken token) noexcept {
+    const auto found =
+        std::find_if(
+            catalog.vertices.begin(),
+            catalog.vertices.end(),
+            [token](
+                const BodyVertexTopologyRecord& item) {
+                return item.runtime_token == token;
+            });
+    return found == catalog.vertices.end()
+        ? nullptr
+        : &*found;
+}
+
+[[nodiscard]] bool vertexCarriesEdge(
+    const BodyStageTopologyCatalog& catalog,
+    const std::vector<kernel::RuntimeVertexToken>&
+        vertices,
+    kernel::RuntimeEdgeToken edge) noexcept {
+    for (const auto vertex : vertices) {
+        const auto* record =
+            findVertexRecord(
+                catalog,
+                vertex);
+        if (record == nullptr) {
+            continue;
+        }
+        if (std::find(
+                record->incident_material_edges.begin(),
+                record->incident_material_edges.end(),
+                edge) !=
+            record->incident_material_edges.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+statusForCandidateCount(
+    std::size_t count) noexcept {
+    if (count == 0U) {
+        return kernel::ReferenceStatus::missing;
+    }
+    if (count == 1U) {
+        return kernel::ReferenceStatus::resolved;
+    }
+    return kernel::ReferenceStatus::ambiguous;
+}
+
+} // namespace
+
+std::optional<MaterialEdgeResolution>
+resolveMaterialEdgeReference(
+    const MaterialEdgeReference& reference,
+    const BodyStageTopologyCatalog& catalog) {
+    if (!reference.valid() ||
+        !catalog.complete() ||
+        catalog.stage != reference.stage) {
+        return std::nullopt;
+    }
+
+    const auto* curve =
+        findCurveResolution(
+            catalog,
+            reference.curve);
+    if (curve == nullptr) {
+        return MaterialEdgeResolution{
+            kernel::ReferenceStatus::missing,
+            {}};
+    }
+    if (curve->status ==
+        kernel::ReferenceStatus::unsupported) {
+        return MaterialEdgeResolution{
+            kernel::ReferenceStatus::unsupported,
+            {}};
+    }
+    if (curve->status ==
+        kernel::ReferenceStatus::missing) {
+        return MaterialEdgeResolution{
+            kernel::ReferenceStatus::missing,
+            {}};
+    }
+
+    if (std::holds_alternative<
+            SingularAtAuthoredStage>(
+                reference.branch)) {
+        if (curve->current_edges.empty()) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::missing,
+                {}};
+        }
+        if (curve->current_edges.size() != 1U ||
+            curve->status ==
+                kernel::ReferenceStatus::ambiguous) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::ambiguous,
+                curve->current_edges};
+        }
+
+        const auto* record =
+            findEdgeRecord(
+                catalog,
+                curve->current_edges.front());
+        if (record == nullptr) {
+            return std::nullopt;
+        }
+        if (record->accounting_class !=
+                TopologyAccountingClass::referenceable ||
+            record->periodic_seam ||
+            record->representation_partition) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::unsupported,
+                {}};
+        }
+        if (record->curve_candidates.size() != 1U ||
+            record->curve_candidates.front() !=
+                reference.curve) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::ambiguous,
+                curve->current_edges};
+        }
+        return MaterialEdgeResolution{
+            kernel::ReferenceStatus::resolved,
+            curve->current_edges};
+    }
+
+    const auto* endpoints =
+        std::get_if<BetweenSemanticPoints>(
+            &reference.branch);
+    if (endpoints == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto* first =
+        findPointResolution(
+            catalog,
+            endpoints->first);
+    const auto* second =
+        findPointResolution(
+            catalog,
+            endpoints->second);
+    if (first == nullptr ||
+        second == nullptr) {
+        return MaterialEdgeResolution{
+            kernel::ReferenceStatus::missing,
+            {}};
+    }
+    if (first->status ==
+            kernel::ReferenceStatus::unsupported ||
+        second->status ==
+            kernel::ReferenceStatus::unsupported) {
+        return MaterialEdgeResolution{
+            kernel::ReferenceStatus::unsupported,
+            {}};
+    }
+    if (first->status ==
+            kernel::ReferenceStatus::missing ||
+        second->status ==
+            kernel::ReferenceStatus::missing) {
+        return MaterialEdgeResolution{
+            kernel::ReferenceStatus::missing,
+            {}};
+    }
+
+    std::vector<kernel::RuntimeEdgeToken>
+        candidates;
+    bool ambiguous_curve_provenance = false;
+    for (const auto edge :
+         curve->current_edges) {
+        if (!vertexCarriesEdge(
+                catalog,
+                first->current_vertices,
+                edge) ||
+            !vertexCarriesEdge(
+                catalog,
+                second->current_vertices,
+                edge)) {
+            continue;
+        }
+
+        const auto* record =
+            findEdgeRecord(
+                catalog,
+                edge);
+        if (record == nullptr) {
+            return std::nullopt;
+        }
+        if (record->accounting_class !=
+                TopologyAccountingClass::referenceable ||
+            record->periodic_seam ||
+            record->representation_partition) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::unsupported,
+                {}};
+        }
+        if (std::find(
+                record->curve_candidates.begin(),
+                record->curve_candidates.end(),
+                reference.curve) ==
+            record->curve_candidates.end()) {
+            return std::nullopt;
+        }
+        ambiguous_curve_provenance =
+            ambiguous_curve_provenance ||
+            record->curve_candidates.size() != 1U;
+        appendUniqueRuntimeToken(
+            candidates,
+            edge);
+    }
+
+    auto status =
+        statusForCandidateCount(
+            candidates.size());
+    if (status ==
+            kernel::ReferenceStatus::resolved &&
+        ambiguous_curve_provenance) {
+        status =
+            kernel::ReferenceStatus::ambiguous;
+    }
+    return MaterialEdgeResolution{
+        status,
+        std::move(candidates)};
+}
+
+MaterialEdgeAuthoringResult
+authorMaterialEdgeReference(
+    const BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeEdgeToken edge) {
+    MaterialEdgeAuthoringResult result;
+    if (!edge.valid() ||
+        !catalog.complete() ||
+        catalog.stage.kind !=
+            BodyStageKind::after_feature) {
+        return result;
+    }
+
+    const auto* record =
+        findEdgeRecord(
+            catalog,
+            edge);
+    if (record == nullptr ||
+        record->accounting_class !=
+            TopologyAccountingClass::referenceable ||
+        record->periodic_seam ||
+        record->representation_partition ||
+        record->curve_candidates.size() != 1U) {
+        return result;
+    }
+
+    const auto& curve_address =
+        record->curve_candidates.front();
+    const auto* curve =
+        findCurveResolution(
+            catalog,
+            curve_address);
+    if (curve == nullptr ||
+        std::find(
+            curve->current_edges.begin(),
+            curve->current_edges.end(),
+            edge) ==
+            curve->current_edges.end()) {
+        return result;
+    }
+
+    MaterialEdgeReference authored{
+        catalog.stage,
+        curve_address,
+        SingularAtAuthoredStage{}};
+
+    if (curve->current_edges.size() != 1U) {
+        std::vector<FeaturePointAddress>
+            endpoint_points;
+        std::size_t incident_vertices = 0U;
+
+        for (const auto& vertex :
+             catalog.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            ++incident_vertices;
+
+            if (vertex.accounting_class !=
+                    TopologyAccountingClass::referenceable ||
+                vertex.referenceability !=
+                    kernel::ReferenceStatus::resolved ||
+                vertex.point_candidates.size() != 1U) {
+                continue;
+            }
+
+            const auto& point_address =
+                vertex.point_candidates.front();
+            const auto* point =
+                findPointResolution(
+                    catalog,
+                    point_address);
+            if (point == nullptr ||
+                point->status !=
+                    kernel::ReferenceStatus::resolved ||
+                point->current_vertices.size() != 1U ||
+                point->current_vertices.front() !=
+                    vertex.runtime_token) {
+                continue;
+            }
+
+            if (std::find(
+                    endpoint_points.begin(),
+                    endpoint_points.end(),
+                    point_address) ==
+                endpoint_points.end()) {
+                endpoint_points.push_back(
+                    point_address);
+            }
+        }
+
+        if (incident_vertices != 2U ||
+            endpoint_points.size() != 2U) {
+            return result;
+        }
+        std::sort(
+            endpoint_points.begin(),
+            endpoint_points.end());
+        if (endpoint_points[0] ==
+            endpoint_points[1]) {
+            return result;
+        }
+        authored.branch =
+            BetweenSemanticPoints{
+                endpoint_points[0],
+                endpoint_points[1]};
+    }
+
+    const auto resolution =
+        resolveMaterialEdgeReference(
+            authored,
+            catalog);
+    if (!resolution ||
+        !resolution->resolved() ||
+        resolution->current_edges.front() !=
+            edge) {
+        return result;
+    }
+
+    result.status =
+        kernel::ReferenceStatus::resolved;
+    result.reference =
+        std::move(authored);
+    return result;
 }
 
 bool FeatureContribution::valid() const noexcept {
