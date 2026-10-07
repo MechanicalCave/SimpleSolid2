@@ -179,7 +179,7 @@ int main() {
     const auto base =
         provider.extrude(
             boxInput());
-    verifyCompleteInventory(base);
+    verifyCompleteInventory("base", base);
     const auto pair =
         connectedPair(base);
     CHECK(pair.size() == 2U);
@@ -196,7 +196,7 @@ int main() {
         provider.edgeFeature(
             fillet_input,
             base.solid);
-    verifyCompleteInventory(fillet);
+    verifyCompleteInventory("fillet", fillet);
     CHECK(fillet.edge_feature_input_membership);
     CHECK(
         fillet.edge_feature_input_membership
@@ -220,7 +220,7 @@ int main() {
                 reverse_pair,
                 2.0},
             base.solid);
-    verifyCompleteInventory(reversed);
+    verifyCompleteInventory("reversed_fillet", reversed);
     CHECK(
         reversed.edge_feature_input_membership);
     CHECK(
@@ -244,7 +244,7 @@ int main() {
                 pair,
                 1.5},
             base.solid);
-    verifyCompleteInventory(chamfer);
+    verifyCompleteInventory("chamfer", chamfer);
     CHECK(chamfer.edge_feature_input_membership);
     CHECK(
         chamfer.edge_feature_input_membership
