@@ -307,6 +307,43 @@ int main() {
         part::evaluatePart(
             *chamfer_document.document,
             kernel);
+    if (chained.body_status !=
+            part::BodyEvaluationStatus::up_to_date) {
+        std::cerr
+            << "PM05C2B_CHAIN"
+            << " body_status="
+            << static_cast<int>(
+                   chained.body_status)
+            << " features="
+            << chained.features.size();
+        if (chained.features.size() >= 3U) {
+            const auto& failed =
+                chained.features[2];
+            std::cerr
+                << " feature_status="
+                << static_cast<int>(
+                       failed.status)
+                << " diagnostic="
+                << static_cast<int>(
+                       failed.diagnostic)
+                << " kernel_status="
+                << (failed.kernel_status
+                        ? static_cast<int>(
+                              *failed.kernel_status)
+                        : -1)
+                << " edge_status="
+                << (failed.edge_reference_status
+                        ? static_cast<int>(
+                              *failed.edge_reference_status)
+                        : -1)
+                << " edge_index="
+                << (failed.failing_edge_input_index
+                        ? static_cast<long long>(
+                              *failed.failing_edge_input_index)
+                        : -1LL);
+        }
+        std::cerr << '\n';
+    }
     CHECK(
         chained.body_status ==
         part::BodyEvaluationStatus::up_to_date);

@@ -116,6 +116,14 @@ void verifyCompleteInventory(
             << result.inherited_surfaces.size()
             << " generated_surfaces="
             << result.edge_feature_surfaces.size()
+            << " generated_face_counts=";
+        for (const auto& surface :
+             result.edge_feature_surfaces) {
+            std::cerr
+                << surface.current_faces.size()
+                << ",";
+        }
+        std::cerr
             << " membership="
             << (result.edge_feature_input_membership
                     ? result.edge_feature_input_membership
