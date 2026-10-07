@@ -40,6 +40,9 @@ enum class FeatureEvaluationDiagnosticCode {
     profile_crosses_axis,
     missing_upstream_body,
     upstream_unavailable,
+    edge_reference_missing,
+    edge_reference_ambiguous,
+    edge_reference_unsupported,
     kernel_invalid_input,
     kernel_provider_mismatch,
     kernel_provider_failure,
@@ -331,6 +334,10 @@ struct FeatureEvaluation final {
         FeatureEvaluationDiagnosticCode::none};
     std::optional<kernel::SolidModelingStatus>
         kernel_status;
+    std::optional<std::size_t>
+        failing_edge_input_index;
+    std::optional<kernel::ReferenceStatus>
+        edge_reference_status;
     std::vector<FeatureFaceResolution>
         produced_faces;
     std::vector<FeatureSurfaceResolution>
@@ -385,6 +392,48 @@ struct PartEvaluation final {
     [[nodiscard]] const FeatureEvaluation*
     findFeature(FeatureId id) const noexcept;
 };
+
+enum class EdgeFeatureKernelInputStatus {
+    resolved,
+    missing_upstream_body,
+    missing_edge,
+    ambiguous_edge,
+    unsupported_edge,
+    invalid_input,
+};
+
+struct EdgeFeatureKernelInputResult final {
+    EdgeFeatureKernelInputStatus status{
+        EdgeFeatureKernelInputStatus::invalid_input};
+    std::optional<kernel::EdgeFeatureInput>
+        input;
+    std::optional<std::size_t>
+        failing_edge_input_index;
+    std::optional<kernel::ReferenceStatus>
+        reference_status;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status ==
+                   EdgeFeatureKernelInputStatus::resolved &&
+               input.has_value() &&
+               input->valid();
+    }
+};
+
+// Materializes the complete explicit authored Edge set against one exact
+// upstream Body stage. Any unresolved member blocks the whole operation and
+// no provider call is permitted.
+[[nodiscard]] EdgeFeatureKernelInputResult
+resolveKernelEdgeFeatureInput(
+    const FilletFeature& feature,
+    const BodyStageTopologyCatalog*
+        upstream_topology);
+
+[[nodiscard]] EdgeFeatureKernelInputResult
+resolveKernelEdgeFeatureInput(
+    const ChamferFeature& feature,
+    const BodyStageTopologyCatalog*
+        upstream_topology);
 
 enum class RevolveKernelInputStatus {
     resolved,

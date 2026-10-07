@@ -930,6 +930,28 @@ set_tests_properties(pm04d2.cad_workbench_revolve PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel"
 )
 
+add_executable(pm05c1_edge_semantic_kernel_test
+    pm05c1_edge_semantic_kernel_test.cpp
+)
+
+target_link_libraries(pm05c1_edge_semantic_kernel_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_part
+        simplesolid2_kernel
+)
+
+target_compile_features(pm05c1_edge_semantic_kernel_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm05c1.edge_semantic_kernel
+    COMMAND pm05c1_edge_semantic_kernel_test
+)
+
+set_tests_properties(pm05c1.edge_semantic_kernel PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-kernel"
+)
+
 add_executable(pm05b3_generated_surface_reference_v14_test
     pm05b3_generated_surface_reference_v14_test.cpp
 )

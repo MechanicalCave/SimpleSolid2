@@ -103,6 +103,32 @@ diagnosticForProfileMaterialization(
 }
 
 [[nodiscard]] FeatureEvaluationDiagnosticCode
+diagnosticForEdgeFeatureInput(
+    EdgeFeatureKernelInputStatus status) noexcept {
+    switch (status) {
+    case EdgeFeatureKernelInputStatus::resolved:
+        return FeatureEvaluationDiagnosticCode::none;
+    case EdgeFeatureKernelInputStatus::missing_upstream_body:
+        return FeatureEvaluationDiagnosticCode::
+            missing_upstream_body;
+    case EdgeFeatureKernelInputStatus::missing_edge:
+        return FeatureEvaluationDiagnosticCode::
+            edge_reference_missing;
+    case EdgeFeatureKernelInputStatus::ambiguous_edge:
+        return FeatureEvaluationDiagnosticCode::
+            edge_reference_ambiguous;
+    case EdgeFeatureKernelInputStatus::unsupported_edge:
+        return FeatureEvaluationDiagnosticCode::
+            edge_reference_unsupported;
+    case EdgeFeatureKernelInputStatus::invalid_input:
+        return FeatureEvaluationDiagnosticCode::
+            kernel_invalid_input;
+    }
+    return FeatureEvaluationDiagnosticCode::
+        kernel_invalid_input;
+}
+
+[[nodiscard]] FeatureEvaluationDiagnosticCode
 diagnosticForRevolveInput(
     RevolveKernelInputStatus status) noexcept {
     switch (status) {
@@ -3456,6 +3482,142 @@ authorMaterialEdgeReference(
     return result;
 }
 
+namespace {
+
+[[nodiscard]] EdgeFeatureKernelInputResult
+resolveKernelEdgeFeatureInputImpl(
+    const std::vector<MaterialEdgeReference>& edges,
+    kernel::EdgeFeatureOperation operation,
+    double parameter_mm,
+    const BodyStageTopologyCatalog*
+        upstream_topology) {
+    EdgeFeatureKernelInputResult result;
+    if (upstream_topology == nullptr) {
+        result.status =
+            EdgeFeatureKernelInputStatus::
+                missing_upstream_body;
+        return result;
+    }
+    if (!upstream_topology->complete() ||
+        edges.empty() ||
+        !std::isfinite(parameter_mm) ||
+        parameter_mm <= 0.0) {
+        result.status =
+            EdgeFeatureKernelInputStatus::
+                invalid_input;
+        return result;
+    }
+
+    kernel::EdgeFeatureInput input;
+    input.operation = operation;
+    input.parameter_mm = parameter_mm;
+    input.edges.reserve(edges.size());
+
+    for (std::size_t index = 0U;
+         index < edges.size();
+         ++index) {
+        const auto resolved =
+            resolveMaterialEdgeReference(
+                edges[index],
+                *upstream_topology);
+        if (!resolved) {
+            result.status =
+                EdgeFeatureKernelInputStatus::
+                    invalid_input;
+            result.failing_edge_input_index =
+                index;
+            return result;
+        }
+        if (!resolved->resolved()) {
+            result.failing_edge_input_index =
+                index;
+            result.reference_status =
+                resolved->status;
+            switch (resolved->status) {
+            case kernel::ReferenceStatus::missing:
+                result.status =
+                    EdgeFeatureKernelInputStatus::
+                        missing_edge;
+                break;
+            case kernel::ReferenceStatus::ambiguous:
+                result.status =
+                    EdgeFeatureKernelInputStatus::
+                        ambiguous_edge;
+                break;
+            case kernel::ReferenceStatus::unsupported:
+                result.status =
+                    EdgeFeatureKernelInputStatus::
+                        unsupported_edge;
+                break;
+            case kernel::ReferenceStatus::resolved:
+                result.status =
+                    EdgeFeatureKernelInputStatus::
+                        invalid_input;
+                break;
+            }
+            return result;
+        }
+
+        const auto token =
+            resolved->current_edges.front();
+        if (std::find(
+                input.edges.begin(),
+                input.edges.end(),
+                token) !=
+            input.edges.end()) {
+            result.status =
+                EdgeFeatureKernelInputStatus::
+                    ambiguous_edge;
+            result.failing_edge_input_index =
+                index;
+            result.reference_status =
+                kernel::ReferenceStatus::
+                    ambiguous;
+            return result;
+        }
+        input.edges.push_back(token);
+    }
+
+    if (!input.valid()) {
+        result.status =
+            EdgeFeatureKernelInputStatus::
+                invalid_input;
+        return result;
+    }
+
+    result.status =
+        EdgeFeatureKernelInputStatus::resolved;
+    result.input =
+        std::move(input);
+    return result;
+}
+
+} // namespace
+
+EdgeFeatureKernelInputResult
+resolveKernelEdgeFeatureInput(
+    const FilletFeature& feature,
+    const BodyStageTopologyCatalog*
+        upstream_topology) {
+    return resolveKernelEdgeFeatureInputImpl(
+        feature.edges,
+        kernel::EdgeFeatureOperation::fillet,
+        feature.radius.millimetres,
+        upstream_topology);
+}
+
+EdgeFeatureKernelInputResult
+resolveKernelEdgeFeatureInput(
+    const ChamferFeature& feature,
+    const BodyStageTopologyCatalog*
+        upstream_topology) {
+    return resolveKernelEdgeFeatureInputImpl(
+        feature.edges,
+        kernel::EdgeFeatureOperation::chamfer,
+        feature.distance.millimetres,
+        upstream_topology);
+}
+
 bool FeatureContribution::valid() const noexcept {
     if (!uniqueValidTokens(faces) ||
         !uniqueValidTokens(direct_edges) ||
@@ -3657,8 +3819,16 @@ PartEvaluation evaluatePart(
         const auto* revolve =
             std::get_if<RevolveFeature>(
                 &authored.definition);
+        const auto* fillet =
+            std::get_if<FilletFeature>(
+                &authored.definition);
+        const auto* chamfer =
+            std::get_if<ChamferFeature>(
+                &authored.definition);
         if (extrude == nullptr &&
-            revolve == nullptr) {
+            revolve == nullptr &&
+            fillet == nullptr &&
+            chamfer == nullptr) {
             evaluated.status =
                 FeatureEvaluationStatus::
                     failed;
@@ -3672,148 +3842,15 @@ PartEvaluation evaluatePart(
             continue;
         }
 
-        const ProfileId profile_id =
-            extrude != nullptr
-                ? extrude->profile_id
-                : revolve->profile_id;
-        const auto* profile =
-            document.findProfile(
-                profile_id);
-        if (profile == nullptr) {
-            evaluated.status =
-                FeatureEvaluationStatus::
-                    blocked;
-            evaluated.diagnostic =
-                FeatureEvaluationDiagnosticCode::
-                    missing_profile;
-            chain_broken = true;
-            current_references.clear();
-            result.features.push_back(
-                std::move(evaluated));
-            continue;
-        }
-
-        const BodyStageTopologyCatalog*
-            support_topology = nullptr;
-        std::optional<DatumEvaluation>
-            support_datums;
-        if (const auto* source =
-                document.findSketch(
-                    profile->source_sketch_id)) {
-            if (const auto* surface =
-                    bodyPlanarSurfaceReference(
-                        source->support)) {
-                const auto stage =
-                    std::find_if(
-                        result.features.begin(),
-                        result.features.end(),
-                        [surface](
-                            const FeatureEvaluation& prior) {
-                            return prior.result_topology &&
-                                   prior.result_topology
-                                       ->stage ==
-                                       surface->stage;
-                        });
-                if (stage != result.features.end()) {
-                    support_topology =
-                        &*stage->result_topology;
-                }
-            } else if (
-                datumPlaneIdForSketchSupport(
-                    source->support)) {
-                support_datums =
-                    evaluateDatums(
-                        document,
-                        result);
-            }
-        }
-
-        // Authored Axis may itself live on a Datum-backed Sketch even when
-        // the consuming Profile does not. Revolve therefore evaluates the
-        // same-revision Datum prefix unconditionally; resolution remains
-        // demand-driven and fail-closed.
-        if (revolve != nullptr &&
-            !support_datums) {
-            support_datums =
-                evaluateDatums(
-                    document,
-                    result);
-        }
-
         kernel::SolidModelingResult
             kernel_result;
+        std::optional<kernel::EdgeFeatureInput>
+            edge_feature_input;
 
-        if (extrude != nullptr) {
-            auto materialized_profile =
-                resolveKernelProfileInput(
-                    document,
-                    profile->id,
-                    support_topology,
-                    support_datums
-                        ? &*support_datums
-                        : nullptr);
-            if (!materialized_profile.ok()) {
-                evaluated.status =
-                    materialized_profile.status ==
-                            ProfileKernelInputStatus::
-                                invalid_input
-                        ? FeatureEvaluationStatus::
-                              failed
-                        : FeatureEvaluationStatus::
-                              blocked;
-                evaluated.diagnostic =
-                    diagnosticForProfileMaterialization(
-                        materialized_profile.status);
-                chain_broken = true;
-                current_references.clear();
-                result.features.push_back(
-                    std::move(evaluated));
-                continue;
-            }
-
-            if (extrude->operation ==
-                    ExtrudeOperation::cut &&
-                current_solid == nullptr) {
-                evaluated.status =
-                    FeatureEvaluationStatus::
-                        blocked;
-                evaluated.diagnostic =
-                    FeatureEvaluationDiagnosticCode::
-                        missing_upstream_body;
-                chain_broken = true;
-                current_references.clear();
-                result.features.push_back(
-                    std::move(evaluated));
-                continue;
-            }
-
-            auto input =
-                makeKernelExtrudeInputFromProfile(
-                    std::move(
-                        *materialized_profile.input),
-                    *extrude);
-            if (!input) {
-                evaluated.status =
-                    FeatureEvaluationStatus::
-                        failed;
-                evaluated.diagnostic =
-                    FeatureEvaluationDiagnosticCode::
-                        kernel_invalid_input;
-                chain_broken = true;
-                current_references.clear();
-                result.features.push_back(
-                    std::move(evaluated));
-                continue;
-            }
-
-            kernel_result =
-                modeling_kernel.extrude(
-                    *input,
-                    current_solid);
-        } else {
-            if (revolve->operation ==
-                    RevolveOperation::cut &&
-                current_solid == nullptr) {
+        if (fillet != nullptr ||
+            chamfer != nullptr) {
+            if (current_solid == nullptr ||
+                !current_topology) {
                 evaluated.status =
                     FeatureEvaluationStatus::
                         blocked;
@@ -3828,25 +3865,29 @@ PartEvaluation evaluatePart(
             }
 
             const auto resolved =
-                resolveKernelRevolveInput(
-                    document,
-                    *revolve,
-                    &result,
-                    support_datums
-                        ? &*support_datums
-                        : nullptr);
+                fillet != nullptr
+                    ? resolveKernelEdgeFeatureInput(
+                          *fillet,
+                          &*current_topology)
+                    : resolveKernelEdgeFeatureInput(
+                          *chamfer,
+                          &*current_topology);
             if (!resolved.ok()) {
                 evaluated.status =
                     resolved.status ==
-                            RevolveKernelInputStatus::
+                            EdgeFeatureKernelInputStatus::
                                 invalid_input
                         ? FeatureEvaluationStatus::
                               failed
                         : FeatureEvaluationStatus::
                               blocked;
                 evaluated.diagnostic =
-                    diagnosticForRevolveInput(
+                    diagnosticForEdgeFeatureInput(
                         resolved.status);
+                evaluated.failing_edge_input_index =
+                    resolved.failing_edge_input_index;
+                evaluated.edge_reference_status =
+                    resolved.reference_status;
                 chain_broken = true;
                 current_references.clear();
                 result.features.push_back(
@@ -3854,10 +3895,196 @@ PartEvaluation evaluatePart(
                 continue;
             }
 
+            edge_feature_input =
+                *resolved.input;
             kernel_result =
-                modeling_kernel.revolve(
-                    *resolved.input,
+                modeling_kernel.edgeFeature(
+                    *edge_feature_input,
                     current_solid);
+        } else {
+            const ProfileId profile_id =
+                extrude != nullptr
+                    ? extrude->profile_id
+                    : revolve->profile_id;
+            const auto* profile =
+                document.findProfile(
+                    profile_id);
+            if (profile == nullptr) {
+                evaluated.status =
+                    FeatureEvaluationStatus::
+                        blocked;
+                evaluated.diagnostic =
+                    FeatureEvaluationDiagnosticCode::
+                        missing_profile;
+                chain_broken = true;
+                current_references.clear();
+                result.features.push_back(
+                    std::move(evaluated));
+                continue;
+            }
+
+            const BodyStageTopologyCatalog*
+                support_topology = nullptr;
+            std::optional<DatumEvaluation>
+                support_datums;
+            if (const auto* source =
+                    document.findSketch(
+                        profile->source_sketch_id)) {
+                if (const auto* surface =
+                        bodyPlanarSurfaceReference(
+                            source->support)) {
+                    const auto stage =
+                        std::find_if(
+                            result.features.begin(),
+                            result.features.end(),
+                            [surface](
+                                const FeatureEvaluation& prior) {
+                                return prior.result_topology &&
+                                       prior.result_topology
+                                           ->stage ==
+                                           surface->stage;
+                            });
+                    if (stage != result.features.end()) {
+                        support_topology =
+                            &*stage->result_topology;
+                    }
+                } else if (
+                    datumPlaneIdForSketchSupport(
+                        source->support)) {
+                    support_datums =
+                        evaluateDatums(
+                            document,
+                            result);
+                }
+            }
+
+            // Authored Axis may itself live on a Datum-backed Sketch even
+            // when the consuming Profile does not. Revolve therefore
+            // evaluates the same-revision Datum prefix unconditionally.
+            if (revolve != nullptr &&
+                !support_datums) {
+                support_datums =
+                    evaluateDatums(
+                        document,
+                        result);
+            }
+
+            if (extrude != nullptr) {
+                auto materialized_profile =
+                    resolveKernelProfileInput(
+                        document,
+                        profile->id,
+                        support_topology,
+                        support_datums
+                            ? &*support_datums
+                            : nullptr);
+                if (!materialized_profile.ok()) {
+                    evaluated.status =
+                        materialized_profile.status ==
+                                ProfileKernelInputStatus::
+                                    invalid_input
+                            ? FeatureEvaluationStatus::
+                                  failed
+                            : FeatureEvaluationStatus::
+                                  blocked;
+                    evaluated.diagnostic =
+                        diagnosticForProfileMaterialization(
+                            materialized_profile.status);
+                    chain_broken = true;
+                    current_references.clear();
+                    result.features.push_back(
+                        std::move(evaluated));
+                    continue;
+                }
+
+                if (extrude->operation ==
+                        ExtrudeOperation::cut &&
+                    current_solid == nullptr) {
+                    evaluated.status =
+                        FeatureEvaluationStatus::
+                            blocked;
+                    evaluated.diagnostic =
+                        FeatureEvaluationDiagnosticCode::
+                            missing_upstream_body;
+                    chain_broken = true;
+                    current_references.clear();
+                    result.features.push_back(
+                        std::move(evaluated));
+                    continue;
+                }
+
+                auto input =
+                    makeKernelExtrudeInputFromProfile(
+                        std::move(
+                            *materialized_profile.input),
+                        *extrude);
+                if (!input) {
+                    evaluated.status =
+                        FeatureEvaluationStatus::
+                            failed;
+                    evaluated.diagnostic =
+                        FeatureEvaluationDiagnosticCode::
+                            kernel_invalid_input;
+                    chain_broken = true;
+                    current_references.clear();
+                    result.features.push_back(
+                        std::move(evaluated));
+                    continue;
+                }
+
+                kernel_result =
+                    modeling_kernel.extrude(
+                        *input,
+                        current_solid);
+            } else {
+                if (revolve->operation ==
+                        RevolveOperation::cut &&
+                    current_solid == nullptr) {
+                    evaluated.status =
+                        FeatureEvaluationStatus::
+                            blocked;
+                    evaluated.diagnostic =
+                        FeatureEvaluationDiagnosticCode::
+                            missing_upstream_body;
+                    chain_broken = true;
+                    current_references.clear();
+                    result.features.push_back(
+                        std::move(evaluated));
+                    continue;
+                }
+
+                const auto resolved =
+                    resolveKernelRevolveInput(
+                        document,
+                        *revolve,
+                        &result,
+                        support_datums
+                            ? &*support_datums
+                            : nullptr);
+                if (!resolved.ok()) {
+                    evaluated.status =
+                        resolved.status ==
+                                RevolveKernelInputStatus::
+                                    invalid_input
+                            ? FeatureEvaluationStatus::
+                                  failed
+                            : FeatureEvaluationStatus::
+                                  blocked;
+                    evaluated.diagnostic =
+                        diagnosticForRevolveInput(
+                            resolved.status);
+                    chain_broken = true;
+                    current_references.clear();
+                    result.features.push_back(
+                        std::move(evaluated));
+                    continue;
+                }
+
+                kernel_result =
+                    modeling_kernel.revolve(
+                        *resolved.input,
+                        current_solid);
+            }
         }
 
         evaluated.kernel_status =
@@ -3869,6 +4096,27 @@ PartEvaluation evaluatePart(
             evaluated.diagnostic =
                 diagnosticForKernel(
                     kernel_result.status);
+            chain_broken = true;
+            current_references.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
+        }
+
+        if (edge_feature_input &&
+            (!kernel_result.edge_feature_input_membership ||
+             !kernel_result.edge_feature_input_membership
+                  ->exactFor(
+                      edge_feature_input->edges))) {
+            evaluated.kernel_status =
+                kernel::SolidModelingStatus::
+                    provider_mismatch;
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    kernel_provider_mismatch;
             chain_broken = true;
             current_references.clear();
             result.features.push_back(

@@ -307,6 +307,86 @@ bool AngularRevolveInput::valid() const noexcept {
            magnitude <= full_turn;
 }
 
+bool EdgeFeatureInput::valid() const noexcept {
+    if (edges.empty() ||
+        !std::isfinite(parameter_mm) ||
+        parameter_mm <= 0.0) {
+        return false;
+    }
+
+    for (std::size_t index = 0U;
+         index < edges.size();
+         ++index) {
+        if (!edges[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < edges.size();
+             ++other) {
+            if (edges[index] == edges[other]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool EdgeFeatureInputMembership::valid() const noexcept {
+    if (provider_contour_edges.empty()) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < provider_contour_edges.size();
+         ++index) {
+        if (!provider_contour_edges[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < provider_contour_edges.size();
+             ++other) {
+            if (provider_contour_edges[index] ==
+                provider_contour_edges[other]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool EdgeFeatureInputMembership::exactFor(
+    const std::vector<RuntimeEdgeToken>&
+        requested_edges) const noexcept {
+    if (!valid() ||
+        requested_edges.size() !=
+            provider_contour_edges.size()) {
+        return false;
+    }
+
+    for (std::size_t index = 0U;
+         index < requested_edges.size();
+         ++index) {
+        if (!requested_edges[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < requested_edges.size();
+             ++other) {
+            if (requested_edges[index] ==
+                requested_edges[other]) {
+                return false;
+            }
+        }
+        if (std::find(
+                provider_contour_edges.begin(),
+                provider_contour_edges.end(),
+                requested_edges[index]) ==
+            provider_contour_edges.end()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool AngularRevolveInput::fullTurn() const noexcept {
     if (!valid()) return false;
     constexpr double full_turn =
@@ -330,6 +410,26 @@ ISolidModelingKernel::revolve(
     if (input.operation ==
             SolidBooleanOperation::cut &&
         upstream == nullptr) {
+        result.status =
+            SolidModelingStatus::missing_upstream;
+        return result;
+    }
+    result.status =
+        SolidModelingStatus::provider_failure;
+    return result;
+}
+
+SolidModelingResult
+ISolidModelingKernel::edgeFeature(
+    const EdgeFeatureInput& input,
+    RuntimeSolidHandle upstream) noexcept {
+    SolidModelingResult result;
+    if (!input.valid()) {
+        result.status =
+            SolidModelingStatus::invalid_input;
+        return result;
+    }
+    if (upstream == nullptr) {
         result.status =
             SolidModelingStatus::missing_upstream;
         return result;

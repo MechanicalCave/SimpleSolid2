@@ -343,6 +343,44 @@ struct AngularRevolveInput final {
         const AngularRevolveInput&) = default;
 };
 
+enum class EdgeFeatureOperation {
+    fillet,
+    chamfer,
+};
+
+struct EdgeFeatureInput final {
+    EdgeFeatureOperation operation{
+        EdgeFeatureOperation::fillet};
+    // Runtime tokens remain ordered by the canonical durable semantic Edge
+    // set. Numeric provider token order has no authored meaning.
+    std::vector<RuntimeEdgeToken> edges;
+    double parameter_mm{};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const EdgeFeatureInput&,
+        const EdgeFeatureInput&) = default;
+};
+
+// Transient T1 evidence. Production providers must inspect the native
+// contour/membership induced by the explicit registration before accepting a
+// successful edge operation. Traversal order is irrelevant; set equality is
+// mandatory. This evidence is runtime-only and never persisted.
+struct EdgeFeatureInputMembership final {
+    std::vector<RuntimeEdgeToken>
+        provider_contour_edges;
+
+    [[nodiscard]] bool valid() const noexcept;
+    [[nodiscard]] bool exactFor(
+        const std::vector<RuntimeEdgeToken>&
+            requested_edges) const noexcept;
+
+    friend bool operator==(
+        const EdgeFeatureInputMembership&,
+        const EdgeFeatureInputMembership&) = default;
+};
+
 enum class SolidModelingStatus {
     ok,
     invalid_input,
@@ -456,6 +494,11 @@ struct SolidModelingResult final {
     std::vector<InheritedVertexRealizationLineage>
         inherited_vertex_realizations;
 
+    // Present only for a PM-05 edge operation. A successful provider result
+    // without exact explicit-input membership is rejected by Part evaluation.
+    std::optional<EdgeFeatureInputMembership>
+        edge_feature_input_membership;
+
     // PM-01 semantic Face lineage remains separate from complete inventory.
     std::vector<InheritedFaceLineage>
         inherited_faces;
@@ -497,6 +540,14 @@ public:
     [[nodiscard]] virtual SolidModelingResult
     revolve(
         const AngularRevolveInput& input,
+        RuntimeSolidHandle upstream = {}) noexcept;
+
+    // Provider-neutral PM-05 explicit multi-Edge operation. The default keeps
+    // bounded/fake providers source-compatible and fails closed until a
+    // provider implements Fillet/Chamfer. PM-05C2 owns production OCCT.
+    [[nodiscard]] virtual SolidModelingResult
+    edgeFeature(
+        const EdgeFeatureInput& input,
         RuntimeSolidHandle upstream = {}) noexcept;
 
     // Presentation-only exact operation delta for Extrude preview:
