@@ -3413,7 +3413,9 @@ DocumentSession::evaluateFilletDraft(
     }
     if (!draft.valid() ||
         !draft.radius() ||
-        !draft.requiredStage()) {
+        (draft.mode() ==
+             EdgeFeatureDraftMode::create &&
+         !draft.requiredStage())) {
         result.status =
             EdgeFeatureDraftEvaluationStatus::
                 incomplete_draft;
@@ -3526,10 +3528,13 @@ DocumentSession::evaluateFilletDraft(
         return result;
     }
 
-    if (result.body_solid != nullptr) {
+    // Preview the exact successful target stage. During Edit the final Body
+    // may be unavailable because downstream Features are Blocked by the
+    // candidate, but that must not erase a valid target-stage preview.
+    if (target->result_solid != nullptr) {
         auto preview =
             modeling_kernel.presentationMesh(
-                result.body_solid);
+                target->result_solid);
         if (preview.ok()) {
             result.preview_mesh =
                 std::move(preview.mesh);
@@ -3573,7 +3578,9 @@ DocumentSession::evaluateChamferDraft(
     }
     if (!draft.valid() ||
         !draft.distance() ||
-        !draft.requiredStage()) {
+        (draft.mode() ==
+             EdgeFeatureDraftMode::create &&
+         !draft.requiredStage())) {
         result.status =
             EdgeFeatureDraftEvaluationStatus::
                 incomplete_draft;
@@ -3686,10 +3693,13 @@ DocumentSession::evaluateChamferDraft(
         return result;
     }
 
-    if (result.body_solid != nullptr) {
+    // Preview the exact successful target stage. During Edit the final Body
+    // may be unavailable because downstream Features are Blocked by the
+    // candidate, but that must not erase a valid target-stage preview.
+    if (target->result_solid != nullptr) {
         auto preview =
             modeling_kernel.presentationMesh(
-                result.body_solid);
+                target->result_solid);
         if (preview.ok()) {
             result.preview_mesh =
                 std::move(preview.mesh);
