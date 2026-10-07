@@ -162,6 +162,33 @@ std::string defaultRevolveFeatureName(
     return result;
 }
 
+
+std::string defaultFilletFeatureName(
+    part::FeatureId id) {
+    const auto serialized = id.serialized();
+    std::string result{"Fillet"};
+    if (serialized.size() < 3U) {
+        result.append(
+            3U - serialized.size(),
+            '0');
+    }
+    result += serialized;
+    return result;
+}
+
+std::string defaultChamferFeatureName(
+    part::FeatureId id) {
+    const auto serialized = id.serialized();
+    std::string result{"Chamfer"};
+    if (serialized.size() < 3U) {
+        result.append(
+            3U - serialized.size(),
+            '0');
+    }
+    result += serialized;
+    return result;
+}
+
 std::string defaultAxisName(
     part::AxisId id) {
     const auto serialized = id.serialized();
