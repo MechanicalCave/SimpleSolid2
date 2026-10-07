@@ -5094,6 +5094,106 @@ void CadWorkbench::buildUi() {
         });
 
     QObject::connect(
+        fillet_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (fillet_draft_ || chamfer_draft_) {
+                cancelEdgeFeature();
+                return;
+            }
+            static_cast<void>(
+                startFilletTool());
+        });
+    QObject::connect(
+        chamfer_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (fillet_draft_ || chamfer_draft_) {
+                cancelEdgeFeature();
+                return;
+            }
+            static_cast<void>(
+                startChamferTool());
+        });
+    QObject::connect(
+        edge_feature_clear_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (viewport_controller_ != nullptr) {
+                viewport_controller_->
+                    clearBodyTopologyToolSelection();
+            }
+            tryStageEdgeFeatureSelection();
+        });
+    QObject::connect(
+        edge_feature_parameter_edit_,
+        &QLineEdit::textChanged,
+        this,
+        [this](const QString& text_value) {
+            if (syncing_edge_feature_ui_ ||
+                (!fillet_draft_ &&
+                 !chamfer_draft_) ||
+                document_session_ == nullptr) {
+                return;
+            }
+
+            const auto parsed =
+                application::parseBareCadDistance(
+                    toUtf8(text_value),
+                    application::CadInputNumberFormat{
+                        toUtf8(
+                            QLocale{}.decimalPoint()),
+                        document_session_->document()
+                            .lengthUnit()});
+            if (!parsed || !(*parsed > 0.0)) {
+                edge_feature_parameter_input_valid_ =
+                    false;
+                edge_feature_evaluation_.reset();
+                if (edge_feature_preview_timer_ != nullptr) {
+                    edge_feature_preview_timer_->stop();
+                }
+                if (viewport_controller_ != nullptr) {
+                    viewport_controller_->clearSolidPreview();
+                }
+                syncEdgeFeatureUi();
+                return;
+            }
+
+            static_cast<void>(
+                setEdgeFeatureParameter(
+                    core::LengthValue{*parsed},
+                    toUtf8(text_value),
+                    false));
+        });
+    QObject::connect(
+        edge_feature_parameter_edit_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] {
+            flushEdgeFeaturePreview();
+            static_cast<void>(
+                finishEdgeFeature());
+        });
+    QObject::connect(
+        edge_feature_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                finishEdgeFeature());
+        });
+    QObject::connect(
+        edge_feature_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cancelEdgeFeature();
+        });
+
+    QObject::connect(
         profile_add_area_button_,
         &QPushButton::clicked,
         this,
