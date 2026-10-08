@@ -4511,6 +4511,78 @@ finishEdgeFeature(
             scan(TopAbs_WIRE, "wire");
             scan(TopAbs_EDGE, "edge");
             scan(TopAbs_VERTEX, "vertex");
+            // Diagnostic only: the symmetric Add(distance, edge)
+            // failed. Test equal-distance Add(d,d,edge,sideFace) with
+            // every adjacent upstream support face combination.
+            // No result is accepted/published, no selection changes.
+            std::vector<std::vector<TopoDS_Face>> supports;
+            supports.reserve(selected.size());
+            for (const auto& chosen : selected) {
+                std::vector<TopoDS_Face> neighbors;
+                for (const auto& [token, face] :
+                     upstream.inventory_faces) {
+                    static_cast<void>(token);
+                    bool incident = false;
+                    for (TopExp_Explorer e{face, TopAbs_EDGE};
+                         e.More(); e.Next()) {
+                        if (e.Current().IsSame(chosen.edge)) {
+                            incident = true;
+                            break;
+                        }
+                    }
+                    if (incident) {
+                        neighbors.push_back(face);
+                    }
+                }
+                std::fprintf(
+                    stderr,
+                    "PM05F_R2_CHAMFER_SUPPORTS edge=%zu count=%zu\n",
+                    supports.size(), neighbors.size());
+                supports.push_back(std::move(neighbors));
+            }
+            if (supports.size() == 3U &&
+                std::all_of(
+                    supports.begin(), supports.end(),
+                    [](const auto& faces) {
+                        return faces.size() == 2U;
+                    })) {
+                for (unsigned mask = 0U; mask < 8U; ++mask) {
+                    try {
+                        BRepFilletAPI_MakeChamfer alternative{
+                            upstream.solid};
+                        for (std::size_t i = 0U; i < 3U; ++i) {
+                            const auto selected_face =
+                                supports[i][(mask >> i) & 1U];
+                            alternative.Add(
+                                input.parameter_mm,
+                                input.parameter_mm,
+                                selected[i].edge,
+                                selected_face);
+                        }
+                        alternative.Build();
+                        const bool done = alternative.IsDone();
+                        const bool valid =
+                            done &&
+                            !alternative.Shape().IsNull() &&
+                            BRepCheck_Analyzer{
+                                alternative.Shape()}.IsValid();
+                        std::fprintf(
+                            stderr,
+                            "PM05F_R2_CHAMFER_SIDE_COMBINATION mask=%u done=%d valid=%d\n",
+                            mask, done ? 1 : 0, valid ? 1 : 0);
+                    } catch (const Standard_Failure&) {
+                        std::fprintf(
+                            stderr,
+                            "PM05F_R2_CHAMFER_SIDE_COMBINATION mask=%u OCC_EXCEPTION\n",
+                            mask);
+                    } catch (...) {
+                        std::fprintf(
+                            stderr,
+                            "PM05F_R2_CHAMFER_SIDE_COMBINATION mask=%u EXCEPTION\n",
+                            mask);
+                    }
+                }
+            }
             std::fflush(stderr);
         }
 #endif
