@@ -102,3 +102,9 @@ Owner also accepted a **separate evidence-first runtime performance direction**,
 Internal docs: required
 User/Product docs: required
 Reason: shared semantic interpretation and newly supported Revolve material Edge operations require current as-built documentation and bilingual user descriptions after complete runtime acceptance. Generated Browser must be synchronized, not manually edited.
+
+## Additional R2-A/E focused evidence — 2026-10-08
+
+- **R2-E:** Windows FOCUSED #1764 PASS, native `sk04b.viewer_native_selection_query` (1/1). Real Qt/OCCT screen-coordinate hover/click on a synthetic cylindrical Body with a curved top material ring: two camera scales and a rear bottom-ring occlusion negative control. The test uses a **densely sampled** ring display polyline; it does NOT establish that production 0.25 mm OCCT edge sampling is precise enough at high zoom/DPI. Owner screenshot/real Revolve picking remains OPEN. No tolerance was relaxed.
+- **R2-A:** Windows kernel FOCUSED #1765 PASS, `pm05f.fillet_corner_diagnostics` (1/1). Additional cubes 10x10x10 and 20x20x20 and geometrically reasonable Fillet radii; any successful provider result must evaluate UpToDate with complete product topology. No provider-success/product-failure contradiction for this tested matrix. Owner's vanished Body after Finish remains OPEN because this test lacks the exact Owner geometry and native Viewer publication.
+- **R2-D architecture finding:** current `ISolidModelingKernel` has presentation-only exact deltas for Extrude/Revolve, but not Fillet/Chamfer. `SolidPreviewScene` has a single `SolidPreviewTone` for the whole scene. True simultaneous before/after additive/subtractive patches require a bounded Kernel and atomic Viewer preview-interface extension. **D2 STOP pending Owner approval** of `work/PM-05F_R2_EDGE_PREVIEW_DELTA_D2_PROPOSAL.md`. Whole-Body blue overlay is not accepted as completion.
