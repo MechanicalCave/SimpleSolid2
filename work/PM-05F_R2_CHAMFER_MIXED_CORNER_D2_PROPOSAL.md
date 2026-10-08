@@ -1,8 +1,8 @@
-# PM-05F R2 — Mixed Chamfer Corner Closure (D2 proposal)
+# PM-05F R2 — Mixed Chamfer Corner Remediation (Owner-approved D2-B)
 
-**Status:** PROPOSED / NOT ACCEPTED — 2026-10-08
+**Status:** D2-B Owner-APPROVED 2026-10-08; bounded implementation AUTOMATED FOCUSED PASS #1885; Owner Windows acceptance and exact-head FULL PENDING
 **Authority:** PM-05 Edge Features / PM-05F R2 Owner remediation
-**Decision:** D2 implementation boundary; Owner must explicitly approve before production geometry/policy changes
+**Decision:** Owner accepted bounded OCCT-private D2-B geometry/lineage implementation; no wider D3 geometry policy or public/persistent contract expansion
 **Production mutation authorization:** D2-B APPROVED by Owner on 2026-10-08, strictly for the bounded provider-private fallback and provenance ledger described below; no public/persistent contract or product D3 extension authorized
 **Owner decision:** D2-A feasibility accepted; D2-B bounded production spike accepted; D3 global corner appearance NOT accepted
 
@@ -16,7 +16,7 @@ Strict native Windows FOCUSED #1834, #1835 reproduced this exact semantic triple
 
 The two-Edge case has **two planar `edge_transition` carriers** and **one genuinely nonplanar `corner_transition` carrier**, as measured by the provider (Windows #1834). The Owner questions this curved connector; the current accepted PM-05 contract does not require a planar connector for every two-Edge corner. Do not silently redefine that product behavior.
 
-## Decision requested from Owner
+## Historical Owner D2-B decision request (subsequently accepted)
 
 Authorize a **bounded provider-local deterministic corner-construction remediation** for the **exact equal-distance material Chamfer on multiple explicitly authored line Edges**, including the mixed concave/convex network in Part008. The new fallback may build a **mitered piecewise-planar closed junction** analogous to the Owner's visual Inventor example when the existing OCCT `BRepFilletAPI_MakeChamfer` produces an invalid B-Rep. It must not be a generic healing mode or alter persisted Feature meaning.
 
@@ -40,7 +40,7 @@ Explicitly **leave the existing valid two-Edge nonplanar corner transition uncha
 
 ## Current disposition
 
-The current valid two-Edge nonplanar connector is a **product appearance question**, not automatically a modeling defect. The confirmed Part008 three-Edge `invalid_brep` is an **open acceptance blocker**. Keep the proposed fallback **UNAUTHORIZED** pending the Owner's explicit D2 decision.
+The current valid two-Edge nonplanar connector is a **product appearance question**, not automatically a modeling defect. The confirmed Part008 three-Edge `invalid_brep` is an **open acceptance blocker**. That production fallback was **UNAUTHORIZED** at the original proposal checkpoint; Owner explicitly authorized bounded D2-B later in this document. The current remaining gates are exact-head FULL, Owner Windows acceptance and PR review.
 
 ## Owner D2-A feasibility outcome — 2026-10-08
 
@@ -80,3 +80,20 @@ After reviewing the exact Part008 F1/F2/F3 diagnostic evidence, the Owner explic
 Implementation gates are mandatory: original 3-Edge material Edges only; default OCCT valid result stays preferred; no-fuzzy exact per-Edge signed deltas; one valid nontrivially changed solid; all authored Edge strips represented at true local offset; exactly one invariant semantic Surface owner for each final Face, including the two independently sourced planar continuation Faces and local corner split Faces; complete current-stage Face/Edge/Vertex accounting with unambiguous provenance; six Edge permutations, distances 1/0.5/0.25 mm; faithful edit/replay/undo/save and current topology no false Resolved; existing good 1-/2-/3-edge cases unmodified. If any gate fails, fall back to original fail-closed error, never silently accept partial geometry.
 
 **Not authorized:** blanket same-domain healing, geometry/proximity rebinding, provider Face-index identity, implicit Edge expansion, tolerance escalation, changed schema/neutral public API, global planar-only 2-Edge product policy, merging PR #298, or activating PM-06. Owner manual Windows and exact-head FULL remain final acceptance gates.
+
+## D2-B implementation and automated acceptance checkpoint — 2026-10-08
+
+**Owner decision:** D2-B accepted, limited to provider-private OCCT planar mixed add/remove equal-distance multi-Edge Chamfer with exactly authored Stage-correct semantic Edge set. The original invalid default OCCT B-Rep is not committed. The bounded fallback constructs deterministic zero-fuzzy signed material deltas, requires a changed single `BRepCheck`-valid solid, and certifies unique history ownership for all 21 Part008 result Faces: 16 upstream descendants, 3 distinct source-Edge transition Faces and 2 source-Vertex/incident-Edge corner Faces. Unsupported cases fail closed.
+
+**Implementation:** `src/kernel_occt/solid_modeling_kernel.cpp`; no public Kernel contract, persisted schema, surface-role vocabulary, tolerance or global 2-Edge connector behavior changed. Removed the temporary D2-A OCCT spike and test environment flag in `2880a28d8cdef15fa973b00f98f03d043869d03f`. The focused regression remains in `tests/pm05f_r2_native_workbench_edit_test.cpp`.
+
+**Exact automated evidence:**
+
+- [#1873 FOCUSED](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37833230513): 21/21 provider-private Face ownership diagnostic at 1/0.5/0.25 mm under both signed-delta precedence strategies; unchanged original production test stayed RED during diagnostics.
+- [#1877 FOCUSED](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37834556926): first native PASS 1/1 for the production three-Edge Part008 Chamfer.
+- [#1878 FOCUSED](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37834857437): PASS after an earlier intermittently failed Viewer trihedral selection on the exact same commit; exhaustive **6 selected-Edge permutations × 3 distances**, full current Face/Edge/Vertex inventory, each of 21 Faces uniquely covered, one provider-neutral Feature.
+- [#1880 FOCUSED](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37835580096): PASS 1/1 after deleting temporary D2-A instrumentation.
+- [#1883/#1884 FOCUSED](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37836562501): the newly introduced lifecycle test initially RED because its *direct Command* supplied noncanonical Edge order (invalid input rejected before evaluation). The Kernel, Draft and prior matrix remained successful. The test is corrected to assert mutation-free rejection of unsorted input followed by canonical sorted input.
+- [#1885 FOCUSED](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37836862225): **PASS 1/1** on exact `e5276d9e54c5c611cbec66203c0a689ccc015e00`, including all 18 Kernel variants, create/edit from 1 to 0.5 mm, Undo/Redo, native `.ss2part` Save/Reopen and cold replay, and semantic topology completeness.
+
+**Not yet accepted:** no exact-head Windows **FULL** result, no Owner's new manual three-Edge Chamfer PASS, and the separate complex Edge-picking P1 cases remain open. An intermittent native Viewer trihedral click test deserves further scrutiny. PR #298 remains **Draft**; no main merge, no PM-06 and no project-wide Chamfer appearance D3 decision. Neither the accepted D2-B permission nor one green FOCUSED run closes PM-05F.
