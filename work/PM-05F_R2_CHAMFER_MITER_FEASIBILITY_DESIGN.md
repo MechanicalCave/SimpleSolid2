@@ -183,3 +183,57 @@ A private provenance composition adapter is a **candidate design requiring its o
 ### Disposition after F2
 
 **F1 qualified for the exact fixture; F2 geometric feasibility demonstrated for d=1/0.5/0.25 mm; F3 unproven and blocking.** The current production three-Edge test deliberately remains RED at `kernel_three.ok()`. No fallback is activated, no public Kernel API or persistent semantics changed, PR #298 remains Draft, and PM-06 remains gated. Only Owner-authorized D2-A isolated diagnostic/research code was added; all `PM05F_R2_MITER_*` probes must be removed before a final accepted production candidate.
+
+## D2-A F3 private-lineage feasibility findings — 2026-10-08
+
+**F3 testing remains diagnostic-only.** All tests below complete the opt-in OCCT probe and then remain **RED on unchanged original `CHECK(kernel_three.ok())`**, because the successful experimental CSG Body is never returned to production.
+
+### Preserved upstream and edge-generated provenance
+
+- [Windows FOCUSED #1853](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37827059028), `055b1eec`: at each distance and both CSG precedence orders, all **12/12 upstream source Faces** produce uniquely traceable `Modified` descendants. **12/21 result Faces** are exactly inherited once; **0 ambiguous**; **9 newly created Faces** require generated-surface claims.
+- [Windows FOCUSED #1854](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37827374266), `4e430535`: the independent OCCT `Generated(source Edge)` strip Face for each authored Edge survives through exact signed delta and final Boolean histories. Exactly **three** final Faces have exclusive Edge strip provenance (`1,1,1`), with **no overlap** with inherited Faces and **no competing strip Edge owners**. Thus **15/21** final Faces have provider-history-backed, source-unique claims.
+
+### Six new Faces and local corner evidence
+
+- [Windows FOCUSED #1855](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37827665014), `676ea815`: of the remaining six Faces, four touch exactly one tracked Edge strip and one inherited upstream carrier, while two touch **both** explicitly selected strips at their source shared-Vertex junctions. Stable adjacency masks are `011` at the `1+2` junction and `110` at the `0+1` junction. All six also share a plane with at least one upstream Face, but **planar coincidence is not provenance**.
+- [Windows FOCUSED #1856](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37827955223), `7e458816`: expanding source-upstream history from `Modified` to `Modified + Generated` yields **zero** certifiable upstream Face owners for each of those six, across both policies and three sizes. The existing inherited-ownership mechanism cannot assign them even with `Generated` included.
+
+### The decisive Boolean tool-history limitation
+
+[Windows FOCUSED #1857](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37828279696), `ee86608e`:
+
+- All six Faces have exact OCCT **tool-delta Face history** under the experimental CSG sequence; none needs nearest-geometry matching just to identify a contributing Boolean tool.
+- Four Faces have stable single-Edge tool contributor masks across both Boolean precedence orders: `001`, `010`, `010`, `100`. These are **not automatically valid inherited Surface or edge_transition claims**. They are new split/closure Faces that still require their own exact semantic classification.
+- Critically, the **two corner-connected Faces change apparent tool-owner under equivalent Boolean construction orders**:
+
+| Authored junction | Exact result-strip adjacency | `remove_wins` tool owner | `add_wins` tool owner |
+|---|---|---|---|
+| Edges `1+2` (near `(-5,5,0)`) | `011` | Edge `2` (`001`) | Edge `1` (`010`) |
+| Edges `0+1` (near `(-5,-15,0)`) | `110` | Edge `0` (`100`) | Edge `1` (`010`) |
+
+This exact pattern repeats at d=1, 0.5 and 0.25 mm. All six tool-history masks are supported by OCCT's exact algorithmic history, **but the corner owner selected by that history depends on a transient implementation order**; the two candidates have equivalent material volume and the same explicit authored Edges.
+
+**Therefore neither `Generated(source upstream Face)`, plane coincidence, nor the last modifying Boolean tool is sufficient to assert a stable semantic owner for these corner Faces.** Simply choosing a fixed Boolean order would mask that contradiction, not solve the identity problem.
+
+### D2-A disposition and explicit D2-B decision request
+
+**D2-A proved:**
+
+1. The exact authored set is supported by straight linear Edges and planar incident Faces.
+2. Exact zero-fuzzy CSG of individually certified signed material deltas produces a valid changed single-solid all-planar B-Rep at 1 / 0.5 / 0.25 mm.
+3. The two tested material-composition policies are volume-equivalent at these distances.
+4. Exact provider histories certify 12 inherited Face claims and 3 Edge strip Face claims, with stable geometric correspondence for each source strip.
+5. Two remaining corner patches are uniquely distinguishable by the explicit **pair of incident authored Edges** at two distinct source Vertices, while their *Boolean tool* provenance is order-dependent. Four additional new planar Faces also need explicit semantic classification.
+
+**D2-A did NOT prove:** unique provider-independent Source Surface/Corner Surface ownership for all 21 Faces, complete Edge/Vertex current-topology semantic parity, exact local trim dimensional coverage of all three strips, replay/Undo/Edit/Save/Reopen, all six input orders for the experimental CSG candidate, or generalization outside Part008. The production validation remains RED and correct.
+
+**D2-B — Owner decision requested, NOT approved:** authorize a narrowly scoped **OCCT-provider-private provenance ledger** for a deterministic analytic planar signed-delta equal-distance Chamfer fallback, only where the default provider reports an invalid B-Rep and all source Edges and incident Faces are strictly supported. The ledger must carry, through construction, explicit source identifiers for:
+
+- each upstream source Surface and its split descendants;
+- each independently generated Edge strip with exactly one authored source Edge;
+- each **corner** with its exact shared source Vertex and **both** incident selected Edges, independent of Boolean last-writer/order;
+- every additional split/closure Face and its exactly one derived semantic carrier, supported by exact construction or OCCT history, never by planar coincidence/proximity alone.
+
+This is **not** permission to fabricate identity, assign ambiguous Faces by provider enumeration, or declare the six remaining Faces fully resolved. A candidate internal history adapter would still need a dedicated falsifiable native regression proving every one of the 21 Faces has exactly one valid Surface owner, no contradictory upstream/strip/corner claims, and complete downstream Edge/Vertex semantics. Any need for public Kernel interfaces, persistent/schema changes, tolerance relaxation, or altered product corner behavior is a **new D2/D3 STOP**.
+
+**Until explicit D2-B acceptance: no production geometric fallback, no publication of experimental solids, no merge of Draft PR #298, and no PM-06.** Remove temporary diagnostics from the eventual production implementation candidate; do not change the original RED regression.
