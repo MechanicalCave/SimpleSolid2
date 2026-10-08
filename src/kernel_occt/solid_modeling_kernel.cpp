@@ -4547,6 +4547,48 @@ finishEdgeFeature(
                     [](const auto& faces) {
                         return faces.size() == 2U;
                     })) {
+                // One-distance symmetric overload may choose a
+                // different internal chamfer construction path from
+                // Add(d1,d2,E,F), even when d1 == d2. Probe both.
+                for (unsigned mask = 0U; mask < 8U; ++mask) {
+                    try {
+                        BRepFilletAPI_MakeChamfer symmetric{
+                            upstream.solid};
+                        for (std::size_t i = 0U; i < 3U; ++i) {
+                            symmetric.Add(
+                                input.parameter_mm,
+                                selected[i].edge,
+                                supports[i][(mask >> i) & 1U]);
+                        }
+                        symmetric.Build();
+                        const bool built = symmetric.IsDone();
+                        const bool valid =
+                            built && !symmetric.Shape().IsNull() &&
+                            BRepCheck_Analyzer{
+                                symmetric.Shape()}.IsValid();
+                        int status = -1;
+                        if (valid) {
+                            const auto outcome = finishEdgeFeature(
+                                symmetric, upstream, input, selected);
+                            status = static_cast<int>(outcome.status);
+                        }
+                        std::fprintf(
+                            stderr,
+                            "PM05F_R2_CHAMFER_SYMMETRIC_SIDE mask=%u done=%d brep_valid=%d status=%d\n",
+                            mask, built ? 1 : 0, valid ? 1 : 0,
+                            status);
+                    } catch (const Standard_Failure&) {
+                        std::fprintf(
+                            stderr,
+                            "PM05F_R2_CHAMFER_SYMMETRIC_SIDE mask=%u OCCT_EXCEPTION\n",
+                            mask);
+                    } catch (...) {
+                        std::fprintf(
+                            stderr,
+                            "PM05F_R2_CHAMFER_SYMMETRIC_SIDE mask=%u EXCEPTION\n",
+                            mask);
+                    }
+                }
                 for (unsigned mask = 0U; mask < 8U; ++mask) {
                     try {
                         BRepFilletAPI_MakeChamfer alternative{
