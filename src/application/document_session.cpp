@@ -3536,7 +3536,7 @@ DocumentSession::evaluateFilletDraft(
         evaluation.features.begin(),
         evaluation.features.end(),
         [target_id](const part::FeatureEvaluation& feature) {
-            return feature.id == target_id;
+            return feature.feature_id == target_id;
         });
     if (target_it != evaluation.features.end() &&
         target_it != evaluation.features.begin() &&
@@ -3718,7 +3718,7 @@ DocumentSession::evaluateChamferDraft(
         evaluation.features.begin(),
         evaluation.features.end(),
         [target_id](const part::FeatureEvaluation& feature) {
-            return feature.id == target_id;
+            return feature.feature_id == target_id;
         });
     if (target_it != evaluation.features.end() &&
         target_it != evaluation.features.begin() &&
