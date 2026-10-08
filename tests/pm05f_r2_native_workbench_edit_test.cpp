@@ -468,11 +468,24 @@ int main(int argc, char* argv[]) {
         // scene, for full 360-degree and partial 90-degree Revolve Bodies.
         // Both operations consume the same semantic MaterialEdgeReference
         // contract. The preview is transient; Finish publishes the Body.
-        for (const auto [angle, command] :
-             {std::pair{2.0 * std::acos(-1.0), "FILLET"},
-              std::pair{std::acos(-1.0) / 2.0, "CHAMFER"}}) {
-            auto revolve_session =
-                makeRevolveSession(angle);
+        // Retain both DocumentSession objects throughout the whole
+        // Workbench switch sequence: the active document pointer must
+        // never outlive a loop-local temporary during deactivation.
+        auto full_revolve_session =
+            makeRevolveSession(2.0 * std::acos(-1.0));
+        auto partial_revolve_session =
+            makeRevolveSession(std::acos(-1.0) / 2.0);
+        for (int variant = 0; variant < 2; ++variant) {
+            auto& revolve_session =
+                variant == 0
+                    ? full_revolve_session
+                    : partial_revolve_session;
+            const double angle =
+                variant == 0
+                    ? 2.0 * std::acos(-1.0)
+                    : std::acos(-1.0) / 2.0;
+            const char* command =
+                variant == 0 ? "FILLET" : "CHAMFER";
             CHECK(workbench.activateDocument(
                 &revolve_session, {}));
             QApplication::processEvents();
@@ -514,6 +527,11 @@ int main(int argc, char* argv[]) {
                 << " angle=" << angle
                 << " operation=" << command << '\n';
         }
+
+        // Restore a known-live session before the temporary Revolve
+        // fixtures are destroyed and the Workbench is closed.
+        CHECK(workbench.activateDocument(&session, {}));
+        QApplication::processEvents();
 
         std::cout
             << "PM05F_R2_NATIVE_WORKBENCH_EDIT_PASS"

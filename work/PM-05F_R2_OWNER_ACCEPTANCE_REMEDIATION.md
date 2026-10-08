@@ -137,3 +137,13 @@ Focused Windows evidence on separate exact candidates:
 - **#1779 kernel FOCUSED PASS** semantically targeted internal wall/floor `cap_side` Curve loop in a blind pocket; UpToDate Fillet generates actual added material, verified by `materialDifferencePreview` and without XYZ/provider-order selection.
 
 Remaining R2-D verification: aggregate FAST, complete same-head FULL after other active R2 corrections, measured interactive p95/memory with realistic parts, real desktop visual Owner acceptance, canonical bilingual product docs and regenerated Browser. R2-A/E/F remain separate open findings. An operation may legitimately have only orange, only blue, or both deltas; no invented nonempty mesh is allowed.
+
+## R2-D and native Revolve pointer update — 2026-10-08
+
+- Windows #1781 FAST PASS (93/93), including previously integrated exact material-difference preview on desktop and relevant existing tests. #1780 was a DOCS freshness failure, corrected by regeneration of canonical Product Browser.
+- Windows #1782 FAST PASS (93/93) after bilingual PL/EN Product documentation and Product Browser regeneration; all published canonical sources pass freshness checks.
+- Windows #1783 FOCUSED PASS (1/1): actual native Qt/OCCT Workbench Fillet Create/Edit, local preview visibility and clearing on Finish/Cancel, and committed Body style isolation.
+- Windows #1784 FOCUSED PASS (1/1): real OCCT-generated full-turn Revolve circular Edge click -> Fillet Finish, and partial Revolve circular Edge click -> Chamfer Finish, with correct evaluated and displayed current Body. This is not a geometry-nearest CAD reference fallback; projected geometry coordinates exist only inside the test's mouse-click fixture.
+- Fix native integration test session lifetime before aggregate retest: preserve both Revolve DocumentSessions while switching documents, not loop-local disposed DocumentSessions. No change to product runtime or durable semantics.
+
+**Open:** manual Owner Revolve/picking acceptance; R2-E high zoom/DPI production shoulder accuracy; R2-A exact disappearing Body reproduction; R2-F complete actionable rejection diagnostics; interactive preview p95/memory evidence; final exact-head FULL and Owner PASS. R2-D local delta presentation has focused proofs, but no acceptance closeout before those gates.
