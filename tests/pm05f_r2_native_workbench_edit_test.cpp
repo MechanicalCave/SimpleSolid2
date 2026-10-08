@@ -257,7 +257,8 @@ QTreeWidgetItem* featureTreeItem(
 
 bool nativeClick(
     viewer_qt_occt::QtOcctViewerWidget& viewport,
-    viewer::Point3 world) {
+    viewer::Point3 world,
+    bool trace = false) {
     const auto screen = viewport.projectWorldPoint(world);
     if (!screen || !std::isfinite(screen->x) ||
         !std::isfinite(screen->y)) {
@@ -275,6 +276,20 @@ bool nativeClick(
     if (!query.valid() || !query.completed ||
         query.candidates.empty()) {
         return false;
+    }
+    if (trace) {
+        std::cerr
+            << "PM05F_R2_NATIVE_QUERY"
+            << " pixel=(" << pixel.x() << "," << pixel.y() << ")"
+            << " generation=" << query.generation.value
+            << " candidates=" << query.candidates.size();
+        for (const auto& item : query.candidates) {
+            std::cerr
+                << " [token=" << item.token.value
+                << " distance=" << item.screen_distance
+                << " depth=" << item.depth << "]";
+        }
+        std::cerr << '\n';
     }
     QTest::mouseMove(&viewport, pixel);
     QTest::mouseClick(
@@ -622,7 +637,7 @@ int main(int argc, char* argv[]) {
             for (std::size_t index = 0U;
                  index < corner.size(); ++index) {
                 const bool clicked =
-                    nativeClick(*viewport, corner[index]);
+                    nativeClick(*viewport, corner[index], true);
                 const bool counted =
                     selectedCount(
                         *label,
