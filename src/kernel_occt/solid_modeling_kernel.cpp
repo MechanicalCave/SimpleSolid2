@@ -4570,6 +4570,24 @@ finishEdgeFeature(
                             stderr,
                             "PM05F_R2_CHAMFER_SIDE_COMBINATION mask=%u done=%d valid=%d\n",
                             mask, done ? 1 : 0, valid ? 1 : 0);
+                        if (valid) {
+                            const auto verified =
+                                finishEdgeFeature(
+                                    alternative,
+                                    upstream,
+                                    input,
+                                    selected);
+                            std::fprintf(
+                                stderr,
+                                "PM05F_R2_CHAMFER_SIDE_LINEAGE mask=%u status=%d surfaces=%zu membership=%d\n",
+                                mask,
+                                static_cast<int>(verified.status),
+                                verified.edge_feature_surfaces.size(),
+                                verified.edge_feature_input_membership &&
+                                    verified.edge_feature_input_membership
+                                        ->exactFor(input.edges)
+                                    ? 1 : 0);
+                        }
                     } catch (const Standard_Failure&) {
                         std::fprintf(
                             stderr,
