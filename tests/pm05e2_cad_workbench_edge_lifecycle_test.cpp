@@ -422,6 +422,9 @@ int main(int argc, char* argv[]) {
     auto* parameter =
         workbench.findChild<QLineEdit*>(
             QStringLiteral("edgeFeatureParameterEdit"));
+    auto* selection_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("edgeFeatureSelectionLabel"));
     auto* finish =
         workbench.findChild<QPushButton*>(
             QStringLiteral("edgeFeatureFinishButton"));
@@ -441,8 +444,8 @@ int main(int argc, char* argv[]) {
         workbench.findChild<QTreeWidget*>();
     CHECK(
         operations && title && parameter &&
-        finish && cancel && edit && suppress && remove &&
-        tree);
+        selection_label && finish && cancel && edit &&
+        suppress && remove && tree);
 
     auto session = makeBaseSession(kernel);
     const auto base_id =
@@ -517,6 +520,63 @@ int main(int argc, char* argv[]) {
         viewer::BodyScenePurpose::tool_stage);
     CHECK(!viewport->solid_preview.empty());
     CHECK(finish->isEnabled());
+
+    // R2-B: use the real controller/tool-stage selection bridge to toggle
+    // the restored semantic Edge off/on, then add/remove another strict
+    // authorable Edge. This remains a synthetic-token Workbench test; the
+    // independent native Qt/OCCT cursor regression protects the Viewer side.
+    std::vector<viewer::PresentationToken> restored_edges;
+    for (const auto token :
+         viewport->presentation_selection.selected) {
+        if (std::any_of(
+                viewport->body_scene.edges.begin(),
+                viewport->body_scene.edges.end(),
+                [token](const auto& edge) {
+                    return edge.token == token;
+                })) {
+            restored_edges.push_back(token);
+        }
+    }
+    CHECK(restored_edges.size() == 1U);
+    const auto original_token = restored_edges.front();
+    CHECK(
+        selection_label->text() ==
+        QStringLiteral("Selected edges: 1"));
+
+    viewport->emitEdge(original_token);
+    QApplication::processEvents();
+    CHECK(
+        selection_label->text() ==
+        QStringLiteral("Selected edges: 0"));
+    CHECK(!finish->isEnabled());
+
+    viewport->emitEdge(original_token);
+    QApplication::processEvents();
+    CHECK(
+        selection_label->text() ==
+        QStringLiteral("Selected edges: 1"));
+    CHECK(finish->isEnabled());
+
+    bool added_second_edge = false;
+    for (const auto token :
+         materialEdgeTokens(viewport->body_scene)) {
+        if (token == original_token) continue;
+        viewport->emitEdge(token);
+        QApplication::processEvents();
+        if (selection_label->text() !=
+                QStringLiteral("Selected edges: 2")) {
+            continue;
+        }
+        added_second_edge = true;
+        viewport->emitEdge(token);
+        QApplication::processEvents();
+        CHECK(
+            selection_label->text() ==
+            QStringLiteral("Selected edges: 1"));
+        CHECK(finish->isEnabled());
+        break;
+    }
+    CHECK(added_second_edge);
 
     result =
         workbench.lockCadDynamicInputField(
