@@ -1976,13 +1976,25 @@ curveRelationForObservation(
         result.role =
             FeatureCurveRoleKind::
                 boolean_intersection;
-        if (semantic_surfaces[0].kind ==
-                kernel::SurfaceKind::plane &&
-            semantic_surfaces[1].kind ==
-                kernel::SurfaceKind::plane) {
+
+        // A boolean Curve is durably identified by the two semantic Surface
+        // meanings that intersect. The provider's analytic CurveKind is not
+        // identity authority, but line/circle classification is admissible
+        // runtime evidence and is part of CurveRelation equality/lineage.
+        // This admits common plane-cylinder Cut boundaries (circle arcs)
+        // without XYZ, nearest-geometry, or provider-order rebinding.
+        //
+        // Multiple disconnected line/circle realizations for the same pair
+        // of semantic Surfaces group into one ambiguous Curve family rather
+        // than silently choosing a branch. Non-analytic CurveKind::other
+        // remains fully topology-accounted but non-authorable.
+        switch (observation.provider_curve_kind) {
+        case kernel::CurveKind::line:
+        case kernel::CurveKind::circle:
             result.curve_kind =
-                kernel::CurveKind::line;
-        } else {
+                observation.provider_curve_kind;
+            break;
+        case kernel::CurveKind::other:
             return std::nullopt;
         }
     } else {
