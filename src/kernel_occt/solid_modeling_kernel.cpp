@@ -3825,9 +3825,17 @@ finishBoolean(
 edgePresentationPoints(
     const TopoDS_Edge& edge) {
     BRepAdaptor_Curve curve{edge};
+    // R2-E: display/pick sampling only. At 0.25 mm curve deflection
+    // the production Revolve ring diverged 21.97 logical pixels from
+    // its displayed material Edge at zoom scale 8, beyond the fixed
+    // 8-pixel pick aperture (native Windows RED #1793).
+    // Keep B-Rep/meshing and all CAD numerical tolerances unchanged.
+    // A finer local presentation path preserves the accepted semantic
+    // Edge identity and the Viewer's existing front-occlusion policy.
+    constexpr double edge_display_deflection_mm = 0.01;
     GCPnts_QuasiUniformDeflection sampler{
         curve,
-        0.25};
+        edge_display_deflection_mm};
     if (!sampler.IsDone() ||
         sampler.NbPoints() < 2) {
         return std::nullopt;
