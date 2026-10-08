@@ -1866,13 +1866,36 @@ int main(int argc, char* argv[]) {
                                   certified_corner_sources.end(),
                                   *surface.source_vertex) ==
                               certified_corner_sources.end());
-                        CHECK(std::any_of(
+                        // A corner's claimed Edge pair must be the
+                        // exact selected pair incident at its *source*
+                        // Vertex, not merely two authored Edges somewhere
+                        // in the same Body. All tokens are stage-local.
+                        const auto source_vertex = std::find_if(
                             crash_eval.current_topology->vertices.begin(),
                             crash_eval.current_topology->vertices.end(),
                             [&](const auto& vertex) {
                                 return vertex.runtime_token ==
                                     *surface.source_vertex;
-                            }));
+                            });
+                        CHECK(source_vertex !=
+                              crash_eval.current_topology->vertices.end());
+                        std::size_t selected_incidence = 0U;
+                        for (const auto edge : input.edges) {
+                            const bool incident = std::find(
+                                source_vertex->incident_material_edges.begin(),
+                                source_vertex->incident_material_edges.end(),
+                                edge) !=
+                                source_vertex->incident_material_edges.end();
+                            if (!incident) continue;
+                            ++selected_incidence;
+                            CHECK(std::find(
+                                      surface.incident_source_edges.begin(),
+                                      surface.incident_source_edges.end(),
+                                      edge) !=
+                                  surface.incident_source_edges.end());
+                        }
+                        CHECK(selected_incidence ==
+                              surface.incident_source_edges.size());
                         certified_corner_sources.push_back(
                             *surface.source_vertex);
                     }
