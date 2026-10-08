@@ -1816,11 +1816,31 @@ int main(int argc, char* argv[]) {
             lifecycle_path,
             std::move(*lifecycle_source.document),
             *initial_file.checkpoint};
-        const std::vector<part::MaterialEdgeReference>
+        std::vector<part::MaterialEdgeReference>
             authored_three{
                 *screenshot_edge,
                 isolated_secondary.reference,
                 *third_owner_edge};
+        // Direct Commands require canonical authored Edge order; Draft
+        // normalizes the user's click sequence before constructing them.
+        // A raw unsorted command must fail closed with no mutation.
+        const auto lifecycle_before_invalid =
+            lifecycle.document().revision();
+        CHECK(!std::is_sorted(
+            authored_three.begin(), authored_three.end()));
+        const auto noncanonical = lifecycle.execute(
+            application::CreateChamferFeatureCommand{
+                authored_three,
+                lifecycle.document().revision(),
+                core::LengthValue{1.0},
+                "Noncanonical input must fail"},
+            kernel);
+        CHECK(!noncanonical.ok());
+        CHECK(!noncanonical.changed);
+        CHECK(lifecycle.document().revision() ==
+              lifecycle_before_invalid);
+        CHECK(lifecycle.document().body().features.size() == 2U);
+        std::sort(authored_three.begin(), authored_three.end());
         const auto create_feature =
             lifecycle.execute(
                 application::CreateChamferFeatureCommand{
