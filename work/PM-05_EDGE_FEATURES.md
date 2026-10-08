@@ -799,4 +799,8 @@ PM-05F Owner acceptance attempt 2 on 2026-10-08 returned **FAIL** after the #296
 
 This is an acceptance-discovered D0/D1 amendment **within PM-05's existing accepted Feature semantics**, not authorization for PM-06, a topology-identity change, generic picker migration or CI policy changes. The remediation document classifies required reproductions and D2/D3 stop conditions. The final fresh exact-head FULL and explicit Owner manual Windows PASS remain required; previously recorded #1744 PASS does not close newly found defects.
 
+Owner additionally accepted on 2026-10-08 the bounded D2 `work/PM-05F_R2_UNIFIED_BODY_TOPOLOGY_D2.md`: the existing BodyStageTopologyCatalog and semantic Surface/Curve/Point reference model must apply coherently to all Part generators. R2-C is authorized to extend the common analytic Curve relationship rules to Revolve without a new durable identity scheme or schema. Existing Extrude and fail-closed rules remain normative; if the current address vocabulary proves insufficient, stop for a new versioned D2.
+
+The same Owner accepted the separate performance *direction* in `work/PART_RUNTIME_PERFORMANCE_EVIDENCE_DIRECTION.md`, which calls for benchmark-first stage-prefix, topology indexing and Viewer optimization. Runtime performance implementation, CI-05 and PM-06 are not activated by that direction.
+
 PM-05F remains active for R2 remediation and repeat Owner acceptance. PM-05 cannot close until the Owner explicitly reports PASS on the repaired exact candidate.
