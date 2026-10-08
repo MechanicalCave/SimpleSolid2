@@ -669,65 +669,86 @@ int main() {
         << " added=" << (complex_delta.added ? 1 : 0)
         << " elapsed_ms=" << delta_ms << '\n';
 
-    // R2-D concave pocket: a blind capsule Cut leaves an interior
-    // wall/floor corner. The same strict four-Edge semantic loop must give
-    // a real material-addition preview at the concave floor, while the
-    // untouched Body remains independent of the preview tessellation.
+    // PM-05F R2-D concave pocket: unlike the opening rim (a
+    // cross-producer Boolean Intersection), the bottom wall/floor seam is
+    // the Cut generator's own cap/side Curve. Select it via exact semantic
+    // producer + Surface-pair relation, never by XYZ or provider ordering.
     {
         const auto pocket =
             makeCapsuleCutPart(10.0);
-        const auto pocket_base =
+        const auto evaluated_pocket =
             part::evaluatePart(pocket.document, kernel);
-        CHECK(
-            pocket_base.body_status ==
-            part::BodyEvaluationStatus::up_to_date);
-        CHECK(pocket_base.features.size() == 2U);
+        CHECK(evaluated_pocket.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(evaluated_pocket.features.size() == 2U);
         const auto& pocket_cut =
-            pocket_base.features.back();
+            evaluated_pocket.features.back();
         CHECK(pocket_cut.result_solid != nullptr);
         CHECK(pocket_cut.result_topology);
         CHECK(pocket_cut.result_topology->complete());
 
-        const auto pocket_loops =
-            mixedBooleanLoops(pocket_cut);
-        CHECK(!pocket_loops.empty());
-        std::size_t applicable = 0U;
-        std::size_t volume_added = 0U;
-        for (const auto& pocket_loop :
-             pocket_loops) {
-            const auto candidate =
-                appendEdgeFeature(
-                    pocket.document,
-                    references(pocket_loop),
-                    kernel::EdgeFeatureOperation::fillet,
-                    1.0);
-            const auto evaluated =
-                part::evaluatePart(candidate, kernel);
-            if (evaluated.features.size() != 3U ||
-                evaluated.features.back().status !=
-                    part::FeatureEvaluationStatus::up_to_date) {
+        std::vector<part::MaterialEdgeReference> floor_edges;
+        std::size_t observed_cap_side = 0U;
+        for (const auto& curve :
+             pocket_cut.produced_curves) {
+            if (curve.address.producer_feature_id !=
+                    pocket.cut_id ||
+                curve.address.role !=
+                    part::FeatureCurveRoleKind::cap_side) {
                 continue;
             }
-            const auto& fillet =
-                evaluated.features.back();
-            CHECK(fillet.result_solid != nullptr);
-            const auto delta =
-                kernel.materialDifferencePreview(
-                    pocket_cut.result_solid,
-                    fillet.result_solid);
-            CHECK(delta.ok());
-            ++applicable;
-            if (delta.added) {
-                ++volume_added;
+            ++observed_cap_side;
+            if (curve.strict_edge_status !=
+                    kernel::ReferenceStatus::resolved ||
+                curve.current_edges.size() != 1U) {
+                continue;
+            }
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *pocket_cut.result_topology,
+                    curve.current_edges.front());
+            if (authored.ok()) {
+                floor_edges.push_back(*authored.reference);
             }
         }
+        std::sort(floor_edges.begin(), floor_edges.end());
+        floor_edges.erase(
+            std::unique(
+                floor_edges.begin(), floor_edges.end()),
+            floor_edges.end());
+
         std::cout
-            << "PM05F_R2_BLIND_POCKET_DELTA"
-            << " applicable_loops=" << applicable
-            << " material_additions=" << volume_added
+            << "PM05F_R2_POCKET_FLOOR_AUTHORED"
+            << " cap_side=" << observed_cap_side
+            << " authorable=" << floor_edges.size()
             << '\n';
-        CHECK(applicable > 0U);
-        CHECK(volume_added > 0U);
+        CHECK(floor_edges.size() == 4U);
+        const auto candidate =
+            appendEdgeFeature(
+                pocket.document,
+                floor_edges,
+                kernel::EdgeFeatureOperation::fillet,
+                1.0);
+        const auto after =
+            part::evaluatePart(candidate, kernel);
+        CHECK(after.features.size() == 3U);
+        const auto& floor_fillet =
+            after.features.back();
+        CHECK(floor_fillet.status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(floor_fillet.result_solid != nullptr);
+        const auto delta =
+            kernel.materialDifferencePreview(
+                pocket_cut.result_solid,
+                floor_fillet.result_solid);
+        CHECK(delta.ok());
+        CHECK(delta.added.has_value());
+        CHECK(delta.added->valid());
+        std::cout
+            << "PM05F_R2_CONCAVE_FLOOR_DELTA"
+            << " removed=" << (delta.removed ? 1 : 0)
+            << " added=" << (delta.added ? 1 : 0)
+            << '\n';
     }
 
     // Old-project analogue: first Chamfer an unrelated exterior Edge, then
