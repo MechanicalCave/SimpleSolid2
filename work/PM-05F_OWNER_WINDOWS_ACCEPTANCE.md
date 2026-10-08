@@ -1,6 +1,6 @@
 # PM-05F — Owner Windows Acceptance
 
-**Status:** READY FOR OWNER RETEST — FINAL AUTOMATED PASS
+**Status:** OWNER ACCEPTANCE ATTEMPT 2 FAIL — R2 REMEDIATION ACTIVE
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
 **Date prepared:** 2026-10-07
@@ -41,6 +41,22 @@ Automated regressions now prove:
 - no relaxation of the existing tangent-chain input-contour guard.
 
 A repeat Owner Windows test is now required on `main` `f5570b3bcde458670943718e78cdf4a7a77667ea`. The minimum remediation-focused retest is: adjacent 2-Edge Fillet on a cube, trihedral 3-Edge Fillet, additional multi-Edge cube selections, a curved/circular material Edge, and mixed straight/curved generated-Edge Fillet after an unrelated Chamfer. The full acceptance workflow below remains the closure authority.
+
+## Owner Windows acceptance attempt 2 — 2026-10-08 — FAIL
+
+The Owner repeated manual testing after the PR #296 remediation on the subsequent unmodified-runtime main candidate (baseline `b0f6e148c25027aa7f6cbf5a6a33250685d7591c`). Behavior improved, but the following acceptance blockers were observed:
+
+1. Fillet/Chamfer preview visually colors/highlights the entire Body instead of the changed material volume. Convex removed material should be orange, concave added material blue, while unmodified Body remains neutral.
+2. Simple-box Chamfer is acceptable; a Fillet on the three Edges sharing one cube vertex can make the *entire Body disappear after Finish*, despite preview being ready.
+3. Fillet/Chamfer cannot even pick normal Edges on whole/partial Revolve Bodies.
+4. Existing Fillet/Chamfer enters Edit mode, but existing Edges cannot be deselected and additional Edges cannot be selected.
+5. Selection of certain visible curved Edges is inaccurate, particularly a ring Edge on revolved/cylindrical geometry (Owner screenshot).
+
+An independent code audit additionally confirmed a `tool_stage` gate contradiction in the native Viewer and identified deflection/projection/triangulated visibility and semantically rejected Edge candidates as possible sources of issue 5. Those mechanisms must not be conflated with proven runtime root causes.
+
+Owner accepted a separate bounded R2 acceptance-remediation plan on 2026-10-08; authority and stop conditions are in `work/PM-05F_R2_OWNER_ACCEPTANCE_REMEDIATION.md`. The prior Windows FULL #1744 remains correct for its exact earlier candidate but **does not accept** the newly reported behavior. No new automated or manual PASS has been asserted for R2.
+
+**Repeat acceptance gate:** after bounded R2 correction, run a new exact-head Windows FULL, and repeat this entire Owner workflow plus dedicated three-Edge corner, Revolve, local preview, Edit-stage cursor-picking and curved/silhouette selection tests. Only an explicit Owner PASS closes PM-05.
 
 ## Preconditions
 
@@ -115,7 +131,7 @@ A repeat Owner Windows test is now required on `main` `f5570b3bcde458670943718e7
 
 ## Result
 
-Owner result: **FAIL — remediation required before repeat acceptance**.
+Owner result: **ATTEMPT 1 FAIL; ATTEMPT 2 FAIL — R2 remediation required before another repeat acceptance**.
 
 This acceptance attempt has returned PM-05F to bounded remediation. After remediation, the exact replacement candidate must pass a fresh Windows FULL and the Owner workflow must be repeated. Only a later explicit Owner PASS closes PM-05.
 
