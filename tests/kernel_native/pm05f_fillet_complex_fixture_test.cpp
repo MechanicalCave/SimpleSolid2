@@ -683,7 +683,7 @@ int main() {
                 << " role="
                 << static_cast<int>(address.role)
                 << " producer="
-                << address.producer_feature_id.value()
+                << address.producer_feature_id.serialized()
                 << " found="
                 << (found != chamfer_evaluation
                                   .current_curve_references.end()
