@@ -643,62 +643,68 @@ int main(int argc, char* argv[]) {
                 a.x,
                 mid_y * radius / mid_len,
                 mid_z * radius / mid_len};
-            const viewer::CameraState close_view{
-                viewer::Point3{100.0, 0.0, 0.0},
-                true_mid,
-                viewer::Vec3{0.0, 0.0, 1.0},
-                viewer::CameraProjection::orthographic,
-                8.0};
-            CHECK(viewport->setCameraState(close_view));
-            QApplication::processEvents();
-            const auto sa =
-                viewport->projectWorldPoint(
-                    {a.x, a.y, a.z});
-            const auto sb =
-                viewport->projectWorldPoint(
-                    {b.x, b.y, b.z});
-            const auto sm =
-                viewport->projectWorldPoint(true_mid);
-            CHECK(sa && sb && sm);
-            const double dx = sb->x - sa->x;
-            const double dy = sb->y - sa->y;
-            const double squared = dx * dx + dy * dy;
-            CHECK(squared > 0.0);
-            const double t = std::clamp(
-                ((sm->x - sa->x) * dx +
-                 (sm->y - sa->y) * dy) / squared,
-                0.0, 1.0);
-            const double screen_gap = std::hypot(
-                sm->x - sa->x - t * dx,
-                sm->y - sa->y - t * dy);
-            max_screen_gap =
-                std::max(max_screen_gap, screen_gap);
-            const auto q =
-                viewport->queryBodyTopology(
-                    *sm,
-                    viewer::BodyTopologyPickFilter{
-                        false, true, false});
-            CHECK(q.valid() && q.completed);
-            CHECK(q.generation.valid());
-            const auto expected =
-                std::any_of(
-                    q.candidates.begin(),
-                    q.candidates.end(),
-                    [](const auto& candidate) {
-                        return candidate.kind ==
-                            viewer::BodyTopologyPresentationKind::edge;
-                    });
-            ++testable_curved_segments;
-            if (!expected) {
-                ++missed_curved_segments;
+            // Verify both a tight view and a much tighter view against
+            // the *production* OCCT edge path, not a densely hand-built
+            // synthetic ring. Pixel-distance evidence never becomes CAD
+            // identity; visible, authorable material Edges must hit.
+            for (const double view_height : {8.0, 2.0}) {
+                const viewer::CameraState close_view{
+                    viewer::Point3{100.0, 0.0, 0.0},
+                    true_mid,
+                    viewer::Vec3{0.0, 0.0, 1.0},
+                    viewer::CameraProjection::orthographic,
+                    view_height};
+                CHECK(viewport->setCameraState(close_view));
+                QApplication::processEvents();
+                const auto sa =
+                    viewport->projectWorldPoint(
+                        {a.x, a.y, a.z});
+                const auto sb =
+                    viewport->projectWorldPoint(
+                        {b.x, b.y, b.z});
+                const auto sm =
+                    viewport->projectWorldPoint(true_mid);
+                CHECK(sa && sb && sm);
+                const double dx = sb->x - sa->x;
+                const double dy = sb->y - sa->y;
+                const double squared = dx * dx + dy * dy;
+                CHECK(squared > 0.0);
+                const double t = std::clamp(
+                    ((sm->x - sa->x) * dx +
+                     (sm->y - sa->y) * dy) / squared,
+                    0.0, 1.0);
+                const double screen_gap = std::hypot(
+                    sm->x - sa->x - t * dx,
+                    sm->y - sa->y - t * dy);
+                max_screen_gap =
+                    std::max(max_screen_gap, screen_gap);
+                const auto q =
+                    viewport->queryBodyTopology(
+                        *sm,
+                        viewer::BodyTopologyPickFilter{
+                            false, true, false});
+                CHECK(q.valid() && q.completed);
+                CHECK(q.generation.valid());
+                const auto expected =
+                    std::any_of(
+                        q.candidates.begin(),
+                        q.candidates.end(),
+                        [](const auto& candidate) {
+                            return candidate.kind ==
+                                viewer::BodyTopologyPresentationKind::edge;
+                        });
+                ++testable_curved_segments;
+                if (!expected) {
+                    ++missed_curved_segments;
+                }
+                std::cerr
+                    << "PM05F_R2_HIGH_ZOOM_CURVE"
+                    << " scale=" << view_height
+                    << " deflection_gap_pixels=" << screen_gap
+                    << " edge_found=" << expected
+                    << " samples=" << edge.points.size()
+                    << '\n';
             }
-            std::cerr
-                << "PM05F_R2_HIGH_ZOOM_CURVE"
-                << " deflection_gap_pixels="
-                << screen_gap
-                << " edge_found=" << expected
-                << " samples=" << edge.points.size()
-                << '\n';
             break;
         }
         CHECK(testable_curved_segments > 0U);
