@@ -4414,8 +4414,14 @@ public:
         result.generation =
             body_scene_.generation;
 
+        // An Edge Feature Edit presents the exact predecessor Body as
+        // tool_stage. Native hit-testing must still return generation-bound
+        // transient candidates; the controller is the authority for stage
+        // and semantic authoring. Diagnostic prefixes remain non-pickable.
         if (body_scene_.purpose !=
-            viewer::BodyScenePurpose::current_body) {
+                viewer::BodyScenePurpose::current_body &&
+            body_scene_.purpose !=
+                viewer::BodyScenePurpose::tool_stage) {
             return result;
         }
 
