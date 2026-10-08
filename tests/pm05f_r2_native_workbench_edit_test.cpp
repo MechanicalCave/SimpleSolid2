@@ -1536,6 +1536,154 @@ int main(int argc, char* argv[]) {
             << "PM05F_R2_PART008_GUI_FINISH_PASS"
             << std::endl;
 
+        // The Owner has PASS for this Part008 Fillet R2/Finish.
+        // Independently cover the complementary equal-distance Chamfer
+        // on the *same original two-Extrude* Body stage. Using a fresh
+        // session prevents the new Chamfer from accidentally consuming
+        // the committed Fillet stage above.
+        auto chamfer_loaded = crash_store.load(crash_fixture);
+        CHECK(chamfer_loaded.ok());
+        application::DocumentSession chamfer_session{
+            {}, std::move(*chamfer_loaded.document)};
+        const auto chamfer_before_revision =
+            chamfer_session.document().revision();
+        auto chamfer_draft =
+            application::ChamferDraft::beginCreate(
+                chamfer_session,
+                {*screenshot_edge, isolated_secondary.reference});
+        CHECK(chamfer_draft);
+        CHECK(chamfer_draft->setDistance(core::LengthValue{1.0}));
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_DRAFT_BEGIN"
+            << std::endl;
+        const auto chamfer_eval =
+            chamfer_session.evaluateChamferDraft(
+                *chamfer_draft, kernel);
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_DRAFT_END"
+            << " status=" << static_cast<int>(chamfer_eval.status)
+            << " removed=" << (chamfer_eval.preview_mesh ? 1 : 0)
+            << " added="
+            << (chamfer_eval.preview_added_mesh ? 1 : 0)
+            << std::endl;
+        CHECK(chamfer_eval.committable());
+        CHECK(chamfer_eval.preview_mesh.has_value());
+        CHECK(chamfer_eval.preview_added_mesh.has_value());
+        CHECK(chamfer_session.document().revision() ==
+              chamfer_before_revision);
+        CHECK(chamfer_eval.body_solid);
+        const auto chamfer_presentation =
+            kernel.bodyPresentation(chamfer_eval.body_solid);
+        CHECK(chamfer_presentation.ok());
+
+        // Exercise the real Qt/OCCT Chamfer picker and Finish, rather
+        // than passing a fabricated PresentationToken or issuing a
+        // direct persistence command in lieu of the Owner interaction.
+        CHECK(workbench.activateDocument(&chamfer_session, {}));
+        QApplication::processEvents();
+        CHECK(viewport->setViewStyle(
+            viewer::ViewStyle::shaded_with_edges));
+        auto chamfer_reply = workbench.submitCadInput(
+            "CHAMFER", workbench.cadInputContextGeneration());
+        CHECK(chamfer_reply.accepted);
+        chamfer_reply = workbench.lockCadDynamicInputField(
+            0U, "1", workbench.cadInputContextGeneration());
+        CHECK(chamfer_reply.accepted);
+        bool chamfer_first_selected = false;
+        for (const auto orientation : {
+                 viewer::StandardView::top_front_right,
+                 viewer::StandardView::top_front_left,
+                 viewer::StandardView::top_back_left,
+                 viewer::StandardView::top_back_right,
+                 viewer::StandardView::bottom_front_left,
+                 viewer::StandardView::bottom_back_right}) {
+            CHECK(viewport->setStandardView(orientation));
+            viewport->fitAll();
+            QApplication::processEvents();
+            for (std::size_t k = 1U;
+                 k < screenshot_points.size() &&
+                 !chamfer_first_selected; ++k) {
+                const auto& a = screenshot_points[k - 1U];
+                const auto& b = screenshot_points[k];
+                const viewer::Point3 midpoint{
+                    (a.x + b.x) / 2.0,
+                    (a.y + b.y) / 2.0,
+                    (a.z + b.z) / 2.0};
+                if (nativeClick(*viewport, midpoint)) {
+                    chamfer_first_selected = selectedCount(*label, 1);
+                }
+            }
+            if (chamfer_first_selected) break;
+        }
+        CHECK(chamfer_first_selected);
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_ONE_EDGE"
+            << std::endl;
+
+        bool chamfer_two_selected = false;
+        for (const auto orientation : {
+                 viewer::StandardView::top_front_right,
+                 viewer::StandardView::top_front_left,
+                 viewer::StandardView::top_back_left,
+                 viewer::StandardView::top_back_right,
+                 viewer::StandardView::bottom_front_left,
+                 viewer::StandardView::bottom_back_right}) {
+            CHECK(viewport->setStandardView(orientation));
+            viewport->fitAll();
+            QApplication::processEvents();
+            for (std::size_t k = 1U;
+                 k < isolated_secondary.points.size() &&
+                 !chamfer_two_selected; ++k) {
+                const auto& a = isolated_secondary.points[k - 1U];
+                const auto& b = isolated_secondary.points[k];
+                const viewer::Point3 midpoint{
+                    (a.x + b.x) / 2.0,
+                    (a.y + b.y) / 2.0,
+                    (a.z + b.z) / 2.0};
+                if (!nativeClick(*viewport, midpoint)) {
+                    continue;
+                }
+                chamfer_two_selected = selectedCount(*label, 2);
+                if (!chamfer_two_selected &&
+                    !selectedCount(*label, 1)) {
+                    // The click toggled OFF the first material Edge.
+                    // Do not claim a 2-Edge successful native pick.
+                    break;
+                }
+            }
+            if (chamfer_two_selected ||
+                !selectedCount(*label, 1)) break;
+        }
+        CHECK(chamfer_two_selected);
+        CHECK(finish->isEnabled());
+        CHECK(viewport->runtimeDiagnostics().solid_preview_displayed);
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_FINISH_BEGIN"
+            << std::endl;
+        finish->click();
+        QApplication::processEvents();
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_FINISH_RETURN"
+            << std::endl;
+        CHECK(chamfer_session.document().revision() !=
+              chamfer_before_revision);
+        CHECK(chamfer_session.document().body()
+                  .features.size() == 3U);
+        const auto* persisted_chamfer =
+            std::get_if<part::ChamferFeature>(
+                &chamfer_session.document().body()
+                    .features.back().definition);
+        CHECK(persisted_chamfer != nullptr);
+        CHECK(persisted_chamfer->edges.size() == 2U);
+        const auto chamfer_committed =
+            part::evaluatePart(chamfer_session.document(), kernel);
+        CHECK(chamfer_committed.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(viewport->runtimeDiagnostics().solid_committed_displayed);
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_FINISH_PASS"
+            << std::endl;
+
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
         CHECK(workbench.activateDocument(&session, {}));
