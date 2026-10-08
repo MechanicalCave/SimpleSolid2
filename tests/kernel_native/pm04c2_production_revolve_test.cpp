@@ -278,6 +278,136 @@ part::PartDocument makePartRevolve(
     return std::move(*restored.document);
 }
 
+part::PartDocument makeExtrudeCylinder() {
+    auto source =
+        part::PartDocument::create(
+            core::DocumentId::generate());
+    application::DocumentSession session{
+        {},
+        std::move(source)};
+
+    const auto sketch =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+    CHECK(sketch.ok() && sketch.sketch_id);
+    const auto circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                *sketch.sketch_id,
+                {0.0, 0.0},
+                10.0,
+                sketch::EntityRole::regular});
+    CHECK(circle.ok());
+    const auto* model =
+        session.document().findSketch(
+            *sketch.sketch_id);
+    CHECK(model != nullptr);
+    const auto regions =
+        sketch::analyzeRegions(model->model);
+    CHECK(regions.complete());
+    CHECK(regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            regions.regions.front());
+    CHECK(intent.has_value());
+    const auto profile =
+        session.execute(
+            application::CreateProfileCommand{
+                *sketch.sketch_id,
+                session.document().revision(),
+                *intent});
+    CHECK(profile.ok() && profile.profile_id);
+
+    auto state = session.document().state();
+    const auto id = state.body.next_feature_id.allocate();
+    CHECK(id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *id,
+            "ExtrudeCylinder",
+            false,
+            part::ExtrudeFeature{
+                *profile.profile_id,
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0},
+                    false}}});
+    auto restored = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(state),
+        session.document().revision());
+    CHECK(restored.ok());
+    return std::move(*restored.document);
+}
+
+std::optional<part::MaterialEdgeReference>
+firstAuthorableCircle(
+    const part::BodyStageTopologyCatalog& catalog) {
+    for (const auto& edge : catalog.edges) {
+        if (edge.curve_kind !=
+                kernel::CurveKind::circle) {
+            continue;
+        }
+        const auto authored =
+            part::authorMaterialEdgeReference(
+                catalog, edge.runtime_token);
+        if (authored.ok()) {
+            return authored.reference;
+        }
+    }
+    return std::nullopt;
+}
+
+void verifyCylinderEdgeFeature(
+    const part::PartDocument& source,
+    const part::MaterialEdgeReference& edge,
+    kernel::EdgeFeatureOperation operation,
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    auto state = source.state();
+    const auto id = state.body.next_feature_id.allocate();
+    CHECK(id.has_value());
+    part::PartFeature feature;
+    feature.id = *id;
+    feature.name = "CircularBoundary";
+    if (operation ==
+        kernel::EdgeFeatureOperation::fillet) {
+        feature.definition = part::FilletFeature{
+            {edge}, core::LengthValue{1.0}};
+    } else {
+        feature.definition = part::ChamferFeature{
+            {edge}, core::LengthValue{1.0}};
+    }
+    state.body.features.push_back(
+        std::move(feature));
+    auto restored = part::PartDocument::restore(
+        source.documentId(),
+        std::move(state),
+        source.revision());
+    CHECK(restored.ok());
+    const auto evaluated =
+        part::evaluatePart(
+            *restored.document, kernel);
+    CHECK(
+        evaluated.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluated.features.size() == 2U);
+    CHECK(
+        evaluated.features.back().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(evaluated.current_topology.has_value());
+    CHECK(evaluated.current_topology->complete());
+    // A new evaluation has no authority to rely on a previous provider
+    // session/preview identity.
+    const auto rebuilt =
+        part::evaluatePart(
+            *restored.document, kernel);
+    CHECK(rebuilt.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(rebuilt.current_topology.has_value());
+    CHECK(rebuilt.current_topology->complete());
+}
+
 std::size_t countSurfaceRole(
     const part::FeatureEvaluation& feature,
     part::FeatureSurfaceRoleKind role) {
@@ -618,6 +748,47 @@ int main() {
             << '\n';
         CHECK(candidate_edges > 0U);
         CHECK(authorable_edges > 0U);
+        const auto circle =
+            firstAuthorableCircle(
+                *feature.result_topology);
+        CHECK(circle.has_value());
+        verifyCylinderEdgeFeature(
+            document,
+            *circle,
+            kernel::EdgeFeatureOperation::fillet,
+            kernel);
+        verifyCylinderEdgeFeature(
+            document,
+            *circle,
+            kernel::EdgeFeatureOperation::chamfer,
+            kernel);
+    }
+
+    // Mathematically equivalent cylinder dimensions through an Extrude
+    // circle Profile. Both generators must use one strict material-Edge
+    // authoring/resolution and Fillet/Chamfer contract.
+    {
+        const auto extrude = makeExtrudeCylinder();
+        const auto evaluated =
+            part::evaluatePart(extrude, kernel);
+        CHECK(evaluated.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(evaluated.current_topology.has_value());
+        CHECK(evaluated.current_topology->complete());
+        const auto circle =
+            firstAuthorableCircle(
+                *evaluated.current_topology);
+        CHECK(circle.has_value());
+        verifyCylinderEdgeFeature(
+            extrude,
+            *circle,
+            kernel::EdgeFeatureOperation::fillet,
+            kernel);
+        verifyCylinderEdgeFeature(
+            extrude,
+            *circle,
+            kernel::EdgeFeatureOperation::chamfer,
+            kernel);
     }
 
     // PM-05F R2-C: the exact same shared semantic Curve/Edge authoring
