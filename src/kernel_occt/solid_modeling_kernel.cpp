@@ -3019,35 +3019,62 @@ template <typename Operation>
 
     trace.gate = 2;
     std::vector<std::vector<TopoDS_Face>>
-        faces_per_source(
-            selected.size());
-    for (const auto& face :
-         edge_generated_faces) {
-        std::optional<std::size_t>
-            owner;
+        faces_per_source(selected.size());
+    if constexpr (requires {
+                      operation.exactSourceEdgePartition();
+                  }) {
+        // Only D2-B's private, separately generated and audited
+        // independent-edge history is allowed to retain its exact owner.
+        // Generic contour Generated(edge) remains governed by the
+        // adjacency-based ownership recovery below.
+        if (!operation.exactSourceEdgePartition()) return false;
         for (std::size_t index = 0U;
-             index < selected.size();
-             ++index) {
-            if (!generatedFaceMatchesSourceEdge(
-                    runtime,
-                    upstream,
-                    selected[index],
-                    face)) {
-                continue;
+             index < selected.size(); ++index) {
+            for (const auto& face : facesFromShapeList(
+                     operation.Generated(selected[index].edge))) {
+                if (!inventoryFaceToken(runtime, face) ||
+                    faceTrackedBySurface(runtime, face)) {
+                    return false;
+                }
+                for (const auto& prior : faces_per_source) {
+                    if (std::any_of(
+                            prior.begin(), prior.end(),
+                            [&face](const TopoDS_Face& f) {
+                                return f.IsSame(face);
+                            })) {
+                        return false;
+                    }
+                }
+                appendUniqueFaceCandidate(
+                    faces_per_source[index], face);
             }
-            if (owner) {
-                // More than one semantic source Edge fits this Face: P2 is
-                // ambiguous and must not use provider order as a tie-break.
-                return false;
-            }
-            owner = index;
+            if (faces_per_source[index].empty()) return false;
         }
-        if (!owner) {
+        std::size_t certified_count = 0U;
+        for (const auto& faces : faces_per_source) {
+            certified_count += faces.size();
+        }
+        if (certified_count != edge_generated_faces.size()) {
             return false;
         }
-        appendUniqueFaceCandidate(
-            faces_per_source[*owner],
-            face);
+    } else {
+        for (const auto& face : edge_generated_faces) {
+            std::optional<std::size_t> owner;
+            for (std::size_t index = 0U;
+                 index < selected.size(); ++index) {
+                if (!generatedFaceMatchesSourceEdge(
+                        runtime, upstream, selected[index], face)) {
+                    continue;
+                }
+                if (owner) {
+                    return false;
+                }
+                owner = index;
+            }
+            if (!owner) return false;
+            appendUniqueFaceCandidate(
+                faces_per_source[*owner], face);
+        }
     }
     trace.gate = 3;
 
@@ -4623,6 +4650,11 @@ struct PlanarMiterHistory final {
     };
     std::vector<Entry> entries;
     TopTools_ListOfShape empty;
+    bool partition_certified{false};
+
+    [[nodiscard]] bool exactSourceEdgePartition() const noexcept {
+        return partition_certified;
+    }
 
     Entry& entry(const TopoDS_Shape& source) {
         for (auto& value : entries) {
@@ -5019,6 +5051,7 @@ finishPlanarMiterFallback(
 
     trace.gate = 9;
     PlanarMiterHistory history;
+    history.partition_certified = true; // Only after full Face oracle.
     for (std::size_t j = 0U; j < original_faces.size(); ++j) {
         history.recordModified(original_faces[j], source_faces[j]);
     }
