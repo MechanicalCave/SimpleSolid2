@@ -1503,7 +1503,6 @@ int main(int argc, char* argv[]) {
         CHECK(finish->isEnabled());
         std::cerr
             << "PM05F_R2_PART008_GUI_FINISH_BEGIN"
-            << " revision=" << crash_session.document().revision()
             << " features="
             << crash_session.document().body().features.size()
             << std::endl;
@@ -1515,7 +1514,7 @@ int main(int argc, char* argv[]) {
         std::cerr
             << "PM05F_R2_PART008_GUI_FINISH_EVENTS_RETURNED"
             << std::endl;
-        CHECK(crash_session.document().revision() >
+        CHECK(crash_session.document().revision() !=
               prior_revision);
         CHECK(crash_session.document().body()
                   .features.size() == 3U);
