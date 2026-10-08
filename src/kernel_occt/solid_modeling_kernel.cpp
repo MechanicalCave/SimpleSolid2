@@ -4620,6 +4620,9 @@ void probeChamferPlanarMiter(
     std::vector<TopoDS_Shape>
         single_chamfer_shapes(selected.size());
     std::vector<TopoDS_Vertex> unique_vertices;
+    const auto original_faces = facesFromShape(upstream.solid);
+    std::vector<std::vector<std::vector<TopoDS_Face>>>
+        single_source_face_history(selected.size());
 
     for (std::size_t i = 0U; i < selected.size(); ++i) {
         const auto& edge = selected[i].edge;
@@ -4677,6 +4680,10 @@ void probeChamferPlanarMiter(
             BRepCheck_Analyzer{alone.Shape()}.IsValid();
         if (valid) {
             single_chamfer_shapes[i] = alone.Shape();
+            for (const auto& source : original_faces) {
+                single_source_face_history[i].push_back(
+                    descendantFaces(alone, source, alone.Shape(), true));
+            }
         }
         const auto generated =
             built
@@ -4718,6 +4725,9 @@ void probeChamferPlanarMiter(
         std::size_t source_index;
         std::vector<TopoDS_Face> generated_strip_descendants;
         std::vector<TopoDS_Face> all_delta_faces;
+        // Exact upstream Surface ancestry routed through the independent
+        // Chamfer and its signed-delta tool input, never plane proximity.
+        std::vector<std::vector<TopoDS_Face>> source_face_history;
     };
     std::vector<ProbeSignedDelta> remove_deltas;
     std::vector<ProbeSignedDelta> add_deltas;
@@ -4747,6 +4757,22 @@ void probeChamferPlanarMiter(
             deltas_complete = false;
             break;
         }
+        const auto mapSourceThroughDelta =
+            [&](auto& delta) {
+                std::vector<std::vector<TopoDS_Face>> claims;
+                for (const auto& via_single :
+                     single_source_face_history[i]) {
+                    std::vector<TopoDS_Face> descendants;
+                    for (const auto& prior : via_single) {
+                        for (const auto& after : descendantFaces(
+                                 delta, prior, delta.Shape(), true)) {
+                            appendUniqueFaceCandidate(descendants, after);
+                        }
+                    }
+                    claims.push_back(std::move(descendants));
+                }
+                return claims;
+            };
         std::size_t removed_strip_faces = 0U;
         std::size_t added_strip_faces = 0U;
         if (removed == VolumePresence::positive) {
@@ -4760,7 +4786,8 @@ void probeChamferPlanarMiter(
             removed_strip_faces = strips.size();
             remove_deltas.push_back(
                 {remove.Shape(), i, std::move(strips),
-                 facesFromShape(remove.Shape())});
+                 facesFromShape(remove.Shape()),
+                 mapSourceThroughDelta(remove)});
         }
         if (added == VolumePresence::positive) {
             auto strips = single_strip_faces[i]
@@ -4773,7 +4800,8 @@ void probeChamferPlanarMiter(
             added_strip_faces = strips.size();
             add_deltas.push_back(
                 {add.Shape(), i, std::move(strips),
-                 facesFromShape(add.Shape())});
+                 facesFromShape(add.Shape()),
+                 mapSourceThroughDelta(add)});
         }
         std::cerr
             << "PM05F_R2_MITER_DELTA index=" << i
@@ -4791,7 +4819,6 @@ void probeChamferPlanarMiter(
         << " added_parts=" << add_deltas.size() << "\n";
     if (deltas_complete) {
         std::vector<TopoDS_Shape> policy_candidates;
-        const auto original_faces = facesFromShape(upstream.solid);
         for (const bool remove_last : {true, false}) {
             TopoDS_Shape candidate = upstream.solid;
             bool built = true;
@@ -4812,6 +4839,8 @@ void probeChamferPlanarMiter(
                 authored_strip_descendants(selected.size());
             std::vector<std::vector<TopoDS_Face>>
                 delta_face_descendants(selected.size());
+            std::vector<std::vector<TopoDS_Face>>
+                tool_source_face_descendants(original_faces.size());
             const auto advance_inherited = [&](auto& operation) {
                 for (const bool include_generated : {false, true}) {
                     auto& claims =
@@ -4848,6 +4877,30 @@ void probeChamferPlanarMiter(
                         }
                     }
                     descendants = std::move(next);
+                }
+                for (auto& descendants : tool_source_face_descendants) {
+                    std::vector<TopoDS_Face> next;
+                    for (const auto& prior : descendants) {
+                        for (const auto& after : descendantFaces(
+                                 operation, prior,
+                                 operation.Shape(), true)) {
+                            appendUniqueFaceCandidate(next, after);
+                        }
+                    }
+                    descendants = std::move(next);
+                }
+                for (std::size_t owner = 0U;
+                     owner < delta.source_face_history.size();
+                     ++owner) {
+                    for (const auto& prior :
+                         delta.source_face_history[owner]) {
+                        for (const auto& after : descendantFaces(
+                                 operation, prior,
+                                 operation.Shape(), true)) {
+                            appendUniqueFaceCandidate(
+                                tool_source_face_descendants[owner], after);
+                        }
+                    }
                 }
                 for (auto& descendants : delta_face_descendants) {
                     std::vector<TopoDS_Face> next;
@@ -5297,6 +5350,30 @@ void probeChamferPlanarMiter(
                             ++expanded_history_owners;
                         }
                     }
+                    std::size_t tool_source_history_owners = 0U;
+                    std::string tool_source_history_mask;
+                    for (const auto& claim :
+                         tool_source_face_descendants) {
+                        const bool claimed = std::any_of(
+                            claim.begin(), claim.end(),
+                            [&face](const TopoDS_Face& prior) {
+                                return prior.IsSame(face);
+                            });
+                        tool_source_history_mask +=
+                            claimed ? '1' : '0';
+                        if (claimed) ++tool_source_history_owners;
+                    }
+                    std::cerr
+                        << "PM05F_R2_D2B_UPSTREAM_TOOL_HISTORY"
+                        << " policy="
+                        << (remove_last ? "remove_wins" : "add_wins")
+                        << " distance=" << distance
+                        << " index=" << unclaimed_index
+                        << " source_face_owners="
+                        << tool_source_history_owners
+                        << " source_mask="
+                        << tool_source_history_mask
+                        << "\n";
                     std::size_t matching_upstream_planes = 0U;
                     for (const auto& original : original_faces) {
                         if (planarFacesSameDomain(face, original)) {
