@@ -663,6 +663,46 @@ int main() {
 
     const auto wanted_addresses =
         addresses(loop);
+
+    // The unrelated exterior Chamfer must not erase or reclassify the mixed
+    // capsule Curve meanings. Prove the exact semantic Cut relations survive
+    // in the adjacent stage as two lines + two circles before re-authoring.
+    std::size_t continued_lines = 0U;
+    std::size_t continued_circles = 0U;
+    for (const auto& address : wanted_addresses) {
+        const auto found =
+            std::find_if(
+                chamfer_evaluation
+                    .current_curve_references.begin(),
+                chamfer_evaluation
+                    .current_curve_references.end(),
+                [&address](const auto& reference) {
+                    return reference.address == address;
+                });
+        CHECK(
+            found != chamfer_evaluation
+                         .current_curve_references.end());
+        CHECK(
+            found->status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(
+            found->strict_edge_status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(found->current_edges.size() == 1U);
+        if (found->curve_kind ==
+            kernel::CurveKind::line) {
+            ++continued_lines;
+        } else if (
+            found->curve_kind ==
+            kernel::CurveKind::circle) {
+            ++continued_circles;
+        } else {
+            CHECK(false);
+        }
+    }
+    CHECK(continued_lines == 2U);
+    CHECK(continued_circles == 2U);
+
     const auto reauthored =
         reauthorCurveAddresses(
             *chamfer.result_topology,
@@ -756,6 +796,8 @@ int main() {
         << " capsule_loops=2"
         << " mixed_edges=4"
         << " chamfer_then_fillet=1"
+        << " continued_lines=2"
+        << " continued_circles=2"
         << " xyz_identity=0\n";
     return EXIT_SUCCESS;
 }
