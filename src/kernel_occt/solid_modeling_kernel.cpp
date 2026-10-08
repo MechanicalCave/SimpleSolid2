@@ -4699,35 +4699,66 @@ void probeChamferPlanarMiter(
             << "\n";
     }
 
-    // Pair oracle: prove whether the two adjacent junctions can each be
-    // constructed independently, and distinguish contour interaction.
-    for (std::size_t i = 0U; i < selected.size(); ++i) {
-        for (std::size_t j = i + 1U; j < selected.size(); ++j) {
-            BRepFilletAPI_MakeChamfer pair{upstream.solid};
-            pair.Add(distance, selected[i].edge);
-            pair.Add(distance, selected[j].edge);
-            pair.Build();
-            const bool built =
-                pair.IsDone() && !pair.Shape().IsNull();
-            const bool valid =
-                built &&
-                BRepCheck_Analyzer{pair.Shape()}.IsValid();
-            const bool changed =
-                valid &&
-                !upstreamExteriorUnchanged(
-                    pair, upstream.solid, pair.Shape());
-            std::cerr
-                << "PM05F_R2_MITER_PAIR edge0=" << i
-                << " edge1=" << j
-                << " built=" << built
-                << " valid=" << valid
-                << " changed=" << changed
-                << " faces="
-                << (built
-                    ? countUniqueSubshapes(
-                        pair.Shape(), TopAbs_FACE)
-                    : 0U)
-                << "\n";
+    // Pair oracle: probe both registration orders without changing the
+    // authored Edge set, at the previously reproduced three distances.
+    for (const double scale : {1.0, 0.5, 0.25}) {
+        const double pair_distance = distance * scale;
+        for (std::size_t i = 0U; i < selected.size(); ++i) {
+            for (std::size_t j = i + 1U; j < selected.size(); ++j) {
+                for (const bool reverse : {false, true}) {
+                    const auto first = reverse ? j : i;
+                    const auto second = reverse ? i : j;
+                    BRepFilletAPI_MakeChamfer pair{upstream.solid};
+                    pair.Add(pair_distance, selected[first].edge);
+                    pair.Add(pair_distance, selected[second].edge);
+                    pair.Build();
+                    const bool built =
+                        pair.IsDone() && !pair.Shape().IsNull();
+                    const bool valid =
+                        built &&
+                        BRepCheck_Analyzer{pair.Shape()}.IsValid();
+                    const bool changed =
+                        valid &&
+                        !upstreamExteriorUnchanged(
+                            pair, upstream.solid, pair.Shape());
+                    std::size_t bad_faces = 0U;
+                    std::size_t bad_wires = 0U;
+                    if (built && !valid) {
+                        for (TopExp_Explorer it{
+                                 pair.Shape(), TopAbs_FACE};
+                             it.More(); it.Next()) {
+                            if (!BRepCheck_Analyzer{
+                                    it.Current()}.IsValid()) {
+                                ++bad_faces;
+                            }
+                        }
+                        for (TopExp_Explorer it{
+                                 pair.Shape(), TopAbs_WIRE};
+                             it.More(); it.Next()) {
+                            if (!BRepCheck_Analyzer{
+                                    it.Current()}.IsValid()) {
+                                ++bad_wires;
+                            }
+                        }
+                    }
+                    std::cerr
+                        << "PM05F_R2_MITER_PAIR"
+                        << " first=" << first
+                        << " second=" << second
+                        << " distance=" << pair_distance
+                        << " built=" << built
+                        << " valid=" << valid
+                        << " changed=" << changed
+                        << " faces="
+                        << (built
+                            ? countUniqueSubshapes(
+                                pair.Shape(), TopAbs_FACE)
+                            : 0U)
+                        << " invalid_faces=" << bad_faces
+                        << " invalid_wires=" << bad_wires
+                        << "\n";
+                }
+            }
         }
     }
 
