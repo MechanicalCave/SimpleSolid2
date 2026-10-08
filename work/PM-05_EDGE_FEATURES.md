@@ -795,4 +795,8 @@ Bounded remediation automated evidence is **COMPLETED — PASS**:
 - final governance-synchronized exact candidate `e1c358cf54fd051f15252ea198d116de0b6a9cdc` passed Windows FULL #1744 with core-only 25/25, kernel-native 57/57 and desktop 112/112; final `windows-msvc` aggregate PASS;
 - PR #296 squash merge is `f5570b3bcde458670943718e78cdf4a7a77667ea`.
 
-PM-05F remains active only for the repeat Owner supported-Windows acceptance workflow. PM-05 cannot close until the Owner explicitly reports PASS on the remediated main candidate.
+PM-05F Owner acceptance attempt 2 on 2026-10-08 returned **FAIL** after the #296 remediation. Owner explicitly accepted bounded **R2** acceptance remediation, recorded in `work/PM-05F_R2_OWNER_ACCEPTANCE_REMEDIATION.md`, for the observed invisible Body after trihedral Fillet Finish, native `tool_stage` edit picking, Revolve material-Edge selection, local orange/blue material-difference preview and curved/silhouette Edge picking plus diagnostics.
+
+This is an acceptance-discovered D0/D1 amendment **within PM-05's existing accepted Feature semantics**, not authorization for PM-06, a topology-identity change, generic picker migration or CI policy changes. The remediation document classifies required reproductions and D2/D3 stop conditions. The final fresh exact-head FULL and explicit Owner manual Windows PASS remain required; previously recorded #1744 PASS does not close newly found defects.
+
+PM-05F remains active for R2 remediation and repeat Owner acceptance. PM-05 cannot close until the Owner explicitly reports PASS on the repaired exact candidate.
