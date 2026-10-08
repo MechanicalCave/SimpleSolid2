@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
@@ -627,6 +628,18 @@ int main(int argc, char* argv[]) {
             0U, "2", workbench.cadInputContextGeneration());
         CHECK(reply.accepted);
 
+        auto* topology_controller =
+            [&workbench]() -> ui::PartViewportController* {
+                for (auto* child : workbench.children()) {
+                    if (auto* controller =
+                            dynamic_cast<ui::PartViewportController*>(
+                                child)) {
+                        return controller;
+                    }
+                }
+                return nullptr;
+            }();
+        CHECK(topology_controller != nullptr);
         bool trihedral_selected = false;
         std::size_t corner_index = 0U;
         for (const auto& corner : corners) {
@@ -642,12 +655,22 @@ int main(int argc, char* argv[]) {
                     selectedCount(
                         *label,
                         static_cast<int>(index + 1U));
+                const auto raw_selected =
+                    topology_controller->bodyTopologySelection();
+                const auto semantic_selected =
+                    topology_controller->selectedMaterialEdgeReferences();
                 std::cerr
                     << "PM05F_R2_TRIHEDRAL_DIAGNOSTIC"
                     << " corner=" << corner_index
                     << " edge=" << index
                     << " clicked=" << clicked
                     << " counted=" << counted
+                    << " raw_selected=" << raw_selected.size()
+                    << " semantic_valid=" << semantic_selected.has_value()
+                    << " semantic_count="
+                    << (semantic_selected
+                            ? semantic_selected->size()
+                            : 0U)
                     << " selected='"
                     << label->text().toStdString()
                     << "' finish=" << finish->isEnabled()
