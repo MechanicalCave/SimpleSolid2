@@ -51,6 +51,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -4864,34 +4866,67 @@ OcctSolidModelingKernel::materialDifferencePreview(
     // Exact transient B-Rep differences, never triangle subtraction.
     // Do not change modeling tolerance or use fuzzy/healing fallback.
     try {
+        // Temporary R2-P0 diagnostic, debug-only and explicit opt-in.
+        // Remove after isolating the OCCT sub-operation; no CAD behavior
+        // or tolerance changes are allowed from this instrumentation.
+        const auto trace_delta =
+            [](const char* direction, const char* phase) noexcept {
+#ifdef _DEBUG
+                if (std::getenv("SS2_PM05F_R2_DELTA_TRACE")) {
+                    std::fprintf(
+                        stderr,
+                        "PM05F_R2_PART008_DELTA_PHASE direction=%s phase=%s\n",
+                        direction, phase);
+                    std::fflush(stderr);
+                }
+#else
+                (void)direction;
+                (void)phase;
+#endif
+            };
         const auto cut_mesh =
-            [](const TopoDS_Solid& a,
-               const TopoDS_Solid& b)
+            [&trace_delta](const TopoDS_Solid& a,
+                           const TopoDS_Solid& b,
+                           const char* direction)
                 -> std::optional<
                     kernel::SolidPresentationResult> {
+                trace_delta(direction, "construct_begin");
                 BRepAlgoAPI_Cut difference{a, b};
+                trace_delta(direction, "construct_end");
                 difference.SetFuzzyValue(0.0);
+                trace_delta(direction, "build_begin");
                 difference.Build();
+                trace_delta(direction, "build_end");
                 if (!difference.IsDone()) {
+                    trace_delta(direction, "not_done");
                     return std::nullopt;
                 }
                 const auto& shape = difference.Shape();
-                switch (volumePresence(shape)) {
+                trace_delta(direction, "volume_begin");
+                const auto presence = volumePresence(shape);
+                trace_delta(direction, "volume_end");
+                switch (presence) {
                 case VolumePresence::none:
+                    trace_delta(direction, "no_delta");
                     return kernel::SolidPresentationResult{
                         kernel::SolidPresentationStatus::ok, {}};
-                case VolumePresence::positive:
-                    return presentationMeshForShape(shape);
+                case VolumePresence::positive: {
+                    trace_delta(direction, "mesh_begin");
+                    auto mesh = presentationMeshForShape(shape);
+                    trace_delta(direction, "mesh_end");
+                    return mesh;
+                }
                 case VolumePresence::invalid:
+                    trace_delta(direction, "invalid_volume");
                     return std::nullopt;
                 }
                 return std::nullopt;
             };
 
         const auto removed =
-            cut_mesh(first->solid, second->solid);
+            cut_mesh(first->solid, second->solid, "removed");
         const auto added =
-            cut_mesh(second->solid, first->solid);
+            cut_mesh(second->solid, first->solid, "added");
         if (!removed || !added ||
             removed->status != kernel::SolidPresentationStatus::ok ||
             added->status != kernel::SolidPresentationStatus::ok) {
