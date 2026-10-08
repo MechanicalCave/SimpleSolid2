@@ -2829,6 +2829,15 @@ template <typename Operation>
     const std::vector<SelectedRuntimeEdge>&
         selected) {
     result.edge_feature_surfaces.clear();
+    struct D2BPublishTrace final {
+        int gate{};
+        ~D2BPublishTrace() {
+            if (std::getenv("SS2_PM05F_R2_CHAMFER_TRIAGE")) {
+                std::cerr << "PM05F_R2_D2B_SURFACE_PUBLISH_GATE="
+                          << gate << "\n";
+            }
+        }
+    } trace;
 
     const auto publish =
         [&result, &runtime, &input](
@@ -2975,6 +2984,7 @@ template <typename Operation>
     if (edge_generated_faces.empty()) {
         return false;
     }
+    trace.gate = 1;
 
     const auto shared_vertices =
         sharedSelectedVertices(
@@ -3007,6 +3017,7 @@ template <typename Operation>
             std::move(faces));
     }
 
+    trace.gate = 2;
     std::vector<std::vector<TopoDS_Face>>
         faces_per_source(
             selected.size());
@@ -3038,6 +3049,7 @@ template <typename Operation>
             faces_per_source[*owner],
             face);
     }
+    trace.gate = 3;
 
     for (std::size_t index = 0U;
          index < selected.size();
@@ -3053,6 +3065,7 @@ template <typename Operation>
             return false;
         }
     }
+    trace.gate = 4;
 
     for (std::size_t index = 0U;
          index < shared_vertices.size();
@@ -3074,6 +3087,7 @@ template <typename Operation>
             return false;
         }
     }
+    trace.gate = 5;
 
     for (const auto& [face_token, face] :
          runtime.inventory_faces) {
@@ -3097,6 +3111,7 @@ template <typename Operation>
         }
     }
 
+    trace.gate = 6;
     return !result.edge_feature_surfaces.empty();
 }
 
