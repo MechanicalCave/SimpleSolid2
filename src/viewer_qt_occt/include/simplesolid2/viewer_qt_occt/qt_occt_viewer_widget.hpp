@@ -102,6 +102,8 @@ public:
     void setBodyTopologyCycleIntentHandler(
         viewer::BodyTopologyCycleIntentHandler handler) override;
 
+    void setBodyTopologyEdgePickMode(bool enabled) override;
+
     [[nodiscard]] bool setBodyTopologyPreselection(
         std::optional<viewer::PresentationToken> token) override;
 

@@ -3728,6 +3728,10 @@ public:
             std::move(handler);
     }
 
+    void setBodyTopologyEdgePickMode(bool enabled) {
+        body_topology_edge_pick_mode_ = enabled;
+    }
+
     [[nodiscard]] bool hasBodyTopologyPreselection() const noexcept {
         return body_preselection_token_.has_value();
     }
@@ -4106,6 +4110,32 @@ public:
             view_.IsNull() ||
             (!selection_intent_handler_ &&
              !body_topology_selection_intent_handler_)) {
+            return;
+        }
+
+        // Fillet/Chamfer acquisition must not be replaced by an overlapping
+        // Sketch/Profile/Reference AIS hit. A non-authorable or absent Edge
+        // never becomes another kind of selection, nor clears prior Edges.
+        // Part still filters semantic eligibility and stage/generation.
+        if (body_topology_edge_pick_mode_) {
+            const auto edge_query =
+                queryBodyTopology(
+                    viewer::ViewportPoint2{
+                        static_cast<double>(logical_x),
+                        static_cast<double>(logical_y)},
+                    viewer::BodyTopologyPickFilter{
+                        false, true, false});
+            context_->ClearDetected(false);
+            if (body_topology_selection_intent_handler_ &&
+                edge_query.valid() &&
+                edge_query.completed &&
+                !edge_query.candidates.empty()) {
+                body_topology_selection_intent_handler_(
+                    edge_query,
+                    toggle
+                        ? viewer::SelectionIntentMode::toggle
+                        : viewer::SelectionIntentMode::replace);
+            }
             return;
         }
 
@@ -6321,6 +6351,7 @@ private:
         body_topology_preselection_intent_handler_;
     viewer::BodyTopologyCycleIntentHandler
         body_topology_cycle_intent_handler_;
+    bool body_topology_edge_pick_mode_{};
     viewer::SpatialPointerHandler spatial_pointer_handler_;
     viewer::NavigationCubeActionHandler
         navigation_cube_action_handler_;
@@ -6625,6 +6656,15 @@ void QtOcctViewerWidget::setBodyTopologyCycleIntentHandler(
         [this, handler = std::move(handler)]() mutable {
             impl_->setBodyTopologyCycleIntentHandler(
                 std::move(handler));
+        });
+}
+
+void QtOcctViewerWidget::setBodyTopologyEdgePickMode(
+    bool enabled) {
+    guardedVoid(
+        "setBodyTopologyEdgePickMode",
+        [this, enabled] {
+            impl_->setBodyTopologyEdgePickMode(enabled);
         });
 }
 

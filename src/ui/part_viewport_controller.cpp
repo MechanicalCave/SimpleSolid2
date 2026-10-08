@@ -4639,6 +4639,9 @@ void PartViewportController::setBodyTopologyEdgeDraftMode(
         return;
     }
     body_topology_edge_draft_mode_ = enabled;
+    if (viewport_ != nullptr) {
+        viewport_->setBodyTopologyEdgePickMode(enabled);
+    }
     if (enabled) {
         body_topology_face_pick_only_ = false;
     }
