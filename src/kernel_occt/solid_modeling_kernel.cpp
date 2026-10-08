@@ -5,6 +5,7 @@
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -4599,6 +4600,61 @@ finishEdgeFeature(
                             "PM05F_R2_CHAMFER_SIDE_COMBINATION mask=%u EXCEPTION\n",
                             mask);
                     }
+                }
+            }
+            // Diagnostic isolation of retained OCCT TShape sharing
+            // after the authored Boolean Extrudes. Copying the upstream
+            // without altering geometric coordinates gives an exact
+            // TopoDS subshape map for each explicit selected Edge.
+            // Never publish either trial or change durable semantics.
+            for (const bool copy_geometry : {false, true}) {
+                try {
+                    BRepBuilderAPI_Copy copy{
+                        upstream.solid,
+                        copy_geometry,
+                        false};
+                    bool mapped = !copy.Shape().IsNull();
+                    BRepFilletAPI_MakeChamfer clean{
+                        copy.Shape()};
+                    for (const auto& item : selected) {
+                        const auto copied_edge =
+                            copy.ModifiedShape(item.edge);
+                        if (copied_edge.IsNull() ||
+                            copied_edge.ShapeType() != TopAbs_EDGE) {
+                            mapped = false;
+                            break;
+                        }
+                        clean.Add(
+                            input.parameter_mm,
+                            TopoDS::Edge(copied_edge));
+                    }
+                    bool built = false;
+                    bool valid = false;
+                    if (mapped) {
+                        clean.Build();
+                        built = clean.IsDone();
+                        valid = built &&
+                            !clean.Shape().IsNull() &&
+                            BRepCheck_Analyzer{
+                                clean.Shape()}.IsValid();
+                    }
+                    std::fprintf(
+                        stderr,
+                        "PM05F_R2_CHAMFER_COPY copy_geometry=%d mapped=%d done=%d valid=%d\n",
+                        copy_geometry ? 1 : 0,
+                        mapped ? 1 : 0,
+                        built ? 1 : 0,
+                        valid ? 1 : 0);
+                } catch (const Standard_Failure&) {
+                    std::fprintf(
+                        stderr,
+                        "PM05F_R2_CHAMFER_COPY copy_geometry=%d OCCT_EXCEPTION\n",
+                        copy_geometry ? 1 : 0);
+                } catch (...) {
+                    std::fprintf(
+                        stderr,
+                        "PM05F_R2_CHAMFER_COPY copy_geometry=%d EXCEPTION\n",
+                        copy_geometry ? 1 : 0);
                 }
             }
             std::fflush(stderr);
