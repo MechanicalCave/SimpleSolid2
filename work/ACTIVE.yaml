@@ -23,6 +23,8 @@ accepted_adrs:
   - "adr/ADR-0016-body-semantic-topology-carrier-geometry-and-face-supported-sketch.md"
   - "adr/ADR-0017-boolean-add-surface-continuation-and-representation-partition-edges.md"
 next:
+  - PM-05F Owner acceptance attempt 2 on 2026-10-08 is FAIL: three-Edge Fillet can hide Body after Finish; Revolve Edge inputs cannot be selected; Edit tool-stage picking is blocked; Fillet/Chamfer preview colors the full Body; curved Edge picking/diagnostics need characterization. Owner accepted bounded R2 remediation in work/PM-05F_R2_OWNER_ACCEPTANCE_REMEDIATION.md; PM-05 remains ACTIVE, PM-06 inactive.
+  - PM-05F R2 work proceeds on a dedicated Draft PR using FOCUSED/FAST/SUBSYSTEM for iteration. Final exact-head Windows FULL and explicit Owner manual PASS remain mandatory. No CI policy change was activated.
   - PM-02 Body Semantic Topology / Face-Supported Sketch is COMPLETED — PASS after Owner post-remediation Windows re-test PASS on 2026-10-05
   - PM-02A production evaluated Body-stage topology catalog is COMPLETED — PASS; runtime candidate 58368a6ada5f6c30e03cb845682dbf5408ecb763 passed Windows FULL #1397 and merged to main as b95f72105b8242eedce9cd79dd8bf910f3ccb715
   - PM-02B Surface/Face production semantics is COMPLETED — PASS; final runtime candidate 05434516fea0892aac2babae09da772043987f29 passed Windows FULL #1400 and merged to main as 65d074577bc89e3507288118b17e99b12288a881
