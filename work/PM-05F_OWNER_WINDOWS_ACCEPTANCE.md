@@ -1,6 +1,6 @@
 # PM-05F — Owner Windows Acceptance
 
-**Status:** OWNER FAIL — BOUNDED REMEDIATION ACTIVE
+**Status:** OWNER FAIL ATTEMPT 1 — AUTOMATED REMEDIATION PASS; RETEST PENDING
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
 **Date prepared:** 2026-10-07
@@ -24,7 +24,22 @@ Observed product behavior:
 
 The Owner also explicitly clarified the expected engineering semantics: if the requested Fillet/Chamfer requires local modification of the selected Edge endpoints, adjacent Edges, vertices or Faces at a 3/4/5-edge junction, that local topology adaptation is preferable to rejecting an otherwise constructible operation. Such adaptation must not silently add durable authored inputs.
 
-Accepted remediation policy: **strict authored intent, permissive local topology**. See `work/PM-05F_FILLET_LOCAL_TOPOLOGY_REMEDIATION.md`.
+Accepted remediation policy: **strict authored intent, permissive local result topology**. See `work/PM-05F_FILLET_LOCAL_TOPOLOGY_REMEDIATION.md`.
+
+## Automated remediation result
+
+Exact remediation runtime candidate `bc0b002f4e45172aec24c61913cd28ac8ca43138` passed Windows FULL #1739 with core 25/25, kernel-native 57/57 and desktop 112/112.
+
+Automated regressions now prove:
+
+- exhaustive cube two-Edge Fillet classification including every geometrically adjacent pair;
+- trihedral Fillet control and Chamfer parity;
+- mixed Line/Circle four-Edge capsule Fillet;
+- an unrelated exterior Chamfer followed by semantic re-authoring and the same mixed four-Edge Fillet;
+- isolated circular Boolean Edge Fillet and Chamfer;
+- no relaxation of the existing tangent-chain input-contour guard.
+
+A repeat Owner Windows test is still required on the final merged/docs-synchronized candidate.
 
 ## Preconditions
 

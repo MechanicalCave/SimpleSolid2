@@ -1,6 +1,6 @@
 # PM-05F — Automated Acceptance Matrix
 
-**Status:** DOCS PASS / OWNER FAIL — Fillet bounded remediation active; fresh exact-head FULL and repeat Owner workflow required
+**Status:** REMEDIATION RUNTIME PASS — documentation sync/final exact-head gate and repeat Owner workflow pending
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Program authority:** work/PART_MODELING_V1_ROADMAP.md v1.29
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
@@ -25,7 +25,8 @@ Owner manual acceptance reported FAIL on 2026-10-07 before final FULL dispatch d
 | PM-05D | 7f57726b368c8a5011f8007369f3de945ae0d833 | Windows FULL #1697 PASS | 83ece0b03889e11f8dc7769498d949caee3c0be1 | Workbench / Viewer / exact preview / Command Line |
 | PM-05E | 88e07b1a2dbdb6ded73d0c2f90dd0a1443242cbe | Windows FULL #1721 PASS — core 25/25, kernel-native 54/54, desktop 112/112 | 1a1491f7687f32089c1424025123329c74d7b6ca | Edit / repair / lifecycle / persistence / reverse-chain canonical-frame remediation |
 | PM-05F docs | 19700794577a516281fcc3e512c898cc1ececfec | Windows DOCS #1725 PASS; synchronized matrix head d08e97c19e2717dbb9e4bc81adf9d11ac1925f84 passed DOCS #1726 | 685bf3f797aa022582952906e8f24cf6d668f2bb | internal + paired PL/EN Product + generated Browser |
-| PM-05F final automated | pending exact candidate | Windows FULL pending | pending | cumulative final runtime/docs gate |
+| PM-05F Fillet remediation runtime | bc0b002f4e45172aec24c61913cd28ac8ca43138 | Windows FULL #1739 PASS — core 25/25, kernel-native 57/57, desktop 112/112 | pending remediation merge | adjacent-pair cube Fillet, mixed Line/Circle complex chain, isolated curved Edge and semantic lineage remediation |
+| PM-05F final automated | pending post-doc-sync exact candidate | Windows FULL pending | pending | cumulative final runtime/docs gate |
 | PM-05F Owner Windows attempt 1 | 7721863e22269474f8f4cca6315eafed86396eff | OWNER FAIL — multi-Edge Fillet blocker | not closable | work/PM-05F_OWNER_WINDOWS_ACCEPTANCE.md |
 
 ## Contract matrix
@@ -36,7 +37,7 @@ Owner manual acceptance reported FAIL on 2026-10-07 before final FULL dispatch d
 | selection-first and command-first multi-Edge Fillet | PM-05D | PASS |
 | selection-first and command-first multi-Edge Chamfer | PM-05D | PASS |
 | disconnected Edge set | PM-05A provider matrix / PM-05C production provider | PASS |
-| two-edge connected corner | PM-05A / PM-05C | PASS |
+| two-edge connected corner | PM-05A + PM-05F `pm05f.fillet_corner_diagnostics` exhaustive cube matrix | PASS |
 | three-edge trihedral corner | PM-05A / PM-05C | PASS |
 | closed loop | PM-05A / PM-05C | PASS |
 | mixed connected/disconnected set | PM-05A / PM-05C | PASS |
@@ -48,8 +49,11 @@ Owner manual acceptance reported FAIL on 2026-10-07 before final FULL dispatch d
 | no first/nearest/longest fallback | PM-05A/B/E | PASS |
 | seam and same-Surface partition not authorable | PM-05B/C/D | PASS |
 | explicit input set unaffected by provider traversal order | PM-05A M1 / C | PASS |
-| no silent tangent-chain authored expansion | PM-05A T1 + production contour membership enforcement | PASS |
+| no silent tangent-chain authored/effect expansion | PM-05A T1 + exact production provider input-contour membership enforcement retained through PM-05F | PASS |
 | generated ordinary engineering Edge usable by later accepted edge Feature | PM-05C2b/E3 | PASS |
+| analytic curved Boolean material Edge (plane-cylinder circle) authorable without geometry rebinding | PM-05F `pm05f.fillet_curved_edge` / complex fixture | PASS |
+| local transition spline may remain non-authorable without invalidating valid Fillet Body | PM-05F adjacent-pair cube matrix | PASS |
+| untouched distant Edge survives local edge Feature when provider lineage is empty but exact semantic CurveRelation persists | PM-05F complex fixture | PASS |
 | Fillet -> Chamfer | PM-05A/C/E3 | PASS |
 | Chamfer -> Fillet | PM-05A/E3; canonical-frame lineage remediation in PM-05E | PASS |
 | exact whole-candidate preview / stale preview rejection | pm05d1.edge_feature_draft_preview / PM-05D2 | PASS |

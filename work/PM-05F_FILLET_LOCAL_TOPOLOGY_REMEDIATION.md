@@ -1,6 +1,6 @@
 # PM-05F — Fillet Local-Topology Remediation
 
-**Status:** ACTIVE — Owner acceptance blocker
+**Status:** AUTOMATED REMEDIATION PASS — docs sync/final gate and Owner retest pending
 **Parent Work Contract:** `work/PM-05_EDGE_FEATURES.md`
 **Checkpoint:** PM-05F
 **Date activated:** 2026-10-07
@@ -91,12 +91,35 @@ The Part curve-stage classifier previously treated `CurveKind::other` adjacent t
 
 Bounded remediation: keep the Edge in complete topology accounting as `semantically_unsupported` / non-authorable, while allowing the valid Body/Feature to remain UpToDate. No heuristic identity is invented.
 
-## Remediation decision rule
+## Root cause B — curved Boolean Edge authoring and untouched-Edge continuation
 
-- **Provider Build succeeds, semantic publication fails:** fix Part/topology publication; do not change provider construction policy unnecessarily.
-- **Current code rejects before Build only because provider contour is not set-equal:** replace exact-equality gating with the Owner-amended seed-vs-local-accommodation policy.
-- **OCCT Build itself fails on ordinary cube adjacent inputs:** inspect native contour/corner fault evidence and provider setup before considering any higher-level fallback.
-- **Complex case needs local extra contour members but yields valid accounted geometry:** allow them transiently; do not persist them as Feature inputs.
+The mixed Line/Circle capsule-Cut fixture reproduced the Owner's complex-geometry symptom before Fillet execution: the Cut Body contained the expected curved material boundaries, but the Part Curve classifier published only the line Boolean intersections as authorable while four plane-cylinder circular boundaries were fully accounted yet semantically unsupported.
+
+Bounded remediation admits analytic cross-producer Boolean intersections as durable Curve meaning when identity is still the exact semantic Surface-pair relation and the provider classifies the current realization as line or circle. No XYZ, length, nearest candidate or traversal ordinal is introduced. Multiple bounded realizations of the same semantic relation remain Ambiguous; CurveKind::other remains non-authorable.
+
+The old-project analogue then exposed a second lineage gap after an unrelated exterior Chamfer: OCCT omitted Edge history for untouched distant capsule boundaries, so the same durable Cut Curve meanings could not be re-authored at the adjacent result stage. The remediation recovers continuation only when provider lineage is completely empty and the exact already-published CurveRelation (role + analytic CurveKind + canonical semantic Surface pair) exists in the adjacent stage. If OCCT publishes any descendant, provider history remains authoritative.
+
+Final remediation evidence on exact candidate `bc0b002f4e45172aec24c61913cd28ac8ca43138` / Windows FULL #1739:
+
+- core-only: 25/25 PASS;
+- kernel-native: 57/57 PASS;
+- desktop: 112/112 PASS;
+- `pm05f.fillet_corner_diagnostics`: PASS;
+- `pm05f.fillet_complex_fixture`: PASS;
+- `pm05f.fillet_curved_edge`: PASS;
+- final `windows-msvc` aggregate: PASS.
+
+The complex fixture covers a mixed 2-line + 2-circle capsule Cut loop, direct four-Edge Fillet, unrelated exterior Chamfer, exact semantic re-authoring of the same Cut Curve meanings at the next stage and the chained four-Edge Fillet. The curved-edge fixture separately proves a single circular Boolean Edge for both Fillet and Chamfer with exact provider input membership.
+
+## Remediation decision result
+
+The Owner blocker did **not** require weakening the tangent-contour input guard and did **not** require generic healing/fuzzy fallback.
+
+- ordinary adjacent cube Fillet: provider Build already succeeded; semantic publication was fixed;
+- local transition-spline result boundary: fully accounted but intentionally non-authorable;
+- curved plane-cylinder Boolean boundary: admitted through semantic Surface-pair + analytic line/circle relation;
+- untouched distant Edge after local Chamfer: adjacent-stage continuation recovered only under empty provider lineage plus exact semantic CurveRelation;
+- tangent-chain provider input propagation remains rejected unless the full affected chain is explicitly authored.
 
 No generic healing, fuzzy escalation, nearest-geometry rebinding or advanced Fillet variant is authorized by this remediation.
 
