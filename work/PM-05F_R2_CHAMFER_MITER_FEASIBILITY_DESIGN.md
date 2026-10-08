@@ -1,11 +1,11 @@
 # PM-05F R2 — Planar-miter Chamfer feasibility and lineage design
 
-**Status:** D2-A FEASIBILITY APPROVED by Owner — 2026-10-08; D2-B production implementation NOT APPROVED  
-**Decision class:** D2-A experiment authorized; separate Owner D2-B required before production geometry, history-adapter, or policy implementation  
+**Status:** Historical D2-A feasibility evidence COMPLETE; D2-B subsequently APPROVED by Owner and automated FOCUSED PASS #1885 — exact-head FULL and Owner PASS pending  
+**Decision class:** D2-A research record; later Owner D2-B authorization is recorded in the parent proposal. This historical design record alone cannot authorize further scope.  
 **Parent proposal:** `work/PM-05F_R2_CHAMFER_MIXED_CORNER_D2_PROPOSAL.md`  
 **Active authority:** `work/PM-05_EDGE_FEATURES.md`, PM-05F R2  
 **PR:** #298 / `pm-05f-r2-owner-remediation`  
-**Nature of this document:** design/evidence only; no code, modeling-semantics, persistence, or public API authorization
+**Nature of this document:** diagnostic/evidence record; current bounded production authorization derives from the separate Owner-approved D2-B decision, not these experimental findings.
 
 ## Verified reproduction and limits of current evidence
 
@@ -297,3 +297,9 @@ The four small local Face candidates comprise **two triangles and two quads**, g
 **D2-A research provides strong geometric classification for all 21 Faces, not yet a semantic 21/21 PASS.** Before production, a new Owner D2-B decision must explicitly authorize a provider-private provenance/semantic ownership ledger that can certify the two unique inherited planar continuations and the two multi-Face corner carriers independently of Boolean order, without broadening the existing ADR-0017 Add continuation policy by implication. Require adversarial same-plane/different-owner decoys, nonlocal corner impostors, complete Face/Edge/Vertex inventory, exact local distance coverage, all six selected Edge permutations and three size values, serializable one-Feature create/edit/undo/save/reopen, and negative unsupported cases. Fail closed if the ledger cannot prove a unique claim.
 
 All focused runs #1863–#1865 correctly remain **RED only on the unchanged production three-Edge kernel check `kernel_three.ok()`**, because the candidate valid CSG is diagnostic-only. Owner manual Chamfer acceptance, exact-head FULL, PR merge and PM-06 are still blocked. **Do not authorize production fallback solely from this section.**
+
+## Post-research implementation result (dated 2026-10-08)
+
+The F3 diagnostic ledger has now been implemented in a bounded OCCT-private production fallback, after separate Owner D2-B approval. The original experimentally measured 21-Face decomposition and exact provenance were sufficient to publish a new Part008 three-Edge Chamfer **without** adding a persistent Face-index or weakening the one-Feature stage-correct semantics. Focused #1877/#1878/#1880/#1885 PASS; source fallback and native test artifacts are identified in the parent D2-B decision.
+
+The original D2-A statements marked NOT APPROVED, BLOCKED and RED throughout the chronology above remain **historical observations only**. The *current* blockers are exact-head Windows FULL, Owner manual Windows acceptance and separate P1 complex Edge-picking tests. Do not mark PM-05F closed solely on this document.
