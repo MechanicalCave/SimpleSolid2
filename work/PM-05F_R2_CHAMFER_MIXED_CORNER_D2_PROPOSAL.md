@@ -55,3 +55,20 @@ Owner accepted the bounded **D2-A evidence-only provider experiment**, explicitl
 **Current decision:** D2-A remains restricted to bounded feasibility/lineage research; **D2-B production implementation remains unauthorized**. Do not use the valid throwaway B-Rep as a successful CAD Feature without accepted strict lineage evidence; do not weaken the red Owner three-Edge check.
 
 **Specific pending Owner D2-B decision:** whether to authorize a constrained internal OCCT provenance ledger that assigns corner patches to their exact shared source Vertex and both incident authored Edges (independent of Boolean implementation order), while preserving unique ownership and fail-closed semantics for every additional Face. This would permit implementation research, **not** presume a successful product Feature. Exact evidence and D2-B conditions are recorded in the linked feasibility design. Until separately accepted, the production fallback remains prohibited.
+
+## Refined D2-B decision requested after F3 diagnostics #1863–#1865 (2026-10-08)
+
+**D2-A Owner-authorized feasibility evidence is recorded** in `work/PM-05F_R2_CHAMFER_MITER_FEASIBILITY_DESIGN.md`. It now classifies **all 21 candidate Faces geometrically**, but not yet all semantically:
+
+- 12 exact upstream inherited Faces and 3 strictly selected Edge strip Faces already have unique OCCT history.
+- 2 Faces have **one** unique same-domain inherited neighbor by exact shared result Edge, but extending ADR-0017 from **Extrude Add** to bounded Chamfer would require a **new explicit D2 decision**.
+- The remaining two source joints each contain a **local triangular Face** (area `d²/2`) and a **quadrilateral Face** (area `d²`) for the tested three sizes. Exact selected-edge adjacency and source shared-Vertex pairing are stable under both Boolean precedence policies, but tool-delta Face last-writer provenance is not.
+
+**Recommended Owner D2-B scope (NOT ACCEPTED):** allow implementation of a narrowly guarded OCCT-private provenance ledger for the specifically supported mixed linear planar equal-distance Chamfer network, with two limited semantic rules to be proven adversarially:
+
+1. A new planar Face can continue an existing authored upstream Surface only if the Face has OCCT tool/operation provenance and exactly one provider-certified **current shared Edge and same-domain planar inherited Face**. This is **not** permission for arbitrary coplanar healing or for changing globally accepted ADR-0017 semantics.
+2. A bounded local junction may produce **multiple current B-Rep Faces for one semantic corner Surface**, whose identity derives from **one exact source shared Vertex + both incident user-authored Edges**, with unique noncompeting construction/history evidence and no transient Boolean operation order or Face index in the durable address.
+
+Both would remain behind the existing neutral Kernel/Part boundary, preserving the one-Feature authored selection, equality of its common distance, fail-closed unresolved claims, zero fuzzy/adaptive tolerance and no public API/persistence mutations by implication. A separate explicit STOP applies if production needs new durable topology roles, public contracts, modeling-semantics version changes, or a new product Chamfer corner policy.
+
+**This paragraph records a recommendation, not Owner authorization**. Existing strict three-Edge RED remains, and no production candidate or acceptance was produced.
