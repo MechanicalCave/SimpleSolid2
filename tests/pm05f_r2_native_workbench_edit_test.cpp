@@ -1,5 +1,4 @@
 #include "cad_workbench.hpp"
-#include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
@@ -258,8 +257,7 @@ QTreeWidgetItem* featureTreeItem(
 
 bool nativeClick(
     viewer_qt_occt::QtOcctViewerWidget& viewport,
-    viewer::Point3 world,
-    bool trace = false) {
+    viewer::Point3 world) {
     const auto screen = viewport.projectWorldPoint(world);
     if (!screen || !std::isfinite(screen->x) ||
         !std::isfinite(screen->y)) {
@@ -277,20 +275,6 @@ bool nativeClick(
     if (!query.valid() || !query.completed ||
         query.candidates.empty()) {
         return false;
-    }
-    if (trace) {
-        std::cerr
-            << "PM05F_R2_NATIVE_QUERY"
-            << " pixel=(" << pixel.x() << "," << pixel.y() << ")"
-            << " generation=" << query.generation.value
-            << " candidates=" << query.candidates.size();
-        for (const auto& item : query.candidates) {
-            std::cerr
-                << " [token=" << item.token.value
-                << " distance=" << item.screen_distance
-                << " depth=" << item.depth << "]";
-        }
-        std::cerr << '\n';
     }
     QTest::mouseMove(&viewport, pixel);
     QTest::mouseClick(
@@ -628,20 +612,7 @@ int main(int argc, char* argv[]) {
             0U, "2", workbench.cadInputContextGeneration());
         CHECK(reply.accepted);
 
-        auto* topology_controller =
-            [&workbench]() -> ui::PartViewportController* {
-                for (auto* child : workbench.children()) {
-                    if (auto* controller =
-                            dynamic_cast<ui::PartViewportController*>(
-                                child)) {
-                        return controller;
-                    }
-                }
-                return nullptr;
-            }();
-        CHECK(topology_controller != nullptr);
         bool trihedral_selected = false;
-        std::size_t corner_index = 0U;
         for (const auto& corner : corners) {
             reply = workbench.submitCadInput(
                 "CLEAR", workbench.cadInputContextGeneration());
@@ -649,36 +620,10 @@ int main(int argc, char* argv[]) {
             bool all_clicked = true;
             for (std::size_t index = 0U;
                  index < corner.size(); ++index) {
-                const bool clicked =
-                    nativeClick(*viewport, corner[index], true);
-                const bool counted =
-                    selectedCount(
+                if (!nativeClick(*viewport, corner[index]) ||
+                    !selectedCount(
                         *label,
-                        static_cast<int>(index + 1U));
-                const auto raw_selected =
-                    topology_controller->bodyTopologySelection();
-                const auto semantic_selected =
-                    topology_controller->selectedMaterialEdgeReferences();
-                std::cerr
-                    << "PM05F_R2_TRIHEDRAL_DIAGNOSTIC"
-                    << " corner=" << corner_index
-                    << " edge=" << index
-                    << " clicked=" << clicked
-                    << " counted=" << counted
-                    << " raw_selected=" << raw_selected.size()
-                    << " semantic_valid=" << semantic_selected.has_value()
-                    << " semantic_count="
-                    << (semantic_selected
-                            ? semantic_selected->size()
-                            : 0U)
-                    << " selected='"
-                    << label->text().toStdString()
-                    << "' finish=" << finish->isEnabled()
-                    << " world=(" << corner[index].x
-                    << "," << corner[index].y
-                    << "," << corner[index].z << ")"
-                    << '\n';
-                if (!clicked || !counted) {
+                        static_cast<int>(index + 1U))) {
                     all_clicked = false;
                     break;
                 }
@@ -687,7 +632,6 @@ int main(int argc, char* argv[]) {
                 trihedral_selected = true;
                 break;
             }
-            ++corner_index;
         }
         CHECK(trihedral_selected);
         CHECK(selectedCount(*label, 3));

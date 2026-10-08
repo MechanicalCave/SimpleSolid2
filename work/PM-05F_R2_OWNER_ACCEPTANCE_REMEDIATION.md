@@ -147,3 +147,14 @@ Remaining R2-D verification: aggregate FAST, complete same-head FULL after other
 - Fix native integration test session lifetime before aggregate retest: preserve both Revolve DocumentSessions while switching documents, not loop-local disposed DocumentSessions. No change to product runtime or durable semantics.
 
 **Open:** manual Owner Revolve/picking acceptance; R2-E high zoom/DPI production shoulder accuracy; R2-A exact disappearing Body reproduction; R2-F complete actionable rejection diagnostics; interactive preview p95/memory evidence; final exact-head FULL and Owner PASS. R2-D local delta presentation has focused proofs, but no acceptance closeout before those gates.
+
+## Native trihedral Edge-input RED → GREEN — 2026-10-08
+
+- Windows FOCUSED **#1784 PASS**: full and partial production Revolve material circle Edge mouse clicks, Fillet/Chamfer Finish and native committed Body publication.
+- Windows FAST **#1785 PASS**: 93/93 desktop FAST (new native test is `tier-full-only`, so #1784 is its relevant point evidence).
+- Windows FOCUSED **#1786, #1787, #1788, #1789 FAIL by design during diagnosis**: native 20×20×20 box trihedral three-Edge test. Three **distinct** current-generation edge query tokens (65853, 65855, 65858, generation 14) were detectable, but the third click dropped the selected count from 2 to 0. Subsequent logging confirmed the controller's raw Body selection itself had been cleared, rather than losing a valid `MaterialEdgeReference` during draft canonicalization.
+- **Root cause:** `QtOcctViewerWidget::pickAtLogicalPoint` prioritised detected Profile/Sketch/Reference AIS objects over the current Body Edge during an active Fillet/Chamfer command. The ordinary non-Body selection path reset the explicit tool selection even when a valid Body Edge lay under the pointer.
+- **Bounded fix:** `446f067a` introduces runtime-only `setBodyTopologyEdgePickMode` controlled by `PartViewportController::setBodyTopologyEdgeDraftMode`. The active Edge tool queries only material Body Edges before unrelated AIS object detection; Part still checks semantic authorability, query generation and the exact Body stage. No eligible Edge => no implicit selection clear; normal Select is unchanged.
+- Windows FOCUSED **#1790 PASS (1/1)**: the previously failing native trihedral test now selects 3 converging Edges, performs Fillet radius 2, verifies UpToDate/complete evaluated Body and a displayed committed native Body after Finish. The test also includes full/partial Revolve and real Edit scenarios. Temporary diagnostic logging is removed in the following point candidate.
+
+**R2-A remains OPEN for original Owner failure** until the reported geometry and UI sequence is manually reproduced/retested. #1790 is a strong control proof, not an Owner PASS. R2-E dense/difficult curved shoulder picking and R2-F user-facing reject details still require separate acceptance. New candidate remains Draft; new FAST/FULL gates required.
