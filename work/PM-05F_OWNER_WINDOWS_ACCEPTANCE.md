@@ -1,10 +1,11 @@
 # PM-05F — Owner Windows Acceptance
 
-**Status:** OWNER FAIL ATTEMPT 1 — AUTOMATED REMEDIATION PASS; RETEST PENDING
+**Status:** READY FOR OWNER RETEST — FINAL AUTOMATED PASS
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
 **Date prepared:** 2026-10-07
-**Candidate manually exercised:** `7721863e22269474f8f4cca6315eafed86396eff` (documentation-final main; final FULL had not yet been dispatched because manual testing exposed a blocker first)
+**Candidate manually exercised — attempt 1:** `7721863e22269474f8f4cca6315eafed86396eff` — FAIL
+**Repeat-test candidate:** remediated `main` `f5570b3bcde458670943718e78cdf4a7a77667ea`; exact pre-merge gate candidate `e1c358cf54fd051f15252ea198d116de0b6a9cdc` passed Windows FULL #1744
 
 ## Purpose
 
@@ -28,7 +29,7 @@ Accepted remediation policy: **strict authored intent, permissive local result t
 
 ## Automated remediation result
 
-Exact remediation runtime candidate `bc0b002f4e45172aec24c61913cd28ac8ca43138` passed Windows FULL #1739 with core 25/25, kernel-native 57/57 and desktop 112/112.
+Exact remediation runtime candidate `bc0b002f4e45172aec24c61913cd28ac8ca43138` passed Windows FULL #1739 with core 25/25, kernel-native 57/57 and desktop 112/112. After docs/Browser synchronization and final regression hardening, exact final candidate `e1c358cf54fd051f15252ea198d116de0b6a9cdc` passed Windows FULL #1744 with the same 25/25, 57/57 and 112/112 counts; aggregate PASS. PR #296 merged it to `main` as `f5570b3bcde458670943718e78cdf4a7a77667ea`.
 
 Automated regressions now prove:
 
@@ -39,7 +40,7 @@ Automated regressions now prove:
 - isolated circular Boolean Edge Fillet and Chamfer;
 - no relaxation of the existing tangent-chain input-contour guard.
 
-A repeat Owner Windows test is still required on the final merged/docs-synchronized candidate.
+A repeat Owner Windows test is now required on `main` `f5570b3bcde458670943718e78cdf4a7a77667ea`. The minimum remediation-focused retest is: adjacent 2-Edge Fillet on a cube, trihedral 3-Edge Fillet, additional multi-Edge cube selections, a curved/circular material Edge, and mixed straight/curved generated-Edge Fillet after an unrelated Chamfer. The full acceptance workflow below remains the closure authority.
 
 ## Preconditions
 
