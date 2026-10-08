@@ -1,6 +1,6 @@
 # PM-05F R2 — Mixed Chamfer Corner Remediation (Owner-approved D2-B)
 
-**Status:** D2-B Owner-APPROVED; targeted Owner manual PASS on `af85a6fafea643739393b4f29673eca56c666519` (2026-10-08); FOCUSED #1898 PASS; final exact-head FULL and aggregate PM-05F acceptance PENDING
+**Status:** D2-B Owner-APPROVED; targeted Owner manual PASS on `af85a6fafea643739393b4f29673eca56c666519` (2026-10-08); FOCUSED #1898 PASS; exact-head FULL #1902 PASS on `5996583e99b20bbad16e252abb2f56c6904d69ef`; aggregate Owner PM-05F acceptance PENDING
 **Authority:** PM-05 Edge Features / PM-05F R2 Owner remediation
 **Decision:** Owner accepted bounded OCCT-private D2-B geometry/lineage implementation; no wider D3 geometry policy or public/persistent contract expansion
 **Production mutation authorization:** D2-B APPROVED by Owner on 2026-10-08, strictly for the bounded provider-private fallback and provenance ledger described below; no public/persistent contract or product D3 extension authorized
@@ -103,3 +103,7 @@ Implementation gates are mandatory: original 3-Edge material Edges only; default
 Owner reported **manual test PASS** for exact candidate `af85a6fafea643739393b4f29673eca56c666519` following requested Part008 three-Edge Chamfer, Edit/persistence and P1 selection test instructions. This is scoped Owner evidence; no individual results for the entire 41-step PM-05F matrix were supplied.
 
 Windows FOCUSED [#1898](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37842345000) on that SHA **PASS 1/1**, including complete 21-Face accounting across 18 variants, strict input source Edge/Vertex incidence and native lifecycle coverage. Final exact-head Windows FULL has not run. PR #298 stays Draft, PM-06 inactive and D3 planar-corner policy deferred.
+
+## Exact-head FULL checkpoint — 2026-10-08
+
+The final runtime/docs candidate `5996583e99b20bbad16e252abb2f56c6904d69ef` passed manually dispatched Windows [FULL #1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905): Core 25/25, kernel-native 57/57 and desktop 113/113; `windows-msvc` aggregate PASS. This satisfies technical verification on that SHA, not an unreported complete 41-step manual Owner acceptance. Cumulative §27 evidence is `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`; D2-B bounds are unchanged.

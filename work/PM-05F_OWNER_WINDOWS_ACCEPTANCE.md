@@ -1,6 +1,6 @@
 # PM-05F — Owner Windows Acceptance
 
-**Status:** R2 TARGETED OWNER MANUAL PASS 2026-10-08 on `af85a6fafea643739393b4f29673eca56c666519`; complete PM-05F matrix and exact-head Windows FULL still PENDING
+**Status:** R2 TARGETED OWNER MANUAL PASS 2026-10-08 on `af85a6fafea643739393b4f29673eca56c666519`; exact-head Windows FULL #1902 PASS (195/195); complete PM-05F Owner matrix confirmation PENDING
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
 **Date prepared:** 2026-10-07
@@ -137,7 +137,7 @@ The Owner reported **"manual test - pass"** after receiving Windows start instru
 
 **Exact automated evidence:** Windows FOCUSED [#1898](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37842345000) **PASS 1/1** on the same SHA, including 18 Chamfer variants, unique 21-Face ownership, actual source-Vertex/selected-Edge incidence and native lifecycle. Earlier FAST [#1893](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37839379219) **PASS 93/93** was on a different HEAD.
 
-**Still required:** final exact-head Windows FULL on synchronized candidate, aggregate PM-05F evidence review and explicit release/merge gate. No implied broader geometry policy, no permanent acceptance of untested edge networks, no D3 planar corner rule, no PM-06 activation.
+**Exact-head FULL now PASS:** [#1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905), `5996583e99b20bbad16e252abb2f56c6904d69ef`, core 25/25, kernel-native 57/57, desktop 113/113; `windows-msvc` PASS. Cumulative evidence: `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`. **Still required:** explicit confirmation of the complete aggregate PM-05F Owner workflow, evidence-only synchronization CI and final release/merge gate. No implied broader geometry policy, no permanent acceptance of untested edge networks, no D3 planar corner rule, no PM-06 activation.
 
 ## Result
 
@@ -145,4 +145,4 @@ Owner results: **ATTEMPT 1 FAIL; ATTEMPT 2 FAIL; targeted R2 re-test PASS (2026-
 
 ## Completion boundary
 
-Until the remaining exact-head FULL and aggregate acceptance gates are met, PM-05 remains ACTIVE, PR #298 remains Draft, PM-06 is not activated, and no advanced Fillet/Chamfer variant is implied by this workflow.
+Until the aggregate Owner acceptance and subsequent evidence-sync CI gates are met, PM-05 remains ACTIVE, PR #298 remains Draft, PM-06 is not activated, and no advanced Fillet/Chamfer variant is implied by this workflow.

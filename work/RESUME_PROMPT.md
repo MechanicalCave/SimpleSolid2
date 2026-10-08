@@ -35,8 +35,8 @@ Part Modeling v1 jest odrębnym programem. Nie implementuj funkcji spoza aktywne
 - Ostatni kodowo/testowy kandydat ręcznie sprawdzony przez Ownera: `af85a6fafea643739393b4f29673eca56c666519`; Owner zgłosił **"manual test - pass"** dla skierowanego re-testu Part008 Chamfer / Edit / Save-Reopen / P1 selection. To scoped Owner PASS bez odrębnych raportów z każdego kroku 41-punktowej pełnej macierzy.
 - Windows FOCUSED **#1898 PASS 1/1** na `af85a6f`: 18 wariantów (6 kolejności × 3 odległości), kompletność 21 Face, identyfikacja źródłowych 3 Edge strips + 2 source Vertex corners, w tym weryfikacja fizycznej incydencji źródłowych Edge z Vertex; testy lifecycle.
 - Windows FAST **#1893 PASS 93/93** dotyczy wcześniejszego commitu; nie jest exact-head FAST.
-- Po code/test candidate wprowadzono evidence/governance docs; **brak nowego exact-head Windows FULL** dla finalnego SHA. Odczytaj najnowszy status CI zamiast zakładać PASS.
-- Następny gate: doprowadzić końcowego kandydata do exact-head Windows FULL; przejrzeć wymagane pełne Owner acceptance, dokumentację i PR. Do tego momentu PR pozostaje Draft i PM-06 nieaktywne.
+- Windows **FULL #1902 PASS 195/195** (Core 25/25, kernel-native 57/57, Desktop 113/113) na exact runtime/docs SHA `5996583e99b20bbad16e252abb2f56c6904d69ef`, final `windows-msvc` PASS. Po tym SHA mogą pojawić się work-only evidence-synchronization commits: sprawdź ich aktualny HEAD/CI, nie przypisuj automatycznie #1902 do nowszego SHA. Cumulative matrix: `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`.
+- Następny gate: rozliczyć governance-only sync CI, potwierdzić pełny zakres 41-step Owner Windows acceptance (dotąd osobno nieitemizowany), dopiero potem rozważyć formalne zamknięcie PM-05F/PR. Do tego momentu PR pozostaje Draft i PM-06/Projection nieaktywne; nowa kolejność Projection/PM-06 jest tylko propozycją, nie zaakceptowaną zmianą roadmapy.
 - Open D2 STOP: ewentualna rozszerzona diagnostyka Viewer rejected-pick (`work/PM-05F_R2_PICK_REJECTION_DIAGNOSTICS_D2_PROPOSAL.md`); nie poszerzać API bez zgody Ownera.
 
 ## Reguły bez wyjątków
