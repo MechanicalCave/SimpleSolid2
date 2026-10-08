@@ -1,7 +1,7 @@
 # PM-05F R2 — Planar-miter Chamfer feasibility and lineage design
 
-**Status:** PROPOSED / NOT ACCEPTED — 2026-10-08  
-**Decision class:** D2; Owner approval required before production geometry implementation  
+**Status:** D2-A FEASIBILITY APPROVED by Owner — 2026-10-08; D2-B production implementation NOT APPROVED  
+**Decision class:** D2-A experiment authorized; separate Owner D2-B required before production geometry, history-adapter, or policy implementation  
 **Parent proposal:** `work/PM-05F_R2_CHAMFER_MIXED_CORNER_D2_PROPOSAL.md`  
 **Active authority:** `work/PM-05_EDGE_FEATURES.md`, PM-05F R2  
 **PR:** #298 / `pm-05f-r2-owner-remediation`  
@@ -26,7 +26,7 @@ In `src/kernel_occt/solid_modeling_kernel.cpp`:
 
 **Single point of failure:** finding/building a valid closed miter is insufficient if each inherited/generated Face cannot be accounted for with unique and defensible source lineage. A fallback must fail closed in that case.
 
-## Proposed bounded feasibility sequence (not authorized implementation)
+## Owner-authorized D2-A feasibility sequence (no production implementation)
 
 ### F0 — Preserve precise semantic oracle
 
@@ -94,10 +94,25 @@ No temporary diagnostic toggles or kernel instrumentation should remain in the f
 
 ## Owner decision surface
 
-**D2-A (requested, not granted):** authorize a **bounded evidence-first provider-local planar-miter feasibility spike** for the exact mixed three-straight-Edge equal-distance Part008 case. The spike may add isolated diagnostic/test code and measured provider experiments, but **not** production behavior or new public contracts until its geometric and lineage oracle passes and the Owner explicitly approves implementation.
+**D2-A (Owner approved 2026-10-08):** authorize a **bounded evidence-first provider-local planar-miter feasibility spike** for the exact mixed three-straight-Edge equal-distance Part008 case. The spike may add isolated diagnostic/test code and measured provider experiments, but **not** production behavior or new public contracts until its geometric and lineage oracle passes and the Owner explicitly approves implementation.
 
 **D2-B (separate later gate):** after that evidence, authorize a precisely scoped production fallback, with any internal history-adapter design and modeling-semantics compatibility decision recorded.
 
 **D3-C (independent):** decide whether all valid two-Edge corner connectors must eventually be planar. Default remains **no change**.
 
-Until those decisions, keep the triple regression RED, preserve fail-closed invalid-BRep rejection, do not merge PR #298, and do not activate PM-06.
+Until D2-B is separately approved, keep the triple regression RED, preserve fail-closed invalid-BRep rejection, do not merge PR #298, and do not activate PM-06.
+
+## D2-A spike checkpoint — 2026-10-08
+
+The Owner explicitly approved **D2-A only** in the conversation after the initial proposal was committed. This is authorization for diagnostic and test-only feasibility work; it does not accept the parent production-fallback D2 proposal.
+
+Commit `8dda62284d00bc7c08a09a41dd7a13ce8e36aa01` adds an **opt-in, failure-isolated** private `probeChamferPlanarMiter` inside the OCCT adapter, activated only under the existing native regression's `SS2_PM05F_R2_CHAMFER_TRIAGE` test switch. It measures, from the *actual* selected OCCT Edges and upstream Body:
+
+- line-vs-curve source, two semantic adjacent Surface carriers, two incident Faces and planar eligibility;
+- validity and generated strip Face kind for each independent one-Edge equal-distance Chamfer;
+- exact shared-Vertex degree of the three input Edges, never proximity-based adjacency;
+- intersection conditioning of single-Edge generated support planes at common two-/three-Edge junctions, and the finite candidate intersection position when defined.
+
+The probe is **read-only** with respect to authored inputs and the production result. It must not authorize a geometry fallback from diagnostic results. Exceptions in diagnostic work are caught so they do not change regular Chamfer status. Instrumentation is temporary and must be removed from any final accepted production candidate.
+
+**Evidence status:** the original three-Edge `CHECK(kernel_three.ok())` is deliberately unchanged, so a correctly executing focused regression may still finish RED. Observe `PM05F_R2_MITER_*` diagnostic lines in Windows job logs before inferring F1 geometry. Do not claim F1/F2/F3 feasibility or B-Rep repair without those results. The 2026-10-08 decision does not constitute an Owner product PASS.
