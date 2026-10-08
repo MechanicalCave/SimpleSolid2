@@ -686,6 +686,77 @@ int main(int argc, char* argv[]) {
         diagnostic_body.generation);
     CHECK(diagnostic_query.candidates.empty());
 
+    // PM-05F R2: Edit of an earlier Fillet/Chamfer presents the exact
+    // predecessor Body as a tool_stage scene. Native screen-coordinate
+    // queries and actual mouse clicks must work at that stage, whereas a
+    // diagnostic_prefix remains non-authorable.
+    viewer::BodyScene tool_stage_body = body_scene;
+    tool_stage_body.generation = {79U};
+    tool_stage_body.purpose =
+        viewer::BodyScenePurpose::tool_stage;
+    CHECK(widget.setBodyScene(tool_stage_body));
+    const auto tool_stage_query =
+        widget.queryBodyTopology(
+            body_center,
+            viewer::BodyTopologyPickFilter{
+                false,
+                true,
+                false});
+    CHECK(tool_stage_query.valid());
+    CHECK(tool_stage_query.completed);
+    CHECK(
+        tool_stage_query.generation ==
+        tool_stage_body.generation);
+    CHECK(tool_stage_query.candidates.size() == 1U);
+    CHECK(
+        tool_stage_query.candidates.front().token ==
+        body_edge_token);
+
+    int tool_stage_click_intents = 0;
+    widget.setBodyTopologySelectionIntentHandler(
+        [&tool_stage_click_intents,
+         &tool_stage_body,
+         body_edge_token](
+            const viewer::BodyTopologyPickQueryResult& query,
+            viewer::SelectionIntentMode mode) {
+            CHECK(query.valid());
+            CHECK(query.completed);
+            CHECK(
+                query.generation ==
+                tool_stage_body.generation);
+            CHECK(
+                mode ==
+                viewer::SelectionIntentMode::replace);
+            CHECK(
+                std::any_of(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [body_edge_token](const auto& candidate) {
+                        return candidate.token ==
+                               body_edge_token;
+                    }));
+            ++tool_stage_click_intents;
+        });
+    QTest::mouseClick(
+        &widget,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        QPoint{
+            static_cast<int>(body_center.x),
+            static_cast<int>(body_center.y)});
+    QApplication::processEvents();
+    CHECK(tool_stage_click_intents == 1);
+
+    sendMouseMove(widget, body_center);
+    CHECK(last_body_preselection_query.completed);
+    CHECK(
+        last_body_preselection_query.generation ==
+        tool_stage_body.generation);
+
+    CHECK(widget.setBodyScene(diagnostic_body));
+    CHECK(
+        widget.queryBodyTopology(
+            body_center).candidates.empty());
     CHECK(widget.setBodyScene(body_scene));
     CHECK(widget.setViewStyle(
         viewer::ViewStyle::shaded));
