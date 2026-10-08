@@ -1243,46 +1243,101 @@ int main(int argc, char* argv[]) {
             << " count=" << secondary_edges.size()
             << std::endl;
 
-        // The exact authored two-Edge input is probed before any
-        // Qt/OCCT event. An invalid mixed pair may return target_failed;
-        // a heap assertion or process termination is never acceptable.
-        constexpr std::size_t max_mixed_candidates = 12U;
-        const auto mixed_limit = std::min(
-            secondary_edges.size(), max_mixed_candidates);
-        for (std::size_t i = 0; i < mixed_limit; ++i) {
-            const auto& second = secondary_edges[i];
-            auto mixed_draft =
-                application::FilletDraft::beginCreate(
-                    crash_session, {*screenshot_edge});
-            CHECK(mixed_draft);
-            CHECK(mixed_draft->setRadius(
-                core::LengthValue{2.0}));
-            CHECK(mixed_draft->setEdges({
-                *screenshot_edge, second.reference}));
+        // #1814 stopped on the SECOND candidate (index 1) while the
+        // first candidate had completed. Isolate that one exact
+        // semantic two-Edge pair without trying any other pair.
+        constexpr std::size_t failing_candidate_index = 1U;
+        CHECK(secondary_edges.size() > failing_candidate_index);
+        const auto& second =
+            secondary_edges[failing_candidate_index];
+        std::cerr
+            << "PM05F_R2_PART008_ISOLATED_CANDIDATE"
+            << " index=" << failing_candidate_index
+            << " role=" << static_cast<int>(second.role)
+            << " producer="
+            << second.reference.curve.producer_feature_id.serialized()
+            << " points=" << second.points.size()
+            << std::endl;
+        for (const auto& surface :
+             second.reference.curve.adjacent_surfaces) {
             std::cerr
-                << "PM05F_R2_PART008_MIXED_EVALUATION_BEGIN"
-                << " index=" << i
-                << " role=" << static_cast<int>(second.role)
+                << "PM05F_R2_PART008_CANDIDATE_SURFACE"
+                << " producer=" << surface.producer_feature_id.serialized()
+                << " role=" << static_cast<int>(surface.role)
+                << " sketch_entity="
+                << (surface.source_entity
+                    ? surface.source_entity->serialized()
+                    : std::string{"none"})
                 << std::endl;
-            const auto evaluated =
-                crash_session.evaluateFilletDraft(
-                    *mixed_draft, kernel);
-            std::cerr
-                << "PM05F_R2_PART008_MIXED_EVALUATION_END"
-                << " index=" << i
-                << " status=" << static_cast<int>(evaluated.status)
-                << " target=" << (evaluated.target_status
-                    ? static_cast<int>(*evaluated.target_status)
-                    : -1)
-                << std::endl;
-            CHECK(evaluated.status ==
-                      application::EdgeFeatureDraftEvaluationStatus::ok ||
-                  evaluated.status ==
-                      application::EdgeFeatureDraftEvaluationStatus::
-                          target_failed);
-            CHECK(crash_session.document().revision() ==
-                  prior_revision);
         }
+        for (const auto& point : second.points) {
+            std::cerr
+                << "PM05F_R2_PART008_CANDIDATE_POINT"
+                << " x=" << point.x
+                << " y=" << point.y
+                << " z=" << point.z
+                << std::endl;
+        }
+
+        const auto input =
+            part::resolveKernelEdgeFeatureInput(
+                part::FilletFeature{
+                    {*screenshot_edge, second.reference},
+                    core::LengthValue{2.0}},
+                &*crash_eval.current_topology);
+        CHECK(input.ok());
+        CHECK(input.input->edges.size() == 2U);
+        std::cerr
+            << "PM05F_R2_PART008_KERNEL_DIRECT_BEGIN"
+            << " edge0=" << input.input->edges[0].value
+            << " edge1=" << input.input->edges[1].value
+            << std::endl;
+        const auto direct =
+            kernel.edgeFeature(
+                *input.input,
+                crash_eval.body_solid);
+        std::cerr
+            << "PM05F_R2_PART008_KERNEL_DIRECT_END"
+            << " status=" << static_cast<int>(direct.status)
+            << std::endl;
+        if (direct.status ==
+                kernel::SolidModelingStatus::ok) {
+            std::cerr
+                << "PM05F_R2_PART008_DELTA_DIRECT_BEGIN"
+                << std::endl;
+            const auto delta =
+                kernel.materialDifferencePreview(
+                    crash_eval.body_solid, direct.solid);
+            std::cerr
+                << "PM05F_R2_PART008_DELTA_DIRECT_END"
+                << " status=" << static_cast<int>(delta.status)
+                << std::endl;
+        }
+
+        auto isolated_draft =
+            application::FilletDraft::beginCreate(
+                crash_session, {*screenshot_edge});
+        CHECK(isolated_draft);
+        CHECK(isolated_draft->setRadius(core::LengthValue{2.0}));
+        CHECK(isolated_draft->setEdges(
+            {*screenshot_edge, second.reference}));
+        std::cerr
+            << "PM05F_R2_PART008_ISOLATED_DRAFT_BEGIN"
+            << std::endl;
+        const auto isolated_result =
+            crash_session.evaluateFilletDraft(
+                *isolated_draft, kernel);
+        std::cerr
+            << "PM05F_R2_PART008_ISOLATED_DRAFT_END"
+            << " status=" << static_cast<int>(isolated_result.status)
+            << std::endl;
+        CHECK(isolated_result.status ==
+                  application::EdgeFeatureDraftEvaluationStatus::ok ||
+              isolated_result.status ==
+                  application::EdgeFeatureDraftEvaluationStatus::
+                      target_failed);
+        CHECK(crash_session.document().revision() ==
+              prior_revision);
 
         // Exercise the same single selected Edge through native Qt/OCCT
         // click routing. Query and hit-testing remain authoritative;
@@ -1343,8 +1398,8 @@ int main(int argc, char* argv[]) {
         // Log before each native click so a Debug CRT assertion isolates
         // the point of failure even if the process terminates.
         bool selected_two = false;
-        for (std::size_t i = 0;
-             i < mixed_limit && !selected_two; ++i) {
+        for (std::size_t i = failing_candidate_index;
+             i <= failing_candidate_index && !selected_two; ++i) {
             const auto& second = secondary_edges[i];
             for (const auto orientation : {
                      viewer::StandardView::top_front_right,
