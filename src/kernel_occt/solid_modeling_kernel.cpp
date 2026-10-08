@@ -51,6 +51,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <iostream>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -4591,6 +4593,201 @@ finishEdgeFeature(
 }
 
 
+
+// D2-A FEASIBILITY SPIKE ONLY. This diagnostic is activated exclusively by
+// the existing native test's SS2_PM05F_R2_CHAMFER_TRIAGE environment variable.
+// It does not contribute geometry, topology lineage, validation or results to
+// the production Chamfer operation. Remove before a production candidate.
+void probeChamferPlanarMiter(
+    const OcctRuntimeSolid& upstream,
+    const std::vector<SelectedRuntimeEdge>& selected,
+    double distance) {
+    if (selected.size() != 3U ||
+        std::getenv(
+            "SS2_PM05F_R2_CHAMFER_TRIAGE") == nullptr) {
+        return;
+    }
+
+    std::cerr
+        << "PM05F_R2_MITER_SPIKE_BEGIN distance="
+        << distance << " selected=3\n";
+    std::vector<std::optional<gp_Pln>>
+        single_strip_planes(selected.size());
+    std::vector<TopoDS_Vertex> unique_vertices;
+
+    for (std::size_t i = 0U; i < selected.size(); ++i) {
+        const auto& edge = selected[i].edge;
+        const BRepAdaptor_Curve curve{edge};
+        const auto surface_tokens =
+            sourceSurfaceTokensForEdge(upstream, edge);
+        std::size_t incident_faces = 0U;
+        std::size_t planar_incident_faces = 0U;
+        for (TopExp_Explorer faces{
+                 upstream.solid, TopAbs_FACE};
+             faces.More(); faces.Next()) {
+            const auto face =
+                TopoDS::Face(faces.Current());
+            if (!faceContainsEdge(face, edge)) {
+                continue;
+            }
+            ++incident_faces;
+            const BRepAdaptor_Surface surface{face, true};
+            if (surface.GetType() == GeomAbs_Plane) {
+                ++planar_incident_faces;
+                const auto pln = surface.Plane();
+                const auto n = pln.Axis().Direction();
+                std::cerr
+                    << "PM05F_R2_MITER_INCIDENT edge=" << i
+                    << " normal=" << n.X() << ","
+                    << n.Y() << "," << n.Z()
+                    << " orientation="
+                    << static_cast<int>(face.Orientation())
+                    << "\n";
+            }
+        }
+
+        for (TopExp_Explorer vertices{
+                 edge, TopAbs_VERTEX};
+             vertices.More(); vertices.Next()) {
+            const auto vertex =
+                TopoDS::Vertex(vertices.Current());
+            if (std::none_of(
+                    unique_vertices.begin(),
+                    unique_vertices.end(),
+                    [&vertex](const TopoDS_Vertex& prior) {
+                        return prior.IsSame(vertex);
+                    })) {
+                unique_vertices.push_back(vertex);
+            }
+        }
+
+        BRepFilletAPI_MakeChamfer alone{upstream.solid};
+        alone.Add(distance, edge);
+        alone.Build();
+        const bool built =
+            alone.IsDone() && !alone.Shape().IsNull();
+        const bool valid =
+            built &&
+            BRepCheck_Analyzer{alone.Shape()}.IsValid();
+        const auto generated =
+            built
+                ? facesFromShapeList(alone.Generated(edge))
+                : std::vector<TopoDS_Face>{};
+        std::size_t planar_generated = 0U;
+        for (const auto& face : generated) {
+            const BRepAdaptor_Surface surface{face, true};
+            if (surface.GetType() == GeomAbs_Plane) {
+                ++planar_generated;
+                if (generated.size() == 1U) {
+                    single_strip_planes[i] = surface.Plane();
+                }
+            }
+        }
+        std::cerr
+            << "PM05F_R2_MITER_EDGE index=" << i
+            << " line=" << (curve.GetType() == GeomAbs_Line)
+            << " semantic_surfaces="
+            << (surface_tokens ? surface_tokens->size() : 0U)
+            << " incident_faces=" << incident_faces
+            << " planar_incident=" << planar_incident_faces
+            << " single_built=" << built
+            << " single_valid=" << valid
+            << " generated_faces=" << generated.size()
+            << " generated_planar=" << planar_generated
+            << " unique_strip_plane="
+            << static_cast<bool>(single_strip_planes[i])
+            << "\n";
+    }
+
+    for (std::size_t v = 0U; v < unique_vertices.size(); ++v) {
+        const auto& vertex = unique_vertices[v];
+        std::vector<std::size_t> touching;
+        for (std::size_t i = 0U; i < selected.size(); ++i) {
+            if (edgeContainsVertex(selected[i].edge, vertex)) {
+                touching.push_back(i);
+            }
+        }
+        if (touching.size() < 2U) {
+            continue;
+        }
+        const auto point = BRep_Tool::Pnt(vertex);
+        std::cerr
+            << "PM05F_R2_MITER_JUNCTION vertex=" << v
+            << " degree=" << touching.size()
+            << " position=" << point.X() << ","
+            << point.Y() << "," << point.Z()
+            << " edges=";
+        bool supports = true;
+        for (const auto i : touching) {
+            std::cerr << i << ",";
+            supports =
+                supports && single_strip_planes[i].has_value();
+        }
+        std::cerr << " supports_complete=" << supports << "\n";
+        if (!supports) continue;
+
+        if (touching.size() == 2U) {
+            const auto n0 =
+                single_strip_planes[touching[0]]->Axis().Direction();
+            const auto n1 =
+                single_strip_planes[touching[1]]->Axis().Direction();
+            const auto cross =
+                gp_Vec{n0}.Crossed(gp_Vec{n1});
+            std::cerr
+                << "PM05F_R2_MITER_TWO_PLANE"
+                << " vertex=" << v
+                << " cross_square=" << cross.SquareMagnitude()
+                << "\n";
+        } else if (touching.size() == 3U) {
+            const auto& p0 = *single_strip_planes[touching[0]];
+            const auto& p1 = *single_strip_planes[touching[1]];
+            const auto& p2 = *single_strip_planes[touching[2]];
+            const gp_Vec n0{p0.Axis().Direction()};
+            const gp_Vec n1{p1.Axis().Direction()};
+            const gp_Vec n2{p2.Axis().Direction()};
+            const auto cross12 = n1.Crossed(n2);
+            const auto cross20 = n2.Crossed(n0);
+            const auto cross01 = n0.Crossed(n1);
+            const double determinant = n0.Dot(cross12);
+            std::cerr
+                << "PM05F_R2_MITER_THREE_PLANE"
+                << " vertex=" << v
+                << " determinant=" << determinant;
+            if (determinant != 0.0 &&
+                std::isfinite(determinant)) {
+                const gp_Pnt origin{0.0, 0.0, 0.0};
+                const double c0 =
+                    n0.Dot(gp_Vec{origin, p0.Location()});
+                const double c1 =
+                    n1.Dot(gp_Vec{origin, p1.Location()});
+                const double c2 =
+                    n2.Dot(gp_Vec{origin, p2.Location()});
+                const auto intersection =
+                    (cross12 * c0 +
+                     cross20 * c1 +
+                     cross01 * c2) / determinant;
+                if (std::isfinite(intersection.X()) &&
+                    std::isfinite(intersection.Y()) &&
+                    std::isfinite(intersection.Z())) {
+                    const gp_Pnt candidate{
+                        intersection.X(),
+                        intersection.Y(),
+                        intersection.Z()};
+                    std::cerr
+                        << " intersection="
+                        << candidate.X() << ","
+                        << candidate.Y() << ","
+                        << candidate.Z()
+                        << " vertex_distance="
+                        << candidate.Distance(point);
+                }
+            }
+            std::cerr << "\n";
+        }
+    }
+    std::cerr << "PM05F_R2_MITER_SPIKE_END\n";
+}
+
 kernel::SolidModelingResult
 OcctSolidModelingKernel::edgeFeature(
     const kernel::EdgeFeatureInput& input,
@@ -4647,6 +4844,22 @@ OcctSolidModelingKernel::edgeFeature(
                 *selected);
         }
         case kernel::EdgeFeatureOperation::chamfer: {
+            // Diagnostic-only, failure-isolated D2-A feasibility probe.
+            if (std::getenv(
+                    "SS2_PM05F_R2_CHAMFER_TRIAGE") != nullptr) {
+                try {
+                    probeChamferPlanarMiter(
+                        *upstream_occt,
+                        *selected,
+                        input.parameter_mm);
+                } catch (const Standard_Failure&) {
+                    std::cerr
+                        << "PM05F_R2_MITER_SPIKE_PROVIDER_EXCEPTION\n";
+                } catch (...) {
+                    std::cerr
+                        << "PM05F_R2_MITER_SPIKE_UNKNOWN_EXCEPTION\n";
+                }
+            }
             BRepFilletAPI_MakeChamfer operation{
                 upstream_occt->solid};
             for (const auto& item : *selected) {
