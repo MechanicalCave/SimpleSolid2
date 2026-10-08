@@ -1913,6 +1913,77 @@ int main(int argc, char* argv[]) {
             << " face_count=21 complete_lineage=1"
             << std::endl;
 
+        // D2-B one authored three-Edge Chamfer lifecycle:
+        // Finish, Edit to a smaller distance, Undo/Redo and cold
+        // native-document rebuild. No provider handles are persisted.
+        const auto finished_three =
+            application::finishChamferDraft(
+                triple_session, *three_draft, three, kernel);
+        CHECK(finished_three.ok());
+        CHECK(finished_three.feature_id);
+        CHECK(triple_session.document().body().features.size() == 3U);
+        const auto committed_three =
+            part::evaluatePart(triple_session.document(), kernel);
+        CHECK(committed_three.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(committed_three.current_topology);
+        CHECK(committed_three.current_topology->complete());
+
+        auto edit_three =
+            application::ChamferDraft::beginEdit(
+                triple_session, *finished_three.feature_id);
+        CHECK(edit_three);
+        CHECK(edit_three->setDistance(core::LengthValue{0.5}));
+        const auto evaluated_edit_three =
+            triple_session.evaluateChamferDraft(*edit_three, kernel);
+        CHECK(evaluated_edit_three.committable());
+        const auto finished_edit_three =
+            application::finishChamferDraft(
+                triple_session, *edit_three,
+                evaluated_edit_three, kernel);
+        CHECK(finished_edit_three.ok());
+        CHECK(triple_session.document().body().features.size() == 3U);
+        CHECK(part::evaluatePart(
+                  triple_session.document(), kernel)
+                  .body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+
+        CHECK(triple_session.undo().ok());
+        CHECK(part::evaluatePart(
+                  triple_session.document(), kernel)
+                  .body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(triple_session.redo().ok());
+        const auto redone_three =
+            part::evaluatePart(triple_session.document(), kernel);
+        CHECK(redone_three.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(redone_three.current_topology);
+        CHECK(redone_three.current_topology->complete());
+
+        const auto cold_path =
+            std::filesystem::temp_directory_path() /
+            ("ss2_pm05f_d2b_cold_" +
+             std::to_string(QCoreApplication::applicationPid()) +
+             ".ss2part");
+        std::error_code cleanup_error;
+        std::filesystem::remove(cold_path, cleanup_error);
+        const auto saved_three =
+            crash_store.createNew(cold_path, triple_session.document());
+        CHECK(saved_three.ok());
+        const auto loaded_three = crash_store.load(cold_path);
+        CHECK(loaded_three.ok());
+        const auto rebuilt_three =
+            part::evaluatePart(*loaded_three.document, kernel);
+        CHECK(rebuilt_three.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(rebuilt_three.current_topology);
+        CHECK(rebuilt_three.current_topology->complete());
+        std::filesystem::remove(cold_path, cleanup_error);
+        std::cerr << "PM05F_R2_PART008_D2B_LIFECYCLE"
+                  << " finish=1 edit=1 undo=1 redo=1 cold=1"
+                  << std::endl;
+
         std::cerr
             << "PM05F_R2_PART008_CHAMFER_OWNER_CORNER_EXPECTATION"
             << " corner_planar=" << chamfer_corner_plane
