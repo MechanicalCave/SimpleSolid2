@@ -1318,6 +1318,21 @@ int main(int argc, char* argv[]) {
                   kernel::SolidPresentationStatus::ok);
             CHECK(delta.removed.has_value());
             CHECK(delta.added.has_value());
+            std::cerr
+                << "PM05F_R2_PART008_RESULT_PRESENTATION_BEGIN"
+                << std::endl;
+            const auto result_presentation =
+                kernel.bodyPresentation(direct.solid);
+            std::cerr
+                << "PM05F_R2_PART008_RESULT_PRESENTATION_END"
+                << " status="
+                << static_cast<int>(result_presentation.status)
+                << " faces="
+                << result_presentation.body.faces.size()
+                << " edges="
+                << result_presentation.body.edges.size()
+                << std::endl;
+            CHECK(result_presentation.ok());
         }
 
         auto isolated_draft =
@@ -1485,8 +1500,42 @@ int main(int argc, char* argv[]) {
         std::cerr
             << "PM05F_R2_PART008_GUI_TWO_EDGE_PASS"
             << std::endl;
-        cancel->click();
+        CHECK(finish->isEnabled());
+        std::cerr
+            << "PM05F_R2_PART008_GUI_FINISH_BEGIN"
+            << " revision=" << crash_session.document().revision()
+            << " features="
+            << crash_session.document().body().features.size()
+            << std::endl;
+        finish->click();
+        std::cerr
+            << "PM05F_R2_PART008_GUI_FINISH_CLICK_RETURNED"
+            << std::endl;
         QApplication::processEvents();
+        std::cerr
+            << "PM05F_R2_PART008_GUI_FINISH_EVENTS_RETURNED"
+            << std::endl;
+        CHECK(crash_session.document().revision() >
+              prior_revision);
+        CHECK(crash_session.document().body()
+                  .features.size() == 3U);
+        std::cerr
+            << "PM05F_R2_PART008_REEVALUATION_BEGIN"
+            << std::endl;
+        const auto crash_committed =
+            part::evaluatePart(crash_session.document(), kernel);
+        std::cerr
+            << "PM05F_R2_PART008_REEVALUATION_END"
+            << " body_status="
+            << static_cast<int>(crash_committed.body_status)
+            << std::endl;
+        CHECK(crash_committed.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(viewport->runtimeDiagnostics()
+                  .solid_committed_displayed);
+        std::cerr
+            << "PM05F_R2_PART008_GUI_FINISH_PASS"
+            << std::endl;
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
