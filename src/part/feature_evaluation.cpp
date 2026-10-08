@@ -1918,7 +1918,15 @@ curveRelationForObservation(
                 observation.provider_curve_kind;
             return result;
         case kernel::CurveKind::other:
-            provider_mismatch = true;
+            // A valid edge-feature corner may create a local transition
+            // boundary whose provider Curve is outside the current durable
+            // line/circle semantic vocabulary (for example a spline between
+            // two adjacent Fillet patches). This is not a provider
+            // contradiction and must not invalidate an otherwise valid
+            // solid. The complete runtime Edge remains topology-accounted as
+            // semantically_unsupported; it simply cannot be authored as a
+            // later strict MaterialEdgeReference until a defensible durable
+            // Curve meaning exists.
             return std::nullopt;
         }
     }
@@ -1968,13 +1976,25 @@ curveRelationForObservation(
         result.role =
             FeatureCurveRoleKind::
                 boolean_intersection;
-        if (semantic_surfaces[0].kind ==
-                kernel::SurfaceKind::plane &&
-            semantic_surfaces[1].kind ==
-                kernel::SurfaceKind::plane) {
+
+        // A boolean Curve is durably identified by the two semantic Surface
+        // meanings that intersect. The provider's analytic CurveKind is not
+        // identity authority, but line/circle classification is admissible
+        // runtime evidence and is part of CurveRelation equality/lineage.
+        // This admits common plane-cylinder Cut boundaries (circle arcs)
+        // without XYZ, nearest-geometry, or provider-order rebinding.
+        //
+        // Multiple disconnected line/circle realizations for the same pair
+        // of semantic Surfaces group into one ambiguous Curve family rather
+        // than silently choosing a branch. Non-analytic CurveKind::other
+        // remains fully topology-accounted but non-authorable.
+        switch (observation.provider_curve_kind) {
+        case kernel::CurveKind::line:
+        case kernel::CurveKind::circle:
             result.curve_kind =
-                kernel::CurveKind::line;
-        } else {
+                observation.provider_curve_kind;
+            break;
+        case kernel::CurveKind::other:
             return std::nullopt;
         }
     } else {
@@ -2277,6 +2297,7 @@ buildCurveStage(
 
         std::vector<kernel::RuntimeEdgeToken>
             descendants;
+        bool provider_lineage_empty = true;
         for (const auto source :
              reference.current_edges) {
             const auto* lineage =
@@ -2289,11 +2310,44 @@ buildCurveStage(
                     lineage->current_edges.size()) {
                 return std::nullopt;
             }
+            if (!lineage->current_edges.empty()) {
+                provider_lineage_empty = false;
+            }
             for (const auto token :
                  lineage->current_edges) {
                 appendUniqueRuntimeToken(
                     descendants,
                     token);
+            }
+        }
+
+        // OCCT Fillet/Chamfer history may omit an untouched, distant Edge
+        // even though the exact same semantic Surface-pair boundary is still
+        // present in the adjacent result stage. For PM-05 only, when provider
+        // Edge lineage is completely empty, recover that adjacent-stage
+        // continuation from the already-published semantic relation.
+        //
+        // This is not geometry rebinding: the role, analytic CurveKind and
+        // exact canonical pair of semantic Surface addresses must match.
+        // Multiple bounded realizations remain multiple descendants and are
+        // handled by the existing strict branch/cardinality rules. If OCCT
+        // did publish any descendant, provider history remains authoritative
+        // and this fallback is not used.
+        if (descendants.empty() &&
+            provider_lineage_empty &&
+            kernel_result.edge_feature_input_membership) {
+            for (const auto& meaning : meanings) {
+                if (meaning.periodic_seam ||
+                    meaning.representation_partition ||
+                    !meaning.relation ||
+                    !sameCurveRelation(
+                        reference,
+                        *meaning.relation)) {
+                    continue;
+                }
+                appendUniqueRuntimeToken(
+                    descendants,
+                    meaning.token);
             }
         }
 
