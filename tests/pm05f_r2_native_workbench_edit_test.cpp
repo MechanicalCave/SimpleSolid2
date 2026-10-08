@@ -613,6 +613,7 @@ int main(int argc, char* argv[]) {
         CHECK(reply.accepted);
 
         bool trihedral_selected = false;
+        std::size_t corner_index = 0U;
         for (const auto& corner : corners) {
             reply = workbench.submitCadInput(
                 "CLEAR", workbench.cadInputContextGeneration());
@@ -620,9 +621,26 @@ int main(int argc, char* argv[]) {
             bool all_clicked = true;
             for (std::size_t index = 0U;
                  index < corner.size(); ++index) {
-                if (!nativeClick(*viewport, corner[index]) ||
-                    !selectedCount(
-                        *label, static_cast<int>(index + 1U))) {
+                const bool clicked =
+                    nativeClick(*viewport, corner[index]);
+                const bool counted =
+                    selectedCount(
+                        *label,
+                        static_cast<int>(index + 1U));
+                std::cerr
+                    << "PM05F_R2_TRIHEDRAL_DIAGNOSTIC"
+                    << " corner=" << corner_index
+                    << " edge=" << index
+                    << " clicked=" << clicked
+                    << " counted=" << counted
+                    << " selected='"
+                    << label->text().toStdString()
+                    << "' finish=" << finish->isEnabled()
+                    << " world=(" << corner[index].x
+                    << "," << corner[index].y
+                    << "," << corner[index].z << ")"
+                    << '\n';
+                if (!clicked || !counted) {
                     all_clicked = false;
                     break;
                 }
@@ -631,6 +649,7 @@ int main(int argc, char* argv[]) {
                 trihedral_selected = true;
                 break;
             }
+            ++corner_index;
         }
         CHECK(trihedral_selected);
         CHECK(selectedCount(*label, 3));
