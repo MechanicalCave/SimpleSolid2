@@ -1248,18 +1248,18 @@ int main(int argc, char* argv[]) {
         // semantic two-Edge pair without trying any other pair.
         constexpr std::size_t failing_candidate_index = 1U;
         CHECK(secondary_edges.size() > failing_candidate_index);
-        const auto& second =
+        const auto& isolated_secondary =
             secondary_edges[failing_candidate_index];
         std::cerr
             << "PM05F_R2_PART008_ISOLATED_CANDIDATE"
             << " index=" << failing_candidate_index
-            << " role=" << static_cast<int>(second.role)
+            << " role=" << static_cast<int>(isolated_secondary.role)
             << " producer="
-            << second.reference.curve.producer_feature_id.serialized()
-            << " points=" << second.points.size()
+            << isolated_secondary.reference.curve.producer_feature_id.serialized()
+            << " points=" << isolated_secondary.points.size()
             << std::endl;
         for (const auto& surface :
-             second.reference.curve.adjacent_surfaces) {
+             isolated_secondary.reference.curve.adjacent_surfaces) {
             std::cerr
                 << "PM05F_R2_PART008_CANDIDATE_SURFACE"
                 << " producer=" << surface.producer_feature_id.serialized()
@@ -1270,7 +1270,7 @@ int main(int argc, char* argv[]) {
                     : std::string{"none"})
                 << std::endl;
         }
-        for (const auto& point : second.points) {
+        for (const auto& point : isolated_secondary.points) {
             std::cerr
                 << "PM05F_R2_PART008_CANDIDATE_POINT"
                 << " x=" << point.x
@@ -1282,7 +1282,7 @@ int main(int argc, char* argv[]) {
         const auto input =
             part::resolveKernelEdgeFeatureInput(
                 part::FilletFeature{
-                    {*screenshot_edge, second.reference},
+                    {*screenshot_edge, isolated_secondary.reference},
                     core::LengthValue{2.0}},
                 &*crash_eval.current_topology);
         CHECK(input.ok());
@@ -1320,7 +1320,7 @@ int main(int argc, char* argv[]) {
         CHECK(isolated_draft);
         CHECK(isolated_draft->setRadius(core::LengthValue{2.0}));
         CHECK(isolated_draft->setEdges(
-            {*screenshot_edge, second.reference}));
+            {*screenshot_edge, isolated_secondary.reference}));
         std::cerr
             << "PM05F_R2_PART008_ISOLATED_DRAFT_BEGIN"
             << std::endl;
