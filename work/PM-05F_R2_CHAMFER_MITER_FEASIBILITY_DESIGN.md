@@ -116,3 +116,70 @@ Commit `8dda62284d00bc7c08a09a41dd7a13ce8e36aa01` adds an **opt-in, failure-isol
 The probe is **read-only** with respect to authored inputs and the production result. It must not authorize a geometry fallback from diagnostic results. Exceptions in diagnostic work are caught so they do not change regular Chamfer status. Instrumentation is temporary and must be removed from any final accepted production candidate.
 
 **Evidence status:** the original three-Edge `CHECK(kernel_three.ok())` is deliberately unchanged, so a correctly executing focused regression may still finish RED. Observe `PM05F_R2_MITER_*` diagnostic lines in Windows job logs before inferring F1 geometry. Do not claim F1/F2/F3 feasibility or B-Rep repair without those results. The 2026-10-08 decision does not constitute an Owner product PASS.
+
+## D2-A F1/F2 actual Windows measurements — 2026-10-08
+
+**Test boundary:** exact `tests/fixtures/pm05f_r2_part008_sanitized.ss2part` and the unchanged semantic three-Edge `CHECK(kernel_three.ok())` in `pm05f_r2.native_workbench_edit`. These FOCUSED runs are **RED by the original production check** after the read-only probe executes. A diagnostic-only candidate is not returned as a production Body.
+
+### F1 — exact source topology and local strip supports
+
+Windows FOCUSED [#1845](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37824803422) on `13c67c23`:
+
+- All three selected OCCT Edges are straight Lines, each bounded by two planar source Faces and two strict semantic Surface carriers.
+- Each single-Edge Chamfer at 1 mm builds a valid B-Rep and generates **exactly one planar strip Face**.
+- Source graph is **not trihedral**: junction `(-5,-15,0)` connects Edges `0+1`; junction `(-5,5,0)` connects Edges `1+2`; no Vertex has selected degree three.
+- Strip-support plane normals at both degree-two junctions have `|n0 × n1|² = 0.75`: a nonparallel analytical intersection.
+
+Windows FOCUSED [#1846](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37825445549) on `c3246d72`:
+
+- At d=1 mm the two nearest-to-junction points on the analytical miter intersection lines are `(-5,-14,1)` and `(-5,4,1)`, each 1.41421 mm from its source Vertex.
+- The first pair `0+1` and disconnected pair `0+2` yield valid changed B-Reps; pair `1+2` yields invalid B-Rep even without selecting the third Edge.
+
+Windows FOCUSED [#1847](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37825703125) on `6c8c5ea2`:
+
+| Pair | d=1 mm | d=0.5 mm | d=0.25 mm |
+|---|---|---|---|
+| `0+1` | Valid/changed | Invalid (2 Faces) | Invalid (2 Faces) |
+| `0+2` | Valid/changed | Valid/changed | Valid/changed |
+| `1+2` | Invalid (2 Faces) | Invalid (2 Faces) | Invalid (2 Faces) |
+
+The two registration orders of **each pair** agree at every distance. Therefore neither selecting a different OCCT `Add(edge)` order nor reducing distance fixes this case. Note the nonmonotonic `0+1` behavior: success at 1 mm but invalid at smaller distances. The full triple remains invalid in the existing original test.
+
+### F2 — exact signed-delta Boolean construction feasibility
+
+Windows FOCUSED [#1848](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37825991972) on `ae516d5f`:
+
+- For each independent valid one-Edge Chamfer, `B0 - S_i` and `S_i - B0` use OCCT Boolean Cut with `SetFuzzyValue(0.0)`.
+- Edge 0 and Edge 2 each **remove** material only; Edge 1 **adds** material only. This explains why a global subtractive planar clipping construction is not sufficient.
+- Experimental composition of those exact deltas — both add-first/remove-last and remove-first/add-last precedence — yields **one changed solid**, valid `BRepCheck_Analyzer`, with **21/21 planar Faces** at d=1 mm. This shape is *throwaway diagnostic evidence*, not a Fillet/Chamfer production output.
+
+Windows FOCUSED [#1849](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37826307095) on `43bf8b2f`:
+
+- Each CSG candidate contains one planar Face sharing the supporting plane with **each** of the three independent Chamfer strip Faces (`strip_support_counts=1,1,1`).
+- Exact zero-fuzzy Boolean Cut in *both directions* between the two CSG candidates reports no positive-volume difference. This establishes **material-volume equivalence**, **not** identical Face partitioning or topological identity.
+
+Windows FOCUSED [#1850](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37826561327) on `53288b7a`:
+
+| Distance | CSG remove-wins | CSG add-wins | Support faces for Edge 0/1/2 | Between-policy material difference |
+|---|---|---|---|---|
+| 1 mm | 1 valid changed solid, 21/21 planar Faces | same | 1 / 1 / 1 | none in either direction |
+| 0.5 mm | 1 valid changed solid, 21/21 planar Faces | same | 1 / 1 / 1 | none in either direction |
+| 0.25 mm | 1 valid changed solid, 21/21 planar Faces | same | 1 / 1 / 1 | none in either direction |
+
+**Interpretation:** For this bounded fixture and three values, an exact no-fuzzy provider-local Boolean construction is **geometrically feasible** despite invalid direct OCCT Chamfer results. The diagnostic evidence does not establish a general Chamfer algorithm, a stable canonical Face decomposition, exact local trimming/size coverage at every strip boundary, proper edge/corner Surface ownership, or Edit/Persistence lifecycle parity.
+
+### F3 — remaining blocking lineage proof (D2-A research, not D2-B permission)
+
+The generated candidate contains 21 planar Faces, compared with the original upstream and independently generated strip Faces. Before it can become any product result, the experiment must demonstrate:
+
+1. **Inherited Face descendants:** compose exact OCCT Boolean `Modified/Generated/IsDeleted` histories from each upstream Face through all signed-delta and final CSG steps, without geometric-nearest/source-order guessing.
+2. **Generated strips:** trace the `Generated(source Edge)` Face from each independent Chamfer through the Boolean delta and candidate history, verify positive-area participation, and uniquely classify the final trimmed descendants as the corresponding `edge_transition`.
+3. **Junctions:** classify any residual generated Face at `(-5,-15,0)` and `(-5,5,0)` against the unique shared source Vertex and its incident selected Edges, or prove that no separate Face patch exists; zero ambiguous ownership.
+4. **Completeness:** every final Face, Edge and Vertex must be accounted for under strict stage-scoped runtime topology; do not infer identity solely from common planar support or visual similarity.
+5. **Geometric controls:** positive material delta, proper shell/orientation, exact authored distance on all three trimmed regions, no remote unrequested modifications, size/ordering independence, unsupported/ambiguous inputs fail closed.
+
+A private provenance composition adapter is a **candidate design requiring its own evidence**, not an accepted API change. If exact lineage is not recoverable through these internal OCCT histories, STOP for a more specific Owner D2 decision.
+
+### Disposition after F2
+
+**F1 qualified for the exact fixture; F2 geometric feasibility demonstrated for d=1/0.5/0.25 mm; F3 unproven and blocking.** The current production three-Edge test deliberately remains RED at `kernel_three.ok()`. No fallback is activated, no public Kernel API or persistent semantics changed, PR #298 remains Draft, and PM-06 remains gated. Only Owner-authorized D2-A isolated diagnostic/research code was added; all `PM05F_R2_MITER_*` probes must be removed before a final accepted production candidate.
