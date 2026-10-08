@@ -3,8 +3,8 @@
 **Status:** PROPOSED / NOT ACCEPTED — 2026-10-08
 **Authority:** PM-05 Edge Features / PM-05F R2 Owner remediation
 **Decision:** D2 implementation boundary; Owner must explicitly approve before production geometry/policy changes
-**Production mutation authorization:** NONE by this document
-**Partial Owner decision:** D2-A evidence-only feasibility accepted 2026-10-08; D2-B implementation and D3 corner appearance NOT accepted
+**Production mutation authorization:** D2-B APPROVED by Owner on 2026-10-08, strictly for the bounded provider-private fallback and provenance ledger described below; no public/persistent contract or product D3 extension authorized
+**Owner decision:** D2-A feasibility accepted; D2-B bounded production spike accepted; D3 global corner appearance NOT accepted
 
 ## Owner evidence and exact bounded failure
 
@@ -72,3 +72,11 @@ Owner accepted the bounded **D2-A evidence-only provider experiment**, explicitl
 Both would remain behind the existing neutral Kernel/Part boundary, preserving the one-Feature authored selection, equality of its common distance, fail-closed unresolved claims, zero fuzzy/adaptive tolerance and no public API/persistence mutations by implication. A separate explicit STOP applies if production needs new durable topology roles, public contracts, modeling-semantics version changes, or a new product Chamfer corner policy.
 
 **This paragraph records a recommendation, not Owner authorization**. Existing strict three-Edge RED remains, and no production candidate or acceptance was produced.
+
+## Explicit Owner D2-B acceptance — 2026-10-08
+
+After reviewing the exact Part008 F1/F2/F3 diagnostic evidence, the Owner explicitly accepted **D2-B** in the conversation ("akceptuję — kontynuujmy"). This is authorization to *attempt* a bounded production implementation of a provider-private planar equal-distance Chamfer fallback for geometrically supported mixed linear multi-Edge corners, not automatic acceptance of any implementation or of a new persistent modeling schema.
+
+Implementation gates are mandatory: original 3-Edge material Edges only; default OCCT valid result stays preferred; no-fuzzy exact per-Edge signed deltas; one valid nontrivially changed solid; all authored Edge strips represented at true local offset; exactly one invariant semantic Surface owner for each final Face, including the two independently sourced planar continuation Faces and local corner split Faces; complete current-stage Face/Edge/Vertex accounting with unambiguous provenance; six Edge permutations, distances 1/0.5/0.25 mm; faithful edit/replay/undo/save and current topology no false Resolved; existing good 1-/2-/3-edge cases unmodified. If any gate fails, fall back to original fail-closed error, never silently accept partial geometry.
+
+**Not authorized:** blanket same-domain healing, geometry/proximity rebinding, provider Face-index identity, implicit Edge expansion, tolerance escalation, changed schema/neutral public API, global planar-only 2-Edge product policy, merging PR #298, or activating PM-06. Owner manual Windows and exact-head FULL remain final acceptance gates.
