@@ -962,6 +962,28 @@ int main(int argc, char* argv[]) {
             << owner_exact_presentation.body.edges.size()
             << '\n';
         CHECK(owner_exact_presentation.ok());
+        // Audit two-point Edge presentation spans in the exact stored
+        // Owner geometry. A mathematically collapsed path cannot form
+        // an OCCT AIS_Wire; this is not a license to fabricate CAD
+        // geometry or silently enlarge numerical tolerances.
+        for (const auto& edge :
+             owner_exact_presentation.body.edges) {
+            if (edge.points.size() != 2U) {
+                continue;
+            }
+            const auto& a = edge.points.front();
+            const auto& b = edge.points.back();
+            const auto length = std::hypot(
+                std::hypot(b.x - a.x, b.y - a.y),
+                b.z - a.z);
+            std::cerr
+                << "PM05F_R2_OWNER_TWO_POINT_EDGE"
+                << " runtime_token=" << edge.runtime_token.value
+                << " length_mm=" << length
+                << " a=" << a.x << "," << a.y << "," << a.z
+                << " b=" << b.x << "," << b.y << "," << b.z
+                << '\n';
+        }
         // Owner screenshot uses Shaded + Edges, not the widget's
         // default Shaded mode. Style synchronization builds an
         // additional OCCT wire for every material Edge and must never
