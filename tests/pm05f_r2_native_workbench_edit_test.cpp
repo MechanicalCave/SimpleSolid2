@@ -589,6 +589,126 @@ int main(int argc, char* argv[]) {
                 << " operation=" << command << '\n';
         }
 
+        // R2-E: an actual OCCT circle sampled with the production
+        // BodyPresentation path must remain selectable at high zoom.
+        // The analytic midpoint is only a cursor-position test probe:
+        // authoring always uses the strict Part semantic Curve catalog.
+        auto precision_session =
+            makeRevolveSession(2.0 * std::acos(-1.0));
+        CHECK(workbench.activateDocument(
+            &precision_session, {}));
+        QApplication::processEvents();
+        const auto precision_evaluation =
+            part::evaluatePart(
+                precision_session.document(), kernel);
+        CHECK(precision_evaluation.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(precision_evaluation.current_topology);
+        const auto precision_body =
+            kernel.bodyPresentation(
+                precision_evaluation.body_solid);
+        CHECK(precision_body.ok());
+        double max_screen_gap = 0.0;
+        std::size_t testable_curved_segments = 0U;
+        std::size_t missed_curved_segments = 0U;
+        for (const auto& edge :
+             precision_body.body.edges) {
+            if (edge.points.size() < 3U) continue;
+            const auto resolved =
+                part::authorMaterialEdgeReference(
+                    *precision_evaluation.current_topology,
+                    edge.runtime_token);
+            if (!resolved.ok()) continue;
+            // The fixture is a circle about the world X-axis.
+            // Only its front x=20 cap rim is guaranteed unobstructed.
+            if (std::abs(edge.points.front().x - 20.0) >
+                1.0e-5) {
+                continue;
+            }
+            const auto& a = edge.points[0];
+            const auto& b = edge.points[1];
+            const double radius =
+                std::hypot(a.y, a.z);
+            if (radius < 9.0 ||
+                std::abs(std::hypot(b.y, b.z) - radius) >
+                    1.0e-4) {
+                continue;
+            }
+            const double mid_y = a.y + b.y;
+            const double mid_z = a.z + b.z;
+            const double mid_len =
+                std::hypot(mid_y, mid_z);
+            if (mid_len <= 0.0) continue;
+            const viewer::Point3 true_mid{
+                a.x,
+                mid_y * radius / mid_len,
+                mid_z * radius / mid_len};
+            const viewer::CameraState close_view{
+                viewer::Point3{100.0, 0.0, 0.0},
+                true_mid,
+                viewer::Vec3{0.0, 0.0, 1.0},
+                viewer::CameraProjection::orthographic,
+                8.0};
+            CHECK(viewport->setCameraState(close_view));
+            QApplication::processEvents();
+            const auto sa =
+                viewport->projectWorldPoint(
+                    {a.x, a.y, a.z});
+            const auto sb =
+                viewport->projectWorldPoint(
+                    {b.x, b.y, b.z});
+            const auto sm =
+                viewport->projectWorldPoint(true_mid);
+            CHECK(sa && sb && sm);
+            const double dx = sb->x - sa->x;
+            const double dy = sb->y - sa->y;
+            const double squared = dx * dx + dy * dy;
+            CHECK(squared > 0.0);
+            const double t = std::clamp(
+                ((sm->x - sa->x) * dx +
+                 (sm->y - sa->y) * dy) / squared,
+                0.0, 1.0);
+            const double screen_gap = std::hypot(
+                sm->x - sa->x - t * dx,
+                sm->y - sa->y - t * dy);
+            max_screen_gap =
+                std::max(max_screen_gap, screen_gap);
+            const auto q =
+                viewport->queryBodyTopology(
+                    *sm,
+                    viewer::BodyTopologyPickFilter{
+                        false, true, false});
+            CHECK(q.valid() && q.completed);
+            CHECK(q.generation.valid());
+            const auto expected =
+                std::any_of(
+                    q.candidates.begin(),
+                    q.candidates.end(),
+                    [](const auto& candidate) {
+                        return candidate.kind ==
+                            viewer::BodyTopologyPresentationKind::edge;
+                    });
+            ++testable_curved_segments;
+            if (!expected) {
+                ++missed_curved_segments;
+            }
+            std::cerr
+                << "PM05F_R2_HIGH_ZOOM_CURVE"
+                << " deflection_gap_pixels="
+                << screen_gap
+                << " edge_found=" << expected
+                << " samples=" << edge.points.size()
+                << '\n';
+            break;
+        }
+        CHECK(testable_curved_segments > 0U);
+        CHECK(missed_curved_segments == 0U);
+        std::cout
+            << "PM05F_R2_CURVE_PICK_HIGH_ZOOM"
+            << " max_chord_gap_px=" << max_screen_gap
+            << " tested=" << testable_curved_segments
+            << '\n';
+
         // R2-A: native full click -> Workbench three converging Edge
         // selection -> Fillet Finish -> fresh Part evaluation and visible
         // committed Body. Coordinates here only choose mouse positions,
