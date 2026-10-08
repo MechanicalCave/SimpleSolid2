@@ -4613,6 +4613,8 @@ void probeChamferPlanarMiter(
         << distance << " selected=3\n";
     std::vector<std::optional<gp_Pln>>
         single_strip_planes(selected.size());
+    std::vector<std::optional<TopoDS_Face>>
+        single_strip_faces(selected.size());
     std::vector<TopoDS_Shape>
         single_chamfer_shapes(selected.size());
     std::vector<TopoDS_Vertex> unique_vertices;
@@ -4685,6 +4687,7 @@ void probeChamferPlanarMiter(
                 ++planar_generated;
                 if (generated.size() == 1U) {
                     single_strip_planes[i] = surface.Plane();
+                    single_strip_faces[i] = face;
                 }
             }
         }
@@ -4755,6 +4758,7 @@ void probeChamferPlanarMiter(
         << " removed_parts=" << remove_deltas.size()
         << " added_parts=" << add_deltas.size() << "\n";
     if (deltas_complete) {
+        std::vector<TopoDS_Shape> policy_candidates;
         for (const bool remove_last : {true, false}) {
             TopoDS_Shape candidate = upstream.solid;
             bool built = true;
@@ -4826,21 +4830,75 @@ void probeChamferPlanarMiter(
                             VolumePresence::positive;
                 }
             }
+            std::vector<std::size_t> support_plane_faces(
+                selected.size(), 0U);
+            if (valid) {
+                for (TopExp_Explorer faces{
+                         candidate, TopAbs_FACE};
+                     faces.More(); faces.Next()) {
+                    const auto face =
+                        TopoDS::Face(faces.Current());
+                    for (std::size_t i = 0U;
+                         i < selected.size(); ++i) {
+                        if (single_strip_faces[i] &&
+                            planarFacesSameDomain(
+                                face, *single_strip_faces[i])) {
+                            ++support_plane_faces[i];
+                        }
+                    }
+                }
+            }
+            const auto solid_count =
+                built
+                    ? countUniqueSubshapes(
+                        candidate, TopAbs_SOLID)
+                    : 0U;
             std::cerr
                 << "PM05F_R2_MITER_CSG"
                 << " policy="
                 << (remove_last ? "remove_wins" : "add_wins")
                 << " built=" << built
                 << " valid=" << valid
-                << " solid_count="
-                << (built
-                    ? countUniqueSubshapes(
-                        candidate, TopAbs_SOLID)
-                    : 0U)
+                << " solid_count=" << solid_count
                 << " faces=" << total_faces
                 << " planar_faces=" << planar_faces
                 << " changed=" << changed
-                << "\n";
+                << " strip_support_counts=";
+            for (const auto count : support_plane_faces) {
+                std::cerr << count << ",";
+            }
+            std::cerr << "\n";
+            if (valid && solid_count == 1U && changed) {
+                policy_candidates.push_back(candidate);
+            }
+        }
+        if (policy_candidates.size() == 2U) {
+            BRepAlgoAPI_Cut first_minus_second{
+                policy_candidates[0], policy_candidates[1]};
+            first_minus_second.SetFuzzyValue(0.0);
+            first_minus_second.Build();
+            BRepAlgoAPI_Cut second_minus_first{
+                policy_candidates[1], policy_candidates[0]};
+            second_minus_first.SetFuzzyValue(0.0);
+            second_minus_first.Build();
+            std::cerr
+                << "PM05F_R2_MITER_CSG_POLICY_DIFF"
+                << " both_built="
+                << (first_minus_second.IsDone() &&
+                    second_minus_first.IsDone());
+            if (first_minus_second.IsDone() &&
+                second_minus_first.IsDone()) {
+                std::cerr
+                    << " first_minus_second="
+                    << static_cast<int>(
+                        volumePresence(
+                            first_minus_second.Shape()))
+                    << " second_minus_first="
+                    << static_cast<int>(
+                        volumePresence(
+                            second_minus_first.Shape()));
+            }
+            std::cerr << "\n";
         }
     }
 
