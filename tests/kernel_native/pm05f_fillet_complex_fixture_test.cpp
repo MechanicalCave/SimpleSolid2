@@ -62,7 +62,7 @@ std::optional<part::ProfileId> createProfile(
         : std::nullopt;
 }
 
-Fixture makeCapsuleCutPart() {
+Fixture makeCapsuleCutPart(double cut_depth = 20.0) {
     auto source =
         part::PartDocument::create(
             core::DocumentId::generate());
@@ -167,7 +167,7 @@ Fixture makeCapsuleCutPart() {
                 *cut_profile,
                 part::ExtrudeOperation::cut,
                 part::OneSidedExtrudeExtent{
-                    core::LengthValue{20.0},
+                    core::LengthValue{cut_depth},
                     false}}});
 
     auto restored =
@@ -668,6 +668,67 @@ int main() {
         << " removed=" << (complex_delta.removed ? 1 : 0)
         << " added=" << (complex_delta.added ? 1 : 0)
         << " elapsed_ms=" << delta_ms << '\n';
+
+    // R2-D concave pocket: a blind capsule Cut leaves an interior
+    // wall/floor corner. The same strict four-Edge semantic loop must give
+    // a real material-addition preview at the concave floor, while the
+    // untouched Body remains independent of the preview tessellation.
+    {
+        const auto pocket =
+            makeCapsuleCutPart(10.0);
+        const auto pocket_base =
+            part::evaluatePart(pocket.document, kernel);
+        CHECK(
+            pocket_base.body_status ==
+            part::BodyEvaluationStatus::up_to_date);
+        CHECK(pocket_base.features.size() == 2U);
+        const auto& pocket_cut =
+            pocket_base.features.back();
+        CHECK(pocket_cut.result_solid != nullptr);
+        CHECK(pocket_cut.result_topology);
+        CHECK(pocket_cut.result_topology->complete());
+
+        const auto pocket_loops =
+            mixedBooleanLoops(pocket_cut);
+        CHECK(!pocket_loops.empty());
+        std::size_t applicable = 0U;
+        std::size_t volume_added = 0U;
+        for (const auto& pocket_loop :
+             pocket_loops) {
+            const auto candidate =
+                appendEdgeFeature(
+                    pocket.document,
+                    references(pocket_loop),
+                    kernel::EdgeFeatureOperation::fillet,
+                    1.0);
+            const auto evaluated =
+                part::evaluatePart(candidate, kernel);
+            if (evaluated.features.size() != 3U ||
+                evaluated.features.back().status !=
+                    part::FeatureEvaluationStatus::up_to_date) {
+                continue;
+            }
+            const auto& fillet =
+                evaluated.features.back();
+            CHECK(fillet.result_solid != nullptr);
+            const auto delta =
+                kernel.materialDifferencePreview(
+                    pocket_cut.result_solid,
+                    fillet.result_solid);
+            CHECK(delta.ok());
+            ++applicable;
+            if (delta.added) {
+                ++volume_added;
+            }
+        }
+        std::cout
+            << "PM05F_R2_BLIND_POCKET_DELTA"
+            << " applicable_loops=" << applicable
+            << " material_additions=" << volume_added
+            << '\n';
+        CHECK(applicable > 0U);
+        CHECK(volume_added > 0U);
+    }
 
     // Old-project analogue: first Chamfer an unrelated exterior Edge, then
     // re-author the same Cut Curve meanings at the new stage and Fillet the
