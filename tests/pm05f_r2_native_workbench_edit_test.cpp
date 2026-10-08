@@ -1704,12 +1704,10 @@ int main(int argc, char* argv[]) {
         std::cerr
             << "PM05F_R2_PART008_CHAMFER_OWNER_THREE_BEGIN"
             << std::endl;
-        qputenv("SS2_PM05F_R2_CHAMFER_TRIAGE", "1");
         const auto kernel_three =
             kernel.edgeFeature(
                 *before_triple_kernel.input,
                 crash_eval.body_solid);
-        qunsetenv("SS2_PM05F_R2_CHAMFER_TRIAGE");
         std::cerr
             << "PM05F_R2_PART008_CHAMFER_OWNER_THREE_KERNEL"
             << " status=" << static_cast<int>(kernel_three.status)
