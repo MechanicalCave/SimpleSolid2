@@ -246,6 +246,22 @@ int main(int argc, char* argv[]) {
     CHECK(material_delta_diagnostics.solid_preview_displayed);
     CHECK(material_delta_diagnostics.solid_preview_style_expected);
     CHECK(material_delta_diagnostics.solid_committed_displayed);
+    CHECK(material_delta_diagnostics.solid_shading_styles_isolated);
+
+    // One-sided differences do not require a fake zero-area second mesh.
+    auto added_only = delta_preview;
+    added_only.triangles.clear();
+    CHECK(added_only.valid());
+    CHECK(widget.setSolidPreviewScene(added_only));
+    CHECK(widget.runtimeDiagnostics().solid_preview_displayed);
+    CHECK(widget.runtimeDiagnostics().solid_preview_style_expected);
+    CHECK(widget.runtimeDiagnostics().solid_shading_styles_isolated);
+    auto removed_only = delta_preview;
+    removed_only.added_triangles.clear();
+    CHECK(removed_only.valid());
+    CHECK(widget.setSolidPreviewScene(removed_only));
+    CHECK(widget.runtimeDiagnostics().solid_preview_style_expected);
+    CHECK(widget.setSolidPreviewScene(delta_preview));
     auto stale_delta = delta_preview;
     stale_delta.generation = {67U};
     CHECK(!widget.setSolidPreviewScene(stale_delta));
