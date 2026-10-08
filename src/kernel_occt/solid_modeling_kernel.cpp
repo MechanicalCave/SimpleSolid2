@@ -5052,6 +5052,8 @@ void probeChamferPlanarMiter(
             // Edge identities. This is a topology diagnostic, not an
             // assignment of a durable owner from geometric similarity.
             if (valid) {
+                std::vector<std::pair<TopoDS_Face, std::string>>
+                    local_corner_candidates;
                 std::size_t unclaimed_index = 0U;
                 for (TopExp_Explorer faces{
                          candidate, TopAbs_FACE};
@@ -5096,6 +5098,12 @@ void probeChamferPlanarMiter(
                                 });
                         adjacent_strip_mask +=
                             adjacent ? '1' : '0';
+                    }
+                    if (adjacent_strip_mask == "010" ||
+                        adjacent_strip_mask == "011" ||
+                        adjacent_strip_mask == "110") {
+                        local_corner_candidates.emplace_back(
+                            face, adjacent_strip_mask);
                     }
                     std::string delta_face_mask;
                     for (const auto& claim : delta_face_descendants) {
@@ -5323,6 +5331,63 @@ void probeChamferPlanarMiter(
                         << matching_upstream_planes
                         << " adjacent_inherited_claims="
                         << adjacent_inherited
+                        << "\n";
+                }
+                // D2-B type-compatibility gate: a pair of planar
+                // result Faces can share one corner Surface carrier
+                // only when they have the *same plane* and an exact
+                // current result Edge between them. The semantic
+                // provenance for that carrier still needs separate proof.
+                for (const auto& [quad, mask] :
+                     local_corner_candidates) {
+                    if (mask != "011" && mask != "110") {
+                        continue;
+                    }
+                    const BRepAdaptor_Surface quad_surface{
+                        quad, true};
+                    std::cerr
+                        << "PM05F_R2_D2B_CORNER_PLANE"
+                        << " policy="
+                        << (remove_last ? "remove_wins" : "add_wins")
+                        << " distance=" << distance
+                        << " source_edges=" << mask;
+                    if (quad_surface.GetType() == GeomAbs_Plane) {
+                        const auto normal =
+                            quad_surface.Plane().Axis().Direction();
+                        std::cerr << " quad_normal="
+                                  << normal.X() << ","
+                                  << normal.Y() << ","
+                                  << normal.Z();
+                    }
+                    std::size_t matching_triangles = 0U;
+                    std::size_t adjacent_triangles = 0U;
+                    for (const auto& [triangle, tri_mask] :
+                         local_corner_candidates) {
+                        if (tri_mask != "010") {
+                            continue;
+                        }
+                        if (!facesShareResultEdge(quad, triangle)) {
+                            continue;
+                        }
+                        ++adjacent_triangles;
+                        if (planarFacesSameDomain(
+                                quad, triangle)) {
+                            ++matching_triangles;
+                        }
+                        const BRepAdaptor_Surface tri_surface{
+                            triangle, true};
+                        if (tri_surface.GetType() == GeomAbs_Plane) {
+                            const auto n =
+                                tri_surface.Plane().Axis().Direction();
+                            std::cerr << " tri_normal="
+                                      << n.X() << ","
+                                      << n.Y() << ","
+                                      << n.Z();
+                        }
+                    }
+                    std::cerr
+                        << " adjacent_triangles=" << adjacent_triangles
+                        << " coplanar_triangles=" << matching_triangles
                         << "\n";
                 }
             }
