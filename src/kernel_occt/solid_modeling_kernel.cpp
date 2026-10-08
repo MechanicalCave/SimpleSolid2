@@ -4596,6 +4596,449 @@ finishEdgeFeature(
 
 
 
+
+// D2-B: provider-private, exact-source lineage adapter for a bounded
+// planar mixed-corner Chamfer. An entry contains only OCCT current
+// subshapes. Neither these handles nor their traversal order are durable.
+struct PlanarMiterHistory final {
+    struct Entry final {
+        TopoDS_Shape source;
+        TopTools_ListOfShape modified;
+        TopTools_ListOfShape generated;
+    };
+    std::vector<Entry> entries;
+    TopTools_ListOfShape empty;
+
+    Entry& entry(const TopoDS_Shape& source) {
+        for (auto& value : entries) {
+            if (value.source.IsSame(source)) return value;
+        }
+        entries.push_back({source, {}, {}});
+        return entries.back();
+    }
+    template <typename Shape>
+    void recordModified(
+        const TopoDS_Shape& source,
+        const std::vector<Shape>& descendants) {
+        auto& item = entry(source);
+        for (const auto& face : descendants) {
+            item.modified.Append(face);
+        }
+    }
+    void recordGenerated(
+        const TopoDS_Shape& source,
+        const TopoDS_Shape& descendant) {
+        entry(source).generated.Append(descendant);
+    }
+    const TopTools_ListOfShape& Modified(
+        const TopoDS_Shape& source) const {
+        for (const auto& item : entries) {
+            if (item.source.IsSame(source)) return item.modified;
+        }
+        return empty;
+    }
+    const TopTools_ListOfShape& Generated(
+        const TopoDS_Shape& source) const {
+        for (const auto& item : entries) {
+            if (item.source.IsSame(source)) return item.generated;
+        }
+        return empty;
+    }
+    Standard_Boolean IsDeleted(
+        const TopoDS_Shape& source) const {
+        for (const auto& item : entries) {
+            if (item.source.IsSame(source)) {
+                return item.modified.IsEmpty() &&
+                       item.generated.IsEmpty();
+            }
+        }
+        return Standard_True;
+    }
+};
+
+struct PlanarMiterDelta final {
+    TopoDS_Shape shape;
+    std::size_t source_index{};
+    bool removal{};
+    std::vector<TopoDS_Face> strip;
+    std::vector<std::vector<TopoDS_Face>> source_faces;
+};
+
+[[nodiscard]] kernel::SolidModelingResult
+finishPlanarMiterFallback(
+    const OcctRuntimeSolid& upstream,
+    const kernel::EdgeFeatureInput& input,
+    const std::vector<SelectedRuntimeEdge>& requested) {
+    kernel::SolidModelingResult result;
+    // Only the two degree-two mixed junctions validated in D2-A are
+    // admitted. All other topologies remain on the existing OCCT path.
+    if (input.operation != kernel::EdgeFeatureOperation::chamfer ||
+        requested.size() != 3U) return result;
+    auto selected = requested;
+    std::sort(selected.begin(), selected.end(),
+              [](const auto& a, const auto& b) {
+                  return a.token.value < b.token.value;
+              });
+    const auto joints = sharedSelectedVertices(upstream, selected);
+    if (joints.size() != 2U ||
+        std::any_of(joints.begin(), joints.end(),
+                    [](const auto& j) {
+                        return j.incident_edges.size() != 2U;
+                    })) return result;
+    for (const auto& item : selected) {
+        if (BRepAdaptor_Curve{item.edge}.GetType() != GeomAbs_Line ||
+            !sourceSurfaceTokensForEdge(upstream, item.edge)) {
+            return result;
+        }
+        std::size_t incident = 0U;
+        for (TopExp_Explorer it{upstream.solid, TopAbs_FACE};
+             it.More(); it.Next()) {
+            const auto face = TopoDS::Face(it.Current());
+            if (!faceContainsEdge(face, item.edge)) continue;
+            if (BRepAdaptor_Surface{face, true}.GetType() !=
+                GeomAbs_Plane) return result;
+            ++incident;
+        }
+        if (incident != 2U) return result;
+    }
+
+    const auto original_faces = facesFromShape(upstream.solid);
+    std::vector<PlanarMiterDelta> deltas;
+    std::vector<kernel::RuntimeEdgeToken> confirmed;
+    for (std::size_t i = 0U; i < selected.size(); ++i) {
+        BRepFilletAPI_MakeChamfer maker{upstream.solid};
+        maker.Add(input.parameter_mm, selected[i].edge);
+        kernel::SolidModelingResult membership;
+        if (!captureExactEdgeFeatureMembership(
+                maker, upstream, {selected[i].token}, membership)) {
+            return result;
+        }
+        confirmed.push_back(selected[i].token);
+        maker.Build();
+        if (!maker.IsDone() || maker.Shape().IsNull() ||
+            !BRepCheck_Analyzer{maker.Shape()}.IsValid()) {
+            return result;
+        }
+        const auto generated =
+            facesFromShapeList(maker.Generated(selected[i].edge));
+        if (generated.size() != 1U ||
+            providerSurfaceKind(generated.front()) !=
+                kernel::SurfaceKind::plane) {
+            return result;
+        }
+        std::vector<std::vector<TopoDS_Face>> by_source;
+        for (const auto& face : original_faces) {
+            by_source.push_back(
+                descendantFaces(maker, face, maker.Shape(), true));
+        }
+        BRepAlgoAPI_Cut remove{upstream.solid, maker.Shape()};
+        remove.SetFuzzyValue(0.0);
+        remove.Build();
+        BRepAlgoAPI_Cut add{maker.Shape(), upstream.solid};
+        add.SetFuzzyValue(0.0);
+        add.Build();
+        if (!remove.IsDone() || !add.IsDone()) return result;
+        const auto minus = volumePresence(remove.Shape());
+        const auto plus = volumePresence(add.Shape());
+        if (minus == VolumePresence::invalid ||
+            plus == VolumePresence::invalid ||
+            (minus == VolumePresence::positive) ==
+                (plus == VolumePresence::positive)) return result;
+
+        const bool removal =
+            minus == VolumePresence::positive;
+        auto& operation = removal ? remove : add;
+        PlanarMiterDelta delta;
+        delta.shape = operation.Shape();
+        delta.source_index = i;
+        delta.removal = removal;
+        delta.strip = descendantFaces(
+            operation, generated.front(), delta.shape, true);
+        if (delta.strip.empty()) return result;
+        for (const auto& first_stage : by_source) {
+            std::vector<TopoDS_Face> claim;
+            for (const auto& parent : first_stage) {
+                for (const auto& face : descendantFaces(
+                         operation, parent, delta.shape, true)) {
+                    appendUniqueFaceCandidate(claim, face);
+                }
+            }
+            delta.source_faces.push_back(std::move(claim));
+        }
+        deltas.push_back(std::move(delta));
+    }
+
+    // One authored Feature, not sequential CAD Features. Input order
+    // is canonicalized using stage-local runtime tokens only.
+    TopoDS_Shape candidate = upstream.solid;
+    std::vector<std::vector<TopoDS_Face>> direct_faces;
+    std::vector<std::vector<TopoDS_Face>> tool_faces(
+        original_faces.size());
+    for (const auto& face : original_faces) {
+        direct_faces.push_back({face});
+    }
+    std::vector<std::vector<TopoDS_Face>> strips(
+        selected.size());
+    std::vector<std::vector<TopoDS_Edge>> edges;
+    std::vector<TopoDS_Edge> edge_sources;
+    for (const auto& [token, edge] : upstream.inventory_edges) {
+        static_cast<void>(token);
+        edge_sources.push_back(edge);
+        edges.push_back({edge});
+    }
+    std::vector<std::vector<TopoDS_Vertex>> vertices;
+    std::vector<TopoDS_Vertex> vertex_sources;
+    for (const auto& [token, vertex] : upstream.inventory_vertices) {
+        static_cast<void>(token);
+        vertex_sources.push_back(vertex);
+        vertices.push_back({vertex});
+    }
+
+    auto compose = [&](auto& operation, const PlanarMiterDelta& delta)
+        -> bool {
+        operation.SetFuzzyValue(0.0);
+        operation.Build();
+        if (!operation.IsDone() || operation.Shape().IsNull()) {
+            return false;
+        }
+        const auto& shape = operation.Shape();
+        const auto advanceFaces = [&](auto& all) {
+            for (auto& claim : all) {
+                std::vector<TopoDS_Face> next;
+                for (const auto& prior : claim) {
+                    for (const auto& face : descendantFaces(
+                             operation, prior, shape, false)) {
+                        appendUniqueFaceCandidate(next, face);
+                    }
+                }
+                claim = std::move(next);
+            }
+        };
+        advanceFaces(direct_faces);
+        advanceFaces(tool_faces);
+        advanceFaces(strips);
+        for (std::size_t j = 0U;
+             j < original_faces.size(); ++j) {
+            for (const auto& prior : delta.source_faces[j]) {
+                for (const auto& face : descendantFaces(
+                         operation, prior, shape, true)) {
+                    appendUniqueFaceCandidate(tool_faces[j], face);
+                }
+            }
+        }
+        for (const auto& prior : delta.strip) {
+            for (const auto& face : descendantFaces(
+                     operation, prior, shape, true)) {
+                appendUniqueFaceCandidate(
+                    strips[delta.source_index], face);
+            }
+        }
+        for (auto& claim : edges) {
+            std::vector<TopoDS_Edge> next;
+            for (const auto& prior : claim) {
+                for (const auto& descendant : descendantEdges(
+                         operation, prior, shape, false)) {
+                    const bool found = std::any_of(
+                        next.begin(), next.end(),
+                        [&](const TopoDS_Edge& e) {
+                            return e.IsSame(descendant);
+                        });
+                    if (!found) next.push_back(descendant);
+                }
+            }
+            claim = std::move(next);
+        }
+        for (auto& claim : vertices) {
+            std::vector<TopoDS_Vertex> next;
+            for (const auto& prior : claim) {
+                for (const auto& descendant : descendantVertices(
+                         operation, prior, shape, false)) {
+                    const bool found = std::any_of(
+                        next.begin(), next.end(),
+                        [&](const TopoDS_Vertex& v) {
+                            return v.IsSame(descendant);
+                        });
+                    if (!found) next.push_back(descendant);
+                }
+            }
+            claim = std::move(next);
+        }
+        candidate = shape;
+        return true;
+    };
+
+    // Tested D2-A remove-wins composition, with all additions first.
+    for (const bool removal : {false, true}) {
+        for (const auto& delta : deltas) {
+            if (delta.removal != removal) continue;
+            if (removal) {
+                BRepAlgoAPI_Cut operation{candidate, delta.shape};
+                if (!compose(operation, delta)) return result;
+            } else {
+                BRepAlgoAPI_Fuse operation{candidate, delta.shape};
+                if (!compose(operation, delta)) return result;
+            }
+        }
+    }
+
+    populateDiagnostics(result, candidate);
+    if (!result.brep_valid || result.solid_count != 1U ||
+        !singleSolid(candidate)) return result;
+    BRepAlgoAPI_Cut removed{upstream.solid, candidate};
+    removed.SetFuzzyValue(0.0);
+    removed.Build();
+    BRepAlgoAPI_Cut added{candidate, upstream.solid};
+    added.SetFuzzyValue(0.0);
+    added.Build();
+    if (!removed.IsDone() || !added.IsDone() ||
+        (volumePresence(removed.Shape()) != VolumePresence::positive &&
+         volumePresence(added.Shape()) != VolumePresence::positive)) {
+        return result;
+    }
+
+    // Exhaustive, mutually exclusive current-Face ownership. No Face
+    // ordinal, nearest geometry or last-writer Boolean precedence
+    // enters the durable semantic owner.
+    std::vector<std::vector<TopoDS_Face>> source_faces =
+        direct_faces;
+    for (std::size_t j = 0U; j < source_faces.size(); ++j) {
+        for (const auto& face : tool_faces[j]) {
+            appendUniqueFaceCandidate(source_faces[j], face);
+        }
+    }
+    std::vector<std::vector<TopoDS_Face>> corner_faces(joints.size());
+    std::vector<std::size_t> strip_counts(selected.size());
+    std::size_t accounted = 0U;
+    for (TopExp_Explorer it{candidate, TopAbs_FACE};
+         it.More(); it.Next()) {
+        const auto face = TopoDS::Face(it.Current());
+        std::size_t source_count = 0U;
+        bool same_plane = false;
+        for (std::size_t j = 0U; j < original_faces.size(); ++j) {
+            if (std::any_of(
+                    source_faces[j].begin(), source_faces[j].end(),
+                    [&](const TopoDS_Face& f) {
+                        return f.IsSame(face);
+                    })) {
+                ++source_count;
+                same_plane = planarFacesSameDomain(
+                    face, original_faces[j]);
+            }
+        }
+        std::vector<std::size_t> strip_owners;
+        std::vector<std::size_t> adjacent_strips;
+        for (std::size_t j = 0U; j < strips.size(); ++j) {
+            for (const auto& strip : strips[j]) {
+                if (strip.IsSame(face)) {
+                    strip_owners.push_back(j);
+                    break;
+                }
+                if (facesShareResultEdge(face, strip) &&
+                    std::find(adjacent_strips.begin(),
+                              adjacent_strips.end(), j) ==
+                        adjacent_strips.end()) {
+                    adjacent_strips.push_back(j);
+                }
+            }
+        }
+        if (source_count == 1U &&
+            strip_owners.empty() && same_plane) {
+            ++accounted;
+        } else if (source_count == 0U &&
+                   strip_owners.size() == 1U) {
+            ++strip_counts[strip_owners.front()];
+            ++accounted;
+        } else if (source_count == 0U &&
+                   strip_owners.empty() &&
+                   adjacent_strips.size() == 2U &&
+                   providerSurfaceKind(face) ==
+                       kernel::SurfaceKind::plane) {
+            std::size_t matches = 0U;
+            std::size_t joint_index = 0U;
+            for (std::size_t j = 0U; j < joints.size(); ++j) {
+                const auto& joint = joints[j];
+                const bool matches_edges = std::all_of(
+                    adjacent_strips.begin(),
+                    adjacent_strips.end(),
+                    [&](std::size_t index) {
+                        return std::find(
+                            joint.incident_edges.begin(),
+                            joint.incident_edges.end(),
+                            selected[index].token) !=
+                            joint.incident_edges.end();
+                    });
+                if (matches_edges) {
+                    ++matches;
+                    joint_index = j;
+                }
+            }
+            if (matches != 1U) return result;
+            corner_faces[joint_index].push_back(face);
+            ++accounted;
+        } else {
+            return result;
+        }
+    }
+    if (accounted != result.face_count ||
+        std::any_of(strip_counts.begin(), strip_counts.end(),
+                    [](auto n) { return n != 1U; }) ||
+        std::any_of(corner_faces.begin(), corner_faces.end(),
+                    [](const auto& faces) {
+                        return faces.size() != 1U;
+                    })) return result;
+
+    PlanarMiterHistory history;
+    for (std::size_t j = 0U; j < original_faces.size(); ++j) {
+        history.recordModified(original_faces[j], source_faces[j]);
+    }
+    for (std::size_t j = 0U; j < edge_sources.size(); ++j) {
+        history.recordModified(edge_sources[j], edges[j]);
+    }
+    for (std::size_t j = 0U; j < vertex_sources.size(); ++j) {
+        history.recordModified(vertex_sources[j], vertices[j]);
+    }
+    for (std::size_t j = 0U; j < selected.size(); ++j) {
+        for (const auto& face : strips[j]) {
+            history.recordGenerated(selected[j].edge, face);
+        }
+    }
+    for (std::size_t j = 0U; j < joints.size(); ++j) {
+        history.recordGenerated(joints[j].vertex,
+                                corner_faces[j].front());
+    }
+
+    kernel::EdgeFeatureInputMembership membership;
+    membership.provider_contour_edges = std::move(confirmed);
+    result.edge_feature_input_membership = std::move(membership);
+    if (!result.edge_feature_input_membership
+             ->exactFor(input.edges)) return result;
+
+    auto runtime = std::make_shared<OcctRuntimeSolid>();
+    runtime->solid = *singleSolid(candidate);
+    auto face_mapper = [&history, &candidate](
+                           const TopoDS_Face& face) {
+        return descendantFaces(history, face, candidate, false);
+    };
+    publishLineage(result, *runtime, &upstream, {}, face_mapper);
+    if (!populateRuntimeTopologyInventory(
+            result, *runtime, runtime->solid) ||
+        !publishSurfaceLineage(
+            result, *runtime, &upstream, {},
+            false, face_mapper) ||
+        !publishEdgeFeatureGeneratedSurfaces(
+            result, *runtime, upstream,
+            history, input, selected) ||
+        !publishCurrentSubshapeLineage(
+            result, upstream, *runtime,
+            history, candidate, false) ||
+        !populateCurrentTopologySemantics(
+            result, *runtime)) return result;
+    result.status = kernel::SolidModelingStatus::ok;
+    result.solid = std::move(runtime);
+    return result;
+}
+
+
 // D2-A FEASIBILITY SPIKE ONLY. This diagnostic is activated exclusively by
 // the existing native test's SS2_PM05F_R2_CHAMFER_TRIAGE environment variable.
 // It does not contribute geometry, topology lineage, validation or results to
@@ -5939,11 +6382,19 @@ OcctSolidModelingKernel::edgeFeature(
                     input.parameter_mm,
                     item.edge);
             }
-            return finishEdgeFeature(
+            auto normal = finishEdgeFeature(
                 operation,
                 *upstream_occt,
                 input,
                 *selected);
+            if (normal.status !=
+                kernel::SolidModelingStatus::invalid_brep) {
+                return normal;
+            }
+            auto fallback = finishPlanarMiterFallback(
+                *upstream_occt, input, *selected);
+            return fallback.ok() ? std::move(fallback)
+                                 : std::move(normal);
         }
         }
     } catch (const Standard_Failure&) {
