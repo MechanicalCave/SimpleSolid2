@@ -3713,22 +3713,45 @@ finishBoolean(
 [[nodiscard]] bool appendFaceTriangles(
     const TopoDS_Face& face,
     kernel::SolidPresentationMesh& mesh) {
+    const bool trace_face =
+#ifdef _DEBUG
+        std::getenv("SS2_PM05F_R2_DELTA_TRACE") != nullptr;
+#else
+        false;
+#endif
+    const auto face_checkpoint =
+        [trace_face](const char* phase,
+                     const Standard_Integer count = 0) noexcept {
+            if (trace_face) {
+                std::fprintf(stderr,
+                    "PM05F_R2_PART008_FACE_PHASE %s count=%d\\n",
+                    phase, static_cast<int>(count));
+                std::fflush(stderr);
+            }
+        };
+    face_checkpoint("triangulation_begin");
     TopLoc_Location location;
     const Handle(Poly_Triangulation)
         triangulation =
             BRep_Tool::Triangulation(
                 face,
                 location);
+    face_checkpoint("triangulation_end");
     if (triangulation.IsNull()) {
+        face_checkpoint("triangulation_null");
         return false;
     }
+    face_checkpoint("triangle_count", triangulation->NbTriangles());
     if (!triangulation->HasNormals()) {
+        face_checkpoint("normals_begin");
         BRepLib_ToolTriangulatedShape::
             ComputeNormals(
                 face,
                 triangulation);
+        face_checkpoint("normals_end");
     }
     if (!triangulation->HasNormals()) {
+        face_checkpoint("normals_missing");
         return false;
     }
 
@@ -3737,6 +3760,7 @@ finishBoolean(
     const auto first_triangle =
         mesh.triangles.size();
 
+    face_checkpoint("triangles_begin", triangulation->NbTriangles());
     for (Standard_Integer index = 1;
          index <= triangulation->NbTriangles();
          ++index) {
@@ -3819,6 +3843,7 @@ finishBoolean(
                  third_normal.Z()}});
     }
 
+    face_checkpoint("triangles_end", triangulation->NbTriangles());
     return mesh.triangles.size() >
            first_triangle;
 }
@@ -3922,6 +3947,7 @@ presentationMeshForShape(
         }
 
         mesh_checkpoint("collect_triangles_begin");
+        std::size_t delta_face_index = 0U;
         for (TopExp_Explorer solid_explorer{
                  shape,
                  TopAbs_SOLID};
@@ -3935,6 +3961,12 @@ presentationMeshForShape(
                      TopAbs_FACE};
                  explorer.More();
                  explorer.Next()) {
+                if (trace_mesh) {
+                    std::fprintf(stderr,
+                        "PM05F_R2_PART008_FACE_INDEX_BEGIN %zu\\n",
+                        delta_face_index);
+                    std::fflush(stderr);
+                }
                 if (!appendFaceTriangles(
                         TopoDS::Face(
                             explorer.Current()),
@@ -3945,6 +3977,13 @@ presentationMeshForShape(
                     result.mesh.triangles.clear();
                     return result;
                 }
+                if (trace_mesh) {
+                    std::fprintf(stderr,
+                        "PM05F_R2_PART008_FACE_INDEX_END %zu\\n",
+                        delta_face_index);
+                    std::fflush(stderr);
+                }
+                ++delta_face_index;
             }
         }
 
