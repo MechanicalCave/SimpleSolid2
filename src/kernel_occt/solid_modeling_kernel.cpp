@@ -5468,6 +5468,137 @@ void probeChamferPlanarMiter(
                         << "\n";
                 }
             }
+            // D2-B ledger proof: every Face must have precisely one
+            // provider-history-backed source Face, precisely one authored
+            // Edge strip, or precisely one exact shared source-Vertex
+            // corner with two incident authored Edge strips. Geometric
+            // coplanarity is only an admissibility check after ancestry.
+            // This candidate is still not returned to production.
+            std::size_t certified_inherited = 0U;
+            std::size_t certified_strips = 0U;
+            std::size_t certified_corners = 0U;
+            std::size_t uncertified_faces = 0U;
+            std::vector<std::size_t> certified_joint_counts;
+            const auto semantic_joints =
+                sharedSelectedVertices(upstream, selected);
+            certified_joint_counts.resize(semantic_joints.size());
+            if (valid) {
+                for (TopExp_Explorer face_it{
+                         candidate, TopAbs_FACE};
+                     face_it.More(); face_it.Next()) {
+                    const auto face =
+                        TopoDS::Face(face_it.Current());
+                    std::size_t parent_count = 0U;
+                    bool parent_plane_confirmed = false;
+                    for (std::size_t j = 0U;
+                         j < original_faces.size(); ++j) {
+                        const auto owned_by = [&](const auto& faces) {
+                            return std::any_of(
+                                faces.begin(), faces.end(),
+                                [&face](const TopoDS_Face& other) {
+                                    return other.IsSame(face);
+                                });
+                        };
+                        if (owned_by(inherited_descendants[j]) ||
+                            owned_by(tool_source_face_descendants[j])) {
+                            ++parent_count;
+                            parent_plane_confirmed =
+                                planarFacesSameDomain(
+                                    face, original_faces[j]);
+                        }
+                    }
+                    std::vector<std::size_t> strip_owners;
+                    std::vector<std::size_t> strip_neighbors;
+                    for (std::size_t j = 0U;
+                         j < selected.size(); ++j) {
+                        for (const auto& strip :
+                             authored_strip_descendants[j]) {
+                            if (strip.IsSame(face)) {
+                                strip_owners.push_back(j);
+                                break;
+                            }
+                            if (facesShareResultEdge(face, strip)) {
+                                if (std::find(
+                                        strip_neighbors.begin(),
+                                        strip_neighbors.end(), j) ==
+                                    strip_neighbors.end()) {
+                                    strip_neighbors.push_back(j);
+                                }
+                            }
+                        }
+                    }
+                    if (parent_count == 1U &&
+                        strip_owners.empty() &&
+                        parent_plane_confirmed) {
+                        ++certified_inherited;
+                    } else if (parent_count == 0U &&
+                               strip_owners.size() == 1U) {
+                        ++certified_strips;
+                    } else if (parent_count == 0U &&
+                               strip_owners.empty() &&
+                               strip_neighbors.size() == 2U) {
+                        std::size_t joint_matches = 0U;
+                        std::size_t matching_joint = 0U;
+                        for (std::size_t j = 0U;
+                             j < semantic_joints.size(); ++j) {
+                            const auto& joint = semantic_joints[j];
+                            if (joint.incident_edges.size() != 2U) {
+                                continue;
+                            }
+                            const bool both_match = std::all_of(
+                                strip_neighbors.begin(),
+                                strip_neighbors.end(),
+                                [&](std::size_t edge_index) {
+                                    return std::find(
+                                        joint.incident_edges.begin(),
+                                        joint.incident_edges.end(),
+                                        selected[edge_index].token) !=
+                                        joint.incident_edges.end();
+                                });
+                            if (both_match) {
+                                ++joint_matches;
+                                matching_joint = j;
+                            }
+                        }
+                        if (joint_matches == 1U &&
+                            providerSurfaceKind(face) ==
+                                kernel::SurfaceKind::plane) {
+                            ++certified_corners;
+                            ++certified_joint_counts[matching_joint];
+                        } else {
+                            ++uncertified_faces;
+                        }
+                    } else {
+                        ++uncertified_faces;
+                    }
+                }
+            }
+            const bool ledger_complete =
+                valid &&
+                certified_inherited + certified_strips +
+                    certified_corners ==
+                    countUniqueSubshapes(candidate, TopAbs_FACE) &&
+                uncertified_faces == 0U &&
+                certified_strips == selected.size() &&
+                semantic_joints.size() == 2U &&
+                std::all_of(
+                    certified_joint_counts.begin(),
+                    certified_joint_counts.end(),
+                    [](std::size_t count) {
+                        return count == 1U;
+                    });
+            std::cerr
+                << "PM05F_R2_D2B_LEDGER"
+                << " policy="
+                << (remove_last ? "remove_wins" : "add_wins")
+                << " distance=" << distance
+                << " inherited=" << certified_inherited
+                << " strips=" << certified_strips
+                << " corners=" << certified_corners
+                << " unresolved=" << uncertified_faces
+                << " joints=" << semantic_joints.size()
+                << " complete=" << ledger_complete
+                << "\n";
             const auto solid_count =
                 built
                     ? countUniqueSubshapes(
