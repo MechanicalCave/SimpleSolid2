@@ -390,23 +390,29 @@ int main(int argc, char* argv[]) {
         last_body_preselection_point.y ==
         body_center.y);
 
+    // Focus and drain unrelated OS/Qt events *before* arming the
+    // deterministic hover. A queued real OS cursor move may otherwise
+    // clear this preselection before Tab reaches QWidget::event().
     widget.setFocus(Qt::MouseFocusReason);
     QApplication::processEvents();
+    sendMouseMove(widget, body_center);
     QTest::keyClick(
         &widget,
         Qt::Key_Tab,
         Qt::NoModifier);
-    QApplication::processEvents();
     CHECK(cycle_forward == 1);
     CHECK(cycle_reverse == 0);
 
+    // Keep the native hover armed between focus-cycle gestures instead of
+    // draining unrelated global mouse events in the middle of the test.
+    sendMouseMove(widget, body_center);
     QTest::keyClick(
         &widget,
         Qt::Key_Tab,
         Qt::ShiftModifier);
-    QApplication::processEvents();
     CHECK(cycle_forward == 1);
     CHECK(cycle_reverse == 1);
+    QApplication::processEvents();
 
     // PM-02J R4: a visible box corner must keep stable Vertex/Edge
     // candidates and hover preselection in an oblique engineering view.
