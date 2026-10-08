@@ -1,7 +1,5 @@
 #include "cad_workbench.hpp"
 
-#include <BRepBuilderAPI_MakePolygon.hxx>
-#include <gp_Pnt.hxx>
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
@@ -942,55 +940,6 @@ int main(int argc, char* argv[]) {
             << owner_exact_presentation.body.edges.size()
             << '\n';
         CHECK(owner_exact_presentation.ok());
-        // Diagnose OCCT's display-only edge-wire construction. Kernel B-Rep
-        // and durable semantic topology are already independently valid.
-        std::size_t owner_style_edge_failures = 0U;
-        for (const auto& edge :
-             owner_exact_presentation.body.edges) {
-            const auto record =
-                std::find_if(
-                    owner_exact_result.current_topology->edges.begin(),
-                    owner_exact_result.current_topology->edges.end(),
-                    [&](const auto& candidate) {
-                        return candidate.runtime_token ==
-                               edge.runtime_token;
-                    });
-            CHECK(record !=
-                  owner_exact_result.current_topology->edges.end());
-            if (record->accounting_class ==
-                    part::TopologyAccountingClass::
-                        known_representation_artifact ||
-                record->periodic_seam) {
-                continue;
-            }
-            BRepBuilderAPI_MakePolygon polygon;
-            bool built = false;
-            try {
-                for (const auto& point : edge.points) {
-                    polygon.Add(gp_Pnt{
-                        point.x, point.y, point.z});
-                }
-                built = polygon.IsDone();
-            } catch (...) {
-                built = false;
-            }
-            if (!built) {
-                ++owner_style_edge_failures;
-                std::cerr
-                    << "PM05F_R2_OWNER_WIRE_FAILURE"
-                    << " token=" << edge.runtime_token.value
-                    << " points=" << edge.points.size()
-                    << " curve_kind="
-                    << static_cast<int>(record->curve_kind)
-                    << " accounting="
-                    << static_cast<int>(record->accounting_class)
-                    << '\n';
-            }
-        }
-        std::cerr
-            << "PM05F_R2_OWNER_WIRE_FAILURES="
-            << owner_style_edge_failures
-            << '\n';
         // Owner screenshot uses Shaded + Edges, not the widget's
         // default Shaded mode. Style synchronization builds an
         // additional OCCT wire for every material Edge and must never
@@ -1014,6 +963,21 @@ int main(int argc, char* argv[]) {
             << (owner_exact_viewer.solid_committed_displayed ? 1 : 0)
             << '\n';
         CHECK(owner_exact_viewer.solid_committed_displayed);
+        CHECK(owner_exact_viewer.solid_committed_style_expected);
+        // A failure in optional Edge outlines must not hide the current
+        // solid when switching among all supported view styles.
+        CHECK(viewport->setViewStyle(
+            viewer::ViewStyle::shaded_with_hidden_edges));
+        CHECK(viewport->runtimeDiagnostics()
+                  .solid_committed_displayed);
+        CHECK(viewport->setViewStyle(
+            viewer::ViewStyle::shaded));
+        CHECK(viewport->runtimeDiagnostics()
+                  .solid_committed_displayed);
+        CHECK(viewport->setViewStyle(
+            viewer::ViewStyle::shaded_with_edges));
+        CHECK(viewport->runtimeDiagnostics()
+                  .solid_committed_displayed);
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.

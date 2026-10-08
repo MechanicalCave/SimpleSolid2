@@ -1986,6 +1986,65 @@ public:
         return object;
     }
 
+    // Body geometry is independently validated and already displayed.
+    // Outline AIS objects are display-only decorations. A degenerate
+    // sampled material Edge must not invalidate the current Body, hide it,
+    // or turn a successful CAD transaction into a presentation failure.
+    // Report the exact transient presentation token; never rebind CAD Edge
+    // references or synthesize a replacement curve.
+    void publishBodyEdgeStyleObject(
+        const viewer::BodyEdgePresentation& edge,
+        bool hidden_pass) {
+        Handle(AIS_Shape) object;
+        try {
+            object = makeBodyEdgeStyleObject(edge, hidden_pass);
+            if (object.IsNull()) {
+                qWarning().noquote()
+                    << "SS2 Viewer display-only Edge outline unavailable:"
+                    << "presentation_token=" << edge.token.value
+                    << "point_count=" << edge.points.size()
+                    << "hidden_pass=" << hidden_pass;
+                return;
+            }
+
+            context_->Display(object, false);
+            context_->Deactivate(object);
+            if (hidden_pass) {
+                body_hidden_edge_objects_.push_back(object);
+            } else {
+                body_visible_edge_objects_.push_back(object);
+            }
+            return;
+        } catch (const Standard_Failure& failure) {
+            logProviderFailure(
+                "publishBodyEdgeStyleObject",
+                failure.GetMessageString());
+        } catch (const std::exception& failure) {
+            logProviderFailure(
+                "publishBodyEdgeStyleObject",
+                failure.what());
+        } catch (...) {
+            logProviderFailure(
+                "publishBodyEdgeStyleObject",
+                "<unknown exception>");
+        }
+
+        if (!object.IsNull()) {
+            const auto failed_object = object;
+            guardedVoid(
+                "removeFailedBodyEdgeStyleObject",
+                [this, failed_object] {
+                    context_->Remove(
+                        failed_object, false);
+                });
+        }
+        qWarning().noquote()
+            << "SS2 Viewer display-only Edge outline rejected:"
+            << "presentation_token=" << edge.token.value
+            << "point_count=" << edge.points.size()
+            << "hidden_pass=" << hidden_pass;
+    }
+
     [[nodiscard]] bool syncBodyViewStyle() {
         clearBodyEdgeStyleObjects();
 
@@ -2002,42 +2061,19 @@ public:
                 continue;
             }
 
-            auto visible =
-                makeBodyEdgeStyleObject(
-                    edge,
-                    false);
-            if (visible.IsNull()) {
-                clearBodyEdgeStyleObjects();
-                return false;
-            }
-            context_->Display(
-                visible,
-                false);
-            context_->Deactivate(
-                visible);
-            body_visible_edge_objects_.push_back(
-                visible);
-
+            publishBodyEdgeStyleObject(
+                edge, false);
             if (view_style_ ==
                 viewer::ViewStyle::
                     shaded_with_hidden_edges) {
-                auto hidden =
-                    makeBodyEdgeStyleObject(
-                        edge,
-                        true);
-                if (hidden.IsNull()) {
-                    clearBodyEdgeStyleObjects();
-                    return false;
-                }
-                context_->Display(
-                    hidden,
-                    false);
-                context_->Deactivate(
-                    hidden);
-                body_hidden_edge_objects_.push_back(
-                    hidden);
+                publishBodyEdgeStyleObject(
+                    edge, true);
             }
         }
+
+        // A partial Edge overlay is reported at its failing runtime token
+        // but does not remove the current committed Body. Face shading and
+        // geometric evaluation are authoritative, not decorative wires.
         return true;
     }
 
