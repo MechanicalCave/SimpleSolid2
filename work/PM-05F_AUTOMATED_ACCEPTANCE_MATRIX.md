@@ -1,6 +1,6 @@
 # PM-05F — Automated Acceptance Matrix
 
-**Status:** REMEDIATION RUNTIME PASS — documentation sync/final exact-head gate and repeat Owner workflow pending
+**Status:** REMEDIATION RUNTIME + DOCS PASS — final exact-head Windows FULL and repeat Owner workflow pending
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Program authority:** work/PART_MODELING_V1_ROADMAP.md v1.29
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
@@ -26,7 +26,9 @@ Owner manual acceptance reported FAIL on 2026-10-07 before final FULL dispatch d
 | PM-05E | 88e07b1a2dbdb6ded73d0c2f90dd0a1443242cbe | Windows FULL #1721 PASS — core 25/25, kernel-native 54/54, desktop 112/112 | 1a1491f7687f32089c1424025123329c74d7b6ca | Edit / repair / lifecycle / persistence / reverse-chain canonical-frame remediation |
 | PM-05F docs | 19700794577a516281fcc3e512c898cc1ececfec | Windows DOCS #1725 PASS; synchronized matrix head d08e97c19e2717dbb9e4bc81adf9d11ac1925f84 passed DOCS #1726 | 685bf3f797aa022582952906e8f24cf6d668f2bb | internal + paired PL/EN Product + generated Browser |
 | PM-05F Fillet remediation runtime | bc0b002f4e45172aec24c61913cd28ac8ca43138 | Windows FULL #1739 PASS — core 25/25, kernel-native 57/57, desktop 112/112 | pending remediation merge | adjacent-pair cube Fillet, mixed Line/Circle complex chain, isolated curved Edge and semantic lineage remediation |
-| PM-05F final automated | pending post-doc-sync exact candidate | Windows FULL pending | pending | cumulative final runtime/docs gate |
+| PM-05F remediation docs/browser | remediation branch through 612cf30f59894a42f4690b1620f8ecc896afe784 | Windows DOCS #1741 PASS | pending remediation merge | synchronized strict-intent/local-result-topology docs + generated Browser |
+| PM-05F final regression hardening | 219e49e6a94dae5d43d807a147261c2c040084ab | Windows FAST #1742 PASS | pending remediation merge | post-Chamfer mixed Curve continuation remains exactly 2 line + 2 circle semantic Curves |
+| PM-05F final automated | current governance-synchronized exact branch head | Windows FULL pending | pending | cumulative final runtime/docs/evidence gate |
 | PM-05F Owner Windows attempt 1 | 7721863e22269474f8f4cca6315eafed86396eff | OWNER FAIL — multi-Edge Fillet blocker | not closable | work/PM-05F_OWNER_WINDOWS_ACCEPTANCE.md |
 
 ## Contract matrix
