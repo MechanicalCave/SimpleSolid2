@@ -5212,6 +5212,55 @@ void probeChamferPlanarMiter(
                         same_domain_upstream_mask +=
                             shares_same_domain_edge ? '1' : '0';
                     }
+                    if (adjacent_strip_mask == "010" &&
+                        same_domain_inherited_claims == 0U) {
+                        GProp_GProps props;
+                        BRepGProp::SurfaceProperties(face, props);
+                        const BRepAdaptor_Surface a{face, true};
+                        std::cerr
+                            << "PM05F_R2_MITER_EDGE1_REMAINDER"
+                            << " policy="
+                            << (remove_last ? "remove_wins" : "add_wins")
+                            << " distance=" << distance
+                            << " index=" << unclaimed_index
+                            << " area=" << props.Mass()
+                            << " edges="
+                            << countUniqueSubshapes(face, TopAbs_EDGE)
+                            << " vertices="
+                            << countUniqueSubshapes(face, TopAbs_VERTEX);
+                        if (a.GetType() == GeomAbs_Plane) {
+                            const auto n = a.Plane().Axis().Direction();
+                            std::cerr << " normal=" << n.X()
+                                      << "," << n.Y()
+                                      << "," << n.Z();
+                        }
+                        for (const auto& joint : unique_vertices) {
+                            std::string owner;
+                            for (const auto& e : selected) {
+                                owner += edgeContainsVertex(e.edge, joint)
+                                    ? '1' : '0';
+                            }
+                            if (std::count(owner.begin(), owner.end(), '1')
+                                != 2) continue;
+                            double nearest =
+                                std::numeric_limits<double>::infinity();
+                            double furthest = 0.0;
+                            const auto p = BRep_Tool::Pnt(joint);
+                            for (TopExp_Explorer v{face, TopAbs_VERTEX};
+                                 v.More(); v.Next()) {
+                                const double d =
+                                    BRep_Tool::Pnt(
+                                        TopoDS::Vertex(v.Current()))
+                                        .Distance(p);
+                                nearest = std::min(nearest, d);
+                                furthest = std::max(furthest, d);
+                            }
+                            std::cerr << " source_joint=" << owner
+                                      << ":near=" << nearest
+                                      << ":far=" << furthest;
+                        }
+                        std::cerr << "\n";
+                    }
                     std::cerr
                         << "PM05F_R2_MITER_CONTINUATION"
                         << " policy="
