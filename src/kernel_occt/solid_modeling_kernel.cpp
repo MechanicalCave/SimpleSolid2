@@ -51,6 +51,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -4474,6 +4476,44 @@ finishEdgeFeature(
         return result;
     }
     if (!result.brep_valid) {
+#ifdef _DEBUG
+        // Temporary Debug-only, opt-in forensic diagnostics.
+        // Never use OCCT subshape index for authored CAD identity.
+        if (input.operation ==
+                kernel::EdgeFeatureOperation::chamfer &&
+            input.edges.size() == 3U &&
+            std::getenv("SS2_PM05F_R2_CHAMFER_TRIAGE")) {
+            BRepCheck_Analyzer analyzer{shape};
+            const auto scan =
+                [&shape, &analyzer](TopAbs_ShapeEnum kind,
+                                    const char* name) {
+                    std::size_t total = 0U;
+                    std::size_t invalid = 0U;
+                    for (TopExp_Explorer it{shape, kind};
+                         it.More(); it.Next()) {
+                        ++total;
+                        if (!analyzer.IsValid(it.Current())) {
+                            ++invalid;
+                            std::fprintf(
+                                stderr,
+                                "PM05F_R2_CHAMFER_INVALID %s index=%zu\n",
+                                name, total);
+                        }
+                    }
+                    std::fprintf(
+                        stderr,
+                        "PM05F_R2_CHAMFER_TOPOLOGY %s total=%zu invalid=%zu\n",
+                        name, total, invalid);
+                };
+            scan(TopAbs_SOLID, "solid");
+            scan(TopAbs_SHELL, "shell");
+            scan(TopAbs_FACE, "face");
+            scan(TopAbs_WIRE, "wire");
+            scan(TopAbs_EDGE, "edge");
+            scan(TopAbs_VERTEX, "vertex");
+            std::fflush(stderr);
+        }
+#endif
         result.status =
             kernel::SolidModelingStatus::
                 invalid_brep;
