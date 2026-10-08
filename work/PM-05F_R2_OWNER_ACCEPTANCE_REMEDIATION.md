@@ -158,3 +158,18 @@ Remaining R2-D verification: aggregate FAST, complete same-head FULL after other
 - Windows FOCUSED **#1790 PASS (1/1)**: the previously failing native trihedral test now selects 3 converging Edges, performs Fillet radius 2, verifies UpToDate/complete evaluated Body and a displayed committed native Body after Finish. The test also includes full/partial Revolve and real Edit scenarios. Temporary diagnostic logging is removed in the following point candidate.
 
 **R2-A remains OPEN for original Owner failure** until the reported geometry and UI sequence is manually reproduced/retested. #1790 is a strong control proof, not an Owner PASS. R2-E dense/difficult curved shoulder picking and R2-F user-facing reject details still require separate acceptance. New candidate remains Draft; new FAST/FULL gates required.
+
+## R2-E measured native curved Edge RED → GREEN — 2026-10-08
+
+Windows native `pm05f_r2.native_workbench_edit` now measures an analytic midpoint of a real OCCT-generated full Revolve circular material Edge using the production `bodyPresentation` sample path and actual projected Viewer screen coordinates. That test point is solely a **cursor fixture**, never CAD reference identity or a nearest-geometry binding.
+
+- **#1793 FOCUSED RED**: production 0.25 mm quasi-uniform presentation sampling yielded 16 polyline points, a measured 21.9659 logical-pixel arc-to-chord displacement at orthographic camera view height 8 mm, outside the existing 8 logical-pixel Edge query aperture; `edge_found=0`. This specifically reproduces a visible real-curve point missed by the native picker.
+- **#1794 FOCUSED GREEN**: Kernel provider's `edgePresentationPoints` local tessellation-only deflection changed to 0.01 mm. Same production native Revolve, unchanged Viewer query aperture and visibility gates, now PASS 1/1. No changes to exact B-Rep, mesher, numerical tolerance policy or semantic selection.
+- **#1795 FOCUSED GREEN**: same production geometry/query PASS 1/1 at two high zoom levels (8 mm and 2 mm viewport heights); original full/partial Revolve tool selections, native Edit and trihedral Fillet Finish remain included in the test. Synthetic ring rear-occlusion negative control stays in native `sk04b.viewer_native_selection_query` (#1764 / #1792 FAST PASS).
+- **Remaining:** production high-DPI display profiles, challenging silhouette orientations and full benchmarked path-size/latency/memory evidence. Changing display sampling may grow transient geometry; do not infer a p95 performance result from a CTest PASS.
+
+## R2-F structured rejected-pick diagnostic D2 STOP — 2026-10-08
+
+Verified interface gap: `viewer::BodyTopologyPickQueryResult` retains only accepted `candidates` plus `generation/completed`; `QtOcctViewerWidget::queryBodyTopology` silently discards non-pickable edges and occluded hits; Part filters semantic Unsupported/Ambiguous without forwarding cause; empty active-tool queries do not invoke a rejection callback. Consequently a faithful UI distinction between `not_hit`, `occluded`, `representation_artifact`, `unsupported`, `ambiguous` and `stale_context` is impossible with the current callback payload.
+
+**STOP for new public Viewer query metadata and UI diagnostic routing** until explicit Owner D2 acceptance of `work/PM-05F_R2_PICK_REJECTION_DIAGNOSTICS_D2_PROPOSAL.md`. This does not block regression testing, normal tool picking or other R2-E/R2-D performance evidence. Never turn a diagnostic near-miss into an authored material Edge.
