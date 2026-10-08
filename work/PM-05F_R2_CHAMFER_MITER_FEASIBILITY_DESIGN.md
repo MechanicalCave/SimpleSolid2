@@ -268,3 +268,32 @@ All reported diagnostic FOCUSED CI runs continue to fail the unchanged original 
 **Next diagnostic request:** re-run `pm05f_r2.native_workbench_edit` FOCUSED on the exact HEAD without modifying the unchanged production RED. Inspect the already guarded `PM05F_R2_MITER_CORNER_FACE` records for the two candidates whose exact strip-adjacency masks are `110` and `011` at d=1/0.5/0.25, under `remove_wins` and `add_wins`. Capture the number of Face Edges/Vertices, surface area, and boundedness relative to the *two exact shared source Vertices*, not a nearest-vertex lookup.
 
 **F3 acceptance caution:** A bounded Face adjacent to exactly two Edge strips is *only a proposed corner patch*. Promotion to a semantic `corner_transition` would require unique upstream shared-Vertex lineage and exactly incident selected Edges, proof that no third-owner claim exists, and full 21-Face catalog accounting. The six unclaimed Faces, exact-dimensional participation, and full output Edge/Vertex coverage remain OPEN. D2-B production fallback authorization is still absent.
+
+## D2-A F3 final local Face classification — 2026-10-08
+
+**Exact fixture:** sanitized Owner Part008, two Extrude Add stages, original authored three-Edge equal-distance Chamfer, 1/0.5/0.25 mm, both Boolean composition precedences. **No CAD Feature output was published from these diagnostics.**
+
+### Windows #1862–#1865
+
+- [Windows FAST #1862](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37829476679), `d29108ab`: **PASS 93/93**, not a focused proof of the three-Edge Chamfer. Windows #1860 for the previous corner-geometry probe was **cancelled**, with no reliable native log.
+- [Windows FOCUSED #1863](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37829938894), `4be2879f`: each of the **two** exact two-strip-adjacent corner Face candidates has **four unique Edges, four unique Vertices**, source-junction-nearest vertex distance zero, area `d²`, and maximum source-junction vertex distance `sqrt(2)*d`. These are geometrically distinct source junctions: the other source joint is roughly 19–20 mm away. Both Boolean precedence policies agree at 1/0.5/0.25 mm.
+- [Windows FOCUSED #1864](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37830195728), `dc26feab`: among the six not yet claimed Faces, those at diagnostic indices `0` and `3` each have **exactly one** upstream Face claim sharing a current result Edge **and** its same planar carrier (`same_domain_inherited_claims=1`, identical unique source claim `000010000000`); indices `1` and `2` touch one inherited Face but are not same-domain with that adjacent source; corner candidates `4` and `5` have no adjacent inherited claim. This is a **continuation admissibility certificate only**; ADR-0017 applies to Extrude Add, not Chamfer, and cannot automatically promote these two Faces to Resolved.
+- [Windows FOCUSED #1865](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37830571127), `c7d23895`: the two remaining `Edge1` tool-delta-supported Faces `1`/`2` are **local triangles**, three Edges, three Vertices, oriented planar normals `(0,-1,0)`/`(0,1,0)`, each area `d²/2`. Their closest vertex is exactly the matching source joint, maximum distance `d`, and the opposite source joint is roughly 20 mm away. Both composition policies and all three distances agree. They are **not** same-domain-adjacent to an inherited Face, despite upstream plane coincidences; no durable owner has been proven.
+
+### Exact 21-Face evidence decomposition
+
+| Face class | Count | Proof level |
+|---|---:|---|
+| Upstream inherited | 12 | Unique OCCT `Modified` chain and no conflicting owner |
+| Source-Edge strip | 3 | Unique OCCT `Generated(selected Edge)` + signed-delta/Boolean history |
+| Same-domain continuation candidates | 2 | Unique exact result Edge adjacency to **one** inherited Surface + same planar support; Chamfer-specific semantic extension **not approved** |
+| Triangle junction-adjacent Faces | 2 | Exact one-strip current-topology adjacency, tool-delta input trace, three bounded Edges/Vertices, area `d²/2`; source-junction local; **semantic owner unproven** |
+| Quadrilateral junction Faces | 2 | Exact two-strip current-topology adjacency, unique source joint pair, four bounded Edges/Vertices, area `d²`; source-junction local; final Boolean tool-delta origin changes with operation precedence; **semantic owner unproven** |
+
+The four small local Face candidates comprise **two triangles and two quads**, geographically separated into the two original source-Vertex joints `(-5,-15,0)` and `(-5,5,0)`. A feasible **corner carrier** could have **multiple result Face descendants** per exact authored source joint/selected Edge pair. This is a D2-B **design hypothesis only**. It may not reclassify a Face based on area, position, number of Edges, or Boolean last writer alone. The bounded geometric measurements serve as adversarial proof that candidates are local and non-degenerate, **not as persistent identity keys**.
+
+### Decision gates (unchanged)
+
+**D2-A research provides strong geometric classification for all 21 Faces, not yet a semantic 21/21 PASS.** Before production, a new Owner D2-B decision must explicitly authorize a provider-private provenance/semantic ownership ledger that can certify the two unique inherited planar continuations and the two multi-Face corner carriers independently of Boolean order, without broadening the existing ADR-0017 Add continuation policy by implication. Require adversarial same-plane/different-owner decoys, nonlocal corner impostors, complete Face/Edge/Vertex inventory, exact local distance coverage, all six selected Edge permutations and three size values, serializable one-Feature create/edit/undo/save/reopen, and negative unsupported cases. Fail closed if the ledger cannot prove a unique claim.
+
+All focused runs #1863–#1865 correctly remain **RED only on the unchanged production three-Edge kernel check `kernel_three.ok()`**, because the candidate valid CSG is diagnostic-only. Owner manual Chamfer acceptance, exact-head FULL, PR merge and PM-06 are still blocked. **Do not authorize production fallback solely from this section.**
