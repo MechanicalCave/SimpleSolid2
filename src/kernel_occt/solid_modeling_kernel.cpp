@@ -3875,13 +3875,45 @@ presentationMeshForShape(
         constexpr double linear_deflection_mm = 0.25;
         constexpr double angular_deflection_rad = 0.35;
 
+        // R2-P0 diagnostic only. Default and release paths remain
+        // parallel; opt-in serial triangulation tests whether the
+        // existing OCCT mesher is the source of the Debug CRT assertion.
+        const bool trace_mesh =
+#ifdef _DEBUG
+            std::getenv("SS2_PM05F_R2_DELTA_TRACE") != nullptr;
+#else
+            false;
+#endif
+        const bool parallel_mesh =
+#ifdef _DEBUG
+            std::getenv("SS2_PM05F_R2_SERIAL_MESH") == nullptr;
+#else
+            true;
+#endif
+        const auto mesh_checkpoint =
+            [trace_mesh](const char* phase) noexcept {
+#ifdef _DEBUG
+                if (trace_mesh) {
+                    std::fprintf(
+                        stderr,
+                        "PM05F_R2_PART008_MESH_PHASE %s\n", phase);
+                    std::fflush(stderr);
+                }
+#else
+                (void)phase;
+#endif
+            };
+        mesh_checkpoint("construct_begin");
         BRepMesh_IncrementalMesh mesher{
             shape,
             linear_deflection_mm,
             false,
             angular_deflection_rad,
-            true};
+            parallel_mesh};
+        mesh_checkpoint("construct_end");
+        mesh_checkpoint("perform_begin");
         mesher.Perform();
+        mesh_checkpoint("perform_end");
         if (!mesher.IsDone()) {
             result.status =
                 kernel::SolidPresentationStatus::
@@ -3889,6 +3921,7 @@ presentationMeshForShape(
             return result;
         }
 
+        mesh_checkpoint("collect_triangles_begin");
         for (TopExp_Explorer solid_explorer{
                  shape,
                  TopAbs_SOLID};
@@ -3915,6 +3948,7 @@ presentationMeshForShape(
             }
         }
 
+        mesh_checkpoint("collect_triangles_end");
         if (!result.mesh.valid()) {
             result.status =
                 kernel::SolidPresentationStatus::
