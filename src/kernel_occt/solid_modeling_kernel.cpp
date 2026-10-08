@@ -4711,8 +4711,13 @@ void probeChamferPlanarMiter(
     // Each single-Edge result is used as geometric evidence of a local
     // signed material delta; this is NOT a sequence of authored Features.
     // None of the candidate shapes below is returned or published.
-    std::vector<TopoDS_Shape> remove_deltas;
-    std::vector<TopoDS_Shape> add_deltas;
+    struct ProbeSignedDelta final {
+        TopoDS_Shape shape;
+        std::size_t source_index;
+        std::vector<TopoDS_Face> generated_strip_descendants;
+    };
+    std::vector<ProbeSignedDelta> remove_deltas;
+    std::vector<ProbeSignedDelta> add_deltas;
     bool deltas_complete = true;
     for (std::size_t i = 0U; i < selected.size(); ++i) {
         if (single_chamfer_shapes[i].IsNull()) {
@@ -4739,16 +4744,38 @@ void probeChamferPlanarMiter(
             deltas_complete = false;
             break;
         }
+        std::size_t removed_strip_faces = 0U;
+        std::size_t added_strip_faces = 0U;
         if (removed == VolumePresence::positive) {
-            remove_deltas.push_back(remove.Shape());
+            auto strips = single_strip_faces[i]
+                ? descendantFaces(
+                      remove,
+                      *single_strip_faces[i],
+                      remove.Shape(),
+                      true)
+                : std::vector<TopoDS_Face>{};
+            removed_strip_faces = strips.size();
+            remove_deltas.push_back(
+                {remove.Shape(), i, std::move(strips)});
         }
         if (added == VolumePresence::positive) {
-            add_deltas.push_back(add.Shape());
+            auto strips = single_strip_faces[i]
+                ? descendantFaces(
+                      add,
+                      *single_strip_faces[i],
+                      add.Shape(),
+                      true)
+                : std::vector<TopoDS_Face>{};
+            added_strip_faces = strips.size();
+            add_deltas.push_back(
+                {add.Shape(), i, std::move(strips)});
         }
         std::cerr
             << "PM05F_R2_MITER_DELTA index=" << i
             << " removed=" << (removed == VolumePresence::positive)
             << " added=" << (added == VolumePresence::positive)
+            << " removed_strip_history=" << removed_strip_faces
+            << " added_strip_history=" << added_strip_faces
             << "\n";
     }
 
@@ -4772,6 +4799,8 @@ void probeChamferPlanarMiter(
             for (const auto& face : original_faces) {
                 inherited_descendants.push_back({face});
             }
+            std::vector<std::vector<TopoDS_Face>>
+                authored_strip_descendants(selected.size());
             const auto advance_inherited = [&](auto& operation) {
                 for (auto& descendants : inherited_descendants) {
                     std::vector<TopoDS_Face> next;
@@ -4787,13 +4816,41 @@ void probeChamferPlanarMiter(
                     descendants = std::move(next);
                 }
             };
+            // Preserve only exact provider face-history links; geometric
+            // co-planarity below is independent corroboration, NOT ID.
+            const auto advance_generated = [&](
+                auto& operation,
+                const ProbeSignedDelta& delta) {
+                for (auto& descendants : authored_strip_descendants) {
+                    std::vector<TopoDS_Face> next;
+                    for (const auto& prior : descendants) {
+                        for (const auto& after : descendantFaces(
+                                 operation, prior,
+                                 operation.Shape(), false)) {
+                            appendUniqueFaceCandidate(next, after);
+                        }
+                    }
+                    descendants = std::move(next);
+                }
+                for (const auto& face :
+                     delta.generated_strip_descendants) {
+                    for (const auto& after : descendantFaces(
+                             operation, face,
+                             operation.Shape(), true)) {
+                        appendUniqueFaceCandidate(
+                            authored_strip_descendants[
+                                delta.source_index],
+                            after);
+                    }
+                }
+            };
             // Compose exact signed deltas on a throwaway candidate only.
             const auto apply = [&](bool removal) {
                 const auto& deltas =
                     removal ? remove_deltas : add_deltas;
                 for (const auto& delta : deltas) {
                     if (removal) {
-                        BRepAlgoAPI_Cut op{candidate, delta};
+                        BRepAlgoAPI_Cut op{candidate, delta.shape};
                         op.SetFuzzyValue(0.0);
                         op.Build();
                         if (!op.IsDone() || op.Shape().IsNull()) {
@@ -4801,9 +4858,10 @@ void probeChamferPlanarMiter(
                             return;
                         }
                         advance_inherited(op);
+                        advance_generated(op, delta);
                         candidate = op.Shape();
                     } else {
-                        BRepAlgoAPI_Fuse op{candidate, delta};
+                        BRepAlgoAPI_Fuse op{candidate, delta.shape};
                         op.SetFuzzyValue(0.0);
                         op.Build();
                         if (!op.IsDone() || op.Shape().IsNull()) {
@@ -4811,6 +4869,7 @@ void probeChamferPlanarMiter(
                             return;
                         }
                         advance_inherited(op);
+                        advance_generated(op, delta);
                         candidate = op.Shape();
                     }
                 }
@@ -4901,6 +4960,56 @@ void probeChamferPlanarMiter(
                     else ++inherited_ambiguous;
                 }
             }
+            std::size_t new_strip_one = 0U;
+            std::size_t new_strip_none = 0U;
+            std::size_t new_strip_conflict = 0U;
+            std::size_t inherited_strip_overlap = 0U;
+            std::vector<std::size_t> strip_history_count(
+                selected.size(), 0U);
+            if (valid) {
+                for (TopExp_Explorer faces{
+                         candidate, TopAbs_FACE};
+                     faces.More(); faces.Next()) {
+                    const auto face =
+                        TopoDS::Face(faces.Current());
+                    std::size_t strip_owners = 0U;
+                    for (std::size_t i = 0U;
+                         i < selected.size(); ++i) {
+                        if (std::any_of(
+                                authored_strip_descendants[i].begin(),
+                                authored_strip_descendants[i].end(),
+                                [&face](const TopoDS_Face& candidate) {
+                                    return candidate.IsSame(face);
+                                })) {
+                            ++strip_owners;
+                            ++strip_history_count[i];
+                        }
+                    }
+                    const bool is_inherited =
+                        std::any_of(
+                            inherited_descendants.begin(),
+                            inherited_descendants.end(),
+                            [&face](const auto& claim) {
+                                return std::any_of(
+                                    claim.begin(),
+                                    claim.end(),
+                                    [&face](const TopoDS_Face& source) {
+                                        return source.IsSame(face);
+                                    });
+                            });
+                    if (is_inherited) {
+                        if (strip_owners != 0U) {
+                            ++inherited_strip_overlap;
+                        }
+                    } else if (strip_owners == 0U) {
+                        ++new_strip_none;
+                    } else if (strip_owners == 1U) {
+                        ++new_strip_one;
+                    } else {
+                        ++new_strip_conflict;
+                    }
+                }
+            }
             const auto solid_count =
                 built
                     ? countUniqueSubshapes(
@@ -4920,7 +5029,16 @@ void probeChamferPlanarMiter(
                 << " inherited_zero=" << inherited_zero
                 << " inherited_one=" << inherited_one
                 << " inherited_ambiguous=" << inherited_ambiguous
-                << " strip_support_counts=";
+                << " new_strip_one=" << new_strip_one
+                << " new_strip_none=" << new_strip_none
+                << " new_strip_conflict=" << new_strip_conflict
+                << " inherited_strip_overlap="
+                << inherited_strip_overlap
+                << " strip_history_counts=";
+            for (const auto count : strip_history_count) {
+                std::cerr << count << ",";
+            }
+            std::cerr << " strip_support_counts=";
             for (const auto count : support_plane_faces) {
                 std::cerr << count << ",";
             }
