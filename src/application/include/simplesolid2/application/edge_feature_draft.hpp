@@ -307,8 +307,12 @@ struct EdgeFeatureDraftEvaluationResult final {
     part::BodyEvaluationStatus body_status{
         part::BodyEvaluationStatus::unavailable};
     kernel::RuntimeSolidHandle body_solid;
+    // Exact B0 - B1 removed material (orange) and B1 - B0 added
+    // material (blue); either side may be absent. Runtime only.
     std::optional<kernel::SolidPresentationMesh>
         preview_mesh;
+    std::optional<kernel::SolidPresentationMesh>
+        preview_added_mesh;
     std::optional<
         part::FeatureEvaluationDiagnosticCode>
         evaluation_diagnostic;
@@ -333,8 +337,11 @@ struct EdgeFeatureDraftEvaluationResult final {
                target_status ==
                    part::FeatureEvaluationStatus::
                        up_to_date &&
-               preview_mesh.has_value() &&
-               preview_mesh->valid();
+               (preview_mesh.has_value() ||
+                preview_added_mesh.has_value()) &&
+               (!preview_mesh || preview_mesh->valid()) &&
+               (!preview_added_mesh ||
+                preview_added_mesh->valid());
     }
 };
 

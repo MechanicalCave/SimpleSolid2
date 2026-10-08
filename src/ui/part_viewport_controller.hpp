@@ -280,6 +280,9 @@ public:
     [[nodiscard]] bool setSolidPreview(
         const kernel::SolidPresentationMesh& mesh,
         viewer::SolidPreviewTone tone);
+    [[nodiscard]] bool setSolidMaterialDeltaPreview(
+        const std::optional<kernel::SolidPresentationMesh>& removed,
+        const std::optional<kernel::SolidPresentationMesh>& added);
     void clearSolidPreview();
 
     [[nodiscard]] bool setProfileDraftPreview(

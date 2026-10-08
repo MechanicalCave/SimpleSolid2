@@ -9112,12 +9112,13 @@ void CadWorkbench::refreshEdgeFeaturePreview() {
 
     if (evaluation.previewSolidAvailable() &&
         viewport_controller_ != nullptr) {
-        // Tone is presentation-only. The geometry is the exact complete
-        // candidate Body returned by the shared semantic evaluation path.
-        if (!viewport_controller_->setSolidPreview(
-                *evaluation.preview_mesh,
-                viewer::SolidPreviewTone::additive)) {
+        // One generation-scoped, atomic local removed/orange and
+        // added/blue preview; the unchanged Body stays neutral.
+        if (!viewport_controller_->setSolidMaterialDeltaPreview(
+                evaluation.preview_mesh,
+                evaluation.preview_added_mesh)) {
             evaluation.preview_mesh.reset();
+            evaluation.preview_added_mesh.reset();
         }
     }
 

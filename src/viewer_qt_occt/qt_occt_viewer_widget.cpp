@@ -720,22 +720,38 @@ public:
             context_->IsDisplayed(solid_object_);
         result.solid_preview_displayed =
             !context_.IsNull() &&
-            !solid_preview_object_.IsNull() &&
-            context_->IsDisplayed(
-                solid_preview_object_);
+            ((!solid_preview_object_.IsNull() &&
+              context_->IsDisplayed(solid_preview_object_)) ||
+             (!solid_preview_added_object_.IsNull() &&
+              context_->IsDisplayed(solid_preview_added_object_)));
         result.solid_committed_style_expected =
             solidStyleMatches(
                 solid_object_,
                 committedSolidColor(),
                 kCommittedSolidTransparency);
         result.solid_preview_style_expected =
-            solid_preview_scene_.empty()
-                ? solid_preview_object_.IsNull()
-                : solidStyleMatches(
-                      solid_preview_object_,
-                      previewSolidColor(
-                          solid_preview_scene_.tone),
-                      kPreviewSolidTransparency);
+            solid_preview_scene_.material_delta
+                ? ((solid_preview_scene_.triangles.empty()
+                        ? solid_preview_object_.IsNull()
+                        : solidStyleMatches(
+                              solid_preview_object_,
+                              previewSolidColor(
+                                  viewer::SolidPreviewTone::subtractive),
+                              kPreviewSolidTransparency)) &&
+                   (solid_preview_scene_.added_triangles.empty()
+                        ? solid_preview_added_object_.IsNull()
+                        : solidStyleMatches(
+                              solid_preview_added_object_,
+                              previewSolidColor(
+                                  viewer::SolidPreviewTone::additive),
+                              kPreviewSolidTransparency)))
+                : (solid_preview_scene_.empty()
+                       ? solid_preview_object_.IsNull()
+                       : solidStyleMatches(
+                             solid_preview_object_,
+                             previewSolidColor(
+                                 solid_preview_scene_.tone),
+                             kPreviewSolidTransparency));
         if (!solid_object_.IsNull() &&
             !solid_preview_object_.IsNull() &&
             !solid_object_->Attributes().IsNull() &&
@@ -753,7 +769,8 @@ public:
                 committed_shading != preview_shading;
         } else {
             result.solid_shading_styles_isolated =
-                solid_preview_object_.IsNull();
+                solid_preview_object_.IsNull() &&
+                solid_preview_added_object_.IsNull();
         }
         return result;
     }
@@ -2072,6 +2089,12 @@ public:
             return true;
         }
 
+        if (solid_preview_scene_.material_delta &&
+            (!scene.generation.valid() ||
+             scene.generation !=
+                 solid_preview_scene_.generation)) {
+            clearSolidPreviewScene();
+        }
         clearSolidScene();
 
         if (scene.empty()) {
@@ -2169,55 +2192,70 @@ public:
     bool setSolidPreviewScene(
         const viewer::SolidPreviewScene& scene) {
         if (!scene.valid()) return false;
+        if (scene.material_delta &&
+            (body_scene_.empty() ||
+             body_scene_.generation != scene.generation ||
+             (body_scene_.purpose !=
+                  viewer::BodyScenePurpose::current_body &&
+              body_scene_.purpose !=
+                  viewer::BodyScenePurpose::tool_stage))) {
+            return false;
+        }
 
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
         }
-
         if (scene == solid_preview_scene_) {
             return true;
         }
 
         clearSolidPreviewScene();
-
         if (scene.empty()) {
             solid_preview_scene_ = scene;
-            syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
         }
 
         try {
-            viewer::SolidScene mesh_scene;
-            mesh_scene.triangles =
-                scene.triangles;
-            const auto object =
-                makeSolidObject(mesh_scene);
-            if (object.IsNull()) {
+            const auto make_preview =
+                [this](const auto& triangles,
+                       viewer::SolidPreviewTone tone,
+                       Handle(AIS_InteractiveObject)& slot) {
+                    if (triangles.empty()) {
+                        return true;
+                    }
+                    viewer::SolidScene mesh_scene;
+                    mesh_scene.triangles = triangles;
+                    auto object = makeSolidObject(mesh_scene);
+                    if (object.IsNull()) {
+                        return false;
+                    }
+                    setOwnedSolidShadingStyle(
+                        object,
+                        previewSolidColor(tone),
+                        kPreviewSolidTransparency);
+                    object->SetPolygonOffsets(
+                        Aspect_POM_Fill, -1.0F, -1.0F);
+                    slot = object;
+                    context_->Display(slot, false);
+                    context_->Deactivate(slot);
+                    return true;
+                };
+            if (!make_preview(
+                    scene.triangles,
+                    scene.tone,
+                    solid_preview_object_) ||
+                (scene.material_delta &&
+                 !make_preview(
+                     scene.added_triangles,
+                     viewer::SolidPreviewTone::additive,
+                     solid_preview_added_object_))) {
                 clearSolidPreviewScene();
                 return false;
             }
 
-            setOwnedSolidShadingStyle(
-                object,
-                previewSolidColor(scene.tone),
-                kPreviewSolidTransparency);
-            // Keep coplanar preview boundaries stable against the opaque Body.
-            // This is display-only depth bias, never modeling input.
-            object->SetPolygonOffsets(
-                Aspect_POM_Fill,
-                -1.0F,
-                -1.0F);
-            solid_preview_object_ = object;
-            context_->Display(
-                solid_preview_object_,
-                false);
-            context_->Deactivate(
-                solid_preview_object_);
             solid_preview_scene_ = scene;
-            // The preview mesh is the exact transient operation delta.
-            // Its owned shading aspect is independent from the committed Body.
             syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
@@ -4990,20 +5028,22 @@ public:
 
 
     void clearSolidPreviewScene() noexcept {
-        if (!context_.IsNull() &&
-            !solid_preview_object_.IsNull()) {
-            const auto retained =
-                solid_preview_object_;
-            guardedVoid(
-                "removeSolidPreviewObject",
-                [this, retained] {
-                    context_->Remove(
-                        retained,
-                        false);
-                });
-        }
-
+        const auto remove =
+            [this](const Handle(AIS_InteractiveObject)& object) {
+                if (context_.IsNull() || object.IsNull()) {
+                    return;
+                }
+                const auto retained = object;
+                guardedVoid(
+                    "removeSolidPreviewObject",
+                    [this, retained] {
+                        context_->Remove(retained, false);
+                    });
+            };
+        remove(solid_preview_object_);
+        remove(solid_preview_added_object_);
         solid_preview_object_.Nullify();
+        solid_preview_added_object_.Nullify();
         solid_preview_scene_ =
             viewer::SolidPreviewScene{};
         syncCommittedSolidVisibilityForPreview();
@@ -6314,6 +6354,7 @@ private:
         reference_preview_objects_;
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
+    Handle(AIS_InteractiveObject) solid_preview_added_object_;
     viewer::BodyScene body_scene_;
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};
