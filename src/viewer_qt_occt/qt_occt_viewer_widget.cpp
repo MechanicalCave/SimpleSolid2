@@ -2061,6 +2061,23 @@ public:
                 continue;
             }
 
+            // A valid OCCT Fillet corner can expose a zero-extent
+            // material Edge whose presentation sampler returns identical
+            // points (Owner Part013: two endpoints at 18,-20,18).
+            // It has no drawable line. Do not ask MakePolygon to build
+            // a zero-length wire; retain the authoritative Body and its
+            // semantic Edge without inventing a line or model tolerance.
+            const auto has_visible_span =
+                std::any_of(
+                    edge.points.begin() + 1,
+                    edge.points.end(),
+                    [&edge](const viewer::Point3& point) {
+                        return point != edge.points.front();
+                    });
+            if (!has_visible_span) {
+                continue;
+            }
+
             publishBodyEdgeStyleObject(
                 edge, false);
             if (view_style_ ==
