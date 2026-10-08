@@ -1734,6 +1734,14 @@ int main(int argc, char* argv[]) {
 
         CHECK(kernel_three.ok());
         CHECK(three.committable());
+        // A mixed signed CSG result must expose *both* exact local
+        // material changes to the Workbench, not merely a valid B-Rep.
+        // Guard the D2-B requirement after the production fallback.
+        CHECK(three.preview_mesh.has_value());
+        CHECK(three.preview_added_mesh.has_value());
+        CHECK(three.preview_mesh->valid());
+        CHECK(three.preview_added_mesh->valid());
+        CHECK(three.previewSolidAvailable());
 
         // D2-B Owner Part008 strict permutation/size and full current
         // Face/Edge/Vertex inventory. Transient runtime tokens may order
