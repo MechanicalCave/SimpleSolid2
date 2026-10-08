@@ -53,6 +53,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -5105,6 +5106,77 @@ void probeChamferPlanarMiter(
                                     return prior.IsSame(face);
                                 });
                         delta_face_mask += traced ? '1' : '0';
+                    }
+                    // Visual-oracle probe: is a two-strip-adjacent
+                    // Face a bounded local polygon near the *exactly*
+                    // shared selected runtime source Vertex? Proximity
+                    // here is a measurement only, never an identity key.
+                    if (std::count(
+                            adjacent_strip_mask.begin(),
+                            adjacent_strip_mask.end(), '1') == 2) {
+                        GProp_GProps properties;
+                        BRepGProp::SurfaceProperties(
+                            face, properties);
+                        std::cerr
+                            << "PM05F_R2_MITER_CORNER_FACE"
+                            << " policy="
+                            << (remove_last
+                                ? "remove_wins" : "add_wins")
+                            << " distance=" << distance
+                            << " unclaimed_index="
+                            << unclaimed_index
+                            << " edges="
+                            << countUniqueSubshapes(
+                                face, TopAbs_EDGE)
+                            << " vertices="
+                            << countUniqueSubshapes(
+                                face, TopAbs_VERTEX)
+                            << " surface_area="
+                            << properties.Mass();
+                        for (const auto& joint : unique_vertices) {
+                            std::string joint_mask;
+                            for (const auto& item : selected) {
+                                joint_mask +=
+                                    edgeContainsVertex(
+                                        item.edge, joint)
+                                    ? '1' : '0';
+                            }
+                            if (std::count(
+                                    joint_mask.begin(),
+                                    joint_mask.end(), '1') != 2) {
+                                continue;
+                            }
+                            const auto source_point =
+                                BRep_Tool::Pnt(joint);
+                            double min_distance =
+                                std::numeric_limits<double>::infinity();
+                            double max_distance = 0.0;
+                            std::size_t samples = 0U;
+                            for (TopExp_Explorer vertices{
+                                     face, TopAbs_VERTEX};
+                                 vertices.More(); vertices.Next()) {
+                                const auto vertex =
+                                    TopoDS::Vertex(
+                                        vertices.Current());
+                                const double d =
+                                    BRep_Tool::Pnt(vertex)
+                                        .Distance(source_point);
+                                min_distance =
+                                    std::min(min_distance, d);
+                                max_distance =
+                                    std::max(max_distance, d);
+                                ++samples;
+                            }
+                            std::cerr
+                                << " shared_joint=" << joint_mask
+                                << ":strip_pair="
+                                << (joint_mask ==
+                                    adjacent_strip_mask)
+                                << ":vertex_samples=" << samples
+                                << ":nearest=" << min_distance
+                                << ":farthest=" << max_distance;
+                        }
+                        std::cerr << "\n";
                     }
                     std::size_t expanded_history_owners = 0U;
                     for (const auto& claim :
