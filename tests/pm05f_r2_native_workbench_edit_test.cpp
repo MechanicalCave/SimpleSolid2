@@ -1817,6 +1817,69 @@ int main(int argc, char* argv[]) {
                 CHECK(trial.current_vertex_semantics.size() ==
                       trial.vertex_count);
                 CHECK(trial.edge_feature_surfaces.size() == 5U);
+                // Check strict provenance, not merely that five output
+                // Surfaces happened to be present in the result B-Rep.
+                std::vector<kernel::RuntimeEdgeToken>
+                    certified_strip_sources;
+                std::vector<kernel::RuntimeVertexToken>
+                    certified_corner_sources;
+                for (const auto& surface :
+                     trial.edge_feature_surfaces) {
+                    CHECK(surface.valid());
+                    CHECK(surface.operation ==
+                          kernel::EdgeFeatureOperation::chamfer);
+                    CHECK(surface.surface_kind ==
+                          kernel::SurfaceKind::plane);
+                    CHECK(surface.current_faces.size() == 1U);
+                    if (surface.kind ==
+                        kernel::EdgeFeatureGeneratedSurfaceKind::
+                            edge_transition) {
+                        CHECK(surface.source_edge.has_value());
+                        CHECK(std::find(
+                                  input.edges.begin(), input.edges.end(),
+                                  *surface.source_edge) !=
+                              input.edges.end());
+                        CHECK(std::find(
+                                  certified_strip_sources.begin(),
+                                  certified_strip_sources.end(),
+                                  *surface.source_edge) ==
+                              certified_strip_sources.end());
+                        certified_strip_sources.push_back(
+                            *surface.source_edge);
+                    } else {
+                        CHECK(surface.kind ==
+                              kernel::EdgeFeatureGeneratedSurfaceKind::
+                                  corner_transition);
+                        CHECK(surface.source_vertex.has_value());
+                        CHECK(surface.incident_source_edges.size() == 2U);
+                        CHECK(surface.incident_source_edges[0] !=
+                              surface.incident_source_edges[1]);
+                        for (const auto edge :
+                             surface.incident_source_edges) {
+                            CHECK(std::find(
+                                      input.edges.begin(),
+                                      input.edges.end(), edge) !=
+                                  input.edges.end());
+                        }
+                        CHECK(std::find(
+                                  certified_corner_sources.begin(),
+                                  certified_corner_sources.end(),
+                                  *surface.source_vertex) ==
+                              certified_corner_sources.end());
+                        CHECK(std::any_of(
+                            crash_eval.current_topology->vertices.begin(),
+                            crash_eval.current_topology->vertices.end(),
+                            [&](const auto& vertex) {
+                                return vertex.runtime_token ==
+                                    *surface.source_vertex;
+                            }));
+                        certified_corner_sources.push_back(
+                            *surface.source_vertex);
+                    }
+                }
+                CHECK(certified_strip_sources.size() ==
+                      input.edges.size());
+                CHECK(certified_corner_sources.size() == 2U);
                 for (const auto& face : trial.current_faces) {
                     std::size_t owners = 0U;
                     for (const auto& surface :
