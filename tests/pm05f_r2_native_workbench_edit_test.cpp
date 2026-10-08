@@ -1049,6 +1049,15 @@ int main(int argc, char* argv[]) {
             "pm05f_r2_part008_sanitized.ss2part";
         const part::PartDocumentStore crash_store;
         auto crash_loaded = crash_store.load(crash_fixture);
+        if (!crash_loaded.ok()) {
+            std::cerr
+                << "PM05F_R2_PART008_LOAD_FAILED"
+                << " code="
+                << static_cast<int>(crash_loaded.diagnostic.code)
+                << " message="
+                << crash_loaded.diagnostic.message
+                << std::endl;
+        }
         CHECK(crash_loaded.ok());
         application::DocumentSession crash_session{
             {}, std::move(*crash_loaded.document)};
