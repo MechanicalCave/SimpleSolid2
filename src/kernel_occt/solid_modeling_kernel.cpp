@@ -4932,9 +4932,13 @@ finishPlanarMiterFallback(
     BRepAlgoAPI_Cut added{candidate, upstream.solid};
     added.SetFuzzyValue(0.0);
     added.Build();
+    // Mixed signed-delta Chamfer must contribute genuinely on *both*
+    // sides of the original material boundary. If Boolean composition
+    // erased either side, the explicit authored network was not fully
+    // realized; do not publish a one-sided or no-effect substitute.
     if (!removed.IsDone() || !added.IsDone() ||
-        (volumePresence(removed.Shape()) != VolumePresence::positive &&
-         volumePresence(added.Shape()) != VolumePresence::positive)) {
+        volumePresence(removed.Shape()) != VolumePresence::positive ||
+        volumePresence(added.Shape()) != VolumePresence::positive) {
         return result;
     }
 
