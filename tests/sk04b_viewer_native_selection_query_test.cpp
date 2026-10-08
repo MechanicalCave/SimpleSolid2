@@ -1046,6 +1046,28 @@ int main(int argc, char* argv[]) {
             viewer::Point3{0.0, 0.0, 0.0}};
     CHECK(widget.setSketchScene(scene));
 
+    // PM-05F R2 Owner P1: active Fillet/Chamfer Edge hover must be
+    // consistent with the already-correct Edge-only click when a
+    // Sketch line and Origin/reference AIS overlap the Body Edge at the
+    // same screen pixel. Existing front-face occlusion and Body scene
+    // generation remain authoritative; an AIS hit cannot suppress a
+    // genuine current material Edge during explicit Edge acquisition.
+    widget.setBodyTopologyEdgePickMode(true);
+    const auto edge_hover_before =
+        body_preselection_intents;
+    sendMouseMove(widget, body_center);
+    CHECK(body_preselection_intents > edge_hover_before);
+    CHECK(last_body_preselection_query.completed);
+    CHECK(last_body_preselection_query.generation ==
+          body_scene.generation);
+    CHECK(std::any_of(
+        last_body_preselection_query.candidates.begin(),
+        last_body_preselection_query.candidates.end(),
+        [body_edge_token](const auto& candidate) {
+            return candidate.token == body_edge_token;
+        }));
+    widget.setBodyTopologyEdgePickMode(false);
+
     const viewer::SketchGripKey center_grip{
         short_token,
         viewer::SketchGripRole::line_center};
