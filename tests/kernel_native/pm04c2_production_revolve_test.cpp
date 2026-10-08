@@ -577,6 +577,41 @@ int main() {
                     }));
         CHECK(representation_edges > 0U);
 
+        // PM-05F R2-C: a valid full-turn Revolve must have ordinary,
+        // authorable material Edges in addition to non-authorable seams.
+        // This counts strict semantic authoring, not geometry-nearest hits.
+        std::size_t candidate_edges = 0U;
+        std::size_t authorable_edges = 0U;
+        std::size_t unsupported_edges = 0U;
+        for (const auto& edge :
+             feature.result_topology->edges) {
+            if (edge.periodic_seam ||
+                edge.representation_partition ||
+                edge.accounting_class ==
+                    part::TopologyAccountingClass::
+                        known_representation_artifact) {
+                continue;
+            }
+            ++candidate_edges;
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *feature.result_topology,
+                    edge.runtime_token);
+            if (authored.ok()) {
+                ++authorable_edges;
+            } else {
+                ++unsupported_edges;
+            }
+        }
+        std::cout
+            << "PM05F_R2_REVOLVE_EDGE_CLASSIFICATION"
+            << " candidates=" << candidate_edges
+            << " authorable=" << authorable_edges
+            << " nonauthorable=" << unsupported_edges
+            << " artifacts=" << representation_edges
+            << '\\n';
+        CHECK(candidate_edges > 0U);
+        CHECK(authorable_edges > 0U);
     }
 
     std::cout
