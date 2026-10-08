@@ -119,3 +119,21 @@ Windows FOCUSED #1767 PASS (1/1), `pm05e2.cad_workbench_edge_lifecycle` on `3c6c
 - Windows FAST #1768 FAIL: 92/93 PASS, native `sk04b.viewer_native_selection_query` failed an existing pre-ring Tab-cycle assertion (`cycle_forward == 1`), while the identical expanded native test passed FOCUSED #1764. Failure occurred **before** the R2 curved-ring fixture and is not evidence that curved-edge selection failed.
 - Native `QtOcctViewerWidget::event()` handles Tab only while Body preselection is armed. The test previously drained global Qt/OS events after synthetic hover and focus, allowing queued real-cursor events to replace/clear the deterministic hover. Test corrected to establish focus and drain unrelated events **before** rearming the synchronous cursor hover, then dispatch Tab/Shift+Tab without an intervening global event pump. Both cycle assertions retained.
 - Windows FOCUSED #1769 PASS (1/1) with the ordering correction. A new same-branch FAST is still required before claiming aggregate PASS. The next governance-only commit intentionally requests FAST; no workflow/classifier edits.
+
+## Owner-approved R2-D exact local preview checkpoint — 2026-10-08
+
+Owner explicitly accepted the bounded presentation-only Kernel and Viewer interface extension in `work/PM-05F_R2_EDGE_PREVIEW_DELTA_D2_PROPOSAL.md`. Earlier D2 STOP is lifted **only for that accepted contract**. No authored schema, topology meaning, modeling tolerance, generic cache or CI policy changed.
+
+The exact successful upstream `B0` and candidate target-stage `B1` now feed provider-neutral `materialDifferencePreview`. OCCT computes zero-fuzzy exact B-Rep differences: `B0 - B1` (removed/orange) and `B1 - B0` (added/blue); a zero-sided difference is represented by an absent mesh, not fabricated material. The Viewer atomically installs both optional meshes in a generation-scoped `SolidPreviewScene`, while unchanged accepted Body retains its own neutral shading. This transient presentation is **never Finish or persisted CAD identity authority**. Unsupported/failing/no-effect preview never falls back to a fully recolored candidate Body.
+
+Focused Windows evidence on separate exact candidates:
+- **#1771 FULL PASS** before this specific preview change: 113/113 desktop and 57/57 kernel; real Qt/OCCT mouse → Workbench Fillet Edit integration `pm05f_r2.native_workbench_edit` passed. This is not the final R2-D exact-head FULL.
+- **#1772 kernel FOCUSED PASS** provider-neutral exact-difference API build/base kernel tests.
+- **#1774 desktop FOCUSED PASS** Fillet Edit Workbench preview/Cancel lifecycle after the dual-color implementation; #1773 was a temporary compile RED from the `FeatureEvaluation::id` vs `feature_id` typo, corrected before #1774.
+- **#1775 kernel FOCUSED PASS** convex Fillet/Chamfer return true local removed material with no blue candidate-Body substitution, plus executable evaluation-time instrumentation.
+- **#1776 native Qt/OCCT FOCUSED PASS** dual-color, added-only and removed-only atomic scenes, neutral Body isolation, stale generation rejection and explicit clearing.
+- **#1777 kernel FOCUSED PASS** exact delta for complex four-Edge Line/Circle capsule opening, and exact no-effect on identical before/after solids.
+- **#1778 expected diagnostic FAIL** demonstrated why a blind pocket's *opening* Boolean boundary is not the *concave floor*; its valid Fillet removed, not added, material.
+- **#1779 kernel FOCUSED PASS** semantically targeted internal wall/floor `cap_side` Curve loop in a blind pocket; UpToDate Fillet generates actual added material, verified by `materialDifferencePreview` and without XYZ/provider-order selection.
+
+Remaining R2-D verification: aggregate FAST, complete same-head FULL after other active R2 corrections, measured interactive p95/memory with realistic parts, real desktop visual Owner acceptance, canonical bilingual product docs and regenerated Browser. R2-A/E/F remain separate open findings. An operation may legitimately have only orange, only blue, or both deltas; no invented nonempty mesh is allowed.

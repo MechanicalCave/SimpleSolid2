@@ -804,3 +804,5 @@ Owner additionally accepted on 2026-10-08 the bounded D2 `work/PM-05F_R2_UNIFIED
 The same Owner accepted the separate performance *direction* in `work/PART_RUNTIME_PERFORMANCE_EVIDENCE_DIRECTION.md`, which calls for benchmark-first stage-prefix, topology indexing and Viewer optimization. Runtime performance implementation, CI-05 and PM-06 are not activated by that direction.
 
 PM-05F remains active for R2 remediation and repeat Owner acceptance. PM-05 cannot close until the Owner explicitly reports PASS on the repaired exact candidate.
+
+On 2026-10-08 the Owner additionally approved the bounded D2 `work/PM-05F_R2_EDGE_PREVIEW_DELTA_D2_PROPOSAL.md`: presentation-only exact removed/orange and added/blue volume deltas against the immediate upstream Body, atomic stage-generation publication, neutral unchanged Body, and no substitute whole-Body blue coloring. This does not change authored semantics, durable reference formats, Kernel modeling tolerance or Finish authority. Initial Windows FOCUSED #1772/#1774/#1775/#1776/#1777/#1779 support the implementation; final R2 Windows FULL and explicit Owner manual PASS remain mandatory.
