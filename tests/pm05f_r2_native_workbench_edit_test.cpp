@@ -10,7 +10,6 @@
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
-#include <QByteArray>
 #include <QDebug>
 #include <QLabel>
 #include <QPushButton>
@@ -1306,12 +1305,9 @@ int main(int argc, char* argv[]) {
             std::cerr
                 << "PM05F_R2_PART008_DELTA_DIRECT_BEGIN"
                 << std::endl;
-            CHECK(qputenv(
-                "SS2_PM05F_R2_DELTA_TRACE", QByteArray{"1"}));
             const auto delta =
                 kernel.materialDifferencePreview(
                     crash_eval.body_solid, direct.solid);
-            qunsetenv("SS2_PM05F_R2_DELTA_TRACE");
             std::cerr
                 << "PM05F_R2_PART008_DELTA_DIRECT_END"
                 << " status=" << static_cast<int>(delta.status)

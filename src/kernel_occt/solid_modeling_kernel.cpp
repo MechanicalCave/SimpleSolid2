@@ -51,8 +51,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -3714,53 +3712,28 @@ finishBoolean(
     const TopoDS_Face& face,
     kernel::SolidPresentationMesh& mesh,
     bool flat_delta_normals = false) {
-    const bool trace_face =
-#ifdef _DEBUG
-        std::getenv("SS2_PM05F_R2_DELTA_TRACE") != nullptr;
-#else
-        false;
-#endif
-    const auto face_checkpoint =
-        [trace_face](const char* phase,
-                     const Standard_Integer count = 0) noexcept {
-            if (trace_face) {
-                std::fprintf(stderr,
-                    "PM05F_R2_PART008_FACE_PHASE %s count=%d\n",
-                    phase, static_cast<int>(count));
-                std::fflush(stderr);
-            }
-        };
-    face_checkpoint("triangulation_begin");
     TopLoc_Location location;
     const Handle(Poly_Triangulation)
         triangulation =
             BRep_Tool::Triangulation(
                 face,
                 location);
-    face_checkpoint("triangulation_end");
     if (triangulation.IsNull()) {
-        face_checkpoint("triangulation_null");
         return false;
     }
-    face_checkpoint("triangle_count", triangulation->NbTriangles());
-    // Transient material-delta shading must not mutate provider-owned
-    // Poly_Triangulation normals. This was the exact Owner Part008 heap
-    // assertion site (FACE 5 / 94 triangles, R2 Windows #1820).
-    // Use face-winding-correct geometric normals in this display-only
-    // mode, while committed Body and other previews retain their
-    // existing OCCT vertex-normal semantics.
+    // Exact signed material-delta presentation can contain transient
+    // Boolean faces for which OCCT ComputeNormals fails in Debug CRT.
+    // Avoid mutating shared OCCT triangulations only for the optional
+    // display-only delta mesh. Main Body shading is unchanged.
     if (!flat_delta_normals &&
         !triangulation->HasNormals()) {
-        face_checkpoint("normals_begin");
         BRepLib_ToolTriangulatedShape::
             ComputeNormals(
                 face,
                 triangulation);
-        face_checkpoint("normals_end");
     }
     if (!flat_delta_normals &&
         !triangulation->HasNormals()) {
-        face_checkpoint("normals_missing");
         return false;
     }
 
@@ -3769,7 +3742,6 @@ finishBoolean(
     const auto first_triangle =
         mesh.triangles.size();
 
-    face_checkpoint("triangles_begin", triangulation->NbTriangles());
     for (Standard_Integer index = 1;
          index <= triangulation->NbTriangles();
          ++index) {
@@ -3804,9 +3776,8 @@ finishBoolean(
             continue;
         }
 
-        // The delta mesh is colored overlay only. A per-triangle
-        // geometric normal is exact for the tessellated triangle,
-        // independent of OCCT's mutable shared vertex-normal data.
+        // Color overlays need only the geometric facet normal. It is
+        // already in world coordinates because the nodes are transformed.
         gp_Dir first_normal = flat_delta_normals
             ? gp_Dir{cross}
             : triangulation->Normal(first_index);
@@ -3855,7 +3826,6 @@ finishBoolean(
                  third_normal.Z()}});
     }
 
-    face_checkpoint("triangles_end", triangulation->NbTriangles());
     return mesh.triangles.size() >
            first_triangle;
 }
@@ -3913,45 +3883,13 @@ presentationMeshForShape(
         constexpr double linear_deflection_mm = 0.25;
         constexpr double angular_deflection_rad = 0.35;
 
-        // R2-P0 diagnostic only. Default and release paths remain
-        // parallel; opt-in serial triangulation tests whether the
-        // existing OCCT mesher is the source of the Debug CRT assertion.
-        const bool trace_mesh =
-#ifdef _DEBUG
-            std::getenv("SS2_PM05F_R2_DELTA_TRACE") != nullptr;
-#else
-            false;
-#endif
-        const bool parallel_mesh =
-#ifdef _DEBUG
-            std::getenv("SS2_PM05F_R2_SERIAL_MESH") == nullptr;
-#else
-            true;
-#endif
-        const auto mesh_checkpoint =
-            [trace_mesh](const char* phase) noexcept {
-#ifdef _DEBUG
-                if (trace_mesh) {
-                    std::fprintf(
-                        stderr,
-                        "PM05F_R2_PART008_MESH_PHASE %s\n", phase);
-                    std::fflush(stderr);
-                }
-#else
-                (void)phase;
-#endif
-            };
-        mesh_checkpoint("construct_begin");
         BRepMesh_IncrementalMesh mesher{
             shape,
             linear_deflection_mm,
             false,
             angular_deflection_rad,
-            parallel_mesh};
-        mesh_checkpoint("construct_end");
-        mesh_checkpoint("perform_begin");
+            true};
         mesher.Perform();
-        mesh_checkpoint("perform_end");
         if (!mesher.IsDone()) {
             result.status =
                 kernel::SolidPresentationStatus::
@@ -3959,8 +3897,6 @@ presentationMeshForShape(
             return result;
         }
 
-        mesh_checkpoint("collect_triangles_begin");
-        std::size_t delta_face_index = 0U;
         for (TopExp_Explorer solid_explorer{
                  shape,
                  TopAbs_SOLID};
@@ -3974,12 +3910,6 @@ presentationMeshForShape(
                      TopAbs_FACE};
                  explorer.More();
                  explorer.Next()) {
-                if (trace_mesh) {
-                    std::fprintf(stderr,
-                        "PM05F_R2_PART008_FACE_INDEX_BEGIN %zu\n",
-                        delta_face_index);
-                    std::fflush(stderr);
-                }
                 if (!appendFaceTriangles(
                         TopoDS::Face(
                             explorer.Current()),
@@ -3991,17 +3921,9 @@ presentationMeshForShape(
                     result.mesh.triangles.clear();
                     return result;
                 }
-                if (trace_mesh) {
-                    std::fprintf(stderr,
-                        "PM05F_R2_PART008_FACE_INDEX_END %zu\n",
-                        delta_face_index);
-                    std::fflush(stderr);
-                }
-                ++delta_face_index;
             }
         }
 
-        mesh_checkpoint("collect_triangles_end");
         if (!result.mesh.valid()) {
             result.status =
                 kernel::SolidPresentationStatus::
@@ -4953,68 +4875,35 @@ OcctSolidModelingKernel::materialDifferencePreview(
     // Exact transient B-Rep differences, never triangle subtraction.
     // Do not change modeling tolerance or use fuzzy/healing fallback.
     try {
-        // Temporary R2-P0 diagnostic, debug-only and explicit opt-in.
-        // Remove after isolating the OCCT sub-operation; no CAD behavior
-        // or tolerance changes are allowed from this instrumentation.
-        const auto trace_delta =
-            [](const char* direction, const char* phase) noexcept {
-#ifdef _DEBUG
-                if (std::getenv("SS2_PM05F_R2_DELTA_TRACE")) {
-                    std::fprintf(
-                        stderr,
-                        "PM05F_R2_PART008_DELTA_PHASE direction=%s phase=%s\n",
-                        direction, phase);
-                    std::fflush(stderr);
-                }
-#else
-                (void)direction;
-                (void)phase;
-#endif
-            };
         const auto cut_mesh =
-            [&trace_delta](const TopoDS_Solid& a,
-                           const TopoDS_Solid& b,
-                           const char* direction)
+            [](const TopoDS_Solid& a,
+               const TopoDS_Solid& b)
                 -> std::optional<
                     kernel::SolidPresentationResult> {
-                trace_delta(direction, "construct_begin");
                 BRepAlgoAPI_Cut difference{a, b};
-                trace_delta(direction, "construct_end");
                 difference.SetFuzzyValue(0.0);
-                trace_delta(direction, "build_begin");
                 difference.Build();
-                trace_delta(direction, "build_end");
                 if (!difference.IsDone()) {
-                    trace_delta(direction, "not_done");
                     return std::nullopt;
                 }
                 const auto& shape = difference.Shape();
-                trace_delta(direction, "volume_begin");
-                const auto presence = volumePresence(shape);
-                trace_delta(direction, "volume_end");
-                switch (presence) {
+                switch (volumePresence(shape)) {
                 case VolumePresence::none:
-                    trace_delta(direction, "no_delta");
                     return kernel::SolidPresentationResult{
                         kernel::SolidPresentationStatus::ok, {}};
-                case VolumePresence::positive: {
-                    trace_delta(direction, "mesh_begin");
-                    auto mesh = presentationMeshForShape(
+                case VolumePresence::positive:
+                    return presentationMeshForShape(
                         shape, true);
-                    trace_delta(direction, "mesh_end");
-                    return mesh;
-                }
                 case VolumePresence::invalid:
-                    trace_delta(direction, "invalid_volume");
                     return std::nullopt;
                 }
                 return std::nullopt;
             };
 
         const auto removed =
-            cut_mesh(first->solid, second->solid, "removed");
+            cut_mesh(first->solid, second->solid);
         const auto added =
-            cut_mesh(second->solid, first->solid, "added");
+            cut_mesh(second->solid, first->solid);
         if (!removed || !added ||
             removed->status != kernel::SolidPresentationStatus::ok ||
             added->status != kernel::SolidPresentationStatus::ok) {
