@@ -598,6 +598,12 @@ int main() {
                     *feature.result_topology,
                     edge.runtime_token);
             if (authored.ok()) {
+                const auto resolved =
+                    part::resolveMaterialEdgeReference(
+                        *authored.reference,
+                        *feature.result_topology);
+                CHECK(resolved.has_value());
+                CHECK(resolved->resolved());
                 ++authorable_edges;
             } else {
                 ++unsupported_edges;
