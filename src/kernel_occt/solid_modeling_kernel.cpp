@@ -4716,6 +4716,7 @@ void probeChamferPlanarMiter(
         TopoDS_Shape shape;
         std::size_t source_index;
         std::vector<TopoDS_Face> generated_strip_descendants;
+        std::vector<TopoDS_Face> all_delta_faces;
     };
     std::vector<ProbeSignedDelta> remove_deltas;
     std::vector<ProbeSignedDelta> add_deltas;
@@ -4757,7 +4758,8 @@ void probeChamferPlanarMiter(
                 : std::vector<TopoDS_Face>{};
             removed_strip_faces = strips.size();
             remove_deltas.push_back(
-                {remove.Shape(), i, std::move(strips)});
+                {remove.Shape(), i, std::move(strips),
+                 facesFromShape(remove.Shape())});
         }
         if (added == VolumePresence::positive) {
             auto strips = single_strip_faces[i]
@@ -4769,7 +4771,8 @@ void probeChamferPlanarMiter(
                 : std::vector<TopoDS_Face>{};
             added_strip_faces = strips.size();
             add_deltas.push_back(
-                {add.Shape(), i, std::move(strips)});
+                {add.Shape(), i, std::move(strips),
+                 facesFromShape(add.Shape())});
         }
         std::cerr
             << "PM05F_R2_MITER_DELTA index=" << i
@@ -4806,6 +4809,8 @@ void probeChamferPlanarMiter(
             }
             std::vector<std::vector<TopoDS_Face>>
                 authored_strip_descendants(selected.size());
+            std::vector<std::vector<TopoDS_Face>>
+                delta_face_descendants(selected.size());
             const auto advance_inherited = [&](auto& operation) {
                 for (const bool include_generated : {false, true}) {
                     auto& claims =
@@ -4843,6 +4848,17 @@ void probeChamferPlanarMiter(
                     }
                     descendants = std::move(next);
                 }
+                for (auto& descendants : delta_face_descendants) {
+                    std::vector<TopoDS_Face> next;
+                    for (const auto& prior : descendants) {
+                        for (const auto& after : descendantFaces(
+                                 operation, prior,
+                                 operation.Shape(), false)) {
+                            appendUniqueFaceCandidate(next, after);
+                        }
+                    }
+                    descendants = std::move(next);
+                }
                 for (const auto& face :
                      delta.generated_strip_descendants) {
                     for (const auto& after : descendantFaces(
@@ -4850,6 +4866,16 @@ void probeChamferPlanarMiter(
                              operation.Shape(), true)) {
                         appendUniqueFaceCandidate(
                             authored_strip_descendants[
+                                delta.source_index],
+                            after);
+                    }
+                }
+                for (const auto& face : delta.all_delta_faces) {
+                    for (const auto& after : descendantFaces(
+                             operation, face,
+                             operation.Shape(), true)) {
+                        appendUniqueFaceCandidate(
+                            delta_face_descendants[
                                 delta.source_index],
                             after);
                     }
@@ -5070,6 +5096,16 @@ void probeChamferPlanarMiter(
                         adjacent_strip_mask +=
                             adjacent ? '1' : '0';
                     }
+                    std::string delta_face_mask;
+                    for (const auto& claim : delta_face_descendants) {
+                        const bool traced =
+                            std::any_of(
+                                claim.begin(), claim.end(),
+                                [&face](const TopoDS_Face& prior) {
+                                    return prior.IsSame(face);
+                                });
+                        delta_face_mask += traced ? '1' : '0';
+                    }
                     std::size_t expanded_history_owners = 0U;
                     for (const auto& claim :
                          inherited_with_generated) {
@@ -5107,6 +5143,8 @@ void probeChamferPlanarMiter(
                         << " index=" << unclaimed_index++
                         << " adjacent_strips="
                         << adjacent_strip_mask
+                        << " delta_face_history_mask="
+                        << delta_face_mask
                         << " inherited_expanded_owners="
                         << expanded_history_owners
                         << " inherited_plane_matches="
