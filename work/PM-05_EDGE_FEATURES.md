@@ -294,20 +294,22 @@ Requirements:
 
 PM-05A originally characterized whether the provider propagates a registered Edge into a tangent contour/chain. The production contract remains **strict authored-input semantics**: the durable Feature stores exactly the semantic material Edge set explicitly authored by the user, in canonical order. No provider-discovered neighbor becomes a durable authored input, and automatic tangent-chain/loop authoring remains excluded.
 
-**Owner amendment accepted 2026-10-07 during PM-05F manual acceptance:** provider execution contour and local result topology are not the same thing as authored input identity.
+**Owner amendment accepted 2026-10-07 during PM-05F manual acceptance:** strict authored input and local **result-topology** accommodation are separate concerns.
 
-The provider may therefore use additional transient contour members or modify/split/trim adjacent local topology when required to construct a valid Fillet/Chamfer corner, provided all of the following hold:
+The provider may modify/split/trim adjacent result topology when required to construct a valid Fillet/Chamfer corner: neighboring Edges may shorten or split, a shared Vertex may be replaced by several Vertices, adjacent Faces may split, and local corner/transition patches may be created. Those result entities are runtime consequences of the requested operation and do not become authored inputs.
+
+For the current OCCT path, provider **input contour propagation remains bounded to the explicit authored Edge set**. PM-05A proved that registering one Edge of a tangent chain can make OCCT expand its input contour and produce the same geometry as explicitly registering the complete chain. That is real operation expansion, not merely local result accommodation. Therefore current production continues to require exact provider input-contour membership; automatic tangent-chain/loop authoring remains excluded.
+
+The accepted local-topology freedom therefore applies only after the explicit input set has passed the provider-input membership gate, provided all of the following hold:
 
 1. every explicit authored Edge resolves and participates in the requested operation;
-2. any additional provider contour/corner participation is runtime-only construction evidence and is never persisted or silently added to the Feature input set;
-3. the effect is a local geometric/topological accommodation of the explicitly requested operation, not unrelated disconnected expansion;
+2. no un-authored tangent/contour Edge receives the Fillet/Chamfer merely because the provider discovered it;
+3. neighboring result topology may change as needed to close the requested local corner;
 4. the complete candidate result is shown by exact preview before Finish;
 5. the resulting solid is valid and receives complete semantic topology accounting;
 6. no nearest/similar/first/longest/provider-order rebinding is introduced.
 
-The previous production requirement that native provider contour membership must be set-equal to the authored Edge set is superseded by this amendment. Exact set equality may remain diagnostic evidence, but it is not by itself a validity condition for provider execution.
-
-Silent **authored-input** expansion remains forbidden. Local provider construction freedom is allowed.
+Silent authored-input expansion remains forbidden. Permissive **local result topology** is allowed.
 
 ## 13. Refine / unify / healing policy
 

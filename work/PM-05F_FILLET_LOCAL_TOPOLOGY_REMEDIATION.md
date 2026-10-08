@@ -20,13 +20,13 @@ This is a PM-05 acceptance blocker. PM-05 remains ACTIVE and PM-06 remains inact
 
 The Owner explicitly accepted the following engineering rule on 2026-10-07:
 
-> **Strict authored intent, permissive local topology.**
+> **Strict authored intent, permissive local result topology.**
 
 The durable Fillet/Chamfer Feature continues to store exactly the semantic Edge set explicitly selected by the user. That set must remain deterministic, stage-scoped and free of nearest/similar/provider-order rebinding.
 
-However, the provider is allowed to modify local topology required to realize that request. At a selected Edge endpoint or a 3/4/5-edge junction it may trim/split neighboring Edges, replace a vertex with several vertices, split adjacent Faces, create corner patches, or internally use extra contour members when that is a local construction consequence of the requested operation.
+After that exact input set is accepted, the provider may modify local result topology required to realize the request. At a selected Edge endpoint or a 3/4/5-edge junction it may trim/split neighboring Edges, replace a vertex with several vertices, split adjacent Faces and create local corner/transition patches. Those result entities do **not** become authored inputs.
 
-Those transient participants do **not** become authored inputs.
+PM-05A tangent evidence is an important boundary: on the current OCCT path, one tangent-chain seed can expand the provider input contour and generate the same result as explicitly selecting the complete chain. That is operation expansion, not mere local corner accommodation. Current production therefore keeps exact provider input-contour membership and does **not** silently Fillet/Chamfer un-authored tangent neighbors.
 
 Automatic tangent-chain/loop authoring remains excluded. Unrelated disconnected expansion remains invalid. Exact whole-candidate preview and complete semantic result accounting remain mandatory.
 

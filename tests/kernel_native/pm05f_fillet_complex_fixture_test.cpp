@@ -479,7 +479,26 @@ disjointChamferEdge(
                 break;
             }
         }
-        if (local) {
+        if (local ||
+            edge.curve_kind != kernel::CurveKind::line) {
+            continue;
+        }
+
+        // The old-project analogue chamfers an exterior box Edge, not the
+        // opposite capsule rim. Exclude every Curve meaning produced by the
+        // Cut Feature that produced the mixed loop; inherited base-box line
+        // meaning must remain.
+        const auto cut_feature_id =
+            loop.front().address.producer_feature_id;
+        const bool produced_by_cut =
+            std::any_of(
+                edge.curve_candidates.begin(),
+                edge.curve_candidates.end(),
+                [cut_feature_id](const auto& address) {
+                    return address.producer_feature_id ==
+                           cut_feature_id;
+                });
+        if (produced_by_cut) {
             continue;
         }
 
@@ -642,10 +661,53 @@ int main() {
     CHECK(chamfer.result_topology);
     CHECK(chamfer.result_topology->complete());
 
+    const auto wanted_addresses =
+        addresses(loop);
     const auto reauthored =
         reauthorCurveAddresses(
             *chamfer.result_topology,
-            addresses(loop));
+            wanted_addresses);
+    if (!reauthored) {
+        for (const auto& address : wanted_addresses) {
+            const auto found =
+                std::find_if(
+                    chamfer_evaluation
+                        .current_curve_references.begin(),
+                    chamfer_evaluation
+                        .current_curve_references.end(),
+                    [&address](const auto& reference) {
+                        return reference.address == address;
+                    });
+            std::cerr
+                << "PM05F_COMPLEX_REAUTHOR"
+                << " role="
+                << static_cast<int>(address.role)
+                << " producer="
+                << address.producer_feature_id.value()
+                << " found="
+                << (found != chamfer_evaluation
+                                  .current_curve_references.end()
+                        ? 1
+                        : 0);
+            if (found != chamfer_evaluation
+                             .current_curve_references.end()) {
+                std::cerr
+                    << " status="
+                    << static_cast<int>(found->status)
+                    << " strict="
+                    << static_cast<int>(
+                           found->strict_edge_status)
+                    << " candidates="
+                    << found->candidate_edge_count
+                    << " current_edges="
+                    << found->current_edges.size()
+                    << " kind="
+                    << static_cast<int>(
+                           found->curve_kind);
+            }
+            std::cerr << '\n';
+        }
+    }
     CHECK(reauthored);
     CHECK(reauthored->size() == 4U);
 
