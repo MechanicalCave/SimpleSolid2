@@ -1038,6 +1038,197 @@ int main(int argc, char* argv[]) {
             << owner_skipped << '\n';
         CHECK(owner_skipped == 0U);
 
+        // R2 P0 Owner Part008: two opposite-direction Add Extrudes,
+        // intersecting at the XY plane. This exact persisted profile
+        // geometry differs from all prior concave Cut-pocket controls.
+        // The private document/sketch UUIDs are replaced in the fixture.
+        const auto crash_fixture =
+            std::filesystem::path{__FILE__}.parent_path() /
+            "fixtures" /
+            "pm05f_r2_part008_sanitized.ss2part";
+        const part::PartDocumentStore crash_store;
+        auto crash_loaded = crash_store.load(crash_fixture);
+        CHECK(crash_loaded.ok());
+        application::DocumentSession crash_session{
+            {}, std::move(*crash_loaded.document)};
+        const auto crash_eval =
+            part::evaluatePart(crash_session.document(), kernel);
+        std::cerr
+            << "PM05F_R2_PART008_EVALUATION"
+            << " body_status="
+            << static_cast<int>(crash_eval.body_status)
+            << " features=" << crash_eval.features.size()
+            << std::endl;
+        CHECK(crash_eval.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(crash_eval.features.size() == 2U);
+        CHECK(crash_eval.current_topology);
+        CHECK(crash_eval.current_topology->complete());
+        const auto crash_presentation =
+            kernel.bodyPresentation(crash_eval.body_solid);
+        CHECK(crash_presentation.ok());
+
+        // Screenshot: selected count=1, radius=2, current stage
+        // After Feature 2; carrier from Extrude001 (Feature 1),
+        // side/side between Sketch entities 3 and 4. Resolve it
+        // semantically from the current Body. Never persist a
+        // provider runtime token or guess by XYZ nearest geometry.
+        std::optional<part::MaterialEdgeReference>
+            screenshot_edge;
+        std::vector<viewer::Point3> screenshot_points;
+        std::size_t matching_screenshot_edges = 0U;
+        for (const auto& edge :
+             crash_presentation.body.edges) {
+            const auto found =
+                std::find_if(
+                    crash_eval.current_topology->edges.begin(),
+                    crash_eval.current_topology->edges.end(),
+                    [&edge](const auto& candidate) {
+                        return candidate.runtime_token ==
+                               edge.runtime_token;
+                    });
+            if (found ==
+                crash_eval.current_topology->edges.end()) {
+                continue;
+            }
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *crash_eval.current_topology,
+                    edge.runtime_token);
+            if (!authored.ok()) {
+                continue;
+            }
+            const auto& curve = authored.reference->curve;
+            if (curve.producer_feature_id.serialized() != "1" ||
+                curve.role != part::FeatureCurveRoleKind::side_side ||
+                curve.adjacent_surfaces.size() != 2U) {
+                continue;
+            }
+            std::vector<std::string> side_entities;
+            for (const auto& adjacent :
+                 curve.adjacent_surfaces) {
+                if (adjacent.producer_feature_id.serialized() != "1" ||
+                    adjacent.role !=
+                        part::FeatureSurfaceRoleKind::side ||
+                    !adjacent.source_entity) {
+                    continue;
+                }
+                side_entities.push_back(
+                    adjacent.source_entity->serialized());
+            }
+            std::sort(
+                side_entities.begin(),
+                side_entities.end());
+            if (side_entities !=
+                std::vector<std::string>{"3", "4"}) {
+                continue;
+            }
+            ++matching_screenshot_edges;
+            screenshot_edge = *authored.reference;
+            screenshot_points.clear();
+            for (const auto& point : edge.points) {
+                screenshot_points.push_back({
+                    point.x, point.y, point.z});
+            }
+            std::cerr
+                << "PM05F_R2_PART008_SCREENSHOT_EDGE"
+                << " runtime_token=" << edge.runtime_token.value
+                << " point_count=" << edge.points.size()
+                << std::endl;
+        }
+        CHECK(matching_screenshot_edges == 1U);
+        CHECK(screenshot_edge);
+        CHECK(screenshot_points.size() >= 2U);
+
+        // First isolate the fully evaluated candidate and exact local
+        // material delta from real pointer/GUI dispatch.
+        auto screenshot_draft =
+            application::FilletDraft::beginCreate(
+                crash_session, {*screenshot_edge});
+        CHECK(screenshot_draft);
+        CHECK(screenshot_draft->setRadius(
+            core::LengthValue{2.0}));
+        const auto prior_revision =
+            crash_session.document().revision();
+        std::cerr
+            << "PM05F_R2_PART008_DRAFT_BEGIN"
+            << " radius=2 selection=1"
+            << std::endl;
+        const auto screenshot_preview =
+            crash_session.evaluateFilletDraft(
+                *screenshot_draft, kernel);
+        std::cerr
+            << "PM05F_R2_PART008_DRAFT_END"
+            << " status="
+            << static_cast<int>(screenshot_preview.status)
+            << " target="
+            << (screenshot_preview.target_status
+                ? static_cast<int>(*screenshot_preview.target_status)
+                : -1)
+            << std::endl;
+        CHECK(screenshot_preview.status ==
+                  application::EdgeFeatureDraftEvaluationStatus::ok ||
+              screenshot_preview.status ==
+                  application::EdgeFeatureDraftEvaluationStatus::
+                      target_failed);
+        CHECK(crash_session.document().revision() ==
+              prior_revision);
+
+        // Exercise the same single selected Edge through native Qt/OCCT
+        // click routing. Query and hit-testing remain authoritative;
+        // sample alternate standard views to find an unoccluded view.
+        CHECK(workbench.activateDocument(&crash_session, {}));
+        QApplication::processEvents();
+        CHECK(viewport->setViewStyle(
+            viewer::ViewStyle::shaded_with_edges));
+        auto crash_reply = workbench.submitCadInput(
+            "FILLET", workbench.cadInputContextGeneration());
+        CHECK(crash_reply.accepted);
+        crash_reply = workbench.lockCadDynamicInputField(
+            0U, "2", workbench.cadInputContextGeneration());
+        CHECK(crash_reply.accepted);
+        std::cerr
+            << "PM05F_R2_PART008_GUI_BEFORE_CLICK"
+            << std::endl;
+        bool clicked = false;
+        for (const auto orientation : {
+                 viewer::StandardView::top_front_right,
+                 viewer::StandardView::top_front_left,
+                 viewer::StandardView::top_back_left,
+                 viewer::StandardView::top_back_right,
+                 viewer::StandardView::bottom_front_left,
+                 viewer::StandardView::bottom_back_right}) {
+            CHECK(viewport->setStandardView(orientation));
+            viewport->fitAll();
+            QApplication::processEvents();
+            for (std::size_t k = 1U;
+                 k < screenshot_points.size() &&
+                 !clicked; ++k) {
+                const auto& a = screenshot_points[k - 1U];
+                const auto& b = screenshot_points[k];
+                const viewer::Point3 point{
+                    (a.x + b.x) / 2.0,
+                    (a.y + b.y) / 2.0,
+                    (a.z + b.z) / 2.0};
+                if (!nativeClick(*viewport, point)) {
+                    continue;
+                }
+                clicked = selectedCount(*label, 1);
+                std::cerr
+                    << "PM05F_R2_PART008_GUI_CLICK"
+                    << " selected_one=" << clicked
+                    << std::endl;
+            }
+            if (clicked) break;
+        }
+        CHECK(clicked);
+        CHECK(selectedCount(*label, 1));
+        std::cerr
+            << "PM05F_R2_PART008_GUI_ONE_EDGE_PASS"
+            << std::endl;
+        cancel->click();
+        QApplication::processEvents();
+
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
         CHECK(workbench.activateDocument(&session, {}));
