@@ -10,6 +10,7 @@
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
+#include <QDebug>
 #include <QLabel>
 #include <QPushButton>
 #include <QTest>
@@ -18,6 +19,7 @@
 #include <QTreeWidgetItem>
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -30,6 +32,26 @@
 using namespace simplesolid2;
 
 namespace {
+
+std::atomic<std::uint32_t> owner_edge_outline_warnings{0U};
+
+void captureOwnerEdgeOutlineWarning(
+    QtMsgType type,
+    const QMessageLogContext&,
+    const QString& message) {
+    if (type != QtWarningMsg ||
+        !message.contains(
+            QStringLiteral(
+                "SS2 Viewer display-only Edge outline"))) {
+        return;
+    }
+    owner_edge_outline_warnings.fetch_add(
+        1U, std::memory_order_relaxed);
+    std::cerr
+        << "PM05F_R2_OWNER_OUTLINE_WARNING "
+        << message.toStdString()
+        << '\n';
+}
 
 void check(bool ok, const char* expression, int line) {
     if (ok) return;
@@ -944,6 +966,13 @@ int main(int argc, char* argv[]) {
         // default Shaded mode. Style synchronization builds an
         // additional OCCT wire for every material Edge and must never
         // make the otherwise valid committed Body disappear.
+        // Capture skipped OCCT outline objects. A visible Body alone
+        // is necessary but does not prove complete material Edge drawing.
+        owner_edge_outline_warnings.store(
+            0U, std::memory_order_relaxed);
+        const auto old_qt_handler =
+            qInstallMessageHandler(
+                captureOwnerEdgeOutlineWarning);
         CHECK(workbench.activateDocument(&session, {}));
         QApplication::processEvents();
         const auto owner_shaded_edges_enabled =
@@ -978,6 +1007,14 @@ int main(int argc, char* argv[]) {
             viewer::ViewStyle::shaded_with_edges));
         CHECK(viewport->runtimeDiagnostics()
                   .solid_committed_displayed);
+        qInstallMessageHandler(old_qt_handler);
+        const auto owner_skipped =
+            owner_edge_outline_warnings.load(
+                std::memory_order_relaxed);
+        std::cerr
+            << "PM05F_R2_OWNER_OUTLINE_SKIPPED="
+            << owner_skipped << '\n';
+        CHECK(owner_skipped == 0U);
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
