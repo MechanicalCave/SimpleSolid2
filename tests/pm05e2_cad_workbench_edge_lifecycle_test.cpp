@@ -519,6 +519,14 @@ int main(int argc, char* argv[]) {
         viewport->body_scene.purpose ==
         viewer::BodyScenePurpose::tool_stage);
     CHECK(!viewport->solid_preview.empty());
+    CHECK(viewport->solid_preview.material_delta);
+    CHECK(
+        viewport->solid_preview.tone ==
+        viewer::SolidPreviewTone::subtractive);
+    CHECK(
+        viewport->solid_preview.generation ==
+        viewport->body_scene.generation);
+    CHECK(viewport->solid_preview.added_triangles.empty());
     CHECK(finish->isEnabled());
 
     // R2-B: use the real controller/tool-stage selection bridge to toggle

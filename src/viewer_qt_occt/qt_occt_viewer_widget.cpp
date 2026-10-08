@@ -752,26 +752,29 @@ public:
                              previewSolidColor(
                                  solid_preview_scene_.tone),
                              kPreviewSolidTransparency));
-        if (!solid_object_.IsNull() &&
-            !solid_preview_object_.IsNull() &&
-            !solid_object_->Attributes().IsNull() &&
-            !solid_preview_object_->
-                 Attributes().IsNull()) {
-            const auto committed_shading =
-                solid_object_->Attributes()->
-                    ShadingAspect();
-            const auto preview_shading =
-                solid_preview_object_->Attributes()->
-                    ShadingAspect();
-            result.solid_shading_styles_isolated =
-                !committed_shading.IsNull() &&
-                !preview_shading.IsNull() &&
-                committed_shading != preview_shading;
-        } else {
-            result.solid_shading_styles_isolated =
-                solid_preview_object_.IsNull() &&
-                solid_preview_added_object_.IsNull();
-        }
+        // Each transient color owns independent shading state, including
+        // added-only previews where the orange object is intentionally null.
+        const auto isolated =
+            [this](const Handle(AIS_InteractiveObject)& preview) {
+                if (preview.IsNull()) {
+                    return true;
+                }
+                if (solid_object_.IsNull() ||
+                    solid_object_->Attributes().IsNull() ||
+                    preview->Attributes().IsNull()) {
+                    return false;
+                }
+                const auto committed =
+                    solid_object_->Attributes()->ShadingAspect();
+                const auto transient =
+                    preview->Attributes()->ShadingAspect();
+                return !committed.IsNull() &&
+                       !transient.IsNull() &&
+                       committed != transient;
+            };
+        result.solid_shading_styles_isolated =
+            isolated(solid_preview_object_) &&
+            isolated(solid_preview_added_object_);
         return result;
     }
 

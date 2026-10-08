@@ -227,6 +227,33 @@ int main(int argc, char* argv[]) {
                            seam_token;
             }));
 
+    // PM-05F R2-D: native Viewer installs an atomic two-color local
+    // material-difference preview for the current generation. These
+    // stand-in triangles exercise presentation binding, not B-Rep booleans.
+    viewer::SolidPreviewScene delta_preview;
+    delta_preview.material_delta = true;
+    delta_preview.generation = body_scene.generation;
+    delta_preview.tone =
+        viewer::SolidPreviewTone::subtractive;
+    delta_preview.triangles.push_back(
+        body_scene.triangles.front());
+    delta_preview.added_triangles.push_back(
+        body_scene.triangles.front());
+    CHECK(delta_preview.valid());
+    CHECK(widget.setSolidPreviewScene(delta_preview));
+    auto material_delta_diagnostics =
+        widget.runtimeDiagnostics();
+    CHECK(material_delta_diagnostics.solid_preview_displayed);
+    CHECK(material_delta_diagnostics.solid_preview_style_expected);
+    CHECK(material_delta_diagnostics.solid_committed_displayed);
+    auto stale_delta = delta_preview;
+    stale_delta.generation = {67U};
+    CHECK(!widget.setSolidPreviewScene(stale_delta));
+    CHECK(widget.runtimeDiagnostics().solid_preview_displayed);
+    CHECK(widget.setSolidPreviewScene(
+        viewer::SolidPreviewScene{}));
+    CHECK(!widget.runtimeDiagnostics().solid_preview_displayed);
+
     // PM-02D4: Feature Contribution is a deactivated presentation
     // overlay over the already-installed BodyScene token. It must not create
     // another hit target or perturb the neutral topology query.

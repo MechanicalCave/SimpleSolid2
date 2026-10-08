@@ -4,6 +4,7 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
@@ -153,12 +154,25 @@ int main() {
                 core::LengthValue{1.0}));
         CHECK(draft.valid());
 
+        const auto started =
+            std::chrono::steady_clock::now();
         const auto preview =
             session.evaluateFilletDraft(
                 draft,
                 kernel);
+        const auto elapsed_ms =
+            std::chrono::duration_cast<
+                std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - started)
+                .count();
+        std::cout << "PM05F_R2_DELTA_FILLET_PREVIEW_MS="
+                  << elapsed_ms << '\n';
         CHECK(preview.committable());
         CHECK(preview.previewSolidAvailable());
+        CHECK(preview.preview_mesh.has_value());
+        CHECK(preview.preview_mesh->valid());
+        CHECK(!preview.preview_added_mesh.has_value());
+        // Convex corner Fillet removes local material; no whole Body blue.
         CHECK(
             preview.target_status ==
             part::FeatureEvaluationStatus::up_to_date);
@@ -236,12 +250,24 @@ int main() {
             draft.setDistance(
                 core::LengthValue{1.0}));
 
+        const auto started =
+            std::chrono::steady_clock::now();
         const auto preview =
             session.evaluateChamferDraft(
                 draft,
                 kernel);
+        const auto elapsed_ms =
+            std::chrono::duration_cast<
+                std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - started)
+                .count();
+        std::cout << "PM05F_R2_DELTA_CHAMFER_PREVIEW_MS="
+                  << elapsed_ms << '\n';
         CHECK(preview.committable());
         CHECK(preview.previewSolidAvailable());
+        CHECK(preview.preview_mesh.has_value());
+        CHECK(preview.preview_mesh->valid());
+        CHECK(!preview.preview_added_mesh.has_value());
         CHECK(
             preview.target_status ==
             part::FeatureEvaluationStatus::up_to_date);
