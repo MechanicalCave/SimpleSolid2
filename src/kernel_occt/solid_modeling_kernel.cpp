@@ -4670,6 +4670,16 @@ finishPlanarMiterFallback(
     const kernel::EdgeFeatureInput& input,
     const std::vector<SelectedRuntimeEdge>& requested) {
     kernel::SolidModelingResult result;
+    // Debug evidence only, gated by the exact native test's opt-in flag.
+    struct FallbackTrace final {
+        int gate{};
+        ~FallbackTrace() {
+            if (std::getenv("SS2_PM05F_R2_CHAMFER_TRIAGE")) {
+                std::cerr << "PM05F_R2_D2B_FALLBACK_GATE="
+                          << gate << "\n";
+            }
+        }
+    } trace;
     // Only the two degree-two mixed junctions validated in D2-A are
     // admitted. All other topologies remain on the existing OCCT path.
     if (input.operation != kernel::EdgeFeatureOperation::chamfer ||
@@ -4702,6 +4712,7 @@ finishPlanarMiterFallback(
         if (incident != 2U) return result;
     }
 
+    trace.gate = 1;
     const auto original_faces = facesFromShape(upstream.solid);
     std::vector<PlanarMiterDelta> deltas;
     std::vector<kernel::RuntimeEdgeToken> confirmed;
@@ -4766,7 +4777,9 @@ finishPlanarMiterFallback(
             delta.source_faces.push_back(std::move(claim));
         }
         deltas.push_back(std::move(delta));
+        trace.gate = 2 + static_cast<int>(i);
     }
+    trace.gate = 6;
 
     // One authored Feature, not sequential CAD Features. Input order
     // is canonicalized using stage-local runtime tokens only.
@@ -4881,6 +4894,7 @@ finishPlanarMiterFallback(
         }
     }
 
+    trace.gate = 7;
     populateDiagnostics(result, candidate);
     if (!result.brep_valid || result.solid_count != 1U ||
         !singleSolid(candidate)) return result;
@@ -4896,6 +4910,7 @@ finishPlanarMiterFallback(
         return result;
     }
 
+    trace.gate = 8;
     // Exhaustive, mutually exclusive current-Face ownership. No Face
     // ordinal, nearest geometry or last-writer Boolean precedence
     // enters the durable semantic owner.
@@ -4987,6 +5002,7 @@ finishPlanarMiterFallback(
                         return faces.size() != 1U;
                     })) return result;
 
+    trace.gate = 9;
     PlanarMiterHistory history;
     for (std::size_t j = 0U; j < original_faces.size(); ++j) {
         history.recordModified(original_faces[j], source_faces[j]);
@@ -5020,19 +5036,25 @@ finishPlanarMiterFallback(
         return descendantFaces(history, face, candidate, false);
     };
     publishLineage(result, *runtime, &upstream, {}, face_mapper);
+    trace.gate = 10;
     if (!populateRuntimeTopologyInventory(
-            result, *runtime, runtime->solid) ||
-        !publishSurfaceLineage(
+            result, *runtime, runtime->solid)) return result;
+    trace.gate = 11;
+    if (!publishSurfaceLineage(
             result, *runtime, &upstream, {},
-            false, face_mapper) ||
-        !publishEdgeFeatureGeneratedSurfaces(
+            false, face_mapper)) return result;
+    trace.gate = 12;
+    if (!publishEdgeFeatureGeneratedSurfaces(
             result, *runtime, upstream,
-            history, input, selected) ||
-        !publishCurrentSubshapeLineage(
+            history, input, selected)) return result;
+    trace.gate = 13;
+    if (!publishCurrentSubshapeLineage(
             result, upstream, *runtime,
-            history, candidate, false) ||
-        !populateCurrentTopologySemantics(
+            history, candidate, false)) return result;
+    trace.gate = 14;
+    if (!populateCurrentTopologySemantics(
             result, *runtime)) return result;
+    trace.gate = 15;
     result.status = kernel::SolidModelingStatus::ok;
     result.solid = std::move(runtime);
     return result;
