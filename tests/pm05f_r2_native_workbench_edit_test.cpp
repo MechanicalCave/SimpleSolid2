@@ -788,89 +788,85 @@ int main(int argc, char* argv[]) {
             << " radius=2"
             << '\n';
 
-        // R2-A Owner attempt 3 (Part013): exact 20 x 20 x 20 box
-        // authored in the negative-Y quadrant. Unlike the earlier
-        // any-corner control, select the three Edges incident at the
-        // specific upper corner (20, -20, 20). Its CAD references are
-        // rebuilt via the normal Sketch/Profile/Extrude commands;
-        // no private Owner document or runtime tokens are committed.
+        // R2-A Owner attempt 3 (Part013): persist-equivalent history.
+        // A 20 x 20 x 20 box in negative Y, three specific upper
+        // (20, -20, 20) material Edges, Fillet radius 2. Unlike the
+        // native mouse control above, this isolates reconstructed CAD
+        // evaluation and body presentation from cursor/camera effects.
+        // The private Owner document is not checked into the repository.
         auto owner_corner_session =
             makeBaseSession(kernel, 20.0, -20.0, 20.0);
-        CHECK(workbench.activateDocument(
-            &owner_corner_session, {}));
-        QApplication::processEvents();
-        CHECK(viewport->setStandardView(
-            viewer::StandardView::top_front_right));
-        viewport->fitAll();
-        QApplication::processEvents();
-        const auto owner_corners =
-            authorableTrihedralCornerProbes(
-                owner_corner_session, kernel);
-        const std::array<viewer::Point3, 3U> owner_edge_midpoints{{
-            {10.0, -20.0, 20.0},
-            {20.0, -10.0, 20.0},
-            {20.0, -20.0, 10.0},
-        }};
-        const auto same_point =
-            [](const viewer::Point3& a,
-               const viewer::Point3& b) {
-                constexpr double tolerance = 1.0e-5;
-                return std::abs(a.x - b.x) < tolerance &&
-                       std::abs(a.y - b.y) < tolerance &&
-                       std::abs(a.z - b.z) < tolerance;
-            };
-        const auto owner_corner =
-            std::find_if(
-                owner_corners.begin(),
-                owner_corners.end(),
-                [&](const auto& corner) {
-                    return std::all_of(
-                        owner_edge_midpoints.begin(),
-                        owner_edge_midpoints.end(),
-                        [&](const auto& expected) {
-                            return std::any_of(
-                                corner.begin(),
-                                corner.end(),
-                                [&](const auto& actual) {
-                                    return same_point(
-                                        actual, expected);
-                                });
-                        });
-                });
-        CHECK(owner_corner != owner_corners.end());
-        reply = workbench.submitCadInput(
-            "FILLET", workbench.cadInputContextGeneration());
-        CHECK(reply.accepted);
-        reply = workbench.lockCadDynamicInputField(
-            0U, "2", workbench.cadInputContextGeneration());
-        CHECK(reply.accepted);
-        for (std::size_t index = 0U;
-             index < owner_corner->size(); ++index) {
-            CHECK(nativeClick(
-                *viewport, (*owner_corner)[index]));
-            CHECK(selectedCount(
-                *label,
-                static_cast<int>(index + 1U)));
-        }
-        CHECK(finish->isEnabled());
-        finish->click();
-        QApplication::processEvents();
-        CHECK(owner_corner_session.document()
-                  .body().features.size() == 2U);
-        const auto owner_result =
+        const auto owner_base =
             part::evaluatePart(
                 owner_corner_session.document(), kernel);
-        const auto owner_body_up_to_date =
+        CHECK(owner_base.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(owner_base.current_topology);
+        CHECK(owner_base.current_topology->complete());
+        const auto owner_base_presentation =
+            kernel.bodyPresentation(owner_base.body_solid);
+        CHECK(owner_base_presentation.ok());
+
+        const auto is_owner_vertex =
+            [](const auto& point) {
+                constexpr double tolerance = 1.0e-5;
+                return std::abs(point.x - 20.0) < tolerance &&
+                       std::abs(point.y + 20.0) < tolerance &&
+                       std::abs(point.z - 20.0) < tolerance;
+            };
+        std::vector<part::MaterialEdgeReference> owner_edges;
+        for (const auto& edge :
+             owner_base_presentation.body.edges) {
+            if (edge.points.size() < 2U ||
+                (!is_owner_vertex(edge.points.front()) &&
+                 !is_owner_vertex(edge.points.back()))) {
+                continue;
+            }
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *owner_base.current_topology,
+                    edge.runtime_token);
+            CHECK(authored.ok());
+            owner_edges.push_back(*authored.reference);
+        }
+        CHECK(owner_edges.size() == 3U);
+        std::sort(owner_edges.begin(), owner_edges.end());
+        CHECK(std::adjacent_find(
+            owner_edges.begin(), owner_edges.end()) ==
+            owner_edges.end());
+
+        auto owner_state = owner_corner_session.document().state();
+        const auto owner_fillet_id =
+            owner_state.body.next_feature_id.allocate();
+        CHECK(owner_fillet_id.has_value());
+        owner_state.body.features.push_back(
+            part::PartFeature{
+                *owner_fillet_id,
+                "Fillet002",
+                false,
+                part::FilletFeature{
+                    owner_edges,
+                    core::LengthValue{2.0}}});
+        auto owner_restored =
+            part::PartDocument::restore(
+                owner_corner_session.document().documentId(),
+                std::move(owner_state),
+                owner_corner_session.document().revision());
+        CHECK(owner_restored.ok());
+        application::DocumentSession owner_committed{
+            {}, std::move(*owner_restored.document)};
+        const auto owner_result =
+            part::evaluatePart(owner_committed.document(), kernel);
+        const bool owner_body_up_to_date =
             owner_result.body_status ==
                 part::BodyEvaluationStatus::up_to_date &&
             owner_result.body_solid != nullptr &&
             owner_result.current_topology &&
             owner_result.current_topology->complete();
         CHECK(owner_body_up_to_date);
+
         const auto owner_presentation =
             kernel.bodyPresentation(owner_result.body_solid);
-        const auto owner_viewer =
-            viewport->runtimeDiagnostics();
         std::cerr
             << "PM05F_R2_OWNER_NEGATIVE_Y_CORNER"
             << " body_up_to_date=1"
@@ -878,10 +874,24 @@ int main(int argc, char* argv[]) {
             << static_cast<int>(owner_presentation.status)
             << " presentation_ok="
             << (owner_presentation.ok() ? 1 : 0)
-            << " body_displayed="
-            << (owner_viewer.solid_committed_displayed ? 1 : 0)
+            << " faces="
+            << owner_presentation.body.faces.size()
+            << " edges="
+            << owner_presentation.body.edges.size()
             << '\n';
         CHECK(owner_presentation.ok());
+
+        CHECK(workbench.activateDocument(&owner_committed, {}));
+        QApplication::processEvents();
+        const auto owner_viewer =
+            viewport->runtimeDiagnostics();
+        std::cerr
+            << "PM05F_R2_OWNER_NEGATIVE_Y_VIEWER"
+            << " body_displayed="
+            << (owner_viewer.solid_committed_displayed ? 1 : 0)
+            << " expected_style="
+            << (owner_viewer.solid_committed_style_expected ? 1 : 0)
+            << '\n';
         CHECK(owner_viewer.solid_committed_displayed);
         CHECK(owner_viewer.solid_committed_style_expected);
 
