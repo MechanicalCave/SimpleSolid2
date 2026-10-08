@@ -609,7 +609,7 @@ int main() {
             << " authorable=" << authorable_edges
             << " nonauthorable=" << unsupported_edges
             << " artifacts=" << representation_edges
-            << '\\n';
+            << '\n';
         CHECK(candidate_edges > 0U);
         CHECK(authorable_edges > 0U);
     }
