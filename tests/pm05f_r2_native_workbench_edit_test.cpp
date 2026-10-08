@@ -1736,6 +1736,75 @@ int main(int argc, char* argv[]) {
         CHECK(kernel_three.ok());
         CHECK(three.committable());
 
+        // D2-B Owner Part008 strict permutation/size and full current
+        // Face/Edge/Vertex inventory. Transient runtime tokens may order
+        // evaluation but must never become durable source identity.
+        auto trial_edges = before_triple_kernel.input->edges;
+        std::sort(
+            trial_edges.begin(), trial_edges.end(),
+            [](const auto& a, const auto& b) {
+                return a.value < b.value;
+            });
+        std::size_t passing_variants = 0U;
+        do {
+            for (const double d : {1.0, 0.5, 0.25}) {
+                auto input = *before_triple_kernel.input;
+                input.edges = trial_edges;
+                input.parameter_mm = d;
+                const auto trial =
+                    kernel.edgeFeature(input, crash_eval.body_solid);
+                CHECK(trial.ok());
+                CHECK(trial.edge_feature_input_membership);
+                CHECK(trial.edge_feature_input_membership
+                          ->exactFor(input.edges));
+                CHECK(trial.face_count == 21U);
+                CHECK(trial.current_faces.size() == trial.face_count);
+                CHECK(trial.current_edges.size() == trial.edge_count);
+                CHECK(trial.current_vertices.size() ==
+                      trial.vertex_count);
+                CHECK(trial.current_edge_semantics.size() ==
+                      trial.edge_count);
+                CHECK(trial.current_vertex_semantics.size() ==
+                      trial.vertex_count);
+                CHECK(trial.edge_feature_surfaces.size() == 5U);
+                for (const auto& face : trial.current_faces) {
+                    std::size_t owners = 0U;
+                    for (const auto& surface :
+                         trial.inherited_surfaces) {
+                        if (surface.surface_status ==
+                                kernel::ReferenceStatus::resolved &&
+                            std::find(
+                                surface.current_faces.begin(),
+                                surface.current_faces.end(),
+                                face) != surface.current_faces.end()) {
+                            ++owners;
+                        }
+                    }
+                    for (const auto& surface :
+                         trial.edge_feature_surfaces) {
+                        if (std::find(
+                                surface.current_faces.begin(),
+                                surface.current_faces.end(),
+                                face) != surface.current_faces.end()) {
+                            ++owners;
+                        }
+                    }
+                    CHECK(owners == 1U);
+                }
+                ++passing_variants;
+            }
+        } while (std::next_permutation(
+            trial_edges.begin(), trial_edges.end(),
+            [](const auto& a, const auto& b) {
+                return a.value < b.value;
+            }));
+        CHECK(passing_variants == 18U);
+        std::cerr
+            << "PM05F_R2_PART008_D2B_PRODUCTION_MATRIX"
+            << " passing=" << passing_variants
+            << " face_count=21 complete_lineage=1"
+            << std::endl;
+
         std::cerr
             << "PM05F_R2_PART008_CHAMFER_OWNER_CORNER_EXPECTATION"
             << " corner_planar=" << chamfer_corner_plane
