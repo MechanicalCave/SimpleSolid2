@@ -4699,6 +4699,38 @@ void probeChamferPlanarMiter(
             << "\n";
     }
 
+    // Pair oracle: prove whether the two adjacent junctions can each be
+    // constructed independently, and distinguish contour interaction.
+    for (std::size_t i = 0U; i < selected.size(); ++i) {
+        for (std::size_t j = i + 1U; j < selected.size(); ++j) {
+            BRepFilletAPI_MakeChamfer pair{upstream.solid};
+            pair.Add(distance, selected[i].edge);
+            pair.Add(distance, selected[j].edge);
+            pair.Build();
+            const bool built =
+                pair.IsDone() && !pair.Shape().IsNull();
+            const bool valid =
+                built &&
+                BRepCheck_Analyzer{pair.Shape()}.IsValid();
+            const bool changed =
+                valid &&
+                !upstreamExteriorUnchanged(
+                    pair, upstream.solid, pair.Shape());
+            std::cerr
+                << "PM05F_R2_MITER_PAIR edge0=" << i
+                << " edge1=" << j
+                << " built=" << built
+                << " valid=" << valid
+                << " changed=" << changed
+                << " faces="
+                << (built
+                    ? countUniqueSubshapes(
+                        pair.Shape(), TopAbs_FACE)
+                    : 0U)
+                << "\n";
+        }
+    }
+
     for (std::size_t v = 0U; v < unique_vertices.size(); ++v) {
         const auto& vertex = unique_vertices[v];
         std::vector<std::size_t> touching;
@@ -4733,11 +4765,51 @@ void probeChamferPlanarMiter(
                 single_strip_planes[touching[1]]->Axis().Direction();
             const auto cross =
                 gp_Vec{n0}.Crossed(gp_Vec{n1});
+            const double cross_square =
+                cross.SquareMagnitude();
             std::cerr
                 << "PM05F_R2_MITER_TWO_PLANE"
                 << " vertex=" << v
-                << " cross_square=" << cross.SquareMagnitude()
-                << "\n";
+                << " cross_square=" << cross_square;
+            if (cross_square > 0.0 &&
+                std::isfinite(cross_square)) {
+                const auto& p0 =
+                    *single_strip_planes[touching[0]];
+                const auto& p1 =
+                    *single_strip_planes[touching[1]];
+                const gp_Vec n0v{n0};
+                const gp_Vec n1v{n1};
+                const double offset0 =
+                    n0v.Dot(gp_Vec{point, p0.Location()});
+                const double offset1 =
+                    n1v.Dot(gp_Vec{point, p1.Location()});
+                const gp_Vec nearest =
+                    (n1v.Crossed(cross) * offset0 +
+                     cross.Crossed(n0v) * offset1) /
+                    cross_square;
+                const auto direction =
+                    cross / std::sqrt(cross_square);
+                const gp_Pnt miter_point{
+                    point.X() + nearest.X(),
+                    point.Y() + nearest.Y(),
+                    point.Z() + nearest.Z()};
+                if (std::isfinite(miter_point.X()) &&
+                    std::isfinite(miter_point.Y()) &&
+                    std::isfinite(miter_point.Z())) {
+                    std::cerr
+                        << " line_point="
+                        << miter_point.X() << ","
+                        << miter_point.Y() << ","
+                        << miter_point.Z()
+                        << " direction="
+                        << direction.X() << ","
+                        << direction.Y() << ","
+                        << direction.Z()
+                        << " distance_from_vertex="
+                        << nearest.Magnitude();
+                }
+            }
+            std::cerr << "\n";
         } else if (touching.size() == 3U) {
             const auto& p0 = *single_strip_planes[touching[0]];
             const auto& p1 = *single_strip_planes[touching[1]];
