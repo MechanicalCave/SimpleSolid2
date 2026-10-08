@@ -1,0 +1,42 @@
+# PM-05F R2 — FreeCAD/FreeCAD Chamfer donor investigation
+
+**Status:** D2-A READ-ONLY EXTERNAL RESEARCH — 2026-10-08. **No D2-B implementation authorization.**
+**External upstream:** [FreeCAD/FreeCAD](https://github.com/FreeCAD/FreeCAD) at `096fc10ed358eb61c1175b592ea1d6f0c4839ee6`.
+**Active SS2 context:** Draft PR #298, Part008 mixed convex/concave three authored material-Edge equal-distance Chamfer, strict semantic identity, fail-closed B-Rep and lineage.
+**Scope:** Donor algorithm and issue investigation only. No foreign source code imported and no runtime behavior modified.
+
+## Executive finding
+
+**FreeCAD does not appear to contain a custom replacement for an invalid OCCT three-Edge equal-distance miter.** Its reviewed Part and PartDesign Chamfer paths call the same `BRepFilletAPI_MakeChamfer` that SS2 already uses. An open FreeCAD issue reproduces Chamfer failure **on two adjacent Pads** as recently as a 2026-09-02 build with OCC 7.8.1. Other confirmed FreeCAD bugs still involve invalid Chamfer topology. This is evidence against treating FreeCAD as proof that the same OCCT operation inherently handles Part008.
+
+## Audited upstream source (pin to above SHA)
+
+| File | Verified relevant behavior | SS2 consequence |
+|---|---|---|
+| [`src/Mod/PartDesign/App/FeatureChamfer.cpp`](https://github.com/FreeCAD/FreeCAD/blob/096fc10ed358eb61c1175b592ea1d6f0c4839ee6/src/Mod/PartDesign/App/FeatureChamfer.cpp) | `PartDesign::Chamfer::execute` gets selected C0 material Edges, calls `TopoShape::makeElementChamfer`, stores `rawShape`, can refine output; on failed `BRepAlgo::IsValid` invokes `ShapeFix_ShapeTolerance::LimitTolerance` with `Precision::Confusion`. | No alternate planar miter. No tolerance mutation or broad post-hoc ShapeFix adoption under PM-05 contract. Refinement is not an OCCT corner-construction proof. |
+| [`src/Mod/Part/App/TopoShapeExpansion.cpp`](https://github.com/FreeCAD/FreeCAD/blob/096fc10ed358eb61c1175b592ea1d6f0c4839ee6/src/Mod/Part/App/TopoShapeExpansion.cpp) | `TopoShape::makeElementChamfer` verifies input Edge belongs to shape and is nondegenerate; obtains incident Face using `findAncestorShape` (or `findAncestorsShapes(...).back()` on Flip); for equal distance calls `mkChamfer.Add(d,d,edge,face)`; then `makeElementShape(mkChamfer, source, op)`. | Incident Face selection is a testable parameter, **not** a demonstrated fix. SS2 Windows #1837–#1841 already tested face-mask alternatives: valid variants were `no_effect` and cannot satisfy exact authored Edge participation. Do not use arbitrary first/last provider Face as semantic authority. |
+| [`src/Mod/Part/App/FeatureChamfer.cpp`](https://github.com/FreeCAD/FreeCAD/blob/096fc10ed358eb61c1175b592ea1d6f0c4839ee6/src/Mod/Part/App/FeatureChamfer.cpp) | Alternative Part workbench directly builds `BRepFilletAPI_MakeChamfer`, maps Edge to adjacent Face and calls `Add(d1,d2,E,F)`; output `makeElementShape(mkChamfer,...)`. | No replacement local-junction builder in this path either. |
+| [`src/Mod/PartDesign/App/FeatureDressUp.cpp`](https://github.com/FreeCAD/FreeCAD/blob/096fc10ed358eb61c1175b592ea1d6f0c4839ee6/src/Mod/PartDesign/App/FeatureDressUp.cpp) | `getContinuousEdges` filters eligible Edges with two adjacent Faces and `BRep_Tool::Continuity(...)=GeomAbs_C0`; supports Face/Wire/Solid selection expanding to constituent Edges. | The semantic selection contract differs: SS2 persists only exactly user-authored material Edges and never assumes Face-derived Edge expansion or accepts skipping unsupported input. |
+| [`src/Mod/Part/App/TopoShapeExpansion.cpp`](https://github.com/FreeCAD/FreeCAD/blob/096fc10ed358eb61c1175b592ea1d6f0c4839ee6/src/Mod/Part/App/TopoShapeExpansion.cpp) and [`TopoShape.h`](https://github.com/FreeCAD/FreeCAD/blob/096fc10ed358eb61c1175b592ea1d6f0c4839ee6/src/Mod/Part/App/TopoShape.h) | `MapperMaker` delegates to OCCT `Modified`/`Generated`, then `makeShapeWithElementMap` assigns mapped names to Face/Edge/Vertex elements; `MapperHistory` can consume `BRepTools_History`. | Useful **design pattern** for provider-private history composition; not enough for SS2's stronger requirement to associate a corner Face uniquely with an authored source shared Vertex and selected material Edges. Current F3 shows tool-generated corner source depends on Boolean precedence. |
+
+## Closest FreeCAD failure reports
+
+1. **[FreeCAD #20750](https://github.com/FreeCAD/FreeCAD/issues/20750)**, *Chamfer on adjacent Pads fails*, **OPEN**: model with two additive Pads, Chamfer `BRep_API: command not done`; confirmed again by reporter [2026-09-02 development build on OCC 7.8.1](https://github.com/FreeCAD/FreeCAD/issues/20750#issuecomment-5662549309). User workaround: two separate Chamfer operations with different sizes and additional generated-edge selection. This **violates** PM-05 single-authored-Feature/equal-distance/no-hidden-rebind invariants and is not reusable.
+2. **[FreeCAD #30244](https://github.com/FreeCAD/FreeCAD/issues/30244)**, *Chamfer results in broken shape if other edges are touched*, **OPEN; 3rd party: OCC**: changing local Chamfer distance across a nearby edge intersection produces invalid geometry. This is a separate but relevant interacting-corner limitation.
+3. **[FreeCAD #30886](https://github.com/FreeCAD/FreeCAD/issues/30886)**, *Chamfers and fillets break geometry*, **OPEN; 3rd party: OCC**: nearby faces become broken/missing.
+4. **[FreeCAD #29870](https://github.com/FreeCAD/FreeCAD/issues/29870)**, *Intersecting sweep geometry*, **closed duplicate**: user demonstrates invalid self-intersecting sweep intended to imitate a chamfer, and later splitting into two independent sweep operations. Maintainer reports success in a different build; outcome is contradictory. It is not a certified single-operation repair.
+5. **[FreeCAD #22519](https://github.com/FreeCAD/FreeCAD/issues/22519)**, OCC Chamfer kernel crash, **closed** with discussion of OCCT 8, not evidence that **our** valid-but-invalid-B-Rep Part008 issue is fixed by an OCCT upgrade.
+
+## Practical donor verdict and next bounded experiment
+
+**Steelmanned prospect:** FreeCAD's alternative `Add(d,d,E,F)` contour-reference choices, and its generic `MapperMaker` / `MapperHistory` adapter, suggest ways to *instrument* OCCT and preserve history at each step. For SS2, compare those provider operations strictly on the pinned Part008 fixture, on exact authoring references, with no widened tolerance and no acceptance of `no_effect`. The face masks have already been explored and did not pass; do not repeat those as if untested.
+
+**Critical counterargument:** FreeCAD demonstrates the same underlying failure class on adjacent additive Pads and still relies on OCCT for Chamfer. Its source contains no evident canonical miter-construction fallback, and generic topo-element naming does not solve invariant semantic corner ownership. Copying source, automatic Edge selection, `ShapeFix` tolerance manipulation, or a two-Feature workaround would be out of scope.
+
+**Most valuable next experiment (SS2 D2-A only):** build a provider-private **corner-certificate diagnostic** for the *two actual shared selected Vertices* at `(-5,-15,0)` and `(-5,5,0)`: trace exact final Face adjacency to two `Generated(source Edge)` descendants, verify the source-Vertex/selected-edge pair and locally bounded patch geometry, then test all six orders and 1/0.5/0.25 mm under both Boolean precedence policies. Keep corner patch ownership **unproven** if provenance still depends on tool order. Do not promote adjacency or coplanarity alone to persistent CAD identity.
+
+An optional **A/B OCCT-version experiment** would import *geometry only* exported from sanitized Part008 into an isolated FreeCAD/OCCT harness and run the exact three authored Edge targets there; it must not make FreeCAD edge indices or exported topology canonical SS2 IDs. An upstream version difference might identify a provider regression, not establish SS2's semantic lifecycle.
+
+**Legal/integration:** FreeCAD source declares LGPL-2.1-or-later. This audit references public interfaces and independently describes behavior; no code was copied. Any future code reuse requires license compatibility review and adherence to SS2 AGENTS rule against wholesale architecture transplantation.
+
+**Stop gate:** F3 lineage of six residual faces is unresolved; D2-B not approved; PR #298 remains Draft, production behavior untouched and Owner triple-edge RED preserved.
