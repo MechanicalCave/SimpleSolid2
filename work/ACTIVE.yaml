@@ -23,6 +23,8 @@ accepted_adrs:
   - "adr/ADR-0016-body-semantic-topology-carrier-geometry-and-face-supported-sketch.md"
   - "adr/ADR-0017-boolean-add-surface-continuation-and-representation-partition-edges.md"
 next:
+  - Owner D2 accepted a unified stage-scoped Body Surface/Curve/Point model for all Part generators, with a bounded current PM-05F R2-C application (work/PM-05F_R2_UNIFIED_BODY_TOPOLOGY_D2.md). FOCUSED #1759 and #1760 PASS prove ordinary full/partial Revolve material Edge authoring and equivalent Extrude/Revolve cylinder Fillet/Chamfer with repeated evaluation. Viewer integration and final FULL/Owner PASS remain OPEN; no new persistent schema, and no PM-06 activation.
+  - Owner D2 accepted an evidence-first future runtime-performance direction only (work/PART_RUNTIME_PERFORMANCE_EVIDENCE_DIRECTION.md): measure history/Body catalog/picking/preview before cache optimization. No performance implementation, CI policy changes or new modeling operation is activated by this entry.
   - PM-05F Owner acceptance attempt 2 on 2026-10-08 is FAIL: three-Edge Fillet can hide Body after Finish; Revolve Edge inputs cannot be selected; Edit tool-stage picking is blocked; Fillet/Chamfer preview colors the full Body; curved Edge picking/diagnostics need characterization. Owner accepted bounded R2 remediation in work/PM-05F_R2_OWNER_ACCEPTANCE_REMEDIATION.md; PM-05 remains ACTIVE, PM-06 inactive.
   - PM-05F R2 work proceeds on a dedicated Draft PR using FOCUSED/FAST/SUBSYSTEM for iteration. Final exact-head Windows FULL and explicit Owner manual PASS remain mandatory. No CI policy change was activated.
   - PM-02 Body Semantic Topology / Face-Supported Sketch is COMPLETED — PASS after Owner post-remediation Windows re-test PASS on 2026-10-05
