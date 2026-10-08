@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QTest>
+#include <QTemporaryDir>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -1797,6 +1798,115 @@ int main(int argc, char* argv[]) {
                 return a.value < b.value;
             }));
         CHECK(passing_variants == 18U);
+
+        // D2-B one-authored-Feature lifecycle, using a new temporary native
+        // file. The original sanitized Owner fixture is never mutated.
+        QTemporaryDir lifecycle_dir;
+        CHECK(lifecycle_dir.isValid());
+        const auto lifecycle_path =
+            std::filesystem::path{
+                lifecycle_dir.path().toStdWString()} /
+            "part008_d2b_three_edge_chamfer.ss2part";
+        auto lifecycle_source = crash_store.load(crash_fixture);
+        CHECK(lifecycle_source.ok());
+        const auto initial_file = crash_store.createNew(
+            lifecycle_path, *lifecycle_source.document);
+        CHECK(initial_file.ok());
+        application::DocumentSession lifecycle{
+            lifecycle_path,
+            std::move(*lifecycle_source.document),
+            *initial_file.checkpoint};
+        const std::vector<part::MaterialEdgeReference>
+            authored_three{
+                *screenshot_edge,
+                isolated_secondary.reference,
+                *third_owner_edge};
+        const auto create_feature =
+            lifecycle.execute(
+                application::CreateChamferFeatureCommand{
+                    authored_three,
+                    lifecycle.document().revision(),
+                    core::LengthValue{1.0},
+                    "D2B Three-Edge Chamfer"},
+                kernel);
+        CHECK(create_feature.ok());
+        CHECK(create_feature.changed);
+        CHECK(create_feature.feature_id);
+        CHECK(lifecycle.document().body().features.size() == 3U);
+        const auto check_live_three = [&]() {
+            const auto evaluated = part::evaluatePart(
+                lifecycle.document(), kernel);
+            CHECK(evaluated.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(evaluated.body_solid);
+            CHECK(evaluated.current_topology);
+            CHECK(evaluated.current_topology->complete());
+            const auto* feature =
+                lifecycle.document().findFeature(
+                    *create_feature.feature_id);
+            CHECK(feature != nullptr);
+            const auto* chamfer =
+                std::get_if<part::ChamferFeature>(
+                    &feature->definition);
+            CHECK(chamfer != nullptr);
+            CHECK(chamfer->edges.size() == 3U);
+        };
+        check_live_three();
+
+        CHECK(lifecycle.undo().ok());
+        CHECK(lifecycle.document().body().features.size() == 2U);
+        CHECK(lifecycle.redo().ok());
+        check_live_three();
+
+        const auto edit_feature =
+            lifecycle.execute(
+                application::EditChamferFeatureCommand{
+                    *create_feature.feature_id,
+                    authored_three,
+                    lifecycle.document().revision(),
+                    core::LengthValue{0.5},
+                    "D2B Three-Edge Chamfer Edited"},
+                kernel);
+        CHECK(edit_feature.ok());
+        CHECK(edit_feature.changed);
+        check_live_three();
+        const auto* edited =
+            std::get_if<part::ChamferFeature>(
+                &lifecycle.document().findFeature(
+                    *create_feature.feature_id)->definition);
+        CHECK(edited != nullptr);
+        CHECK(edited->distance == core::LengthValue{0.5});
+
+        CHECK(lifecycle.undo().ok());
+        check_live_three();
+        const auto* restored =
+            std::get_if<part::ChamferFeature>(
+                &lifecycle.document().findFeature(
+                    *create_feature.feature_id)->definition);
+        CHECK(restored != nullptr);
+        CHECK(restored->distance == core::LengthValue{1.0});
+        CHECK(lifecycle.redo().ok());
+        check_live_three();
+        CHECK(lifecycle.save().ok());
+        CHECK(!lifecycle.needsSave());
+
+        auto reopened = crash_store.load(lifecycle_path);
+        CHECK(reopened.ok());
+        CHECK(reopened.document->state() ==
+              lifecycle.document().state());
+        const auto reopened_eval =
+            part::evaluatePart(*reopened.document, kernel);
+        CHECK(reopened_eval.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(reopened_eval.body_solid);
+        CHECK(reopened_eval.current_topology);
+        CHECK(reopened_eval.current_topology->complete());
+        std::cerr
+            << "PM05F_R2_PART008_D2B_LIFECYCLE_PASS"
+            << " create=1 edit=1 undo=1 redo=1"
+            << " save=1 reopen=1 replay=1"
+            << std::endl;
+
         std::cerr
             << "PM05F_R2_PART008_D2B_PRODUCTION_MATRIX"
             << " passing=" << passing_variants
