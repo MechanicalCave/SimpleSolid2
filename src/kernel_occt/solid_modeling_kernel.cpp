@@ -4759,9 +4759,34 @@ void probeChamferPlanarMiter(
         << " added_parts=" << add_deltas.size() << "\n";
     if (deltas_complete) {
         std::vector<TopoDS_Shape> policy_candidates;
+        const auto original_faces = facesFromShape(upstream.solid);
         for (const bool remove_last : {true, false}) {
             TopoDS_Shape candidate = upstream.solid;
             bool built = true;
+            // Every inherited Face begins with its own exact OCCT TShape.
+            // Advance only using provider operation history (no plane,
+            // coordinate, index or nearest Face ownership claims).
+            std::vector<std::vector<TopoDS_Face>>
+                inherited_descendants;
+            inherited_descendants.reserve(original_faces.size());
+            for (const auto& face : original_faces) {
+                inherited_descendants.push_back({face});
+            }
+            const auto advance_inherited = [&](auto& operation) {
+                for (auto& descendants : inherited_descendants) {
+                    std::vector<TopoDS_Face> next;
+                    for (const auto& prior : descendants) {
+                        for (const auto& after : descendantFaces(
+                                 operation,
+                                 prior,
+                                 operation.Shape(),
+                                 false)) {
+                            appendUniqueFaceCandidate(next, after);
+                        }
+                    }
+                    descendants = std::move(next);
+                }
+            };
             // Compose exact signed deltas on a throwaway candidate only.
             const auto apply = [&](bool removal) {
                 const auto& deltas =
@@ -4775,6 +4800,7 @@ void probeChamferPlanarMiter(
                             built = false;
                             return;
                         }
+                        advance_inherited(op);
                         candidate = op.Shape();
                     } else {
                         BRepAlgoAPI_Fuse op{candidate, delta};
@@ -4784,6 +4810,7 @@ void probeChamferPlanarMiter(
                             built = false;
                             return;
                         }
+                        advance_inherited(op);
                         candidate = op.Shape();
                     }
                 }
@@ -4848,6 +4875,32 @@ void probeChamferPlanarMiter(
                     }
                 }
             }
+            std::size_t inherited_zero = 0U;
+            std::size_t inherited_one = 0U;
+            std::size_t inherited_ambiguous = 0U;
+            if (valid) {
+                for (TopExp_Explorer faces{
+                         candidate, TopAbs_FACE};
+                     faces.More(); faces.Next()) {
+                    const auto face =
+                        TopoDS::Face(faces.Current());
+                    std::size_t owners = 0U;
+                    for (const auto& descendants :
+                         inherited_descendants) {
+                        if (std::any_of(
+                                descendants.begin(),
+                                descendants.end(),
+                                [&face](const TopoDS_Face& source) {
+                                    return source.IsSame(face);
+                                })) {
+                            ++owners;
+                        }
+                    }
+                    if (owners == 0U) ++inherited_zero;
+                    else if (owners == 1U) ++inherited_one;
+                    else ++inherited_ambiguous;
+                }
+            }
             const auto solid_count =
                 built
                     ? countUniqueSubshapes(
@@ -4863,6 +4916,10 @@ void probeChamferPlanarMiter(
                 << " faces=" << total_faces
                 << " planar_faces=" << planar_faces
                 << " changed=" << changed
+                << " upstream_faces=" << original_faces.size()
+                << " inherited_zero=" << inherited_zero
+                << " inherited_one=" << inherited_one
+                << " inherited_ambiguous=" << inherited_ambiguous
                 << " strip_support_counts=";
             for (const auto count : support_plane_faces) {
                 std::cerr << count << ",";
