@@ -620,6 +620,75 @@ int main() {
         CHECK(authorable_edges > 0U);
     }
 
+    // PM-05F R2-C: the exact same shared semantic Curve/Edge authoring
+    // pipeline also handles partial Revolve's real planar start/end caps.
+    // No new Curve address layout or transient provider-order identity.
+    {
+        auto partial =
+            makePartRevolve(
+                core::BuiltinReferenceRole::x_axis,
+                {10.0, 0.0},
+                {20.0, 10.0},
+                pi / 2.0);
+        const auto evaluated =
+            part::evaluatePart(partial, kernel);
+        CHECK(evaluated.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(evaluated.features.size() == 1U);
+        const auto& feature = evaluated.features.front();
+        CHECK(feature.result_topology.has_value());
+        CHECK(feature.result_topology->complete());
+
+        std::size_t authorable_edges = 0U;
+        std::size_t authorable_lines = 0U;
+        std::size_t authorable_circles = 0U;
+        std::size_t cap_side_curves = 0U;
+        for (const auto& curve :
+             feature.result_topology->curves) {
+            if (curve.address.role ==
+                    part::FeatureCurveRoleKind::cap_side &&
+                curve.status ==
+                    kernel::ReferenceStatus::resolved) {
+                ++cap_side_curves;
+            }
+        }
+        for (const auto& edge :
+             feature.result_topology->edges) {
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *feature.result_topology,
+                    edge.runtime_token);
+            if (!authored.ok()) {
+                continue;
+            }
+            const auto resolved =
+                part::resolveMaterialEdgeReference(
+                    *authored.reference,
+                    *feature.result_topology);
+            CHECK(resolved.has_value());
+            CHECK(resolved->resolved());
+            ++authorable_edges;
+            if (edge.curve_kind ==
+                    kernel::CurveKind::line) {
+                ++authorable_lines;
+            }
+            if (edge.curve_kind ==
+                    kernel::CurveKind::circle) {
+                ++authorable_circles;
+            }
+        }
+        std::cout
+            << "PM05F_R2_PARTIAL_REVOLVE_EDGE_CLASSIFICATION"
+            << " authorable=" << authorable_edges
+            << " line=" << authorable_lines
+            << " circle=" << authorable_circles
+            << " cap_side=" << cap_side_curves
+            << '\n';
+        CHECK(authorable_edges > 0U);
+        CHECK(authorable_lines > 0U);
+        CHECK(cap_side_curves > 0U);
+    }
+
     std::cout
         << "PM-04C2 production OCCT Revolve tests passed\n";
     return EXIT_SUCCESS;
