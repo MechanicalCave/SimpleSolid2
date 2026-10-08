@@ -815,108 +815,112 @@ int main() {
         const auto source_feature_count =
             preview_session.document().body().features.size();
 
-        const auto concave =
-            floor_edges.front();
-        const auto convex =
-            exterior_edges.front();
-        CHECK(concave != convex);
-        for (const auto operation : {
-                 kernel::EdgeFeatureOperation::fillet,
-                 kernel::EdgeFeatureOperation::chamfer}) {
-            const bool fillet =
-                operation ==
-                kernel::EdgeFeatureOperation::fillet;
-            std::cerr
-                << "PM05F_R2_MIXED_P0_STAGE"
-                << " operation=" << (fillet ? "FILLET" : "CHAMFER")
-                << " step=concave_only"
-                << std::endl;
-            if (fillet) {
-                auto draft =
-                    application::FilletDraft::beginCreate(
-                        preview_session,
-                        {concave});
-                CHECK(draft);
-                CHECK(draft->setRadius(core::LengthValue{1.0}));
-                const auto solo =
-                    preview_session.evaluateFilletDraft(
-                        *draft, kernel);
-                std::cerr
-                    << "PM05F_R2_MIXED_P0_SOLO"
-                    << " status=" << static_cast<int>(solo.status)
-                    << " target=" << (solo.target_status
-                        ? static_cast<int>(*solo.target_status)
-                        : -1)
-                    << std::endl;
-                CHECK(draft->setEdges({concave, convex}));
-                std::cerr
-                    << "PM05F_R2_MIXED_P0_STAGE"
-                    << " operation=FILLET step=mixed"
-                    << std::endl;
-                const auto mixed =
-                    preview_session.evaluateFilletDraft(
-                        *draft, kernel);
-                std::cerr
-                    << "PM05F_R2_MIXED_P0_RESULT"
-                    << " operation=FILLET"
-                    << " status=" << static_cast<int>(mixed.status)
-                    << " target=" << (mixed.target_status
-                        ? static_cast<int>(*mixed.target_status)
-                        : -1)
-                    << std::endl;
-                CHECK(mixed.status ==
-                      application::EdgeFeatureDraftEvaluationStatus::ok ||
-                      mixed.status ==
-                      application::EdgeFeatureDraftEvaluationStatus::
-                          target_failed);
-            } else {
-                auto draft =
-                    application::ChamferDraft::beginCreate(
-                        preview_session,
-                        {concave});
-                CHECK(draft);
-                CHECK(draft->setDistance(core::LengthValue{1.0}));
-                const auto solo =
-                    preview_session.evaluateChamferDraft(
-                        *draft, kernel);
-                std::cerr
-                    << "PM05F_R2_MIXED_P0_SOLO"
-                    << " status=" << static_cast<int>(solo.status)
-                    << " target=" << (solo.target_status
-                        ? static_cast<int>(*solo.target_status)
-                        : -1)
-                    << std::endl;
-                CHECK(draft->setEdges({concave, convex}));
-                std::cerr
-                    << "PM05F_R2_MIXED_P0_STAGE"
-                    << " operation=CHAMFER step=mixed"
-                    << std::endl;
-                const auto mixed =
-                    preview_session.evaluateChamferDraft(
-                        *draft, kernel);
-                std::cerr
-                    << "PM05F_R2_MIXED_P0_RESULT"
-                    << " operation=CHAMFER"
-                    << " status=" << static_cast<int>(mixed.status)
-                    << " target=" << (mixed.target_status
-                        ? static_cast<int>(*mixed.target_status)
-                        : -1)
-                    << std::endl;
-                CHECK(mixed.status ==
-                      application::EdgeFeatureDraftEvaluationStatus::ok ||
-                      mixed.status ==
-                      application::EdgeFeatureDraftEvaluationStatus::
-                          target_failed);
+        // Explicit bounded matrix, never guessed material Edge identity:
+        // 4 known concave pocket-floor inputs x up to 4 inherited convex
+        // outer lines x Fillet/Chamfer. One selected Edge is previewed
+        // before adding the second, matching Owner's reported ordering.
+        const auto convex_count = std::min<std::size_t>(
+            exterior_edges.size(), 4U);
+        std::size_t mixed_cases = 0U;
+        for (std::size_t fi = 0U;
+             fi < floor_edges.size(); ++fi) {
+            for (std::size_t ci = 0U;
+                 ci < convex_count; ++ci) {
+                const auto& concave = floor_edges[fi];
+                const auto& convex = exterior_edges[ci];
+                CHECK(concave != convex);
+                for (const auto operation : {
+                         kernel::EdgeFeatureOperation::fillet,
+                         kernel::EdgeFeatureOperation::chamfer}) {
+                    const bool fillet =
+                        operation ==
+                        kernel::EdgeFeatureOperation::fillet;
+                    std::cerr
+                        << "PM05F_R2_MIXED_P0_STAGE"
+                        << " operation="
+                        << (fillet ? "FILLET" : "CHAMFER")
+                        << " concave_index=" << fi
+                        << " convex_index=" << ci
+                        << " step=concave_only"
+                        << std::endl;
+                    if (fillet) {
+                        auto draft =
+                            application::FilletDraft::beginCreate(
+                                preview_session, {concave});
+                        CHECK(draft);
+                        CHECK(draft->setRadius(
+                            core::LengthValue{1.0}));
+                        const auto solo =
+                            preview_session.evaluateFilletDraft(
+                                *draft, kernel);
+                        CHECK(solo.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::ok ||
+                              solo.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::
+                                target_failed);
+                        CHECK(draft->setEdges({concave, convex}));
+                        std::cerr
+                            << "PM05F_R2_MIXED_P0_STAGE"
+                            << " operation=FILLET"
+                            << " concave_index=" << fi
+                            << " convex_index=" << ci
+                            << " step=mixed"
+                            << std::endl;
+                        const auto mixed =
+                            preview_session.evaluateFilletDraft(
+                                *draft, kernel);
+                        CHECK(mixed.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::ok ||
+                              mixed.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::
+                                target_failed);
+                    } else {
+                        auto draft =
+                            application::ChamferDraft::beginCreate(
+                                preview_session, {concave});
+                        CHECK(draft);
+                        CHECK(draft->setDistance(
+                            core::LengthValue{1.0}));
+                        const auto solo =
+                            preview_session.evaluateChamferDraft(
+                                *draft, kernel);
+                        CHECK(solo.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::ok ||
+                              solo.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::
+                                target_failed);
+                        CHECK(draft->setEdges({concave, convex}));
+                        std::cerr
+                            << "PM05F_R2_MIXED_P0_STAGE"
+                            << " operation=CHAMFER"
+                            << " concave_index=" << fi
+                            << " convex_index=" << ci
+                            << " step=mixed"
+                            << std::endl;
+                        const auto mixed =
+                            preview_session.evaluateChamferDraft(
+                                *draft, kernel);
+                        CHECK(mixed.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::ok ||
+                              mixed.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::
+                                target_failed);
+                    }
+                    CHECK(preview_session.document().revision() ==
+                          source_revision);
+                    CHECK(preview_session.document().body()
+                              .features.size() == source_feature_count);
+                    ++mixed_cases;
+                }
             }
-            CHECK(preview_session.document().revision() ==
-                  source_revision);
-            CHECK(preview_session.document().body()
-                      .features.size() == source_feature_count);
         }
+        CHECK(mixed_cases ==
+              floor_edges.size() * convex_count * 2U);
         std::cout
             << "PM05F_R2_MIXED_P0_DRAFT_COMPLETES"
             << " fillet=1 chamfer=1"
-            << " mutation=0\n";
+            << " mutation=0"
+            << " cases=" << mixed_cases << '\n';
     }
 
     // Old-project analogue: first Chamfer an unrelated exterior Edge, then
