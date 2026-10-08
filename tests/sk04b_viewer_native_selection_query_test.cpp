@@ -574,6 +574,202 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // PM-05F R2-E: real Qt/OCCT cursor hit-testing on a curved circular
+    // material boundary. The triangulation is intentionally coarser than
+    // the authored Edge polyline, as in a normal cylindrical Body display.
+    // The test checks two zooms and an occluded rear/bottom boundary.
+    {
+        viewer_qt_occt::QtOcctViewerWidget ring_widget;
+        ring_widget.resize(801, 601);
+        ring_widget.show();
+        QApplication::processEvents();
+
+        constexpr double radius = 10.0;
+        constexpr double top_z = 20.0;
+        constexpr int facets = 64;
+        const double full_turn = 2.0 * std::acos(-1.0);
+
+        viewer::BodyScene ring_scene;
+        ring_scene.generation = {81U};
+        ring_scene.purpose =
+            viewer::BodyScenePurpose::current_body;
+        const viewer::PresentationToken
+            ring_face_token{0x7101U};
+        const viewer::PresentationToken
+            cylinder_face_token{0x7102U};
+        const viewer::PresentationToken
+            top_ring_token{0x7201U};
+        const viewer::PresentationToken
+            bottom_ring_token{0x7202U};
+
+        auto ringPoint = [full_turn](
+            int index,
+            double z) {
+            const double angle =
+                full_turn * static_cast<double>(index) /
+                static_cast<double>(facets);
+            return viewer::Point3{
+                radius * std::cos(angle),
+                radius * std::sin(angle),
+                z};
+        };
+
+        for (int index = 0; index < facets; ++index) {
+            const auto first = ringPoint(index, top_z);
+            const auto next = ringPoint(index + 1, top_z);
+            ring_scene.triangles.push_back(
+                {
+                    {0.0, 0.0, top_z},
+                    first,
+                    next,
+                    {0.0, 0.0, 1.0},
+                    {0.0, 0.0, 1.0},
+                    {0.0, 0.0, 1.0}});
+        }
+        ring_scene.faces.push_back(
+            {
+                ring_face_token,
+                0U,
+                static_cast<std::size_t>(facets)});
+        for (int index = 0; index < facets; ++index) {
+            const auto top_first =
+                ringPoint(index, top_z);
+            const auto top_next =
+                ringPoint(index + 1, top_z);
+            const auto bottom_first =
+                ringPoint(index, 0.0);
+            const auto bottom_next =
+                ringPoint(index + 1, 0.0);
+            const viewer::Vec3 normal{0.0, -1.0, 0.0};
+            ring_scene.triangles.push_back(
+                {
+                    top_first,
+                    bottom_first,
+                    bottom_next,
+                    normal,
+                    normal,
+                    normal});
+            ring_scene.triangles.push_back(
+                {
+                    top_first,
+                    bottom_next,
+                    top_next,
+                    normal,
+                    normal,
+                    normal});
+        }
+        ring_scene.faces.push_back(
+            {
+                cylinder_face_token,
+                static_cast<std::size_t>(facets),
+                static_cast<std::size_t>(2 * facets)});
+
+        viewer::BodyEdgePresentation top_ring{
+            top_ring_token, {}, true, true};
+        viewer::BodyEdgePresentation bottom_ring{
+            bottom_ring_token, {}, true, true};
+        for (int index = 0; index <= 256; ++index) {
+            const double angle =
+                full_turn * static_cast<double>(index) /
+                256.0;
+            const double x = radius * std::cos(angle);
+            const double y = radius * std::sin(angle);
+            top_ring.points.push_back({x, y, top_z});
+            bottom_ring.points.push_back({x, y, 0.0});
+        }
+        ring_scene.edges.push_back(std::move(top_ring));
+        ring_scene.edges.push_back(std::move(bottom_ring));
+        CHECK(ring_scene.valid());
+        CHECK(ring_widget.setBodyScene(ring_scene));
+
+        int ring_clicks = 0;
+        ring_widget.setBodyTopologySelectionIntentHandler(
+            [&ring_clicks,
+             top_ring_token](
+                const viewer::BodyTopologyPickQueryResult& query,
+                viewer::SelectionIntentMode) {
+                CHECK(query.valid());
+                CHECK(query.completed);
+                CHECK(std::any_of(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [top_ring_token](const auto& item) {
+                        return item.token ==
+                               top_ring_token;
+                    }));
+                ++ring_clicks;
+            });
+
+        for (const double scale : {60.0, 35.0}) {
+            const viewer::CameraState camera{
+                viewer::Point3{45.0, -75.0, 55.0},
+                viewer::Point3{0.0, 0.0, 10.0},
+                viewer::Vec3{0.0, 0.0, 1.0},
+                viewer::CameraProjection::orthographic,
+                scale};
+            CHECK(ring_widget.setCameraState(camera));
+            for (const double angle :
+                 {-std::acos(-1.0) / 2.0,
+                  -std::acos(-1.0) / 4.0}) {
+                const viewer::Point3 target{
+                    radius * std::cos(angle),
+                    radius * std::sin(angle),
+                    top_z};
+                const auto screen =
+                    ring_widget.projectWorldPoint(target);
+                CHECK(screen.has_value());
+                const auto query =
+                    ring_widget.queryBodyTopology(
+                        *screen,
+                        viewer::BodyTopologyPickFilter{
+                            false, true, false});
+                CHECK(query.valid());
+                CHECK(query.completed);
+                CHECK(query.generation ==
+                      ring_scene.generation);
+                CHECK(std::any_of(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [top_ring_token](const auto& item) {
+                        return item.token ==
+                               top_ring_token;
+                    }));
+                sendMouseMove(ring_widget, *screen);
+                QTest::mouseClick(
+                    &ring_widget,
+                    Qt::LeftButton,
+                    Qt::NoModifier,
+                    QPoint{
+                        static_cast<int>(std::lround(
+                            screen->x)),
+                        static_cast<int>(std::lround(
+                            screen->y))});
+                QApplication::processEvents();
+                CHECK(ring_clicks > 0);
+            }
+        }
+        CHECK(ring_clicks == 4);
+
+        const auto hidden =
+            ring_widget.projectWorldPoint(
+                {0.0, radius, 0.0});
+        CHECK(hidden.has_value());
+        const auto hidden_query =
+            ring_widget.queryBodyTopology(
+                *hidden,
+                viewer::BodyTopologyPickFilter{
+                    false, true, false});
+        CHECK(hidden_query.valid());
+        CHECK(std::none_of(
+            hidden_query.candidates.begin(),
+            hidden_query.candidates.end(),
+            [bottom_ring_token](const auto& item) {
+                return item.token ==
+                       bottom_ring_token;
+            }));
+        ring_widget.setBodyTopologySelectionIntentHandler({});
+    }
+
     // View Style lives in the same provider-surface HUD family as the
     // navigation controls. Its click emits an action; the callback/controller
     // remains runtime state authority.
