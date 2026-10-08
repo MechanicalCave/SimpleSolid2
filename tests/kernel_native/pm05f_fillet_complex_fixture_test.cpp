@@ -4,6 +4,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <numbers>
@@ -632,6 +633,41 @@ int main() {
         part::FeatureEvaluationStatus::up_to_date);
     CHECK(direct_fillet.result_topology);
     CHECK(direct_fillet.result_topology->complete());
+
+    // PM-05F R2-D: production mixed Line/Circle capsule cut and its
+    // four-Edge Fillet must produce a presentation-only exact local delta.
+    // Neither preview mesh may be substituted with the final full Body.
+    CHECK(cut.result_solid != nullptr);
+    CHECK(direct_fillet.result_solid != nullptr);
+    const auto delta_started =
+        std::chrono::steady_clock::now();
+    const auto complex_delta =
+        kernel.materialDifferencePreview(
+            cut.result_solid,
+            direct_fillet.result_solid);
+    const auto delta_ms =
+        std::chrono::duration_cast<
+            std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - delta_started)
+            .count();
+    CHECK(complex_delta.ok());
+    CHECK(complex_delta.removed || complex_delta.added);
+    CHECK(!complex_delta.removed ||
+          complex_delta.removed->valid());
+    CHECK(!complex_delta.added ||
+          complex_delta.added->valid());
+    const auto unchanged_delta =
+        kernel.materialDifferencePreview(
+            cut.result_solid,
+            cut.result_solid);
+    CHECK(!unchanged_delta.ok());
+    CHECK(!unchanged_delta.removed);
+    CHECK(!unchanged_delta.added);
+    std::cout
+        << "PM05F_R2_COMPLEX_EXACT_DELTA"
+        << " removed=" << (complex_delta.removed ? 1 : 0)
+        << " added=" << (complex_delta.added ? 1 : 0)
+        << " elapsed_ms=" << delta_ms << '\n';
 
     // Old-project analogue: first Chamfer an unrelated exterior Edge, then
     // re-author the same Cut Curve meanings at the new stage and Fillet the
