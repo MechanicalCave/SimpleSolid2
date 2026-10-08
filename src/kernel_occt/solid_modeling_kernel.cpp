@@ -4796,25 +4796,35 @@ void probeChamferPlanarMiter(
             // coordinate, index or nearest Face ownership claims).
             std::vector<std::vector<TopoDS_Face>>
                 inherited_descendants;
+            std::vector<std::vector<TopoDS_Face>>
+                inherited_with_generated;
             inherited_descendants.reserve(original_faces.size());
+            inherited_with_generated.reserve(original_faces.size());
             for (const auto& face : original_faces) {
                 inherited_descendants.push_back({face});
+                inherited_with_generated.push_back({face});
             }
             std::vector<std::vector<TopoDS_Face>>
                 authored_strip_descendants(selected.size());
             const auto advance_inherited = [&](auto& operation) {
-                for (auto& descendants : inherited_descendants) {
-                    std::vector<TopoDS_Face> next;
-                    for (const auto& prior : descendants) {
-                        for (const auto& after : descendantFaces(
-                                 operation,
-                                 prior,
-                                 operation.Shape(),
-                                 false)) {
-                            appendUniqueFaceCandidate(next, after);
+                for (const bool include_generated : {false, true}) {
+                    auto& claims =
+                        include_generated
+                            ? inherited_with_generated
+                            : inherited_descendants;
+                    for (auto& descendants : claims) {
+                        std::vector<TopoDS_Face> next;
+                        for (const auto& prior : descendants) {
+                            for (const auto& after : descendantFaces(
+                                     operation,
+                                     prior,
+                                     operation.Shape(),
+                                     include_generated)) {
+                                appendUniqueFaceCandidate(next, after);
+                            }
                         }
+                        descendants = std::move(next);
                     }
-                    descendants = std::move(next);
                 }
             };
             // Preserve only exact provider face-history links; geometric
@@ -5060,6 +5070,17 @@ void probeChamferPlanarMiter(
                         adjacent_strip_mask +=
                             adjacent ? '1' : '0';
                     }
+                    std::size_t expanded_history_owners = 0U;
+                    for (const auto& claim :
+                         inherited_with_generated) {
+                        if (std::any_of(
+                                claim.begin(), claim.end(),
+                                [&face](const TopoDS_Face& prior) {
+                                    return prior.IsSame(face);
+                                })) {
+                            ++expanded_history_owners;
+                        }
+                    }
                     std::size_t matching_upstream_planes = 0U;
                     for (const auto& original : original_faces) {
                         if (planarFacesSameDomain(face, original)) {
@@ -5086,6 +5107,8 @@ void probeChamferPlanarMiter(
                         << " index=" << unclaimed_index++
                         << " adjacent_strips="
                         << adjacent_strip_mask
+                        << " inherited_expanded_owners="
+                        << expanded_history_owners
                         << " inherited_plane_matches="
                         << matching_upstream_planes
                         << " adjacent_inherited_claims="
