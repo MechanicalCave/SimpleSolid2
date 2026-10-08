@@ -1,6 +1,6 @@
 # PM-05F R2 — Mixed Chamfer Corner Remediation (Owner-approved D2-B)
 
-**Status:** D2-B Owner-APPROVED 2026-10-08; bounded implementation AUTOMATED FOCUSED PASS #1885; Owner Windows acceptance and exact-head FULL PENDING
+**Status:** D2-B Owner-APPROVED; targeted Owner manual PASS on `af85a6fafea643739393b4f29673eca56c666519` (2026-10-08); FOCUSED #1898 PASS; final exact-head FULL and aggregate PM-05F acceptance PENDING
 **Authority:** PM-05 Edge Features / PM-05F R2 Owner remediation
 **Decision:** Owner accepted bounded OCCT-private D2-B geometry/lineage implementation; no wider D3 geometry policy or public/persistent contract expansion
 **Production mutation authorization:** D2-B APPROVED by Owner on 2026-10-08, strictly for the bounded provider-private fallback and provenance ledger described below; no public/persistent contract or product D3 extension authorized
@@ -96,4 +96,10 @@ Implementation gates are mandatory: original 3-Edge material Edges only; default
 - [#1883/#1884 FOCUSED](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37836562501): the newly introduced lifecycle test initially RED because its *direct Command* supplied noncanonical Edge order (invalid input rejected before evaluation). The Kernel, Draft and prior matrix remained successful. The test is corrected to assert mutation-free rejection of unsorted input followed by canonical sorted input.
 - [#1885 FOCUSED](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37836862225): **PASS 1/1** on exact `e5276d9e54c5c611cbec66203c0a689ccc015e00`, including all 18 Kernel variants, create/edit from 1 to 0.5 mm, Undo/Redo, native `.ss2part` Save/Reopen and cold replay, and semantic topology completeness.
 
-**Not yet accepted:** no exact-head Windows **FULL** result, no Owner's new manual three-Edge Chamfer PASS, and the separate complex Edge-picking P1 cases remain open. An intermittent native Viewer trihedral click test deserves further scrutiny. PR #298 remains **Draft**; no main merge, no PM-06 and no project-wide Chamfer appearance D3 decision. Neither the accepted D2-B permission nor one green FOCUSED run closes PM-05F.
+**Historical status before the latest targeted Owner re-test:** no final FULL, no new three-Edge Owner PASS and separate P1 picking questions were open. The latest scoped Owner response and CI evidence are recorded below. Intermittent native Viewer trihedral clicks remain a regression-monitoring concern; PM-05F is not closed.
+
+## Targeted R2 Owner/CI evidence update — 2026-10-08
+
+Owner reported **manual test PASS** for exact candidate `af85a6fafea643739393b4f29673eca56c666519` following requested Part008 three-Edge Chamfer, Edit/persistence and P1 selection test instructions. This is scoped Owner evidence; no individual results for the entire 41-step PM-05F matrix were supplied.
+
+Windows FOCUSED [#1898](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37842345000) on that SHA **PASS 1/1**, including complete 21-Face accounting across 18 variants, strict input source Edge/Vertex incidence and native lifecycle coverage. Final exact-head Windows FULL has not run. PR #298 stays Draft, PM-06 inactive and D3 planar-corner policy deferred.

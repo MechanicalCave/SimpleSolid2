@@ -1,6 +1,6 @@
 # PM-05F — Owner Windows Acceptance
 
-**Status:** OWNER ACCEPTANCE ATTEMPT 2 FAIL — R2 REMEDIATION ACTIVE
+**Status:** R2 TARGETED OWNER MANUAL PASS 2026-10-08 on `af85a6fafea643739393b4f29673eca56c666519`; complete PM-05F matrix and exact-head Windows FULL still PENDING
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
 **Date prepared:** 2026-10-07
@@ -129,12 +129,20 @@ Owner accepted a separate bounded R2 acceptance-remediation plan on 2026-10-08; 
 40. Confirm docs describe selection-first/command-first, Operations/Command Line parity, Edit preserving FeatureId, explicit repair, Suppress/Delete/Undo/Redo and Save/Reopen.
 41. Confirm docs do not claim variable-radius/full-round/face Fillet, distance-angle/asymmetric Chamfer or automatic tangent-chain authoring.
 
+## Owner R2 targeted re-test — 2026-10-08 — PASS (scoped)
+
+**Exact manually tested candidate:** `af85a6fafea643739393b4f29673eca56c666519` on PR #298.
+
+The Owner reported **"manual test - pass"** after receiving Windows start instructions and a four-part targeted checklist: Part008 three-Edge Chamfer; Edit/Finish/Cancel/Undo/Redo/Save/Reopen; complex Edge-picking P1; and rejection diagnostics. Record an explicit **targeted Owner manual PASS**, without fabricating a per-step result. The full 41-step aggregate PM-05F acceptance matrix was not independently itemized.
+
+**Exact automated evidence:** Windows FOCUSED [#1898](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37842345000) **PASS 1/1** on the same SHA, including 18 Chamfer variants, unique 21-Face ownership, actual source-Vertex/selected-Edge incidence and native lifecycle. Earlier FAST [#1893](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37839379219) **PASS 93/93** was on a different HEAD.
+
+**Still required:** final exact-head Windows FULL on synchronized candidate, aggregate PM-05F evidence review and explicit release/merge gate. No implied broader geometry policy, no permanent acceptance of untested edge networks, no D3 planar corner rule, no PM-06 activation.
+
 ## Result
 
-Owner result: **ATTEMPT 1 FAIL; ATTEMPT 2 FAIL — R2 remediation required before another repeat acceptance**.
-
-This acceptance attempt has returned PM-05F to bounded remediation. After remediation, the exact replacement candidate must pass a fresh Windows FULL and the Owner workflow must be repeated. Only a later explicit Owner PASS closes PM-05.
+Owner results: **ATTEMPT 1 FAIL; ATTEMPT 2 FAIL; targeted R2 re-test PASS (2026-10-08)**. Aggregate PM-05F remains **PENDING**, not a completed Work Contract.
 
 ## Completion boundary
 
-Until Owner PASS, PM-05 remains ACTIVE, PM-05F remains the current checkpoint, PM-06 is not activated, and no advanced Fillet/Chamfer variant is implied by this workflow.
+Until the remaining exact-head FULL and aggregate acceptance gates are met, PM-05 remains ACTIVE, PR #298 remains Draft, PM-06 is not activated, and no advanced Fillet/Chamfer variant is implied by this workflow.
