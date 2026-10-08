@@ -3721,24 +3721,49 @@ finishBoolean(
     if (triangulation.IsNull()) {
         return false;
     }
-    // Exact signed material-delta presentation can contain transient
-    // Boolean faces for which OCCT ComputeNormals fails in Debug CRT.
-    // Avoid mutating shared OCCT triangulations only for the optional
-    // display-only delta mesh. Main Body shading is unchanged.
-    if (!flat_delta_normals &&
-        !triangulation->HasNormals()) {
-        BRepLib_ToolTriangulatedShape::
-            ComputeNormals(
-                face,
-                triangulation);
-    }
-    if (!flat_delta_normals &&
-        !triangulation->HasNormals()) {
-        return false;
-    }
-
     const auto transform =
         location.Transformation();
+
+    // A finished Fillet Body can reach the same unsafe OCCT normal
+    // mutation as the signed delta preview (Owner Part008 R2-P0).
+    // Preserve provider-supplied smooth normals when they exist.
+    // Otherwise, accumulate area-weighted facet normals per face-local
+    // vertex *without modifying* shared Poly_Triangulation storage.
+    // This keeps curved faces smoothly shaded and leaves B-Rep, Edge
+    // identity and all modeling tolerances untouched.
+    const bool missing_normals =
+        !flat_delta_normals &&
+        !triangulation->HasNormals();
+    std::vector<gp_Vec> fallback_normals;
+    if (missing_normals) {
+        fallback_normals.resize(
+            static_cast<std::size_t>(
+                triangulation->NbNodes()) + 1U);
+        for (Standard_Integer index = 1;
+             index <= triangulation->NbTriangles();
+             ++index) {
+            Standard_Integer i0{};
+            Standard_Integer i1{};
+            Standard_Integer i2{};
+            triangulation->Triangle(index).Get(i0, i1, i2);
+            const gp_Pnt a =
+                triangulation->Node(i0).Transformed(transform);
+            const gp_Pnt b =
+                triangulation->Node(i1).Transformed(transform);
+            const gp_Pnt c =
+                triangulation->Node(i2).Transformed(transform);
+            const gp_Vec normal =
+                gp_Vec{a, b}.Crossed(gp_Vec{a, c});
+            const double length = normal.Magnitude();
+            if (!std::isfinite(length) || !(length > 0.0)) {
+                continue;
+            }
+            fallback_normals[static_cast<std::size_t>(i0)] += normal;
+            fallback_normals[static_cast<std::size_t>(i1)] += normal;
+            fallback_normals[static_cast<std::size_t>(i2)] += normal;
+        }
+    }
+
     const auto first_triangle =
         mesh.triangles.size();
 
@@ -3776,22 +3801,30 @@ finishBoolean(
             continue;
         }
 
-        // Color overlays need only the geometric facet normal. It is
-        // already in world coordinates because the nodes are transformed.
-        gp_Dir first_normal = flat_delta_normals
-            ? gp_Dir{cross}
-            : triangulation->Normal(first_index);
-        gp_Dir second_normal = flat_delta_normals
-            ? gp_Dir{cross}
-            : triangulation->Normal(second_index);
-        gp_Dir third_normal = flat_delta_normals
-            ? gp_Dir{cross}
-            : triangulation->Normal(third_index);
-        if (!flat_delta_normals) {
-            first_normal.Transform(transform);
-            second_normal.Transform(transform);
-            third_normal.Transform(transform);
-        }
+        // Signed delta: flat normals. Committed Body: use untouched
+        // provider normals, or the face-local smooth fallback above.
+        const auto normal_at =
+            [&](Standard_Integer node_index) {
+                if (flat_delta_normals) {
+                    return gp_Dir{cross};
+                }
+                if (!missing_normals) {
+                    gp_Dir provider =
+                        triangulation->Normal(node_index);
+                    provider.Transform(transform);
+                    return provider;
+                }
+                const gp_Vec& accumulated =
+                    fallback_normals[
+                        static_cast<std::size_t>(node_index)];
+                const double length = accumulated.Magnitude();
+                return std::isfinite(length) && length > 0.0
+                    ? gp_Dir{accumulated}
+                    : gp_Dir{cross};
+            };
+        gp_Dir first_normal = normal_at(first_index);
+        gp_Dir second_normal = normal_at(second_index);
+        gp_Dir third_normal = normal_at(third_index);
 
         if (face.Orientation() ==
             TopAbs_REVERSED) {
