@@ -3,6 +3,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
@@ -19,6 +20,7 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <utility>
@@ -894,6 +896,58 @@ int main(int argc, char* argv[]) {
             << '\n';
         CHECK(owner_viewer.solid_committed_displayed);
         CHECK(owner_viewer.solid_committed_style_expected);
+
+        // Owner Part013's actual authored sketch segment order, Profile
+        // region intent and three durable MaterialEdgeReferences are read
+        // from a sanitized copy of the native document. This catches
+        // differences that an equivalent bounding box cannot reproduce.
+        // Only regenerated document/sketch UUIDs differ from Owner input.
+        const auto owner_fixture =
+            std::filesystem::path{__FILE__}.parent_path() /
+            "fixtures" /
+            "pm05f_r2_part013_sanitized.ss2part";
+        const part::PartDocumentStore owner_store;
+        const auto owner_loaded = owner_store.load(owner_fixture);
+        CHECK(owner_loaded.ok());
+        application::DocumentSession owner_exact_session{
+            {}, std::move(*owner_loaded.document)};
+        const auto owner_exact_result =
+            part::evaluatePart(owner_exact_session.document(), kernel);
+        const bool owner_exact_up_to_date =
+            owner_exact_result.body_status ==
+                part::BodyEvaluationStatus::up_to_date &&
+            owner_exact_result.body_solid != nullptr &&
+            owner_exact_result.current_topology &&
+            owner_exact_result.current_topology->complete();
+        std::cerr
+            << "PM05F_R2_OWNER_EXACT_NATIVE"
+            << " body_up_to_date="
+            << (owner_exact_up_to_date ? 1 : 0)
+            << '\n';
+        CHECK(owner_exact_up_to_date);
+        const auto owner_exact_presentation =
+            kernel.bodyPresentation(owner_exact_result.body_solid);
+        std::cerr
+            << "PM05F_R2_OWNER_EXACT_PRESENTATION"
+            << " status="
+            << static_cast<int>(owner_exact_presentation.status)
+            << " ok="
+            << (owner_exact_presentation.ok() ? 1 : 0)
+            << " faces="
+            << owner_exact_presentation.body.faces.size()
+            << " edges="
+            << owner_exact_presentation.body.edges.size()
+            << '\n';
+        CHECK(owner_exact_presentation.ok());
+        CHECK(workbench.activateDocument(&owner_exact_session, {}));
+        QApplication::processEvents();
+        const auto owner_exact_viewer = viewport->runtimeDiagnostics();
+        std::cerr
+            << "PM05F_R2_OWNER_EXACT_VIEWER"
+            << " body_displayed="
+            << (owner_exact_viewer.solid_committed_displayed ? 1 : 0)
+            << '\n';
+        CHECK(owner_exact_viewer.solid_committed_displayed);
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
