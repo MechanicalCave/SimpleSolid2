@@ -1308,17 +1308,20 @@ int main(int argc, char* argv[]) {
                 << std::endl;
             CHECK(qputenv(
                 "SS2_PM05F_R2_DELTA_TRACE", QByteArray{"1"}));
-            CHECK(qputenv(
-                "SS2_PM05F_R2_SERIAL_MESH", QByteArray{"1"}));
             const auto delta =
                 kernel.materialDifferencePreview(
                     crash_eval.body_solid, direct.solid);
             qunsetenv("SS2_PM05F_R2_DELTA_TRACE");
-            qunsetenv("SS2_PM05F_R2_SERIAL_MESH");
             std::cerr
                 << "PM05F_R2_PART008_DELTA_DIRECT_END"
                 << " status=" << static_cast<int>(delta.status)
+                << " removed=" << (delta.removed ? 1 : 0)
+                << " added=" << (delta.added ? 1 : 0)
                 << std::endl;
+            CHECK(delta.status ==
+                  kernel::SolidPresentationStatus::ok);
+            CHECK(delta.removed.has_value());
+            CHECK(delta.added.has_value());
         }
 
         auto isolated_draft =

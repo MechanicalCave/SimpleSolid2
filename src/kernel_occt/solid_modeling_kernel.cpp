@@ -3712,7 +3712,8 @@ finishBoolean(
 
 [[nodiscard]] bool appendFaceTriangles(
     const TopoDS_Face& face,
-    kernel::SolidPresentationMesh& mesh) {
+    kernel::SolidPresentationMesh& mesh,
+    bool flat_delta_normals = false) {
     const bool trace_face =
 #ifdef _DEBUG
         std::getenv("SS2_PM05F_R2_DELTA_TRACE") != nullptr;
@@ -3742,7 +3743,14 @@ finishBoolean(
         return false;
     }
     face_checkpoint("triangle_count", triangulation->NbTriangles());
-    if (!triangulation->HasNormals()) {
+    // Transient material-delta shading must not mutate provider-owned
+    // Poly_Triangulation normals. This was the exact Owner Part008 heap
+    // assertion site (FACE 5 / 94 triangles, R2 Windows #1820).
+    // Use face-winding-correct geometric normals in this display-only
+    // mode, while committed Body and other previews retain their
+    // existing OCCT vertex-normal semantics.
+    if (!flat_delta_normals &&
+        !triangulation->HasNormals()) {
         face_checkpoint("normals_begin");
         BRepLib_ToolTriangulatedShape::
             ComputeNormals(
@@ -3750,7 +3758,8 @@ finishBoolean(
                 triangulation);
         face_checkpoint("normals_end");
     }
-    if (!triangulation->HasNormals()) {
+    if (!flat_delta_normals &&
+        !triangulation->HasNormals()) {
         face_checkpoint("normals_missing");
         return false;
     }
@@ -3785,15 +3794,33 @@ finishBoolean(
                 ->Node(third_index)
                 .Transformed(transform);
 
-        gp_Dir first_normal =
-            triangulation->Normal(first_index);
-        gp_Dir second_normal =
-            triangulation->Normal(second_index);
-        gp_Dir third_normal =
-            triangulation->Normal(third_index);
-        first_normal.Transform(transform);
-        second_normal.Transform(transform);
-        third_normal.Transform(transform);
+        const gp_Vec first_edge{first, second};
+        const gp_Vec second_edge{first, third};
+        const gp_Vec cross =
+            first_edge.Crossed(second_edge);
+        const double magnitude = cross.Magnitude();
+        if (!std::isfinite(magnitude) ||
+            !(magnitude > 0.0)) {
+            continue;
+        }
+
+        // The delta mesh is colored overlay only. A per-triangle
+        // geometric normal is exact for the tessellated triangle,
+        // independent of OCCT's mutable shared vertex-normal data.
+        gp_Dir first_normal = flat_delta_normals
+            ? gp_Dir{cross}
+            : triangulation->Normal(first_index);
+        gp_Dir second_normal = flat_delta_normals
+            ? gp_Dir{cross}
+            : triangulation->Normal(second_index);
+        gp_Dir third_normal = flat_delta_normals
+            ? gp_Dir{cross}
+            : triangulation->Normal(third_index);
+        if (!flat_delta_normals) {
+            first_normal.Transform(transform);
+            second_normal.Transform(transform);
+            third_normal.Transform(transform);
+        }
 
         if (face.Orientation() ==
             TopAbs_REVERSED) {
@@ -3804,21 +3831,6 @@ finishBoolean(
             first_normal.Reverse();
             second_normal.Reverse();
             third_normal.Reverse();
-        }
-
-        const gp_Vec first_edge{
-            first,
-            second};
-        const gp_Vec second_edge{
-            first,
-            third};
-        const gp_Vec cross =
-            first_edge.Crossed(second_edge);
-        const double magnitude =
-            cross.Magnitude();
-        if (!std::isfinite(magnitude) ||
-            !(magnitude > 0.0)) {
-            continue;
         }
 
         mesh.triangles.push_back(
@@ -3887,7 +3899,8 @@ edgePresentationPoints(
 
 [[nodiscard]] kernel::SolidPresentationResult
 presentationMeshForShape(
-    const TopoDS_Shape& shape) noexcept {
+    const TopoDS_Shape& shape,
+    bool flat_delta_normals = false) noexcept {
     kernel::SolidPresentationResult result;
     if (shape.IsNull()) {
         result.status =
@@ -3970,7 +3983,8 @@ presentationMeshForShape(
                 if (!appendFaceTriangles(
                         TopoDS::Face(
                             explorer.Current()),
-                        result.mesh)) {
+                        result.mesh,
+                        flat_delta_normals)) {
                     result.status =
                         kernel::SolidPresentationStatus::
                             provider_failure;
@@ -4985,7 +4999,8 @@ OcctSolidModelingKernel::materialDifferencePreview(
                         kernel::SolidPresentationStatus::ok, {}};
                 case VolumePresence::positive: {
                     trace_delta(direction, "mesh_begin");
-                    auto mesh = presentationMeshForShape(shape);
+                    auto mesh = presentationMeshForShape(
+                        shape, true);
                     trace_delta(direction, "mesh_end");
                     return mesh;
                 }
