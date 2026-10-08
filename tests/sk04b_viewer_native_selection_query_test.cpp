@@ -747,6 +747,10 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(tool_stage_click_intents == 1);
 
+    // The callback belongs to this tool-stage scenario only. Later tests
+    // install unrelated scenes/generations on the same native widget.
+    widget.setBodyTopologySelectionIntentHandler({});
+
     sendMouseMove(widget, body_center);
     CHECK(last_body_preselection_query.completed);
     CHECK(
