@@ -1730,6 +1730,39 @@ int main(int argc, char* argv[]) {
         CHECK(triple_session.document().revision() ==
               triple_source_revision);
         CHECK(lone.committable());
+
+        // Controlled provider-only diagnostic. Runtime-token permutation
+        // is NOT CAD authored order, and must never become durable
+        // Edge identity. Determine whether OCCT invalid B-Rep depends
+        // on registration order versus geometric impossibility.
+        CHECK(before_triple_kernel.input->edges.size() == 3U);
+        const auto base_three = *before_triple_kernel.input;
+        std::vector<std::size_t> order{0U, 1U, 2U};
+        for (const auto candidate_distance :
+             {1.0, 0.5, 0.25}) {
+            do {
+                auto alternate = base_three;
+                alternate.parameter_mm = candidate_distance;
+                for (std::size_t i = 0; i < 3U; ++i) {
+                    alternate.edges[i] =
+                        base_three.edges[order[i]];
+                }
+                const auto attempt =
+                    kernel.edgeFeature(
+                        alternate,
+                        crash_eval.body_solid);
+                std::cerr
+                    << "PM05F_R2_PART008_CHAMFER_PERMUTATION"
+                    << " distance=" << candidate_distance
+                    << " order=" << order[0]
+                    << order[1] << order[2]
+                    << " status=" << static_cast<int>(attempt.status)
+                    << " brep_valid=" << (attempt.brep_valid ? 1 : 0)
+                    << " solids=" << attempt.solid_count
+                    << std::endl;
+            } while (std::next_permutation(
+                order.begin(), order.end()));
+        }
         CHECK(kernel_three.ok());
         CHECK(three.committable());
 
