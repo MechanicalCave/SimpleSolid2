@@ -1184,6 +1184,106 @@ int main(int argc, char* argv[]) {
         CHECK(crash_session.document().revision() ==
               prior_revision);
 
+        // P0 Part008: this is the *second* edge transition missing
+        // from FULL #1813. Candidate identities are obtained from
+        // the current strict material Edge catalog. Prioritize true
+        // two-producer Boolean intersections, then ordinary Edges.
+        // Never persist or guess OCCT runtime tokens for authored CAD.
+        struct Part008SecondaryEdge {
+            part::MaterialEdgeReference reference;
+            part::FeatureCurveRoleKind role;
+            std::vector<viewer::Point3> points;
+        };
+        std::vector<Part008SecondaryEdge> secondary_edges;
+        for (const auto& edge :
+             crash_presentation.body.edges) {
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *crash_eval.current_topology,
+                    edge.runtime_token);
+            if (!authored.ok() ||
+                *authored.reference == *screenshot_edge ||
+                edge.points.size() < 2U) {
+                continue;
+            }
+            const auto already_added =
+                std::any_of(
+                    secondary_edges.begin(),
+                    secondary_edges.end(),
+                    [&](const auto& item) {
+                        return item.reference ==
+                            *authored.reference;
+                    });
+            if (already_added) {
+                continue;
+            }
+            Part008SecondaryEdge next{
+                *authored.reference,
+                authored.reference->curve.role,
+                {}};
+            for (const auto& point : edge.points) {
+                next.points.push_back({
+                    point.x, point.y, point.z});
+            }
+            secondary_edges.push_back(std::move(next));
+        }
+        std::stable_sort(
+            secondary_edges.begin(),
+            secondary_edges.end(),
+            [](const auto& a, const auto& b) {
+                const auto intersection =
+                    part::FeatureCurveRoleKind::
+                        boolean_intersection;
+                return (a.role == intersection) &&
+                       (b.role != intersection);
+            });
+        CHECK(!secondary_edges.empty());
+        std::cerr
+            << "PM05F_R2_PART008_SECOND_CANDIDATES"
+            << " count=" << secondary_edges.size()
+            << std::endl;
+
+        // The exact authored two-Edge input is probed before any
+        // Qt/OCCT event. An invalid mixed pair may return target_failed;
+        // a heap assertion or process termination is never acceptable.
+        constexpr std::size_t max_mixed_candidates = 12U;
+        const auto mixed_limit = std::min(
+            secondary_edges.size(), max_mixed_candidates);
+        for (std::size_t i = 0; i < mixed_limit; ++i) {
+            const auto& second = secondary_edges[i];
+            auto mixed_draft =
+                application::FilletDraft::beginCreate(
+                    crash_session, {*screenshot_edge});
+            CHECK(mixed_draft);
+            CHECK(mixed_draft->setRadius(
+                core::LengthValue{2.0}));
+            CHECK(mixed_draft->setEdges({
+                *screenshot_edge, second.reference}));
+            std::cerr
+                << "PM05F_R2_PART008_MIXED_EVALUATION_BEGIN"
+                << " index=" << i
+                << " role=" << static_cast<int>(second.role)
+                << std::endl;
+            const auto evaluated =
+                crash_session.evaluateFilletDraft(
+                    *mixed_draft, kernel);
+            std::cerr
+                << "PM05F_R2_PART008_MIXED_EVALUATION_END"
+                << " index=" << i
+                << " status=" << static_cast<int>(evaluated.status)
+                << " target=" << (evaluated.target_status
+                    ? static_cast<int>(*evaluated.target_status)
+                    : -1)
+                << std::endl;
+            CHECK(evaluated.status ==
+                      application::EdgeFeatureDraftEvaluationStatus::ok ||
+                  evaluated.status ==
+                      application::EdgeFeatureDraftEvaluationStatus::
+                          target_failed);
+            CHECK(crash_session.document().revision() ==
+                  prior_revision);
+        }
+
         // Exercise the same single selected Edge through native Qt/OCCT
         // click routing. Query and hit-testing remain authoritative;
         // sample alternate standard views to find an unoccluded view.
@@ -1235,6 +1335,94 @@ int main(int argc, char* argv[]) {
         CHECK(selectedCount(*label, 1));
         std::cerr
             << "PM05F_R2_PART008_GUI_ONE_EDGE_PASS"
+            << std::endl;
+
+        // Attempt the transition selected 1 -> selected 2 through the
+        // native pointer path (not synthetic draft setEdges). A selected
+        // second Edge invokes Workbench's synchronous exact delta preview.
+        // Log before each native click so a Debug CRT assertion isolates
+        // the point of failure even if the process terminates.
+        bool selected_two = false;
+        for (std::size_t i = 0;
+             i < mixed_limit && !selected_two; ++i) {
+            const auto& second = secondary_edges[i];
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::bottom_front_left,
+                     viewer::StandardView::bottom_back_right}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                for (std::size_t k = 1U;
+                     k < second.points.size() && !selected_two;
+                     ++k) {
+                    const auto& a = second.points[k - 1U];
+                    const auto& b = second.points[k];
+                    const viewer::Point3 point{
+                        (a.x + b.x) / 2.0,
+                        (a.y + b.y) / 2.0,
+                        (a.z + b.z) / 2.0};
+                    const auto screen =
+                        viewport->projectWorldPoint(point);
+                    if (!screen) {
+                        continue;
+                    }
+                    const QPoint pixel{
+                        static_cast<int>(std::lround(screen->x)),
+                        static_cast<int>(std::lround(screen->y))};
+                    if (!viewport->rect().contains(pixel)) {
+                        continue;
+                    }
+                    const auto query =
+                        viewport->queryBodyTopology(
+                            *screen,
+                            viewer::BodyTopologyPickFilter{
+                                false, true, false});
+                    if (!query.valid() || !query.completed ||
+                        query.candidates.empty()) {
+                        continue;
+                    }
+                    std::cerr
+                        << "PM05F_R2_PART008_SECOND_CLICK_BEGIN"
+                        << " index=" << i
+                        << " role=" << static_cast<int>(second.role)
+                        << " segment=" << k
+                        << std::endl;
+                    QTest::mouseMove(viewport, pixel);
+                    QTest::mouseClick(
+                        viewport, Qt::LeftButton,
+                        Qt::NoModifier, pixel);
+                    QApplication::processEvents();
+                    selected_two = selectedCount(*label, 2);
+                    std::cerr
+                        << "PM05F_R2_PART008_SECOND_CLICK_END"
+                        << " index=" << i
+                        << " selected_two=" << selected_two
+                        << " selected_one=" << selectedCount(*label, 1)
+                        << std::endl;
+                    if (!selectedCount(*label, 1) &&
+                        !selected_two) {
+                        // A hit on the already selected Edge toggles
+                        // it off. Do not silently assert we selected a
+                        // second authored Edge; report diagnostic RED.
+                        break;
+                    }
+                }
+                if (!selectedCount(*label, 1) && !selected_two) {
+                    break;
+                }
+                if (selected_two) break;
+            }
+            if (!selectedCount(*label, 1) && !selected_two) {
+                break;
+            }
+        }
+        CHECK(selected_two);
+        std::cerr
+            << "PM05F_R2_PART008_GUI_TWO_EDGE_PASS"
             << std::endl;
         cancel->click();
         QApplication::processEvents();
