@@ -58,6 +58,7 @@
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -5008,6 +5009,88 @@ void probeChamferPlanarMiter(
                     } else {
                         ++new_strip_conflict;
                     }
+                }
+            }
+            // Explain every unclaimed Face using *exact* adjacent OCCT
+            // Edge identities. This is a topology diagnostic, not an
+            // assignment of a durable owner from geometric similarity.
+            if (valid) {
+                std::size_t unclaimed_index = 0U;
+                for (TopExp_Explorer faces{
+                         candidate, TopAbs_FACE};
+                     faces.More(); faces.Next()) {
+                    const auto face =
+                        TopoDS::Face(faces.Current());
+                    const bool inherited =
+                        std::any_of(
+                            inherited_descendants.begin(),
+                            inherited_descendants.end(),
+                            [&face](const auto& claim) {
+                                return std::any_of(
+                                    claim.begin(),
+                                    claim.end(),
+                                    [&face](const TopoDS_Face& prior) {
+                                        return prior.IsSame(face);
+                                    });
+                            });
+                    bool any_strip = false;
+                    for (const auto& claim :
+                         authored_strip_descendants) {
+                        any_strip =
+                            any_strip ||
+                            std::any_of(
+                                claim.begin(), claim.end(),
+                                [&face](const TopoDS_Face& prior) {
+                                    return prior.IsSame(face);
+                                });
+                    }
+                    if (inherited || any_strip) {
+                        continue;
+                    }
+                    std::string adjacent_strip_mask;
+                    for (const auto& claim :
+                         authored_strip_descendants) {
+                        const bool adjacent =
+                            std::any_of(
+                                claim.begin(), claim.end(),
+                                [&face](const TopoDS_Face& known) {
+                                    return facesShareResultEdge(
+                                        face, known);
+                                });
+                        adjacent_strip_mask +=
+                            adjacent ? '1' : '0';
+                    }
+                    std::size_t matching_upstream_planes = 0U;
+                    for (const auto& original : original_faces) {
+                        if (planarFacesSameDomain(face, original)) {
+                            ++matching_upstream_planes;
+                        }
+                    }
+                    std::size_t adjacent_inherited = 0U;
+                    for (const auto& claim : inherited_descendants) {
+                        if (std::any_of(
+                                claim.begin(), claim.end(),
+                                [&face](const TopoDS_Face& known) {
+                                    return facesShareResultEdge(
+                                        face, known);
+                                })) {
+                            ++adjacent_inherited;
+                        }
+                    }
+                    std::cerr
+                        << "PM05F_R2_MITER_UNCLAIMED"
+                        << " policy="
+                        << (remove_last
+                            ? "remove_wins" : "add_wins")
+                        << " distance=" << distance
+                        << " index=" << unclaimed_index++
+                        << " adjacent_strips="
+                        << adjacent_strip_mask
+                        << " inherited_plane_matches="
+                        << matching_upstream_planes
+                        << " adjacent_inherited_claims="
+                        << adjacent_inherited
+                        << "\n";
                 }
             }
             const auto solid_count =
