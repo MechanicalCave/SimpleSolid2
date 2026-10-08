@@ -1623,13 +1623,12 @@ int main(int argc, char* argv[]) {
             << std::endl;
         CHECK(!chamfer_kernel_result.edge_feature_surfaces.empty());
 
-        // Bounded third-Edge characterization from semantic entities,
-        // not runtime topology ordering or XYZ-nearest reattachment.
-        // Extrude001 sketch sides 1+2 share the *opposite* rectangle
-        // corner from screenshot Edge's sides 3+4. This is only a
-        // geometrically controlled comparison, NOT proof that Owner
-        // clicked this exact third Edge in the cropped screenshot.
-        std::optional<part::MaterialEdgeReference> opposite_corner;
+        // The Owner's full screenshot identifies the third selected
+        // Edge by strict authored lineage: Extrude001, Side/Entity 1
+        // + Side/Entity 4. This was NOT the prior test's sides 1+2.
+        // Reproduce the exact 3-Edge authored semantic set on Part008,
+        // without relying on provider runtime token or XYZ proximity.
+        std::optional<part::MaterialEdgeReference> third_owner_edge;
         for (const auto& probe : secondary_edges) {
             const auto& curve = probe.reference.curve;
             if (curve.producer_feature_id.serialized() != "1" ||
@@ -1641,92 +1640,106 @@ int main(int argc, char* argv[]) {
             for (const auto& adjacent : curve.adjacent_surfaces) {
                 if (adjacent.producer_feature_id.serialized() != "1" ||
                     adjacent.role != part::FeatureSurfaceRoleKind::side ||
-                    !adjacent.source_entity) {
-                    continue;
-                }
+                    !adjacent.source_entity) continue;
                 side_entities.push_back(
                     adjacent.source_entity->serialized());
             }
             std::sort(side_entities.begin(), side_entities.end());
             if (side_entities ==
-                std::vector<std::string>{"1", "2"}) {
-                opposite_corner = probe.reference;
+                std::vector<std::string>{"1", "4"}) {
+                third_owner_edge = probe.reference;
                 break;
             }
         }
         std::cerr
-            << "PM05F_R2_PART008_CHAMFER_OPPOSITE_REFERENCE"
-            << " present=" << (opposite_corner ? 1 : 0)
+            << "PM05F_R2_PART008_CHAMFER_OWNER_THIRD"
+            << " referenceable=" << (third_owner_edge ? 1 : 0)
             << std::endl;
-        if (opposite_corner) {
-            auto triple_loaded = crash_store.load(crash_fixture);
-            CHECK(triple_loaded.ok());
-            application::DocumentSession triple_session{
-                {}, std::move(*triple_loaded.document)};
-            const auto triple_source_revision =
-                triple_session.document().revision();
+        CHECK(third_owner_edge);
+        CHECK(*third_owner_edge != *screenshot_edge);
+        CHECK(*third_owner_edge != isolated_secondary.reference);
 
-            auto lone_draft =
-                application::ChamferDraft::beginCreate(
-                    triple_session, {*opposite_corner});
-            CHECK(lone_draft);
-            CHECK(lone_draft->setDistance(
-                core::LengthValue{1.0}));
-            const auto lone =
-                triple_session.evaluateChamferDraft(
-                    *lone_draft, kernel);
-            std::cerr
-                << "PM05F_R2_PART008_CHAMFER_OPPOSITE_ALONE"
-                << " status=" << static_cast<int>(lone.status)
-                << " target="
-                << (lone.target_status
-                    ? static_cast<int>(*lone.target_status)
-                    : -1)
-                << std::endl;
-            auto three_draft =
-                application::ChamferDraft::beginCreate(
-                    triple_session,
+        auto triple_loaded = crash_store.load(crash_fixture);
+        CHECK(triple_loaded.ok());
+        application::DocumentSession triple_session{
+            {}, std::move(*triple_loaded.document)};
+        const auto triple_source_revision =
+            triple_session.document().revision();
+
+        auto lone_draft =
+            application::ChamferDraft::beginCreate(
+                triple_session, {*third_owner_edge});
+        CHECK(lone_draft);
+        CHECK(lone_draft->setDistance(
+            core::LengthValue{1.0}));
+        const auto lone =
+            triple_session.evaluateChamferDraft(
+                *lone_draft, kernel);
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_THIRD_ALONE"
+            << " status=" << static_cast<int>(lone.status)
+            << " target="
+            << (lone.target_status
+                ? static_cast<int>(*lone.target_status)
+                : -1)
+            << " committable=" << (lone.committable() ? 1 : 0)
+            << std::endl;
+
+        auto three_draft =
+            application::ChamferDraft::beginCreate(
+                triple_session,
+                {*screenshot_edge, isolated_secondary.reference,
+                 *third_owner_edge});
+        CHECK(three_draft);
+        CHECK(three_draft->setDistance(
+            core::LengthValue{1.0}));
+        const auto before_triple_kernel =
+            part::resolveKernelEdgeFeatureInput(
+                part::ChamferFeature{
                     {*screenshot_edge, isolated_secondary.reference,
-                     *opposite_corner});
-            CHECK(three_draft);
-            CHECK(three_draft->setDistance(
-                core::LengthValue{1.0}));
-            std::cerr
-                << "PM05F_R2_PART008_CHAMFER_THREE_BEGIN"
-                << std::endl;
-            const auto three =
-                triple_session.evaluateChamferDraft(
-                    *three_draft, kernel);
-            std::cerr
-                << "PM05F_R2_PART008_CHAMFER_THREE_END"
-                << " status=" << static_cast<int>(three.status)
-                << " target="
-                << (three.target_status
-                    ? static_cast<int>(*three.target_status)
-                    : -1)
-                << " removed=" << (three.preview_mesh ? 1 : 0)
-                << " added="
-                << (three.preview_added_mesh ? 1 : 0)
-                << std::endl;
-            CHECK(three.status ==
-                      application::EdgeFeatureDraftEvaluationStatus::ok ||
-                  three.status ==
-                      application::EdgeFeatureDraftEvaluationStatus::
-                          target_failed);
-            CHECK(triple_session.document().revision() ==
-                  triple_source_revision);
-            // An independently valid opposite corner and existing
-            // valid pair are a controlled mixed connected/disconnected
-            // reference case. Do not silently treat their combined
-            // failure as a preview-rendering failure.
-            if (lone.committable() && chamfer_eval.committable()) {
-                std::cerr
-                    << "PM05F_R2_PART008_CHAMFER_THREE_COMPARE"
-                    << " lone=ok pair=ok triple="
-                    << (three.committable() ? "ok" : "failed")
-                    << std::endl;
-            }
-        }
+                     *third_owner_edge},
+                    core::LengthValue{1.0}},
+                &*crash_eval.current_topology);
+        CHECK(before_triple_kernel.ok());
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_OWNER_THREE_BEGIN"
+            << std::endl;
+        const auto kernel_three =
+            kernel.edgeFeature(
+                *before_triple_kernel.input,
+                crash_eval.body_solid);
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_OWNER_THREE_KERNEL"
+            << " status=" << static_cast<int>(kernel_three.status)
+            << " solid_count=" << kernel_three.solid_count
+            << " brep_valid=" << (kernel_three.brep_valid ? 1 : 0)
+            << std::endl;
+        const auto three =
+            triple_session.evaluateChamferDraft(
+                *three_draft, kernel);
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_OWNER_THREE_END"
+            << " status=" << static_cast<int>(three.status)
+            << " target="
+            << (three.target_status
+                ? static_cast<int>(*three.target_status)
+                : -1)
+            << " removed=" << (three.preview_mesh ? 1 : 0)
+            << " added=" << (three.preview_added_mesh ? 1 : 0)
+            << std::endl;
+        CHECK(triple_session.document().revision() ==
+              triple_source_revision);
+        CHECK(lone.committable());
+        CHECK(kernel_three.ok());
+        CHECK(three.committable());
+
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_OWNER_CORNER_EXPECTATION"
+            << " corner_planar=" << chamfer_corner_plane
+            << " corner_nonplanar=" << chamfer_corner_curved
+            << " edge_planar=" << chamfer_edge_plane
+            << " edge_nonplanar=" << chamfer_edge_curved
+            << std::endl;
 
         // Exercise the real Qt/OCCT Chamfer picker and Finish, rather
         // than passing a fabricated PresentationToken or issuing a
