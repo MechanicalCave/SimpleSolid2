@@ -76,3 +76,10 @@ CI-05 classifier/build policy optimization is not part of R2 implementation; do 
 ## Documentation impact
 
 Internal/Product documentation: update after actual behavior changes are verified. Product Browser is generated, never hand-edited. This file and associated `work/**` changes are governance/evidence only.
+
+## Focused evidence checkpoint — 2026-10-08
+
+- R2-B: test-only candidate a32568a Windows FOCUSED #1748 expected FAIL; corrected native Viewer query passed Windows FOCUSED #1750 (1/1) on b9ff051. Full Workbench Edit acceptance remains open.
+- R2-A: box 40x30x20, Radius 2, three-edge Fillet Finish and current Body publication passed Windows FOCUSED #1751 (1/1). The Owner's disappearing-Body case remains open and not reproduced by this control case.
+- R2-C: Windows kernel FOCUSED #1754 confirmed full-turn Revolve with 2 ordinary candidate Edges, 0 strict authorable Edges, 1 representation artifact. In current Part classifier only ordinary Extrude `side` is recognized as a side Surface; `revolve_side` lacks a valid same-producer analytic Curve rule. Any new durable Revolve Curve relation needs explicit Owner D2 approval; production semantics mutation is stopped pending that decision. No nearest/provider-order workaround.
+- R2-D/E/F open. No new R2 exact-head FULL or Owner PASS.
