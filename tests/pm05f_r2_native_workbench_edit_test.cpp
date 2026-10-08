@@ -1829,6 +1829,19 @@ int main(int argc, char* argv[]) {
                     core::LengthValue{1.0},
                     "D2B Three-Edge Chamfer"},
                 kernel);
+        std::cerr
+            << "PM05F_R2_PART008_D2B_CREATE_DIAGNOSTIC"
+            << " changed=" << create_feature.changed
+            << " code="
+            << static_cast<int>(create_feature.diagnostic.code)
+            << " commit_code="
+            << static_cast<int>(create_feature.diagnostic.commit_code)
+            << " evaluation_diagnostic="
+            << (create_feature.evaluation_diagnostic
+                ? static_cast<int>(*create_feature.evaluation_diagnostic)
+                : -1)
+            << " message=" << create_feature.diagnostic.message
+            << std::endl;
         CHECK(create_feature.ok());
         CHECK(create_feature.changed);
         CHECK(create_feature.feature_id);
