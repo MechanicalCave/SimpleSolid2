@@ -275,6 +275,43 @@ materialEdgeTokens(
     return result;
 }
 
+// R2-A: locate one geometric trihedral vertex of the disposable box
+// fixture. The coordinates are used only to choose UI tokens for a test;
+// no geometric proximity is used as durable CAD identity.
+std::optional<std::array<viewer::PresentationToken, 3U>>
+trihedralPickTokens(
+    const viewer::BodyScene& scene) {
+    const auto samePoint = [](
+        const viewer::Point3& first,
+        const viewer::Point3& second) {
+        constexpr double tolerance = 1.0e-7;
+        return std::abs(first.x - second.x) < tolerance &&
+               std::abs(first.y - second.y) < tolerance &&
+               std::abs(first.z - second.z) < tolerance;
+    };
+
+    for (const auto& vertex : scene.vertices) {
+        std::vector<viewer::PresentationToken> edges;
+        for (const auto& edge : scene.edges) {
+            if (!edge.material ||
+                !edge.ordinary_pickable ||
+                edge.points.size() < 2U ||
+                (!samePoint(
+                    edge.points.front(), vertex.point) &&
+                 !samePoint(
+                    edge.points.back(), vertex.point))) {
+                continue;
+            }
+            edges.push_back(edge.token);
+        }
+        if (edges.size() == 3U) {
+            return std::array<viewer::PresentationToken, 3U>{
+                edges[0], edges[1], edges[2]};
+        }
+    }
+    return std::nullopt;
+}
+
 bool selectionLabelHas(
     const QLabel* label,
     std::size_t count) {
@@ -631,6 +668,58 @@ int main(int argc, char* argv[]) {
         fillet_session,
         "FILLET",
         true);
+
+    // R2-A: A successful three-Edge trihedral draft must remain a present,
+    // complete Body after the real Workbench Finish/re-evaluation boundary.
+    // This specifically detects preview-ready -> invisible Body regressions.
+    auto trihedral_session =
+        makeBaseSession(kernel);
+    CHECK(workbench.activateDocument(
+        &trihedral_session,
+        {}));
+    QApplication::processEvents();
+    CHECK(!viewport->body_scene.empty());
+    const auto corner_edges =
+        trihedralPickTokens(viewport->body_scene);
+    CHECK(corner_edges.has_value());
+    CHECK(fillet->isEnabled());
+    fillet->click();
+    QApplication::processEvents();
+    CHECK(operations->isVisible());
+    for (const auto token : *corner_edges) {
+        viewport->emitEdge(token);
+        QApplication::processEvents();
+    }
+    CHECK(selectionLabelHas(selection_label, 3U));
+    result = workbench.lockCadDynamicInputField(
+        0U,
+        "2",
+        workbench.cadInputContextGeneration());
+    CHECK(result.accepted);
+    CHECK(!viewport->solid_preview.empty());
+    CHECK(finish->isEnabled());
+    finish->click();
+    QApplication::processEvents();
+    CHECK(
+        trihedral_session.document().body()
+            .features.size() == 2U);
+    const auto committed_trihedral =
+        part::evaluatePart(
+            trihedral_session.document(),
+            kernel);
+    CHECK(
+        committed_trihedral.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(committed_trihedral.body_solid != nullptr);
+    CHECK(committed_trihedral.current_topology);
+    CHECK(
+        committed_trihedral.current_topology
+            ->complete());
+    CHECK(viewport->solid_preview.empty());
+    CHECK(
+        viewport->body_scene.purpose ==
+        viewer::BodyScenePurpose::current_body);
+    CHECK(!viewport->body_scene.empty());
 
     // Selection-first and command-first Chamfer use the same shared draft,
     // selection and exact-preview meaning on a fresh Body.
