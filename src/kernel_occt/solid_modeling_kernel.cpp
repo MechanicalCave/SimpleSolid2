@@ -4698,9 +4698,12 @@ finishPlanarMiterFallback(
     const kernel::EdgeFeatureInput& input,
     const std::vector<SelectedRuntimeEdge>& requested) {
     kernel::SolidModelingResult result;
-    // Debug evidence only, gated by the exact native test's opt-in flag.
-    // Only the two degree-two mixed junctions validated in D2-A are
-    // admitted. All other topologies remain on the existing OCCT path.
+    // Owner-approved D2-B production fallback. It is attempted only
+    // after the ordinary multi-Edge OCCT Chamfer returned invalid_brep.
+    // Admit only the bounded two-degree-two-joint linear/planar mixed
+    // material topology, with strict authored-input and full lineage.
+    // Every unsupported or ambiguous candidate fails closed; no debug
+    // switch or transient provider subshape becomes design intent.
     if (input.operation != kernel::EdgeFeatureOperation::chamfer ||
         requested.size() != 3U) return result;
     auto selected = requested;
