@@ -260,3 +260,11 @@ This is **not** permission to fabricate identity, assign ambiguous Faces by prov
 **Implication for next F3 spike:** Seek a deterministic geometric/topological *corner certificate*, expressed in terms of the two actual shared authored Vertices and their exactly incident selected Edges, together with an OCCT-backed provenance for every resulting Face. A transient tool-delta index or construction order may be retained only as evidence, never as persistent or semantic identity. Treat residual single-strip-adjacent Faces as separate candidate inherited fragments or local corner-adjacent pieces until their specific lineage is proven. F3 remains BLOCKED; Owner D2-B production fallback is **not** authorized.
 
 All reported diagnostic FOCUSED CI runs continue to fail the unchanged original production `CHECK(kernel_three.ok())` after producing the diagnostic output. The screenshot files are conversation references, not copied into the repository.
+
+## D2-A F3 focused retest — Owner continuation 2026-10-08
+
+**Current tested baseline:** exact-head Windows FAST #1862 PASS 93/93 at `d29108ab1a72617231a97bcf93fafcecb9b55244`. This is **not** the Part008 native RED test. The earlier #1860 requested focused measurement was cancelled by subsequent commits before producing usable logs.
+
+**Next diagnostic request:** re-run `pm05f_r2.native_workbench_edit` FOCUSED on the exact HEAD without modifying the unchanged production RED. Inspect the already guarded `PM05F_R2_MITER_CORNER_FACE` records for the two candidates whose exact strip-adjacency masks are `110` and `011` at d=1/0.5/0.25, under `remove_wins` and `add_wins`. Capture the number of Face Edges/Vertices, surface area, and boundedness relative to the *two exact shared source Vertices*, not a nearest-vertex lookup.
+
+**F3 acceptance caution:** A bounded Face adjacent to exactly two Edge strips is *only a proposed corner patch*. Promotion to a semantic `corner_transition` would require unique upstream shared-Vertex lineage and exactly incident selected Edges, proof that no third-owner claim exists, and full 21-Face catalog accounting. The six unclaimed Faces, exact-dimensional participation, and full output Edge/Vertex coverage remain OPEN. D2-B production fallback authorization is still absent.
