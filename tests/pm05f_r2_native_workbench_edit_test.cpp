@@ -907,7 +907,7 @@ int main(int argc, char* argv[]) {
             "fixtures" /
             "pm05f_r2_part013_sanitized.ss2part";
         const part::PartDocumentStore owner_store;
-        const auto owner_loaded = owner_store.load(owner_fixture);
+        auto owner_loaded = owner_store.load(owner_fixture);
         CHECK(owner_loaded.ok());
         application::DocumentSession owner_exact_session{
             {}, std::move(*owner_loaded.document)};
@@ -939,6 +939,20 @@ int main(int argc, char* argv[]) {
             << owner_exact_presentation.body.edges.size()
             << '\n';
         CHECK(owner_exact_presentation.ok());
+        // Owner screenshot uses Shaded + Edges, not the widget's
+        // default Shaded mode. Style synchronization builds an
+        // additional OCCT wire for every material Edge and must never
+        // make the otherwise valid committed Body disappear.
+        CHECK(workbench.activateDocument(&session, {}));
+        QApplication::processEvents();
+        const auto owner_shaded_edges_enabled =
+            viewport->setViewStyle(
+                viewer::ViewStyle::shaded_with_edges);
+        std::cerr
+            << "PM05F_R2_OWNER_EDGE_STYLE_ENABLED="
+            << (owner_shaded_edges_enabled ? 1 : 0)
+            << '\n';
+        CHECK(owner_shaded_edges_enabled);
         CHECK(workbench.activateDocument(&owner_exact_session, {}));
         QApplication::processEvents();
         const auto owner_exact_viewer = viewport->runtimeDiagnostics();
