@@ -1899,6 +1899,27 @@ int main(int argc, char* argv[]) {
         CHECK(lifecycle.redo().ok());
         check_live_three();
 
+        // Edit preview must use the exact authored source stage,
+        // preserve DocumentRevision and expose both signed deltas
+        // for this mixed-material three-Edge Chamfer.
+        const auto before_edit_draft_revision =
+            lifecycle.document().revision();
+        auto edit_draft_three =
+            application::ChamferDraft::beginEdit(
+                lifecycle, *create_feature.feature_id);
+        CHECK(edit_draft_three);
+        CHECK(edit_draft_three->setDistance(
+            core::LengthValue{0.5}));
+        const auto preview_edit_three =
+            lifecycle.evaluateChamferDraft(
+                *edit_draft_three, kernel);
+        CHECK(preview_edit_three.committable());
+        CHECK(preview_edit_three.preview_mesh.has_value());
+        CHECK(preview_edit_three.preview_added_mesh.has_value());
+        CHECK(preview_edit_three.previewSolidAvailable());
+        CHECK(lifecycle.document().revision() ==
+              before_edit_draft_revision);
+
         const auto edit_feature =
             lifecycle.execute(
                 application::EditChamferFeatureCommand{
@@ -1911,6 +1932,22 @@ int main(int argc, char* argv[]) {
         CHECK(edit_feature.ok());
         CHECK(edit_feature.changed);
         check_live_three();
+        // An Edit draft evaluated before the committed transaction
+        // is stale afterwards; its Finish must not commit a second edit.
+        const auto revision_after_edit =
+            lifecycle.document().revision();
+        const auto stale_finish_three =
+            application::finishChamferDraft(
+                lifecycle, *edit_draft_three,
+                preview_edit_three, kernel);
+        CHECK(!stale_finish_three.ok());
+        CHECK(!stale_finish_three.changed);
+        CHECK(stale_finish_three.status ==
+              application::EdgeFeatureDraftFinishStatus::
+                  stale_context);
+        CHECK(lifecycle.document().revision() ==
+              revision_after_edit);
+        CHECK(lifecycle.document().body().features.size() == 3U);
         const auto* edited =
             std::get_if<part::ChamferFeature>(
                 &lifecycle.document().findFeature(
