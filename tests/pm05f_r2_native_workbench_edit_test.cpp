@@ -1576,6 +1576,158 @@ int main(int argc, char* argv[]) {
             kernel.bodyPresentation(chamfer_eval.body_solid);
         CHECK(chamfer_presentation.ok());
 
+        // Owner's new Chamfer corner report: inspect *actual* provider
+        // surface kinds rather than infer curvature from displayed
+        // triangle edges or interpolated shading. The generated corner
+        // transition may be planar or nonplanar independently of the
+        // flat equal-distance chamfers along each authored straight Edge.
+        const auto chamfer_kernel_input =
+            part::resolveKernelEdgeFeatureInput(
+                part::ChamferFeature{
+                    {*screenshot_edge, isolated_secondary.reference},
+                    core::LengthValue{1.0}},
+                &*crash_eval.current_topology);
+        CHECK(chamfer_kernel_input.ok());
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_PAIR_KERNEL_BEGIN"
+            << std::endl;
+        const auto chamfer_kernel_result =
+            kernel.edgeFeature(
+                *chamfer_kernel_input.input,
+                crash_eval.body_solid);
+        CHECK(chamfer_kernel_result.ok());
+        std::size_t chamfer_corner_plane = 0U;
+        std::size_t chamfer_corner_curved = 0U;
+        std::size_t chamfer_edge_plane = 0U;
+        std::size_t chamfer_edge_curved = 0U;
+        for (const auto& carrier :
+             chamfer_kernel_result.edge_feature_surfaces) {
+            const bool planar =
+                carrier.surface_kind == kernel::SurfaceKind::plane;
+            if (carrier.kind ==
+                kernel::EdgeFeatureGeneratedSurfaceKind::
+                    corner_transition) {
+                planar ? ++chamfer_corner_plane :
+                    ++chamfer_corner_curved;
+            } else {
+                planar ? ++chamfer_edge_plane :
+                    ++chamfer_edge_curved;
+            }
+        }
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_PAIR_SURFACES"
+            << " corner_plane=" << chamfer_corner_plane
+            << " corner_nonplane=" << chamfer_corner_curved
+            << " edge_plane=" << chamfer_edge_plane
+            << " edge_nonplane=" << chamfer_edge_curved
+            << std::endl;
+        CHECK(!chamfer_kernel_result.edge_feature_surfaces.empty());
+
+        // Bounded third-Edge characterization from semantic entities,
+        // not runtime topology ordering or XYZ-nearest reattachment.
+        // Extrude001 sketch sides 1+2 share the *opposite* rectangle
+        // corner from screenshot Edge's sides 3+4. This is only a
+        // geometrically controlled comparison, NOT proof that Owner
+        // clicked this exact third Edge in the cropped screenshot.
+        std::optional<part::MaterialEdgeReference> opposite_corner;
+        for (const auto& probe : secondary_edges) {
+            const auto& curve = probe.reference.curve;
+            if (curve.producer_feature_id.serialized() != "1" ||
+                curve.role != part::FeatureCurveRoleKind::side_side ||
+                curve.adjacent_surfaces.size() != 2U) {
+                continue;
+            }
+            std::vector<std::string> side_entities;
+            for (const auto& adjacent : curve.adjacent_surfaces) {
+                if (adjacent.producer_feature_id.serialized() != "1" ||
+                    adjacent.role != part::FeatureSurfaceRoleKind::side ||
+                    !adjacent.source_entity) {
+                    continue;
+                }
+                side_entities.push_back(
+                    adjacent.source_entity->serialized());
+            }
+            std::sort(side_entities.begin(), side_entities.end());
+            if (side_entities ==
+                std::vector<std::string>{"1", "2"}) {
+                opposite_corner = probe.reference;
+                break;
+            }
+        }
+        std::cerr
+            << "PM05F_R2_PART008_CHAMFER_OPPOSITE_REFERENCE"
+            << " present=" << (opposite_corner ? 1 : 0)
+            << std::endl;
+        if (opposite_corner) {
+            auto triple_loaded = crash_store.load(crash_fixture);
+            CHECK(triple_loaded.ok());
+            application::DocumentSession triple_session{
+                {}, std::move(*triple_loaded.document)};
+            const auto triple_source_revision =
+                triple_session.document().revision();
+
+            auto lone_draft =
+                application::ChamferDraft::beginCreate(
+                    triple_session, {*opposite_corner});
+            CHECK(lone_draft);
+            CHECK(lone_draft->setDistance(
+                core::LengthValue{1.0}));
+            const auto lone =
+                triple_session.evaluateChamferDraft(
+                    *lone_draft, kernel);
+            std::cerr
+                << "PM05F_R2_PART008_CHAMFER_OPPOSITE_ALONE"
+                << " status=" << static_cast<int>(lone.status)
+                << " target="
+                << (lone.target_status
+                    ? static_cast<int>(*lone.target_status)
+                    : -1)
+                << std::endl;
+            auto three_draft =
+                application::ChamferDraft::beginCreate(
+                    triple_session,
+                    {*screenshot_edge, isolated_secondary.reference,
+                     *opposite_corner});
+            CHECK(three_draft);
+            CHECK(three_draft->setDistance(
+                core::LengthValue{1.0}));
+            std::cerr
+                << "PM05F_R2_PART008_CHAMFER_THREE_BEGIN"
+                << std::endl;
+            const auto three =
+                triple_session.evaluateChamferDraft(
+                    *three_draft, kernel);
+            std::cerr
+                << "PM05F_R2_PART008_CHAMFER_THREE_END"
+                << " status=" << static_cast<int>(three.status)
+                << " target="
+                << (three.target_status
+                    ? static_cast<int>(*three.target_status)
+                    : -1)
+                << " removed=" << (three.preview_mesh ? 1 : 0)
+                << " added="
+                << (three.preview_added_mesh ? 1 : 0)
+                << std::endl;
+            CHECK(three.status ==
+                      application::EdgeFeatureDraftEvaluationStatus::ok ||
+                  three.status ==
+                      application::EdgeFeatureDraftEvaluationStatus::
+                          target_failed);
+            CHECK(triple_session.document().revision() ==
+                  triple_source_revision);
+            // An independently valid opposite corner and existing
+            // valid pair are a controlled mixed connected/disconnected
+            // reference case. Do not silently treat their combined
+            // failure as a preview-rendering failure.
+            if (lone.committable() && chamfer_eval.committable()) {
+                std::cerr
+                    << "PM05F_R2_PART008_CHAMFER_THREE_COMPARE"
+                    << " lone=ok pair=ok triple="
+                    << (three.committable() ? "ok" : "failed")
+                    << std::endl;
+            }
+        }
+
         // Exercise the real Qt/OCCT Chamfer picker and Finish, rather
         // than passing a fabricated PresentationToken or issuing a
         // direct persistence command in lieu of the Owner interaction.
