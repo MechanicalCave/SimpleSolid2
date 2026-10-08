@@ -3724,7 +3724,7 @@ finishBoolean(
                      const Standard_Integer count = 0) noexcept {
             if (trace_face) {
                 std::fprintf(stderr,
-                    "PM05F_R2_PART008_FACE_PHASE %s count=%d\\n",
+                    "PM05F_R2_PART008_FACE_PHASE %s count=%d\n",
                     phase, static_cast<int>(count));
                 std::fflush(stderr);
             }
@@ -3963,7 +3963,7 @@ presentationMeshForShape(
                  explorer.Next()) {
                 if (trace_mesh) {
                     std::fprintf(stderr,
-                        "PM05F_R2_PART008_FACE_INDEX_BEGIN %zu\\n",
+                        "PM05F_R2_PART008_FACE_INDEX_BEGIN %zu\n",
                         delta_face_index);
                     std::fflush(stderr);
                 }
@@ -3979,7 +3979,7 @@ presentationMeshForShape(
                 }
                 if (trace_mesh) {
                     std::fprintf(stderr,
-                        "PM05F_R2_PART008_FACE_INDEX_END %zu\\n",
+                        "PM05F_R2_PART008_FACE_INDEX_END %zu\n",
                         delta_face_index);
                     std::fflush(stderr);
                 }
