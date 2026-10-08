@@ -112,3 +112,10 @@ Reason: shared semantic interpretation and newly supported Revolve material Edge
 ## R2-B Workbench selection lifecycle checkpoint — 2026-10-08
 
 Windows FOCUSED #1767 PASS (1/1), `pm05e2.cad_workbench_edge_lifecycle` on `3c6c4c688065d978f18429a7dda52c4b3b256c11`. The real Workbench/controller with an instrumented viewport now verifies an Edit-stage restored Edge selection, cursor-intent toggle OFF and ON, adding and removing a second semantic Edge, restored exact preview, Cancel zero mutation, plus prior Edit/Finish stable FeatureId and Undo lifecycle. This test injects provider-neutral selection intentions; separate native Qt/OCCT widget FOCUSED #1750 proves screen-coordinate input at `tool_stage`. A single end-to-end native Qt/OCCT **Workbench** mouse test and repeat Owner workflow are still required before closing R2-02.
+
+## R2 native CI reliability checkpoint — 2026-10-08
+
+- Windows FAST #1766 PASS on the previous evidence candidate.
+- Windows FAST #1768 FAIL: 92/93 PASS, native `sk04b.viewer_native_selection_query` failed an existing pre-ring Tab-cycle assertion (`cycle_forward == 1`), while the identical expanded native test passed FOCUSED #1764. Failure occurred **before** the R2 curved-ring fixture and is not evidence that curved-edge selection failed.
+- Native `QtOcctViewerWidget::event()` handles Tab only while Body preselection is armed. The test previously drained global Qt/OS events after synthetic hover and focus, allowing queued real-cursor events to replace/clear the deterministic hover. Test corrected to establish focus and drain unrelated events **before** rearming the synchronous cursor hover, then dispatch Tab/Shift+Tab without an intervening global event pump. Both cycle assertions retained.
+- Windows FOCUSED #1769 PASS (1/1) with the ordering correction. A new same-branch FAST is still required before claiming aggregate PASS. The next governance-only commit intentionally requests FAST; no workflow/classifier edits.
