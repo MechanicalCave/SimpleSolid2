@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <optional>
+#include <utility>
 #include <vector>
 
 using namespace simplesolid2;
@@ -75,6 +76,62 @@ application::DocumentSession makeBaseSession(
         kernel);
     CHECK(base.ok() && base.feature_id);
     return session;
+}
+
+application::DocumentSession makeRevolveSession(
+    double angle) {
+    auto source =
+        part::PartDocument::create(core::DocumentId::generate());
+    application::DocumentSession session{{}, std::move(source)};
+    const auto sketch =
+        session.execute(application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(sketch.ok() && sketch.sketch_id);
+    CHECK(session.execute(application::AddSketchRectangleCommand{
+        *sketch.sketch_id,
+        session.document().revision(),
+        {10.0, 0.0},
+        {20.0, 10.0},
+        sketch::EntityRole::regular,
+        false}).ok());
+    const auto* model =
+        session.document().findSketch(*sketch.sketch_id);
+    CHECK(model != nullptr);
+    const auto regions =
+        sketch::analyzeRegions(model->model);
+    CHECK(regions.complete() && regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(regions.regions.front());
+    CHECK(intent.has_value());
+    const auto profile = session.execute(
+        application::CreateProfileCommand{
+            *sketch.sketch_id,
+            session.document().revision(),
+            *intent});
+    CHECK(profile.ok() && profile.profile_id);
+
+    auto state = session.document().state();
+    const auto id = state.body.next_feature_id.allocate();
+    CHECK(id.has_value());
+    state.body.features.push_back(part::PartFeature{
+        *id,
+        "Revolve",
+        false,
+        part::RevolveFeature{
+            *profile.profile_id,
+            part::AxisReference{
+                part::BuiltinOriginAxisReference{
+                    core::BuiltinReferenceRole::x_axis}},
+            part::RevolveOperation::add,
+            part::OneSidedRevolveExtent{
+                core::AngleValue{angle}, false}}});
+    auto restored = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(state),
+        session.document().revision());
+    CHECK(restored.ok());
+    return application::DocumentSession{
+        {}, std::move(*restored.document)};
 }
 
 struct WorldEdgeProbe final {
@@ -168,6 +225,76 @@ bool nativeClick(
 bool selectedCount(const QLabel& label, int count) {
     return label.text().contains(
         QStringLiteral("Selected edges: %1").arg(count));
+}
+
+// R2-C/E: query and CLICK actual OCCT-presented circular Edges of full
+// and partial Revolve. The world point is only a test cursor fixture:
+// authoring still requires the Workbench strict semantic Edge resolver.
+bool clickAuthorableRevolveCircle(
+    viewer_qt_occt::QtOcctViewerWidget& viewport,
+    const application::DocumentSession& session,
+    kernel_occt::OcctSolidModelingKernel& kernel,
+    const QLabel& selection) {
+    const auto evaluated =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(evaluated.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluated.current_topology);
+    CHECK(evaluated.current_topology->complete());
+    CHECK(evaluated.body_solid != nullptr);
+    const auto presented =
+        kernel.bodyPresentation(evaluated.body_solid);
+    CHECK(presented.ok());
+    std::size_t semantic_circles = 0U;
+    for (const auto& edge :
+         evaluated.current_topology->edges) {
+        if (edge.curve_kind !=
+            kernel::CurveKind::circle) {
+            continue;
+        }
+        const auto ref =
+            part::authorMaterialEdgeReference(
+                *evaluated.current_topology,
+                edge.runtime_token);
+        if (!ref.ok()) continue;
+        ++semantic_circles;
+        const auto path = std::find_if(
+            presented.body.edges.begin(),
+            presented.body.edges.end(),
+            [&edge](const auto& item) {
+                return item.runtime_token ==
+                       edge.runtime_token;
+            });
+        if (path == presented.body.edges.end() ||
+            path->points.size() < 2U) {
+            continue;
+        }
+        constexpr std::size_t attempts = 24U;
+        for (std::size_t index = 0U;
+             index < attempts; ++index) {
+            const auto segment =
+                (index * (path->points.size() - 1U)) /
+                attempts;
+            const auto& a = path->points[segment];
+            const auto& b = path->points[segment + 1U];
+            const viewer::Point3 point{
+                (a.x + b.x) / 2.0,
+                (a.y + b.y) / 2.0,
+                (a.z + b.z) / 2.0};
+            if (!nativeClick(viewport, point)) {
+                continue;
+            }
+            if (selectedCount(selection, 1)) {
+                return true;
+            }
+        }
+    }
+    std::cout
+        << "PM05F_R2_REVOLVE_CIRCLE_PICK_FAIL"
+        << " semantic_circles=" << semantic_circles
+        << '\n';
+    CHECK(semantic_circles > 0U);
+    return false;
 }
 
 } // namespace
@@ -336,6 +463,57 @@ int main(int argc, char* argv[]) {
               part::BodyEvaluationStatus::up_to_date);
         CHECK(evaluation.current_topology.has_value());
         CHECK(evaluation.current_topology->complete());
+
+        // R2-C/E: real displayed OCCT analytic ring Edge, not a synthetic
+        // scene, for full 360-degree and partial 90-degree Revolve Bodies.
+        // Both operations consume the same semantic MaterialEdgeReference
+        // contract. The preview is transient; Finish publishes the Body.
+        for (const auto [angle, command] :
+             {std::pair{2.0 * std::acos(-1.0), "FILLET"},
+              std::pair{std::acos(-1.0) / 2.0, "CHAMFER"}}) {
+            auto revolve_session =
+                makeRevolveSession(angle);
+            CHECK(workbench.activateDocument(
+                &revolve_session, {}));
+            QApplication::processEvents();
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top_front_right));
+            viewport->fitAll();
+            QApplication::processEvents();
+
+            reply = workbench.submitCadInput(
+                command,
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.lockCadDynamicInputField(
+                0U, "0.75",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(clickAuthorableRevolveCircle(
+                *viewport, revolve_session, kernel, *label));
+            CHECK(selectedCount(*label, 1));
+            CHECK(finish->isEnabled());
+            finish->click();
+            QApplication::processEvents();
+            CHECK(
+                revolve_session.document().body()
+                    .features.size() == 2U);
+            const auto outcome =
+                part::evaluatePart(
+                    revolve_session.document(), kernel);
+            CHECK(outcome.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(outcome.current_topology);
+            CHECK(outcome.current_topology->complete());
+            CHECK(!viewport->runtimeDiagnostics()
+                       .solid_preview_displayed);
+            CHECK(viewport->runtimeDiagnostics()
+                      .solid_committed_displayed);
+            std::cout
+                << "PM05F_R2_NATIVE_REVOLVE_EDGE_PASS"
+                << " angle=" << angle
+                << " operation=" << command << '\n';
+        }
 
         std::cout
             << "PM05F_R2_NATIVE_WORKBENCH_EDIT_PASS"
