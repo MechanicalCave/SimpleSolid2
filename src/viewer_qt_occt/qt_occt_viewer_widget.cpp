@@ -3859,6 +3859,27 @@ public:
             return false;
         }
 
+        // Fillet/Chamfer Edge acquisition has the same Body-only
+        // authority on hover as on click. An overlapping Sketch/Profile
+        // or Origin AIS hit must not suppress an otherwise visible
+        // material Edge while this explicit tool is active.
+        // queryBodyTopology retains front-occlusion, ordinary material
+        // filtering, current generation and the consumed Body stage;
+        // Part retains strict semantic authorability checks.
+        if (body_topology_edge_pick_mode_) {
+            context_->ClearDetected(false);
+            const auto query =
+                queryBodyTopology(
+                    point,
+                    viewer::BodyTopologyPickFilter{
+                        false, true, false});
+            body_topology_preselection_intent_handler_(
+                query, point);
+            return query.valid() &&
+                   query.completed &&
+                   !query.candidates.empty();
+        }
+
         const int x = static_cast<int>(
             std::lround(logical_x * dpr));
         const int y = static_cast<int>(
