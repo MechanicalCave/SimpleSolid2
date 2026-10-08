@@ -1,6 +1,6 @@
 # PM-05F — Fillet Local-Topology Remediation
 
-**Status:** AUTOMATED REMEDIATION PASS — docs sync/final gate and Owner retest pending
+**Status:** AUTOMATED REMEDIATION COMPLETED — PASS; Owner retest pending
 **Parent Work Contract:** `work/PM-05_EDGE_FEATURES.md`
 **Checkpoint:** PM-05F
 **Date activated:** 2026-10-07
@@ -111,7 +111,9 @@ Final remediation evidence on exact candidate `bc0b002f4e45172aec24c61913cd28ac8
 
 The complex fixture covers a mixed 2-line + 2-circle capsule Cut loop, direct four-Edge Fillet, unrelated exterior Chamfer, exact semantic re-authoring of the same Cut Curve meanings at the next stage and the chained four-Edge Fillet. The curved-edge fixture separately proves a single circular Boolean Edge for both Fillet and Chamfer with exact provider input membership.
 
-Documentation/Product Browser synchronization passed Windows DOCS #1741. Candidate `219e49e6a94dae5d43d807a147261c2c040084ab` then hardened the complex fixture to prove that, after the unrelated exterior Chamfer, the exact four continued capsule Curve meanings remain **2 lines + 2 circles**, each Resolved with one strict current Edge; Windows FAST #1742 PASS. This governance synchronization intentionally triggers the required final exact-head Windows FULL for the combined runtime/docs/evidence package.
+Documentation/Product Browser synchronization passed Windows DOCS #1741. Candidate `219e49e6a94dae5d43d807a147261c2c040084ab` then hardened the complex fixture to prove that, after the unrelated exterior Chamfer, the exact four continued capsule Curve meanings remain **2 lines + 2 circles**, each Resolved with one strict current Edge; Windows FAST #1742 PASS.
+
+Final governance-synchronized candidate `e1c358cf54fd051f15252ea198d116de0b6a9cdc` passed Windows FULL #1744 with core-only 25/25, kernel-native 57/57 and desktop 112/112; final aggregate PASS. PR #296 merged that exact tree to `main` as `f5570b3bcde458670943718e78cdf4a7a77667ea`. No further automated/runtime remediation gate remains; repeat Owner Windows acceptance is pending.
 
 ## Remediation decision result
 
@@ -127,11 +129,12 @@ No generic healing, fuzzy escalation, nearest-geometry rebinding or advanced Fil
 
 ## Completion gate
 
-Remediation is complete only after:
+Automated remediation completion criteria are satisfied:
 
-- focused diagnostics prove the root cause;
-- bounded fix has regression coverage for at least adjacent-pair and trihedral cube Fillet plus Chamfer control;
-- complex mixed/generated Edge fixture is covered;
-- exact-head Windows FULL passes;
-- canonical docs/Product Browser are updated if the as-built provider-contour semantics changed;
-- Owner repeats the supported-Windows acceptance workflow and explicitly reports PASS.
+- focused diagnostics proved both root causes;
+- bounded regressions cover adjacent-pair/trihedral cube Fillet with Chamfer control;
+- mixed/generated and isolated curved-Edge fixtures pass;
+- canonical docs/Product Browser are synchronized;
+- exact-head Windows FULL #1744 passed and the candidate merged as #296.
+
+The remaining PM-05F gate is Owner repetition of the supported-Windows acceptance workflow with an explicit PASS.

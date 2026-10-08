@@ -787,11 +787,12 @@ PM-05F does not authorize PM-06, new Fillet/Chamfer variants, new schema/modelin
 
 Owner manual acceptance on 2026-10-07 found a Fillet blocker and explicitly accepted the strict-intent/permissive-local-result-topology amendment above.
 
-Bounded remediation evidence is now ready for the final exact-head package gate:
+Bounded remediation automated evidence is **COMPLETED — PASS**:
 
 - runtime remediation candidate `bc0b002f4e45172aec24c61913cd28ac8ca43138` passed Windows FULL #1739 with core-only 25/25, kernel-native 57/57 and desktop 112/112;
-- canonical internal/Product documentation and Product Browser were synchronized on the same remediation branch and passed Windows DOCS #1741;
-- final mixed-Curve continuation regression hardening candidate `219e49e6a94dae5d43d807a147261c2c040084ab` passed Windows FAST #1742;
-- the next exact branch head must pass Windows FULL before merge/repeat Owner acceptance.
+- canonical internal/Product documentation and Product Browser synchronization passed Windows DOCS #1741;
+- mixed-Curve continuation hardening candidate `219e49e6a94dae5d43d807a147261c2c040084ab` passed Windows FAST #1742;
+- final governance-synchronized exact candidate `e1c358cf54fd051f15252ea198d116de0b6a9cdc` passed Windows FULL #1744 with core-only 25/25, kernel-native 57/57 and desktop 112/112; final `windows-msvc` aggregate PASS;
+- PR #296 squash merge is `f5570b3bcde458670943718e78cdf4a7a77667ea`.
 
-PM-05F remains active. PM-05 cannot close until that fresh exact-head FULL passes, the remediation is merged to `main`, and the Owner repeats the supported-Windows workflow with an explicit PASS.
+PM-05F remains active only for the repeat Owner supported-Windows acceptance workflow. PM-05 cannot close until the Owner explicitly reports PASS on the remediated main candidate.
