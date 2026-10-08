@@ -4554,11 +4554,27 @@ finishEdgeFeature(
                     try {
                         BRepFilletAPI_MakeChamfer symmetric{
                             upstream.solid};
+                        for (const auto& item : selected) {
+                            symmetric.Add(item.edge);
+                        }
+                        bool all_contours_present = true;
                         for (std::size_t i = 0U; i < 3U; ++i) {
-                            symmetric.Add(
+                            const auto contour =
+                                symmetric.Contour(selected[i].edge);
+                            if (contour <= 0) {
+                                all_contours_present = false;
+                                break;
+                            }
+                            symmetric.SetDist(
                                 input.parameter_mm,
-                                selected[i].edge,
+                                contour,
                                 supports[i][(mask >> i) & 1U]);
+                        }
+                        if (!all_contours_present) {
+                            std::fprintf(stderr,
+                                "PM05F_R2_CHAMFER_SYMMETRIC_SIDE mask=%u missing_contour\n",
+                                mask);
+                            continue;
                         }
                         symmetric.Build();
                         const bool built = symmetric.IsDone();
