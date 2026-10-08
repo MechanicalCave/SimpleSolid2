@@ -5178,6 +5178,57 @@ void probeChamferPlanarMiter(
                         }
                         std::cerr << "\n";
                     }
+                    // D2-A only: bounded analogue of the exact
+                    // ADR-0017 Add-continuation certificate. This is
+                    // NOT permission to use that rule for Chamfer.
+                    // Claims originate from upstream OCCT histories;
+                    // an exact common result Edge + coplanar support
+                    // is admissibility evidence, not ownership by
+                    // similarity or arbitrary provider traversal.
+                    std::size_t same_domain_inherited_claims = 0U;
+                    std::size_t adjacent_inherited_claims = 0U;
+                    std::string same_domain_upstream_mask;
+                    for (const auto& claim :
+                         inherited_descendants) {
+                        bool shares_actual_edge = false;
+                        bool shares_same_domain_edge = false;
+                        for (const auto& inherited_face : claim) {
+                            if (!facesShareResultEdge(
+                                    face, inherited_face)) {
+                                continue;
+                            }
+                            shares_actual_edge = true;
+                            if (planarFacesSameDomain(
+                                    face, inherited_face)) {
+                                shares_same_domain_edge = true;
+                            }
+                        }
+                        if (shares_actual_edge) {
+                            ++adjacent_inherited_claims;
+                        }
+                        if (shares_same_domain_edge) {
+                            ++same_domain_inherited_claims;
+                        }
+                        same_domain_upstream_mask +=
+                            shares_same_domain_edge ? '1' : '0';
+                    }
+                    std::cerr
+                        << "PM05F_R2_MITER_CONTINUATION"
+                        << " policy="
+                        << (remove_last ? "remove_wins" : "add_wins")
+                        << " distance=" << distance
+                        << " index=" << unclaimed_index
+                        << " adjacent_strip_pair="
+                        << (std::count(
+                                adjacent_strip_mask.begin(),
+                                adjacent_strip_mask.end(), '1') == 2)
+                        << " inherited_edge_claims="
+                        << adjacent_inherited_claims
+                        << " same_domain_inherited_claims="
+                        << same_domain_inherited_claims
+                        << " source_mask="
+                        << same_domain_upstream_mask
+                        << "\n";
                     std::size_t expanded_history_owners = 0U;
                     for (const auto& claim :
                          inherited_with_generated) {
