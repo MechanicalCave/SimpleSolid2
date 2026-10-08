@@ -16,6 +16,7 @@
 #include <QTreeWidgetItem>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -36,7 +37,10 @@ void check(bool ok, const char* expression, int line) {
 #define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
 
 application::DocumentSession makeBaseSession(
-    kernel_occt::OcctSolidModelingKernel& kernel) {
+    kernel_occt::OcctSolidModelingKernel& kernel,
+    double width = 40.0,
+    double depth = 30.0,
+    double height = 20.0) {
     auto source =
         part::PartDocument::create(core::DocumentId::generate());
     application::DocumentSession session{{}, std::move(source)};
@@ -48,7 +52,7 @@ application::DocumentSession makeBaseSession(
         *sketch.sketch_id,
         session.document().revision(),
         {0.0, 0.0},
-        {40.0, 30.0},
+        {width, depth},
         sketch::EntityRole::regular,
         false}).ok());
     const auto* model =
@@ -71,7 +75,7 @@ application::DocumentSession makeBaseSession(
             session.document().revision(),
             part::ExtrudeOperation::add,
             part::OneSidedExtrudeExtent{
-                core::LengthValue{20.0}, false},
+                core::LengthValue{height}, false},
             "Base"},
         kernel);
     CHECK(base.ok() && base.feature_id);
@@ -170,6 +174,63 @@ std::vector<WorldEdgeProbe> authorableEdgeProbes(
     }
     CHECK(probes.size() >= 4U);
     return probes;
+}
+
+std::vector<std::array<viewer::Point3, 3U>>
+authorableTrihedralCornerProbes(
+    const application::DocumentSession& session,
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    const auto evaluated =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(evaluated.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluated.current_topology);
+    CHECK(evaluated.current_topology->complete());
+    const auto presented =
+        kernel.bodyPresentation(evaluated.body_solid);
+    CHECK(presented.ok());
+    const auto isSameTestPoint =
+        [](const kernel::Point3& a,
+           const kernel::Point3& b) {
+            constexpr double epsilon = 1.0e-6;
+            return std::abs(a.x - b.x) <= epsilon &&
+                   std::abs(a.y - b.y) <= epsilon &&
+                   std::abs(a.z - b.z) <= epsilon;
+        };
+    std::vector<std::array<viewer::Point3, 3U>> corners;
+    for (const auto& vertex : presented.body.vertices) {
+        std::vector<viewer::Point3> incident_edge_centers;
+        for (const auto& edge : presented.body.edges) {
+            if (edge.points.size() < 2U ||
+                (!isSameTestPoint(
+                    edge.points.front(), vertex.point) &&
+                 !isSameTestPoint(
+                    edge.points.back(), vertex.point))) {
+                continue;
+            }
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *evaluated.current_topology,
+                    edge.runtime_token);
+            if (!authored.ok()) {
+                continue;
+            }
+            const auto& first = edge.points.front();
+            const auto& last = edge.points.back();
+            incident_edge_centers.push_back({
+                (first.x + last.x) / 2.0,
+                (first.y + last.y) / 2.0,
+                (first.z + last.z) / 2.0});
+        }
+        if (incident_edge_centers.size() == 3U) {
+            corners.push_back({
+                incident_edge_centers[0],
+                incident_edge_centers[1],
+                incident_edge_centers[2]});
+        }
+    }
+    CHECK(corners.size() == 8U);
+    return corners;
 }
 
 QTreeWidgetItem* featureTreeItem(
@@ -527,6 +588,78 @@ int main(int argc, char* argv[]) {
                 << " angle=" << angle
                 << " operation=" << command << '\n';
         }
+
+        // R2-A: native full click -> Workbench three converging Edge
+        // selection -> Fillet Finish -> fresh Part evaluation and visible
+        // committed Body. Coordinates here only choose mouse positions,
+        // never persistent Edge identity.
+        auto trihedral_session =
+            makeBaseSession(kernel, 20.0, 20.0, 20.0);
+        CHECK(workbench.activateDocument(
+            &trihedral_session, {}));
+        QApplication::processEvents();
+        CHECK(viewport->setStandardView(
+            viewer::StandardView::top_front_right));
+        viewport->fitAll();
+        QApplication::processEvents();
+        const auto corners =
+            authorableTrihedralCornerProbes(
+                trihedral_session, kernel);
+        reply = workbench.submitCadInput(
+            "FILLET", workbench.cadInputContextGeneration());
+        CHECK(reply.accepted);
+        reply = workbench.lockCadDynamicInputField(
+            0U, "2", workbench.cadInputContextGeneration());
+        CHECK(reply.accepted);
+
+        bool trihedral_selected = false;
+        for (const auto& corner : corners) {
+            reply = workbench.submitCadInput(
+                "CLEAR", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            bool all_clicked = true;
+            for (std::size_t index = 0U;
+                 index < corner.size(); ++index) {
+                if (!nativeClick(*viewport, corner[index]) ||
+                    !selectedCount(
+                        *label, static_cast<int>(index + 1U))) {
+                    all_clicked = false;
+                    break;
+                }
+            }
+            if (all_clicked && finish->isEnabled()) {
+                trihedral_selected = true;
+                break;
+            }
+        }
+        CHECK(trihedral_selected);
+        CHECK(selectedCount(*label, 3));
+        CHECK(finish->isEnabled());
+        CHECK(viewport->runtimeDiagnostics()
+                  .solid_committed_displayed);
+        finish->click();
+        QApplication::processEvents();
+        CHECK(trihedral_session.document()
+                  .body().features.size() == 2U);
+        const auto after_three =
+            part::evaluatePart(
+                trihedral_session.document(), kernel);
+        CHECK(after_three.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(after_three.current_topology);
+        CHECK(after_three.current_topology->complete());
+        CHECK(!viewport->runtimeDiagnostics()
+                   .solid_preview_displayed);
+        CHECK(viewport->runtimeDiagnostics()
+                  .solid_committed_displayed);
+        CHECK(viewport->runtimeDiagnostics()
+                  .solid_committed_style_expected);
+        std::cout
+            << "PM05F_R2_NATIVE_TRIHEDRAL_FILLET_PASS"
+            << " body_present=1"
+            << " edges=3"
+            << " radius=2"
+            << '\n';
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
