@@ -24,7 +24,9 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -1742,6 +1744,47 @@ int main(int argc, char* argv[]) {
         CHECK(three.preview_mesh->valid());
         CHECK(three.preview_added_mesh->valid());
         CHECK(three.previewSolidAvailable());
+
+        // D2-B negative admission: never deduplicate authored Edges,
+        // guess a missing reference or publish a partial fallback.
+        auto duplicate_edge_input = *before_triple_kernel.input;
+        CHECK(duplicate_edge_input.edges.size() == 3U);
+        duplicate_edge_input.edges[2] =
+            duplicate_edge_input.edges.front();
+        CHECK(!duplicate_edge_input.valid());
+        const auto duplicate_edge_result =
+            kernel.edgeFeature(
+                duplicate_edge_input, crash_eval.body_solid);
+        CHECK(!duplicate_edge_result.ok());
+        CHECK(duplicate_edge_result.status ==
+              kernel::SolidModelingStatus::invalid_input);
+        CHECK(!duplicate_edge_result.solid);
+
+        // Strict runtime-stage membership: a structurally valid but
+        // unknown Edge token fails; no XYZ or similarity rebind exists.
+        auto missing_edge_input = *before_triple_kernel.input;
+        std::uint64_t highest_token = 0U;
+        for (const auto& current :
+             crash_eval.current_topology->edges) {
+            highest_token = std::max(
+                highest_token, current.runtime_token.value);
+        }
+        CHECK(highest_token <
+              std::numeric_limits<std::uint64_t>::max());
+        const auto missing_edge_token =
+            kernel::RuntimeEdgeToken{highest_token + 1U};
+        CHECK(missing_edge_token.valid());
+        missing_edge_input.edges[2] = missing_edge_token;
+        CHECK(missing_edge_input.valid());
+        const auto missing_edge_result =
+            kernel.edgeFeature(
+                missing_edge_input, crash_eval.body_solid);
+        CHECK(!missing_edge_result.ok());
+        CHECK(missing_edge_result.status ==
+              kernel::SolidModelingStatus::provider_mismatch);
+        CHECK(!missing_edge_result.solid);
+        CHECK(triple_session.document().revision() ==
+              triple_source_revision);
 
         // D2-B Owner Part008 strict permutation/size and full current
         // Face/Edge/Vertex inventory. Transient runtime tokens may order
