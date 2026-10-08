@@ -37,6 +37,11 @@ public:
         const kernel::AngularRevolveInput& input,
         kernel::RuntimeSolidHandle upstream = {}) noexcept override;
 
+    [[nodiscard]] kernel::SolidMaterialDeltaPresentationResult
+    materialDifferencePreview(
+        kernel::RuntimeSolidHandle before,
+        kernel::RuntimeSolidHandle after) noexcept override;
+
     [[nodiscard]] kernel::SolidPresentationResult
     presentationMesh(
         kernel::RuntimeSolidHandle solid) noexcept override;

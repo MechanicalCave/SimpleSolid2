@@ -4832,6 +4832,89 @@ OcctSolidModelingKernel::revolvePreviewMesh(
     }
 }
 
+kernel::SolidMaterialDeltaPresentationResult
+OcctSolidModelingKernel::materialDifferencePreview(
+    kernel::RuntimeSolidHandle before,
+    kernel::RuntimeSolidHandle after) noexcept {
+    kernel::SolidMaterialDeltaPresentationResult result;
+    if (!before || !after) {
+        result.status =
+            kernel::SolidPresentationStatus::invalid_input;
+        return result;
+    }
+
+    const auto* first =
+        dynamic_cast<const OcctRuntimeSolid*>(before.get());
+    const auto* second =
+        dynamic_cast<const OcctRuntimeSolid*>(after.get());
+    if (!first || !second) {
+        result.status =
+            kernel::SolidPresentationStatus::provider_mismatch;
+        return result;
+    }
+
+    // Exact transient B-Rep differences, never triangle subtraction.
+    // Do not change modeling tolerance or use fuzzy/healing fallback.
+    try {
+        const auto cut_mesh =
+            [](const TopoDS_Solid& a,
+               const TopoDS_Solid& b)
+                -> std::optional<
+                    kernel::SolidPresentationResult> {
+                BRepAlgoAPI_Cut difference{a, b};
+                difference.SetFuzzyValue(0.0);
+                difference.Build();
+                if (!difference.IsDone()) {
+                    return std::nullopt;
+                }
+                const auto& shape = difference.Shape();
+                switch (volumePresence(shape)) {
+                case VolumePresence::none:
+                    return kernel::SolidPresentationResult{
+                        kernel::SolidPresentationStatus::ok, {}};
+                case VolumePresence::positive:
+                    return presentationMeshForShape(shape);
+                case VolumePresence::invalid:
+                    return std::nullopt;
+                }
+                return std::nullopt;
+            };
+
+        const auto removed =
+            cut_mesh(first->solid, second->solid);
+        const auto added =
+            cut_mesh(second->solid, first->solid);
+        if (!removed || !added ||
+            removed->status != kernel::SolidPresentationStatus::ok ||
+            added->status != kernel::SolidPresentationStatus::ok) {
+            result.status =
+                kernel::SolidPresentationStatus::provider_failure;
+            return result;
+        }
+
+        if (removed->mesh.valid()) {
+            result.removed = removed->mesh;
+        }
+        if (added->mesh.valid()) {
+            result.added = added->mesh;
+        }
+        // A valid but exactly unchanged result is not visual evidence
+        // of any Edge Feature effect. Do not fabricate a colored Body.
+        result.status =
+            (result.removed || result.added)
+                ? kernel::SolidPresentationStatus::ok
+                : kernel::SolidPresentationStatus::unsupported;
+        return result;
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidPresentationStatus::provider_failure;
+    } catch (...) {
+        result.status =
+            kernel::SolidPresentationStatus::provider_failure;
+    }
+    return result;
+}
+
 kernel::SolidPresentationResult
 OcctSolidModelingKernel::presentationMesh(
     kernel::RuntimeSolidHandle solid) noexcept {

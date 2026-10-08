@@ -1,6 +1,6 @@
 # PM-05F R2-D — Exact Local Edge-Feature Preview D2 Proposal
 
-**Status:** PROPOSED — OWNER APPROVAL REQUIRED (not activated)
+**Status:** OWNER APPROVED — ACTIVE R2-D, 2026-10-08
 **Date:** 2026-10-08
 **Authority:** PM-05F R2-D finding within `work/PM-05F_R2_OWNER_ACCEPTANCE_REMEDIATION.md`
 **Decision class:** D2 — bounded Kernel and Viewer presentation contract change
@@ -24,4 +24,4 @@ The Kernel already exposes separate exact delta preview entry points for Extrude
 
 No new authored Feature variants, topology identities, persistent schema, geometry-nearest rebinding, transient OCCT handles in public domain contracts, general-purpose Boolean tool in Part, or new modeling tolerance policy.
 
-This proposed D2 does **not** authorize implementation. The Owner must accept the Kernel/Viewer contract extension first. PM-05F R2-D stays OPEN meanwhile; R2-A/B/C/E/F can proceed independently.
+The Owner expressly approved this bounded D2 on 2026-10-08. R2-D is authorized for implementation on Draft PR #298, but remains OPEN pending code, exact-difference evidence, Windows tests and repeat Owner acceptance. No separate schema/identity/tolerance changes are authorized.

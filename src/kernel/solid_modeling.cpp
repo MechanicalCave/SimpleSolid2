@@ -564,6 +564,16 @@ ISolidModelingKernel::revolvePreviewMesh(
         {}};
 }
 
+SolidMaterialDeltaPresentationResult
+ISolidModelingKernel::materialDifferencePreview(
+    RuntimeSolidHandle before,
+    RuntimeSolidHandle after) noexcept {
+    if (!before || !after) {
+        return {SolidPresentationStatus::invalid_input, {}, {}};
+    }
+    return {SolidPresentationStatus::unsupported, {}, {}};
+}
+
 SolidPresentationResult
 ISolidModelingKernel::presentationMesh(
     RuntimeSolidHandle solid) noexcept {
