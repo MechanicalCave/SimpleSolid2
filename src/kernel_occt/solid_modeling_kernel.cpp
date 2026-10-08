@@ -4613,6 +4613,8 @@ void probeChamferPlanarMiter(
         << distance << " selected=3\n";
     std::vector<std::optional<gp_Pln>>
         single_strip_planes(selected.size());
+    std::vector<TopoDS_Shape>
+        single_chamfer_shapes(selected.size());
     std::vector<TopoDS_Vertex> unique_vertices;
 
     for (std::size_t i = 0U; i < selected.size(); ++i) {
@@ -4669,6 +4671,9 @@ void probeChamferPlanarMiter(
         const bool valid =
             built &&
             BRepCheck_Analyzer{alone.Shape()}.IsValid();
+        if (valid) {
+            single_chamfer_shapes[i] = alone.Shape();
+        }
         const auto generated =
             built
                 ? facesFromShapeList(alone.Generated(edge))
@@ -4697,6 +4702,146 @@ void probeChamferPlanarMiter(
             << " unique_strip_plane="
             << static_cast<bool>(single_strip_planes[i])
             << "\n";
+    }
+
+    // Provider-private, test-only F2 Boolean feasibility experiment.
+    // Each single-Edge result is used as geometric evidence of a local
+    // signed material delta; this is NOT a sequence of authored Features.
+    // None of the candidate shapes below is returned or published.
+    std::vector<TopoDS_Shape> remove_deltas;
+    std::vector<TopoDS_Shape> add_deltas;
+    bool deltas_complete = true;
+    for (std::size_t i = 0U; i < selected.size(); ++i) {
+        if (single_chamfer_shapes[i].IsNull()) {
+            deltas_complete = false;
+            break;
+        }
+
+        BRepAlgoAPI_Cut remove{
+            upstream.solid, single_chamfer_shapes[i]};
+        remove.SetFuzzyValue(0.0);
+        remove.Build();
+        BRepAlgoAPI_Cut add{
+            single_chamfer_shapes[i], upstream.solid};
+        add.SetFuzzyValue(0.0);
+        add.Build();
+        if (!remove.IsDone() || !add.IsDone()) {
+            deltas_complete = false;
+            break;
+        }
+        const auto removed = volumePresence(remove.Shape());
+        const auto added = volumePresence(add.Shape());
+        if (removed == VolumePresence::invalid ||
+            added == VolumePresence::invalid) {
+            deltas_complete = false;
+            break;
+        }
+        if (removed == VolumePresence::positive) {
+            remove_deltas.push_back(remove.Shape());
+        }
+        if (added == VolumePresence::positive) {
+            add_deltas.push_back(add.Shape());
+        }
+        std::cerr
+            << "PM05F_R2_MITER_DELTA index=" << i
+            << " removed=" << (removed == VolumePresence::positive)
+            << " added=" << (added == VolumePresence::positive)
+            << "\n";
+    }
+
+    std::cerr
+        << "PM05F_R2_MITER_CSG_DELTAS"
+        << " complete=" << deltas_complete
+        << " removed_parts=" << remove_deltas.size()
+        << " added_parts=" << add_deltas.size() << "\n";
+    if (deltas_complete) {
+        for (const bool remove_last : {true, false}) {
+            TopoDS_Shape candidate = upstream.solid;
+            bool built = true;
+            // Compose exact signed deltas on a throwaway candidate only.
+            const auto apply = [&](bool removal) {
+                const auto& deltas =
+                    removal ? remove_deltas : add_deltas;
+                for (const auto& delta : deltas) {
+                    if (removal) {
+                        BRepAlgoAPI_Cut op{candidate, delta};
+                        op.SetFuzzyValue(0.0);
+                        op.Build();
+                        if (!op.IsDone() || op.Shape().IsNull()) {
+                            built = false;
+                            return;
+                        }
+                        candidate = op.Shape();
+                    } else {
+                        BRepAlgoAPI_Fuse op{candidate, delta};
+                        op.SetFuzzyValue(0.0);
+                        op.Build();
+                        if (!op.IsDone() || op.Shape().IsNull()) {
+                            built = false;
+                            return;
+                        }
+                        candidate = op.Shape();
+                    }
+                }
+            };
+            if (remove_last) {
+                apply(false);
+                if (built) apply(true);
+            } else {
+                apply(true);
+                if (built) apply(false);
+            }
+
+            const bool valid =
+                built && BRepCheck_Analyzer{candidate}.IsValid();
+            std::size_t planar_faces = 0U;
+            std::size_t total_faces = 0U;
+            if (built) {
+                for (TopExp_Explorer it{
+                         candidate, TopAbs_FACE};
+                     it.More(); it.Next()) {
+                    ++total_faces;
+                    if (BRepAdaptor_Surface{
+                            TopoDS::Face(it.Current()), true}
+                            .GetType() == GeomAbs_Plane) {
+                        ++planar_faces;
+                    }
+                }
+            }
+            bool changed = false;
+            if (valid) {
+                BRepAlgoAPI_Cut removed{
+                    upstream.solid, candidate};
+                removed.SetFuzzyValue(0.0);
+                removed.Build();
+                BRepAlgoAPI_Cut added{
+                    candidate, upstream.solid};
+                added.SetFuzzyValue(0.0);
+                added.Build();
+                if (removed.IsDone() && added.IsDone()) {
+                    changed =
+                        volumePresence(removed.Shape()) ==
+                            VolumePresence::positive ||
+                        volumePresence(added.Shape()) ==
+                            VolumePresence::positive;
+                }
+            }
+            std::cerr
+                << "PM05F_R2_MITER_CSG"
+                << " policy="
+                << (remove_last ? "remove_wins" : "add_wins")
+                << " built=" << built
+                << " valid=" << valid
+                << " solid_count="
+                << (built
+                    ? countUniqueSubshapes(
+                        candidate, TopAbs_SOLID)
+                    : 0U)
+                << " faces=" << total_faces
+                << " planar_faces=" << planar_faces
+                << " changed=" << changed
+                << "\n";
+        }
     }
 
     // Pair oracle: probe both registration orders without changing the
