@@ -4,6 +4,7 @@
 **Authority:** PM-05 Edge Features / PM-05F R2 Owner remediation
 **Decision:** D2 implementation boundary; Owner must explicitly approve before production geometry/policy changes
 **Production mutation authorization:** NONE by this document
+**Partial Owner decision:** D2-A evidence-only feasibility accepted 2026-10-08; D2-B implementation and D3 corner appearance NOT accepted
 
 ## Owner evidence and exact bounded failure
 
@@ -40,3 +41,13 @@ Explicitly **leave the existing valid two-Edge nonplanar corner transition uncha
 ## Current disposition
 
 The current valid two-Edge nonplanar connector is a **product appearance question**, not automatically a modeling defect. The confirmed Part008 three-Edge `invalid_brep` is an **open acceptance blocker**. Keep the proposed fallback **UNAUTHORIZED** pending the Owner's explicit D2 decision.
+
+## Owner D2-A feasibility outcome — 2026-10-08
+
+Owner accepted the bounded **D2-A evidence-only provider experiment**, explicitly **not** a production fallback or public Kernel/history contract. Detailed test measurements and the temporary diagnostic source are recorded in [`work/PM-05F_R2_CHAMFER_MITER_FEASIBILITY_DESIGN.md`](PM-05F_R2_CHAMFER_MITER_FEASIBILITY_DESIGN.md).
+
+- Native FOCUSED #1845–#1847 proved the exact three-edge Part008 set is a **two-junction chain**, with individual planar Chamfers valid but OCCT combined/pairwise combinations invalid under the observed distances.
+- Native FOCUSED #1848–#1850 proved an isolated zero-fuzzy signed-delta CSG candidate produces a changed one-solid valid planar B-Rep at 1, 0.5 and 0.25 mm, with one matching support-plane Face per explicit source Edge and equal resulting material volume under the two tested precedence strategies.
+- **F3 remains unresolved:** OCCT generated/modified source histories, all Face/Edge/Vertex ownership, both corner junctions, positive-area strip participation and lifecycle/persistence parity have not been proven for that candidate.
+
+**Current decision:** D2-A remains restricted to bounded feasibility/lineage research; **D2-B production implementation remains unauthorized**. Do not use the valid throwaway B-Rep as a successful CAD Feature without accepted strict lineage evidence; do not weaken the red Owner three-Edge check.
