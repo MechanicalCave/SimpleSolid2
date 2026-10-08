@@ -231,9 +231,19 @@ int main(int argc, char* argv[]) {
         }
         CHECK(first.has_value());
         CHECK(finish->isEnabled());
+        // R2-D: real Workbench preview stays local, transient and distinct
+        // from the neutral displayed accepted Body.
+        const auto creating_preview =
+            viewport->runtimeDiagnostics();
+        CHECK(creating_preview.solid_preview_displayed);
+        CHECK(creating_preview.solid_preview_style_expected);
+        CHECK(creating_preview.solid_committed_displayed);
+        CHECK(creating_preview.solid_committed_style_expected);
+        CHECK(creating_preview.solid_shading_styles_isolated);
         finish->click();
         QApplication::processEvents();
         CHECK(session.document().body().features.size() == 2U);
+        CHECK(!viewport->runtimeDiagnostics().solid_preview_displayed);
         const auto feature_id =
             session.document().body().features.back().id;
         const auto* feature =
@@ -256,6 +266,8 @@ int main(int argc, char* argv[]) {
         edit->click();
         QApplication::processEvents();
         CHECK(selectedCount(*label, 1));
+        CHECK(viewport->runtimeDiagnostics().solid_preview_displayed);
+        CHECK(viewport->runtimeDiagnostics().solid_preview_style_expected);
 
         // This is the central R2-B acceptance boundary: real native click,
         // tool_stage Viewer's query, controller semantic selection and
@@ -263,9 +275,11 @@ int main(int argc, char* argv[]) {
         CHECK(nativeClick(*viewport, first->world));
         CHECK(selectedCount(*label, 0));
         CHECK(!finish->isEnabled());
+        CHECK(!viewport->runtimeDiagnostics().solid_preview_displayed);
         CHECK(nativeClick(*viewport, first->world));
         CHECK(selectedCount(*label, 1));
         CHECK(finish->isEnabled());
+        CHECK(viewport->runtimeDiagnostics().solid_preview_displayed);
 
         std::optional<WorldEdgeProbe> second;
         for (const auto& probe : probes) {
@@ -286,6 +300,7 @@ int main(int argc, char* argv[]) {
         CHECK(finish->isEnabled());
         cancel->click();
         QApplication::processEvents();
+        CHECK(!viewport->runtimeDiagnostics().solid_preview_displayed);
         CHECK(session.undoDepth() == undo_before_edit);
         CHECK(session.document().body().features.size() == 2U);
         feature = session.document().findFeature(feature_id);
@@ -313,6 +328,7 @@ int main(int argc, char* argv[]) {
         finish->click();
         QApplication::processEvents();
         CHECK(session.undoDepth() == undo_before_edit + 1U);
+        CHECK(!viewport->runtimeDiagnostics().solid_preview_displayed);
         CHECK(session.document().findFeature(feature_id) != nullptr);
         const auto evaluation =
             part::evaluatePart(session.document(), kernel);
