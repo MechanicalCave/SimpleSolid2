@@ -4904,8 +4904,8 @@ void probeChamferPlanarMiter(
 
     // Pair oracle: probe both registration orders without changing the
     // authored Edge set, at the previously reproduced three distances.
-    for (const double scale : {1.0, 0.5, 0.25}) {
-        const double pair_distance = distance * scale;
+    {
+        const double pair_distance = distance;
         for (std::size_t i = 0U; i < selected.size(); ++i) {
             for (std::size_t j = i + 1U; j < selected.size(); ++j) {
                 for (const bool reverse : {false, true}) {
@@ -5154,10 +5154,12 @@ OcctSolidModelingKernel::edgeFeature(
             if (std::getenv(
                     "SS2_PM05F_R2_CHAMFER_TRIAGE") != nullptr) {
                 try {
-                    probeChamferPlanarMiter(
-                        *upstream_occt,
-                        *selected,
-                        input.parameter_mm);
+                    for (const double scale : {1.0, 0.5, 0.25}) {
+                        probeChamferPlanarMiter(
+                            *upstream_occt,
+                            *selected,
+                            input.parameter_mm * scale);
+                    }
                 } catch (const Standard_Failure&) {
                     std::cerr
                         << "PM05F_R2_MITER_SPIKE_PROVIDER_EXCEPTION\n";
