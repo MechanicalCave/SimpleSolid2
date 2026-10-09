@@ -504,6 +504,13 @@ public:
     currentMaterialEdgeProjectionStatus(
         const part::MaterialEdgeReference& source) const;
 
+    // Runtime-only Face source feedback: strict material references are
+    // resolved against one current Body scene generation, never stored
+    // as Viewer or durable CAD identity. Empty vectors clear feedback.
+    [[nodiscard]] bool setProjectFaceSourceFeedback(
+        const std::vector<part::MaterialEdgeReference>& supported,
+        const std::vector<part::MaterialEdgeReference>& skipped);
+
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
 
@@ -715,6 +722,14 @@ private:
     bool body_topology_edge_draft_mode_{false};
     std::optional<part::BodyStageRef>
         body_topology_tool_stage_;
+    std::optional<core::DocumentRevision>
+        project_face_feedback_revision_;
+    std::optional<viewer::BodyPresentationGeneration>
+        project_face_feedback_generation_;
+    std::vector<part::MaterialEdgeReference>
+        project_face_feedback_supported_;
+    std::vector<part::MaterialEdgeReference>
+        project_face_feedback_skipped_;
     std::uint64_t next_body_scene_generation_{1U};
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};
