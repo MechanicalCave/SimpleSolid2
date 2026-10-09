@@ -5,6 +5,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <cstdint>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -589,9 +590,50 @@ void verifyBlockedSupport(
     CHECK(!materialized.input.has_value());
 }
 
+// PG-01C Owner Sketch 5 diagnostic guardrail, using a wholly synthetic
+// 40 x 30 rectangle rather than publishing the Owner's private CAD file.
+// A single ULP endpoint gap must remain OPEN in Shared 2D. A future
+// OCCT projection fix must use proven common source-vertex topology,
+// not a global proximity/tolerance relaxation in region analysis.
+void verifyExactRegionEndpointBoundary() {
+    sketch::SketchModel model;
+    const auto almost_30 = std::nextafter(30.0, 0.0);
+    CHECK(almost_30 != 30.0);
+
+    [[maybe_unused]] const auto bottom = model.addLine(
+        {0.0, 0.0}, {40.0, 0.0}, sketch::EntityRole::regular);
+    const auto right = model.addLine(
+        {40.0, 0.0}, {40.0, almost_30},
+        sketch::EntityRole::regular);
+    [[maybe_unused]] const auto top = model.addLine(
+        {40.0, 30.0}, {0.0, 30.0},
+        sketch::EntityRole::regular);
+    [[maybe_unused]] const auto left = model.addLine(
+        {0.0, 30.0}, {0.0, 0.0},
+        sketch::EntityRole::regular);
+
+    const auto disconnected = sketch::analyzeRegions(model);
+    CHECK(disconnected.regions.empty());
+
+    // Explicitly identical coordinates represent a different, closed
+    // topology. The same EntityIds survive this normal authored edit.
+    CHECK(model.updateLine(
+        right, {40.0, 0.0}, {40.0, 30.0}));
+    const auto closed = sketch::analyzeRegions(model);
+    CHECK(closed.complete());
+    CHECK(closed.regions.size() == 1U);
+    CHECK(closed.regions.front().area == 1200.0);
+    std::cout
+        << "PG01C_SKETCH5_EXACT_ENDPOINT_BOUNDARY_PASS"
+        << " one_ulp_gap_rejected=1"
+        << " exact_edit_closes=1"
+        << " proximity_healing=0\\n";
+}
+
 } // namespace
 
 int main() {
+    verifyExactRegionEndpointBoundary();
     auto fixture = makeFixture();
     StageKernel kernel;
 
