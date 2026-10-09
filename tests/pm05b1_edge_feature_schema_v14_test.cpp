@@ -443,10 +443,10 @@ void verifyPg01bB2EffectiveSketch(
     CHECK(derived->outcomes.size() == 1U);
     const auto* current = derived->model.findLine(id);
     CHECK(current != nullptr);
-    CHECK(current->start.u == 100.0);
-    CHECK(current->end.u == 120.0);
+    CHECK(current->start().u == 100.0);
+    CHECK(current->end().u == 120.0);
     CHECK(document.document->findSketch(sketch_id)
-              ->model.findLine(id)->start.u == 1.0);
+              ->model.findLine(id)->start().u == 1.0);
 
     query.unsupported = true;
     const auto broken =
