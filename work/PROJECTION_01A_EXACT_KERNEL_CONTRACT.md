@@ -1,12 +1,12 @@
 # PG-01A — Exact Kernel Edge Projection Work Contract
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-09; bounded exact Kernel/OCCT only
+**Status:** COMPLETED — OWNER FINAL PASS 2026-10-09; [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) squash-merged as `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`
 **Prepared:** 2026-10-09
 **Baseline:** main `2cda8e04d7d0e2594edae7dc90e88cbb90dcae35` — Projection 00A accepted/merged
 **Program:** accepted Part v1 roadmap v1.30, Projection before PM-06
 **Design:** `work/PROJECTION_01_PROJECT_GEOMETRY_DESIGN_PROPOSAL.md`
 **Source donor:** `MechanicalCave/SimpleSolid` SS1 SK-01 kernel API/OCCT geometry and tests
-**Current evidence:** `work/PROJECTION_01A_KERNEL_ACCEPTANCE_EVIDENCE.md`; native earlier FOCUSED #1918/#1919/#1920/#1922/#1924 PASS; FAST #1925 93/93 and FULL #1926 195/195 PASS on earlier `0a8483d` without new injected-OCCT-exception test. Actual thrown-OCCT-exception native FOCUSED #1930 PASS 1/1 on `62fd10849446dff1f03b439ac6f6d346da2e16db`; updated evidence/docs FAST and final exact-head FULL, followed by Owner final PG-01A PASS, still pending.
+**Final evidence:** `work/PROJECTION_01A_KERNEL_ACCEPTANCE_EVIDENCE.md`; native injected OCCT exception FOCUSED #1930 PASS 1/1 at `62fd10849446dff1f03b439ac6f6d346da2e16db`, FAST #1931 PASS 93/93 and FULL #1932 PASS 195/195 + docs/bootstrap/aggregate on exact PR HEAD `9d60b67f34020f75e8bbe104e85d790fb6e155a2`; Owner explicit `Zatwierdzam - kontynuuj` and guarded squash PR #300 merged as `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`.
 **Activation:** Owner explicitly wrote `Akceptuje twoje propozycje - kontynuuj pracę` after reviewing proposed PG-01A contract; `work/ACTIVE.yaml` points to this accepted Work Contract. Authority is confined to this exact Kernel-only scope; PG-01B/C/D/E remain inactive.
 
 ## Objective
@@ -63,3 +63,7 @@ Use one existing registered native CTest target first, preferably `pm02p_e_kerne
 Internal docs: required
 User/Product docs: not required
 Reason: New provider-neutral exact Kernel capability requires internal API documentation and native test/evidence coverage; no user-facing Project Geometry tool ships in PG-01A.
+
+## PG-01A final Owner disposition — 2026-10-09
+
+Owner explicitly confirmed `Zatwierdzam - kontynuuj` in response to the proposal to accept PG-01A and merge PR #300. [Windows FULL #1932](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37897152384) PASS **25/25 Core + 57/57 kernel-native + 113/113 Desktop = 195/195** on exact PR source `9d60b67f34020f75e8bbe104e85d790fb6e155a2`; documentation, bootstrap and aggregate PASS. [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) squash-merged onto `main` as `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`. **PG-01A production mutation scope CLOSED.** No PG-01B activation by implication. A user-visible Project Geometry tool or associative Sketch semantics are **not** claimed by 01A.
