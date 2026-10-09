@@ -348,6 +348,7 @@ private:
     void finishSketchLine();
     void cancelSketchLine();
     void deleteSketchSelection();
+    void breakSelectedProjectedEdgeLink();
     void syncSketchInteractionUi();
     void clearSketchRuntimeContext();
     void reconcileSketchRuntimeContext();
@@ -657,6 +658,8 @@ private:
     QPushButton* cancel_line_button_{};
     QPushButton* delete_selection_button_{};
     QLabel* entity_role_label_{};
+    QLabel* project_link_status_label_{};
+    QPushButton* project_link_break_button_{};
     QPushButton* regular_role_button_{};
     QPushButton* construction_role_button_{};
     QLabel* line_part_reference_label_{};
