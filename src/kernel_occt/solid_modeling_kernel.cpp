@@ -1,4 +1,5 @@
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
+#include <simplesolid2/kernel_occt/detail/edge_projection_exception_guard.hpp>
 
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
@@ -5714,7 +5715,7 @@ OcctSolidModelingKernel::projectEdgeToPlane(
             const double dv = a.v - b.v;
             return du * du + dv * dv;
         };
-    try {
+    return detail::guardedExactEdgeProjection([&]() -> kernel::EdgeProjectionResult {
         const auto& edge = found->second;
         const BRepAdaptor_Curve curve{edge};
         const double first = curve.FirstParameter();
@@ -5784,11 +5785,7 @@ OcctSolidModelingKernel::projectEdgeToPlane(
             Status::ok,
             kernel::Arc2{
                 center, radius, angle, sweep}};
-    } catch (const Standard_Failure&) {
-        return fail(Status::kernel_failure);
-    } catch (...) {
-        return fail(Status::kernel_failure);
-    }
+    });
 }
 
 } // namespace simplesolid2::kernel_occt
