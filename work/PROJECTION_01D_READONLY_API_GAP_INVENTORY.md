@@ -35,7 +35,7 @@
 
 ## Concrete next gate
 
-After Owner **separately accepts** `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT_DRAFT.md` and a dedicated `ACTIVE.yaml` activation is merged, run D0 **native OCCT Face-wire RED characterization** and Part strict bounded Face mapping first. STOP/Owner D2 if selected true material Face wire members cannot be mapped one-to-one to accepted semantic material Edge references. Only then implement UI staging/preview/Finish.
+With the Owner-accepted `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT.md`, after a dedicated `ACTIVE.yaml` activation is merged, run D0 **native OCCT Face-wire RED characterization** and Part strict bounded Face mapping first. STOP/Owner D2 if selected true material Face wire members cannot be mapped one-to-one to accepted semantic material Edge references. Only then implement UI staging/preview/Finish.
 
 ## Documentation impact
 
