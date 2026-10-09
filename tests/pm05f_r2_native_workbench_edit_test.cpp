@@ -502,7 +502,7 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
               << " material_edges=" << current_material_edges.size()
               << " rejected_nonmaterial=" << nonmaterial_edge_count
               << " provider_face_wires_not_yet_claimed=1"
-              << '\\n';
+              << '\n';
 }
 
 } // namespace
