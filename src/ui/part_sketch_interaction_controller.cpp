@@ -5736,6 +5736,14 @@ PartSketchInteractionController::resolvePointerInput(
     // the locked result at the same advertised point.
     const auto* hosted = activeSketch();
     if (hosted != nullptr) {
+        const auto* current_model =
+            viewport_controller_->currentSketchInteractionModel();
+        if (current_model == nullptr) {
+            // Viewer scene is unavailable/stale: no snap may read
+            // persisted linked seed coordinates or old OCCT geometry.
+            snap_capture_.clear();
+            return raw();
+        }
         const auto modes =
             staticSnapModes(eligibility);
 
@@ -5753,7 +5761,7 @@ PartSketchInteractionController::resolvePointerInput(
                 snap_policy{};
             auto semantic_candidates =
                 sketch::staticSnapCandidates(
-                    hosted->model,
+                    *current_model,
                     modes);
 
             std::vector<sketch::EntityId>
@@ -5816,7 +5824,7 @@ PartSketchInteractionController::resolvePointerInput(
                 for (const auto entity :
                      nearby_entities) {
                     const auto* line =
-                        hosted->model.findLine(entity);
+                        *current_model.findLine(entity);
                     if (line == nullptr) {
                         continue;
                     }
@@ -5889,7 +5897,7 @@ PartSketchInteractionController::resolvePointerInput(
                     const auto reference =
                         sketch::
                             makeLineExtensionReference(
-                                hosted->model,
+                                *current_model,
                                 best_extension_endpoint->
                                     entity,
                                 best_extension_endpoint->
@@ -5941,16 +5949,16 @@ PartSketchInteractionController::resolvePointerInput(
 
                     for (const auto entity :
                          nearby_entities) {
-                        if (hosted->model.findCircle(entity) ==
+                        if (*current_model.findCircle(entity) ==
                                 nullptr &&
-                            hosted->model.findArc(entity) ==
+                            *current_model.findArc(entity) ==
                                 nullptr) {
                             continue;
                         }
 
                         const auto nearest =
                             sketch::nearestSnapCandidate(
-                                hosted->model,
+                                *current_model,
                                 entity,
                                 input.position);
                         if (!nearest) {
@@ -5992,7 +6000,7 @@ PartSketchInteractionController::resolvePointerInput(
                         const auto reference =
                             sketch::
                                 makeTangentCurveReference(
-                                    hosted->model,
+                                    *current_model,
                                     best_source->entity);
                         if (reference &&
                             interaction_.
@@ -6026,7 +6034,7 @@ PartSketchInteractionController::resolvePointerInput(
                         const auto second_reference =
                             sketch::
                                 makeTangentCurveReference(
-                                    hosted->model,
+                                    *current_model,
                                     entity);
                         if (!second_reference) {
                             continue;
@@ -6035,7 +6043,7 @@ PartSketchInteractionController::resolvePointerInput(
                         const auto branches =
                             sketch::
                                 commonTangentCandidates(
-                                    hosted->model,
+                                    *current_model,
                                     *deferred,
                                     *second_reference);
                         for (const auto& common :
@@ -6091,7 +6099,7 @@ PartSketchInteractionController::resolvePointerInput(
 
                     const auto selected =
                         sketch::resolveScreenSnap(
-                            hosted->model,
+                            *current_model,
                             snap_capture_,
                             common_screen,
                             snap_policy);
@@ -6138,7 +6146,7 @@ PartSketchInteractionController::resolvePointerInput(
                         auto intersections =
                             sketch::
                                 intersectionSnapCandidates(
-                                    hosted->model,
+                                    *current_model,
                                     nearby_entities[first],
                                     nearby_entities[second]);
                         semantic_candidates.insert(
@@ -6155,7 +6163,7 @@ PartSketchInteractionController::resolvePointerInput(
                     if (const auto nearest =
                             sketch::
                                 nearestSnapCandidate(
-                                    hosted->model,
+                                    *current_model,
                                     entity,
                                     input.position)) {
                         semantic_candidates.push_back(
@@ -6168,7 +6176,7 @@ PartSketchInteractionController::resolvePointerInput(
                     auto perpendicular =
                         sketch::
                             perpendicularSnapCandidates(
-                                hosted->model,
+                                *current_model,
                                 entity,
                                 *request->base);
                     semantic_candidates.insert(
@@ -6182,7 +6190,7 @@ PartSketchInteractionController::resolvePointerInput(
                     auto tangent =
                         sketch::
                             tangentSnapCandidates(
-                                hosted->model,
+                                *current_model,
                                 entity,
                                 *request->base);
                     semantic_candidates.insert(
@@ -6230,7 +6238,7 @@ PartSketchInteractionController::resolvePointerInput(
 
             const auto snap =
                 sketch::resolveScreenSnap(
-                    hosted->model,
+                    *current_model,
                     snap_capture_,
                     screen_candidates,
                     snap_policy);
@@ -6271,7 +6279,7 @@ PartSketchInteractionController::resolvePointerInput(
         if (eligibility.extension) {
             extension_point =
                 sketch::projectPointToLineExtension(
-                    hosted->model,
+                    *current_model,
                     *deferred_reference,
                     input.position);
         } else if (
@@ -6280,7 +6288,7 @@ PartSketchInteractionController::resolvePointerInput(
             extension_point =
                 sketch::
                     perpendicularPointOnLineExtension(
-                        hosted->model,
+                        *current_model,
                         *deferred_reference,
                         *request->base);
         }
