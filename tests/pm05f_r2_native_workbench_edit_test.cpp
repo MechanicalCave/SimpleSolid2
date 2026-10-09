@@ -1475,6 +1475,98 @@ int main(int argc, char* argv[]) {
                 part::makeProfileRegionIntent(
                     pg_all_regions.regions.front());
             CHECK(pg_all_intent);
+
+            // D2-P: change the upstream rectangle *after* projecting
+            // all four linked targets. Persisted linked seeds stay
+            // identical; the new current region (50x40) must be the
+            // semantic authority for Create Profile, not old 40x30.
+            const auto pg_changed_doc =
+                part::PartDocument::restore(
+                    pg_all_session.document().documentId(),
+                    pg_all_session.document().state(),
+                    pg_all_session.document().revision());
+            CHECK(pg_changed_doc.ok());
+            application::DocumentSession pg_changed_session{
+                {}, std::move(*pg_changed_doc.document)};
+            const auto pg_changed_authored_state =
+                pg_changed_session.document().state();
+            const auto& pg_changed_upstream =
+                pg_changed_authored_state.sketches.front();
+            CHECK(pg_changed_upstream.id != *pg_all_sketch.sketch_id);
+            std::vector<application::SketchLineGeometryUpdate>
+                pg_changed_updates;
+            const auto pg_changed_lines =
+                pg_changed_upstream.model.state().lines;
+            CHECK(pg_changed_lines.size() == 4U);
+            for (const auto& item : pg_changed_lines) {
+                const auto remap = [](sketch::Point2 p) {
+                    if (p.u == 40.0) p.u = 50.0;
+                    if (p.v == 30.0) p.v = 40.0;
+                    return p;
+                };
+                pg_changed_updates.push_back({
+                    item.id, remap(item.start), remap(item.end)});
+            }
+            const auto pg_changed_seed =
+                pg_changed_session.document()
+                    .findSketch(*pg_all_sketch.sketch_id)->model.state();
+            const auto pg_changed_result =
+                pg_changed_session.execute(
+                    application::UpdateSketchLinesCommand{
+                        pg_changed_upstream.id,
+                        pg_changed_session.document().revision(),
+                        std::move(pg_changed_updates)});
+            CHECK(pg_changed_result.ok());
+            CHECK(pg_changed_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->model.state() == pg_changed_seed);
+            const auto pg_changed_effective =
+                part::evaluateEffectiveSketchProjection(
+                    pg_changed_session.document(),
+                    *pg_all_sketch.sketch_id,
+                    part::evaluatePart(
+                        pg_changed_session.document(), kernel),
+                    kernel);
+            CHECK(pg_changed_effective &&
+                  pg_changed_effective->allResolved());
+            const auto pg_changed_regions =
+                sketch::analyzeRegions(pg_changed_effective->model);
+            CHECK(pg_changed_regions.complete() &&
+                  pg_changed_regions.regions.size() == 1U);
+            CHECK(pg_changed_regions.regions.front().area !=
+                  pg_all_regions.regions.front().area);
+            const auto pg_changed_intent =
+                part::makeProfileRegionIntent(
+                    pg_changed_regions.regions.front());
+            CHECK(pg_changed_intent);
+            const auto pg_changed_rev =
+                pg_changed_session.document().revision();
+            const auto pg_changed_reject =
+                pg_changed_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_changed_rev,
+                        *pg_changed_intent});
+            CHECK(!pg_changed_reject.ok());
+            CHECK(pg_changed_session.document().revision() ==
+                  pg_changed_rev);
+            const auto pg_changed_profile =
+                pg_changed_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_changed_rev,
+                        *pg_changed_intent},
+                    kernel);
+            CHECK(pg_changed_profile.ok() &&
+                  pg_changed_profile.profile_id);
+            CHECK(pg_changed_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->model.state() == pg_changed_seed);
+            std::cout << "PG01C_D2P_MOVED_SOURCE_CREATE_PASS"
+                      << " authored_seed_stale=1"
+                      << " current_provider=1"
+                      << " no_provider_rejected=1\\n";
+
             const auto pg_legacy_revision =
                 pg_all_session.document().revision();
             const auto pg_legacy_undo =
