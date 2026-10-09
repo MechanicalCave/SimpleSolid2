@@ -996,6 +996,126 @@ int main(int argc, char* argv[]) {
             << " cancel_zero_mutation=1"
             << " undo_redo=1\n";
 
+            // PG-01C C1 acceptance: two different actual OCCT cap
+            // material Edges are staged through one native multi-pick
+            // session (Ctrl-click adds to the staged selection), and
+            // Finish authors two linked entities in ONE Undo entry.
+            auto pg_batch_session = makeBaseSession(kernel);
+            const auto pg_batch_sketch =
+                pg_batch_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(pg_batch_sketch.ok() && pg_batch_sketch.sketch_id);
+            CHECK(workbench.activateDocument(&pg_batch_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* pg_batch_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    pg_batch_item = *it;
+                    break;
+                }
+            }
+            CHECK(pg_batch_item);
+            tree->clearSelection();
+            tree->setCurrentItem(pg_batch_item);
+            pg_batch_item->setSelected(true);
+            pg_action->trigger();
+            QApplication::processEvents();
+            pg_reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(pg_reply.accepted);
+            const auto pg_batch_before_undo =
+                pg_batch_session.undoDepth();
+            const auto pg_batch_before_revision =
+                pg_batch_session.document().revision();
+            bool pg_batch_picked = false;
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::bottom_front_right,
+                     viewer::StandardView::bottom_back_left}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                if (!nativeClick(*viewport, *pg_source_point) ||
+                    !pg_count->text().contains(
+                        QStringLiteral("selected: 1"))) {
+                    pg_reply = workbench.submitCadInput(
+                        "CLEAR", workbench.cadInputContextGeneration());
+                    CHECK(pg_reply.accepted);
+                    continue;
+                }
+                for (const auto& probe : pg_probes) {
+                    if (std::abs(probe.world.z) > 1.0e-6 &&
+                        std::abs(probe.world.z - 20.0) > 1.0e-6) {
+                        continue;
+                    }
+                    if (probe.world == *pg_source_point) {
+                        continue;
+                    }
+                    const auto pixel_pos =
+                        viewport->projectWorldPoint(probe.world);
+                    if (!pixel_pos) continue;
+                    const QPoint pixel{
+                        static_cast<int>(std::lround(pixel_pos->x)),
+                        static_cast<int>(std::lround(pixel_pos->y))};
+                    if (!viewport->rect().contains(pixel)) continue;
+                    QTest::mouseMove(viewport, pixel);
+                    QTest::mouseClick(
+                        viewport, Qt::LeftButton,
+                        Qt::ControlModifier, pixel);
+                    QApplication::processEvents();
+                    if (pg_count->text().contains(
+                            QStringLiteral("selected: 2")) &&
+                        pg_finish->isEnabled()) {
+                        pg_batch_picked = true;
+                        break;
+                    }
+                    pg_reply = workbench.submitCadInput(
+                        "CLEAR", workbench.cadInputContextGeneration());
+                    CHECK(pg_reply.accepted);
+                    CHECK(nativeClick(*viewport, *pg_source_point));
+                    CHECK(pg_count->text().contains(
+                        QStringLiteral("selected: 1")));
+                }
+                if (pg_batch_picked) break;
+                pg_reply = workbench.submitCadInput(
+                    "CLEAR", workbench.cadInputContextGeneration());
+                CHECK(pg_reply.accepted);
+            }
+            CHECK(pg_batch_picked);
+            CHECK(pg_result->text().contains(
+                QStringLiteral("Current preview: 2 derived Edge(s)")));
+            CHECK(pg_batch_session.document().revision() ==
+                  pg_batch_before_revision);
+            CHECK(pg_batch_session.undoDepth() ==
+                  pg_batch_before_undo);
+            pg_finish->click();
+            QApplication::processEvents();
+            const auto* pg_batch_authored =
+                pg_batch_session.document().findSketch(
+                    *pg_batch_sketch.sketch_id);
+            CHECK(pg_batch_authored);
+            CHECK(pg_batch_authored->projection_bindings.size() == 2U);
+            CHECK(pg_batch_session.undoDepth() ==
+                  pg_batch_before_undo + 1U);
+            const auto pg_batch_links =
+                pg_batch_authored->projection_bindings;
+            CHECK(pg_batch_session.undo().changed);
+            CHECK(pg_batch_session.document()
+                      .findSketch(*pg_batch_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            CHECK(pg_batch_session.redo().changed);
+            CHECK(pg_batch_session.document()
+                      .findSketch(*pg_batch_sketch.sketch_id)
+                      ->projection_bindings == pg_batch_links);
+            std::cout << "PG01C_C1_TWO_EDGE_ATOMIC_PASS"
+                      << " native_ctrl_selection=1"
+                      << " linked_edges=2"
+                      << " undo_batches=1\\n";
+
             CHECK(workbench.activateDocument(&session, {}));
             result = EXIT_SUCCESS;
             workbench.close();
