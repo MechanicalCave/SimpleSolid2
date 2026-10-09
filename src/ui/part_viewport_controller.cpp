@@ -3237,57 +3237,142 @@ bool PartViewportController::applyFeatureContributionOverlay() {
     }
 
     viewer::BodyTopologyOverlayScene scene;
+    const bool current_body =
+        body_scene_cache_ &&
+        body_scene_cache_->purpose ==
+            viewer::BodyScenePurpose::current_body;
+    const bool source_stage =
+        body_scene_cache_ &&
+        body_topology_edge_draft_mode_ &&
+        body_scene_cache_->purpose ==
+            viewer::BodyScenePurpose::tool_stage;
     if (!body_scene_cache_ ||
         body_scene_cache_->empty() ||
-        body_scene_cache_->purpose !=
-            viewer::BodyScenePurpose::current_body ||
+        (!current_body && !source_stage) ||
         !body_scene_cache_->generation.valid() ||
         !body_topology_catalog_cache_) {
-        return viewport_->setBodyTopologyOverlayScene(
-            scene);
+        return viewport_->setBodyTopologyOverlayScene(scene);
     }
 
     const auto append_group =
         [this, &scene](
             viewer::BodyTopologyOverlayRole role,
             const std::optional<part::FeatureId>& feature) {
-            if (!feature || !feature->valid()) {
-                return;
-            }
-            auto tokens =
-                featureContributionTokens(*feature);
-            if (tokens.empty()) {
-                return;
-            }
+            if (!feature || !feature->valid()) return;
+            auto tokens = featureContributionTokens(*feature);
+            if (tokens.empty()) return;
             scene.groups.push_back(
                 viewer::BodyTopologyOverlayGroup{
-                    role,
-                    std::move(tokens)});
+                    role, std::move(tokens)});
         };
 
-    append_group(
-        viewer::BodyTopologyOverlayRole::
-            feature_contribution_selected,
-        selected_feature_contribution_);
-
-    if (!hovered_feature_contribution_ ||
-        !selected_feature_contribution_ ||
-        *hovered_feature_contribution_ !=
-            *selected_feature_contribution_) {
+    if (current_body) {
         append_group(
             viewer::BodyTopologyOverlayRole::
-                feature_contribution_hover,
-            hovered_feature_contribution_);
+                feature_contribution_selected,
+            selected_feature_contribution_);
+
+        if (!hovered_feature_contribution_ ||
+            !selected_feature_contribution_ ||
+            *hovered_feature_contribution_ !=
+                *selected_feature_contribution_) {
+            append_group(
+                viewer::BodyTopologyOverlayRole::
+                    feature_contribution_hover,
+                hovered_feature_contribution_);
+        }
+    }
+
+    // Feedback is valid only for the exact revision and generation of
+    // the active native Face gesture. Never rebind a stale Viewer token
+    // by geometric proximity or silently highlight another Body stage.
+    if (session_ && project_face_feedback_revision_ &&
+        project_face_feedback_generation_ &&
+        *project_face_feedback_revision_ ==
+            session_->document().revision() &&
+        *project_face_feedback_generation_ ==
+            body_scene_cache_->generation &&
+        body_scene_revision_ &&
+        *body_scene_revision_ ==
+            session_->document().revision()) {
+        const auto append_sources =
+            [this, &scene](
+                viewer::BodyTopologyOverlayRole role,
+                const std::vector<
+                    part::MaterialEdgeReference>& sources) {
+                std::vector<viewer::PresentationToken> tokens;
+                tokens.reserve(sources.size());
+                for (const auto& source : sources) {
+                    if (!source.valid() ||
+                        source.stage !=
+                            body_topology_catalog_cache_->stage) {
+                        return false;
+                    }
+                    const auto resolution =
+                        part::resolveMaterialEdgeReference(
+                            source, *body_topology_catalog_cache_);
+                    if (!resolution || !resolution->resolved() ||
+                        resolution->current_edges.size() != 1U) {
+                        return false;
+                    }
+                    const auto token =
+                        bodyPresentationTokenFor(
+                            viewer::BodyTopologyPresentationKind::edge,
+                            resolution->current_edges.front().value);
+                    if (!token ||
+                        std::find(tokens.begin(), tokens.end(),
+                                  *token) != tokens.end()) {
+                        return false;
+                    }
+                    tokens.push_back(*token);
+                }
+                if (!tokens.empty()) {
+                    scene.groups.push_back(
+                        viewer::BodyTopologyOverlayGroup{
+                            role, std::move(tokens)});
+                }
+                return true;
+            };
+        if (!append_sources(
+                viewer::BodyTopologyOverlayRole::
+                    project_geometry_supported,
+                project_face_feedback_supported_) ||
+            !append_sources(
+                viewer::BodyTopologyOverlayRole::
+                    project_geometry_unsupported,
+                project_face_feedback_skipped_)) {
+            // Invalid exact-source feedback must never leave stale
+            // colored objects visible in an otherwise valid scene.
+            scene.groups.erase(
+                std::remove_if(
+                    scene.groups.begin(),
+                    scene.groups.end(),
+                    [](const auto& group) {
+                        return group.role ==
+                            viewer::BodyTopologyOverlayRole::
+                                project_geometry_supported ||
+                            group.role ==
+                            viewer::BodyTopologyOverlayRole::
+                                project_geometry_unsupported;
+                    }),
+                scene.groups.end());
+            project_face_feedback_revision_.reset();
+            project_face_feedback_generation_.reset();
+            project_face_feedback_supported_.clear();
+            project_face_feedback_skipped_.clear();
+        }
+    } else {
+        project_face_feedback_revision_.reset();
+        project_face_feedback_generation_.reset();
+        project_face_feedback_supported_.clear();
+        project_face_feedback_skipped_.clear();
     }
 
     if (!scene.groups.empty()) {
-        scene.generation =
-            body_scene_cache_->generation;
+        scene.generation = body_scene_cache_->generation;
     }
-
     return scene.valid() &&
-           viewport_->setBodyTopologyOverlayScene(
-               scene);
+           viewport_->setBodyTopologyOverlayScene(scene);
 }
 
 viewer::PresentationToken PartViewportController::tokenFor(
