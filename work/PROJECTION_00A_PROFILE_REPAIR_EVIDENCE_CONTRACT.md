@@ -54,6 +54,6 @@ SS2-Focus-Mode: kernel
 
 ## Documentation impact
 
-**Internal docs:** not required; tests/evidence only, no current subsystem behavior change.
-**User/Product docs:** not required; no product feature shipped.
-**Reason:** evidence-only characterization, existing production behavior unchanged. When future Projection production is authorized, as-built internal and bilingual PL/EN Product docs (plus generated Browser) are mandatory.
+Internal docs: not required
+User/Product docs: not required
+Reason: Evidence-only characterization, existing production behavior unchanged. When future Projection production is authorized, as-built internal and bilingual PL/EN Product docs (plus generated Browser) are mandatory.

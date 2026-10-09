@@ -173,7 +173,7 @@ part::ExtrudeExtent oneSide(double distance) {
 
 
 void runProjection00AProfileRepairEvidence() {
-    // Characterize existing command semantics only: no projected entities,
+    // A0-A6 expected existing CAD semantics; report unsupported repair paths.\n    // Characterize existing command semantics only: no projected entities,
     // no private document mutation and no new Profile/Extrude implementation.
     FakeKernel kernel;
     auto fixture = makeFixture();
