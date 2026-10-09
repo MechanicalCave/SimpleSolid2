@@ -145,7 +145,8 @@ public:
             expected_context_generation) override;
     [[nodiscard]] bool
     acceptsEmptyCadInput() const noexcept override {
-        return axis_draft_.has_value() ||
+        return project_edge_active_ ||
+               axis_draft_.has_value() ||
                datum_plane_draft_.has_value() ||
                extrude_draft_.has_value() ||
                revolve_draft_.has_value() ||
