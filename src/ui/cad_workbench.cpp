@@ -9606,6 +9606,8 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
     project_edge_role_ = sketch::EntityRole::regular;
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clearSketchPreview();
+        static_cast<void>(
+            viewport_controller_->setProjectFaceSourceFeedback({}, {}));
         viewport_controller_->setBodyTopologyFacePickOnly(false);
         viewport_controller_->setBodyTopologyEdgeDraftMode(false);
         viewport_controller_->clearBodyTopologyToolSelection();
@@ -9667,6 +9669,8 @@ void CadWorkbench::clearProjectEdgeSelection() {
     project_edge_face_pick_.reset();
     project_edge_preview_valid_ = false;
     viewport_controller_->clearSketchPreview();
+    static_cast<void>(
+        viewport_controller_->setProjectFaceSourceFeedback({}, {}));
     viewport_controller_->clearBodyTopologyToolSelection();
     syncProjectEdgeUi();
     notifyCadInputContextChanged();
@@ -9681,6 +9685,8 @@ void CadWorkbench::removeProjectFaceSelection() {
     project_edge_face_membership_.reset();
     project_edge_face_sources_.clear();
     project_edge_face_skipped_.clear();
+    static_cast<void>(
+        viewport_controller_->setProjectFaceSourceFeedback({}, {}));
     project_edge_sources_ = project_edge_manual_sources_;
     viewport_controller_->clearBodyTopologyToolSelection();
     refreshProjectEdgePreview();
@@ -9820,6 +9826,14 @@ void CadWorkbench::tryStageProjectFaceSelection() {
         refreshProjectEdgePreview();
         setStatusText(QStringLiteral(
             "PROJECT Face preview rejected; previously staged sources preserved."));
+        return;
+    }
+
+    if (!viewport_controller_->setProjectFaceSourceFeedback(
+            accepted, skipped)) {
+        refreshProjectEdgePreview();
+        setStatusText(QStringLiteral(
+            "PROJECT Face rejected: stale source overlay stage/generation; previous staging preserved."));
         return;
     }
 
