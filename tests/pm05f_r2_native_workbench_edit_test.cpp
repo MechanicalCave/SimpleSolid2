@@ -1510,7 +1510,7 @@ int main(int argc, char* argv[]) {
             // all four linked targets. Persisted linked seeds stay
             // identical; the new current region (50x40) must be the
             // semantic authority for Create Profile, not old 40x30.
-            const auto pg_changed_doc =
+            auto pg_changed_doc =
                 part::PartDocument::restore(
                     pg_all_session.document().documentId(),
                     pg_all_session.document().state(),
@@ -1658,7 +1658,7 @@ int main(int argc, char* argv[]) {
             // D2-B: four linked Edges are detached in one semantic
             // transaction without changing Profile or EntityIds. Invalid
             // duplicate input rolls back the whole staged operation.
-            const auto pg_clone =
+            auto pg_clone =
                 part::PartDocument::restore(
                     pg_all_session.document().documentId(),
                     pg_all_session.document().state(),
