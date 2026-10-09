@@ -5,7 +5,7 @@
 **Baseline:** main `8d78320daca8a72a1431fbece49296c3bfb83aec` after Owner PG-01B FINAL PASS and [PR #301](https://github.com/MechanicalCave/SimpleSolid2/pull/301) merge
 **Program:** `work/PART_MODELING_V1_ROADMAP.md` v1.30, Projection before PM-06
 **Prerequisites:** Projection 00A, PG-01A, PG-01B completed; same-Part associativity D2 approved, Assembly §7.3 snapshot unchanged
-**Architecture authorization required:** Owner review of `work/PROJECTION_01C_PROJECT_EDGE_UI_D2_PROPOSAL.md` D2-A/B/C/D
+**Architecture authorization required:** Owner review of `work/PROJECTION_01C_PROJECT_EDGE_UI_D2_PROPOSAL.md` D2-A/B/C/D/E
 **Current authority:** `work/ACTIVE.yaml` still points to PG-01B for traceability. Do NOT activate this draft implicitly.
 **Known independent CI defect:** [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302)
 
@@ -53,6 +53,22 @@ Qt Workbench / right Operations panel / Viewer pick transport
 - Finish revalidates exact current source and document context; no partial batch commits. Transient preview failures do not dirty the Document. No tool stage's Viewer tokens outlive their current generation.
 - Presentation setter failures are surfaced/recoverable without undoing a successfully committed Part command.
 
+## 4.1 Mandatory native tool interaction and Command Line parity
+
+**Owner D2-E approval is required before production work.** "Full tool" means parity with accepted Workbench patterns, not only happy-path buttons. Integrate Project Geometry with the existing Sketch toolbar (launcher), contextual **right Operations panel** (options/diagnostics), global Command Line (tool activation and control), native 3D Viewport (strict stage-scoped Edge picking), Workbench Status, Sketch Select fallback, and existing Undo/Redo/Save/shortcut/focus arbitration. There must be **one** tool state machine and one semantic transaction path shared by all adapters.
+
+**Exact minimum tool-local grammar:** top-level `PROJECT` (optionally `PROJECTGEOMETRY`, subject to no keyword collision); in active tool `REGULAR`, `CONSTRUCTION`, `REMOVE` primary staged source, `CLEAR` all staged sources, `FINISH`, `CANCEL`. Global Command Line token parsing is **context-first** as in ADR-0011; command activation and each option must update the same right panel state. No direct durable source ID typing or speculative global CAD command grammar. Expose contextual prompt and rejected-token diagnostic; rejected input leaves tool/Document unchanged and empties submitted buffer.
+
+**Esc/Enter/Cancel contract:**
+- First Esc with a non-empty Command Line buffer clears **only that buffer**, not the Project Geometry staging area; next Esc reaches tool cancellation. With empty buffer, cancel the innermost unfinished source pick/request/preview stage first, then exit the non-Select tool on a further Esc; absent nested stage, exit immediately. Never leave pending runtime Edge capture or an undefined tool.
+- Explicit right-panel Cancel and `CANCEL` exit immediately and restore Select; do not save partial selections, dirty the Document or create Undo. Full cancellation must also drop stale preview, hover and generation-bound picks.
+- Right-panel Finish, `FINISH`, and **empty-buffer Enter from the CAD viewport** invoke the same commit path while Project Geometry owns input; invalid/empty Finish leaves session active with a corrective diagnostic and zero mutation; successful Finish returns to Select with one Undo entry.
+- Preserve accepted Space/Repeat Last Command behavior when Project Geometry is **not** the active owner. Project Geometry must not turn Space into global Finish or allow an empty-buffer Enter to repeat an unrelated Sketch command.
+- Typing from the CAD viewport must not force Qt focus into Command Line; a focused editable widget, text composition/IME, modal editor, and platform/application shortcut (Ctrl+S/Ctrl+Z etc.) outrank CAD capture. No input to inactive/hidden Document.
+- Toolbar start, Command Line start, tool switch, Sketch Finish, document switch/close, Workspace navigation, Undo/Redo, provider loss and revision change must synchronize/deactivate/revalidate staged picks and input generations. No stale Finish, cross-document token consumption, ghost preview or accidental persistent mutation.
+
+**User-visible UI consistency:** normal existing toolbar icon placement/grouping, contextual Operations layout, disabled/enabled Finish states, role defaults/indicators, selection/hover style, cursor, prompts, current stage and source count, diagnostic rendering and return to Select must match adjacent Sketch and Part Fillet/Chamfer tools. No modal-only fallback, detached second command console or hidden context; the tool remains discoverable and consistent across PL/EN docs.
+
 ## 5. Permitted bounded file scope AFTER formal activation
 
 - `src/ui/cad_workbench.cpp/.hpp`: one tool and right panel, command dispatch, status and lifecycle.
@@ -67,15 +83,15 @@ No edits to `main` except through approved PR merge.
 
 ## 6. Planned bounded execution stages
 
-**C0 — baseline/proofs:** audit all current authored-seed reads in Sketch rendering, Profile rendering, selection, OSNAP/measurement, Properties and interaction; add RED focused evidence proving displayed link/visible Profile differs from current effective geometry on an upstream source edit. No speculative Qt refactor.
+**C0 — baseline/proofs:** audit existing neighboring Workbench tool UX, Command Line routing/precedence, Esc hierarchy, key event focus arbitration and all current authored-seed reads in Sketch rendering, Profile rendering, selection, OSNAP/measurement, Properties and interaction; add RED focused evidence proving displayed link/visible Profile differs from current effective geometry on an upstream source edit. No speculative Qt refactor.
 
-**C1 — single tool state:** toolbar activation within Sketch edit, right-side role/options/status, stage-scoped material Edge collection, dedup, semantic input bridge, Escape/Cancel/context cleanup. Native real Body Edge picking; typed rejected-pick status.
+**C1 — single tool state:** toolbar **and Command Line PROJECT** activation within Sketch edit, right-side role/options/status, stage-scoped material Edge collection, dedup, one semantic input bridge, `REGULAR/CONSTRUCTION/REMOVE/CLEAR/FINISH/CANCEL`, hierarchical Esc, eligible Enter, focus priority and context cleanup. Native real Body Edge picking; typed rejected-pick status. Reuse existing Workbench grammar conventions and do not introduce a second tool dispatcher.
 
 **C2 — effective current presentation:** consume PG-01B derived Sketch model across Sketch scene, eligible Profile scene, selection/snapping/Properties; use the narrow D2-C linked visual flag. Unresolved source is not drawn as a valid linked curve. Preserve semantic EntityId/role and unlinked behavior.
 
-**C3 — lifecycle:** stable preview and one Finish, one Undo; Break Link and Delete via headless semantic Commands, Undo/Redo, upstream source edit/suppress/missing recovery, Save/Close/Reopen, current support frame and provider loss. No last-good preview or stale token command authority.
+**C3 — lifecycle:** stable preview and one Finish from panel, global Command Line or eligible viewport Enter, one Undo; Break Link and Delete via headless semantic Commands, Undo/Redo, upstream source edit/suppress/missing recovery, Save/Close/Reopen, current support frame and provider loss. No last-good preview or stale token command authority.
 
-**C4 — evidence/docs/closeout:** focused native UI tests, FAST, final exact-head Windows FULL and Owner practical Windows walkthrough; internal current-as-built and bilingual Product docs parity, Browser regeneration and `ss2 verify` pass. Retain all RED-to-GREEN evidence and independent CI #302.
+**C4 — evidence/docs/closeout:** focused native UI tests including Command Line and Esc/focus parity matrix, FAST, final exact-head Windows FULL and Owner practical Windows walkthrough; internal current-as-built and bilingual Product docs parity, Browser regeneration and `ss2 verify` pass. Retain all RED-to-GREEN evidence and independent CI #302.
 
 Each stage is strictly within this Work Contract after Owner D2 + contract approval and dedicated `ACTIVE.yaml` activation. FOCUSED success alone does not close PG-01C.
 
@@ -90,7 +106,8 @@ Each stage is strictly within this Work Contract after Owner D2 + contract appro
 7. Material Edge selection rejects representation partition/unsupported/nonmaterial, stale generation and stage mismatch; preview provider failure, Edit Context switch, Sketch exit and document close clear picks/overlays without changing authored model.
 8. True native Windows Save/Close/Reopen with new OCCT provider and upstream edited source reprojections maintain exact semantic source. GUI is stable under source suppression/unresolved geometry and restoration.
 9. Existing Sketch tools, selecting normal Body Edges outside this tool, cursor routing, zoom/DPI and Command Line are regression-green. Failed Viewer update surfaces degraded state and recovers from current authoritative model.
-10. Docs PL/EN parity, generated Browser freshness, explicit exact-head Windows FULL and Owner manual Windows PASS before merge. If FAST is red or cannot certify source binaries due to [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302), record failed evidence and require an explicit Owner maintenance/exception decision.
+10. **Full native command/input acceptance matrix (mandatory):** launch by toolbar and typed `PROJECT` arrives at identical state; `REGULAR/CONSTRUCTION/REMOVE/CLEAR` both reflect in Operations; finish via button, `FINISH`, and eligible empty-buffer viewport Enter creates the same atomic transaction; Cancel button, `CANCEL`, and hierarchical Esc revert to Select without authorship change. Text-buffer first-Esc clearing must not erase staged Edges. Invalid Command Line text shows a diagnostic, clears only submitted token and preserves tool. Test with focus in QLineEdit/property field, IME input, global Ctrl+S/Ctrl+Z, Sketch Space/Repeat Last Command, and active vs inactive document. Verify that tool switch, Sketch exit, Undo/Redo, close, stale provider generation or failed Finish leaves no ghost selection/pick capture and that all three presentations of status agree.
+11. Docs PL/EN parity, generated Browser freshness, explicit exact-head Windows FULL and Owner manual Windows PASS before merge. If FAST is red or cannot certify source binaries due to [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302), record failed evidence and require an explicit Owner maintenance/exception decision.
 
 ## 8. Known risks / STOP (D2 or D3)
 
@@ -106,7 +123,7 @@ STOP, prepare bounded amendment, request Owner D2/D3 rather than silently expand
 
 This draft is not sufficient authority. Owner must explicitly accept:
 
-- PG-01C D2-A/B/C/D design choices (including bounded transient Viewer contract), and
+- PG-01C D2-A/B/C/D/E design choices (including bounded transient Viewer contract), and
 - this PG-01C Work Contract with declared source/testing/documentation scope.
 
 Then create a dedicated governance activation commit updating `work/ACTIVE.yaml -> active_work` to the accepted contract, pass the required gate, and **only then** start product code changes on a new feature branch. Neither PG-01B PASS nor a draft PR activates PG-01C automatically.
