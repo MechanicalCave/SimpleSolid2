@@ -587,6 +587,56 @@ int main(int argc, char* argv[]) {
         CHECK(pg_result->text().contains(
             QStringLiteral("Regular")));
 
+        // Owner remediation: a real material vertical Edge projected
+        // onto this XY Sketch is degenerate. Reject that *new* pick
+        // without destroying an already staged valid horizontal Edge.
+        ui::PartViewportController* pg_reject_controller = nullptr;
+        for (auto* object : workbench.findChildren<QObject*>()) {
+            if (auto* candidate =
+                    dynamic_cast<ui::PartViewportController*>(
+                        object)) {
+                pg_reject_controller = candidate;
+                break;
+            }
+        }
+        CHECK(pg_reject_controller);
+        const auto pg_prior_selection =
+            pg_reject_controller->selectedMaterialEdgeReferences();
+        CHECK(pg_prior_selection &&
+              pg_prior_selection->size() == 1U);
+        const auto pg_vertical = std::find_if(
+            pg_probes.begin(), pg_probes.end(),
+            [](const WorldEdgeProbe& probe) {
+                return probe.world.z > 1.0e-6 &&
+                       probe.world.z < 20.0 - 1.0e-6;
+            });
+        CHECK(pg_vertical != pg_probes.end());
+        auto pg_unsupported_batch = *pg_prior_selection;
+        pg_unsupported_batch.push_back(
+            pg_vertical->reference);
+        const auto pg_restored_tokens =
+            pg_reject_controller->
+                restoreMaterialEdgeToolSelection(
+                    pg_unsupported_batch);
+        CHECK(pg_restored_tokens &&
+              pg_restored_tokens->empty());
+        QApplication::processEvents();
+        const auto pg_after_reject =
+            pg_reject_controller->selectedMaterialEdgeReferences();
+        CHECK(pg_after_reject &&
+              *pg_after_reject == *pg_prior_selection);
+        CHECK(pg_count->text().contains(
+            QStringLiteral("selected: 1")));
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Current preview: 1 derived Edge(s)")));
+        CHECK(pg_finish->isEnabled());
+        CHECK(pg_session.document().revision() ==
+              pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+        std::cout
+            << "PG01C_OWNER_UNSUPPORTED_PICK_PRESERVES_STAGING_PASS"
+            << " prior=1 rejected=1 committed=0\\n";
+
         // Rejected Command Line text is diagnostic-only: it does not
         // discard the exact staged source or leave the tool.
         pg_reply = workbench.submitCadInput(
@@ -1135,9 +1185,94 @@ int main(int argc, char* argv[]) {
         CHECK(pg_profile_finish->isEnabled());
         CHECK(pg_profile_result->text().contains(
             QStringLiteral("Status: Valid")));
-        pg_reply = workbench.submitCadInput(
-            "CANCEL", workbench.cadInputContextGeneration());
-        CHECK(pg_reply.accepted);
+        // Owner Profile regression: a linked boundary is a valid
+        // source of durable RegionIntent, and detaching it later must
+        // preserve both Profile identity and the region exactly.
+        const auto pg_profile_count_before =
+            pg_reopened.document().profiles().size();
+        pg_profile_finish->click();
+        QApplication::processEvents();
+        CHECK(pg_reopened.document().profiles().size() ==
+              pg_profile_count_before + 1U);
+        const auto pg_durable_profile =
+            pg_reopened.document().profiles().back();
+        const auto pg_durable_profile_id =
+            pg_durable_profile.id;
+        const auto pg_current_profile =
+            pg_ui_controller->currentProfileResolution(
+                pg_durable_profile_id);
+        CHECK(pg_current_profile &&
+              pg_current_profile->valid());
+        CHECK(pg_current_profile->region.has_value());
+        const auto pg_region_snapshot =
+            *pg_current_profile->region;
+        const auto pg_linked_geometry =
+            *pg_recovered_line;
+        const auto pg_profile_undo_before =
+            pg_reopened.undoDepth();
+        const auto pg_profile_detach =
+            pg_reopened.execute(
+                application::BreakProjectedEdgeLinkCommand{
+                    *pg_sketch.sketch_id,
+                    pg_target,
+                    pg_reopened.document().revision()},
+                pg_cold_kernel);
+        CHECK(pg_profile_detach.ok());
+        CHECK(pg_reopened.undoDepth() ==
+              pg_profile_undo_before + 1U);
+        const auto* pg_detached_sketch =
+            pg_reopened.document().findSketch(
+                *pg_sketch.sketch_id);
+        CHECK(pg_detached_sketch);
+        CHECK(pg_detached_sketch->projection_bindings.empty());
+        CHECK(pg_detached_sketch->model.contains(pg_target));
+        CHECK(pg_detached_sketch->model.findLine(pg_target));
+        CHECK(*pg_detached_sketch->model.findLine(pg_target) ==
+              pg_linked_geometry);
+        const auto* pg_preserved_profile =
+            pg_reopened.document().findProfile(
+                pg_durable_profile_id);
+        CHECK(pg_preserved_profile);
+        CHECK(*pg_preserved_profile == pg_durable_profile);
+        const auto pg_detached_resolution =
+            pg_reopened.document().evaluateProfile(
+                pg_durable_profile_id);
+        CHECK(pg_detached_resolution &&
+              pg_detached_resolution->valid());
+        CHECK(*pg_detached_resolution->region ==
+              pg_region_snapshot);
+        CHECK(pg_reopened.undo().changed);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(*pg_reopened.document().findProfile(
+                  pg_durable_profile_id) == pg_durable_profile);
+        CHECK(pg_reopened.redo().changed);
+        CHECK(pg_reopened.document()
+                  .evaluateProfile(pg_durable_profile_id)
+                  ->valid());
+        CHECK(*pg_reopened.document().findProfile(
+                  pg_durable_profile_id) == pg_durable_profile);
+
+        const auto pg_profile_saved =
+            pg_store.createNew(
+                pg_persistence_path, pg_reopened.document());
+        CHECK(pg_profile_saved.ok());
+        const auto pg_profile_loaded =
+            pg_store.load(pg_persistence_path);
+        CHECK(pg_profile_loaded.ok());
+        CHECK(pg_profile_loaded.document->findProfile(
+                  pg_durable_profile_id));
+        CHECK(*pg_profile_loaded.document->findProfile(
+                  pg_durable_profile_id) == pg_durable_profile);
+        CHECK(pg_profile_loaded.document
+                  ->evaluateProfile(pg_durable_profile_id)
+                  ->valid());
+        std::cout
+            << "PG01C_OWNER_PROFILE_BREAK_LINK_IDENTITY_PASS"
+            << " profile_stable=1 entity_stable=1"
+            << " geometry_stable=1 undo_redo=1"
+            << " save_reopen=1\\n";
         std::cout
             << "PG01C_C2_CURRENT_PROFILE_REGIONS_PASS"
             << " persisted_seed_regions=0"
