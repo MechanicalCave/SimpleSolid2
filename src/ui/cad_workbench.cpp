@@ -9940,18 +9940,110 @@ bool CadWorkbench::finishProjectEdgeTool() {
             "PROJECT Finish rejected: selection empty or Sketch/Document context stale."));
         return false;
     }
-    const auto current =
-        viewport_controller_ != nullptr
-            ? viewport_controller_->selectedMaterialEdgeReferences()
-            : std::nullopt;
-    if (!current || *current != project_edge_sources_ ||
-        !std::all_of(current->begin(), current->end(),
-                     [this](const part::MaterialEdgeReference& source) {
-                         return source.stage == *project_edge_stage_;
-                     })) {
+    if (!viewport_controller_ ||
+        !std::all_of(
+            project_edge_sources_.begin(),
+            project_edge_sources_.end(),
+            [this](const part::MaterialEdgeReference& source) {
+                return source.valid() &&
+                    source.stage == *project_edge_stage_;
+            })) {
         setStatusText(QStringLiteral(
-            "PROJECT Finish rejected: selected Edge stage or generation changed."));
+            "PROJECT Finish rejected: invalid current Edge source stage."));
         return false;
+    }
+    if (project_edge_face_pick_) {
+        if (!project_edge_face_membership_) {
+            setStatusText(QStringLiteral(
+                "PROJECT Face draft has no verified membership."));
+            return false;
+        }
+        const auto fresh =
+            viewport_controller_->inspectCurrentMaterialFaceBoundary(
+                *project_edge_face_pick_);
+        const auto& prior = *project_edge_face_membership_;
+        bool same = fresh.ok() &&
+            fresh.bounded_face == prior.bounded_face &&
+            fresh.wires.size() == prior.wires.size();
+        if (same) {
+            for (std::size_t i = 0U;
+                 i < fresh.wires.size() && same; ++i) {
+                const auto& lhs = fresh.wires[i];
+                const auto& rhs = prior.wires[i];
+                same = lhs.outer == rhs.outer &&
+                    lhs.edges.size() == rhs.edges.size();
+                for (std::size_t j = 0U;
+                     j < lhs.edges.size() && same; ++j) {
+                    same =
+                        lhs.edges[j].current_edge ==
+                            rhs.edges[j].current_edge &&
+                        lhs.edges[j].reference ==
+                            rhs.edges[j].reference &&
+                        lhs.edges[j].reversed ==
+                            rhs.edges[j].reversed;
+                }
+            }
+        }
+        if (!same) {
+            setStatusText(QStringLiteral(
+                "PROJECT Finish rejected: Face membership or provider generation changed since preview."));
+            return false;
+        }
+        std::vector<part::MaterialEdgeReference> accepted;
+        std::vector<part::MaterialEdgeReference> skipped;
+        for (const auto& wire : fresh.wires) {
+            for (const auto& member : wire.edges) {
+                const auto status =
+                    viewport_controller_->
+                        currentMaterialEdgeProjectionStatus(
+                            member.reference);
+                if (status ==
+                        part::ProjectedSketchSourceStatus::resolved) {
+                    accepted.push_back(member.reference);
+                } else if (status ==
+                           part::ProjectedSketchSourceStatus::
+                               unsupported_projection) {
+                    skipped.push_back(member.reference);
+                } else {
+                    setStatusText(QStringLiteral(
+                        "PROJECT Finish rejected: Face source resolution or geometric skip status changed."));
+                    return false;
+                }
+            }
+        }
+        std::sort(accepted.begin(), accepted.end());
+        accepted.erase(
+            std::unique(accepted.begin(), accepted.end()),
+            accepted.end());
+        std::sort(skipped.begin(), skipped.end());
+        skipped.erase(
+            std::unique(skipped.begin(), skipped.end()),
+            skipped.end());
+        if (accepted != project_edge_face_sources_ ||
+            skipped != project_edge_face_skipped_) {
+            setStatusText(QStringLiteral(
+                "PROJECT Finish rejected: Face supported/skipped membership changed."));
+            return false;
+        }
+    }
+
+    if (project_edge_face_mode_) {
+        const auto selected =
+            viewport_controller_->primaryBodyTopologySelection();
+        if (project_edge_face_pick_ &&
+            (!selected || *selected != *project_edge_face_pick_)) {
+            setStatusText(QStringLiteral(
+                "PROJECT Finish rejected: selected Face changed."));
+            return false;
+        }
+    } else {
+        const auto selected =
+            viewport_controller_->selectedMaterialEdgeReferences();
+        if (!selected || *selected != project_edge_sources_) {
+            setStatusText(QStringLiteral(
+                "PROJECT Finish rejected: selected Edge stage or generation changed."));
+            return false;
+        }
     }
 
     const auto result = session->execute(
