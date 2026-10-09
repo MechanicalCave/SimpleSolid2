@@ -969,8 +969,14 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("projectEdgeFinishButton"));
             auto* pg_count = workbench.findChild<QLabel*>(
                 QStringLiteral("projectEdgeSelectionLabel"));
-            auto* controller =
-                workbench.findChild<ui::PartViewportController*>();
+            ui::PartViewportController* controller = nullptr;
+            for (auto* child : workbench.children()) {
+                if (auto* found =
+                        dynamic_cast<ui::PartViewportController*>(child)) {
+                    controller = found;
+                    break;
+                }
+            }
             CHECK(sketch_edit && face_mode && edge_mode &&
                   pg_finish && pg_count && controller);
             QTreeWidgetItem* sketch_item = nullptr;
