@@ -9546,6 +9546,13 @@ bool CadWorkbench::startProjectEdgeTool() {
     project_edge_stage_ = summary->stage;
     project_edge_role_ = sketch::EntityRole::regular;
     project_edge_sources_.clear();
+    project_edge_manual_sources_.clear();
+    project_edge_face_sources_.clear();
+    project_edge_face_skipped_.clear();
+    project_edge_face_membership_.reset();
+    project_edge_face_pick_.reset();
+    project_edge_face_mode_ = false;
+    project_edge_switching_mode_ = false;
     project_edge_preview_valid_ = false;
     viewport_controller_->clearSketchPreview();
 
@@ -9582,6 +9589,13 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
     }
     // Clear the tool before viewport callbacks can re-enter selection sync.
     project_edge_active_ = false;
+    project_edge_face_mode_ = false;
+    project_edge_switching_mode_ = false;
+    project_edge_face_pick_.reset();
+    project_edge_face_membership_.reset();
+    project_edge_face_sources_.clear();
+    project_edge_face_skipped_.clear();
+    project_edge_manual_sources_.clear();
     project_edge_revision_.reset();
     project_edge_stage_.reset();
     project_edge_sources_.clear();
@@ -9589,6 +9603,7 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
     project_edge_role_ = sketch::EntityRole::regular;
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clearSketchPreview();
+        viewport_controller_->setBodyTopologyFacePickOnly(false);
         viewport_controller_->setBodyTopologyEdgeDraftMode(false);
         viewport_controller_->clearBodyTopologyToolSelection();
         // Return control to the existing Sketcher input grammar.
@@ -9611,7 +9626,8 @@ void CadWorkbench::escapeProjectEdgeTool() {
     // One staged selection is an unfinished source-pick stage. The
     // first empty-buffer Esc discards it; only the next Esc exits.
     // Explicit CANCEL always exits immediately, in contrast.
-    if (!project_edge_sources_.empty()) {
+    if (!project_edge_sources_.empty() ||
+        project_edge_face_pick_) {
         clearProjectEdgeSelection();
         setStatusText(QStringLiteral(
             "PROJECT — Edge source selection cleared; Esc again to Cancel."));
@@ -9641,6 +9657,11 @@ void CadWorkbench::clearProjectEdgeSelection() {
         return;
     }
     project_edge_sources_.clear();
+    project_edge_manual_sources_.clear();
+    project_edge_face_sources_.clear();
+    project_edge_face_skipped_.clear();
+    project_edge_face_membership_.reset();
+    project_edge_face_pick_.reset();
     project_edge_preview_valid_ = false;
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearBodyTopologyToolSelection();
