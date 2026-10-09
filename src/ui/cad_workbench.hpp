@@ -8,6 +8,7 @@
 #include <simplesolid2/viewer/camera_state.hpp>
 
 #include "viewport_surface.hpp"
+#include "part_viewport_controller.hpp"
 
 #include <QWidget>
 
