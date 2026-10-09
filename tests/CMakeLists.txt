@@ -2591,7 +2591,11 @@ function(ss2_resolve_test_build_target test_name out_var)
         set(${out_var} "simplesolid2" PARENT_SCOPE)
         return()
     endif()
-    if(test_name STREQUAL "pg01c.native_project_edge_command")
+    # PG-01C cursor UX and PG-01D native Face-wire proof share one
+    # already-built executable but execute independent argument modes.
+    # This is an explicit CI-04 build mapping, not a new CI policy.
+    if(test_name STREQUAL "pg01c.native_project_edge_command" OR
+       test_name STREQUAL "pg01d.native_face_boundary_d0")
         set(${out_var} "pm05f_r2_native_workbench_edit_test" PARENT_SCOPE)
         return()
     endif()
