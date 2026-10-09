@@ -30,6 +30,12 @@
 - **Limitations not covered by this slice:** current exact pre-Finish projection preview and linked visual styling, durable Properties/Break Link action, positive provider-supported native Edge clicking while Sketch is active, full focus/Esc hierarchy and interactive snapping. These remain mandatory C2–C4 before feature acceptance.
 - This remains a **draft**, not a claim that C1 product UX is complete. Native focused compilation/negative routing and later real OCCT Qt tests must prove the implementation.
 
+## C1 native OCCT end-to-end verification
+
+- Extended existing full-only native test `tests/pm05f_r2_native_workbench_edit_test.cpp` with isolated later Sketch source-stage workflow. This probes a real material Body Edge by mouse click under Qt/OCCT, the right Operations count/Finish state, Command Line START/REGULAR/CONSTRUCTION/FINISH/CANCEL, zero authored mutation for invalid Finish/Cancel and one atomic link Undo/Redo.
+- Test is **pending focused Windows validation**; no native PG-01C PASS claim until actual runner output confirms the asserted scenario.
+- Existing native test name is `pm05f_r2.native_workbench_edit` (not `pm05f.r2_native_workbench_edit`); focused request below uses the registered name. The independent FAST target registry issue #302 remains unchanged.
+
 ## Validation obligations
 
 1. A real upstream OCCT Line/Circle/Arc source with a deliberately different persisted seed: its linked Sketch display and Profile fill must match **current** derived geometry and source stage.
