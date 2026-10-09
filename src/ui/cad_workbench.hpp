@@ -291,6 +291,19 @@ private:
     [[nodiscard]] application::CadInputSubmitResult
     submitEdgeFeatureCadInput(std::string_view text);
 
+    // PG-01C single Sketch Project Geometry tool; semantic state is
+    // transient. Only DocumentSession commands author the Part.
+    [[nodiscard]] bool startProjectEdgeTool();
+    void cancelProjectEdgeTool();
+    void clearProjectEdgeRuntimeContext();
+    void clearProjectEdgeSelection();
+    void tryStageProjectEdgeSelection();
+    [[nodiscard]] bool finishProjectEdgeTool();
+    void syncProjectEdgeUi();
+    [[nodiscard]] application::CadInputSubmitResult
+    submitProjectEdgeCadInput(std::string_view text);
+    void setProjectEdgeRole(sketch::EntityRole role);
+
     void setSketchSelectionRole(
         sketch::EntityRole role);
     void setSketchLineAxisDesignation(
@@ -613,6 +626,7 @@ private:
     QLabel* part_modify_tools_label_{};
     QPushButton* fillet_button_{};
     QPushButton* chamfer_button_{};
+    QPushButton* project_edge_button_{};
     QPushButton* select_sketch_button_{};
     QLabel* create_tools_label_{};
     QPushButton* line_sketch_button_{};
@@ -740,6 +754,23 @@ private:
     bool edge_feature_parameter_input_valid_{true};
     bool syncing_edge_feature_ui_{};
     bool syncing_edge_feature_selection_{};
+
+    QWidget* project_edge_operations_widget_{};
+    QLabel* project_edge_stage_label_{};
+    QLabel* project_edge_selection_label_{};
+    QLabel* project_edge_result_label_{};
+    QPushButton* project_edge_regular_button_{};
+    QPushButton* project_edge_construction_button_{};
+    QPushButton* project_edge_remove_button_{};
+    QPushButton* project_edge_clear_button_{};
+    QPushButton* project_edge_finish_button_{};
+    QPushButton* project_edge_cancel_button_{};
+    bool project_edge_active_{false};
+    std::optional<core::DocumentRevision> project_edge_revision_;
+    std::optional<part::BodyStageRef> project_edge_stage_;
+    std::vector<part::MaterialEdgeReference> project_edge_sources_;
+    sketch::EntityRole project_edge_role_{
+        sketch::EntityRole::regular};
 
     QWidget* profile_operations_widget_{};
     QPushButton* profile_add_area_button_{};
