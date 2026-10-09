@@ -10917,52 +10917,54 @@ void CadWorkbench::breakSelectedProjectedEdgeLink() {
         !sketch_interaction_controller_->active() ||
         sketch_interaction_controller_->tool() !=
             sketch::SketchTool::select ||
-        sketch_interaction_controller_->selectedCount() != 1U) {
+        sketch_interaction_controller_->selectedCount() == 0U) {
         setStatusText(QStringLiteral(
-            "Break Link requires one selected, currently resolvable linked Sketch Edge."));
+            "Break Link requires one or more selected, currently resolvable linked Sketch Edges."));
         return;
     }
 
-    const auto target =
-        sketch_interaction_controller_->selectedEntities().front();
+    const auto targets =
+        sketch_interaction_controller_->selectedEntities();
     const auto* sketch =
         document_session_->document().findSketch(
             *active_sketch_id_);
-    if (sketch == nullptr ||
-        std::none_of(
-            sketch->projection_bindings.begin(),
-            sketch->projection_bindings.end(),
-            [&target](const part::ProjectedEdgeBinding& item) {
-                return item.target_entity == target;
+    if (!sketch ||
+        std::any_of(
+            targets.begin(), targets.end(),
+            [sketch](const sketch::EntityId& target) {
+                return std::none_of(
+                    sketch->projection_bindings.begin(),
+                    sketch->projection_bindings.end(),
+                    [&target](const part::ProjectedEdgeBinding& item) {
+                        return item.target_entity == target;
+                    });
             })) {
         setStatusText(QStringLiteral(
-            "Selected Sketch geometry is not a linked Project Edge."));
+            "Break Link rejected: all selected entities must be linked Project Edges; no changes made."));
         return;
     }
 
     const auto result = document_session_->execute(
-        application::BreakProjectedEdgeLinkCommand{
+        application::BreakProjectedEdgeLinksCommand{
             *active_sketch_id_,
-            target,
+            targets,
             document_session_->document().revision()},
         *solid_modeling_kernel_);
     if (!result.ok()) {
         setStatusText(result.diagnostic.message.empty()
             ? QStringLiteral(
-                "Break Link rejected: current exact projected source cannot be resolved; link preserved.")
+                "Break Link rejected: one or more exact current sources cannot be resolved; links preserved.")
             : fromUtf8(result.diagnostic.message));
         return;
     }
 
-    // Refresh from the committed Part. No authored seed or runtime
-    // pointer is passed into the detach command by the UI.
     refreshActiveContext();
     if (sketch_interaction_controller_ &&
         sketch_interaction_controller_->active()) {
         sketch_interaction_controller_->activateSelect();
     }
     setStatusText(QStringLiteral(
-        "Break Link finished — current geometry retained, source association removed."));
+        "Break Link finished — selected current geometry retained, source associations removed in one Undo."));
 }
 
 void CadWorkbench::deleteSketchSelection() {
