@@ -391,6 +391,32 @@ bool clickAuthorableRevolveCircle(
     return false;
 }
 
+bool nativePlanarFaceClick(
+    viewer_qt_occt::QtOcctViewerWidget& viewport,
+    viewer::Point3 world) {
+    const auto screen = viewport.projectWorldPoint(world);
+    if (!screen || !std::isfinite(screen->x) ||
+        !std::isfinite(screen->y)) {
+        return false;
+    }
+    const QPoint pixel{
+        static_cast<int>(std::lround(screen->x)),
+        static_cast<int>(std::lround(screen->y))};
+    if (!viewport.rect().contains(pixel)) return false;
+    const auto query = viewport.queryBodyTopology(
+        *screen,
+        viewer::BodyTopologyPickFilter{true, false, false});
+    if (!query.valid() || !query.completed ||
+        query.candidates.empty()) {
+        return false;
+    }
+    QTest::mouseMove(&viewport, pixel);
+    QTest::mouseClick(
+        &viewport, Qt::LeftButton, Qt::NoModifier, pixel);
+    QApplication::processEvents();
+    return true;
+}
+
 // PG-01D D0 native SS2 semantic-side characterization.
 // The independent native OCCT wire/hole proof is recorded in work/.
 // This test checks the *actual* current Part/OCCT catalog, not OCP:
@@ -879,6 +905,8 @@ int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
     const bool pg01c_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01c";
+    const bool pg01d_ui_only =
+        argc == 2 && std::string_view{argv[1]} == "--pg01d-ui";
     const bool pg01d_d0_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01d-d0";
     kernel_occt::OcctSolidModelingKernel kernel;
@@ -919,6 +947,109 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+        if (pg01d_ui_only) {
+            // Real Qt/OCCT Face cursor admission, never a fabricated
+            // Viewer token or a provider ordinal. The target is a
+            // separate XY Sketch after the legal upstream Extrude.
+            auto face_session = makeBaseSession(kernel);
+            const auto target_sketch =
+                face_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(target_sketch.ok() && target_sketch.sketch_id);
+            CHECK(workbench.activateDocument(&face_session, {}));
+            QApplication::processEvents();
+            auto* sketch_edit = workbench.findChild<QAction*>(
+                QStringLiteral("editSketchAction"));
+            auto* face_mode = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeSourceFaceButton"));
+            auto* edge_mode = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeSourceEdgesButton"));
+            auto* pg_finish = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeFinishButton"));
+            auto* pg_count = workbench.findChild<QLabel*>(
+                QStringLiteral("projectEdgeSelectionLabel"));
+            auto* controller =
+                workbench.findChild<ui::PartViewportController*>();
+            CHECK(sketch_edit && face_mode && edge_mode &&
+                  pg_finish && pg_count && controller);
+            QTreeWidgetItem* sketch_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    sketch_item = *it;
+                    break;
+                }
+            }
+            CHECK(sketch_item);
+            tree->clearSelection();
+            tree->setCurrentItem(sketch_item);
+            sketch_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+
+            const auto before_state = face_session.document().state();
+            const auto before_revision =
+                face_session.document().revision();
+            const auto before_undo = face_session.undoDepth();
+            auto reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(face_mode->isChecked());
+            CHECK(!edge_mode->isChecked());
+            CHECK(!pg_finish->isEnabled());
+
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            const auto admission =
+                controller->selectedMaterialFaceBoundaryAdmission();
+            CHECK(admission.ok());
+            CHECK(admission.wires.size() == 1U);
+            CHECK(admission.wires.front().outer);
+            CHECK(admission.wires.front().edges.size() == 4U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(face_session.document().state() == before_state);
+            CHECK(face_session.undoDepth() == before_undo);
+
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(face_session.undoDepth() == before_undo + 1U);
+            CHECK(face_session.document().revision() !=
+                  before_revision);
+            const auto* projected =
+                face_session.document().findSketch(
+                    *target_sketch.sketch_id);
+            CHECK(projected);
+            CHECK(projected->projection_bindings.size() == 4U);
+            CHECK(face_session.undo());
+            CHECK(face_session.document()
+                      .findSketch(*target_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            CHECK(face_session.redo());
+            CHECK(face_session.document()
+                      .findSketch(*target_sketch.sketch_id)
+                      ->projection_bindings.size() == 4U);
+
+            std::cout << "PG01D_D2_NATIVE_FACE_FINISH_PASS"
+                      << " outer_lines=4"
+                      << " linked_entities=4"
+                      << " one_undo=1"
+                      << " undo_redo=1\n";
+            result = EXIT_SUCCESS;
+            workbench.close();
+            app.quit();
+            return;
+        }
         if (pg01c_only) {
         // PG-01C C1: real OCCT native cursor -> Workbench Project Geometry,
         // not a fabricated presentation token. The separate later Sketch
