@@ -714,6 +714,32 @@ public:
         auto result = runtime_diagnostics_;
         result.sketch_native_objects_current =
             sketch_objects_.size();
+        std::size_t pg_supported = 0U;
+        std::size_t pg_skipped = 0U;
+        std::size_t expected_overlay_objects = 0U;
+        for (const auto& group : body_topology_overlay_scene_.groups) {
+            expected_overlay_objects += group.tokens.size();
+            if (group.role ==
+                    viewer::BodyTopologyOverlayRole::
+                        project_geometry_supported) {
+                pg_supported = group.tokens.size();
+            } else if (group.role ==
+                           viewer::BodyTopologyOverlayRole::
+                               project_geometry_unsupported) {
+                pg_skipped = group.tokens.size();
+            }
+        }
+        // Each successfully displayed native Body topology overlay
+        // produces one AIS object. Never report an unrendered request
+        // as a highlighted source.
+        if (!context_.IsNull() &&
+            body_topology_overlay_objects_.size() ==
+                expected_overlay_objects) {
+            result.project_face_supported_overlays_current =
+                pg_supported;
+            result.project_face_skipped_overlays_current =
+                pg_skipped;
+        }
         result.solid_committed_displayed =
             !context_.IsNull() &&
             !solid_object_.IsNull() &&
