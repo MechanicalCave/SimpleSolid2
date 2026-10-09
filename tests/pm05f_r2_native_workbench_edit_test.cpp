@@ -1346,6 +1346,36 @@ int main(int argc, char* argv[]) {
             // material Edges. Their projected end vertices must be
             // exactly connected; no Sketcher tolerance healing.
             auto pg_chamfer_session = makeBaseSession(kernel);
+            // A skewed source forces nontrivial analytic endpoint
+            // evaluation. Equal authored source vertices are mapped
+            // with one function so they remain exactly shared.
+            const auto pg_skew_authored =
+                pg_chamfer_session.document().state();
+            const auto& pg_skew_source =
+                pg_skew_authored.sketches.front();
+            const double skew_cos = std::cos(0.31);
+            const double skew_sin = std::sin(0.31);
+            const auto rotate = [skew_cos, skew_sin](
+                                    sketch::Point2 p) {
+                return sketch::Point2{
+                    p.u * skew_cos - p.v * skew_sin,
+                    p.u * skew_sin + p.v * skew_cos};
+            };
+            std::vector<application::SketchLineGeometryUpdate>
+                pg_skew_updates;
+            for (const auto& line :
+                 pg_skew_source.model.state().lines) {
+                pg_skew_updates.push_back({
+                    line.id,
+                    rotate(line.start),
+                    rotate(line.end)});
+            }
+            CHECK(pg_skew_updates.size() == 4U);
+            CHECK(pg_chamfer_session.execute(
+                application::UpdateSketchLinesCommand{
+                    pg_skew_source.id,
+                    pg_chamfer_session.document().revision(),
+                    std::move(pg_skew_updates)}).ok());
             std::vector<part::MaterialEdgeReference>
                 pg_pre_chamfer_cap;
             for (const auto& probe :
