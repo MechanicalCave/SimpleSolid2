@@ -89,7 +89,7 @@ One Undo/Redo entry, stable targets, construction/regular role parity, and curre
 
 **Owner decision received:** `akceptuje - kontynuuj` (2026-10-09) approves **D2-F1 transient Face gesture + durable per-Edge bindings**, **D2-F2 provider-owned oriented outer/hole wire accounting + strict material mapping**, **D2-F3 only geometric Unsupported skip**, **D2-F4 semantic-reference deduplication**, **D2-F5 existing single Workbench tool with prominent partial warnings and no added modal confirmation**, **D2-F6 exact-current atomic Finish without Face-token persistence**.
 
-**Remaining governance gate:** review and separately accept `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT_DRAFT.md`, followed by a **distinct activation commit** to `work/ACTIVE.yaml` on a governance branch; only then may a dedicated production PG-01D branch mutate code. If the native F2 evidence is insufficient to map strict bounded Face and actual oriented wire occurrences, implementation **STOP / new Owner D2**. PG-01E / PM-06 remain gated.
+**Remaining governance gate:** the Owner accepted `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT.md` on 2026-10-09 (`Zatwierdzam Work Contract PG-01D — kontynuuj`); next is a **distinct activation commit** to `work/ACTIVE.yaml` on a governance branch; only then may a dedicated production PG-01D branch mutate code. If the native F2 evidence is insufficient to map strict bounded Face and actual oriented wire occurrences, implementation **STOP / new Owner D2**. PG-01E / PM-06 remain gated.
 
 ## Documentation impact
 
