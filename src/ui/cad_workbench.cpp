@@ -9506,6 +9506,7 @@ bool CadWorkbench::startProjectEdgeTool() {
     viewport_controller_->setBodyTopologyEdgeDraftMode(true);
     // Select keeps ordinary pointer navigation and camera controls;
     // the provider's existing Edge pick mode owns source collection.
+    syncSketchInteractionUi();
     syncProjectEdgeUi();
     syncActionState();
     notifyCadInputContextChanged();
@@ -9531,6 +9532,7 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
         viewport_controller_->setBodyTopologyEdgeDraftMode(false);
         viewport_controller_->clearBodyTopologyToolSelection();
     }
+    syncSketchInteractionUi();
     syncProjectEdgeUi();
     syncActionState();
     notifyCadInputContextChanged();
@@ -14761,6 +14763,7 @@ void CadWorkbench::syncActionState() {
     apply_button_->setEnabled(active);
     undo_button_->setEnabled(
         active &&
+        !project_edge_active_ &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
         !datum_plane_draft_ &&
@@ -14771,6 +14774,7 @@ void CadWorkbench::syncActionState() {
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
+        !project_edge_active_ &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
         !datum_plane_draft_ &&
@@ -14914,6 +14918,13 @@ void CadWorkbench::syncActionState() {
             chamfer_draft_.has_value());
     }
 
+    if (project_edge_button_ != nullptr) {
+        project_edge_button_->setVisible(editing_sketch);
+        project_edge_button_->setEnabled(
+            editing_sketch &&
+            solid_modeling_kernel_ != nullptr);
+        project_edge_button_->setChecked(project_edge_active_);
+    }
     select_sketch_button_->setVisible(
         editing_sketch);
     create_tools_label_->setVisible(
