@@ -5134,6 +5134,19 @@ PartViewportController::selectedMaterialEdgeReferences() const {
 
 part::MaterialFaceBoundaryAdmission
 PartViewportController::selectedMaterialFaceBoundaryAdmission() const {
+    const auto selected = bodyTopologySelection();
+    if (selected.size() != 1U) {
+        part::MaterialFaceBoundaryAdmission result;
+        result.status =
+            part::MaterialFaceBoundaryStatus::face_unavailable;
+        return result;
+    }
+    return inspectCurrentMaterialFaceBoundary(selected.front());
+}
+
+part::MaterialFaceBoundaryAdmission
+PartViewportController::inspectCurrentMaterialFaceBoundary(
+    const BodyTopologySelectionAddress& picked) const {
     using Status = part::MaterialFaceBoundaryStatus;
     const auto fail = [](Status status) {
         part::MaterialFaceBoundaryAdmission result;
@@ -5157,13 +5170,10 @@ PartViewportController::selectedMaterialFaceBoundaryAdmission() const {
         !body_topology_catalog_cache_->complete()) {
         return fail(Status::invalid_stage);
     }
-    const auto selected = bodyTopologySelection();
-    if (selected.size() != 1U ||
-        !selected.front().valid() ||
-        selected.front().kind !=
+    if (!picked.valid() ||
+        picked.kind !=
             viewer::BodyTopologyPresentationKind::face ||
-        selected.front().generation !=
-            body_scene_cache_->generation) {
+        picked.generation != body_scene_cache_->generation) {
         return fail(Status::face_unavailable);
     }
     const auto stage = body_topology_catalog_cache_->stage;
@@ -5184,9 +5194,40 @@ PartViewportController::selectedMaterialFaceBoundaryAdmission() const {
     }
     return part::inspectMaterialFaceBoundary(
         *feature,
-        kernel::RuntimeFaceToken{
-            selected.front().runtime_token_value},
+        kernel::RuntimeFaceToken{picked.runtime_token_value},
         *provider);
+}
+
+part::ProjectedSketchSourceStatus
+PartViewportController::currentMaterialEdgeProjectionStatus(
+    const part::MaterialEdgeReference& source) const {
+    using Status = part::ProjectedSketchSourceStatus;
+    const auto* hosted = activeSketch();
+    if (session_ == nullptr || hosted == nullptr ||
+        !body_scene_revision_ ||
+        *body_scene_revision_ != session_->document().revision() ||
+        !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete() ||
+        !source.valid() ||
+        source.stage != body_topology_catalog_cache_->stage) {
+        return Status::invalid_dependency;
+    }
+    auto* query = dynamic_cast<kernel::IEdgeProjectionQuery*>(
+        solid_modeling_kernel_);
+    const auto frame = part::resolveCurrentProjectionSketchFrame(
+        session_->document(), hosted->id, *part_evaluation_cache_);
+    if (query == nullptr || !frame) {
+        return Status::invalid_support;
+    }
+    return part::projectStrictMaterialEdge(
+        session_->document(), source, *part_evaluation_cache_,
+        *query, *frame).status;
 }
 
 void PartViewportController::clearBodyTopologyPreselection() {
@@ -5389,6 +5430,7 @@ void PartViewportController::onBodyTopologyIntent(
     auto& selection = activeSelection();
     const auto effective_mode =
         body_topology_edge_draft_mode_ &&
+                !body_topology_face_pick_only_ &&
                 mode ==
                     viewer::SelectionIntentMode::replace
             ? viewer::SelectionIntentMode::toggle
