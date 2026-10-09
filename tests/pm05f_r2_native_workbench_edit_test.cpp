@@ -1341,6 +1341,86 @@ int main(int argc, char* argv[]) {
                       << " linked_edges=2"
                       << " undo_batches=1\\n";
 
+            // D2-K synthetic native OCCT regression: a rectangle
+            // after Chamfer is authored from four real same-stage
+            // material Edges. Their projected end vertices must be
+            // exactly connected; no Sketcher tolerance healing.
+            auto pg_chamfer_session = makeBaseSession(kernel);
+            std::vector<part::MaterialEdgeReference>
+                pg_pre_chamfer_cap;
+            for (const auto& probe :
+                 authorableEdgeProbes(pg_chamfer_session, kernel)) {
+                if (std::abs(probe.world.z - 20.0) < 1.0e-6) {
+                    pg_pre_chamfer_cap.push_back(probe.reference);
+                }
+            }
+            CHECK(pg_pre_chamfer_cap.size() == 4U);
+            std::sort(
+                pg_pre_chamfer_cap.begin(),
+                pg_pre_chamfer_cap.end());
+            const auto pg_chamfer =
+                pg_chamfer_session.execute(
+                    application::CreateChamferFeatureCommand{
+                        pg_pre_chamfer_cap,
+                        pg_chamfer_session.document().revision(),
+                        core::LengthValue{2.0},
+                        "PG01C vertex continuity Chamfer"},
+                    kernel);
+            CHECK(pg_chamfer.ok());
+            const auto pg_chamfer_sketch =
+                pg_chamfer_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(pg_chamfer_sketch.ok() &&
+                  pg_chamfer_sketch.sketch_id);
+            std::vector<part::MaterialEdgeReference>
+                pg_post_chamfer_cap;
+            for (const auto& probe :
+                 authorableEdgeProbes(pg_chamfer_session, kernel)) {
+                if (std::abs(probe.world.z - 20.0) < 1.0e-6) {
+                    pg_post_chamfer_cap.push_back(probe.reference);
+                }
+            }
+            CHECK(pg_post_chamfer_cap.size() == 4U);
+            const auto pg_chamfer_projected =
+                pg_chamfer_session.execute(
+                    application::CreateProjectedSketchEdgesCommand{
+                        *pg_chamfer_sketch.sketch_id,
+                        pg_chamfer_session.document().revision(),
+                        pg_post_chamfer_cap,
+                        sketch::EntityRole::regular},
+                    kernel);
+            CHECK(pg_chamfer_projected.ok());
+            CHECK(pg_chamfer_projected.entity_ids.size() == 4U);
+            const auto pg_chamfer_current =
+                part::evaluateEffectiveSketchProjection(
+                    pg_chamfer_session.document(),
+                    *pg_chamfer_sketch.sketch_id,
+                    part::evaluatePart(
+                        pg_chamfer_session.document(), kernel),
+                    kernel);
+            CHECK(pg_chamfer_current &&
+                  pg_chamfer_current->allResolved());
+            const auto pg_chamfer_regions =
+                sketch::analyzeRegions(pg_chamfer_current->model);
+            CHECK(pg_chamfer_regions.complete());
+            CHECK(pg_chamfer_regions.regions.size() == 1U);
+            const auto pg_chamfer_intent =
+                part::makeProfileRegionIntent(
+                    pg_chamfer_regions.regions.front());
+            CHECK(pg_chamfer_intent);
+            const auto pg_chamfer_profile =
+                pg_chamfer_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_chamfer_sketch.sketch_id,
+                        pg_chamfer_session.document().revision(),
+                        *pg_chamfer_intent},
+                    kernel);
+            CHECK(pg_chamfer_profile.ok());
+            std::cout << "PG01C_D2K_CHAMFER_LINKED_REGION_PASS"
+                      << " edges=4 native_occt=1"
+                      << " no_tolerance_heal=1\\n";
+
             // Owner identity regression: an all-linked rectangle
             // Profile remains the SAME Profile as each linked Edge is
             // detached, including mixed linked/authored intermediate
