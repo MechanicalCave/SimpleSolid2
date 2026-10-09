@@ -318,7 +318,7 @@ void verifyMissingProjectionProviderNeverShowsSeed() {
          std::move(surfaces)},
         part::SingularAtAuthoredStage{}};
     CHECK(source.valid());
-    auto* staged = std::find_if(
+    auto staged = std::find_if(
         state.sketches.begin(), state.sketches.end(),
         [&target](const part::PartSketch& item) {
             return item.id == *target.sketch_id;
