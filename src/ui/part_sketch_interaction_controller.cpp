@@ -5742,15 +5742,15 @@ PartSketchInteractionController::resolvePointerInput(
     // assistance participates only when Shared2D proves the candidate leaves
     // the locked result at the same advertised point.
     const auto* hosted = activeSketch();
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (hosted == nullptr || current_model == nullptr) {
+        // Viewer scene is unavailable/stale: no snap may read
+        // persisted linked seed coordinates or old OCCT geometry.
+        snap_capture_.clear();
+        return raw();
+    }
     if (hosted != nullptr) {
-        const auto* current_model =
-            viewport_controller_->currentSketchInteractionModel();
-        if (current_model == nullptr) {
-            // Viewer scene is unavailable/stale: no snap may read
-            // persisted linked seed coordinates or old OCCT geometry.
-            snap_capture_.clear();
-            return raw();
-        }
         const auto modes =
             staticSnapModes(eligibility);
 
