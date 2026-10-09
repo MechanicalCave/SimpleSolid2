@@ -1022,6 +1022,17 @@ set_tests_properties(pm05f_r2.native_workbench_edit PROPERTIES
     LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel;native"
 )
 
+# PG-01C isolated positive native GUI gate: reuse the existing Qt/OCCT
+# binary but bypass earlier unrelated Fillet/Chamfer stress sequences.
+add_test(
+    NAME pg01c.native_project_edge_command
+    COMMAND pm05f_r2_native_workbench_edit_test --pg01c
+)
+set_tests_properties(pg01c.native_project_edge_command PROPERTIES
+    TIMEOUT 90
+    LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel;native"
+)
+
 add_executable(pm05c1_edge_semantic_kernel_test
     pm05c1_edge_semantic_kernel_test.cpp
 )
@@ -2565,6 +2576,10 @@ function(ss2_resolve_test_build_target test_name out_var)
 
     if(test_name STREQUAL "ph01.app_smoke")
         set(${out_var} "simplesolid2" PARENT_SCOPE)
+        return()
+    endif()
+    if(test_name STREQUAL "pg01c.native_project_edge_command")
+        set(${out_var} "pm05f_r2_native_workbench_edit_test" PARENT_SCOPE)
         return()
     endif()
 
