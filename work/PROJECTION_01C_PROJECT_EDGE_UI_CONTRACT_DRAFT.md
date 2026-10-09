@@ -1,0 +1,118 @@
+# PG-01C — One Project Geometry tool: Edge authoring & linked Sketch UX Work Contract (DRAFT)
+
+**Status:** DRAFT / UNACCEPTED — NO IMPLEMENTATION AUTHORITY
+**Prepared:** 2026-10-09
+**Baseline:** main \`8d78320daca8a72a1431fbece49296c3bfb83aec\` after Owner PG-01B FINAL PASS and [PR #301](https://github.com/MechanicalCave/SimpleSolid2/pull/301) merge
+**Program:** \`work/PART_MODELING_V1_ROADMAP.md\` v1.30, Projection before PM-06
+**Prerequisites:** Projection 00A, PG-01A, PG-01B completed; same-Part associativity D2 approved, Assembly §7.3 snapshot unchanged
+**Architecture authorization required:** Owner review of \`work/PROJECTION_01C_PROJECT_EDGE_UI_D2_PROPOSAL.md\` D2-A/B/C/D
+**Current authority:** \`work/ACTIVE.yaml\` still points to PG-01B for traceability. Do NOT activate this draft implicitly.
+**Known independent CI defect:** [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302)
+
+## 1. Goal
+
+Ship **one** real Part-hosted Sketch **Project Geometry / Rzutuj geometrię** user tool for existing exact, strict, same-Part material **Edges**, building on the PG-01B headless Commands/Part binding/effective Sketch. All working controls and diagnostics are in the contextual **right-hand Operations panel**. Project Geometry launcher remains in existing Sketch toolbar.
+
+The workflow must be usable end-to-end: pick one/many Edges, select Regular/Construction, stage exact derived preview, Finish once or Cancel, see colored/identified linked geometry in Sketch and Properties, Break Link / Delete, Undo/Redo, Save/Close/Reopen and rebuild of dependent Profile/Features from current source.
+
+## 2. In scope
+
+- One runtime tool state in current Sketch edit and active Part session. Reuse current Body tool-stage Edge pick selection and its strict \`MaterialEdgeReference\` translation, same-revision/stage/generation guards and duplicate detection.
+- Right Operations tool controls: clear active selection, source stage/context, source list/count, role Regular (default) / Construction, live typed validation, Finish, Cancel; no authored mutation before Finish.
+- Semantic Finish through existing \`CreateProjectedSketchEdgesCommand\` with exact current revision and one atomic batch/one Undo, no UI/Viewer direct Part mutation. \`BreakProjectedEdgeLinkCommand\` and existing Delete/role commands are the only durable actions for linked targets.
+- Read-only effective Sketch integration for existing linked entities in 3D Sketch scene, selection, supported snap/inspection, valid Profile fill/selection and right-side Properties; no authored-seed fallback for unresolved source. Use PG-01B \`evaluateEffectiveSketchProjection\` and same-revision Part evaluation.
+- Narrow neutral Viewer linked visual styling / provider adapter **only if Owner D2-C accepts it**. Display Regular/Construction orthogonally to linked state.
+- Tool/editor lifecycle on Esc/Finish/Cancel/Undo/Redo/document change/Sketch exit/provider failure; stale visual or pending pick state must be rejected/cleared.
+- Focused Qt/OCCT native regressions, exact-CAD semantic tests and docs.
+
+## 3. Explicitly out of scope
+
+- **PG-01D:** planar Face pick, loop traversal, holes, partial per-edge Unsupported skips, source Face identity policy, Face boundary membership refresh.
+- **PG-01E:** aggregate Project Geometry program closeout and additional product-wide performance milestones beyond mandatory PG-01C lifecycle.
+- Future Assembly-context projection, cross-Part links, Drawing, auto-bind/rebind, similarity/proximity resolution, automated closure/gap healing, spline/ellipse approximations, unrestricted constraint solver/Sketch structural editor redesign.
+- New native schema (current v15), new MaterialEdgeReference semantics, edits to Foundation/accepted ADRs without Owner decision, PM-06.
+- CI build/test registry repair [#302], workflow/classifier policy changes or test weakening.
+
+## 4. Architecture, identity and safety
+
+\`\`\`text
+Qt Workbench / right Operations panel / Viewer pick transport
+  -> stage only current runtime semantic Edge candidates
+  -> exact Part same-revision source + support-frame resolution
+  -> PG-01B DocumentSession CreateProjectedSketchEdgesCommand
+  -> Validation -> Transaction -> owning PartDocument
+  -> pure effective Sketch -> Profile/Feature evaluation
+  -> neutral Viewer scenes / Properties / diagnostics
+\`\`\`
+
+- Part owns the only durable \`EntityId -> MaterialEdgeReference\` mapping and role. Viewer runtime generation/token, Qt widget/Tree identity and currently sampled curve are **never persisted as source identity**.
+- One tool state; no duplicate pipeline hidden in Qt or command-line transport. Any keyboard action uses the existing global CAD Input semantic routing policy.
+- Source must be a strict material Edge at an explicitly displayed and current legal Body stage, from the **same Part**; stage ordering and cycles are checked by PG-01B. No selection from arbitrary final Body when declared stage differs.
+- On every redraw and user-facing query, linked curves come only from current resolved effective Sketch; missing/ambiguous/unsupported/broken links do not present/snaps/commit stale authored seed. Unaffected entities and regions remain usable.
+- Properties report linked source, role and typed current status; Break Link succeeds only on latest resolved geometry, keeps EntityId and role; broken Break Link is mutation-free failure.
+- Finish revalidates exact current source and document context; no partial batch commits. Transient preview failures do not dirty the Document. No tool stage's Viewer tokens outlive their current generation.
+- Presentation setter failures are surfaced/recoverable without undoing a successfully committed Part command.
+
+## 5. Permitted bounded file scope AFTER formal activation
+
+- \`src/ui/cad_workbench.cpp/.hpp\`: one tool and right panel, command dispatch, status and lifecycle.
+- \`src/ui/part_viewport_controller.cpp/.hpp\`: reuse stage-scoped material Edge picking; read-only current effective Sketch / linked scene and Profile scene projection, transient binding and diagnostics.
+- \`src/ui/part_sketch_interaction_controller.cpp/.hpp\`: only necessary linked-aware read/interaction/selection/typed edit protection; no generalized new tool architecture.
+- \`src/viewer/**\`: only approved D2-C narrow, provider-neutral transient linked-style surface and Qt/OCCT presentation/pick parity. Stop before public contract expansion beyond D2-C.
+- \`src/application/**\` and \`src/part/**\`: **only** bounded read-only reuse/factor of existing PG-01B current effective projection and typed diagnostics if demonstrably necessary; any new persistence/identity/Feature semantic mutation needs Owner D2 STOP.
+- \`tests/**\`: bounded existing Qt/OCCT Workbench/Sketch/Part regressions. New test/CMake registration only when intrinsically justified, separately reviewed for [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302) consistency.
+- \`docs/internal/**\`, \`docs/product/pl/**\`, \`docs/product/en/**\`, canonical \`docs/browser/index.html\` **via \`.\ss2.ps1 docs\` only**, \`work/**\` evidence and acceptance.
+
+No edits to \`main\` except through approved PR merge.
+
+## 6. Planned bounded execution stages
+
+**C0 — baseline/proofs:** audit all current authored-seed reads in Sketch rendering, Profile rendering, selection, OSNAP/measurement, Properties and interaction; add RED focused evidence proving displayed link/visible Profile differs from current effective geometry on an upstream source edit. No speculative Qt refactor.
+
+**C1 — single tool state:** toolbar activation within Sketch edit, right-side role/options/status, stage-scoped material Edge collection, dedup, semantic input bridge, Escape/Cancel/context cleanup. Native real Body Edge picking; typed rejected-pick status.
+
+**C2 — effective current presentation:** consume PG-01B derived Sketch model across Sketch scene, eligible Profile scene, selection/snapping/Properties; use the narrow D2-C linked visual flag. Unresolved source is not drawn as a valid linked curve. Preserve semantic EntityId/role and unlinked behavior.
+
+**C3 — lifecycle:** stable preview and one Finish, one Undo; Break Link and Delete via headless semantic Commands, Undo/Redo, upstream source edit/suppress/missing recovery, Save/Close/Reopen, current support frame and provider loss. No last-good preview or stale token command authority.
+
+**C4 — evidence/docs/closeout:** focused native UI tests, FAST, final exact-head Windows FULL and Owner practical Windows walkthrough; internal current-as-built and bilingual Product docs parity, Browser regeneration and \`ss2 verify\` pass. Retain all RED-to-GREEN evidence and independent CI #302.
+
+Each stage is strictly within this Work Contract after Owner D2 + contract approval and dedicated \`ACTIVE.yaml\` activation. FOCUSED success alone does not close PG-01C.
+
+## 7. Mandatory acceptance cases
+
+1. Start from a real Part with upstream Extrude/other supported Feature; enter later Sketch; launch Project Geometry once; pick two distinct **material** Edges on currently declared Body stage; chosen role reflected in the right panel and preview; Finish creates two linked EntityIds, **one** Undo entry.
+2. Undo removes both; Redo restores their identities, source bindings and role. Cancel, zero-selection Finish, duplicate source, rejected source, and stale context produce zero mutation and zero Undo entries.
+3. Regular linked geometry may participate in valid Profile/Extrude/Revolve; Construction linked geometry stays reference-only. Toggling role is an explicit semantic command, not a link detach.
+4. Editing upstream dimensions changes projected **Sketch display**, eligible derived Profile fill, snap/selection queries and dependent solid, with no authored seed mutation. The same test uses deliberately different persisted seed values to prove no stale-source shortcut.
+5. Clicking a linked entity shows distinct linked indication, source, role and current status; attempts to drag/trim/extend/duplicate linked geometry fail closed where not provider-aware, without harming normal unlinked edits.
+6. Break Link keeps latest resolved curve, original EntityId and role; Undo restores association, Redo freezes again. Broken linked source cannot Break Link from old seed. Explicit Delete removes entity+binding atomically.
+7. Material Edge selection rejects representation partition/unsupported/nonmaterial, stale generation and stage mismatch; preview provider failure, Edit Context switch, Sketch exit and document close clear picks/overlays without changing authored model.
+8. True native Windows Save/Close/Reopen with new OCCT provider and upstream edited source reprojections maintain exact semantic source. GUI is stable under source suppression/unresolved geometry and restoration.
+9. Existing Sketch tools, selecting normal Body Edges outside this tool, cursor routing, zoom/DPI and Command Line are regression-green. Failed Viewer update surfaces degraded state and recovers from current authoritative model.
+10. Docs PL/EN parity, generated Browser freshness, explicit exact-head Windows FULL and Owner manual Windows PASS before merge. If FAST is red or cannot certify source binaries due to [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302), record failed evidence and require an explicit Owner maintenance/exception decision.
+
+## 8. Known risks / STOP (D2 or D3)
+
+- **Single point of failure:** some UI read path still consumes stored seed instead of effective Sketch after source change; **cannot ship** an apparently valid linked curve/profile in this state.
+- Existing Body Edge pick/Sketch input routing cannot coexist without expanding public Viewer/Selection protocols beyond D2-C.
+- New persisted identity/reference, schema change or changed Profile/Feature semantics would be necessary.
+- Missing/ambiguous source gets replaced by similarity/proximity fallback, stale provider token or old displayed geometry.
+- Fix expands into general Sketch solver/constraints, Face capture, Drawing/Assembly, CI infrastructure or global performance architecture.
+
+STOP, prepare bounded amendment, request Owner D2/D3 rather than silently expanding.
+
+## 9. Owner acceptance / activation gate
+
+This draft is not sufficient authority. Owner must explicitly accept:
+
+- PG-01C D2-A/B/C/D design choices (including bounded transient Viewer contract), and
+- this PG-01C Work Contract with declared source/testing/documentation scope.
+
+Then create a dedicated governance activation commit updating \`work/ACTIVE.yaml -> active_work\` to the accepted contract, pass the required gate, and **only then** start product code changes on a new feature branch. Neither PG-01B PASS nor a draft PR activates PG-01C automatically.
+
+## Documentation impact
+
+Internal docs: required
+User/Product docs: required
+Reason: new linked Sketch presentation and Project Geometry/Break Link end-user command workflows, diagnostics and interaction/lifecycle behavior. Provide canonical bilingual PL/EN docs, regenerate Browser, and run \`ss2 verify\`.
