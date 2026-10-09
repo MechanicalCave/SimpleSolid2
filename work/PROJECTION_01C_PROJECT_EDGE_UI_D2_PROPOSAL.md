@@ -1,11 +1,11 @@
 # PG-01C — Project Edge UI, effective presentation and interaction: D2 design proposal
 
-**Status:** PROPOSAL ONLY — OWNER D2 REVIEW REQUIRED; NOT ACCEPTED; no product implementation authority
+**Status:** OWNER D2-A–D2-E ACCEPTED 2026-10-09; implementation bounded by separately activated PG-01C Work Contract
 **Date:** 2026-10-09
 **Baseline:** main `8d78320daca8a72a1431fbece49296c3bfb83aec`, PG-01B Owner FINAL PASS and PR #301 squash merged
 **Program:** Part Modeling v1 roadmap v1.30 — Projection before PM-06
 **Accepted upstream:** Projection 00A, PG-01A, PG-01B; Foundation §7.2 associative same-Part, §7.3 future Assembly snapshot CORE
-**Companion draft:** `work/PROJECTION_01C_PROJECT_EDGE_UI_CONTRACT_DRAFT.md`
+**Accepted Work Contract:** `work/PROJECTION_01C_PROJECT_EDGE_UI_CONTRACT.md`; Owner approval 2026-10-09 (`zatwierdzam PG-01C - kontynuuj pracę`)
 
 ## 1. Purpose / scope boundary
 
@@ -79,7 +79,7 @@ Broken linked geometry may have a separate status indicator in Properties/tool d
 
 **Consistent discoverability and feedback.** Enabled/disabled buttons, tool highlight/cursor, prompts, stage/Edge count, role, rejection reason, accepted Finish feedback and Properties status must agree across right panel, viewport and Command Line; no silent rejection or duplicate toast/state. Selection/hover, OSNAP, zoom/orbit, Undo/Redo, Save, Delete, keyboard shortcuts and return to Select must remain consistent with neighboring Sketch and Fillet/Chamfer workflows. Error/status text and product documentation require PL/EN terminology parity.
 
-**Owner gate D2-E:** authorize the above *bounded* Project Geometry-specific input grammar and keyboard/lifecycle integration; do not create a new universal CAD command system or change global ADR-0011 routing policy. If `PROJECT` collides with an existing accepted keyword, stop for a narrow Owner-reviewed alternative rather than hijack command precedence.
+**Owner D2-E accepted 2026-10-09:** the above *bounded* Project Geometry-specific input grammar and keyboard/lifecycle integration; do not create a new universal CAD command system or change global ADR-0011 routing policy. If `PROJECT` collides with an existing accepted keyword, stop for a narrow Owner-reviewed alternative rather than hijack command precedence.
 
 ## 8. Proposed mandatory evidence and Owner gate
 
@@ -94,14 +94,14 @@ Broken linked geometry may have a separate status indicator in Properties/tool d
 
 ## 9. Decision request / stop conditions
 
-Owner approval is requested for **D2-A through D2-E** and the separate bounded PG-01C Work Contract. Explicitly confirm the small Viewer presentation-only contract extension, current effective Sketch as UI/read/interaction authority, and use of existing strict material-edge tool-stage picking.
+**Owner accepted D2-A through D2-E and the bounded PG-01C Work Contract on 2026-10-09.** Explicitly confirm the small Viewer presentation-only contract extension, current effective Sketch as UI/read/interaction authority, and use of existing strict material-edge tool-stage picking.
 
 STOP for Owner if a wider public Viewer/Kernel/Selection API, new durable identity or persistence schema, new solver/evaluator ownership, Face membership semantics, loosening strict source resolution, or unbounded Sketch interaction rewrite becomes necessary. Do not expand scope silently.
 
-Approval of this proposal alone is not an implementation activation: the separately approved Work Contract must be installed in `work/ACTIVE.yaml` in a dedicated governance activation commit, validated before changing product source.
+Acceptance is not by itself runtime activation: the Owner-approved Work Contract must be installed in `work/ACTIVE.yaml` in a dedicated governance activation commit, validated before changing product source.
 
 ## Documentation impact
 
 Internal docs: not required
 User/Product docs: not required
-Reason: this file is a design-only Owner D2 proposal; PG-01C implementation will require both internal and PL/EN Product docs.
+Reason: this D2 acceptance document contains only decisions and no shipping product mutation; PG-01C implementation requires internal and PL/EN Product docs.
