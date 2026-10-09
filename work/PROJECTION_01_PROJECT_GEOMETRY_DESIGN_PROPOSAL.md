@@ -1,11 +1,11 @@
 # Project Geometry — Part v1 Production Design and Staging PROPOSAL
 
-**Status:** DRAFT FOR OWNER REVIEW — NOT ACTIVATED; NO PRODUCTION MUTATION AUTHORITY
+**Status:** STAGING PLAN OWNER ACCEPTED 2026-10-09; PG-01A ACTIVE as separate bounded Work Contract, PG-01B/C/D/E still NOT activated
 **Prepared:** 2026-10-09
 **Baseline:** main `2cda8e04d7d0e2594edae7dc90e88cbb90dcae35`, Projection 00A **COMPLETED — Owner PASS**; [PR #299](https://github.com/MechanicalCave/SimpleSolid2/pull/299) merged; [FULL #1915](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37890913601) PASS 195/195
 **Accepted program:** Part Modeling v1 roadmap v1.30, Projection **before PM-06**
 **Accepted D2 direction:** Foundation §7.2 and §7.5: same-Part **associative**; §7.3 future Assembly-context **snapshot** CORE unchanged
-**Current authority:** `work/ACTIVE.yaml` deliberately still points to the **completed** 00A Work Contract. No new product Work Contract is active; this Draft does not activate itself.
+**Current authority:** `work/ACTIVE.yaml` points to Owner-accepted bounded `work/PROJECTION_01A_EXACT_KERNEL_CONTRACT.md`. Only PG-01A Kernel/OCCT production work is authorized; other package stages remain gated.
 
 ## Product behavior that has already been agreed with Owner
 
@@ -58,7 +58,7 @@ Reuse existing FOCUSED Kernel/Part/native targets and warm persistent build tree
 
 ## Proposed next activation
 
-Review and **explicitly accept** `work/PROJECTION_01A_EXACT_KERNEL_CONTRACT_DRAFT.md` as the first production Work Contract. On Owner approval, record it as the active contract and move `work/ACTIVE.yaml` in an independently gated activation commit **before editing `src/**`**. This Draft proposal and 00A Owner PASS alone do not authorize implementation.
+**PG-01A explicitly accepted by Owner 2026-10-09** and activated through the dedicated `work/PROJECTION_01A_EXACT_KERNEL_CONTRACT.md` with `ACTIVE.yaml` pointer **before code mutation**. Continue strictly within PG-01A; don't infer activation of later stages.
 
 ## Documentation impact
 
