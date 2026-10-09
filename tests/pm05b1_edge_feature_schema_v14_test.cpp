@@ -1,6 +1,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
@@ -11,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -344,6 +346,146 @@ Fixture makeFixture() {
         *chamfer_id};
 }
 
+
+void verifyPg01bB2EffectiveSketch(
+    const Fixture& fixture) {
+    struct FakeBody final : kernel::RuntimeSolid {};
+    struct FakeQuery final : kernel::IEdgeProjectionQuery {
+        bool unsupported{false};
+        std::optional<kernel::ScopedProjectionEdge>
+        bindEdgeToBody(
+            kernel::RuntimeSolidHandle body,
+            kernel::RuntimeEdgeToken edge) noexcept override {
+            if (!body || !edge.valid()) {
+                return std::nullopt;
+            }
+            return makeScopedEdge(std::move(body), edge);
+        }
+        kernel::EdgeProjectionResult projectEdgeToPlane(
+            kernel::RuntimeSolidHandle body,
+            const kernel::ScopedProjectionEdge& edge,
+            const kernel::Frame3& frame) noexcept override {
+            if (!body || body != edge.sourceBody() ||
+                !frame.valid()) {
+                return {
+                    kernel::EdgeProjectionStatus::provider_mismatch,
+                    std::nullopt};
+            }
+            if (unsupported) {
+                return {
+                    kernel::EdgeProjectionStatus::unsupported_curve,
+                    std::nullopt};
+            }
+            return {
+                kernel::EdgeProjectionStatus::ok,
+                kernel::Line2{
+                    {100.0, 0.0}, {120.0, 0.0}}};
+        }
+    };
+
+    const auto* fillet =
+        std::get_if<part::FilletFeature>(
+            &fixture.document.body().features[1].definition);
+    CHECK(fillet && !fillet->edges.empty());
+    const auto source = fillet->edges.front();
+    auto state = fixture.document.state();
+    const auto support = part::partSketchSupportForBuiltinPlane(
+        core::BuiltinReferenceRole::xy_plane);
+    CHECK(support);
+    part::PartSketch target{
+        sketch::SketchId::generate(), *support, true, {}};
+    const auto id = target.model.addLine(
+        {1.0, 2.0}, {3.0, 4.0});
+    target.projection_bindings.push_back({id, source});
+    const auto sketch_id = target.id;
+    state.sketches.push_back(std::move(target));
+    auto document = part::PartDocument::restore(
+        fixture.document.documentId(), std::move(state));
+    CHECK(document.ok());
+
+    const kernel::RuntimeEdgeToken token{101U};
+    part::BodyStageTopologyCatalog catalog;
+    catalog.stage = source.stage;
+    part::FeatureCurveResolution curve;
+    curve.address = source.curve;
+    curve.status = kernel::ReferenceStatus::resolved;
+    curve.strict_edge_status = kernel::ReferenceStatus::resolved;
+    curve.candidate_edge_count = 1U;
+    curve.curve_kind = kernel::CurveKind::line;
+    curve.current_edges = {token};
+    catalog.curves.push_back(curve);
+    part::BodyEdgeTopologyRecord edge;
+    edge.runtime_token = token;
+    edge.accounting_class =
+        part::TopologyAccountingClass::referenceable;
+    edge.referenceability =
+        kernel::ReferenceStatus::resolved;
+    edge.curve_kind = kernel::CurveKind::line;
+    edge.curve_candidates = {source.curve};
+    catalog.edges.push_back(edge);
+    CHECK(catalog.complete());
+
+    part::FeatureEvaluation stage;
+    stage.feature_id = fixture.base_id;
+    stage.status = part::FeatureEvaluationStatus::up_to_date;
+    stage.result_solid = std::make_shared<FakeBody>();
+    stage.result_topology = catalog;
+    part::PartEvaluation prefix;
+    prefix.source_revision = document.document->revision();
+    prefix.features.push_back(std::move(stage));
+    FakeQuery query;
+    const auto derived =
+        part::evaluateEffectiveSketchProjection(
+            *document.document, sketch_id, prefix,
+            query, fixture.fillet_id);
+    CHECK(derived);
+    CHECK(derived->allResolved());
+    CHECK(derived->outcomes.size() == 1U);
+    const auto* current = derived->model.findLine(id);
+    CHECK(current != nullptr);
+    CHECK(current->start.u == 100.0);
+    CHECK(current->end.u == 120.0);
+    CHECK(document.document->findSketch(sketch_id)
+              ->model.findLine(id)->start.u == 1.0);
+
+    query.unsupported = true;
+    const auto broken =
+        part::evaluateEffectiveSketchProjection(
+            *document.document, sketch_id, prefix,
+            query, fixture.fillet_id);
+    CHECK(broken && !broken->allResolved());
+    CHECK(!broken->model.findLine(id));
+    CHECK(broken->outcomes.front().status ==
+          part::ProjectedSketchSourceStatus::
+              unsupported_projection);
+    const auto cycle =
+        part::evaluateEffectiveSketchProjection(
+            *document.document, sketch_id, prefix,
+            query, fixture.base_id);
+    CHECK(cycle && !cycle->allResolved());
+    CHECK(cycle->outcomes.front().status ==
+          part::ProjectedSketchSourceStatus::
+              invalid_dependency);
+
+    part::PartEvaluation no_stage;
+    no_stage.source_revision = prefix.source_revision;
+    const auto missing =
+        part::evaluateEffectiveSketchProjection(
+            *document.document, sketch_id, no_stage,
+            query, fixture.fillet_id);
+    CHECK(missing && !missing->allResolved());
+    CHECK(!missing->model.findLine(id));
+    CHECK(missing->outcomes.front().status ==
+          part::ProjectedSketchSourceStatus::missing_stage);
+
+    std::cout << "PG01B_B2_EFFECTIVE_SKETCH_PASS"
+              << " stable_entity=1"
+              << " pure_seed=1"
+              << " unsupported_fail_closed=1"
+              << " cycle_rejected=1"
+              << " missing_rejected=1\n";
+}
+
 void verifyPg01bB1BindingStructure(
     const Fixture& fixture) {
     const auto base =
@@ -519,6 +661,7 @@ int main() {
 
     const auto fixture = makeFixture();
     verifyPg01bB1BindingStructure(fixture);
+    verifyPg01bB2EffectiveSketch(fixture);
     CHECK(
         fixture.document.body().features.size() ==
         3U);

@@ -1,4 +1,5 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
@@ -5074,6 +5075,214 @@ PartEvaluation evaluatePart(
 
     result.body_status =
         BodyEvaluationStatus::empty;
+    return result;
+}
+
+
+std::optional<EffectiveSketchProjection>
+evaluateEffectiveSketchProjection(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    std::optional<FeatureId> consuming_feature) {
+    if (evaluated_prefix.source_revision !=
+        document.revision()) {
+        return std::nullopt;
+    }
+    const PartSketch* authored = document.findSketch(sketch_id);
+    if (!authored) {
+        return std::nullopt;
+    }
+
+    EffectiveSketchProjection result;
+    result.model = authored->model;
+    result.outcomes.reserve(
+        authored->projection_bindings.size());
+    if (authored->projection_bindings.empty()) {
+        return result;
+    }
+
+    const auto& features = document.body().features;
+    const auto consumer = consuming_feature
+        ? std::find_if(
+              features.begin(), features.end(),
+              [consuming_feature](const PartFeature& f) {
+                  return f.id == *consuming_feature;
+              })
+        : features.end();
+    const bool unknown_consumer =
+        consuming_feature && consumer == features.end();
+
+    const BodyStageTopologyCatalog* support_catalog = nullptr;
+    if (const auto* surface =
+            bodyPlanarSurfaceReference(authored->support)) {
+        if (surface->stage.feature_id) {
+            const auto* stage = evaluated_prefix.findFeature(
+                *surface->stage.feature_id);
+            if (stage && stage->result_topology &&
+                stage->result_topology->stage ==
+                    surface->stage) {
+                support_catalog = &*stage->result_topology;
+            }
+        }
+    }
+    std::optional<DatumEvaluation> datums;
+    if (datumPlaneIdForSketchSupport(authored->support)) {
+        datums = evaluateDatums(document, evaluated_prefix);
+    }
+    const auto support = resolveSketchSupport(
+        authored->support, support_catalog,
+        datums ? &*datums : nullptr);
+    std::optional<kernel::Frame3> frame;
+    if (support.valid() && support.frame) {
+        const auto& s = *support.frame;
+        const kernel::Point3 u{
+            s.u_axis[0], s.u_axis[1], s.u_axis[2]};
+        const kernel::Point3 v{
+            s.v_axis[0], s.v_axis[1], s.v_axis[2]};
+        frame = kernel::Frame3{
+            {s.origin[0], s.origin[1], s.origin[2]},
+            u, v,
+            {u.y * v.z - u.z * v.y,
+             u.z * v.x - u.x * v.z,
+             u.x * v.y - u.y * v.x}};
+        if (!frame->valid()) {
+            frame.reset();
+        }
+    }
+
+    for (const auto& binding :
+         authored->projection_bindings) {
+        ProjectedSketchOutcome outcome{
+            binding.target_entity,
+            ProjectedSketchSourceStatus::missing_stage};
+        do {
+            if (!frame) {
+                outcome.status =
+                    ProjectedSketchSourceStatus::invalid_support;
+                break;
+            }
+            const auto source_id =
+                binding.source.stage.feature_id;
+            if (!source_id || unknown_consumer) {
+                outcome.status =
+                    ProjectedSketchSourceStatus::invalid_dependency;
+                break;
+            }
+            const auto producer = std::find_if(
+                features.begin(), features.end(),
+                [source_id](const PartFeature& f) {
+                    return f.id == *source_id;
+                });
+            if (producer == features.end()) {
+                break; // deleted historical Feature: repairable Missing
+            }
+            if (consuming_feature && producer >= consumer) {
+                outcome.status =
+                    ProjectedSketchSourceStatus::invalid_dependency;
+                break;
+            }
+            const auto* stage = evaluated_prefix.findFeature(
+                *source_id);
+            if (!stage ||
+                stage->status !=
+                    FeatureEvaluationStatus::up_to_date ||
+                !stage->result_solid ||
+                !stage->result_topology ||
+                stage->result_topology->stage !=
+                    binding.source.stage ||
+                !stage->result_topology->complete()) {
+                break;
+            }
+            const auto resolved = resolveMaterialEdgeReference(
+                binding.source, *stage->result_topology);
+            if (!resolved) {
+                outcome.status =
+                    ProjectedSketchSourceStatus::unsupported_source;
+                break;
+            }
+            if (!resolved->resolved()) {
+                outcome.status =
+                    resolved->status ==
+                        kernel::ReferenceStatus::ambiguous
+                        ? ProjectedSketchSourceStatus::ambiguous_source
+                        : resolved->status ==
+                            kernel::ReferenceStatus::unsupported
+                            ? ProjectedSketchSourceStatus::unsupported_source
+                            : ProjectedSketchSourceStatus::missing_stage;
+                break;
+            }
+            const auto scoped = query.bindEdgeToBody(
+                stage->result_solid,
+                resolved->current_edges.front());
+            if (!scoped || !scoped->valid()) {
+                outcome.status =
+                    ProjectedSketchSourceStatus::provider_failure;
+                break;
+            }
+            const auto projected = query.projectEdgeToPlane(
+                stage->result_solid, *scoped, *frame);
+            if (!projected.ok()) {
+                switch (projected.status) {
+                case kernel::EdgeProjectionStatus::unsupported_curve:
+                    outcome.status =
+                        ProjectedSketchSourceStatus::unsupported_projection;
+                    break;
+                case kernel::EdgeProjectionStatus::degenerate_projection:
+                    outcome.status =
+                        ProjectedSketchSourceStatus::degenerate_projection;
+                    break;
+                default:
+                    outcome.status =
+                        ProjectedSketchSourceStatus::provider_failure;
+                    break;
+                }
+                break;
+            }
+
+            const auto point =
+                [](const kernel::Point2& p) -> sketch::Point2 {
+                    return {p.u, p.v};
+                };
+            bool applied = false;
+            if (const auto* line =
+                    std::get_if<kernel::Line2>(&*projected.curve)) {
+                applied = authored->model.findLine(
+                              binding.target_entity) != nullptr &&
+                    result.model.updateLine(
+                        binding.target_entity,
+                        point(line->start), point(line->end));
+            } else if (const auto* circle =
+                           std::get_if<kernel::Circle2>(
+                               &*projected.curve)) {
+                applied = authored->model.findCircle(
+                              binding.target_entity) != nullptr &&
+                    result.model.updateCircle(
+                        binding.target_entity,
+                        point(circle->center), circle->radius);
+            } else if (const auto* arc =
+                           std::get_if<kernel::Arc2>(
+                               &*projected.curve)) {
+                applied = authored->model.findArc(
+                              binding.target_entity) != nullptr &&
+                    result.model.updateArc(
+                        binding.target_entity,
+                        point(arc->center), arc->radius,
+                        arc->start_angle, arc->sweep_angle);
+            }
+            outcome.status = applied
+                ? ProjectedSketchSourceStatus::resolved
+                : ProjectedSketchSourceStatus::changed_curve_kind;
+        } while (false);
+
+        // On broken bindings, the temporary model must NOT keep the stale
+        // authored seed available for downstream Profile materialization.
+        if (!outcome.resolved()) {
+            (void)result.model.erase(binding.target_entity);
+        }
+        result.outcomes.push_back(outcome);
+    }
     return result;
 }
 
