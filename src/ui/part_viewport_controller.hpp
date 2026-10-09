@@ -264,6 +264,13 @@ public:
     void setSketchEditSketch(
         std::optional<sketch::SketchId> sketch_id);
 
+    // C2: transient exact-source Project Geometry draft. The actual
+    // Part and current Sketch remain unchanged until Workbench Finish.
+    // A failed source/provider evaluation clears its entire preview.
+    [[nodiscard]] bool setProjectedEdgeDraftPreview(
+        const std::vector<part::MaterialEdgeReference>& sources,
+        sketch::EntityRole role);
+
     [[nodiscard]] bool setSketchPreview(
         const std::vector<SketchPreviewLine2D>& lines);
     [[nodiscard]] bool setSketchCirclePreview(
