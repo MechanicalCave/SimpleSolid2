@@ -1702,13 +1702,13 @@ int main(int argc, char* argv[]) {
                       ->projection_bindings.empty());
             CHECK(*pg_batch_detach_session.document().findProfile(
                       pg_all_profile.id) == pg_all_profile);
-            const auto pg_batch_authored =
+            const auto* pg_detach_authored =
                 pg_batch_detach_session.document().findSketch(
                     *pg_all_sketch.sketch_id);
-            CHECK(pg_batch_authored);
+            CHECK(pg_detach_authored);
             for (const auto& binding : pg_all_targets) {
                 const auto* actual =
-                    pg_batch_authored->model.findLine(
+                    pg_detach_authored->model.findLine(
                         binding.target_entity);
                 const auto* expected =
                     pg_all_effective->model.findLine(
