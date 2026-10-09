@@ -1123,6 +1123,47 @@ int main(int argc, char* argv[]) {
             reply = workbench.submitCadInput(
                 "PROJECT", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
+
+            // Mixed acquisition must deduplicate an independently picked
+            // native material cap Edge against that same Edge expanded by
+            // the later Face gesture. The first pick is an actual Viewer
+            // Edge click, not an injected material reference.
+            bool mixed_manual_picked = false;
+            const std::array<viewer::Point3, 4> cap_midpoints{{
+                {20.0, 0.0, 20.0},
+                {20.0, 30.0, 20.0},
+                {0.0, 15.0, 20.0},
+                {40.0, 15.0, 20.0}
+            }};
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::top}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                for (const auto& midpoint : cap_midpoints) {
+                    if (!nativeClick(*viewport, midpoint)) {
+                        continue;
+                    }
+                    if (pg_count->text().contains(
+                            QStringLiteral("selected: 1"))) {
+                        mixed_manual_picked = true;
+                        break;
+                    }
+                    reply = workbench.submitCadInput(
+                        "CLEAR", workbench.cadInputContextGeneration());
+                    CHECK(reply.accepted);
+                }
+                if (mixed_manual_picked) break;
+            }
+            CHECK(mixed_manual_picked);
+            const auto manual_source =
+                controller->selectedMaterialEdgeReferences();
+            CHECK(manual_source && manual_source->size() == 1U);
+            CHECK(holed_session.document().state() == holed_state);
+            CHECK(holed_session.undoDepth() == holed_undo);
             reply = workbench.submitCadInput(
                 "FACE", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
@@ -1162,6 +1203,11 @@ int main(int argc, char* argv[]) {
             CHECK(outer_count == 1U);
             CHECK(inner_count == 2U);
             CHECK(material_members == 6U);
+            CHECK(std::binary_search(
+                exact_sources.begin(), exact_sources.end(),
+                manual_source->front()));
+            // A duplicate Edge picked manually and through Face is still
+            // one linked source and will produce only one target EntityId.
             CHECK(pg_count->text().contains(
                 QStringLiteral("selected: 6")));
             CHECK(pg_count->text().contains(
@@ -1170,6 +1216,21 @@ int main(int argc, char* argv[]) {
             CHECK(holed_session.document().state() == holed_state);
             CHECK(holed_session.document().revision() == holed_revision);
             CHECK(holed_session.undoDepth() == holed_undo);
+
+            // Return to manual Edge selection before Finish. The existing
+            // Face gesture must stay authoritative, and the Viewer must
+            // restore all six generation-bound Edge picks from semantic
+            // references, not leak the old Face presentation token.
+            reply = workbench.submitCadInput(
+                "EDGES", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(edge_mode->isChecked());
+            CHECK(!face_mode->isChecked());
+            const auto restored_sources =
+                controller->selectedMaterialEdgeReferences();
+            CHECK(restored_sources);
+            CHECK(*restored_sources == exact_sources);
+            CHECK(pg_finish->isEnabled());
 
             reply = workbench.submitCadInput(
                 "FINISH", workbench.cadInputContextGeneration());
@@ -1241,6 +1302,8 @@ int main(int argc, char* argv[]) {
                       << " inner=2"
                       << " linked=6"
                       << " distinct_semantic_sources=6"
+                      << " mixed_manual_face_dedup=1"
+                      << " restored_edge_picks=6"
                       << " one_undo=1"
                       << " cold_v15=1"
                       << " region_holes=2\n";
