@@ -4229,6 +4229,12 @@ inspectMaterialFaceBoundary(
     result.status = Status::resolved;
     result.bounded_face = face->semantic_address;
     result.wires.reserve(native.wires.size());
+    // A single supported material Edge source cannot account for two
+    // distinct Face boundary occurrences. Otherwise the Workbench's
+    // semantic dedup would silently remove part of the native loop.
+    // Distinct material Edges with identical geometry remain distinct.
+    std::vector<kernel::RuntimeEdgeToken> seen_edges;
+    std::vector<MaterialEdgeReference> seen_sources;
     for (const auto& wire : native.wires) {
         MaterialFaceBoundaryWire mapped;
         mapped.outer = wire.outer;
@@ -4246,6 +4252,18 @@ inspectMaterialFaceBoundary(
                 // It blocks the entire Face; no partial authoring result.
                 return fail(Status::material_edge_unavailable);
             }
+            if (std::find(
+                    seen_edges.begin(), seen_edges.end(),
+                    use.edge) != seen_edges.end() ||
+                std::find(
+                    seen_sources.begin(), seen_sources.end(),
+                    *authored.reference) != seen_sources.end()) {
+                // A repeated native use is not a second independent
+                // material source and cannot be silently collapsed.
+                return fail(Status::material_edge_unavailable);
+            }
+            seen_edges.push_back(use.edge);
+            seen_sources.push_back(*authored.reference);
             mapped.edges.push_back(
                 MaterialFaceBoundaryMember{
                     use.edge, *authored.reference,
