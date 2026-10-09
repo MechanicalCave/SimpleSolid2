@@ -1129,6 +1129,54 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               << " stale_seed_rejected=1"
               << " suppressed_cold_blocked=1\n";
 
+    // Independent B5/B3 Revolve Draft native regression. The linked
+    // Profile has an intentionally OPEN authored seed. A create Revolve
+    // preview must evaluate its current source Edge, not seed geometry.
+    // Preserve the original Base stage and drop the unrelated Cut to
+    // exercise a directly subsequent Revolve consuming the same Profile.
+    auto revolve_state = restored.document->state();
+    CHECK(revolve_state.body.features.size() == 2U);
+    revolve_state.body.features.pop_back();
+    auto revolve_copy = part::PartDocument::restore(
+        restored.document->documentId(),
+        std::move(revolve_state));
+    CHECK(revolve_copy.ok());
+    application::DocumentSession revolve_session{
+        {}, std::move(*revolve_copy.document)};
+    CHECK(!revolve_session.document().evaluateProfile(
+        *profile.profile_id));
+    auto draft = application::RevolveDraft::beginCreate(
+        revolve_session, *profile.profile_id);
+    CHECK(draft);
+    CHECK(draft->setAxis(part::AxisReference{
+        part::BuiltinOriginAxisReference{
+            core::BuiltinReferenceRole::y_axis}}));
+    CHECK(draft->setAngle(
+        core::AngleValue{1.5707963267948966}));
+    CHECK(draft->setOperation(
+        part::RevolveOperation::add));
+    CHECK(draft->valid());
+    const auto revolve_before =
+        revolve_session.document().state();
+    kernel_occt::OcctSolidModelingKernel revolve_kernel;
+    const auto revolve_preview =
+        revolve_session.evaluateRevolveDraft(
+            *draft, revolve_kernel);
+    CHECK(revolve_preview.committable());
+    CHECK(revolve_preview.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(revolve_preview.previewSolidAvailable());
+    CHECK(revolve_session.document().state() ==
+          revolve_before);
+    CHECK(revolve_session.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+    std::cout << "PG01B_B5_NATIVE_REVOLVE_DRAFT_PASS"
+              << " linked_profile_current=1"
+              << " authored_seed_stale=1"
+              << " preview_delta=1"
+              << " source_unchanged=1\n";
+
     // B3 draft regression: Finish already uses the effective source.
     // The live Edit Extrude preview must use it too, not the OPEN
     // authored line at v=-8 which cannot produce this Profile.
