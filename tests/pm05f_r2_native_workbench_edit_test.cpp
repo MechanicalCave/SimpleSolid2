@@ -1449,6 +1449,238 @@ int main(int argc, char* argv[]) {
                       << " cold_v15=1"
                       << " region_holes=2\n";
 
+
+            // PG-01D D3 positive Partial: exact native Circle cannot be
+            // projected as a Circle/Arc onto a perpendicular YZ Sketch,
+            // but the four *skewed* planar perimeter Lines project
+            // without degeneracy. This is genuine OCCT geometry and a
+            // genuine strict material Face, not a mocked projection.
+            auto partial_session = makeBaseSession(kernel);
+            const auto& partial_base =
+                partial_session.document().state().sketches.front();
+            const double skew_cos = std::cos(0.31);
+            const double skew_sin = std::sin(0.31);
+            const auto skew = [skew_cos, skew_sin](
+                                  sketch::Point2 p) {
+                return sketch::Point2{
+                    p.u * skew_cos - p.v * skew_sin,
+                    p.u * skew_sin + p.v * skew_cos};
+            };
+            std::vector<application::SketchLineGeometryUpdate>
+                partial_updates;
+            for (const auto& source :
+                 partial_base.model.state().lines) {
+                partial_updates.push_back({
+                    source.id, skew(source.start),
+                    skew(source.end)});
+            }
+            CHECK(partial_updates.size() == 4U);
+            CHECK(partial_session.execute(
+                application::UpdateSketchLinesCommand{
+                    partial_base.id,
+                    partial_session.document().revision(),
+                    std::move(partial_updates)}).ok());
+            const auto partial_hole = partial_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+            CHECK(partial_hole.ok() && partial_hole.sketch_id);
+            CHECK(partial_session.execute(
+                application::AddSketchCircleCommand{
+                    *partial_hole.sketch_id,
+                    {20.0, 15.0}, 3.0,
+                    sketch::EntityRole::regular}).ok());
+            const auto* partial_hole_model =
+                partial_session.document().findSketch(
+                    *partial_hole.sketch_id);
+            CHECK(partial_hole_model);
+            const auto partial_hole_regions =
+                sketch::analyzeRegions(
+                    partial_hole_model->model);
+            CHECK(partial_hole_regions.complete());
+            CHECK(partial_hole_regions.regions.size() == 1U);
+            const auto partial_hole_intent =
+                part::makeProfileRegionIntent(
+                    partial_hole_regions.regions.front());
+            CHECK(partial_hole_intent);
+            const auto partial_profile =
+                partial_session.execute(
+                    application::CreateProfileCommand{
+                        *partial_hole.sketch_id,
+                        partial_session.document().revision(),
+                        *partial_hole_intent});
+            CHECK(partial_profile.ok() &&
+                  partial_profile.profile_id);
+            const auto partial_cut = partial_session.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *partial_profile.profile_id,
+                    partial_session.document().revision(),
+                    part::ExtrudeOperation::cut,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{25.0}, false},
+                    "PG01D Partial native circular cut"},
+                kernel);
+            CHECK(partial_cut.ok() && partial_cut.feature_id);
+            const auto partial_target = partial_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::yz_plane});
+            CHECK(partial_target.ok() && partial_target.sketch_id);
+            const auto partial_eval = part::evaluatePart(
+                partial_session.document(), kernel);
+            CHECK(partial_eval.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(partial_eval.current_topology);
+            const auto partial_frame =
+                part::resolveCurrentProjectionSketchFrame(
+                    partial_session.document(),
+                    *partial_target.sketch_id, partial_eval);
+            CHECK(partial_frame);
+            std::size_t partial_native_faces = 0U;
+            for (const auto& face :
+                 partial_eval.current_topology->faces) {
+                const auto admitted =
+                    part::inspectMaterialFaceBoundary(
+                        partial_eval.features.back(),
+                        face.runtime_token, kernel);
+                if (!admitted.ok() ||
+                    admitted.wires.size() != 2U) {
+                    continue;
+                }
+                std::size_t supported = 0U;
+                std::size_t unsupported = 0U;
+                for (const auto& wire : admitted.wires) {
+                    for (const auto& member : wire.edges) {
+                        const auto projected =
+                            part::projectStrictMaterialEdge(
+                                partial_session.document(),
+                                member.reference, partial_eval,
+                                kernel, *partial_frame);
+                        if (projected.status ==
+                                part::ProjectedSketchSourceStatus::
+                                    resolved) {
+                            ++supported;
+                        } else if (projected.status ==
+                                   part::ProjectedSketchSourceStatus::
+                                       unsupported_projection) {
+                            ++unsupported;
+                        } else {
+                            CHECK(false);
+                        }
+                    }
+                }
+                if (supported == 4U && unsupported == 1U) {
+                    ++partial_native_faces;
+                }
+            }
+            CHECK(partial_native_faces > 0U);
+            std::cout << "PG01D_D3_NATIVE_GEOMETRIC_PARTIAL_PROOF"
+                      << " strict_face=1"
+                      << " supported_lines=4"
+                      << " unsupported_circle=1\\n";
+
+            CHECK(workbench.activateDocument(
+                &partial_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* partial_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 3")) {
+                    partial_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(partial_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(partial_tree_item);
+            partial_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            const auto partial_original =
+                partial_session.document().state();
+            const auto partial_rev =
+                partial_session.document().revision();
+            const auto partial_undo =
+                partial_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto click_point = skew({20.0, 15.0});
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{
+                    click_point.u, click_point.v, 20.0}));
+            const auto partial_admission =
+                controller->selectedMaterialFaceBoundaryAdmission();
+            CHECK(partial_admission.ok());
+            CHECK(partial_admission.wires.size() == 2U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("holes 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("SKIPPED")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 4U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 1U);
+            CHECK(pg_finish->isEnabled());
+            CHECK(partial_session.document().state() ==
+                  partial_original);
+            CHECK(partial_session.document().revision() ==
+                  partial_rev);
+            CHECK(partial_session.undoDepth() == partial_undo);
+
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(partial_session.undoDepth() == partial_undo + 1U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            const auto* partial_linked =
+                partial_session.document().findSketch(
+                    *partial_target.sketch_id);
+            CHECK(partial_linked);
+            CHECK(partial_linked->projection_bindings.size() == 4U);
+            const auto partial_after = part::evaluatePart(
+                partial_session.document(), kernel);
+            const auto partial_projection =
+                part::evaluateEffectiveSketchProjection(
+                    partial_session.document(),
+                    *partial_target.sketch_id,
+                    partial_after, kernel);
+            CHECK(partial_projection);
+            CHECK(partial_projection->allResolved());
+            CHECK(partial_projection->outcomes.size() == 4U);
+            CHECK(partial_projection->model.state().lines.size() == 4U);
+            CHECK(partial_projection->model.state().circles.empty());
+            CHECK(sketch::analyzeRegions(
+                partial_projection->model).regions.empty());
+            CHECK(partial_session.undo().changed);
+            CHECK(partial_session.document().findSketch(
+                *partial_target.sketch_id)
+                ->projection_bindings.empty());
+            CHECK(partial_session.redo().changed);
+            CHECK(partial_session.document().findSketch(
+                *partial_target.sketch_id)
+                ->projection_bindings.size() == 4U);
+            std::cout << "PG01D_D3_NATIVE_PARTIAL_FINISH_PASS"
+                      << " cyan_ais=4 red_ais=1"
+                      << " geometric_skipped=1"
+                      << " linked=4"
+                      << " open_no_profile=1"
+                      << " one_undo=1\\n";
+
             result = EXIT_SUCCESS;
             workbench.close();
             app.quit();
