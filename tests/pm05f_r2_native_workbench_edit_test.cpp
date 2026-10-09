@@ -1062,6 +1062,79 @@ int main(int argc, char* argv[]) {
                       << " linked_entities=4"
                       << " one_undo=1"
                       << " undo_redo=1\n";
+
+            // D3 fail-closed: a real previously acquired Face cannot be
+            // finished after its source Feature is suppressed. The stale
+            // document revision/generation must not create any links.
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 4U);
+            const auto prior_link_count =
+                face_session.document().findSketch(
+                    *target_sketch.sketch_id)
+                    ->projection_bindings.size();
+            const auto base_id =
+                face_session.document().body().features.front().id;
+            CHECK(face_session.execute(
+                application::SetFeatureSuppressedCommand{
+                    base_id, face_session.document().revision(),
+                    true}).ok());
+            const auto suppressed_revision =
+                face_session.document().revision();
+            const auto suppressed_undo =
+                face_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(!reply.accepted);
+            CHECK(face_session.document().revision() ==
+                  suppressed_revision);
+            CHECK(face_session.undoDepth() == suppressed_undo);
+            CHECK(face_session.document().findSketch(
+                *target_sketch.sketch_id)
+                ->projection_bindings.size() == prior_link_count);
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            const auto suppressed_body = part::evaluatePart(
+                face_session.document(), kernel);
+            const auto unresolved_link =
+                part::evaluateEffectiveSketchProjection(
+                    face_session.document(),
+                    *target_sketch.sketch_id,
+                    suppressed_body, kernel);
+            CHECK(!unresolved_link ||
+                  !unresolved_link->allResolved());
+            CHECK(face_session.execute(
+                application::SetFeatureSuppressedCommand{
+                    base_id, face_session.document().revision(),
+                    false}).ok());
+            const auto restored_body = part::evaluatePart(
+                face_session.document(), kernel);
+            const auto restored_links =
+                part::evaluateEffectiveSketchProjection(
+                    face_session.document(),
+                    *target_sketch.sketch_id,
+                    restored_body, kernel);
+            CHECK(restored_links);
+            CHECK(restored_links->allResolved());
+            CHECK(restored_links->outcomes.size() == 4U);
+            std::cout << "PG01D_D3_STALE_SUPPRESSED_FACE_PASS"
+                      << " stale_finish_rejected=1"
+                      << " linked_state_preserved=1"
+                      << " overlay_cleared=1"
+                      << " suppression_recovery=1\n";
+
             // D3 native Face-with-two-holes: two *real* SS2 Cut features,
             // not a fabricated wire or a painted/tessellated perimeter.
             // The top cap has four material outer Lines and two distinct
