@@ -362,6 +362,102 @@ void verifyColdRebuild() {
 }
 
 
+kernel::PlanarProfileInput circularSegmentProfile(
+    double start_angle,
+    double sweep_angle) {
+    const double end_angle =
+        start_angle + sweep_angle;
+    const kernel::Point2 from{
+        10.0 * std::cos(start_angle),
+        10.0 * std::sin(start_angle)};
+    const kernel::Point2 to{
+        10.0 * std::cos(end_angle),
+        10.0 * std::sin(end_angle)};
+    kernel::PlanarProfileInput input;
+    input.outer.boundary = {
+        kernel::BoundaryUse2D{
+            kernel::Arc2{
+                {0.0, 0.0}, 10.0,
+                start_angle, sweep_angle},
+            0.0, 1.0, true, false, false,
+            kernel::BoundaryUseProvenance{
+                "pg01a-arc", 0U, 0U, false}},
+        lineUse(
+            to, from, "pg01a-chord", 1U)};
+    CHECK(input.valid());
+    return input;
+}
+
+void verifyPg01aArcProjection() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const kernel::Frame3 xy{};
+    const kernel::Frame3 yz{
+        {0.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0},
+        {1.0, 0.0, 0.0}};
+    const double pi = std::numbers::pi;
+    const struct {
+        double start;
+        double sweep;
+    } cases[] = {
+        {0.0, pi},
+        {pi, -pi},
+        {5.0 * pi / 3.0, pi / 2.0}
+    };
+    std::size_t verified_arcs = 0U;
+    for (const auto& arc : cases) {
+        const auto body = query.extrude(
+            kernel::LinearExtrudeInput{
+                circularSegmentProfile(
+                    arc.start, arc.sweep),
+                0.0, 10.0,
+                kernel::ExtrudeCapRole::profile_cap,
+                kernel::ExtrudeCapRole::extent_cap,
+                kernel::SolidBooleanOperation::add});
+        CHECK(body.ok());
+        std::size_t arcs_in_body = 0U;
+        for (const auto edge : body.current_edges) {
+            const auto projection =
+                query.projectEdgeToPlane(
+                    body.solid, edge, xy);
+            if (!projection.ok() ||
+                !std::holds_alternative<kernel::Arc2>(
+                    *projection.curve)) {
+                continue;
+            }
+            const auto& result =
+                std::get<kernel::Arc2>(
+                    *projection.curve);
+            CHECK(near(result.radius, 10.0));
+            CHECK(near(result.center.u, 0.0));
+            CHECK(near(result.center.v, 0.0));
+            CHECK(near(
+                std::abs(result.sweep_angle),
+                std::abs(arc.sweep)));
+            const auto angled =
+                query.projectEdgeToPlane(
+                    body.solid, edge, yz);
+            CHECK(angled.status ==
+                  Status::unsupported_curve);
+            CHECK(!angled.curve);
+            const auto repeated =
+                query.projectEdgeToPlane(
+                    body.solid, edge, xy);
+            CHECK(repeated.ok());
+            CHECK(repeated.curve == projection.curve);
+            ++arcs_in_body;
+        }
+        CHECK(arcs_in_body >= 2U);
+        verified_arcs += arcs_in_body;
+    }
+    std::cout
+        << "PG01A_EXACT_ARC_PROJECTION_PASS"
+        << " native_arcs=" << verified_arcs
+        << " tested_orientations=3\n";
+}
+
 void verifyPg01aExactProjection() {
     using Status = kernel::EdgeProjectionStatus;
     kernel_occt::OcctSolidModelingKernel query;
@@ -392,12 +488,16 @@ void verifyPg01aExactProjection() {
     for (const auto& frame : {xy, xz, yz, displaced}) {
         CHECK(frame.valid());
         std::size_t lines = 0U;
+        std::size_t degenerate = 0U;
         for (const auto edge : box.current_edges) {
             const auto result =
                 query.projectEdgeToPlane(
                     box.solid, edge, frame);
             CHECK(result.ok() ||
                   result.status == Status::degenerate_projection);
+            if (result.status == Status::degenerate_projection) {
+                ++degenerate;
+            }
             if (result.ok()) {
                 CHECK(std::holds_alternative<kernel::Line2>(
                     *result.curve));
@@ -410,6 +510,7 @@ void verifyPg01aExactProjection() {
             }
         }
         CHECK(lines >= 4U);
+        CHECK(degenerate > 0U);
     }
     // One exactly horizontal Edge must yield an exact Sketch Line in XY.
     bool found_bottom = false;
@@ -503,6 +604,7 @@ int main() {
     verifyProspectiveDynamicSketchSupport();
     verifyColdRebuild();
     verifyPg01aExactProjection();
+    verifyPg01aArcProjection();
 
     std::cout
         << "PM02P_E_KERNEL_LIFECYCLE_PASS"
