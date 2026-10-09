@@ -690,6 +690,46 @@ int main(int argc, char* argv[]) {
                   ->projection_bindings.size() == 1U);
         CHECK(pg_session.undoDepth() == pg_before_undo + 1U);
 
+        // PG-01C C3: durable Save -> close/open with a cold OCCT provider.
+        // Use the native v15 .ss2part store, not a fabricated in-memory
+        // restored Part or a serialized Viewer token.
+        QTemporaryDir pg_persistence_dir;
+        CHECK(pg_persistence_dir.isValid());
+        const std::filesystem::path pg_persistence_path =
+            std::filesystem::path{
+                pg_persistence_dir.path().toStdWString()} /
+            "ProjectGeometry.ss2part";
+        const part::PartDocumentStore pg_store;
+        const auto pg_saved = pg_store.createNew(
+            pg_persistence_path, pg_session.document());
+        CHECK(pg_saved.ok());
+        auto pg_loaded = pg_store.load(pg_persistence_path);
+        CHECK(pg_loaded.ok());
+        CHECK(pg_loaded.document->documentId() ==
+              pg_session.documentId());
+        CHECK(pg_loaded.document->state() ==
+              pg_session.document().state());
+        application::DocumentSession pg_reopened{
+            pg_persistence_path,
+            std::move(*pg_loaded.document),
+            *pg_loaded.checkpoint};
+        kernel_occt::OcctSolidModelingKernel pg_cold_kernel;
+        const auto pg_cold_evaluation = part::evaluatePart(
+            pg_reopened.document(), pg_cold_kernel);
+        CHECK(pg_cold_evaluation.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto pg_cold_projection =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(), *pg_sketch.sketch_id,
+                pg_cold_evaluation, pg_cold_kernel);
+        CHECK(pg_cold_projection);
+        CHECK(pg_cold_projection->allResolved());
+        CHECK(pg_cold_projection->outcomes.size() == 1U);
+        CHECK(pg_cold_projection->model.entityCount() == 1U);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+
         // C3 D2-D: select the *linked Sketch curve* through a real
         // Viewport mouse pick after the Project tool has finished.
         // The Operations Break Link action must detach the currently
@@ -771,6 +811,55 @@ int main(int argc, char* argv[]) {
         CHECK(pg_session.document()
                   .findSketch(*pg_sketch.sketch_id)
                   ->projection_bindings.empty());
+        // Open the saved native file as a new Workbench session after
+        // the original was edited further. The persisted link is
+        // independent of transient selection/Undo state of pg_session.
+        CHECK(workbench.activateDocument(&pg_reopened, {}));
+        QApplication::processEvents();
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        QTreeWidgetItem* pg_reopened_item = nullptr;
+        for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+            if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
+                pg_reopened_item = *it;
+                break;
+            }
+        }
+        CHECK(pg_reopened_item);
+        tree->clearSelection();
+        tree->setCurrentItem(pg_reopened_item);
+        pg_reopened_item->setSelected(true);
+        pg_action->trigger();
+        QApplication::processEvents();
+        CHECK(!pg_button->isHidden());
+        CHECK(viewport->setStandardView(
+            viewer::StandardView::top));
+        viewport->fitAll();
+        QApplication::processEvents();
+        const auto* pg_cold_line =
+            pg_cold_projection->model.findLine(pg_target);
+        CHECK(pg_cold_line);
+        const viewer::Point3 pg_reopened_midpoint{
+            (pg_cold_line->start().u +
+             pg_cold_line->end().u) / 2.0,
+            (pg_cold_line->start().v +
+             pg_cold_line->end().v) / 2.0,
+            0.0};
+        const auto pg_reopened_cursor =
+            viewport->projectWorldPoint(pg_reopened_midpoint);
+        CHECK(pg_reopened_cursor);
+        const auto pg_reopened_pick =
+            viewport->querySketchPresentation(
+                *pg_reopened_cursor);
+        CHECK(pg_reopened_pick.valid());
+        CHECK(pg_reopened_pick.completed);
+        CHECK(pg_reopened_pick.token.has_value());
+        std::cout
+            << "PG01C_C3_NATIVE_SAVE_REOPEN_PASS"
+            << " native_v15=1"
+            << " cold_occt=1"
+            << " current_linked_scene=1\\n";
         std::cout
             << "PG01C_C3_NATIVE_BREAK_LINK_PASS"
             << " real_sketch_pick=1"
