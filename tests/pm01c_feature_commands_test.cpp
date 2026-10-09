@@ -345,6 +345,22 @@ void runProjection00AProfileRepairEvidence() {
     CHECK(session.document().findFeature(feature_id)->id == feature_id);
     CHECK(part::evaluatePart(session.document(), kernel).body_status ==
           part::BodyEvaluationStatus::up_to_date);
+
+    // A4 negative: an invalid Profile reassignment must not mutate the
+    // authored Part document or spend a new durable FeatureId.
+    const auto valid_state = session.document().state();
+    const auto invalid_reassignment = session.execute(
+        application::EditExtrudeFeatureCommand{
+            feature_id,
+            session.document().revision(),
+            part::ProfileId{},
+            part::ExtrudeOperation::add,
+            oneSide(9.0),
+            "Invalid Profile reassignment"},
+        kernel);
+    CHECK(!invalid_reassignment.ok() && !invalid_reassignment.changed);
+    CHECK(session.document().state() == valid_state);
+    CHECK(session.document().findFeature(feature_id)->id == feature_id);
     std::cout
         << "PROJECTION00A_A0_A4_A6_PASS"
         << " linked_source_rebinding=0"
