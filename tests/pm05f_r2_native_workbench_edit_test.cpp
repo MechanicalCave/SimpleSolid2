@@ -1051,6 +1051,200 @@ int main(int argc, char* argv[]) {
                       << " linked_entities=4"
                       << " one_undo=1"
                       << " undo_redo=1\n";
+            // D3 native Face-with-two-holes: two *real* SS2 Cut features,
+            // not a fabricated wire or a painted/tessellated perimeter.
+            // The top cap has four material outer Lines and two distinct
+            // one-Circle hole wires, all scoped to one legal prior stage.
+            auto holed_session = makeBaseSession(kernel);
+            const auto make_hole = [&](double x, const char* label) {
+                const auto hole_sketch = holed_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+                CHECK(hole_sketch.ok() && hole_sketch.sketch_id);
+                CHECK(holed_session.execute(
+                    application::AddSketchCircleCommand{
+                        *hole_sketch.sketch_id,
+                        {x, 15.0}, 4.0,
+                        sketch::EntityRole::regular}).ok());
+                const auto* authored = holed_session.document()
+                    .findSketch(*hole_sketch.sketch_id);
+                CHECK(authored);
+                const auto regions =
+                    sketch::analyzeRegions(authored->model);
+                CHECK(regions.complete() &&
+                      regions.regions.size() == 1U);
+                const auto intent =
+                    part::makeProfileRegionIntent(
+                        regions.regions.front());
+                CHECK(intent);
+                const auto profile = holed_session.execute(
+                    application::CreateProfileCommand{
+                        *hole_sketch.sketch_id,
+                        holed_session.document().revision(),
+                        *intent});
+                CHECK(profile.ok() && profile.profile_id);
+                const auto cut = holed_session.execute(
+                    application::CreateExtrudeFeatureCommand{
+                        *profile.profile_id,
+                        holed_session.document().revision(),
+                        part::ExtrudeOperation::cut,
+                        part::OneSidedExtrudeExtent{
+                            core::LengthValue{25.0}, false},
+                        label},
+                    kernel);
+                CHECK(cut.ok() && cut.feature_id);
+            };
+            make_hole(12.0, "PG01D D3 native hole 1");
+            make_hole(28.0, "PG01D D3 native hole 2");
+            const auto holed_target = holed_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+            CHECK(holed_target.ok() && holed_target.sketch_id);
+            CHECK(workbench.activateDocument(&holed_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* holed_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 4")) {
+                    holed_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(holed_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(holed_tree_item);
+            holed_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            const auto holed_state = holed_session.document().state();
+            const auto holed_revision =
+                holed_session.document().revision();
+            const auto holed_undo = holed_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            const auto two_hole_admitted =
+                controller->selectedMaterialFaceBoundaryAdmission();
+            CHECK(two_hole_admitted.ok());
+            CHECK(two_hole_admitted.wires.size() == 3U);
+            std::size_t outer_count = 0U;
+            std::size_t inner_count = 0U;
+            std::size_t material_members = 0U;
+            std::vector<part::MaterialEdgeReference>
+                exact_sources;
+            for (const auto& wire : two_hole_admitted.wires) {
+                if (wire.outer) {
+                    ++outer_count;
+                    CHECK(wire.edges.size() == 4U);
+                } else {
+                    ++inner_count;
+                    CHECK(wire.edges.size() == 1U);
+                }
+                for (const auto& member : wire.edges) {
+                    CHECK(member.valid());
+                    exact_sources.push_back(member.reference);
+                    ++material_members;
+                }
+            }
+            std::sort(exact_sources.begin(), exact_sources.end());
+            CHECK(std::adjacent_find(
+                exact_sources.begin(), exact_sources.end()) ==
+                exact_sources.end());
+            CHECK(outer_count == 1U);
+            CHECK(inner_count == 2U);
+            CHECK(material_members == 6U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 6")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("holes 2")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(holed_session.document().state() == holed_state);
+            CHECK(holed_session.document().revision() == holed_revision);
+            CHECK(holed_session.undoDepth() == holed_undo);
+
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(holed_session.undoDepth() == holed_undo + 1U);
+            const auto* holed_linked = holed_session.document()
+                .findSketch(*holed_target.sketch_id);
+            CHECK(holed_linked);
+            CHECK(holed_linked->projection_bindings.size() == 6U);
+            std::vector<part::MaterialEdgeReference> saved_sources;
+            for (const auto& linked :
+                 holed_linked->projection_bindings) {
+                saved_sources.push_back(linked.source);
+            }
+            std::sort(
+                saved_sources.begin(), saved_sources.end());
+            CHECK(saved_sources == exact_sources);
+            CHECK(holed_session.undo().changed);
+            CHECK(holed_session.document()
+                .findSketch(*holed_target.sketch_id)
+                ->projection_bindings.empty());
+            CHECK(holed_session.redo().changed);
+            CHECK(holed_session.document()
+                .findSketch(*holed_target.sketch_id)
+                ->projection_bindings.size() == 6U);
+
+            // Cold OCCT recovery must not depend on the selected Face token,
+            // its wire count, or its original provider generation.
+            QTemporaryDir holed_store_dir;
+            CHECK(holed_store_dir.isValid());
+            const std::filesystem::path holed_path =
+                std::filesystem::path{
+                    holed_store_dir.path().toStdWString()} /
+                "PG01DTwoHoleFace.ss2part";
+            const part::PartDocumentStore store;
+            CHECK(store.createNew(
+                holed_path, holed_session.document()).ok());
+            const auto loaded = store.load(holed_path);
+            CHECK(loaded.ok());
+            CHECK(loaded.document->state() ==
+                  holed_session.document().state());
+            kernel_occt::OcctSolidModelingKernel cold_kernel;
+            const auto cold_body = part::evaluatePart(
+                *loaded.document, cold_kernel);
+            CHECK(cold_body.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto cold_projection =
+                part::evaluateEffectiveSketchProjection(
+                    *loaded.document, *holed_target.sketch_id,
+                    cold_body, cold_kernel);
+            CHECK(cold_projection);
+            CHECK(cold_projection->allResolved());
+            CHECK(cold_projection->outcomes.size() == 6U);
+            CHECK(cold_projection->model.entityCount() == 6U);
+            CHECK(cold_projection->model.state().lines.size() == 4U);
+            CHECK(cold_projection->model.state().circles.size() == 2U);
+            const auto cold_regions =
+                sketch::analyzeRegions(cold_projection->model);
+            CHECK(cold_regions.complete());
+            bool full_face_region = false;
+            for (const auto& region : cold_regions.regions) {
+                if (region.holes.size() == 2U) {
+                    full_face_region = true;
+                }
+            }
+            CHECK(full_face_region);
+            std::cout << "PG01D_D3_NATIVE_TWO_HOLE_COLD_PASS"
+                      << " outer=4"
+                      << " inner=2"
+                      << " linked=6"
+                      << " distinct_semantic_sources=6"
+                      << " one_undo=1"
+                      << " cold_v15=1"
+                      << " region_holes=2\n";
+
             result = EXIT_SUCCESS;
             workbench.close();
             app.quit();
