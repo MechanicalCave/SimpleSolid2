@@ -486,6 +486,11 @@ public:
         std::vector<part::MaterialEdgeReference>>
     selectedMaterialEdgeReferences() const;
 
+    // PG-01D: read one exact generation-bound bounded Face from the
+    // current scene. Wires are transient, never authored Face identity.
+    [[nodiscard]] part::MaterialFaceBoundaryAdmission
+    selectedMaterialFaceBoundaryAdmission() const;
+
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
 
