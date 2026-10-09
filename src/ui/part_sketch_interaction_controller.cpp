@@ -2483,7 +2483,11 @@ PartSketchInteractionController::measureResult() const {
     if (!target || hosted == nullptr) {
         return std::nullopt;
     }
-    return sketch::measureEntity(hosted->model, *target);
+    const auto* current =
+        viewport_controller_->currentSketchInteractionModel();
+    return current != nullptr
+        ? sketch::measureEntity(*current, *target)
+        : std::nullopt;
 }
 
 bool PartSketchInteractionController::activateMeasureBetween() {
@@ -2512,10 +2516,10 @@ PartSketchInteractionController::measureRelationalResult() const {
         !interaction_.measureBetweenActive()) {
         return std::nullopt;
     }
-    const auto* hosted = activeSketch();
-    return hosted != nullptr
-        ? interaction_.measureRelationalResult(
-              hosted->model)
+    const auto* current =
+        viewport_controller_->currentSketchInteractionModel();
+    return current != nullptr
+        ? interaction_.measureRelationalResult(*current)
         : std::nullopt;
 }
 
@@ -4364,7 +4368,10 @@ void PartSketchInteractionController::handleMeasurePointer(
     }
 
     const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (hosted == nullptr || current_model == nullptr) {
+        reportStatus("Measure requires a current resolved Sketch scene.");
         return;
     }
 
@@ -4380,7 +4387,7 @@ void PartSketchInteractionController::handleMeasurePointer(
         if (!queried.hit) {
             static_cast<void>(
                 interaction_.setMeasureTarget(
-                    hosted->model,
+                    *current_model,
                     std::nullopt));
             notifyStateChanged();
             return;
@@ -4394,7 +4401,7 @@ void PartSketchInteractionController::handleMeasurePointer(
         }
 
         if (!interaction_.setMeasureTarget(
-                hosted->model,
+                *current_model,
                 queried.hit->entity_id)) {
             reportStatus("Measure target was rejected.");
             return;
@@ -4403,7 +4410,7 @@ void PartSketchInteractionController::handleMeasurePointer(
         if (!measureResult()) {
             static_cast<void>(
                 interaction_.setMeasureTarget(
-                    hosted->model,
+                    *current_model,
                     std::nullopt));
             reportStatus(
                 "Measure result is not finite for the selected geometry.");
@@ -4455,7 +4462,7 @@ void PartSketchInteractionController::handleMeasurePointer(
 
         const auto first =
             sketch::resolveMeasurePoint(
-                hosted->model,
+                *current_model,
                 hits.front().point);
         if (!first) {
             reportStatus(
@@ -4468,7 +4475,7 @@ void PartSketchInteractionController::handleMeasurePointer(
              ++index) {
             const auto resolved =
                 sketch::resolveMeasurePoint(
-                    hosted->model,
+                    *current_model,
                     hits[index].point);
             if (!resolved) {
                 reportStatus(
@@ -4509,7 +4516,7 @@ void PartSketchInteractionController::handleMeasurePointer(
             return;
         }
 
-        if (hosted->model.findLine(
+        if (*current_model.findLine(
                 entity_query.hit->entity_id) != nullptr) {
             target =
                 sketch::MeasureRelationTarget{
@@ -4528,7 +4535,7 @@ void PartSketchInteractionController::handleMeasurePointer(
 
     const auto outcome =
         interaction_.acceptMeasureRelationTarget(
-            hosted->model,
+            *current_model,
             std::move(*target));
     switch (outcome) {
     case sketch::MeasureRelationAcceptOutcome::
@@ -6549,14 +6556,15 @@ void PartSketchInteractionController::projectMeasureInteraction() {
         return;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr) {
         viewport_controller_->clearSketchMeasurePresentation();
         return;
     }
 
     const auto catalog =
-        sketch::measurePointCatalog(hosted->model);
+        sketch::measurePointCatalog(*current_model);
 
     std::vector<sketch::MeasurePointRef>
         selected_points;
@@ -6581,7 +6589,7 @@ void PartSketchInteractionController::projectMeasureInteraction() {
         cue;
     if (const auto result =
             interaction_.measureRelationalResult(
-                hosted->model)) {
+                *current_model)) {
         cue =
             sketch::makeRelationalMeasurementCue(
                 *result);
