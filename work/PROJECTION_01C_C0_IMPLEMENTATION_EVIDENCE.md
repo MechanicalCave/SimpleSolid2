@@ -22,6 +22,14 @@
 - FAST #1980 was RED at C++ compilation: changed Profile presentation signature left two preview callers and a lambda capture stale. Both issues were explicitly corrected, not suppressed. Run current exact-head FOCUSED regression before further expansion.
 - FAST registry issue #302 is independent and remains RED. Do not infer one focused green test means all FAST/GUI gates pass.
 
+## C1 native Workbench first integration (unverified until exact-head Windows)
+
+- Added Sketch Modify toolbar launcher `projectEdgeToolButton` and right Operations `projectEdgeOperationsWidget` with stage, Edge count, Regular/Construction, Remove/Clear, Finish/Cancel. One transient `CadWorkbench` state shared by direct buttons and global `PROJECT/PROJECTGEOMETRY` Command Line tokens.
+- Existing Body stage-scoped semantic `selectedMaterialEdgeReferences()` and `setBodyTopologyEdgeDraftMode()` are reused, never storing Viewer token as persistent Part data; default source stage is visibly declared from the **current** complete Body topology, and exact command guards stale DocumentRevision/SketchId/source-stage and current selection before atomic Finish.
+- Command Line text `FINISH`, empty Enter, `CANCEL`, role keywords, REMOVE/CLEAR, viewport Esc/Enter and toolbar Cancel use one Finish/Cancel code path; Sketch Select/tool change, document deactivate, Undo/Redo clean pending state.
+- **Limitations not covered by this slice:** current exact pre-Finish projection preview and linked visual styling, durable Properties/Break Link action, positive provider-supported native Edge clicking while Sketch is active, full focus/Esc hierarchy and interactive snapping. These remain mandatory C2–C4 before feature acceptance.
+- This remains a **draft**, not a claim that C1 product UX is complete. Native focused compilation/negative routing and later real OCCT Qt tests must prove the implementation.
+
 ## Validation obligations
 
 1. A real upstream OCCT Line/Circle/Arc source with a deliberately different persisted seed: its linked Sketch display and Profile fill must match **current** derived geometry and source stage.
