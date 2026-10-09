@@ -1101,13 +1101,36 @@ void verifyPg01bNativeDerivedProfileExtrude() {
     CHECK(blocked.body_status ==
           part::BodyEvaluationStatus::unavailable);
     CHECK(!blocked.body_solid);
+
+    // B4 broken binding cannot Break Link using the old authored seed or
+    // last-good provider result. Failure must be mutation-free.
+    auto broken_copy = part::PartDocument::restore(
+        unavailable.document->documentId(),
+        unavailable.document->state());
+    CHECK(broken_copy.ok());
+    application::DocumentSession broken_session{
+        {}, std::move(*broken_copy.document)};
+    const auto broken_before = broken_session.document().state();
+    const auto cannot_detach = broken_session.execute(
+        application::BreakProjectedEdgeLinkCommand{
+            id, *sourceLine.entity_id,
+            broken_session.document().revision()},
+        no_source);
+    CHECK(!cannot_detach.ok() && !cannot_detach.changed);
+    CHECK(cannot_detach.status ==
+          application::BreakProjectedEdgeLinkStatus::source_unavailable);
+    CHECK(broken_session.document().state() == broken_before);
+    CHECK(broken_session.document().findSketch(id)
+              ->projection_bindings.size() == 1U);
+
     std::cout
         << "PG01B_B3_NATIVE_LINKED_CUT_PASS"
         << " current_occt_edge=1"
         << " authored_seed_stale=1"
         << " same_profile_id=1"
         << " missing_source_fail_closed=1"
-        << " break_link_undo_redo=1\n";
+        << " break_link_undo_redo=1"
+        << " broken_detach_denied=1\n";
 }
 
 } // namespace
