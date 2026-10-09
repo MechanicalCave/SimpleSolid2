@@ -1038,6 +1038,97 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               ->model.findLine(*sourceLine.entity_id)
               ->start().v == -8.0);
 
+    // B5: the full source -> linked Regular Profile -> downstream Cut
+    // history must survive true native Save/Close/Reopen. The authored
+    // -8 mm seed is intentionally OPEN and cannot produce this result;
+    // only a FRESH OCCT runtime can reproject the persisted strict source.
+    part::PartDocumentStore linked_store;
+    const auto before_save = linked_store.load(path);
+    CHECK(before_save.ok() && before_save.checkpoint);
+    CHECK(linked_store.save(
+              path, *restored.document,
+              *before_save.checkpoint).ok());
+    const auto cold_load = linked_store.load(path);
+    CHECK(cold_load.ok() && cold_load.document);
+    CHECK(cold_load.document->state() ==
+          restored.document->state());
+    const auto* persisted_target =
+        cold_load.document->findSketch(id);
+    CHECK(persisted_target != nullptr);
+    CHECK(persisted_target->projection_bindings.size() == 1U);
+    CHECK(persisted_target->projection_bindings.front().target_entity ==
+          *sourceLine.entity_id);
+    CHECK(persisted_target->projection_bindings.front().source ==
+          *selected);
+    CHECK(persisted_target->model.findLine(
+              *sourceLine.entity_id)->start().v == -8.0);
+    CHECK(!cold_load.document->evaluateProfile(
+        *profile.profile_id));
+    kernel_occt::OcctSolidModelingKernel cold_reopen_kernel;
+    const auto cold_evaluated = part::evaluatePart(
+        *cold_load.document, cold_reopen_kernel);
+    CHECK(cold_evaluated.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto* cold_base =
+        cold_evaluated.findFeature(fixture.base_id);
+    const auto* cold_cut =
+        cold_evaluated.findFeature(*cut.feature_id);
+    CHECK(cold_base && cold_cut);
+    CHECK(cold_base->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    CHECK(cold_cut->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    CHECK(cold_cut->result_solid);
+    const auto cold_effective =
+        part::evaluateEffectiveSketchProjection(
+            *cold_load.document, id,
+            cold_evaluated, cold_reopen_kernel,
+            *cut.feature_id);
+    CHECK(cold_effective && cold_effective->allResolved());
+    const auto* fresh_line = cold_effective->model.findLine(
+        *sourceLine.entity_id);
+    CHECK(fresh_line);
+    CHECK(close(fresh_line->start().v, 0.0));
+    CHECK(close(fresh_line->end().v, 0.0));
+    CHECK(cold_load.document->findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+
+    // A structurally valid but suppressed source must remain durable
+    // and repairable after a SECOND cold save. No serialized last-good
+    // geometry or previous provider token may revive the blocked Cut.
+    auto suppressed_disk = cold_load.document->state();
+    suppressed_disk.body.features.front().suppressed = true;
+    auto persisted_blocked = part::PartDocument::restore(
+        cold_load.document->documentId(),
+        std::move(suppressed_disk));
+    CHECK(persisted_blocked.ok());
+    CHECK(linked_store.save(
+              path, *persisted_blocked.document,
+              *cold_load.checkpoint).ok());
+    const auto broken_load = linked_store.load(path);
+    CHECK(broken_load.ok() && broken_load.document);
+    const auto* saved_broken_sketch =
+        broken_load.document->findSketch(id);
+    CHECK(saved_broken_sketch &&
+          saved_broken_sketch->projection_bindings.size() == 1U);
+    CHECK(saved_broken_sketch->projection_bindings.front().source ==
+          *selected);
+    kernel_occt::OcctSolidModelingKernel cold_broken_kernel;
+    const auto cold_blocked = part::evaluatePart(
+        *broken_load.document, cold_broken_kernel);
+    CHECK(cold_blocked.body_status ==
+          part::BodyEvaluationStatus::unavailable);
+    CHECK(!cold_blocked.body_solid);
+    CHECK(cold_blocked.findFeature(*cut.feature_id)->status !=
+          part::FeatureEvaluationStatus::up_to_date);
+    std::cout << "PG01B_B5_COLD_LINKED_DEPENDENT_PASS"
+              << " original_profile_id=1"
+              << " original_feature_ids=2"
+              << " fresh_kernel_reprojection=1"
+              << " stale_seed_rejected=1"
+              << " suppressed_cold_blocked=1\n";
+
     // B3 draft regression: Finish already uses the effective source.
     // The live Edit Extrude preview must use it too, not the OPEN
     // authored line at v=-8 which cannot produce this Profile.
