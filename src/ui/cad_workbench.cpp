@@ -9669,15 +9669,49 @@ void CadWorkbench::tryStageProjectEdgeSelection() {
                 "PROJECT Edge belongs to another source Body stage."));
             return;
         }
-        project_edge_sources_ = *selected;
+        // Reject only the new unsupported pick. Previously staged,
+        // exact material references and their preview remain usable.
+        // Do not partially commit an invalid command batch.
+        if (*selected != project_edge_sources_ &&
+            !selected->empty()) {
+            if (!viewport_controller_->setProjectedEdgeDraftPreview(
+                    *selected, project_edge_role_)) {
+                const auto prior = project_edge_sources_;
+                const auto restored =
+                    viewport_controller_->
+                        restoreMaterialEdgeToolSelection(prior);
+                if (!restored || !restored->empty()) {
+                    // Stage/generation loss is not a reason to
+                    // resurrect a last-good preview.
+                    clearProjectEdgeSelection();
+                    setStatusText(QStringLiteral(
+                        "PROJECT source changed; selection cleared."));
+                    return;
+                }
+                // Restoring the Viewer's tokens may notify this tool;
+                // the same exact prior references remain authoritative.
+                project_edge_sources_ = prior;
+                refreshProjectEdgePreview();
+                syncProjectEdgeUi();
+                notifyCadInputContextChanged();
+                setStatusText(QStringLiteral(
+                    "PROJECT unsupported or unresolved Edge rejected; previous valid sources preserved."));
+                return;
+            }
+            project_edge_sources_ = *selected;
+            project_edge_preview_valid_ = true;
+        } else {
+            project_edge_sources_ = *selected;
+            refreshProjectEdgePreview();
+        }
     } else if (viewport_controller_->bodyTopologySelection().empty()) {
         project_edge_sources_.clear();
+        refreshProjectEdgePreview();
     } else {
         setStatusText(QStringLiteral(
             "PROJECT selection contains unsupported or stale Body topology."));
         return;
     }
-    refreshProjectEdgePreview();
     syncProjectEdgeUi();
     notifyCadInputContextChanged();
 }
