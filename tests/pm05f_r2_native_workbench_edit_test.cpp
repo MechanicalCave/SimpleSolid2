@@ -1031,11 +1031,11 @@ int main(int argc, char* argv[]) {
                     *target_sketch.sketch_id);
             CHECK(projected);
             CHECK(projected->projection_bindings.size() == 4U);
-            CHECK(face_session.undo());
+            CHECK(face_session.undo().changed);
             CHECK(face_session.document()
                       .findSketch(*target_sketch.sketch_id)
                       ->projection_bindings.empty());
-            CHECK(face_session.redo());
+            CHECK(face_session.redo().changed);
             CHECK(face_session.document()
                       .findSketch(*target_sketch.sketch_id)
                       ->projection_bindings.size() == 4U);
