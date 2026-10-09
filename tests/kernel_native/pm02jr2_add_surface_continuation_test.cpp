@@ -447,6 +447,8 @@ void verifyPartIntegration() {
     std::size_t boundary_material_uses = 0U;
     std::size_t boundary_partition_uses = 0U;
     std::size_t boundary_other_nonmaterial_uses = 0U;
+    std::size_t blocked_face_admissions = 0U;
+    std::size_t accepted_face_admissions = 0U;
     for (const auto token : current_side->current_faces) {
         CHECK(std::find(
             observed_faces.begin(),
@@ -484,6 +486,7 @@ void verifyPartIntegration() {
             provider.queryFaceBoundary(final_eval.body_solid, *scoped);
         CHECK(native.ok());
         std::size_t outer_wires = 0U;
+        bool all_members_material = true;
         for (const auto& wire : native.wires) {
             CHECK(wire.valid());
             if (wire.outer) ++outer_wires;
@@ -505,17 +508,51 @@ void verifyPartIntegration() {
                     // Native wires contain representation artifacts.
                     // These are never material Sketch source references.
                     CHECK(!author.ok());
+                    all_members_material = false;
                     ++boundary_partition_uses;
                 } else if (author.ok()) {
                     CHECK(author.reference &&
                           author.reference->stage == topology.stage);
                     ++boundary_material_uses;
                 } else {
+                    all_members_material = false;
                     ++boundary_other_nonmaterial_uses;
                 }
             }
         }
         CHECK(outer_wires == 1U);
+
+        const auto inspected =
+            part::inspectMaterialFaceBoundary(
+                final_eval.features.back(), token, provider);
+        if (!face->semantic_address) {
+            CHECK(!inspected.ok());
+            CHECK(inspected.status ==
+                  part::MaterialFaceBoundaryStatus::face_not_strict);
+            ++blocked_face_admissions;
+        } else if (!all_members_material) {
+            // Do not partly author a bounded Face whose native wire
+            // contains a nonmaterial partition/seam occurrence.
+            CHECK(!inspected.ok());
+            CHECK(inspected.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      material_edge_unavailable);
+            ++blocked_face_admissions;
+        } else {
+            CHECK(inspected.ok());
+            CHECK(inspected.bounded_face ==
+                  face->semantic_address);
+            CHECK(inspected.wires.size() ==
+                  native.wires.size());
+            for (std::size_t index = 0U;
+                 index < native.wires.size(); ++index) {
+                CHECK(inspected.wires[index].outer ==
+                      native.wires[index].outer);
+                CHECK(inspected.wires[index].edges.size() ==
+                      native.wires[index].edges.size());
+            }
+            ++accepted_face_admissions;
+        }
     }
     CHECK(observed_faces.size() ==
           current_side->current_faces.size());
@@ -537,10 +574,29 @@ void verifyPartIntegration() {
         << boundary_partition_uses
         << " other_nonmaterial="
         << boundary_other_nonmaterial_uses
+        << " blocked_admissions="
+        << blocked_face_admissions
+        << " accepted_admissions="
+        << accepted_face_admissions
         << '\n';
     // The former shared-Surface partition Edge is an actual native
     // boundary use and must never be promoted into material identity.
     CHECK(boundary_partition_uses >= 1U);
+    CHECK(blocked_face_admissions >= 1U);
+    const auto invalid_face =
+        part::inspectMaterialFaceBoundary(
+            final_eval.features.back(),
+            kernel::RuntimeFaceToken{}, provider);
+    CHECK(invalid_face.status ==
+          part::MaterialFaceBoundaryStatus::face_unavailable);
+    auto detached_stage = final_eval.features.back();
+    detached_stage.result_solid.reset();
+    const auto invalid_stage =
+        part::inspectMaterialFaceBoundary(
+            detached_stage,
+            observed_faces.front(), provider);
+    CHECK(invalid_stage.status ==
+          part::MaterialFaceBoundaryStatus::invalid_stage);
 
     const part::SurfaceReference final_side_ref{
         topology.stage,
