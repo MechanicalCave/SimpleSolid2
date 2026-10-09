@@ -385,14 +385,84 @@ void verifyPg01bB1BindingStructure(
             fixture.document.documentId(), original);
     CHECK(accepted.ok());
 
-    // A binding is neither a detached geometry copy nor persistent BRep.
-    // Until B5 schema v15, Save must explicitly fail, not drop the link.
+    // v15 must roundtrip the exact authored semantic link and stable target
+    // through real native bytes, not BRep/provider tokens.
     TempDirectory tmp;
     part::PartDocumentStore store;
-    const auto unsaved = store.createNew(
-        tmp.path / "UnsafeProjection.ss2part",
-        *accepted.document);
-    CHECK(!unsaved.ok());
+    const auto saved_path =
+        tmp.path / "LinkedProjectionV15.ss2part";
+    CHECK(store.createNew(
+        saved_path, *accepted.document).ok());
+    const auto loaded = store.load(saved_path);
+    CHECK(loaded.ok());
+    CHECK(loaded.document->state() ==
+          accepted.document->state());
+
+    const auto native =
+        persistence::readNativeDocumentContainer(saved_path);
+    CHECK(native.ok());
+    CHECK(native.package->descriptor.domain_schema_version == 15);
+    const auto original_authored =
+        nlohmann::json::parse(
+            native.package->authored_json);
+    const auto& serialized =
+        original_authored["sketches"].back()["projected_edges"];
+    CHECK(serialized.size() == 1U);
+    CHECK(serialized[0]["target_entity"] ==
+          linked.projection_bindings.front()
+              .target_entity.serialized());
+    CHECK(serialized[0]["source"]["stage"]["feature_id"] ==
+          fixture.base_id.serialized());
+    CHECK(native.package->authored_json.find(
+              "runtime_token") ==
+          std::string::npos);
+    CHECK(native.package->authored_json.find(
+              "provider") ==
+          std::string::npos);
+
+    auto bad = original_authored;
+    bad["sketches"].back()["projected_edges"]
+       .push_back(serialized[0]);
+    auto damaged_path =
+        tmp.path / "DuplicatedProjectedEdge.ss2part";
+    writeBytes(damaged_path, repackage(
+        *native.package, 15, bad.dump(2)));
+    CHECK(!store.load(damaged_path).ok());
+
+    bad = original_authored;
+    bad["sketches"].back()["projected_edges"][0]
+       ["target_entity"] = "9999";
+    damaged_path =
+        tmp.path / "MissingProjectedEntity.ss2part";
+    writeBytes(damaged_path, repackage(
+        *native.package, 15, bad.dump(2)));
+    CHECK(!store.load(damaged_path).ok());
+
+    bad = original_authored;
+    bad["sketches"].back()["projected_edges"][0]
+       ["source"]["stage"]["feature_id"] = "9999";
+    damaged_path =
+        tmp.path / "UnallocatedProjectedSource.ss2part";
+    writeBytes(damaged_path, repackage(
+        *native.package, 15, bad.dump(2)));
+    CHECK(!store.load(damaged_path).ok());
+
+    // v14 has no projection key, and loads as detached without inventing
+    // a projection source; the migration is intentionally one-way.
+    auto old = original_authored;
+    for (auto& sketch : old["sketches"]) {
+        sketch.erase("projected_edges");
+    }
+    damaged_path =
+        tmp.path / "LegacyWithoutProjection.ss2part";
+    writeBytes(damaged_path, repackage(
+        *native.package, 14, old.dump(2)));
+    const auto legacy = store.load(damaged_path);
+    CHECK(legacy.ok());
+    for (const auto& sketch :
+         legacy.document->sketches()) {
+        CHECK(sketch.projection_bindings.empty());
+    }
 
     auto missing_target = withLink();
     missing_target.sketches.back()
@@ -436,7 +506,7 @@ void verifyPg01bB1BindingStructure(
               << " stable_entity=1"
               << " duplicate_reject=1"
               << " stage_cycle_reject=1"
-              << " unsafe_save_reject=1\n";
+              << " v15_cold_roundtrip=1"\n              << " malformed_reject=3\n";
 }
 
 } // namespace
