@@ -499,6 +499,7 @@ int main(int argc, char* argv[]) {
         CHECK(pg_reply.accepted);
         const auto pg_probes = authorableEdgeProbes(pg_session, kernel);
         bool pg_picked = false;
+        std::optional<viewer::Point3> pg_source_point;
         int native_queries = 0;
         int native_clicks = 0;
         // Try the same genuine native picking from several standard
@@ -544,7 +545,10 @@ int main(int argc, char* argv[]) {
                 CHECK(pg_button->isChecked());
                 pg_picked = pg_count->text().contains(
                     QStringLiteral("selected: 1"));
-                if (pg_picked) break;
+                if (pg_picked) {
+                    pg_source_point = probe.world;
+                    break;
+                }
                 pg_reply = workbench.submitCadInput(
                     "CLEAR", workbench.cadInputContextGeneration());
                 CHECK(pg_reply.accepted);
@@ -556,8 +560,46 @@ int main(int argc, char* argv[]) {
                   << " clicks=" << native_clicks
                   << " selected=" << pg_count->text().toStdString()
                   << std::endl;
-        CHECK(pg_picked);
+        CHECK(pg_picked && pg_source_point);
         CHECK(pg_finish->isEnabled());
+        CHECK(pg_session.document().revision() == pg_before_revision);
+
+        // Rejected Command Line text is diagnostic-only: it does not
+        // discard the exact staged source or leave the tool.
+        pg_reply = workbench.submitCadInput(
+            "UNSUPPORTED", workbench.cadInputContextGeneration());
+        CHECK(!pg_reply.accepted);
+        CHECK(pg_button->isChecked());
+        CHECK(pg_finish->isEnabled());
+
+        // Hierarchical Esc while a material source is staged: discard
+        // pending selection first, exit Sketch Project tool on next Esc.
+        QTest::keyClick(viewport, Qt::Key_Escape);
+        QApplication::processEvents();
+        CHECK(pg_button->isChecked());
+        CHECK(!pg_panel->isHidden());
+        CHECK(!pg_finish->isEnabled());
+        CHECK(pg_count->text().contains(
+            QStringLiteral("selected: 0")));
+        CHECK(pg_session.document().state() == pg_before_state);
+        QTest::keyClick(viewport, Qt::Key_Escape);
+        QApplication::processEvents();
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_panel->isHidden());
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+
+        // Toolbar and Command Line re-enter the *same* stage-scoped
+        // material Edge picker; use the same genuine OCCT source click.
+        pg_button->click();
+        QApplication::processEvents();
+        CHECK(pg_button->isChecked());
+        CHECK(!pg_panel->isHidden());
+        CHECK(nativeClick(*viewport, *pg_source_point));
+        CHECK(pg_count->text().contains(
+            QStringLiteral("selected: 1")));
+        CHECK(pg_finish->isEnabled());
+
         pg_reply = workbench.submitCadInput(
             "REGULAR", workbench.cadInputContextGeneration());
         CHECK(pg_reply.accepted);
