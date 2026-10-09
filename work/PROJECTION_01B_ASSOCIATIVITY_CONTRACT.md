@@ -6,6 +6,7 @@
 **Foundation:** §7.2/§7.5 accepted Part-associative DIRECTION, §7.3 Assembly snapshot unchanged
 **Program:** Part Modeling v1 roadmap v1.30, Project Geometry before PM-06
 **D2 authority:** `work/PROJECTION_01B_ASSOCIATIVITY_DESIGN_PROPOSAL.md` §7 five decisions explicitly Owner-accepted on 2026-10-09 (`zatwierdzam - kontynuuj`)
+**Current phase:** B1 v15 Part Sketch bindings + validated source/target provenance tested FOCUSED #1940 PASS 1/1; broader FAST and B2–B5 remain open. Evidence: `work/PROJECTION_01B_PROGRESS_EVIDENCE.md`.
 **Activation:** `work/ACTIVE.yaml` references THIS Work Contract after a dedicated activation commit. Source changes can follow activation only within PG-01B B1–B5. PG-01C/D/E remain separately gated.
 
 ## Goal and scope
