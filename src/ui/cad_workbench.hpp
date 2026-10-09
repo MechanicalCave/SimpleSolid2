@@ -364,6 +364,8 @@ private:
     void restoreActiveViewState();
     void refreshPropertiesContext(
         std::optional<core::BuiltinReferenceRole> primary);
+    [[nodiscard]] std::optional<part::ResolvedProfileRegion>
+    evaluateCurrentProfile(part::ProfileId profile_id) const;
     void refreshProfileProperties(
         part::ProfileId profile_id);
     void refreshAxisProperties(
