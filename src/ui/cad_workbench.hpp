@@ -300,6 +300,7 @@ private:
     void clearProjectEdgeRuntimeContext();
     void clearProjectEdgeSelection();
     void tryStageProjectEdgeSelection();
+    void refreshProjectEdgePreview();
     [[nodiscard]] bool finishProjectEdgeTool();
     void syncProjectEdgeUi();
     [[nodiscard]] application::CadInputSubmitResult
@@ -771,6 +772,7 @@ private:
     QPushButton* project_edge_finish_button_{};
     QPushButton* project_edge_cancel_button_{};
     bool project_edge_active_{false};
+    bool project_edge_preview_valid_{false};
     std::optional<core::DocumentRevision> project_edge_revision_;
     std::optional<part::BodyStageRef> project_edge_stage_;
     std::vector<part::MaterialEdgeReference> project_edge_sources_;
