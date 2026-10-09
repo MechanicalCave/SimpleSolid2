@@ -445,10 +445,12 @@ int main(int argc, char* argv[]) {
             QStringLiteral("projectEdgeOperationsWidget"));
         auto* pg_count = workbench.findChild<QLabel*>(
             QStringLiteral("projectEdgeSelectionLabel"));
+        auto* pg_result = workbench.findChild<QLabel*>(
+            QStringLiteral("projectEdgeResultLabel"));
         auto* pg_finish = workbench.findChild<QPushButton*>(
             QStringLiteral("projectEdgeFinishButton"));
         CHECK(pg_action && pg_button && pg_panel &&
-              pg_count && pg_finish);
+              pg_count && pg_result && pg_finish);
         QTreeWidgetItem* pg_tree_item = nullptr;
         for (QTreeWidgetItemIterator it(tree); *it; ++it) {
             if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
@@ -562,7 +564,27 @@ int main(int argc, char* argv[]) {
                   << std::endl;
         CHECK(pg_picked && pg_source_point);
         CHECK(pg_finish->isEnabled());
+        // C2: a live strict analytic projection preview, rather than
+        // only a staged Edge token, is required to enable Finish.
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Current preview: 1 derived Edge(s)")));
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Regular")));
         CHECK(pg_session.document().revision() == pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+        pg_reply = workbench.submitCadInput(
+            "CONSTRUCTION", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Construction")));
+        CHECK(pg_finish->isEnabled());
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+        pg_reply = workbench.submitCadInput(
+            "REGULAR", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Regular")));
 
         // Rejected Command Line text is diagnostic-only: it does not
         // discard the exact staged source or leave the tool.
@@ -581,6 +603,8 @@ int main(int argc, char* argv[]) {
         CHECK(!pg_finish->isEnabled());
         CHECK(pg_count->text().contains(
             QStringLiteral("selected: 0")));
+        CHECK(!pg_result->text().contains(
+            QStringLiteral("Current preview:")));
         CHECK(pg_session.document().state() == pg_before_state);
         QTest::keyClick(viewport, Qt::Key_Escape);
         QApplication::processEvents();
