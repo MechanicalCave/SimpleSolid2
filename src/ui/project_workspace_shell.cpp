@@ -245,6 +245,15 @@ ProjectWorkspaceShell::ProjectWorkspaceShell(
             command_line_widget_);
     command_prompt_->setObjectName(
         QStringLiteral("cadCommandPrompt"));
+    command_prompt_->setWordWrap(false);
+    command_prompt_->setTextFormat(Qt::PlainText);
+    command_prompt_->setAlignment(
+        Qt::AlignLeft | Qt::AlignVCenter);
+    // PG-01C/ADR-0011: tool-local prompts must not resize the shared
+    // Command Line or steal width from the actual input buffer.
+    // The full string remains available via tooltip; contextual detail
+    // is also presented in the Sketch Operations panel.
+    command_prompt_->setFixedWidth(240);
     command_layout->addWidget(command_prompt_);
 
     command_input_ =
@@ -557,8 +566,14 @@ void ProjectWorkspaceShell::refreshCadInputPresentation() {
         cad_input_.synchronizeContext());
 
     if (command_prompt_ != nullptr) {
+        const auto complete_prompt =
+            fromUtf8(cad_input_.prompt());
+        command_prompt_->setToolTip(complete_prompt);
         command_prompt_->setText(
-            fromUtf8(cad_input_.prompt()));
+            command_prompt_->fontMetrics().elidedText(
+                complete_prompt,
+                Qt::ElideRight,
+                std::max(0, command_prompt_->width() - 4)));
     }
 
     syncCadInputLineEdit();
