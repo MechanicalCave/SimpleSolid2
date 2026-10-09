@@ -2,7 +2,7 @@
 
 **Status:** DESIGN EVIDENCE ONLY — no production implementation or native test PASS claimed.  
 **Examined baseline:** `main` `d928e8a5d1f5893b73de3e4fcd399d7e0483af83`.  
-**Authority:** accepted PG-01D D2-F1–F6 design, pending separate Work Contract acceptance and activation.  
+**Authority:** accepted PG-01D D2-F1–F6 design and Owner-accepted bounded Work Contract; dedicated activation is still pending.  
 **Method:** read current repository source and existing native test registration. This is **not** a run of the OCCT Face-wire probe; F2 topological consistency still needs real RED→GREEN evidence.
 
 ## Existing reusable paths (confirmed from repository)
