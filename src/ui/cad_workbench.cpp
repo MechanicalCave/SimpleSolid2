@@ -10169,10 +10169,16 @@ void CadWorkbench::syncProjectEdgeUi() {
                 *project_edge_revision_);
     }
     if (project_edge_remove_button_ != nullptr) {
-        project_edge_remove_button_->setEnabled(count > 0U);
+        project_edge_remove_button_->setEnabled(
+            project_edge_face_mode_
+                ? project_edge_face_pick_.has_value()
+                : count > 0U);
     }
     if (project_edge_clear_button_ != nullptr) {
-        project_edge_clear_button_->setEnabled(count > 0U);
+        // A geometrically Unsupported-only Face may admit zero links,
+        // but its transient draft must still be removable from the UI.
+        project_edge_clear_button_->setEnabled(
+            count > 0U || project_edge_face_pick_.has_value());
     }
     if (project_edge_result_label_ != nullptr) {
         QString result_message =
