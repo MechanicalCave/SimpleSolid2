@@ -26,6 +26,12 @@ Both `TopAbs_FORWARD` and `TopAbs_REVERSED` planar material Face orientations we
 - `src/part/feature_evaluation.cpp::authorMaterialEdgeReference` already rejects `periodic_seam`, `representation_partition`, non-referenceable/multi-candidate curves, incomplete stage catalog; any D0 probe must exercise the **same** authoring function before classifying a native occurrence as admissible material Edge.
 - `src/ui/part_viewport_controller.cpp::selectedMaterialEdgeReferences` accepts only Edge-kind selections and must not be repurposed to infer a Face's hidden perimeter.
 
+## In-repository native characterization (test authored; Windows execution pending)
+
+The activated PG-01D production branch adds `verifyPg01dNativeStrictFaceAndMaterialCatalog` to `tests/pm05f_r2_native_workbench_edit_test.cpp`. The fixture constructs a real Extrude Add rectangle and a circular one-sided **through Cut**, evaluates the exact current `BodyStageTopologyCatalog`, counts **strict bounded Face IDs separately from Surface-only carrier occurrences**, checks current material Edges *only* via `part::authorMaterialEdgeReference`, verifies per-stage binding and unique semantic references, and prints `PG01D_D0_NATIVE_STRICT_FACE_CATALOG_PASS`.
+
+CI FAST #2117 on this branch is **PASS**, but FAST does **not** exercise the full-only native Qt/OCCT target. A separate FOCUSED request for existing `pm05f_r2_native_workbench_edit_test` / `pg01c.native_project_edge_command` is therefore required before any native SS2 D0 PASS claim. The test deliberately does **not** claim per-Face oriented wire membership until the D1 provider query exists.
+
 ## Mandatory remaining D0 tests / STOP
 
 1. Run a **compiled native Windows SS2 OCCT** fixture building a real through-Cut and inspect `BodyStageTopologyCatalog`: exact strict material Face address (not only Surface carrier), complete Face/Edge accounting, and deterministic after-Feature stage.
