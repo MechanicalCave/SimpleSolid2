@@ -498,29 +498,64 @@ int main(int argc, char* argv[]) {
             "PROJECT", workbench.cadInputContextGeneration());
         CHECK(pg_reply.accepted);
         const auto pg_probes = authorableEdgeProbes(pg_session, kernel);
-        CHECK(viewport->setStandardView(
-            viewer::StandardView::top_front_right));
-        viewport->fitAll();
-        QApplication::processEvents();
         bool pg_picked = false;
-        for (const auto& probe : pg_probes) {
-            // XY projected vertical material Edges are degenerate points.
-            // A cap Edge is the supported exact Line source.
-            if (std::abs(probe.world.z) > 1.0e-6 &&
-                std::abs(probe.world.z - 20.0) > 1.0e-6) {
-                continue;
-            }
-            if (!nativeClick(*viewport, probe.world)) {
-                continue;
-            }
-            pg_picked =
-                pg_count->text().contains(
+        int native_queries = 0;
+        int native_clicks = 0;
+        // Try the same genuine native picking from several standard
+        // cameras. Exact Body pick/occlusion and Sketch support overlays
+        // vary by camera; no synthetic provider token is accepted.
+        for (const auto orientation : {
+                 viewer::StandardView::top_front_right,
+                 viewer::StandardView::top_front_left,
+                 viewer::StandardView::top_back_right,
+                 viewer::StandardView::bottom_front_right,
+                 viewer::StandardView::bottom_back_left}) {
+            CHECK(viewport->setStandardView(orientation));
+            viewport->fitAll();
+            QApplication::processEvents();
+            for (const auto& probe : pg_probes) {
+                // Only horizontal caps project as non-degenerate
+                // Line onto the selected XY Sketch support.
+                if (std::abs(probe.world.z) > 1.0e-6 &&
+                    std::abs(probe.world.z - 20.0) > 1.0e-6) {
+                    continue;
+                }
+                const auto point =
+                    viewport->projectWorldPoint(probe.world);
+                if (!point) continue;
+                const auto query = viewport->queryBodyTopology(
+                    *point,
+                    viewer::BodyTopologyPickFilter{
+                        false, true, false});
+                if (query.valid() && query.completed &&
+                    !query.candidates.empty()) {
+                    ++native_queries;
+                }
+                if (!nativeClick(*viewport, probe.world)) {
+                    continue;
+                }
+                ++native_clicks;
+                std::cerr << "PG01C_NATIVE_PICK_ATTEMPT"
+                          << " orientation=" << static_cast<int>(orientation)
+                          << " label=" << pg_count->text().toStdString()
+                          << " project_active=" << pg_button->isChecked()
+                          << " query_edges=" << query.candidates.size()
+                          << std::endl;
+                CHECK(pg_button->isChecked());
+                pg_picked = pg_count->text().contains(
                     QStringLiteral("selected: 1"));
+                if (pg_picked) break;
+                pg_reply = workbench.submitCadInput(
+                    "CLEAR", workbench.cadInputContextGeneration());
+                CHECK(pg_reply.accepted);
+            }
             if (pg_picked) break;
-            pg_reply = workbench.submitCadInput(
-                "CLEAR", workbench.cadInputContextGeneration());
-            CHECK(pg_reply.accepted);
         }
+        std::cerr << "PG01C_NATIVE_PICK_SUMMARY"
+                  << " queries=" << native_queries
+                  << " clicks=" << native_clicks
+                  << " selected=" << pg_count->text().toStdString()
+                  << std::endl;
         CHECK(pg_picked);
         CHECK(pg_finish->isEnabled());
         pg_reply = workbench.submitCadInput(
