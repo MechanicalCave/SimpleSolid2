@@ -300,6 +300,8 @@ private:
     void clearProjectEdgeRuntimeContext();
     void clearProjectEdgeSelection();
     void tryStageProjectEdgeSelection();
+    void tryStageProjectFaceSelection();
+    void setProjectEdgeFaceMode(bool enabled);
     void refreshProjectEdgePreview();
     [[nodiscard]] bool finishProjectEdgeTool();
     void syncProjectEdgeUi();
@@ -767,6 +769,8 @@ private:
     QLabel* project_edge_stage_label_{};
     QLabel* project_edge_selection_label_{};
     QLabel* project_edge_result_label_{};
+    QPushButton* project_edge_edges_button_{};
+    QPushButton* project_edge_face_button_{};
     QPushButton* project_edge_regular_button_{};
     QPushButton* project_edge_construction_button_{};
     QPushButton* project_edge_remove_button_{};
@@ -775,6 +779,18 @@ private:
     QPushButton* project_edge_cancel_button_{};
     bool project_edge_active_{false};
     bool project_edge_preview_valid_{false};
+    bool project_edge_face_mode_{false};
+    bool project_edge_switching_mode_{false};
+    std::optional<BodyTopologySelectionAddress>
+        project_edge_face_pick_;
+    std::optional<part::MaterialFaceBoundaryAdmission>
+        project_edge_face_membership_;
+    std::vector<part::MaterialEdgeReference>
+        project_edge_face_sources_;
+    std::vector<part::MaterialEdgeReference>
+        project_edge_face_skipped_;
+    std::vector<part::MaterialEdgeReference>
+        project_edge_manual_sources_;
     std::optional<core::DocumentRevision> project_edge_revision_;
     std::optional<part::BodyStageRef> project_edge_stage_;
     std::vector<part::MaterialEdgeReference> project_edge_sources_;
