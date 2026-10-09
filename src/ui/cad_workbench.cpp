@@ -9456,6 +9456,325 @@ CadWorkbench::submitEdgeFeatureCadInput(
     return {true, {}};
 }
 
+bool CadWorkbench::startProjectEdgeTool() {
+    if (project_edge_active_) {
+        return true;
+    }
+    auto* session = activeDocumentSession();
+    if (session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        viewport_controller_ == nullptr ||
+        !active_sketch_id_ ||
+        !sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->active() ||
+        sketch_support_pick_active_ ||
+        axis_draft_ || datum_plane_draft_ ||
+        extrude_draft_ || revolve_draft_ ||
+        fillet_draft_ || chamfer_draft_) {
+        setStatusText(QStringLiteral(
+            "PROJECT requires an active Part Sketch and exact Body provider."));
+        return false;
+    }
+
+    // Select is the existing Sketch input baseline. The Viewer remains
+    // the stage-scoped Edge picker and never authors Part geometry.
+    sketch_interaction_controller_->activateSelect();
+    const auto summary = viewport_controller_->bodyTopologySummary();
+    if (!summary || summary->stage.kind !=
+            part::BodyStageKind::after_feature ||
+        summary->edges.referenceable == 0U) {
+        setStatusText(QStringLiteral(
+            "PROJECT needs a resolved source Body stage with material Edges."));
+        return false;
+    }
+
+    project_edge_active_ = true;
+    project_edge_revision_ = session->document().revision();
+    project_edge_stage_ = summary->stage;
+    project_edge_role_ = sketch::EntityRole::regular;
+    project_edge_sources_.clear();
+
+    viewport_controller_->clearBodyTopologyToolSelection();
+    viewport_controller_->setBodyTopologyEdgeDraftMode(true);
+    // Select keeps ordinary pointer navigation and camera controls;
+    // the provider's existing Edge pick mode owns source collection.
+    syncProjectEdgeUi();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(QStringLiteral(
+        "PROJECT — pick current-stage material Edges; Regular/Construction, FINISH or CANCEL."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::clearProjectEdgeRuntimeContext() {
+    if (!project_edge_active_) {
+        return;
+    }
+    // Clear the tool before viewport callbacks can re-enter selection sync.
+    project_edge_active_ = false;
+    project_edge_revision_.reset();
+    project_edge_stage_.reset();
+    project_edge_sources_.clear();
+    project_edge_role_ = sketch::EntityRole::regular;
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->setBodyTopologyEdgeDraftMode(false);
+        viewport_controller_->clearBodyTopologyToolSelection();
+    }
+    syncProjectEdgeUi();
+    syncActionState();
+    notifyCadInputContextChanged();
+}
+
+void CadWorkbench::cancelProjectEdgeTool() {
+    if (!project_edge_active_) {
+        return;
+    }
+    clearProjectEdgeRuntimeContext();
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active()) {
+        sketch_interaction_controller_->activateSelect();
+    }
+    setStatusText(QStringLiteral(
+        "Project Geometry cancelled — no authored change."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::clearProjectEdgeSelection() {
+    if (!project_edge_active_ || !viewport_controller_) {
+        return;
+    }
+    project_edge_sources_.clear();
+    viewport_controller_->clearBodyTopologyToolSelection();
+    syncProjectEdgeUi();
+    notifyCadInputContextChanged();
+}
+
+void CadWorkbench::tryStageProjectEdgeSelection() {
+    if (!project_edge_active_ ||
+        !document_session_ ||
+        !project_edge_revision_ ||
+        !project_edge_stage_ ||
+        !viewport_controller_) {
+        return;
+    }
+    if (document_session_->document().revision() !=
+            *project_edge_revision_) {
+        clearProjectEdgeSelection();
+        setStatusText(QStringLiteral(
+            "PROJECT source selection stale after Document revision change."));
+        return;
+    }
+    const auto selected =
+        viewport_controller_->selectedMaterialEdgeReferences();
+    if (selected) {
+        const bool stage_matches = std::all_of(
+            selected->begin(), selected->end(),
+            [this](const part::MaterialEdgeReference& source) {
+                return source.valid() &&
+                    source.stage == *project_edge_stage_;
+            });
+        if (!stage_matches) {
+            setStatusText(QStringLiteral(
+                "PROJECT Edge belongs to another source Body stage."));
+            return;
+        }
+        project_edge_sources_ = *selected;
+    } else if (viewport_controller_->bodyTopologySelection().empty()) {
+        project_edge_sources_.clear();
+    } else {
+        setStatusText(QStringLiteral(
+            "PROJECT selection contains unsupported or stale Body topology."));
+        return;
+    }
+    syncProjectEdgeUi();
+    notifyCadInputContextChanged();
+}
+
+bool CadWorkbench::finishProjectEdgeTool() {
+    auto* session = activeDocumentSession();
+    if (!project_edge_active_ || session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        !project_edge_revision_ || !project_edge_stage_ ||
+        !active_sketch_id_ ||
+        !sketch_edit_document_id_ ||
+        *sketch_edit_document_id_ != session->documentId() ||
+        session->document().revision() !=
+            *project_edge_revision_ ||
+        project_edge_sources_.empty()) {
+        setStatusText(QStringLiteral(
+            "PROJECT Finish rejected: selection empty or Sketch/Document context stale."));
+        return false;
+    }
+    const auto current =
+        viewport_controller_ != nullptr
+            ? viewport_controller_->selectedMaterialEdgeReferences()
+            : std::nullopt;
+    if (!current || *current != project_edge_sources_ ||
+        !std::all_of(current->begin(), current->end(),
+                     [this](const part::MaterialEdgeReference& source) {
+                         return source.stage == *project_edge_stage_;
+                     })) {
+        setStatusText(QStringLiteral(
+            "PROJECT Finish rejected: selected Edge stage or generation changed."));
+        return false;
+    }
+
+    const auto result = session->execute(
+        application::CreateProjectedSketchEdgesCommand{
+            *active_sketch_id_,
+            *project_edge_revision_,
+            project_edge_sources_,
+            project_edge_role_},
+        *solid_modeling_kernel_);
+    if (!result.ok()) {
+        setStatusText(result.diagnostic.message.empty()
+            ? QStringLiteral(
+                "PROJECT rejected an unresolved, invalid or cyclic source Edge; no batch committed.")
+            : fromUtf8(result.diagnostic.message));
+        return false;
+    }
+
+    const auto count = result.entity_ids.size();
+    clearProjectEdgeRuntimeContext();
+    refreshActiveContext();
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active()) {
+        sketch_interaction_controller_->activateSelect();
+    }
+    setStatusText(
+        QStringLiteral("Project Geometry finished — %1 linked Edges.")
+            .arg(static_cast<qulonglong>(count)));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::setProjectEdgeRole(sketch::EntityRole role) {
+    if (!project_edge_active_ ||
+        (role != sketch::EntityRole::regular &&
+         role != sketch::EntityRole::construction)) {
+        return;
+    }
+    project_edge_role_ = role;
+    syncProjectEdgeUi();
+    notifyCadInputContextChanged();
+}
+
+void CadWorkbench::syncProjectEdgeUi() {
+    if (project_edge_operations_widget_ != nullptr) {
+        project_edge_operations_widget_->setVisible(project_edge_active_);
+    }
+    if (project_edge_button_ != nullptr) {
+        project_edge_button_->setChecked(project_edge_active_);
+    }
+    if (!project_edge_active_) {
+        return;
+    }
+    const auto count = project_edge_sources_.size();
+    if (project_edge_stage_label_ != nullptr) {
+        project_edge_stage_label_->setText(
+            project_edge_stage_ && project_edge_stage_->feature_id
+                ? QStringLiteral("Source stage: after Feature %1")
+                      .arg(fromUtf8(
+                          project_edge_stage_->feature_id->serialized()))
+                : QStringLiteral("Source stage: unavailable"));
+    }
+    if (project_edge_selection_label_ != nullptr) {
+        project_edge_selection_label_->setText(
+            QStringLiteral("Material Edges selected: %1")
+                .arg(static_cast<qulonglong>(count)));
+    }
+    if (project_edge_regular_button_ != nullptr) {
+        project_edge_regular_button_->setChecked(
+            project_edge_role_ == sketch::EntityRole::regular);
+    }
+    if (project_edge_construction_button_ != nullptr) {
+        project_edge_construction_button_->setChecked(
+            project_edge_role_ == sketch::EntityRole::construction);
+    }
+    if (project_edge_finish_button_ != nullptr) {
+        project_edge_finish_button_->setEnabled(
+            count > 0U && document_session_ != nullptr &&
+            project_edge_revision_ &&
+            document_session_->document().revision() ==
+                *project_edge_revision_);
+    }
+    if (project_edge_remove_button_ != nullptr) {
+        project_edge_remove_button_->setEnabled(count > 0U);
+    }
+    if (project_edge_clear_button_ != nullptr) {
+        project_edge_clear_button_->setEnabled(count > 0U);
+    }
+    if (project_edge_result_label_ != nullptr) {
+        project_edge_result_label_->setText(
+            count == 0U
+                ? QStringLiteral(
+                    "Pick one or more exact material Edges, then Finish; Cancel makes no changes.")
+                : QStringLiteral(
+                    "Current batch: %1 Edge(s), %2. FINISH commits once; REMOVE/CLEAR or CANCEL.")
+                    .arg(static_cast<qulonglong>(count))
+                    .arg(project_edge_role_ ==
+                             sketch::EntityRole::regular
+                             ? QStringLiteral("Regular")
+                             : QStringLiteral("Construction")));
+    }
+    if (operations_placeholder_ != nullptr) {
+        operations_placeholder_->setText(
+            QStringLiteral("Project Geometry — %1 source Edge(s)")
+                .arg(static_cast<qulonglong>(count)));
+    }
+}
+
+application::CadInputSubmitResult
+CadWorkbench::submitProjectEdgeCadInput(std::string_view text) {
+    if (!project_edge_active_) {
+        return {false, "No active Project Geometry tool."};
+    }
+    const auto keyword = upperAsciiTrimmed(text);
+    if (keyword == "PROJECT" || keyword == "PROJECTGEOMETRY") {
+        return {true, {}};
+    }
+    if (keyword == "CANCEL" || keyword == "ESC") {
+        cancelProjectEdgeTool();
+        return {true, {}};
+    }
+    if (keyword == "REGULAR") {
+        setProjectEdgeRole(sketch::EntityRole::regular);
+        return {true, {}};
+    }
+    if (keyword == "CONSTRUCTION") {
+        setProjectEdgeRole(sketch::EntityRole::construction);
+        return {true, {}};
+    }
+    if (keyword == "REMOVE") {
+        if (!viewport_controller_ ||
+            !viewport_controller_->removePrimaryBodyTopologyToolSelection()) {
+            return {false, "REMOVE requires one staged material Edge."};
+        }
+        tryStageProjectEdgeSelection();
+        return {true, {}};
+    }
+    if (keyword == "CLEAR") {
+        clearProjectEdgeSelection();
+        return {true, {}};
+    }
+    if (keyword.empty() || keyword == "FINISH") {
+        return finishProjectEdgeTool()
+            ? application::CadInputSubmitResult{true, {}}
+            : application::CadInputSubmitResult{
+                false, "PROJECT Finish rejected; correct source selection or CANCEL."};
+    }
+    return {
+        false,
+        "PROJECT expects REGULAR, CONSTRUCTION, REMOVE, CLEAR, FINISH or CANCEL."};
+}
+
 void CadWorkbench::setSketchSelectionRole(
     sketch::EntityRole role) {
     if (!sketch_interaction_controller_ ||
