@@ -807,6 +807,20 @@ void verifyPg01bAtomicProjectedEdges() {
         const auto* line = sketch->model.findLine(entity);
         CHECK(line && line->role() == sketch::EntityRole::construction);
     }
+    const auto before_duplicate =
+        fixture.session.document().state();
+    const auto geometry =
+        sketch::captureSketchTransformGeometry(
+            authored->model, {batch.entity_ids.front()});
+    CHECK(geometry && !geometry->empty());
+    const auto stale_copy = fixture.session.execute(
+        application::DuplicateSketchGeometryCommand{
+            id, fixture.session.document().revision(),
+            *geometry});
+    CHECK(!stale_copy.ok() && !stale_copy.changed);
+    CHECK(fixture.session.document().state() ==
+          before_duplicate);
+
     const auto after = fixture.session.document().state();
     const auto dup = fixture.session.execute(
         application::CreateProjectedSketchEdgesCommand{

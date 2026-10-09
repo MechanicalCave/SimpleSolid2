@@ -2486,6 +2486,25 @@ DuplicateSketchGeometryResult DocumentSession::execute(
         }
     }
 
+    // Copy/Duplicate consumes the selected authored seed today. Copying a
+    // linked source would silently materialize stale geometry as an
+    // unrelated editable entity. Refuse until an explicit provider-derived
+    // copy workflow exists (Break Link first is available).
+    const bool includes_linked_seed = std::any_of(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [&source_ids](const part::ProjectedEdgeBinding& binding) {
+            return source_ids.contains(binding.target_entity);
+        });
+    if (includes_linked_seed) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Duplicate Sketch Geometry cannot copy a linked authored seed",
+            path_);
+        return DuplicateSketchGeometryResult{
+            false, {}, failed.diagnostic};
+    }
+
     std::vector<sketch::EntityId> created;
     created.reserve(
         command.geometry.lines.size() +
