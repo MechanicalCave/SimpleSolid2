@@ -1029,6 +1029,10 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("selected: 4")));
             CHECK(pg_face_detail->text().contains(
                 QStringLiteral("Outer Edge 1: supported")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 4U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
             CHECK(pg_finish->isEnabled());
             CHECK(face_session.document().state() == before_state);
             CHECK(face_session.undoDepth() == before_undo);
@@ -1225,6 +1229,10 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("Hole 1 Edge 1: supported")));
             CHECK(pg_face_detail->text().contains(
                 QStringLiteral("Hole 2 Edge 1: supported")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 6U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
             CHECK(pg_finish->isEnabled());
             CHECK(holed_session.document().state() == holed_state);
             CHECK(holed_session.document().revision() == holed_revision);
@@ -1240,6 +1248,10 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("selected: 1")));
             CHECK(!pg_face_detail->text().contains(
                 QStringLiteral("Hole 1 Edge 1")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
             CHECK(holed_session.document().state() == holed_state);
             CHECK(holed_session.undoDepth() == holed_undo);
             CHECK(nativePlanarFaceClick(
@@ -1248,6 +1260,8 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("selected: 6")));
             CHECK(pg_face_detail->text().contains(
                 QStringLiteral("Hole 2 Edge 1: supported")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 6U);
             CHECK(pg_finish->isEnabled());
 
             // Return to manual Edge selection before Finish. The existing
@@ -1269,6 +1283,10 @@ int main(int argc, char* argv[]) {
                 "FINISH", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
             CHECK(holed_session.undoDepth() == holed_undo + 1U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
             const auto* holed_linked = holed_session.document()
                 .findSketch(*holed_target.sketch_id);
             CHECK(holed_linked);
