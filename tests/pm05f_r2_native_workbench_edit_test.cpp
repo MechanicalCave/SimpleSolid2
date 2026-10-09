@@ -9,6 +9,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
+#include <QAction>
 #include <QApplication>
 #include <QDebug>
 #include <QLabel>
@@ -18,6 +19,7 @@
 #include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QTreeWidgetItemIterator>
 
 #include <algorithm>
 #include <atomic>
@@ -2235,6 +2237,132 @@ int main(int argc, char* argv[]) {
         std::cerr
             << "PM05F_R2_PART008_CHAMFER_FINISH_PASS"
             << std::endl;
+
+        // PG-01C C1: real OCCT native cursor -> Workbench Project Geometry,
+        // not a fabricated presentation token. The separate later Sketch
+        // makes the base Extrude a legal prior Body stage.
+        auto pg_session = makeBaseSession(kernel);
+        const auto pg_sketch =
+            pg_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+        CHECK(pg_sketch.ok() && pg_sketch.sketch_id);
+        CHECK(workbench.activateDocument(&pg_session, {}));
+        QApplication::processEvents();
+
+        auto* pg_action = workbench.findChild<QAction*>(
+            QStringLiteral("editSketchAction"));
+        auto* pg_button = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeToolButton"));
+        auto* pg_panel = workbench.findChild<QWidget*>(
+            QStringLiteral("projectEdgeOperationsWidget"));
+        auto* pg_count = workbench.findChild<QLabel*>(
+            QStringLiteral("projectEdgeSelectionLabel"));
+        auto* pg_finish = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeFinishButton"));
+        CHECK(pg_action && pg_button && pg_panel &&
+              pg_count && pg_finish);
+        QTreeWidgetItem* pg_tree_item = nullptr;
+        for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+            if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
+                pg_tree_item = *it;
+                break;
+            }
+        }
+        CHECK(pg_tree_item);
+        tree->clearSelection();
+        tree->setCurrentItem(pg_tree_item);
+        pg_tree_item->setSelected(true);
+        pg_action->trigger();
+        QApplication::processEvents();
+        CHECK(!pg_button->isHidden());
+        CHECK(pg_button->isEnabled());
+
+        const auto pg_before_state = pg_session.document().state();
+        const auto pg_before_revision =
+            pg_session.document().revision();
+        const auto pg_before_undo = pg_session.undoDepth();
+        auto pg_reply = workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_button->isChecked());
+        CHECK(!pg_panel->isHidden());
+        CHECK(!pg_finish->isEnabled());
+        CHECK(workbench.acceptsEmptyCadInput());
+        pg_reply = workbench.submitCadInput(
+            "CONSTRUCTION", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        pg_reply = workbench.submitCadInput(
+            "FINISH", workbench.cadInputContextGeneration());
+        CHECK(!pg_reply.accepted);
+        CHECK(pg_session.document().state() == pg_before_state);
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+        pg_reply = workbench.submitCadInput(
+            "CANCEL", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_panel->isHidden());
+        CHECK(pg_session.document().state() == pg_before_state);
+
+        // Repeat through the same semantic Command Line activation and
+        // select an exact source Edge in the native provider.
+        pg_reply = workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        const auto pg_probes = authorableEdgeProbes(pg_session, kernel);
+        CHECK(viewport->setStandardView(
+            viewer::StandardView::top_front_right));
+        viewport->fitAll();
+        QApplication::processEvents();
+        bool pg_picked = false;
+        for (const auto& probe : pg_probes) {
+            // XY projected vertical material Edges are degenerate points.
+            // A cap Edge is the supported exact Line source.
+            if (std::abs(probe.world.z) > 1.0e-6 &&
+                std::abs(probe.world.z - 20.0) > 1.0e-6) {
+                continue;
+            }
+            if (!nativeClick(*viewport, probe.world)) {
+                continue;
+            }
+            pg_picked =
+                pg_count->text().contains(
+                    QStringLiteral("selected: 1"));
+            if (pg_picked) break;
+            pg_reply = workbench.submitCadInput(
+                "CLEAR", workbench.cadInputContextGeneration());
+            CHECK(pg_reply.accepted);
+        }
+        CHECK(pg_picked);
+        CHECK(pg_finish->isEnabled());
+        pg_reply = workbench.submitCadInput(
+            "REGULAR", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        pg_finish->click();
+        QApplication::processEvents();
+        const auto* pg_authored =
+            pg_session.document().findSketch(*pg_sketch.sketch_id);
+        CHECK(pg_authored);
+        CHECK(pg_authored->projection_bindings.size() == 1U);
+        CHECK(pg_authored->model.entityCount() == 1U);
+        CHECK(pg_session.undoDepth() == pg_before_undo + 1U);
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_panel->isHidden());
+        CHECK(pg_session.undo().changed);
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        CHECK(pg_session.redo().changed);
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        std::cout
+            << "PG01C_C1_NATIVE_EDGE_TOOL_PASS"
+            << " actual_cursor=1"
+            << " semantic_finish=1"
+            << " cancel_zero_mutation=1"
+            << " undo_redo=1\n";
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
