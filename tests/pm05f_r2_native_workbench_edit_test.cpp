@@ -1016,6 +1016,12 @@ int main(int argc, char* argv[]) {
         const auto pg_current_regions =
             sketch::analyzeRegions(pg_region_effective->model);
         CHECK(pg_current_regions.regions.size() == 1U);
+        // The upstream update above intentionally bypassed the GUI.
+        // Tear down the *old* edit context before revisiting this
+        // Document, otherwise Workbench legitimately rejects a second
+        // Edit Sketch and the revision-bound scene fails closed.
+        CHECK(workbench.activateDocument(&session, {}));
+        QApplication::processEvents();
         CHECK(workbench.activateDocument(&pg_reopened, {}));
         QApplication::processEvents();
         QTreeWidgetItem* pg_profile_sketch_item = nullptr;
