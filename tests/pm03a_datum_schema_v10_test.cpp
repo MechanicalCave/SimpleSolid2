@@ -127,7 +127,7 @@ std::string schema9FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        14);
+        15);
 
     // DatumId follows the existing Part-local canonical positive-decimal and
     // high-water allocation rules.

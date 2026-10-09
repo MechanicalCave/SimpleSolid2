@@ -465,7 +465,7 @@ Fixture makeFixture() {
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        14);
+        15);
 
     const auto fixture =
         makeFixture();
