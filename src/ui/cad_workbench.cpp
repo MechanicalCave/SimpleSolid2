@@ -1771,6 +1771,17 @@ void CadWorkbench::buildUi() {
         6,
         rectangle_sketch_button_);
 
+    project_edge_button_ =
+        new QPushButton(
+            QStringLiteral("Project Geometry"),
+            shell_);
+    project_edge_button_->setObjectName(
+        QStringLiteral("projectEdgeToolButton"));
+    project_edge_button_->setCheckable(true);
+    // Same Sketch Modify group as Trim/Extend, not a Part-level dialog.
+    shell_->editorToolsLayout().insertWidget(
+        10, project_edge_button_);
+
     viewport_controller_ =
         new PartViewportController(
             *tree_controller_,
@@ -3833,6 +3844,89 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         edge_feature_operations_widget_);
 
+    project_edge_operations_widget_ =
+        new QWidget(operations_content);
+    project_edge_operations_widget_->setObjectName(
+        QStringLiteral("projectEdgeOperationsWidget"));
+    auto* project_layout =
+        new QVBoxLayout(project_edge_operations_widget_);
+    project_layout->setContentsMargins(0, 0, 0, 0);
+
+    auto* project_title =
+        new QLabel(QStringLiteral("PROJECT GEOMETRY"),
+                   project_edge_operations_widget_);
+    project_title->setObjectName(
+        QStringLiteral("projectEdgeTitleLabel"));
+    project_layout->addWidget(project_title);
+
+    project_edge_stage_label_ =
+        new QLabel(project_edge_operations_widget_);
+    project_edge_stage_label_->setObjectName(
+        QStringLiteral("projectEdgeStageLabel"));
+    project_edge_stage_label_->setWordWrap(true);
+    project_layout->addWidget(project_edge_stage_label_);
+
+    project_edge_selection_label_ =
+        new QLabel(project_edge_operations_widget_);
+    project_edge_selection_label_->setObjectName(
+        QStringLiteral("projectEdgeSelectionLabel"));
+    project_layout->addWidget(project_edge_selection_label_);
+
+    auto* role_row = new QWidget(project_edge_operations_widget_);
+    auto* role_layout = new QHBoxLayout(role_row);
+    role_layout->setContentsMargins(0, 0, 0, 0);
+    project_edge_regular_button_ =
+        new QPushButton(QStringLiteral("Regular"), role_row);
+    project_edge_regular_button_->setObjectName(
+        QStringLiteral("projectEdgeRegularButton"));
+    project_edge_regular_button_->setCheckable(true);
+    project_edge_construction_button_ =
+        new QPushButton(QStringLiteral("Construction"), role_row);
+    project_edge_construction_button_->setObjectName(
+        QStringLiteral("projectEdgeConstructionButton"));
+    project_edge_construction_button_->setCheckable(true);
+    role_layout->addWidget(project_edge_regular_button_);
+    role_layout->addWidget(project_edge_construction_button_);
+    project_layout->addWidget(role_row);
+
+    auto* pick_row = new QWidget(project_edge_operations_widget_);
+    auto* pick_layout = new QHBoxLayout(pick_row);
+    pick_layout->setContentsMargins(0, 0, 0, 0);
+    project_edge_remove_button_ =
+        new QPushButton(QStringLiteral("Remove"), pick_row);
+    project_edge_remove_button_->setObjectName(
+        QStringLiteral("projectEdgeRemoveButton"));
+    project_edge_clear_button_ =
+        new QPushButton(QStringLiteral("Clear"), pick_row);
+    project_edge_clear_button_->setObjectName(
+        QStringLiteral("projectEdgeClearButton"));
+    pick_layout->addWidget(project_edge_remove_button_);
+    pick_layout->addWidget(project_edge_clear_button_);
+    project_layout->addWidget(pick_row);
+
+    project_edge_result_label_ =
+        new QLabel(project_edge_operations_widget_);
+    project_edge_result_label_->setObjectName(
+        QStringLiteral("projectEdgeResultLabel"));
+    project_edge_result_label_->setWordWrap(true);
+    project_layout->addWidget(project_edge_result_label_);
+
+    project_edge_finish_button_ =
+        new QPushButton(QStringLiteral("Finish Project Geometry"),
+                        project_edge_operations_widget_);
+    project_edge_finish_button_->setObjectName(
+        QStringLiteral("projectEdgeFinishButton"));
+    project_layout->addWidget(project_edge_finish_button_);
+
+    project_edge_cancel_button_ =
+        new QPushButton(QStringLiteral("Cancel"),
+                        project_edge_operations_widget_);
+    project_edge_cancel_button_->setObjectName(
+        QStringLiteral("projectEdgeCancelButton"));
+    project_layout->addWidget(project_edge_cancel_button_);
+    project_edge_operations_widget_->setVisible(false);
+    operations_layout->addWidget(project_edge_operations_widget_);
+
     profile_operations_widget_ =
         new QWidget(operations_content);
     profile_operations_widget_->setObjectName(
@@ -5302,6 +5396,46 @@ void CadWorkbench::buildUi() {
         [this] {
             cancelEdgeFeature();
         });
+
+    QObject::connect(
+        project_edge_button_, &QPushButton::clicked,
+        this, [this] {
+            if (project_edge_active_) {
+                cancelProjectEdgeTool();
+            } else {
+                static_cast<void>(startProjectEdgeTool());
+            }
+        });
+    QObject::connect(
+        project_edge_regular_button_, &QPushButton::clicked,
+        this, [this] {
+            setProjectEdgeRole(sketch::EntityRole::regular);
+        });
+    QObject::connect(
+        project_edge_construction_button_, &QPushButton::clicked,
+        this, [this] {
+            setProjectEdgeRole(sketch::EntityRole::construction);
+        });
+    QObject::connect(
+        project_edge_clear_button_, &QPushButton::clicked,
+        this, [this] { clearProjectEdgeSelection(); });
+    QObject::connect(
+        project_edge_remove_button_, &QPushButton::clicked,
+        this, [this] {
+            if (viewport_controller_ &&
+                viewport_controller_->
+                    removePrimaryBodyTopologyToolSelection()) {
+                tryStageProjectEdgeSelection();
+            }
+        });
+    QObject::connect(
+        project_edge_finish_button_, &QPushButton::clicked,
+        this, [this] {
+            static_cast<void>(finishProjectEdgeTool());
+        });
+    QObject::connect(
+        project_edge_cancel_button_, &QPushButton::clicked,
+        this, [this] { cancelProjectEdgeTool(); });
 
     QObject::connect(
         profile_add_area_button_,
