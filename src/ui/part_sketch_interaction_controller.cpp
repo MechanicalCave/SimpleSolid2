@@ -4516,7 +4516,7 @@ void PartSketchInteractionController::handleMeasurePointer(
             return;
         }
 
-        if (*current_model.findLine(
+        if (current_model->findLine(
                 entity_query.hit->entity_id) != nullptr) {
             target =
                 sketch::MeasureRelationTarget{
@@ -5831,7 +5831,7 @@ PartSketchInteractionController::resolvePointerInput(
                 for (const auto entity :
                      nearby_entities) {
                     const auto* line =
-                        *current_model.findLine(entity);
+                        current_model->findLine(entity);
                     if (line == nullptr) {
                         continue;
                     }
@@ -5956,9 +5956,9 @@ PartSketchInteractionController::resolvePointerInput(
 
                     for (const auto entity :
                          nearby_entities) {
-                        if (*current_model.findCircle(entity) ==
+                        if (current_model->findCircle(entity) ==
                                 nullptr &&
-                            *current_model.findArc(entity) ==
+                            current_model->findArc(entity) ==
                                 nullptr) {
                             continue;
                         }
