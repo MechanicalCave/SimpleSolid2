@@ -4016,6 +4016,41 @@ PartViewportController::buildBodyScene() {
     return *body_scene_cache_;
 }
 
+std::optional<part::ResolvedProfileRegion>
+PartViewportController::currentProfileResolution(
+    part::ProfileId profile_id) const {
+    if (session_ == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto& document = session_->document();
+    const auto* profile = document.findProfile(profile_id);
+    if (profile == nullptr) {
+        return std::nullopt;
+    }
+    const auto* source = document.findSketch(
+        profile->source_sketch_id);
+    if (source == nullptr) {
+        return std::nullopt;
+    }
+    if (source->projection_bindings.empty()) {
+        return document.evaluateProfile(profile_id);
+    }
+
+    // A linked Profile must resolve on the current evaluated Body,
+    // exactly like the visible Profile scene. An authored linked seed
+    // is not a valid substitute after an upstream edit/provider loss.
+    if (!part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            document.revision()) {
+        return std::nullopt;
+    }
+    const auto model =
+        effectiveSketchModelForPresentation(*source);
+    return part::resolveProfileRegionIntent(
+        model, profile->region_intent);
+}
+
 sketch::SketchModel
 PartViewportController::effectiveSketchModelForPresentation(
     const part::PartSketch& hosted) const {
