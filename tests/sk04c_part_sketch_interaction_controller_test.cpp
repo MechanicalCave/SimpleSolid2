@@ -811,7 +811,31 @@ int main(int argc, char* argv[]) {
             .profileIdCursor()
             .serialized() == "1");
 
-    CHECK(interaction.finishProfile());
+    // Preserve diagnostics if Profile Finish rejects a formerly
+    // supported ordinary authored-only Sketch.
+    std::string profile_finish_diagnostic;
+    interaction.setStatusHandler(
+        [&profile_finish_diagnostic](const std::string& message) {
+            profile_finish_diagnostic = message;
+        });
+    const bool profile_finished = interaction.finishProfile();
+    if (!profile_finished) {
+        const auto current_status =
+            interaction.profileDraftResolutionStatus();
+        const auto* source =
+            session.document().findSketch(sketch_id);
+        std::cerr
+            << "SK04C_PROFILE_FINISH_REJECTED"
+            << " diagnostic=" << profile_finish_diagnostic
+            << " linked=" << (source && !source->projection_bindings.empty())
+            << " draft_valid=" << interaction.profileDraftValid()
+            << " resolution=" << (current_status
+                ? static_cast<int>(*current_status)
+                : -1)
+            << " revision=" << session.document().revision().serialized()
+            << '\\n';
+    }
+    CHECK(profile_finished);
     CHECK(!interaction.profileToolActive());
     CHECK(
         session.undoDepth() ==
