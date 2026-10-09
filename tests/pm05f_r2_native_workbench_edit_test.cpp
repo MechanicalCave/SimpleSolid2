@@ -615,6 +615,138 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
               << '\n';
 }
 
+// PG-01D D1: the actual SS2 Part-after-two-Cuts case must preserve an
+// *individually bounded* planar Face with two real native inner wires.
+// A Surface carrier alone never grants Face Project Geometry admission.
+void verifyPg01dNativeTwoHoleFaceBoundary(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    auto session = makeBaseSession(kernel);
+    const auto cut_circle = [&](
+        double x, const char* label) {
+        const auto sketch =
+            session.execute(application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(sketch.ok() && sketch.sketch_id);
+        const auto circle = session.execute(
+            application::AddSketchCircleCommand{
+                *sketch.sketch_id,
+                {x, 15.0},
+                4.0,
+                sketch::EntityRole::regular});
+        CHECK(circle.ok());
+        const auto* authored =
+            session.document().findSketch(*sketch.sketch_id);
+        CHECK(authored);
+        const auto regions =
+            sketch::analyzeRegions(authored->model);
+        CHECK(regions.complete() &&
+              regions.regions.size() == 1U);
+        const auto intent =
+            part::makeProfileRegionIntent(regions.regions.front());
+        CHECK(intent);
+        const auto profile = session.execute(
+            application::CreateProfileCommand{
+                *sketch.sketch_id,
+                session.document().revision(),
+                *intent});
+        CHECK(profile.ok() && profile.profile_id);
+        const auto cut = session.execute(
+            application::CreateExtrudeFeatureCommand{
+                *profile.profile_id,
+                session.document().revision(),
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{25.0}, false},
+                label},
+            kernel);
+        CHECK(cut.ok() && cut.feature_id);
+    };
+    cut_circle(12.0, "PG01D First Through Cut");
+    cut_circle(28.0, "PG01D Second Through Cut");
+
+    const auto result =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(result.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(result.body_solid && result.current_topology);
+    const auto& catalog = *result.current_topology;
+    CHECK(catalog.complete());
+
+    std::size_t observed_two_hole_faces = 0U;
+    std::size_t strict_two_hole_faces = 0U;
+    std::size_t strict_two_hole_material_faces = 0U;
+    std::size_t excluded_periodic_seams = 0U;
+    std::size_t excluded_partition_edges = 0U;
+    for (const auto& edge : catalog.edges) {
+        if (!edge.periodic_seam &&
+            !edge.representation_partition) {
+            continue;
+        }
+        const auto authored =
+            part::authorMaterialEdgeReference(
+                catalog, edge.runtime_token);
+        CHECK(!authored.ok());
+        if (edge.periodic_seam) ++excluded_periodic_seams;
+        if (edge.representation_partition) {
+            ++excluded_partition_edges;
+        }
+    }
+
+    for (const auto& face : catalog.faces) {
+        const auto scoped =
+            kernel.bindFaceToBody(
+                result.body_solid, face.runtime_token);
+        CHECK(scoped && scoped->valid());
+        const auto boundary =
+            kernel.queryFaceBoundary(result.body_solid, *scoped);
+        if (boundary.status ==
+                kernel::FaceBoundaryStatus::unsupported_surface) {
+            continue;
+        }
+        CHECK(boundary.ok());
+        if (boundary.wires.size() != 3U) continue;
+        ++observed_two_hole_faces;
+        std::size_t outers = 0U;
+        bool all_material = true;
+        std::vector<part::MaterialEdgeReference> sources;
+        for (const auto& wire : boundary.wires) {
+            if (wire.outer) ++outers;
+            for (const auto& member : wire.edges) {
+                const auto identity =
+                    part::authorMaterialEdgeReference(
+                        catalog, member.edge);
+                if (!identity.ok()) {
+                    all_material = false;
+                    continue;
+                }
+                CHECK(identity.reference &&
+                      identity.reference->stage ==
+                          catalog.stage);
+                sources.push_back(*identity.reference);
+            }
+        }
+        CHECK(outers == 1U);
+        std::sort(sources.begin(), sources.end());
+        CHECK(std::adjacent_find(
+            sources.begin(), sources.end()) == sources.end());
+        if (!face.semantic_address) continue;
+        ++strict_two_hole_faces;
+        if (all_material) ++strict_two_hole_material_faces;
+    }
+    std::cerr << "PG01D_D1_TWO_HOLE_FACE_STATUS"
+              << " observed=" << observed_two_hole_faces
+              << " strict=" << strict_two_hole_faces
+              << " strict_material="
+              << strict_two_hole_material_faces
+              << " excluded_seams="
+              << excluded_periodic_seams
+              << " excluded_partitions="
+              << excluded_partition_edges << std::endl;
+    CHECK(observed_two_hole_faces >= 2U);
+    CHECK(strict_two_hole_faces > 0U);
+    CHECK(strict_two_hole_material_faces > 0U);
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -623,6 +755,7 @@ int main(int argc, char* argv[]) {
         argc == 2 && std::string_view{argv[1]} == "--pg01c";
     kernel_occt::OcctSolidModelingKernel kernel;
     verifyPg01dNativeStrictFaceAndMaterialCatalog(kernel);
+    verifyPg01dNativeTwoHoleFaceBoundary(kernel);
     viewer_qt_occt::QtOcctViewerWidget* viewport = nullptr;
     ui::CadWorkbench workbench{
         [&viewport](QWidget* parent) {
