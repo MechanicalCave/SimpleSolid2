@@ -1046,6 +1046,18 @@ set_tests_properties(pg01d.native_face_boundary_d0 PROPERTIES
     LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-kernel;native"
 )
 
+# PG-01D D2: isolated real Viewer planar Face click + one existing
+# Project Geometry tool Finish. This is deliberately full-only and reuses
+# the same native executable; #302 FAST registry remains unchanged.
+add_test(
+    NAME pg01d.native_face_ui
+    COMMAND pm05f_r2_native_workbench_edit_test --pg01d-ui
+)
+set_tests_properties(pg01d.native_face_ui PROPERTIES
+    TIMEOUT 90
+    LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel;native"
+)
+
 add_executable(pm05c1_edge_semantic_kernel_test
     pm05c1_edge_semantic_kernel_test.cpp
 )
@@ -2595,7 +2607,8 @@ function(ss2_resolve_test_build_target test_name out_var)
     # already-built executable but execute independent argument modes.
     # This is an explicit CI-04 build mapping, not a new CI policy.
     if(test_name STREQUAL "pg01c.native_project_edge_command" OR
-       test_name STREQUAL "pg01d.native_face_boundary_d0")
+       test_name STREQUAL "pg01d.native_face_boundary_d0" OR
+       test_name STREQUAL "pg01d.native_face_ui")
         set(${out_var} "pm05f_r2_native_workbench_edit_test" PARENT_SCOPE)
         return()
     endif()
