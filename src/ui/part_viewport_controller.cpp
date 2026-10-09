@@ -1319,11 +1319,14 @@ bool PartViewportController::setProfileDraftPreview(
     viewer::ProfilePreviewScene scene;
     scene.show_boundary = show_boundary;
     scene.tone = tone;
+    const auto current_model =
+        effectiveSketchModelForPresentation(*hosted);
 
     if (region) {
         scene.region =
             buildProfileRegionPresentation(
                 *hosted,
+                current_model,
                 *region);
         if (!scene.region) return false;
     }
@@ -1332,6 +1335,7 @@ bool PartViewportController::setProfileDraftPreview(
         scene.emphasis_region =
             buildProfileRegionPresentation(
                 *hosted,
+                current_model,
                 *emphasis_region);
         if (!scene.emphasis_region) return false;
     }
@@ -3916,7 +3920,7 @@ PartViewportController::buildProfileRegionPresentation(
     const sketch::SketchModel& evaluated_model,
     const sketch::RegionCandidate2D& region) const {
     const auto sample_loop =
-        [this, &source](
+        [this, &source, &evaluated_model](
             const sketch::RegionLoop2D& loop)
             -> std::optional<
                 std::vector<viewer::Point3>> {
