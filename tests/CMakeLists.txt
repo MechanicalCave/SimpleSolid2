@@ -1058,6 +1058,21 @@ set_tests_properties(pg01d.native_face_ui PROPERTIES
     LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel;native"
 )
 
+# PG-01D D3 strict fail-closed read seam: separate native current-Body
+# fixture drives a deliberately malformed provider answer through the
+# real Part Face admission adapter (invalid Face, unavailable provider,
+# outer-wire accounting, bogus/repeated material source).
+# A distinct full-only registration ensures native negative cases are
+# always exercised in FULL; no FAST registry or CI issue #302 changes.
+add_test(
+    NAME pg01d.native_face_fail_closed
+    COMMAND pm05f_r2_native_workbench_edit_test --pg01d-negative
+)
+set_tests_properties(pg01d.native_face_fail_closed PROPERTIES
+    TIMEOUT 90
+    LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-kernel;native"
+)
+
 add_executable(pm05c1_edge_semantic_kernel_test
     pm05c1_edge_semantic_kernel_test.cpp
 )
