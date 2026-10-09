@@ -21,6 +21,15 @@
 - The fifth Sketch's authored seed and effective current projection should be separately measured after cold evaluation, particularly after provider/Feature reconstruction. A current-source disagreement cannot be repaired by changing authored seed or by importing close points into durable topology.
 - `tests/pm02f_stage_aware_profile_evaluation_test.cpp` now includes a **completely synthetic** one-ULP open/closed characterization. It intentionally keeps Shared-2D exact endpoint rules unchanged and never uses the Owner file in CI.
 
+## Independent synthetic OCCT identity check (local, NOT the Owner Part)
+
+A separate native OCCT 7.9.3 experiment built a four-sided deliberately skewed planar extrusion and chamfered its four upper perimeter edges. For each resulting analytic straight Edge, the experiment read **both** oriented endpoint vertices via `TopExp::FirstVertex/LastVertex(..., true)` and the corresponding edge-curve samples via `BRepAdaptor_Curve::Value(first/last)`. All pairwise samples belonging to exactly `TopoDS_Vertex::IsSame` groups were compared in 3D, without any closeness-based matching.
+
+- In this independent synthetic model, **34 endpoint pairs** sharing the same exact `TopoDS_Vertex` had **different sampled curve endpoint coordinates**. The greatest pairwise distance was about `3.18e-14` model units (mm).
+- `BRep_Tool::Pnt(shared_vertex)` is the one canonical point associated with each matching vertex, regardless of which incident Edge is inspected. The observed differences therefore can arise solely from separate analytic edge-parameter evaluations; they are not proof of an open 3D vertex wire.
+- This is reproducible **mechanism evidence**, not source-topology certification of the Owner's saved Part, nor proof that directly substituting vertex coordinates is always modeling-semantics-compatible. The Part-specific common-vertex check, geometry validity and safety boundaries in D2-K remain mandatory.
+- The experiment ran locally with Python bindings to OCCT rather than against the application's selected Kernel build. It does not constitute a Windows C++ regression PASS.
+
 ## Bounded follow-up decisions
 
 **D2-K — provider source-vertex continuity proof and repair**, needs Owner authorization to add `src/kernel_occt/solid_modeling_kernel.cpp` (and related strictly necessary provider-owned headers/tests) to PG-01C permitted file scope. Required first: native OCCT evidence that adjacent projected Edges in a synthetic post-Chamfer/Datum fixture share exactly the **same TopoDS_Vertex** (including location) and that current Line end samples differ numerically. Only then consider projecting that *same topological vertex's authoritative point* for all incident supported linear Edges. Prevent unrelated nearby vertices from merging. Verify reversed edge orientation, geometric carrier compatibility, degenerate results, source changes, cold reopen, no persisted tokens and no schema change. Any change affecting modeling/topology semantics must be separately classified under ADR-0014 §7 and may require further Owner D2.
