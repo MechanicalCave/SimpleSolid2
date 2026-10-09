@@ -3218,6 +3218,26 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         entity_role_label_);
 
+    project_link_status_label_ =
+        new QLabel(operations_content);
+    project_link_status_label_->setObjectName(
+        QStringLiteral("projectLinkedEdgeStatusLabel"));
+    project_link_status_label_->setWordWrap(true);
+    project_link_status_label_->setVisible(false);
+    operations_layout->addWidget(project_link_status_label_);
+
+    project_link_break_button_ =
+        new QPushButton(
+            QStringLiteral("Break Link"),
+            operations_content);
+    project_link_break_button_->setObjectName(
+        QStringLiteral("projectBreakLinkButton"));
+    project_link_break_button_->setToolTip(
+        QStringLiteral(
+            "Detach this projected Edge using the current resolved source curve; keep its current geometry."));
+    project_link_break_button_->setVisible(false);
+    operations_layout->addWidget(project_link_break_button_);
+
     regular_role_button_ =
         new QPushButton(
             QStringLiteral("Regular"),
@@ -5403,6 +5423,9 @@ void CadWorkbench::buildUi() {
             cancelEdgeFeature();
         });
 
+    QObject::connect(
+        project_link_break_button_, &QPushButton::clicked,
+        this, [this] { breakSelectedProjectedEdgeLink(); });
     QObject::connect(
         project_edge_button_, &QPushButton::clicked,
         this, [this] {
@@ -10820,6 +10843,63 @@ void CadWorkbench::cancelSketchLine() {
     }
 }
 
+void CadWorkbench::breakSelectedProjectedEdgeLink() {
+    if (project_edge_active_ ||
+        !document_session_ ||
+        !solid_modeling_kernel_ ||
+        !active_sketch_id_ ||
+        !sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->active() ||
+        sketch_interaction_controller_->tool() !=
+            sketch::SketchTool::select ||
+        sketch_interaction_controller_->selectedCount() != 1U) {
+        setStatusText(QStringLiteral(
+            "Break Link requires one selected, currently resolvable linked Sketch Edge."));
+        return;
+    }
+
+    const auto target =
+        sketch_interaction_controller_->selectedEntities().front();
+    const auto* sketch =
+        document_session_->document().findSketch(
+            *active_sketch_id_);
+    if (sketch == nullptr ||
+        std::none_of(
+            sketch->projection_bindings.begin(),
+            sketch->projection_bindings.end(),
+            [&target](const part::ProjectedEdgeBinding& item) {
+                return item.target_entity == target;
+            })) {
+        setStatusText(QStringLiteral(
+            "Selected Sketch geometry is not a linked Project Edge."));
+        return;
+    }
+
+    const auto result = document_session_->execute(
+        application::BreakProjectedEdgeLinkCommand{
+            *active_sketch_id_,
+            target,
+            document_session_->document().revision()},
+        *solid_modeling_kernel_);
+    if (!result.ok()) {
+        setStatusText(result.diagnostic.message.empty()
+            ? QStringLiteral(
+                "Break Link rejected: current exact projected source cannot be resolved; link preserved.")
+            : fromUtf8(result.diagnostic.message));
+        return;
+    }
+
+    // Refresh from the committed Part. No authored seed or runtime
+    // pointer is passed into the detach command by the UI.
+    refreshActiveContext();
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active()) {
+        sketch_interaction_controller_->activateSelect();
+    }
+    setStatusText(QStringLiteral(
+        "Break Link finished — current geometry retained, source association removed."));
+}
+
 void CadWorkbench::deleteSketchSelection() {
     if (!sketch_interaction_controller_ ||
         !sketch_interaction_controller_->deleteSelection()) {
@@ -13830,6 +13910,12 @@ void CadWorkbench::syncSketchInteractionUi() {
     if (entity_role_label_ != nullptr) {
         entity_role_label_->setVisible(false);
     }
+    if (project_link_status_label_ != nullptr) {
+        project_link_status_label_->setVisible(false);
+    }
+    if (project_link_break_button_ != nullptr) {
+        project_link_break_button_->setVisible(false);
+    }
     if (regular_role_button_ != nullptr) {
         regular_role_button_->setVisible(false);
     }
@@ -14305,6 +14391,52 @@ void CadWorkbench::syncSketchInteractionUi() {
             selected > 0U);
         construction_role_button_->setVisible(
             selected > 0U);
+        // D2-D: a linked source is not an ordinary editable seed.
+        // The same Sketch Select context exposes typed source origin
+        // and routes Break Link through the existing atomic command.
+        if (selected == 1U &&
+            active_sketch_id_ &&
+            document_session_ != nullptr) {
+            const auto target =
+                sketch_interaction_controller_->
+                    selectedEntities().front();
+            const auto* sketch =
+                document_session_->document().findSketch(
+                    *active_sketch_id_);
+            if (sketch != nullptr) {
+                const auto found = std::find_if(
+                    sketch->projection_bindings.begin(),
+                    sketch->projection_bindings.end(),
+                    [&target](const part::ProjectedEdgeBinding& item) {
+                        return item.target_entity == target;
+                    });
+                if (found != sketch->projection_bindings.end()) {
+                    const auto& source = found->source;
+                    const bool current =
+                        viewport_controller_ != nullptr &&
+                        viewport_controller_->sketchPresentationFor(
+                            target).has_value();
+                    if (project_link_status_label_ != nullptr) {
+                        project_link_status_label_->setText(
+                            QStringLiteral(
+                                "Projected Edge — %1\nSource stage: %2")
+                                .arg(current
+                                    ? QStringLiteral("Current")
+                                    : QStringLiteral("Unresolved"))
+                                .arg(source.stage.feature_id
+                                    ? fromUtf8(
+                                        source.stage.feature_id->serialized())
+                                    : QStringLiteral("Missing")));
+                        project_link_status_label_->setVisible(true);
+                    }
+                    if (project_link_break_button_ != nullptr) {
+                        project_link_break_button_->setVisible(true);
+                        project_link_break_button_->setEnabled(
+                            current && solid_modeling_kernel_ != nullptr);
+                    }
+                }
+            }
+        }
         const auto selected_role =
             sketch_interaction_controller_->
                 selectedEntityRole();
