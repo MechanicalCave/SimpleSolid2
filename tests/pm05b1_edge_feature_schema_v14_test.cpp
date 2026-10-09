@@ -67,6 +67,16 @@ std::string repackage(
     const persistence::NativeDocumentPackage& package,
     int schema_version,
     std::string authored_json) {
+    if (schema_version < 15) {
+        auto authored =
+            nlohmann::json::parse(
+                authored_json, nullptr, false);
+        CHECK(authored.is_object());
+        for (auto& sketch : authored["sketches"]) {
+            sketch.erase("projected_edges");
+        }
+        authored_json = authored.dump(2) + "\n";
+    }
     const auto built =
         persistence::buildNativeDocumentContainer(
             persistence::NativeDocumentDescriptor{
@@ -434,7 +444,7 @@ void verifyPg01bB1BindingStructure(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        14);
+        15);
 
     const auto fixture = makeFixture();
     verifyPg01bB1BindingStructure(fixture);
@@ -585,7 +595,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
 
     const auto authored =
         nlohmann::json::parse(
@@ -637,7 +647,7 @@ int main() {
         std::string::npos);
 
     // A schema-v13 authored state without Edge Features remains loadable and
-    // is written back as schema v14 without rewriting existing identities.
+    // is written back as schema v15 without rewriting existing identities.
     auto legacy_state =
         fixture.document.state();
     legacy_state.body.features.resize(1U);
@@ -691,7 +701,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
 
     // New Edge Feature records are schema-v14-only and must fail closed when
     // deliberately mislabeled as a legacy v13 payload.
@@ -764,7 +774,7 @@ int main() {
 
     std::cout
         << "PM05B1_EDGE_FEATURE_SCHEMA_V14_PASS"
-        << " schema=14"
+        << " schema=15"
         << " edge_feature_kinds=2"
         << " provider_identity_persisted=0\n";
     return EXIT_SUCCESS;

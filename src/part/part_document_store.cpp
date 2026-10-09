@@ -1181,15 +1181,27 @@ std::string serializeAuthored(
     nlohmann::json sketches =
         nlohmann::json::array();
     for (const auto& hosted : document.sketches()) {
-        // B1 intentionally cannot yet persist linked entities. Reject
-        // Save rather than silently emit a v14 file with lost link intent.
-        // B5 replaces this fence with the accepted schema-v15 binding
-        // serializer and cold-load validation.
-        if (!hosted.projection_bindings.empty()) {
-            return {};
-        }
         const auto model_state =
             hosted.model.state();
+        nlohmann::json projected_edges =
+            nlohmann::json::array();
+        for (const auto& binding :
+             hosted.projection_bindings) {
+            if (!binding.valid() ||
+                !hosted.model.contains(binding.target_entity)) {
+                return {};
+            }
+            auto source =
+                materialEdgeReferenceJson(binding.source);
+            if (source.empty()) {
+                return {};
+            }
+            projected_edges.push_back({
+                {"target_entity",
+                 binding.target_entity.serialized()},
+                {"source", std::move(source)},
+            });
+        }
 
         nlohmann::json entities =
             nlohmann::json::array();
@@ -1243,6 +1255,8 @@ std::string serializeAuthored(
                       model_state.next_entity_id.serialized()},
                      {"entities", std::move(entities)},
                  }},
+                {"projected_edges",
+                 std::move(projected_edges)},
             });
     }
 
@@ -2369,6 +2383,8 @@ bool parseSketches(
         schema_version >= 11;
     const bool schema_v14 =
         schema_version >= 14;
+    const bool schema_v15 =
+        schema_version >= 15;
     if (schema_v14 &&
         feature_cursor == nullptr) {
         error =
@@ -2376,9 +2392,8 @@ bool parseSketches(
         return false;
     }
     const std::size_t expected_fields =
-        schema_v9
-            ? 4U
-            : (schema_has_model ? 5U : 4U);
+        (schema_v9 ? 4U : (schema_has_model ? 5U : 4U)) +
+        (schema_v15 ? 1U : 0U);
 
     std::set<std::string> ids;
 
@@ -2393,6 +2408,9 @@ bool parseSketches(
                  : !item.contains("placement")) ||
             (schema_has_model &&
              !item.contains("model")) ||
+            (schema_v15 &&
+             (!item.contains("projected_edges") ||
+              !item["projected_edges"].is_array())) ||
             !item["id"].is_string() ||
             !item["visible"].is_boolean()) {
             error =
@@ -2498,12 +2516,47 @@ bool parseSketches(
             model = std::move(*parsed_model);
         }
 
+        std::vector<ProjectedEdgeBinding> bindings;
+        if (schema_v15) {
+            for (const auto& binding : item["projected_edges"]) {
+                if (!binding.is_object() ||
+                    binding.size() != 2U ||
+                    !binding.contains("target_entity") ||
+                    !binding["target_entity"].is_string() ||
+                    !binding.contains("source") ||
+                    feature_cursor == nullptr) {
+                    error =
+                        "Native Part contains malformed schema-v15 projected Edge binding";
+                    return false;
+                }
+                const auto target =
+                    sketch::EntityId::parse(
+                        binding["target_entity"]
+                            .get<std::string>());
+                const auto source =
+                    parseMaterialEdgeReferenceV14(
+                        binding["source"],
+                        *feature_cursor, error);
+                if (!target || !source ||
+                    !model.contains(*target) ||
+                    (!bindings.empty() &&
+                     !(bindings.back().target_entity <
+                       *target))) {
+                    error =
+                        "Native Part contains invalid or duplicate schema-v15 projected Edge binding";
+                    return false;
+                }
+                bindings.push_back({
+                    *target, std::move(*source)});
+            }
+        }
         sketches.push_back(
             PartSketch{
                 std::move(*id),
                 std::move(*support),
                 item["visible"].get<bool>(),
-                std::move(model)});
+                std::move(model),
+                std::move(bindings)});
     }
 
     return true;
