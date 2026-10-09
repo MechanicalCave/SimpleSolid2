@@ -660,9 +660,11 @@ void verifyPg01dNativeTwoHoleFaceBoundary(
                 label},
             kernel);
         CHECK(cut.ok() && cut.feature_id);
+        return *cut.feature_id;
     };
     cut_circle(12.0, "PG01D First Through Cut");
-    cut_circle(28.0, "PG01D Second Through Cut");
+    const auto last_cut_id =
+        cut_circle(28.0, "PG01D Second Through Cut");
 
     const auto result =
         part::evaluatePart(session.document(), kernel);
@@ -794,6 +796,81 @@ void verifyPg01dNativeTwoHoleFaceBoundary(
     CHECK(strict_two_hole_material_faces > 0U);
     CHECK(admitted_complete_face_batches ==
           strict_two_hole_material_faces);
+
+    // D1 lifecycle: a Face observed before an authored upstream change
+    // cannot authorize a new read in a different provider generation.
+    // Suppression must reject Face admission without a cached result;
+    // unsuppression must rebuild a fresh, strictly mapped outer+holes.
+    const auto old_scoped = kernel.bindFaceToBody(
+        result.body_solid,
+        catalog.faces.front().runtime_token);
+    CHECK(old_scoped && old_scoped->valid());
+    auto absent_catalog = result.features.back();
+    absent_catalog.result_topology.reset();
+    const auto invalid_catalog = part::inspectMaterialFaceBoundary(
+        absent_catalog,
+        catalog.faces.front().runtime_token, kernel);
+    CHECK(!invalid_catalog.ok());
+    CHECK(invalid_catalog.status ==
+          part::MaterialFaceBoundaryStatus::invalid_stage);
+
+    const auto suppressed = session.execute(
+        application::SetFeatureSuppressedCommand{
+            last_cut_id, session.document().revision(), true});
+    CHECK(suppressed.ok());
+    const auto suppressed_eval =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(suppressed_eval.features.size() ==
+          result.features.size());
+    const auto blocked = part::inspectMaterialFaceBoundary(
+        suppressed_eval.features.back(),
+        catalog.faces.front().runtime_token, kernel);
+    CHECK(!blocked.ok());
+    CHECK(blocked.status ==
+          part::MaterialFaceBoundaryStatus::invalid_stage);
+
+    const auto unsuppressed = session.execute(
+        application::SetFeatureSuppressedCommand{
+            last_cut_id, session.document().revision(), false});
+    CHECK(unsuppressed.ok());
+    const auto rebuilt =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(rebuilt.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(rebuilt.body_solid && rebuilt.current_topology);
+    CHECK(rebuilt.current_topology->complete());
+    CHECK(rebuilt.body_solid.get() != result.body_solid.get());
+    const auto stale_native = kernel.queryFaceBoundary(
+        rebuilt.body_solid, *old_scoped);
+    CHECK(stale_native.status ==
+          kernel::FaceBoundaryStatus::provider_mismatch);
+
+    std::size_t rebuilt_two_hole_admissions = 0U;
+    for (const auto& face : rebuilt.current_topology->faces) {
+        const auto admitted = part::inspectMaterialFaceBoundary(
+            rebuilt.features.back(), face.runtime_token, kernel);
+        if (!admitted.ok() || admitted.wires.size() != 3U) {
+            continue;
+        }
+        std::size_t outer_count = 0U;
+        std::size_t material_members = 0U;
+        for (const auto& wire : admitted.wires) {
+            if (wire.outer) ++outer_count;
+            for (const auto& member : wire.edges) {
+                CHECK(member.valid());
+                CHECK(member.reference.stage ==
+                      rebuilt.current_topology->stage);
+                ++material_members;
+            }
+        }
+        CHECK(outer_count == 1U);
+        CHECK(material_members == 6U);
+        ++rebuilt_two_hole_admissions;
+    }
+    CHECK(rebuilt_two_hole_admissions > 0U);
+    std::cout << "PG01D_D1_SUPPRESS_REBUILD_FACE_PASS"
+              << " refreshed_strict_two_hole_faces="
+              << rebuilt_two_hole_admissions << '\n';
 }
 
 } // namespace
