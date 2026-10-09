@@ -1181,6 +1181,13 @@ std::string serializeAuthored(
     nlohmann::json sketches =
         nlohmann::json::array();
     for (const auto& hosted : document.sketches()) {
+        // B1 intentionally cannot yet persist linked entities. Reject
+        // Save rather than silently emit a v14 file with lost link intent.
+        // B5 replaces this fence with the accepted schema-v15 binding
+        // serializer and cold-load validation.
+        if (!hosted.projection_bindings.empty()) {
+            return {};
+        }
         const auto model_state =
             hosted.model.state();
 

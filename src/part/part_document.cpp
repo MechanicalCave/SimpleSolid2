@@ -305,6 +305,39 @@ PartDocument::evaluateProfile(
     if (source == nullptr) {
         return std::nullopt;
     }
+    // PG-01B/B1 safety fence: never use stale authored seed as current
+    // geometric truth for a Profile that consumes linked source geometry.
+    // B2/B3 will replace this with pure effective Sketch evaluation.
+    const auto depends_on_bound_entity =
+        [&source](const ProfileLoopIntent& loop) {
+            for (const auto& use : loop.boundary) {
+                for (const auto& binding :
+                     source->projection_bindings) {
+                    if (use.source_entity ==
+                            binding.target_entity ||
+                        (use.start_anchor &&
+                         use.start_anchor->kind ==
+                             ProfileBoundaryAnchorKind::intersection &&
+                         use.start_anchor->other_entity ==
+                             binding.target_entity) ||
+                        (use.end_anchor &&
+                         use.end_anchor->kind ==
+                             ProfileBoundaryAnchorKind::intersection &&
+                         use.end_anchor->other_entity ==
+                             binding.target_entity)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+    if (depends_on_bound_entity(profile->region_intent.outer) ||
+        std::any_of(
+            profile->region_intent.holes.begin(),
+            profile->region_intent.holes.end(),
+            depends_on_bound_entity)) {
+        return std::nullopt;
+    }
     return resolveProfileRegionIntent(
         source->model,
         profile->region_intent);
@@ -514,6 +547,29 @@ bool PartDocument::validAuthoredState(
             return false;
         }
 
+        // Strict Part-only binding metadata, never derived OCCT identity.
+        // Missing historical Features remain valid repairable intent; the
+        // source stage must still be an allocated, earlier semantic stage.
+        std::optional<sketch::EntityId> last_bound;
+        for (const auto& binding :
+             hosted.projection_bindings) {
+            if (!binding.valid() ||
+                !hosted.model.contains(binding.target_entity) ||
+                (last_bound &&
+                 !(*last_bound < binding.target_entity)) ||
+                !binding.source.stage.feature_id ||
+                !semanticEdgeHistoryValid(
+                    binding.source,
+                    SemanticProvenanceBounds{
+                        &state,
+                        *binding.source.stage.feature_id,
+                        std::nullopt,
+                        std::nullopt})) {
+                return false;
+            }
+            last_bound = binding.target_entity;
+        }
+
         if (const auto* surface =
                 bodyPlanarSurfaceReference(
                     hosted.support);
@@ -553,6 +609,97 @@ bool PartDocument::validAuthoredState(
     // or Line later disappears. Only structural identity/high-water validity
     // and duplicate AxisId are reconstruction invariants here; source
     // availability is derived repairable Axis evaluation state.
+    // Feature dependencies must point to strictly earlier evaluated Body
+    // stages, even when a projected target is an otherwise valid EntityId.
+    // No self / forward / cyclic linked Profile may be restored.
+    for (std::size_t feature_index = 0U;
+         feature_index < state.body.features.size();
+         ++feature_index) {
+        const auto& feature =
+            state.body.features[feature_index];
+        const auto* extrude =
+            std::get_if<ExtrudeFeature>(&feature.definition);
+        const auto* revolve =
+            std::get_if<RevolveFeature>(&feature.definition);
+        if (!extrude && !revolve) {
+            continue;
+        }
+        const auto profile_id = extrude
+            ? extrude->profile_id
+            : revolve->profile_id;
+        const auto profile_it =
+            std::find_if(
+                state.profiles.begin(),
+                state.profiles.end(),
+                [profile_id](const PartProfile& item) {
+                    return item.id == profile_id;
+                });
+        if (profile_it == state.profiles.end()) {
+            continue;
+        }
+        const auto sketch_it =
+            std::find_if(
+                state.sketches.begin(),
+                state.sketches.end(),
+                [&profile_it](const PartSketch& item) {
+                    return item.id ==
+                           profile_it->source_sketch_id;
+                });
+        if (sketch_it == state.sketches.end()) {
+            continue;
+        }
+        for (const auto& binding :
+             sketch_it->projection_bindings) {
+            const auto referenced =
+                [&binding](const ProfileLoopIntent& loop) {
+                    return std::any_of(
+                        loop.boundary.begin(),
+                        loop.boundary.end(),
+                        [&binding](
+                            const ProfileBoundaryUseIntent& use) {
+                            return use.source_entity ==
+                                       binding.target_entity ||
+                                (use.start_anchor &&
+                                 use.start_anchor->kind ==
+                                     ProfileBoundaryAnchorKind::intersection &&
+                                 use.start_anchor->other_entity ==
+                                     binding.target_entity) ||
+                                (use.end_anchor &&
+                                 use.end_anchor->kind ==
+                                     ProfileBoundaryAnchorKind::intersection &&
+                                 use.end_anchor->other_entity ==
+                                     binding.target_entity);
+                        });
+                };
+            if (!referenced(profile_it->region_intent.outer) &&
+                std::none_of(
+                    profile_it->region_intent.holes.begin(),
+                    profile_it->region_intent.holes.end(),
+                    referenced)) {
+                continue;
+            }
+            const auto& source_id =
+                binding.source.stage.feature_id;
+            if (!source_id) {
+                return false;
+            }
+            const auto found =
+                std::find_if(
+                    state.body.features.begin(),
+                    state.body.features.end(),
+                    [source_id](const PartFeature& candidate) {
+                        return candidate.id == *source_id;
+                    });
+            if (found != state.body.features.end() &&
+                static_cast<std::size_t>(
+                    std::distance(
+                        state.body.features.begin(), found)) >=
+                    feature_index) {
+                return false;
+            }
+        }
+    }
+
     for (std::size_t index = 0U;
          index < state.axes.size();
          ++index) {

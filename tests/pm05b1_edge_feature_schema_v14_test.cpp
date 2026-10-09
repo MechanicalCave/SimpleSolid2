@@ -334,6 +334,101 @@ Fixture makeFixture() {
         *chamfer_id};
 }
 
+void verifyPg01bB1BindingStructure(
+    const Fixture& fixture) {
+    const auto base =
+        fixture.document.state();
+    CHECK(!base.sketches.empty());
+    const auto* fillet =
+        std::get_if<part::FilletFeature>(
+            &base.body.features.at(1).definition);
+    CHECK(fillet && !fillet->edges.empty());
+    const auto valid_source =
+        fillet->edges.front();
+    CHECK(valid_source.valid());
+
+    auto withLink = [&]() {
+        auto next = base;
+        const auto support =
+            part::partSketchSupportForBuiltinPlane(
+                core::BuiltinReferenceRole::xy_plane);
+        CHECK(support);
+        part::PartSketch target{
+            sketch::SketchId::generate(),
+            *support, true, {}};
+        const auto entity =
+            target.model.addLine(
+                {1.0, 2.0}, {3.0, 4.0},
+                sketch::EntityRole::regular);
+        CHECK(entity.valid());
+        target.projection_bindings.push_back(
+            {entity, valid_source});
+        next.sketches.push_back(std::move(target));
+        return next;
+    };
+    auto original = withLink();
+    const auto& linked = original.sketches.back();
+    CHECK(linked.projection_bindings.size() == 1U);
+    CHECK(linked.projection_bindings[0].valid());
+    const auto accepted =
+        part::PartDocument::restore(
+            fixture.document.documentId(), original);
+    CHECK(accepted.ok());
+
+    // A binding is neither a detached geometry copy nor persistent BRep.
+    // Until B5 schema v15, Save must explicitly fail, not drop the link.
+    TempDirectory tmp;
+    part::PartDocumentStore store;
+    const auto unsaved = store.createNew(
+        tmp.path / "UnsafeProjection.ss2part",
+        *accepted.document);
+    CHECK(!unsaved.ok());
+
+    auto missing_target = withLink();
+    missing_target.sketches.back()
+        .projection_bindings[0].target_entity =
+            sketch::EntityId{9999U};
+    CHECK(!part::PartDocument::restore(
+        fixture.document.documentId(),
+        std::move(missing_target)).ok());
+
+    auto duplicate = withLink();
+    duplicate.sketches.back()
+        .projection_bindings.push_back(
+            duplicate.sketches.back()
+                .projection_bindings.front());
+    CHECK(!part::PartDocument::restore(
+        fixture.document.documentId(),
+        std::move(duplicate)).ok());
+
+    auto unallocated = withLink();
+    unallocated.sketches.back()
+        .projection_bindings[0].source.stage.feature_id =
+            part::FeatureId{9999U};
+    CHECK(!part::PartDocument::restore(
+        fixture.document.documentId(),
+        std::move(unallocated)).ok());
+
+    // Authored source after target-consuming Feature is a cycle.
+    auto self_cycle = base;
+    CHECK(!self_cycle.sketches.empty());
+    const auto source_entity =
+        self_cycle.sketches.front()
+            .model.state().lines.front().id;
+    self_cycle.sketches.front()
+        .projection_bindings.push_back(
+            {source_entity, valid_source});
+    CHECK(!part::PartDocument::restore(
+        fixture.document.documentId(),
+        std::move(self_cycle)).ok());
+
+    std::cout << "PG01B_B1_STRUCTURE_PASS"
+              << " stable_entity=1"
+              << " duplicate_reject=1"
+              << " stage_cycle_reject=1"
+              << " unsafe_save_reject=1\n";
+}
+
 } // namespace
 
 int main() {
@@ -342,6 +437,7 @@ int main() {
         14);
 
     const auto fixture = makeFixture();
+    verifyPg01bB1BindingStructure(fixture);
     CHECK(
         fixture.document.body().features.size() ==
         3U);

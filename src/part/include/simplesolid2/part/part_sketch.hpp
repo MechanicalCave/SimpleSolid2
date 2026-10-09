@@ -9,6 +9,7 @@
 #include <array>
 #include <optional>
 #include <variant>
+#include <vector>
 
 namespace simplesolid2::part {
 
@@ -90,11 +91,29 @@ struct PartSketchSupport final {
         const PartSketchSupport&) = default;
 };
 
+// Part-owned source intent for a linked, existing Sketch entity.
+// Runtime projection output and provider tokens are never stored here.
+struct ProjectedEdgeBinding final {
+    sketch::EntityId target_entity;
+    MaterialEdgeReference source;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return target_entity.valid() && source.valid();
+    }
+
+    friend bool operator==(
+        const ProjectedEdgeBinding&,
+        const ProjectedEdgeBinding&) = default;
+};
+
 struct PartSketch final {
     sketch::SketchId id;
     PartSketchSupport support;
     bool visible{true};
     sketch::SketchModel model;
+    // Canonically ordered by target EntityId, no duplicate bindings.
+    // A linked entity's authored Sketch coordinates are seed only.
+    std::vector<ProjectedEdgeBinding> projection_bindings;
 
     friend bool operator==(
         const PartSketch&,
