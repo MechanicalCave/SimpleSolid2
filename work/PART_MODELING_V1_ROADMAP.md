@@ -7,7 +7,7 @@
 
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PG-01A — exact provider-neutral Kernel/OCCT Edge projection of Line/Circle/Arc, Owner accepted 2026-10-09. Projection 00A prior Owner PASS, FULL #1915 PASS 195/195 and merged as `2cda8e04d7d0e2594edae7dc90e88cbb90dcae35`  
+**Current active checkpoint:** PG-01B — Owner D2 architecture and Work Contract approved 2026-10-09; Part-owned source bindings / effective Sketch / v15 structural persistence under active PG-01B. PG-01A prior Owner FINAL PASS FULL #1932 195/195, [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) merged `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -132,7 +132,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | **COMPLETED — PASS; runtime FULL #1578 attempt 2; Owner final Windows PASS 2026-10-06** |
 | 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete explicit multi-Edge Fillet/Chamfer lifecycle with connected-corner, lineage/refine handling and repair | **COMPLETED — Owner final PM-05F PASS 2026-10-09; runtime/docs FULL #1902 195/195, evidence FAST #1903 93/93; see work/PM-05F_EDGE_FEATURES_COMPLETION.md** |
 | 9A | **Projection 00A — Profile Repair Evidence Gate** | test existing Sketch/Profile/Extrude contour changes, explicit repair, stable IDs, Undo/Redo and cold Save/Reopen before designing automatic projection dependency/evaluation | **COMPLETED — Owner final PASS 2026-10-09; FULL #1915 195/195, PR #299 merged as `2cda8e0`; no shipping Project Geometry** |
-| 9B | **Projection — Project Geometry in Sketch** | one right-panel tool for selected Edge / planar Face; associative same-Part Regular/Construction, Break Link, partial exact supported Face boundary; stages and lifecycle frozen after 00A evidence | **PG-01A ACTIVE — Owner accepted exact Kernel/OCCT Line/Circle/Arc only; future PG-01B/C/D/E independently gated** |
+| 9B | **Projection — Project Geometry in Sketch** | one right-panel tool for selected Edge / planar Face; associative same-Part Regular/Construction, Break Link, partial exact supported Face boundary; stages and lifecycle frozen after 00A evidence | **PG-01A COMPLETED — Owner final PASS 2026-10-09, FULL #1932 195/195, PR #300 merged. PG-01B ACTIVE — Owner-accepted D2 design + Work Contract, B1–B5; later PG-01C/D/E separately gated** |
 | 10 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
 
 No package number authorizes mutation by itself.

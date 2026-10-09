@@ -256,7 +256,7 @@ std::string repackage(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        14);
+        15);
 
     TempDirectory temp;
     part::PartDocumentStore store;
@@ -276,7 +276,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
 
     const auto authored =
         nlohmann::json::parse(
@@ -426,7 +426,7 @@ int main() {
         *duplicate_axis_id);
 
     // A valid schema-v12 document has no Revolve records. Loading it preserves
-    // all old authored identities; the next save writes current schema v14.
+    // all old authored identities; the next save writes current schema v15.
     auto legacy_state =
         fixture.document.state();
     legacy_state.body.features.clear();
@@ -448,6 +448,21 @@ int main() {
             legacy_current_path);
     CHECK(legacy_current_package.ok());
 
+    // A v12 fixture must contain the actual v12 Sketch record shape,
+    // not the v15-only projected_edges member introduced by PG-01B.
+    // No linked targets may be silently downgraded or lost.
+    auto legacy_v12_authored =
+        nlohmann::json::parse(
+            legacy_current_package.package->authored_json);
+    for (auto& sketch_json :
+         legacy_v12_authored.at("sketches")) {
+        CHECK(sketch_json.contains("projected_edges"));
+        CHECK(
+            sketch_json.at("projected_edges").is_array());
+        CHECK(
+            sketch_json.at("projected_edges").empty());
+        sketch_json.erase("projected_edges");
+    }
     const auto legacy_v12_path =
         temp.path / "LegacyV12.ss2part";
     writeBytes(
@@ -455,8 +470,7 @@ int main() {
         repackage(
             *legacy_current_package.package,
             12,
-            legacy_current_package.package
-                ->authored_json));
+            legacy_v12_authored.dump()));
 
     const auto legacy_loaded =
         store.load(legacy_v12_path);
@@ -478,7 +492,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
 
     // Revolve is a schema-v13 feature kind. Relabeling a v13 Revolve payload
     // as v12 must fail closed rather than silently interpreting future data.

@@ -1,6 +1,8 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
+#include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
@@ -11,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -67,6 +70,16 @@ std::string repackage(
     const persistence::NativeDocumentPackage& package,
     int schema_version,
     std::string authored_json) {
+    if (schema_version < 15) {
+        auto authored =
+            nlohmann::json::parse(
+                authored_json, nullptr, false);
+        CHECK(authored.is_object());
+        for (auto& sketch : authored["sketches"]) {
+            sketch.erase("projected_edges");
+        }
+        authored_json = authored.dump(2) + "\n";
+    }
     const auto built =
         persistence::buildNativeDocumentContainer(
             persistence::NativeDocumentDescriptor{
@@ -334,14 +347,463 @@ Fixture makeFixture() {
         *chamfer_id};
 }
 
+
+
+void verifyPg01bB3KernelProfileUsesEffectiveSketch(
+    const Fixture& fixture) {
+    const auto* base =
+        std::get_if<part::ExtrudeFeature>(
+            &fixture.document.body().features.front().definition);
+    CHECK(base != nullptr);
+    const auto* profile =
+        fixture.document.findProfile(base->profile_id);
+    CHECK(profile != nullptr);
+    const auto* source =
+        fixture.document.findSketch(
+            profile->source_sketch_id);
+    CHECK(source != nullptr);
+    CHECK(source->model.state().lines.size() == 4U);
+    const auto authored =
+        part::resolveKernelProfileInput(
+            fixture.document, profile->id);
+    CHECK(authored.ok());
+
+    auto derived = source->model;
+    const double offset = 20.0;
+    for (const auto& line : source->model.state().lines) {
+        CHECK(derived.updateLine(
+            line.id,
+            {line.start.u + offset, line.start.v},
+            {line.end.u + offset, line.end.v}));
+    }
+    const auto current =
+        part::resolveKernelProfileInput(
+            fixture.document, profile->id,
+            nullptr, nullptr, &derived);
+    CHECK(current.ok());
+    CHECK(current.input->outer.boundary.size() ==
+          authored.input->outer.boundary.size());
+    for (std::size_t i = 0;
+         i < current.input->outer.boundary.size(); ++i) {
+        const auto* old_line =
+            std::get_if<kernel::Line2>(
+                &authored.input->outer.boundary[i].curve);
+        const auto* new_line =
+            std::get_if<kernel::Line2>(
+                &current.input->outer.boundary[i].curve);
+        CHECK(old_line && new_line);
+        CHECK(new_line->start.u == old_line->start.u + offset);
+        CHECK(new_line->end.u == old_line->end.u + offset);
+    }
+    CHECK(fixture.document.findSketch(
+              profile->source_sketch_id)
+              ->model.state().lines.front().start.u !=
+          derived.state().lines.front().start.u);
+    CHECK(derived.erase(source->model.state().lines.front().id));
+    // Authored contour still closes, but the *current* derived contour
+    // is Missing. Never replace it with the stale authored Rectangle.
+    const auto broken =
+        part::resolveKernelProfileInput(
+            fixture.document, profile->id,
+            nullptr, nullptr, &derived);
+    CHECK(!broken.ok());
+    CHECK(fixture.document.evaluateProfile(
+              profile->id).has_value());
+    std::cout
+        << "PG01B_B3_KERNEL_PROFILE_OVERLAY_PASS"
+        << " derived_curve_consumed=1"
+        << " stale_seed_fenced=1"
+        << " authored_unchanged=1\n";
+}
+
+void verifyPg01bB2EffectiveSketch(
+    const Fixture& fixture) {
+    struct FakeBody final : kernel::RuntimeSolid {};
+    struct FakeQuery final : kernel::IEdgeProjectionQuery {
+        bool unsupported{false};
+        std::optional<kernel::ScopedProjectionEdge>
+        bindEdgeToBody(
+            kernel::RuntimeSolidHandle body,
+            kernel::RuntimeEdgeToken edge) noexcept override {
+            if (!body || !edge.valid()) {
+                return std::nullopt;
+            }
+            return makeScopedEdge(std::move(body), edge);
+        }
+        kernel::EdgeProjectionResult projectEdgeToPlane(
+            kernel::RuntimeSolidHandle body,
+            const kernel::ScopedProjectionEdge& edge,
+            const kernel::Frame3& frame) noexcept override {
+            if (!body || body != edge.sourceBody() ||
+                !frame.valid()) {
+                return {
+                    kernel::EdgeProjectionStatus::provider_mismatch,
+                    std::nullopt};
+            }
+            if (unsupported) {
+                return {
+                    kernel::EdgeProjectionStatus::unsupported_curve,
+                    std::nullopt};
+            }
+            return {
+                kernel::EdgeProjectionStatus::ok,
+                kernel::Line2{
+                    {100.0, 0.0}, {120.0, 0.0}}};
+        }
+    };
+
+    const auto* fillet =
+        std::get_if<part::FilletFeature>(
+            &fixture.document.body().features[1].definition);
+    CHECK(fillet && !fillet->edges.empty());
+    const auto source = fillet->edges.front();
+    auto state = fixture.document.state();
+    const auto support = part::partSketchSupportForBuiltinPlane(
+        core::BuiltinReferenceRole::xy_plane);
+    CHECK(support);
+    part::PartSketch target{
+        sketch::SketchId::generate(), *support, true, {}};
+    const auto id = target.model.addLine(
+        {1.0, 2.0}, {3.0, 4.0});
+    target.projection_bindings.push_back({id, source});
+    const auto other_id =
+        target.model.addLine({0.0, 0.0}, {0.0, 10.0});
+    const auto sketch_id = target.id;
+    state.sketches.push_back(std::move(target));
+    auto document = part::PartDocument::restore(
+        fixture.document.documentId(), std::move(state));
+    CHECK(document.ok());
+
+    const kernel::RuntimeEdgeToken token{101U};
+    part::BodyStageTopologyCatalog catalog;
+    catalog.stage = source.stage;
+    part::FeatureCurveResolution curve;
+    curve.address = source.curve;
+    curve.status = kernel::ReferenceStatus::resolved;
+    curve.strict_edge_status = kernel::ReferenceStatus::resolved;
+    curve.candidate_edge_count = 1U;
+    curve.curve_kind = kernel::CurveKind::line;
+    curve.current_edges = {token};
+    catalog.curves.push_back(curve);
+    part::BodyEdgeTopologyRecord edge;
+    edge.runtime_token = token;
+    edge.accounting_class =
+        part::TopologyAccountingClass::referenceable;
+    edge.referenceability =
+        kernel::ReferenceStatus::resolved;
+    edge.curve_kind = kernel::CurveKind::line;
+    edge.curve_candidates = {source.curve};
+    catalog.edges.push_back(edge);
+    CHECK(catalog.complete());
+
+    part::FeatureEvaluation stage;
+    stage.feature_id = fixture.base_id;
+    stage.status = part::FeatureEvaluationStatus::up_to_date;
+    stage.result_solid = std::make_shared<FakeBody>();
+    stage.result_topology = catalog;
+    part::PartEvaluation prefix;
+    prefix.source_revision = document.document->revision();
+    prefix.features.push_back(std::move(stage));
+    FakeQuery query;
+    const auto derived =
+        part::evaluateEffectiveSketchProjection(
+            *document.document, sketch_id, prefix,
+            query, fixture.fillet_id);
+    CHECK(derived);
+    CHECK(derived->allResolved());
+    CHECK(derived->outcomes.size() == 1U);
+    const auto* current = derived->model.findLine(id);
+    CHECK(current != nullptr);
+    CHECK(current->start().u == 100.0);
+    CHECK(current->end().u == 120.0);
+    CHECK(document.document->findSketch(sketch_id)
+              ->model.findLine(id)->start().u == 1.0);
+
+    query.unsupported = true;
+    const auto broken =
+        part::evaluateEffectiveSketchProjection(
+            *document.document, sketch_id, prefix,
+            query, fixture.fillet_id);
+    CHECK(broken && !broken->allResolved());
+    CHECK(!broken->model.findLine(id));
+    CHECK(broken->outcomes.front().status ==
+          part::ProjectedSketchSourceStatus::
+              unsupported_projection);
+    const auto cycle =
+        part::evaluateEffectiveSketchProjection(
+            *document.document, sketch_id, prefix,
+            query, fixture.base_id);
+    CHECK(cycle && !cycle->allResolved());
+    CHECK(cycle->outcomes.front().status ==
+          part::ProjectedSketchSourceStatus::
+              invalid_dependency);
+
+    part::PartEvaluation no_stage;
+    no_stage.source_revision = prefix.source_revision;
+    const auto missing =
+        part::evaluateEffectiveSketchProjection(
+            *document.document, sketch_id, no_stage,
+            query, fixture.fillet_id);
+    CHECK(missing && !missing->allResolved());
+    CHECK(!missing->model.findLine(id));
+    CHECK(missing->outcomes.front().status ==
+          part::ProjectedSketchSourceStatus::missing_stage);
+
+    // B4a: direct geometry editing of a linked target is an invalid
+    // semantic mutation; Erase atomically removes its binding and Undo
+    // restores both the stable EntityId and source intent.
+    application::DocumentSession session{
+        {}, std::move(*document.document)};
+    const auto before = session.document().state();
+    const auto rejected = session.execute(
+        application::UpdateSketchLinesCommand{
+            sketch_id,
+            session.document().revision(),
+            {{id, {8.0, 9.0}, {18.0, 19.0}}}});
+    CHECK(!rejected.ok() && !rejected.changed);
+    CHECK(session.document().state() == before);
+
+    const auto trim = session.execute(
+        application::TrimSketchCommand{
+            sketch_id, session.document().revision(),
+            id, {}, {0.0, 0.0}});
+    CHECK(!trim.changed);
+    CHECK(trim.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    const auto trim_ref = session.execute(
+        application::TrimSketchCommand{
+            sketch_id, session.document().revision(),
+            other_id, {id}, {0.0, 0.0}});
+    CHECK(!trim_ref.changed);
+    CHECK(trim_ref.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    const auto extend = session.execute(
+        application::ExtendSketchCommand{
+            sketch_id, session.document().revision(),
+            id, {}, sketch::StructuralEndpointRole::end});
+    CHECK(!extend.changed);
+    CHECK(extend.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    const auto both = session.execute(
+        application::ExtendBothSketchLinesCommand{
+            sketch_id, session.document().revision(),
+            other_id, id});
+    CHECK(!both.changed);
+    CHECK(both.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    CHECK(session.document().state() == before);
+
+    const auto erased = session.execute(
+        application::EraseSketchEntityCommand{
+            sketch_id, id});
+    CHECK(erased.ok() && erased.changed);
+    CHECK(!session.document().findSketch(sketch_id)
+              ->model.contains(id));
+    CHECK(session.document().findSketch(sketch_id)
+              ->projection_bindings.empty());
+    CHECK(session.undo().changed);
+    CHECK(session.document().findSketch(sketch_id)
+              ->model.contains(id));
+    CHECK(session.document().findSketch(sketch_id)
+              ->projection_bindings.size() == 1U);
+    CHECK(session.document().findSketch(sketch_id)
+              ->projection_bindings.front().target_entity == id);
+    CHECK(session.redo().changed);
+    CHECK(!session.document().findSketch(sketch_id)
+              ->model.contains(id));
+    CHECK(session.document().findSketch(sketch_id)
+              ->projection_bindings.empty());
+
+    std::cout << "PG01B_B4A_LINKED_EDIT_ERASE_PASS"
+              << " direct_edit_blocked=1"
+              << " atomic_erase_binding=1"
+              << " trim_extend_guarded=1"
+              << " undo_redo=1\n";
+    std::cout << "PG01B_B2_EFFECTIVE_SKETCH_PASS"
+              << " stable_entity=1"
+              << " pure_seed=1"
+              << " unsupported_fail_closed=1"
+              << " cycle_rejected=1"
+              << " missing_rejected=1\n";
+}
+
+void verifyPg01bB1BindingStructure(
+    const Fixture& fixture) {
+    const auto base =
+        fixture.document.state();
+    CHECK(!base.sketches.empty());
+    const auto* fillet =
+        std::get_if<part::FilletFeature>(
+            &base.body.features.at(1).definition);
+    CHECK(fillet && !fillet->edges.empty());
+    const auto valid_source =
+        fillet->edges.front();
+    CHECK(valid_source.valid());
+
+    auto withLink = [&]() {
+        auto next = base;
+        const auto support =
+            part::partSketchSupportForBuiltinPlane(
+                core::BuiltinReferenceRole::xy_plane);
+        CHECK(support);
+        part::PartSketch target{
+            sketch::SketchId::generate(),
+            *support, true, {}};
+        const auto entity =
+            target.model.addLine(
+                {1.0, 2.0}, {3.0, 4.0},
+                sketch::EntityRole::regular);
+        CHECK(entity.valid());
+        target.projection_bindings.push_back(
+            {entity, valid_source});
+        next.sketches.push_back(std::move(target));
+        return next;
+    };
+    auto original = withLink();
+    const auto& linked = original.sketches.back();
+    CHECK(linked.projection_bindings.size() == 1U);
+    CHECK(linked.projection_bindings[0].valid());
+    const auto accepted =
+        part::PartDocument::restore(
+            fixture.document.documentId(), original);
+    CHECK(accepted.ok());
+
+    // v15 must roundtrip the exact authored semantic link and stable target
+    // through real native bytes, not BRep/provider tokens.
+    TempDirectory tmp;
+    part::PartDocumentStore store;
+    const auto saved_path =
+        tmp.path / "LinkedProjectionV15.ss2part";
+    CHECK(store.createNew(
+        saved_path, *accepted.document).ok());
+    const auto loaded = store.load(saved_path);
+    CHECK(loaded.ok());
+    CHECK(loaded.document->state() ==
+          accepted.document->state());
+
+    const auto native =
+        persistence::readNativeDocumentContainer(saved_path);
+    CHECK(native.ok());
+    CHECK(native.package->descriptor.domain_schema_version == 15);
+    const auto original_authored =
+        nlohmann::json::parse(
+            native.package->authored_json);
+    const auto& serialized =
+        original_authored["sketches"].back()["projected_edges"];
+    CHECK(serialized.size() == 1U);
+    CHECK(serialized[0]["target_entity"] ==
+          linked.projection_bindings.front()
+              .target_entity.serialized());
+    CHECK(serialized[0]["source"]["stage"]["feature_id"] ==
+          fixture.base_id.serialized());
+    CHECK(native.package->authored_json.find(
+              "runtime_token") ==
+          std::string::npos);
+    CHECK(native.package->authored_json.find(
+              "provider") ==
+          std::string::npos);
+
+    auto bad = original_authored;
+    bad["sketches"].back()["projected_edges"]
+       .push_back(serialized[0]);
+    auto damaged_path =
+        tmp.path / "DuplicatedProjectedEdge.ss2part";
+    writeBytes(damaged_path, repackage(
+        *native.package, 15, bad.dump(2)));
+    CHECK(!store.load(damaged_path).ok());
+
+    bad = original_authored;
+    bad["sketches"].back()["projected_edges"][0]
+       ["target_entity"] = "9999";
+    damaged_path =
+        tmp.path / "MissingProjectedEntity.ss2part";
+    writeBytes(damaged_path, repackage(
+        *native.package, 15, bad.dump(2)));
+    CHECK(!store.load(damaged_path).ok());
+
+    bad = original_authored;
+    bad["sketches"].back()["projected_edges"][0]
+       ["source"]["stage"]["feature_id"] = "9999";
+    damaged_path =
+        tmp.path / "UnallocatedProjectedSource.ss2part";
+    writeBytes(damaged_path, repackage(
+        *native.package, 15, bad.dump(2)));
+    CHECK(!store.load(damaged_path).ok());
+
+    // v14 has no projection key, and loads as detached without inventing
+    // a projection source; the migration is intentionally one-way.
+    auto old = original_authored;
+    for (auto& sketch : old["sketches"]) {
+        sketch.erase("projected_edges");
+    }
+    damaged_path =
+        tmp.path / "LegacyWithoutProjection.ss2part";
+    writeBytes(damaged_path, repackage(
+        *native.package, 14, old.dump(2)));
+    const auto legacy = store.load(damaged_path);
+    CHECK(legacy.ok());
+    for (const auto& sketch :
+         legacy.document->sketches()) {
+        CHECK(sketch.projection_bindings.empty());
+    }
+
+    auto missing_target = withLink();
+    missing_target.sketches.back()
+        .projection_bindings[0].target_entity =
+            *sketch::EntityId::parse("9999");
+    CHECK(!part::PartDocument::restore(
+        fixture.document.documentId(),
+        std::move(missing_target)).ok());
+
+    auto duplicate = withLink();
+    duplicate.sketches.back()
+        .projection_bindings.push_back(
+            duplicate.sketches.back()
+                .projection_bindings.front());
+    CHECK(!part::PartDocument::restore(
+        fixture.document.documentId(),
+        std::move(duplicate)).ok());
+
+    auto unallocated = withLink();
+    unallocated.sketches.back()
+        .projection_bindings[0].source.stage.feature_id =
+            *part::FeatureId::parse("9999");
+    CHECK(!part::PartDocument::restore(
+        fixture.document.documentId(),
+        std::move(unallocated)).ok());
+
+    // Authored source after target-consuming Feature is a cycle.
+    auto self_cycle = base;
+    CHECK(!self_cycle.sketches.empty());
+    const auto source_entity =
+        self_cycle.sketches.front()
+            .model.state().lines.front().id;
+    self_cycle.sketches.front()
+        .projection_bindings.push_back(
+            {source_entity, valid_source});
+    CHECK(!part::PartDocument::restore(
+        fixture.document.documentId(),
+        std::move(self_cycle)).ok());
+
+    std::cout << "PG01B_B1_STRUCTURE_PASS"
+              << " stable_entity=1"
+              << " duplicate_reject=1"
+              << " stage_cycle_reject=1"
+              << " v15_cold_roundtrip=1"
+              << " malformed_reject=3\n";
+}
+
 } // namespace
 
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        14);
+        15);
 
     const auto fixture = makeFixture();
+    verifyPg01bB1BindingStructure(fixture);
+    verifyPg01bB2EffectiveSketch(fixture);
+    verifyPg01bB3KernelProfileUsesEffectiveSketch(fixture);
     CHECK(
         fixture.document.body().features.size() ==
         3U);
@@ -489,7 +951,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
 
     const auto authored =
         nlohmann::json::parse(
@@ -541,7 +1003,7 @@ int main() {
         std::string::npos);
 
     // A schema-v13 authored state without Edge Features remains loadable and
-    // is written back as schema v14 without rewriting existing identities.
+    // is written back as schema v15 without rewriting existing identities.
     auto legacy_state =
         fixture.document.state();
     legacy_state.body.features.resize(1U);
@@ -595,7 +1057,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
 
     // New Edge Feature records are schema-v14-only and must fail closed when
     // deliberately mislabeled as a legacy v13 payload.
@@ -668,7 +1130,7 @@ int main() {
 
     std::cout
         << "PM05B1_EDGE_FEATURE_SCHEMA_V14_PASS"
-        << " schema=14"
+        << " schema=15"
         << " edge_feature_kinds=2"
         << " provider_identity_persisted=0\n";
     return EXIT_SUCCESS;

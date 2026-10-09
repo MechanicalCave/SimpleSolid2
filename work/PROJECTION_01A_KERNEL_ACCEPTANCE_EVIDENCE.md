@@ -1,6 +1,6 @@
 # PG-01A — Kernel / OCCT Exact Projection Evidence
 
-**Status:** IMPLEMENTING; actual injected `Standard_Failure` FOCUSED #1930 PASS 1/1; earlier FULL #1926 PASS 195/195 on pre-injection head only. Latest-head FAST and Ready-for-Review exact-head FULL pending; Owner final PG-01A PASS not claimed.
+**Status:** COMPLETED — OWNER FINAL PASS 2026-10-09; exact-head Windows FULL #1932 195/195 PASS; PR #300 squash MERGED to main as `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`.
 **Date:** 2026-10-09
 **PR:** [#300](https://github.com/MechanicalCave/SimpleSolid2/pull/300)
 **Contract:** `work/PROJECTION_01A_EXACT_KERNEL_CONTRACT.md`
@@ -40,3 +40,11 @@
 | Owner final PG-01A acceptance and merge | PENDING |
 
 **Source boundaries:** SS2 `kernel/edge_projection.hpp`, `kernel_occt/solid_modeling_kernel.hpp/.cpp` and existing `pm02p.e_kernel_lifecycle`; no Part/Sketch/UI/persistence/PM-06 changes or CMake modifications. Canonical internal as-built doc `docs/internal/PART_EDGE_PROJECTION_KERNEL.md` and generated Browser updated together. No user-facing Project Geometry feature ships in PG-01A.
+
+## Final Owner acceptance and immutable tested head
+
+- Owner final `Zatwierdzam - kontynuuj` accepting PG-01A and guarded merge, 2026-10-09.
+- [FOCUSED #1930](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37896698388) **PASS 1/1** on `62fd10849446dff1f03b439ac6f6d346da2e16db`, actual thrown `Standard_Failure`, generic C++ exception and normal passthrough via production-shared OCCT guard. Both failures returned KernelFailure without geometry.
+- [FAST #1931](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37896942447) **PASS 93/93**, aggregate PASS, exact final PR HEAD `9d60b67f34020f75e8bbe104e85d790fb6e155a2`.
+- [FULL #1932](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37897152384) **PASS 195/195**, Core 25, kernel-native 57, Desktop 113, docs/bootstrap/aggregate PASS on that **same exact PR HEAD**.
+- Guarded [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) **squash-MERGED** as `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`, verified `main`. PG-01A contract is **completed** and does not authorize further product modifications. A direct synthetic B-Spline construction fixture was not run; real unsupported nonanalytic OCCT Boolean intersection is covered by #1924.

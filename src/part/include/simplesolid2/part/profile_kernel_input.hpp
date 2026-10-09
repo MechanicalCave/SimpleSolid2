@@ -48,7 +48,12 @@ resolveKernelProfileInput(
     const BodyStageTopologyCatalog*
         support_topology = nullptr,
     const DatumEvaluation*
-        datum_evaluation = nullptr);
+        datum_evaluation = nullptr,
+    // Authorized same-revision, same-Sketch projection snapshot. When
+    // provided, BOTH semantic loop intent and exact Kernel curves read
+    // this temporary model, never the persisted authored seed.
+    const sketch::SketchModel*
+        effective_sketch = nullptr);
 
 // Compatibility convenience for Origin-backed callers that do not own a
 // Body-stage evaluation context. Body-Surface-backed Profiles intentionally

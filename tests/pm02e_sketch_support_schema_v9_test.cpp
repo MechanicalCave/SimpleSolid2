@@ -221,6 +221,15 @@ std::string buildSchema8FromCurrentOriginDocument(
     authored.erase("datum_planes");
     authored.erase("next_axis_id");
     authored.erase("axes");
+    // A historical schema fixture cannot carry v15 projected bindings.
+    // Refuse to downgrade a genuinely linked Sketch and never relax the
+    // production legacy parser to accommodate current-schema extensions.
+    for (auto& sketch_json : authored["sketches"]) {
+        CHECK(sketch_json.contains("projected_edges"));
+        CHECK(sketch_json.at("projected_edges").is_array());
+        CHECK(sketch_json.at("projected_edges").empty());
+        sketch_json.erase("projected_edges");
+    }
     for (auto& sketch : authored["sketches"]) {
         auto placement =
             legacyPlacementFor(
@@ -260,6 +269,15 @@ std::string buildSchema9FromCurrentDocument(
     authored.erase("datum_planes");
     authored.erase("next_axis_id");
     authored.erase("axes");
+    // A historical schema fixture cannot carry v15 projected bindings.
+    // Refuse to downgrade a genuinely linked Sketch and never relax the
+    // production legacy parser to accommodate current-schema extensions.
+    for (auto& sketch_json : authored["sketches"]) {
+        CHECK(sketch_json.contains("projected_edges"));
+        CHECK(sketch_json.at("projected_edges").is_array());
+        CHECK(sketch_json.at("projected_edges").empty());
+        sketch_json.erase("projected_edges");
+    }
 
     auto text = authored.dump(2);
     text.push_back('\n');
@@ -353,7 +371,7 @@ int main() {
     CHECK(current_package.ok());
     CHECK(
         current_package.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
     CHECK(
         current_package.package->authored_json.find(
             "\"placement\"") ==
@@ -469,7 +487,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
     CHECK(
         rewritten.package->authored_json.find(
             "\"placement\"") ==
@@ -584,7 +602,7 @@ int main() {
     CHECK(body_package.ok());
     CHECK(
         body_package.package->descriptor
-            .domain_schema_version == 14);
+            .domain_schema_version == 15);
     CHECK(
         body_package.package->authored_json.find(
             "\"body_planar_surface\"") !=

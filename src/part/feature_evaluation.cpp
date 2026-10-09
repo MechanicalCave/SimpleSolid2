@@ -1,4 +1,5 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
@@ -731,13 +732,16 @@ makeKernelExtrudeInput(
     const BodyStageTopologyCatalog*
         support_topology,
     const DatumEvaluation*
-        datum_evaluation) {
+        datum_evaluation,
+    const sketch::SketchModel*
+        effective_sketch) {
     auto profile =
         resolveKernelProfileInput(
             document,
             feature.profile_id,
             support_topology,
-            datum_evaluation);
+            datum_evaluation,
+            effective_sketch);
     if (!profile.ok()) {
         return std::nullopt;
     }
@@ -752,7 +756,8 @@ resolveKernelRevolveInput(
     const PartDocument& document,
     const RevolveFeature& feature,
     const PartEvaluation* prefix_evaluation,
-    const DatumEvaluation* datum_evaluation) {
+    const DatumEvaluation* datum_evaluation,
+    const sketch::SketchModel* effective_sketch) {
     RevolveKernelInputResult result;
 
     if (!revolveFeatureStructurallyValid(
@@ -783,7 +788,8 @@ resolveKernelRevolveInput(
             document,
             profile->id,
             support_topology,
-            datum_evaluation);
+            datum_evaluation,
+            effective_sketch);
     if (!materialized.ok()) {
         result.status =
             materialized.status ==
@@ -4651,6 +4657,41 @@ PartEvaluation evaluatePart(
                         result);
             }
 
+            // PG-01B/B3: only the currently evaluated upstream Feature
+            // prefix may author an effective Sketch geometry snapshot.
+            // The snapshot is disposable; no authored model, provider
+            // token, identity or DocumentRevision is mutated by it.
+            // If an active linked Regular source cannot be reprojected,
+            // resolveKernelProfileInput fails closed on the derived
+            // missing Entity rather than taking its stale authored seed.
+            std::optional<EffectiveSketchProjection>
+                effective_profile_sketch;
+            if (const auto* source_sketch =
+                    document.findSketch(
+                        profile->source_sketch_id);
+                source_sketch &&
+                !source_sketch->projection_bindings.empty()) {
+                if (auto* projection_query =
+                        dynamic_cast<
+                            kernel::IEdgeProjectionQuery*>(
+                            &modeling_kernel)) {
+                    effective_profile_sketch =
+                        evaluateEffectiveSketchProjection(
+                            document,
+                            profile->source_sketch_id,
+                            result,
+                            *projection_query,
+                            authored.id);
+                }
+                // Without a matching projection provider, the normal
+                // authored Profile safety fence retains fail-closed
+                // behavior. It never fabricates current linked truth.
+            }
+            const auto* evaluated_model =
+                effective_profile_sketch
+                    ? &effective_profile_sketch->model
+                    : nullptr;
+
             if (extrude != nullptr) {
                 auto materialized_profile =
                     resolveKernelProfileInput(
@@ -4659,7 +4700,8 @@ PartEvaluation evaluatePart(
                         support_topology,
                         support_datums
                             ? &*support_datums
-                            : nullptr);
+                            : nullptr,
+                        evaluated_model);
                 if (!materialized_profile.ok()) {
                     evaluated.status =
                         materialized_profile.status ==
@@ -4742,7 +4784,8 @@ PartEvaluation evaluatePart(
                         &result,
                         support_datums
                             ? &*support_datums
-                            : nullptr);
+                            : nullptr,
+                        evaluated_model);
                 if (!resolved.ok()) {
                     evaluated.status =
                         resolved.status ==
@@ -5074,6 +5117,209 @@ PartEvaluation evaluatePart(
 
     result.body_status =
         BodyEvaluationStatus::empty;
+    return result;
+}
+
+
+std::optional<kernel::Frame3>
+resolveCurrentProjectionSketchFrame(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& prefix) {
+    if (prefix.source_revision != document.revision()) {
+        return std::nullopt;
+    }
+    const auto* authored = document.findSketch(sketch_id);
+    if (!authored) {
+        return std::nullopt;
+    }
+    const BodyStageTopologyCatalog* catalog = nullptr;
+    if (const auto* surface =
+            bodyPlanarSurfaceReference(authored->support);
+        surface && surface->stage.feature_id) {
+        const auto* stage = prefix.findFeature(
+            *surface->stage.feature_id);
+        if (stage && stage->result_topology &&
+            stage->result_topology->stage == surface->stage) {
+            catalog = &*stage->result_topology;
+        }
+    }
+    std::optional<DatumEvaluation> datums;
+    if (datumPlaneIdForSketchSupport(authored->support)) {
+        datums = evaluateDatums(document, prefix);
+    }
+    const auto support = resolveSketchSupport(
+        authored->support, catalog,
+        datums ? &*datums : nullptr);
+    if (!support.valid() || !support.frame) {
+        return std::nullopt;
+    }
+    const auto& f = *support.frame;
+    const kernel::Point3 u{
+        f.u_axis[0], f.u_axis[1], f.u_axis[2]};
+    const kernel::Point3 v{
+        f.v_axis[0], f.v_axis[1], f.v_axis[2]};
+    kernel::Frame3 current{
+        {f.origin[0], f.origin[1], f.origin[2]},
+        u, v,
+        {u.y * v.z - u.z * v.y,
+         u.z * v.x - u.x * v.z,
+         u.x * v.y - u.y * v.x}};
+    return current.valid()
+        ? std::optional<kernel::Frame3>{current}
+        : std::nullopt;
+}
+
+StrictProjectedEdgeGeometry projectStrictMaterialEdge(
+    const PartDocument& document,
+    const MaterialEdgeReference& source,
+    const PartEvaluation& prefix,
+    kernel::IEdgeProjectionQuery& query,
+    const kernel::Frame3& frame,
+    std::optional<FeatureId> consuming_feature) {
+    using Status = ProjectedSketchSourceStatus;
+    const auto fail = [](Status s) {
+        return StrictProjectedEdgeGeometry{s, std::nullopt};
+    };
+    if (prefix.source_revision != document.revision() ||
+        !frame.valid() || !source.valid() ||
+        !source.stage.feature_id) {
+        return fail(Status::invalid_dependency);
+    }
+    const auto& features = document.body().features;
+    const auto producer = std::find_if(
+        features.begin(), features.end(),
+        [&source](const PartFeature& f) {
+            return f.id == *source.stage.feature_id;
+        });
+    if (producer == features.end()) {
+        return fail(Status::missing_stage);
+    }
+    if (consuming_feature) {
+        const auto consumer = std::find_if(
+            features.begin(), features.end(),
+            [consuming_feature](const PartFeature& f) {
+                return f.id == *consuming_feature;
+            });
+        if (consumer == features.end() || producer >= consumer) {
+            return fail(Status::invalid_dependency);
+        }
+    }
+    const auto* stage =
+        prefix.findFeature(*source.stage.feature_id);
+    if (!stage ||
+        stage->status != FeatureEvaluationStatus::up_to_date ||
+        !stage->result_solid || !stage->result_topology ||
+        stage->result_topology->stage != source.stage ||
+        !stage->result_topology->complete()) {
+        return fail(Status::missing_stage);
+    }
+    const auto ref = resolveMaterialEdgeReference(
+        source, *stage->result_topology);
+    if (!ref) {
+        return fail(Status::unsupported_source);
+    }
+    if (!ref->resolved() || ref->current_edges.size() != 1U) {
+        return fail(
+            ref->status == kernel::ReferenceStatus::ambiguous
+                ? Status::ambiguous_source
+                : ref->status == kernel::ReferenceStatus::unsupported
+                    ? Status::unsupported_source
+                    : Status::missing_stage);
+    }
+    const auto bound = query.bindEdgeToBody(
+        stage->result_solid, ref->current_edges.front());
+    if (!bound || !bound->valid()) {
+        return fail(Status::provider_failure);
+    }
+    const auto projected = query.projectEdgeToPlane(
+        stage->result_solid, *bound, frame);
+    if (!projected.ok()) {
+        switch (projected.status) {
+        case kernel::EdgeProjectionStatus::unsupported_curve:
+            return fail(Status::unsupported_projection);
+        case kernel::EdgeProjectionStatus::degenerate_projection:
+            return fail(Status::degenerate_projection);
+        default:
+            return fail(Status::provider_failure);
+        }
+    }
+    return {Status::resolved, projected.curve};
+}
+
+std::optional<EffectiveSketchProjection>
+evaluateEffectiveSketchProjection(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& prefix,
+    kernel::IEdgeProjectionQuery& query,
+    std::optional<FeatureId> consuming_feature) {
+    if (prefix.source_revision != document.revision()) {
+        return std::nullopt;
+    }
+    const auto* authored = document.findSketch(sketch_id);
+    if (!authored) {
+        return std::nullopt;
+    }
+    EffectiveSketchProjection result;
+    result.model = authored->model;
+    result.outcomes.reserve(authored->projection_bindings.size());
+    if (authored->projection_bindings.empty()) {
+        return result;
+    }
+    const auto frame = resolveCurrentProjectionSketchFrame(
+        document, sketch_id, prefix);
+    for (const auto& binding : authored->projection_bindings) {
+        ProjectedSketchOutcome outcome{
+            binding.target_entity,
+            ProjectedSketchSourceStatus::invalid_support};
+        if (frame) {
+            const auto projection = projectStrictMaterialEdge(
+                document, binding.source, prefix, query,
+                *frame, consuming_feature);
+            outcome.status = projection.status;
+            if (projection.resolved()) {
+                const auto point = [](const kernel::Point2& p) {
+                    return sketch::Point2{p.u, p.v};
+                };
+                bool applied = false;
+                if (const auto* line =
+                        std::get_if<kernel::Line2>(&*projection.curve)) {
+                    applied = authored->model.findLine(
+                                  binding.target_entity) != nullptr &&
+                        result.model.updateLine(
+                            binding.target_entity,
+                            point(line->start), point(line->end));
+                } else if (const auto* circle =
+                               std::get_if<kernel::Circle2>(
+                                   &*projection.curve)) {
+                    applied = authored->model.findCircle(
+                                  binding.target_entity) != nullptr &&
+                        result.model.updateCircle(
+                            binding.target_entity,
+                            point(circle->center), circle->radius);
+                } else if (const auto* arc =
+                               std::get_if<kernel::Arc2>(
+                                   &*projection.curve)) {
+                    applied = authored->model.findArc(
+                                  binding.target_entity) != nullptr &&
+                        result.model.updateArc(
+                            binding.target_entity,
+                            point(arc->center), arc->radius,
+                            arc->start_angle, arc->sweep_angle);
+                }
+                if (!applied) {
+                    outcome.status =
+                        ProjectedSketchSourceStatus::changed_curve_kind;
+                }
+            }
+        }
+        if (!outcome.resolved()) {
+            // Broken binding never leaks the saved seed into Profile truth.
+            (void)result.model.erase(binding.target_entity);
+        }
+        result.outcomes.push_back(outcome);
+    }
     return result;
 }
 

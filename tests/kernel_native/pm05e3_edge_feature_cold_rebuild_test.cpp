@@ -1,10 +1,13 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <variant>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -723,9 +726,733 @@ void checkColdChain(
         blocked_first->result_solid == nullptr);
 }
 
+
+void verifyPg01bAtomicProjectedEdges() {
+    TempDirectory temp;
+    const auto path = temp.path / "Pg01bProjectedBatch.ss2part";
+    kernel_occt::OcctSolidModelingKernel kernel;
+    auto fixture = makeBaseSession(path, kernel);
+    const auto prefix = part::evaluatePart(
+        fixture.session.document(), kernel);
+    const auto* stage = prefix.findFeature(fixture.base_id);
+    CHECK(stage && stage->result_topology && stage->result_solid);
+    const kernel::Frame3 xy{};
+    std::vector<part::MaterialEdgeReference> sources;
+    std::optional<part::MaterialEdgeReference>
+        projected_point_source;
+    for (const auto& edge : stage->result_topology->edges) {
+        const auto ref = part::authorMaterialEdgeReference(
+            *stage->result_topology, edge.runtime_token);
+        if (!ref.ok()) {
+            continue;
+        }
+        const auto scoped = kernel.bindEdgeToBody(
+            stage->result_solid, edge.runtime_token);
+        if (!scoped) {
+            continue;
+        }
+        const auto projected = kernel.projectEdgeToPlane(
+            stage->result_solid, *scoped, xy);
+        if (projected.status ==
+                kernel::EdgeProjectionStatus::degenerate_projection &&
+            !projected_point_source) {
+            projected_point_source = *ref.reference;
+        }
+        if (projected.ok() &&
+            std::holds_alternative<kernel::Line2>(*projected.curve) &&
+            std::find(sources.begin(), sources.end(), *ref.reference)
+                == sources.end() &&
+            sources.size() < 2U) {
+            sources.push_back(*ref.reference);
+        }
+        if (sources.size() == 2U && projected_point_source) {
+            break;
+        }
+    }
+    CHECK(sources.size() == 2U);
+    CHECK(projected_point_source);
+    const auto new_sketch = fixture.session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(new_sketch.ok() && new_sketch.sketch_id);
+    const auto id = *new_sketch.sketch_id;
+    const auto old_revision = fixture.session.document().revision();
+    // First exact Edge materializes in pending state, but the second
+    // strict source collapses into a Point in XY. The entire two-source
+    // request must fail with no partial authored target/EntityId.
+    const auto before_bad = fixture.session.document().state();
+    const auto bad_batch = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, old_revision,
+            {sources.front(), *projected_point_source},
+            sketch::EntityRole::regular}, kernel);
+    CHECK(!bad_batch.ok() && !bad_batch.changed);
+    CHECK(bad_batch.failing_source_index &&
+          *bad_batch.failing_source_index == 1U);
+    CHECK(bad_batch.source_status &&
+          *bad_batch.source_status ==
+              part::ProjectedSketchSourceStatus::degenerate_projection);
+    CHECK(fixture.session.document().state() == before_bad);
+
+    const auto batch = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, old_revision, sources,
+            sketch::EntityRole::construction}, kernel);
+    CHECK(batch.ok());
+    CHECK(batch.entity_ids.size() == 2U);
+    const auto* sketch = fixture.session.document().findSketch(id);
+    CHECK(sketch && sketch->projection_bindings.size() == 2U);
+    CHECK(sketch->model.entityCount() == 2U);
+    for (const auto entity : batch.entity_ids) {
+        const auto* line = sketch->model.findLine(entity);
+        CHECK(line && line->role() == sketch::EntityRole::construction);
+    }
+    const auto before_duplicate =
+        fixture.session.document().state();
+    const auto geometry =
+        sketch::captureSketchTransformGeometry(
+            sketch->model, {batch.entity_ids.front()});
+    CHECK(geometry && !geometry->empty());
+    const auto stale_copy = fixture.session.execute(
+        application::DuplicateSketchGeometryCommand{
+            id, fixture.session.document().revision(),
+            *geometry});
+    CHECK(!stale_copy.ok() && !stale_copy.changed);
+    CHECK(fixture.session.document().state() ==
+          before_duplicate);
+
+    const auto after = fixture.session.document().state();
+    const auto dup = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, fixture.session.document().revision(),
+            {sources[0], sources[0]},
+            sketch::EntityRole::regular}, kernel);
+    CHECK(!dup.ok() && !dup.changed);
+    CHECK(dup.failing_source_index);
+    CHECK(fixture.session.document().state() == after);
+    const auto stale = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, old_revision, sources,
+            sketch::EntityRole::regular}, kernel);
+    CHECK(!stale.ok() && !stale.changed);
+    CHECK(fixture.session.document().state() == after);
+    const auto incomplete = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, fixture.session.document().revision(),
+            {part::MaterialEdgeReference{}},
+            sketch::EntityRole::regular}, kernel);
+    CHECK(!incomplete.ok() && !incomplete.changed);
+    CHECK(fixture.session.document().state() == after);
+
+    // One batch is one Undo step, preserving both IDs under Redo.
+    CHECK(fixture.session.undo().changed);
+    const auto* undone = fixture.session.document().findSketch(id);
+    CHECK(undone && undone->projection_bindings.empty());
+    CHECK(undone->model.entityCount() == 0U);
+    CHECK(fixture.session.redo().changed);
+    const auto* redone = fixture.session.document().findSketch(id);
+    CHECK(redone && redone->projection_bindings.size() == 2U);
+    CHECK(redone->model.contains(batch.entity_ids[0]));
+    CHECK(redone->model.contains(batch.entity_ids[1]));
+    CHECK(fixture.session.save().ok());
+
+    part::PartDocumentStore store;
+    const auto loaded = store.load(path);
+    CHECK(loaded.ok() && loaded.document);
+    const auto* cold_sketch = loaded.document->findSketch(id);
+    CHECK(cold_sketch && cold_sketch->projection_bindings.size() == 2U);
+    CHECK(cold_sketch->model.contains(batch.entity_ids[0]));
+    CHECK(cold_sketch->model.contains(batch.entity_ids[1]));
+    kernel_occt::OcctSolidModelingKernel cold;
+    const auto current = part::evaluatePart(
+        *loaded.document, cold);
+    const auto effective = part::evaluateEffectiveSketchProjection(
+        *loaded.document, id, current, cold);
+    CHECK(effective && effective->allResolved());
+    std::cout
+        << "PG01B_B4_ATOMIC_EDGE_BATCH_PASS"
+        << " edges=2 undo_steps=1"
+        << " cold_reproject=1\n";
+}
+
+void verifyPg01bNativeDerivedProfileExtrude() {
+    TempDirectory temp;
+    const auto path =
+        temp.path / "Pg01bNativeLinkedProfile.ss2part";
+    kernel_occt::OcctSolidModelingKernel kernel;
+    auto fixture = makeBaseSession(path, kernel);
+    const auto prefix =
+        part::evaluatePart(
+            fixture.session.document(), kernel);
+    CHECK(prefix.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto* stage =
+        prefix.findFeature(fixture.base_id);
+    CHECK(stage && stage->result_topology &&
+          stage->result_solid);
+    const auto close = [](double a, double b) {
+        return std::abs(a - b) < 1.0e-7;
+    };
+    const kernel::Frame3 xy{};
+    std::optional<part::MaterialEdgeReference> selected;
+    for (const auto& edge :
+         stage->result_topology->edges) {
+        if (selected) {
+            break;
+        }
+        const auto semantic =
+            part::authorMaterialEdgeReference(
+                *stage->result_topology,
+                edge.runtime_token);
+        if (!semantic.ok()) {
+            continue;
+        }
+        const auto bound = kernel.bindEdgeToBody(
+            stage->result_solid,
+            edge.runtime_token);
+        if (!bound) {
+            continue;
+        }
+        const auto projected =
+            kernel.projectEdgeToPlane(
+                stage->result_solid, *bound, xy);
+        if (!projected.ok()) {
+            continue;
+        }
+        const auto* line =
+            std::get_if<kernel::Line2>(
+                &*projected.curve);
+        if (!line) {
+            continue;
+        }
+        const auto min_u =
+            std::min(line->start.u, line->end.u);
+        const auto max_u =
+            std::max(line->start.u, line->end.u);
+        if (close(min_u, 0.0) &&
+            close(max_u, 40.0) &&
+            close(line->start.v, 0.0) &&
+            close(line->end.v, 0.0)) {
+            selected = *semantic.reference;
+        }
+    }
+    CHECK(selected && selected->valid());
+    CHECK(selected->stage.feature_id == fixture.base_id);
+
+    const auto sk = fixture.session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(sk.ok() && sk.sketch_id);
+    const auto id = *sk.sketch_id;
+    const auto sourceLine = fixture.session.execute(
+        application::AddSketchLineCommand{
+            id, {0.0, 0.0}, {40.0, 0.0},
+            sketch::EntityRole::regular});
+    CHECK(sourceLine.ok() && sourceLine.entity_id);
+    CHECK(fixture.session.execute(
+        application::AddSketchLineCommand{
+            id, {40.0, 0.0}, {40.0, 10.0},
+            sketch::EntityRole::regular}).ok());
+    CHECK(fixture.session.execute(
+        application::AddSketchLineCommand{
+            id, {40.0, 10.0}, {0.0, 10.0},
+            sketch::EntityRole::regular}).ok());
+    CHECK(fixture.session.execute(
+        application::AddSketchLineCommand{
+            id, {0.0, 10.0}, {0.0, 0.0},
+            sketch::EntityRole::regular}).ok());
+    const auto* sketch =
+        fixture.session.document().findSketch(id);
+    CHECK(sketch != nullptr);
+    const auto regions =
+        sketch::analyzeRegions(sketch->model);
+    CHECK(regions.complete() &&
+          regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            regions.regions.front());
+    CHECK(intent);
+    const auto profile =
+        fixture.session.execute(
+            application::CreateProfileCommand{
+                id,
+                fixture.session.document().revision(),
+                *intent});
+    CHECK(profile.ok() && profile.profile_id);
+    const auto cut =
+        fixture.session.execute(
+            application::CreateExtrudeFeatureCommand{
+                *profile.profile_id,
+                fixture.session.document().revision(),
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{8.0}, false},
+                "PG-01B Native Linked Cut"},
+            kernel);
+    CHECK(cut.ok() && cut.feature_id);
+
+    // Deliberately store an OPEN authored seed while retaining the old
+    // ProfileId and one linked EntityId. A stale-seed evaluator cannot
+    // produce the current solid; correct stage-scoped projection can.
+    auto state = fixture.session.document().state();
+    auto target = std::find_if(
+        state.sketches.begin(), state.sketches.end(),
+        [&id](const part::PartSketch& x) {
+            return x.id == id;
+        });
+    CHECK(target != state.sketches.end());
+    CHECK(target->model.updateLine(
+        *sourceLine.entity_id,
+        {0.0, -8.0}, {40.0, -8.0}));
+    target->projection_bindings.push_back({
+        *sourceLine.entity_id, *selected});
+    auto restored = part::PartDocument::restore(
+        fixture.session.document().documentId(),
+        std::move(state));
+    CHECK(restored.ok());
+    CHECK(!restored.document->evaluateProfile(
+        *profile.profile_id));
+
+    kernel_occt::OcctSolidModelingKernel cold;
+    const auto evaluated =
+        part::evaluatePart(*restored.document, cold);
+    CHECK(evaluated.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto* current =
+        evaluated.findFeature(*cut.feature_id);
+    CHECK(current && current->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    const auto effective =
+        part::evaluateEffectiveSketchProjection(
+            *restored.document, id,
+            evaluated, cold,
+            *cut.feature_id);
+    CHECK(effective && effective->allResolved());
+    const auto* line =
+        effective->model.findLine(
+            *sourceLine.entity_id);
+    CHECK(line);
+    CHECK(close(line->start().v, 0.0));
+    CHECK(close(line->end().v, 0.0));
+    CHECK(restored.document->findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+
+    // B5: the full source -> linked Regular Profile -> downstream Cut
+    // history must survive true native Save/Close/Reopen. The authored
+    // -8 mm seed is intentionally OPEN and cannot produce this result;
+    // only a FRESH OCCT runtime can reproject the persisted strict source.
+    part::PartDocumentStore linked_store;
+    const auto before_save = linked_store.load(path);
+    CHECK(before_save.ok() && before_save.checkpoint);
+    CHECK(linked_store.save(
+              path, *restored.document,
+              *before_save.checkpoint).ok());
+    const auto cold_load = linked_store.load(path);
+    CHECK(cold_load.ok() && cold_load.document);
+    CHECK(cold_load.document->state() ==
+          restored.document->state());
+    const auto* persisted_target =
+        cold_load.document->findSketch(id);
+    CHECK(persisted_target != nullptr);
+    CHECK(persisted_target->projection_bindings.size() == 1U);
+    CHECK(persisted_target->projection_bindings.front().target_entity ==
+          *sourceLine.entity_id);
+    CHECK(persisted_target->projection_bindings.front().source ==
+          *selected);
+    CHECK(persisted_target->model.findLine(
+              *sourceLine.entity_id)->start().v == -8.0);
+    CHECK(!cold_load.document->evaluateProfile(
+        *profile.profile_id));
+    kernel_occt::OcctSolidModelingKernel cold_reopen_kernel;
+    const auto cold_evaluated = part::evaluatePart(
+        *cold_load.document, cold_reopen_kernel);
+    CHECK(cold_evaluated.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto* cold_base =
+        cold_evaluated.findFeature(fixture.base_id);
+    const auto* cold_cut =
+        cold_evaluated.findFeature(*cut.feature_id);
+    CHECK(cold_base && cold_cut);
+    CHECK(cold_base->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    CHECK(cold_cut->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    CHECK(cold_cut->result_solid);
+    const auto cold_effective =
+        part::evaluateEffectiveSketchProjection(
+            *cold_load.document, id,
+            cold_evaluated, cold_reopen_kernel,
+            *cut.feature_id);
+    CHECK(cold_effective && cold_effective->allResolved());
+    const auto* fresh_line = cold_effective->model.findLine(
+        *sourceLine.entity_id);
+    CHECK(fresh_line);
+    CHECK(close(fresh_line->start().v, 0.0));
+    CHECK(close(fresh_line->end().v, 0.0));
+    CHECK(cold_load.document->findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+
+    // B5 source edit across the strict semantic binding. Moving the
+    // upstream rectangle from 40 to 50 makes the downstream linked
+    // bottom Edge grow, while the three locally authored sides are still
+    // at x=40. The dependent Feature MUST fail closed until those three
+    // sides are explicitly repaired; old seed x=40 must not hide the gap.
+    auto edit_copy = part::PartDocument::restore(
+        cold_load.document->documentId(),
+        cold_load.document->state());
+    CHECK(edit_copy.ok());
+    application::DocumentSession edit_session{
+        {}, std::move(*edit_copy.document)};
+    const auto* base_definition =
+        std::get_if<part::ExtrudeFeature>(
+            &edit_session.document()
+                 .findFeature(fixture.base_id)->definition);
+    CHECK(base_definition);
+    const auto* base_profile =
+        edit_session.document().findProfile(
+            base_definition->profile_id);
+    CHECK(base_profile != nullptr);
+    const auto base_sketch_id =
+        base_profile->source_sketch_id;
+    const auto* base_sketch =
+        edit_session.document().findSketch(base_sketch_id);
+    CHECK(base_sketch != nullptr);
+    std::vector<application::SketchLineGeometryUpdate>
+        upstream_updates;
+    for (const auto& line :
+         base_sketch->model.state().lines) {
+        auto start = line.start;
+        auto end = line.end;
+        if (close(start.u, 40.0)) {
+            start.u = 50.0;
+        }
+        if (close(end.u, 40.0)) {
+            end.u = 50.0;
+        }
+        upstream_updates.push_back(
+            {line.id, start, end});
+    }
+    CHECK(upstream_updates.size() == 4U);
+    const auto move_source = edit_session.execute(
+        application::UpdateSketchLinesCommand{
+            base_sketch_id,
+            edit_session.document().revision(),
+            upstream_updates});
+    CHECK(move_source.ok() && move_source.changed);
+    kernel_occt::OcctSolidModelingKernel edited_kernel;
+    const auto gap_evaluation =
+        part::evaluatePart(
+            edit_session.document(), edited_kernel);
+    CHECK(gap_evaluation.body_status !=
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(!gap_evaluation.body_solid);
+    const auto* gap_cut =
+        gap_evaluation.findFeature(*cut.feature_id);
+    CHECK(gap_cut && gap_cut->status !=
+          part::FeatureEvaluationStatus::up_to_date);
+
+    // Only the three ordinary local Lines may be edited. The linked
+    // source-controlled bottom retains its target EntityId and its OPEN
+    // authored seed. After explicit contour repair the SAME old Profile
+    // and Cut Feature become evaluable again.
+    const auto* prior_target =
+        edit_session.document().findSketch(id);
+    CHECK(prior_target != nullptr);
+    std::vector<application::SketchLineGeometryUpdate>
+        target_updates;
+    for (const auto& line :
+         prior_target->model.state().lines) {
+        if (line.id == *sourceLine.entity_id) {
+            continue;
+        }
+        auto start = line.start;
+        auto end = line.end;
+        if (close(start.u, 40.0)) {
+            start.u = 50.0;
+        }
+        if (close(end.u, 40.0)) {
+            end.u = 50.0;
+        }
+        target_updates.push_back(
+            {line.id, start, end});
+    }
+    CHECK(target_updates.size() == 3U);
+    const auto repair = edit_session.execute(
+        application::UpdateSketchLinesCommand{
+            id,
+            edit_session.document().revision(),
+            target_updates});
+    CHECK(repair.ok() && repair.changed);
+    const auto now_current =
+        part::evaluatePart(
+            edit_session.document(), edited_kernel);
+    CHECK(now_current.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto* resized_cut =
+        now_current.findFeature(*cut.feature_id);
+    CHECK(resized_cut && resized_cut->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    const auto widened =
+        part::evaluateEffectiveSketchProjection(
+            edit_session.document(), id,
+            now_current, edited_kernel,
+            *cut.feature_id);
+    CHECK(widened && widened->allResolved());
+    const auto* resized_line =
+        widened->model.findLine(*sourceLine.entity_id);
+    CHECK(resized_line != nullptr);
+    CHECK(close(
+        std::min(resized_line->start().u,
+                 resized_line->end().u), 0.0));
+    CHECK(close(
+        std::max(resized_line->start().u,
+                 resized_line->end().u), 50.0));
+    CHECK(edit_session.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+    CHECK(edit_session.document().findProfile(
+              *profile.profile_id)->id ==
+          *profile.profile_id);
+    CHECK(edit_session.document().findFeature(
+              *cut.feature_id)->id ==
+          *cut.feature_id);
+
+    // A new provider must reproduce the *edited* 50 mm source geometry
+    // from the saved v15 model rather than a previously cached BRep.
+    const auto resized_path =
+        temp.path / "Pg01bResizedUpstream.ss2part";
+    CHECK(linked_store.createNew(
+              resized_path, edit_session.document()).ok());
+    const auto reopened_resized =
+        linked_store.load(resized_path);
+    CHECK(reopened_resized.ok() &&
+          reopened_resized.document);
+    CHECK(reopened_resized.document->state() ==
+          edit_session.document().state());
+    kernel_occt::OcctSolidModelingKernel new_provider;
+    const auto rebuilt =
+        part::evaluatePart(
+            *reopened_resized.document, new_provider);
+    CHECK(rebuilt.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(rebuilt.findFeature(*cut.feature_id)->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    const auto rebuilt_sketch =
+        part::evaluateEffectiveSketchProjection(
+            *reopened_resized.document, id, rebuilt,
+            new_provider, *cut.feature_id);
+    CHECK(rebuilt_sketch && rebuilt_sketch->allResolved());
+    const auto* cold_widened =
+        rebuilt_sketch->model.findLine(
+            *sourceLine.entity_id);
+    CHECK(cold_widened);
+    CHECK(close(
+        std::max(cold_widened->start().u,
+                 cold_widened->end().u), 50.0));
+    std::cout << "PG01B_B5_SOURCE_EDIT_REPAIR_PASS"
+              << " old_profile_id=1 old_cut_id=1"
+              << " gap_blocked=1 manual_contour_repair=1"
+              << " cold_50mm_projection=1\n";
+
+    // A structurally valid but suppressed source must remain durable
+    // and repairable after a SECOND cold save. No serialized last-good
+    // geometry or previous provider token may revive the blocked Cut.
+    auto suppressed_disk = cold_load.document->state();
+    suppressed_disk.body.features.front().suppressed = true;
+    auto persisted_blocked = part::PartDocument::restore(
+        cold_load.document->documentId(),
+        std::move(suppressed_disk));
+    CHECK(persisted_blocked.ok());
+    CHECK(linked_store.save(
+              path, *persisted_blocked.document,
+              *cold_load.checkpoint).ok());
+    const auto broken_load = linked_store.load(path);
+    CHECK(broken_load.ok() && broken_load.document);
+    const auto* saved_broken_sketch =
+        broken_load.document->findSketch(id);
+    CHECK(saved_broken_sketch &&
+          saved_broken_sketch->projection_bindings.size() == 1U);
+    CHECK(saved_broken_sketch->projection_bindings.front().source ==
+          *selected);
+    kernel_occt::OcctSolidModelingKernel cold_broken_kernel;
+    const auto cold_blocked = part::evaluatePart(
+        *broken_load.document, cold_broken_kernel);
+    CHECK(cold_blocked.body_status ==
+          part::BodyEvaluationStatus::unavailable);
+    CHECK(!cold_blocked.body_solid);
+    CHECK(cold_blocked.findFeature(*cut.feature_id)->status !=
+          part::FeatureEvaluationStatus::up_to_date);
+    std::cout << "PG01B_B5_COLD_LINKED_DEPENDENT_PASS"
+              << " original_profile_id=1"
+              << " original_feature_ids=2"
+              << " fresh_kernel_reprojection=1"
+              << " stale_seed_rejected=1"
+              << " suppressed_cold_blocked=1\n";
+
+    // Independent B5/B3 Revolve Draft native regression. The linked
+    // Profile has an intentionally OPEN authored seed. A create Revolve
+    // preview must evaluate its current source Edge, not seed geometry.
+    // Preserve the original Base stage and drop the unrelated Cut to
+    // exercise a directly subsequent Revolve consuming the same Profile.
+    auto revolve_state = restored.document->state();
+    CHECK(revolve_state.body.features.size() == 2U);
+    revolve_state.body.features.pop_back();
+    auto revolve_copy = part::PartDocument::restore(
+        restored.document->documentId(),
+        std::move(revolve_state));
+    CHECK(revolve_copy.ok());
+    application::DocumentSession revolve_session{
+        {}, std::move(*revolve_copy.document)};
+    CHECK(!revolve_session.document().evaluateProfile(
+        *profile.profile_id));
+    auto draft = application::RevolveDraft::beginCreate(
+        revolve_session, *profile.profile_id);
+    CHECK(draft);
+    CHECK(draft->setAxis(part::AxisReference{
+        part::BuiltinOriginAxisReference{
+            core::BuiltinReferenceRole::y_axis}}));
+    CHECK(draft->setAngle(
+        core::AngleValue{1.5707963267948966}));
+    CHECK(draft->setOperation(
+        part::RevolveOperation::add));
+    CHECK(draft->valid());
+    const auto revolve_before =
+        revolve_session.document().state();
+    kernel_occt::OcctSolidModelingKernel revolve_kernel;
+    const auto revolve_preview =
+        revolve_session.evaluateRevolveDraft(
+            *draft, revolve_kernel);
+    CHECK(revolve_preview.committable());
+    CHECK(revolve_preview.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(revolve_preview.previewSolidAvailable());
+    CHECK(revolve_session.document().state() ==
+          revolve_before);
+    CHECK(revolve_session.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+    std::cout << "PG01B_B5_NATIVE_REVOLVE_DRAFT_PASS"
+              << " linked_profile_current=1"
+              << " authored_seed_stale=1"
+              << " preview_delta=1"
+              << " source_unchanged=1\n";
+
+    // B3 draft regression: Finish already uses the effective source.
+    // The live Edit Extrude preview must use it too, not the OPEN
+    // authored line at v=-8 which cannot produce this Profile.
+    auto preview_copy = part::PartDocument::restore(
+        restored.document->documentId(),
+        restored.document->state());
+    CHECK(preview_copy.ok());
+    application::DocumentSession preview_session{
+        {}, std::move(*preview_copy.document)};
+    const auto edit_draft =
+        application::ExtrudeDraft::beginEdit(
+            preview_session, *cut.feature_id);
+    CHECK(edit_draft);
+    const auto edit_preview =
+        preview_session.evaluateExtrudeDraft(
+            *edit_draft, kernel);
+    CHECK(edit_preview.committable());
+    CHECK(edit_preview.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(edit_preview.previewSolidAvailable());
+    CHECK(preview_session.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+
+    // Break Link must freeze the exact CURRENT evaluation, not the
+    // broken (-8 mm) persisted seed. The same EntityId survives and
+    // one Undo restores the original durable semantic source.
+    auto break_copy = part::PartDocument::restore(
+        restored.document->documentId(),
+        restored.document->state());
+    CHECK(break_copy.ok());
+    application::DocumentSession detached{
+        {}, std::move(*break_copy.document)};
+    const auto broken_revision =
+        detached.document().revision();
+    const auto broken_link =
+        detached.execute(
+            application::BreakProjectedEdgeLinkCommand{
+                id, *sourceLine.entity_id,
+                broken_revision},
+            cold);
+    CHECK(broken_link.ok());
+    CHECK(detached.document().findSketch(id)
+              ->projection_bindings.empty());
+    CHECK(close(detached.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v, 0.0));
+    CHECK(detached.undo().changed);
+    CHECK(detached.document().findSketch(id)
+              ->projection_bindings.size() == 1U);
+    CHECK(detached.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+    CHECK(detached.redo().changed);
+    CHECK(detached.document().findSketch(id)
+              ->projection_bindings.empty());
+    const auto not_linked =
+        detached.execute(
+            application::BreakProjectedEdgeLinkCommand{
+                id, *sourceLine.entity_id,
+                detached.document().revision()},
+            cold);
+    CHECK(!not_linked.ok() && !not_linked.changed);
+
+    auto suppressed = restored.document->state();
+    suppressed.body.features.front().suppressed = true;
+    auto unavailable = part::PartDocument::restore(
+        restored.document->documentId(),
+        std::move(suppressed));
+    CHECK(unavailable.ok());
+    kernel_occt::OcctSolidModelingKernel no_source;
+    const auto blocked =
+        part::evaluatePart(
+            *unavailable.document, no_source);
+    CHECK(blocked.body_status ==
+          part::BodyEvaluationStatus::unavailable);
+    CHECK(!blocked.body_solid);
+
+    // B4 broken binding cannot Break Link using the old authored seed or
+    // last-good provider result. Failure must be mutation-free.
+    auto broken_copy = part::PartDocument::restore(
+        unavailable.document->documentId(),
+        unavailable.document->state());
+    CHECK(broken_copy.ok());
+    application::DocumentSession broken_session{
+        {}, std::move(*broken_copy.document)};
+    const auto broken_before = broken_session.document().state();
+    const auto cannot_detach = broken_session.execute(
+        application::BreakProjectedEdgeLinkCommand{
+            id, *sourceLine.entity_id,
+            broken_session.document().revision()},
+        no_source);
+    CHECK(!cannot_detach.ok() && !cannot_detach.changed);
+    CHECK(cannot_detach.status ==
+          application::BreakProjectedEdgeLinkStatus::source_unavailable);
+    CHECK(broken_session.document().state() == broken_before);
+    CHECK(broken_session.document().findSketch(id)
+              ->projection_bindings.size() == 1U);
+
+    std::cout
+        << "PG01B_B3_NATIVE_LINKED_CUT_PASS"
+        << " current_occt_edge=1"
+        << " authored_seed_stale=1"
+        << " same_profile_id=1"
+        << " missing_source_fail_closed=1"
+        << " break_link_undo_redo=1"
+        << " broken_detach_denied=1\n";
+}
+
 } // namespace
 
 int main() {
+    verifyPg01bAtomicProjectedEdges();
+    verifyPg01bNativeDerivedProfileExtrude();
     TempDirectory temp;
 
     const auto fillet_then_chamfer_path =

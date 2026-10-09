@@ -1,4 +1,5 @@
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -1523,6 +1524,13 @@ DocumentSessionResult DocumentSession::execute(
             "Erase Sketch Entity target EntityId does not exist",
             path_);
     }
+    // A linked target and its source intent form one authored semantic fact.
+    // Erase is one atomic Command/Undo, never a dangling projection binding.
+    std::erase_if(
+        target->projection_bindings,
+        [&command](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == command.entity_id;
+        });
 
     return commitCommandState(
         std::move(after),
@@ -1580,10 +1588,255 @@ DocumentSessionResult DocumentSession::execute(
                 path_);
         }
     }
+    std::erase_if(
+        target->projection_bindings,
+        [&unique](const part::ProjectedEdgeBinding& binding) {
+            return unique.contains(binding.target_entity);
+        });
 
     return commitCommandState(
         std::move(after),
         "Part transaction failed while erasing Sketch entities");
+}
+
+
+CreateProjectedSketchEdgesResult DocumentSession::execute(
+    const CreateProjectedSketchEdgesCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    const auto reject = [this](
+                            DocumentSessionErrorCode code,
+                            std::string message,
+                            std::optional<std::size_t> index =
+                                std::nullopt,
+                            std::optional<part::ProjectedSketchSourceStatus>
+                                source_status = std::nullopt) {
+        const auto failed = failure(code, std::move(message), path_);
+        return CreateProjectedSketchEdgesResult{
+            false, {}, index, source_status, failed.diagnostic};
+    };
+    if (document_.revision() != command.expected_revision) {
+        return reject(
+            DocumentSessionErrorCode::revision_diverged,
+            "Project Sketch Edges has a stale DocumentRevision");
+    }
+    if (command.sources.empty() ||
+        (command.role != sketch::EntityRole::regular &&
+         command.role != sketch::EntityRole::construction)) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Project Sketch Edges needs nonempty sources and valid role");
+    }
+    const auto* authored =
+        document_.findSketch(command.sketch_id);
+    if (!authored) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Project Sketch Edges target SketchId is missing");
+    }
+    auto* query = dynamic_cast<kernel::IEdgeProjectionQuery*>(
+        &modeling_kernel);
+    if (!query) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Project Sketch Edges has no exact projection provider");
+    }
+    const auto prefix = part::evaluatePart(
+        document_, modeling_kernel);
+    const auto frame = part::resolveCurrentProjectionSketchFrame(
+        document_, command.sketch_id, prefix);
+    if (!frame) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Project Sketch Edges target support frame is unavailable");
+    }
+
+    std::set<part::MaterialEdgeReference> unique;
+    for (std::size_t i = 0U; i < command.sources.size(); ++i) {
+        const auto& source = command.sources[i];
+        if (!source.valid() ||
+            !unique.insert(source).second ||
+            std::any_of(
+                authored->projection_bindings.begin(),
+                authored->projection_bindings.end(),
+                [&source](const part::ProjectedEdgeBinding& linked) {
+                    return linked.source == source;
+                })) {
+            return reject(
+                DocumentSessionErrorCode::invalid_command,
+                "Project Sketch Edges contains invalid or duplicate source",
+                i);
+        }
+    }
+
+    auto after = document_.state();
+    applySketchEntityIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (!target) {
+        return reject(
+            DocumentSessionErrorCode::transaction_failure,
+            "Project Sketch Edges staged Sketch disappeared");
+    }
+    std::vector<sketch::EntityId> created;
+    created.reserve(command.sources.size());
+    for (std::size_t i = 0U; i < command.sources.size(); ++i) {
+        const auto& source = command.sources[i];
+        const auto projected = part::projectStrictMaterialEdge(
+            document_, source, prefix, *query, *frame);
+        if (!projected.resolved()) {
+            return reject(
+                DocumentSessionErrorCode::invalid_command,
+                "Project Sketch Edges source is not one exact current Edge",
+                i, projected.status);
+        }
+        const auto pt = [](const kernel::Point2& p) {
+            return sketch::Point2{p.u, p.v};
+        };
+        sketch::EntityId new_id;
+        try {
+            if (const auto* line =
+                    std::get_if<kernel::Line2>(&*projected.curve)) {
+                new_id = target->model.addLine(
+                    pt(line->start), pt(line->end), command.role);
+            } else if (const auto* circle =
+                           std::get_if<kernel::Circle2>(
+                               &*projected.curve)) {
+                new_id = target->model.addCircle(
+                    pt(circle->center), circle->radius, command.role);
+            } else if (const auto* arc =
+                           std::get_if<kernel::Arc2>(
+                               &*projected.curve)) {
+                new_id = target->model.addArc(
+                    pt(arc->center), arc->radius,
+                    arc->start_angle, arc->sweep_angle, command.role);
+            } else {
+                return reject(
+                    DocumentSessionErrorCode::invalid_command,
+                    "Project Sketch Edges has an unsupported curve kind",
+                    i);
+            }
+        } catch (const std::invalid_argument&) {
+            return reject(
+                DocumentSessionErrorCode::invalid_command,
+                "Project Sketch Edges exact curve is invalid Sketch geometry",
+                i);
+        } catch (const std::overflow_error&) {
+            return reject(
+                DocumentSessionErrorCode::transaction_failure,
+                "Project Sketch Edges EntityId allocation exhausted",
+                i);
+        }
+        created.push_back(new_id);
+        target->projection_bindings.push_back({new_id, source});
+    }
+    std::sort(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [](const part::ProjectedEdgeBinding& a,
+           const part::ProjectedEdgeBinding& b) {
+            return a.target_entity < b.target_entity;
+        });
+    const auto result = commitCommandState(
+        std::move(after),
+        "Part transaction failed creating linked Sketch Edge batch");
+    if (!result.ok() || !result.changed) {
+        return {false, {}, std::nullopt,
+                std::nullopt, result.diagnostic};
+    }
+    return {true, std::move(created), std::nullopt,
+            std::nullopt, {}};
+}
+
+BreakProjectedEdgeLinkResult DocumentSession::execute(
+    const BreakProjectedEdgeLinkCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    using Status = BreakProjectedEdgeLinkStatus;
+    if (document_.revision() != command.expected_revision) {
+        return {Status::stale_revision};
+    }
+    const auto* original =
+        document_.findSketch(command.sketch_id);
+    if (original == nullptr) {
+        return {Status::missing_sketch};
+    }
+    const auto binding = std::find_if(
+        original->projection_bindings.begin(),
+        original->projection_bindings.end(),
+        [&command](const part::ProjectedEdgeBinding& item) {
+            return item.target_entity == command.entity_id;
+        });
+    if (binding == original->projection_bindings.end()) {
+        return {Status::not_linked};
+    }
+    auto* projection_query =
+        dynamic_cast<kernel::IEdgeProjectionQuery*>(
+            &modeling_kernel);
+    if (projection_query == nullptr) {
+        return {Status::provider_unavailable};
+    }
+
+    // Re-evaluate the current document. Never accept a caller-supplied
+    // last-good Curve2 or old Body token as Break Link authority.
+    const auto current_prefix =
+        part::evaluatePart(document_, modeling_kernel);
+    const auto effective =
+        part::evaluateEffectiveSketchProjection(
+            document_, command.sketch_id,
+            current_prefix, *projection_query);
+    if (!effective) {
+        return {Status::source_unavailable};
+    }
+    const auto outcome = std::find_if(
+        effective->outcomes.begin(),
+        effective->outcomes.end(),
+        [&command](const part::ProjectedSketchOutcome& item) {
+            return item.target_entity == command.entity_id;
+        });
+    if (outcome == effective->outcomes.end() ||
+        !outcome->resolved()) {
+        return {Status::source_unavailable};
+    }
+
+    auto after = document_.state();
+    auto* target = findSketch(after, command.sketch_id);
+    if (!target) {
+        return {Status::missing_sketch};
+    }
+    bool materialized = false;
+    if (const auto* line =
+            effective->model.findLine(command.entity_id)) {
+        materialized = target->model.updateLine(
+            command.entity_id,
+            line->start(), line->end());
+    } else if (const auto* circle =
+                   effective->model.findCircle(command.entity_id)) {
+        materialized = target->model.updateCircle(
+            command.entity_id,
+            circle->center(), circle->radius());
+    } else if (const auto* arc =
+                   effective->model.findArc(command.entity_id)) {
+        materialized = target->model.updateArc(
+            command.entity_id,
+            arc->center(), arc->radius(),
+            arc->startAngle(), arc->sweepAngle());
+    }
+    if (!materialized) {
+        return {Status::source_unavailable};
+    }
+    std::erase_if(
+        target->projection_bindings,
+        [&command](const part::ProjectedEdgeBinding& item) {
+            return item.target_entity == command.entity_id;
+        });
+    const auto committed = commitCommandState(
+        std::move(after),
+        "Part transaction failed while breaking Projected Edge Link");
+    if (!committed.ok() || !committed.changed) {
+        return {
+            Status::transaction_failed,
+            committed.changed,
+            committed.diagnostic};
+    }
+    return {Status::detached, true};
 }
 
 DocumentSessionResult DocumentSession::execute(
@@ -1686,6 +1939,15 @@ DocumentSessionResult DocumentSession::execute(
     }
 
     std::set<sketch::EntityId> unique;
+    const auto is_linked =
+        [target](sketch::EntityId entity) {
+            return std::any_of(
+                target->projection_bindings.begin(),
+                target->projection_bindings.end(),
+                [entity](const part::ProjectedEdgeBinding& binding) {
+                    return binding.target_entity == entity;
+                });
+        };
 
     for (const auto& line : command.lines) {
         if (!line.entity_id.valid() ||
@@ -1693,6 +1955,7 @@ DocumentSessionResult DocumentSession::execute(
             !line.end.finite() ||
             line.start == line.end ||
             !unique.insert(line.entity_id).second ||
+            is_linked(line.entity_id) ||
             target->model.findLine(line.entity_id) ==
                 nullptr) {
             return failure(
@@ -1708,6 +1971,7 @@ DocumentSessionResult DocumentSession::execute(
             !std::isfinite(circle.radius) ||
             circle.radius <= 0.0 ||
             !unique.insert(circle.entity_id).second ||
+            is_linked(circle.entity_id) ||
             target->model.findCircle(circle.entity_id) ==
                 nullptr) {
             return failure(
@@ -1730,6 +1994,7 @@ DocumentSessionResult DocumentSession::execute(
             std::abs(arc.sweep_angle) >=
                 full_turn ||
             !unique.insert(arc.entity_id).second ||
+            is_linked(arc.entity_id) ||
             target->model.findArc(arc.entity_id) ==
                 nullptr) {
             return failure(
@@ -1837,6 +2102,34 @@ DocumentSession::execute(
             failed.diagnostic};
     }
 
+    // Structural-edit evaluators use authored Sketch input today, not
+    // the current provider-derived Sketch. Reject linked targets AND linked
+    // reference boundaries rather than accidentally using a stale seed.
+    // A future provider-aware overload may accept linked boundaries once
+    // it evaluates them from the current upstream Body stage.
+    const bool touches_linked_geometry = std::any_of(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [&command](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == command.target ||
+                    std::find(
+                        command.boundaries.begin(),
+                        command.boundaries.end(),
+                        binding.target_entity) !=
+                        command.boundaries.end();
+        });
+    if (touches_linked_geometry) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Trim cannot use linked source-controlled Sketch geometry until it is re-evaluated",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
     const auto evaluated =
         sketch::evaluateTrim(
             target->model,
@@ -1918,6 +2211,34 @@ DocumentSession::execute(
             failed.diagnostic};
     }
 
+    // Structural-edit evaluators use authored Sketch input today, not
+    // the current provider-derived Sketch. Reject linked targets AND linked
+    // reference boundaries rather than accidentally using a stale seed.
+    // A future provider-aware overload may accept linked boundaries once
+    // it evaluates them from the current upstream Body stage.
+    const bool touches_linked_geometry = std::any_of(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [&command](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == command.target ||
+                    std::find(
+                        command.boundaries.begin(),
+                        command.boundaries.end(),
+                        binding.target_entity) !=
+                        command.boundaries.end();
+        });
+    if (touches_linked_geometry) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend cannot use linked source-controlled Sketch geometry until it is re-evaluated",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
     const auto evaluated =
         sketch::evaluateExtend(
             target->model,
@@ -1995,6 +2316,30 @@ DocumentSession::execute(
         return {
             false,
             sketch::StructuralEditStatus::missing_entity,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    // Structural-edit evaluators use authored Sketch input today, not
+    // the current provider-derived Sketch. Reject linked targets AND linked
+    // reference boundaries rather than accidentally using a stale seed.
+    // A future provider-aware overload may accept linked boundaries once
+    // it evaluates them from the current upstream Body stage.
+    const bool touches_linked_geometry = std::any_of(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [&command](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == command.first_line ||
+                    binding.target_entity == command.second_line;
+        });
+    if (touches_linked_geometry) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend Both cannot use linked source-controlled Sketch geometry until it is re-evaluated",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
             std::nullopt,
             failed.diagnostic};
     }
@@ -2139,6 +2484,25 @@ DuplicateSketchGeometryResult DocumentSession::execute(
                 {},
                 failed.diagnostic};
         }
+    }
+
+    // Copy/Duplicate consumes the selected authored seed today. Copying a
+    // linked source would silently materialize stale geometry as an
+    // unrelated editable entity. Refuse until an explicit provider-derived
+    // copy workflow exists (Break Link first is available).
+    const bool includes_linked_seed = std::any_of(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [&source_ids](const part::ProjectedEdgeBinding& binding) {
+            return source_ids.contains(binding.target_entity);
+        });
+    if (includes_linked_seed) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Duplicate Sketch Geometry cannot copy a linked authored seed",
+            path_);
+        return DuplicateSketchGeometryResult{
+            false, {}, failed.diagnostic};
     }
 
     std::vector<sketch::EntityId> created;
@@ -3099,6 +3463,31 @@ DocumentSession::evaluateExtrudeDraft(
         }
     }
 
+    // The committed Feature above was evaluated using the current
+    // provider-derived Sketch. Preview MUST use that same stage-scoped
+    // geometry, never the old authored Line/Circle/Arc seed.
+    std::optional<part::EffectiveSketchProjection>
+        preview_effective_sketch;
+    if (const auto* profile =
+            candidate.document->findProfile(
+                definition.profile_id)) {
+        if (const auto* source =
+                candidate.document->findSketch(
+                    profile->source_sketch_id);
+            source && !source->projection_bindings.empty()) {
+            if (auto* projection_query =
+                    dynamic_cast<
+                        kernel::IEdgeProjectionQuery*>(
+                        &modeling_kernel)) {
+                preview_effective_sketch =
+                    part::evaluateEffectiveSketchProjection(
+                        *candidate.document,
+                        profile->source_sketch_id,
+                        evaluation, *projection_query,
+                        target_id);
+            }
+        }
+    }
     auto preview_input =
         part::makeKernelExtrudeInput(
             *candidate.document,
@@ -3106,6 +3495,9 @@ DocumentSession::evaluateExtrudeDraft(
             preview_support_topology,
             preview_support_datums
                 ? &*preview_support_datums
+                : nullptr,
+            preview_effective_sketch
+                ? &preview_effective_sketch->model
                 : nullptr);
     if (preview_input &&
         preview_upstream_ready) {
@@ -3355,12 +3747,41 @@ DocumentSession::evaluateRevolveDraft(
                 part::evaluateDatums(
                     *candidate.document,
                     prefix_evaluation);
+            // Preview uses the identical current effective Sketch as
+            // candidate Feature evaluation, never linked authored seeds.
+            std::optional<part::EffectiveSketchProjection>
+                preview_effective_sketch;
+            if (const auto* profile =
+                    candidate.document->findProfile(
+                        definition.profile_id)) {
+                if (const auto* source =
+                        candidate.document->findSketch(
+                            profile->source_sketch_id);
+                    source &&
+                    !source->projection_bindings.empty()) {
+                    if (auto* projection_query =
+                            dynamic_cast<
+                                kernel::IEdgeProjectionQuery*>(
+                                &modeling_kernel)) {
+                        preview_effective_sketch =
+                            part::evaluateEffectiveSketchProjection(
+                                *candidate.document,
+                                profile->source_sketch_id,
+                                prefix_evaluation,
+                                *projection_query,
+                                target_id);
+                    }
+                }
+            }
             const auto resolved =
                 part::resolveKernelRevolveInput(
                     *candidate.document,
                     definition,
                     &prefix_evaluation,
-                    &datums);
+                    &datums,
+                    preview_effective_sketch
+                        ? &preview_effective_sketch->model
+                        : nullptr);
             if (resolved.ok() &&
                 preview_upstream_ready) {
                 auto preview =
