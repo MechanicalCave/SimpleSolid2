@@ -969,6 +969,8 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("projectEdgeFinishButton"));
             auto* pg_count = workbench.findChild<QLabel*>(
                 QStringLiteral("projectEdgeSelectionLabel"));
+            auto* pg_face_detail = workbench.findChild<QLabel*>(
+                QStringLiteral("projectEdgeResultLabel"));
             ui::PartViewportController* controller = nullptr;
             for (auto* child : workbench.children()) {
                 if (auto* found =
@@ -978,7 +980,8 @@ int main(int argc, char* argv[]) {
                 }
             }
             CHECK(sketch_edit && face_mode && edge_mode &&
-                  pg_finish && pg_count && controller);
+                  pg_finish && pg_count && pg_face_detail &&
+                  controller);
             QTreeWidgetItem* sketch_item = nullptr;
             for (QTreeWidgetItemIterator it(tree); *it; ++it) {
                 if ((*it)->text(0) ==
@@ -1022,6 +1025,8 @@ int main(int argc, char* argv[]) {
             CHECK(admission.wires.front().edges.size() == 4U);
             CHECK(pg_count->text().contains(
                 QStringLiteral("selected: 4")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Outer Edge 1: supported")));
             CHECK(pg_finish->isEnabled());
             CHECK(face_session.document().state() == before_state);
             CHECK(face_session.undoDepth() == before_undo);
@@ -1212,6 +1217,12 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("selected: 6")));
             CHECK(pg_count->text().contains(
                 QStringLiteral("holes 2")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Outer Edge 1: supported")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Hole 1 Edge 1: supported")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Hole 2 Edge 1: supported")));
             CHECK(pg_finish->isEnabled());
             CHECK(holed_session.document().state() == holed_state);
             CHECK(holed_session.document().revision() == holed_revision);
