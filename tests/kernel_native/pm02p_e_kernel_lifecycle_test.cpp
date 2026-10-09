@@ -420,7 +420,7 @@ void verifyPg01aArcProjection() {
         std::size_t arcs_in_body = 0U;
         for (const auto edge : body.current_edges) {
             const auto projection =
-                query.projectEdgeToPlane(
+                projectCurrentEdge(query,
                     body.solid, edge, xy);
             if (!projection.ok() ||
                 !std::holds_alternative<kernel::Arc2>(
@@ -437,13 +437,13 @@ void verifyPg01aArcProjection() {
                 std::abs(result.sweep_angle),
                 std::abs(arc.sweep)));
             const auto angled =
-                query.projectEdgeToPlane(
+                projectCurrentEdge(query,
                     body.solid, edge, yz);
             CHECK(angled.status ==
                   Status::unsupported_curve);
             CHECK(!angled.curve);
             const auto repeated =
-                query.projectEdgeToPlane(
+                projectCurrentEdge(query,
                     body.solid, edge, xy);
             CHECK(repeated.ok());
             CHECK(repeated.curve == projection.curve);
@@ -456,6 +456,71 @@ void verifyPg01aArcProjection() {
         << "PG01A_EXACT_ARC_PROJECTION_PASS"
         << " native_arcs=" << verified_arcs
         << " tested_orientations=3\n";
+}
+
+kernel::EdgeProjectionResult projectCurrentEdge(
+    kernel_occt::OcctSolidModelingKernel& query,
+    kernel::RuntimeSolidHandle body,
+    kernel::RuntimeEdgeToken current_edge,
+    const kernel::Frame3& frame) {
+    using Status = kernel::EdgeProjectionStatus;
+    if (!body || !current_edge.valid()) {
+        return {Status::invalid_input, std::nullopt};
+    }
+    const auto bound =
+        query.bindEdgeToBody(body, current_edge);
+    if (!bound) {
+        return {Status::edge_unavailable, std::nullopt};
+    }
+    return query.projectEdgeToPlane(
+        body, *bound, frame);
+}
+
+// The two bodies deliberately restart the same numeric token inventory.
+// Once bound to the OLD runtime solid, the token cannot be redirected to
+// NEW runtime solid despite an equal integer token value.
+void verifyPg01aGenerationScope() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const auto old_body = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("pg01a-old"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    const auto new_body = query.extrude(
+        kernel::LinearExtrudeInput{
+            circle("pg01a-new"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(old_body.ok() && new_body.ok());
+    CHECK(old_body.current_edges.front().value ==
+          new_body.current_edges.front().value);
+    const auto old_scoped = query.bindEdgeToBody(
+        old_body.solid, old_body.current_edges.front());
+    CHECK(old_scoped && old_scoped->valid());
+    const kernel::Frame3 xy{};
+    CHECK(query.projectEdgeToPlane(
+              new_body.solid, *old_scoped, xy).status ==
+          Status::provider_mismatch);
+    CHECK(!query.bindEdgeToBody(
+              old_body.solid, kernel::RuntimeEdgeToken{}));
+    CHECK(!query.bindEdgeToBody(
+              new_body.solid,
+              kernel::RuntimeEdgeToken{999999999U}));
+    struct ForeignSolid final : kernel::RuntimeSolid {};
+    CHECK(!query.bindEdgeToBody(
+              std::make_shared<ForeignSolid>(),
+              old_body.current_edges.front()));
+    const auto now = query.bindEdgeToBody(
+        new_body.solid, new_body.current_edges.front());
+    CHECK(now && now->valid());
+    CHECK(query.projectEdgeToPlane(
+              new_body.solid, *now, xy).status !=
+          Status::provider_mismatch);
+    std::cout << "PG01A_SCOPED_GENERATION_PASS"
+              << " colliding_token_retarget_rejected=1\n";
 }
 
 void verifyPg01aOnCurrentPartOperations() {
@@ -509,7 +574,7 @@ void verifyPg01aOnCurrentPartOperations() {
         for (const auto token : result.current_edges) {
             for (const auto& frame : {xy, xz}) {
                 const auto projected =
-                    query.projectEdgeToPlane(
+                    projectCurrentEdge(query,
                         result.solid, token, frame);
                 if (projected.ok()) {
                     CHECK(projected.curve);
@@ -570,7 +635,7 @@ void verifyPg01aExactProjection() {
         std::size_t degenerate = 0U;
         for (const auto edge : box.current_edges) {
             const auto result =
-                query.projectEdgeToPlane(
+                projectCurrentEdge(query,
                     box.solid, edge, frame);
             CHECK(result.ok() ||
                   result.status == Status::degenerate_projection);
@@ -582,7 +647,7 @@ void verifyPg01aExactProjection() {
                     *result.curve));
                 ++lines;
                 const auto repeated =
-                    query.projectEdgeToPlane(
+                    projectCurrentEdge(query,
                         box.solid, edge, frame);
                 CHECK(repeated.ok());
                 CHECK(repeated.curve == result.curve);
@@ -595,7 +660,7 @@ void verifyPg01aExactProjection() {
     bool found_bottom = false;
     for (const auto edge : box.current_edges) {
         const auto result =
-            query.projectEdgeToPlane(
+            projectCurrentEdge(query,
                 box.solid, edge, xy);
         if (!result.ok() ||
             !std::holds_alternative<kernel::Line2>(
@@ -614,22 +679,24 @@ void verifyPg01aExactProjection() {
         }
     }
     CHECK(found_bottom);
-    CHECK(query.projectEdgeToPlane(
+    CHECK(projectCurrentEdge(query,
               box.solid, {}, xy).status ==
           Status::invalid_input);
     auto bad = xy;
     bad.v_axis = {2.0, 0.0, 0.0};
-    CHECK(query.projectEdgeToPlane(
+    CHECK(projectCurrentEdge(query,
               box.solid, box.current_edges.front(),
               bad).status ==
           Status::invalid_input);
     struct ForeignSolid final : kernel::RuntimeSolid {};
+    const auto first_scope = query.bindEdgeToBody(
+        box.solid, box.current_edges.front());
+    CHECK(first_scope && first_scope->valid());
     CHECK(query.projectEdgeToPlane(
               std::make_shared<ForeignSolid>(),
-              box.current_edges.front(),
-              xy).status ==
+              *first_scope, xy).status ==
           Status::provider_mismatch);
-    CHECK(query.projectEdgeToPlane(
+    CHECK(projectCurrentEdge(query,
               box.solid,
               kernel::RuntimeEdgeToken{999999999U},
               xy).status ==
@@ -646,7 +713,7 @@ void verifyPg01aExactProjection() {
     std::size_t tilted_rejections = 0U;
     for (const auto edge : cylinder.current_edges) {
         const auto result =
-            query.projectEdgeToPlane(
+            projectCurrentEdge(query,
                 cylinder.solid, edge, xy);
         if (result.ok() &&
             std::holds_alternative<kernel::Circle2>(
@@ -658,7 +725,7 @@ void verifyPg01aExactProjection() {
             CHECK(near(c.center.v, 0.0));
             ++projected_circles;
             const auto oblique =
-                query.projectEdgeToPlane(
+                projectCurrentEdge(query,
                     cylinder.solid, edge, yz);
             CHECK(oblique.status ==
                   Status::unsupported_curve);
@@ -685,6 +752,7 @@ int main() {
     verifyPg01aExactProjection();
     verifyPg01aArcProjection();
     verifyPg01aOnCurrentPartOperations();
+    verifyPg01aGenerationScope();
 
     std::cout
         << "PM02P_E_KERNEL_LIFECYCLE_PASS"

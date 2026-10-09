@@ -11,10 +11,15 @@ class OcctSolidModelingKernel final
     : public kernel::ISolidModelingKernel,
       public kernel::IEdgeProjectionQuery {
 public:
+    [[nodiscard]] std::optional<kernel::ScopedProjectionEdge>
+    bindEdgeToBody(
+        kernel::RuntimeSolidHandle source_body,
+        kernel::RuntimeEdgeToken current_edge) noexcept override;
+
     [[nodiscard]] kernel::EdgeProjectionResult
     projectEdgeToPlane(
-        kernel::RuntimeSolidHandle source_body,
-        kernel::RuntimeEdgeToken current_edge,
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedProjectionEdge& bound_edge,
         const kernel::Frame3& target_frame) noexcept override;
 
     OcctSolidModelingKernel() = default;

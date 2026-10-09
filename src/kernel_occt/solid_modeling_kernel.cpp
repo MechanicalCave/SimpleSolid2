@@ -5627,20 +5627,44 @@ OcctSolidModelingKernel::bodyPresentation(
 }
 
 
+std::optional<kernel::ScopedProjectionEdge>
+OcctSolidModelingKernel::bindEdgeToBody(
+    kernel::RuntimeSolidHandle source_body,
+    kernel::RuntimeEdgeToken current_edge) noexcept {
+    if (!source_body || !current_edge.valid()) {
+        return std::nullopt;
+    }
+    const auto* runtime =
+        dynamic_cast<const OcctRuntimeSolid*>(source_body.get());
+    if (runtime == nullptr ||
+        runtime->inventory_edges.find(current_edge.value) ==
+            runtime->inventory_edges.end()) {
+        return std::nullopt;
+    }
+    return makeScopedEdge(std::move(source_body), current_edge);
+}
+
 kernel::EdgeProjectionResult
 OcctSolidModelingKernel::projectEdgeToPlane(
     kernel::RuntimeSolidHandle source_body,
-    kernel::RuntimeEdgeToken current_edge,
+    const kernel::ScopedProjectionEdge& bound_edge,
     const kernel::Frame3& target_frame) noexcept {
 
     using Status = kernel::EdgeProjectionStatus;
     const auto fail = [](Status status) -> kernel::EdgeProjectionResult {
         return {status, std::nullopt};
     };
-    if (!source_body || !current_edge.valid() ||
+    if (!source_body || !bound_edge.valid() ||
         !target_frame.valid()) {
         return fail(Status::invalid_input);
     }
+    // An Edge scoped to a previous evaluation must never be projected
+    // through a newer runtime Body, even when numeric token values collide.
+    if (source_body.get() !=
+        bound_edge.sourceBody().get()) {
+        return fail(Status::provider_mismatch);
+    }
+    const auto current_edge = bound_edge.edge();
 
     // Frame3::valid() permits general non-orthogonal frames for other
     // consumers. Exact Circle/Arc projection specifically needs an
