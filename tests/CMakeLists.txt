@@ -1033,6 +1033,19 @@ set_tests_properties(pg01c.native_project_edge_command PROPERTIES
     LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel;native"
 )
 
+# PG-01D D0/D1: isolate native strict planar Face outer/hole wire + material
+# Edge identity from cursor-sensitive PG-01C GUI interactions. Reuse the
+# *same* already compiled Qt/OCCT executable with headless test branch.
+# Registration is full-only: no FAST registry change or CI #302 workaround.
+add_test(
+    NAME pg01d.native_face_boundary_d0
+    COMMAND pm05f_r2_native_workbench_edit_test --pg01d-d0
+)
+set_tests_properties(pg01d.native_face_boundary_d0 PROPERTIES
+    TIMEOUT 90
+    LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-kernel;native"
+)
+
 add_executable(pm05c1_edge_semantic_kernel_test
     pm05c1_edge_semantic_kernel_test.cpp
 )
