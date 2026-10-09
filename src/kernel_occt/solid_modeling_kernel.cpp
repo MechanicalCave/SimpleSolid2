@@ -30,6 +30,7 @@
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <TopoDS_Solid.hxx>
 #include <TopoDS_Wire.hxx>
 #include <TopoDS_Vertex.hxx>
@@ -5727,10 +5728,34 @@ OcctSolidModelingKernel::projectEdgeToPlane(
         const bool reversed =
             edge.Orientation() == TopAbs_REVERSED;
         if (curve.GetType() == GeomAbs_Line) {
+            // BRepAdaptor_Curve::Value(parameter) evaluates the analytic
+            // carrier independently for each Edge. At a *shared*
+            // TopoDS_Vertex, two incident Edges can consequently return
+            // slightly different floating-point endpoint coordinates.
+            // These gaps are not a topological opening. Use each Edge's
+            // explicitly owned, oriented OCCT endpoint Vertices instead;
+            // their BRep_Tool::Pnt is identical for exactly shared
+            // TopoDS_Vertex identity. No proximity search, snapping or
+            // arbitrary endpoint merge is performed.
+            TopoDS_Vertex first_vertex;
+            TopoDS_Vertex last_vertex;
+            TopExp::Vertices(
+                edge, first_vertex, last_vertex, true);
+            if (first_vertex.IsNull() ||
+                last_vertex.IsNull() ||
+                first_vertex.IsSame(last_vertex)) {
+                return fail(Status::kernel_failure);
+            }
             const auto start =
-                project(curve.Value(reversed ? last : first));
+                project(BRep_Tool::Pnt(first_vertex));
             const auto end =
-                project(curve.Value(reversed ? first : last));
+                project(BRep_Tool::Pnt(last_vertex));
+            if (!std::isfinite(start.u) ||
+                !std::isfinite(start.v) ||
+                !std::isfinite(end.u) ||
+                !std::isfinite(end.v)) {
+                return fail(Status::kernel_failure);
+            }
             if (squaredDistance(start, end) <=
                 Precision::Confusion() *
                     Precision::Confusion()) {
