@@ -9,6 +9,7 @@
 #include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
+#include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
 #include <QObject>
@@ -269,6 +270,12 @@ public:
     // Absent on stale revision, switched Document or failed scene.
     [[nodiscard]] const sketch::SketchModel*
     currentSketchInteractionModel() const;
+
+    // Current stage-aware Profile resolution for Workbench Properties and
+    // Feature pick gates. Matches the effective Sketch used by the Viewer;
+    // linked authored seeds are never accepted as current geometry.
+    [[nodiscard]] std::optional<part::ResolvedProfileRegion>
+    currentProfileResolution(part::ProfileId profile_id) const;
 
     // C2: transient exact-source Project Geometry draft. The actual
     // Part and current Sketch remain unchanged until Workbench Finish.
