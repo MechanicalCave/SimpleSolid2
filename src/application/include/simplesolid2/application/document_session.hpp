@@ -7,6 +7,7 @@
 #include <simplesolid2/application/revolve_draft.hpp>
 #include <simplesolid2/core/units.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/structural_edit.hpp>
@@ -104,6 +105,16 @@ struct EraseSketchEntityCommand final {
 struct EraseSketchEntitiesCommand final {
     sketch::SketchId sketch_id;
     std::vector<sketch::EntityId> entity_ids;
+};
+
+// Headless atomic multi-Edge projection; PG-01C will own picking/selection.
+// Caller provides durable semantic sources, not current OCCT tokens or 2D
+// coordinates. Each exact projection is recomputed by the provider.
+struct CreateProjectedSketchEdgesCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    std::vector<part::MaterialEdgeReference> sources;
+    sketch::EntityRole role{sketch::EntityRole::regular};
 };
 
 // Detach a linked target using only its newly resolved current projection.
@@ -334,6 +345,19 @@ struct DocumentSessionResult final {
 
     [[nodiscard]] bool ok() const noexcept {
         return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
+struct CreateProjectedSketchEdgesResult final {
+    bool changed{false};
+    std::vector<sketch::EntityId> entity_ids;
+    std::optional<std::size_t> failing_source_index;
+    std::optional<part::ProjectedSketchSourceStatus> source_status;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return changed &&
+            diagnostic.code == DocumentSessionErrorCode::none;
     }
 };
 
@@ -625,6 +649,9 @@ public:
         const EraseSketchEntityCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchEntitiesCommand& command);
+    [[nodiscard]] CreateProjectedSketchEdgesResult execute(
+        const CreateProjectedSketchEdgesCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] BreakProjectedEdgeLinkResult execute(
         const BreakProjectedEdgeLinkCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);

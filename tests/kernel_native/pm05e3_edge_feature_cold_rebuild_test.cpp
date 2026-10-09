@@ -727,6 +727,115 @@ void checkColdChain(
 }
 
 
+void verifyPg01bAtomicProjectedEdges() {
+    TempDirectory temp;
+    const auto path = temp.path / "Pg01bProjectedBatch.ss2part";
+    kernel_occt::OcctSolidModelingKernel kernel;
+    auto fixture = makeBaseSession(path, kernel);
+    const auto prefix = part::evaluatePart(
+        fixture.session.document(), kernel);
+    const auto* stage = prefix.findFeature(fixture.base_id);
+    CHECK(stage && stage->result_topology && stage->result_solid);
+    const kernel::Frame3 xy{};
+    std::vector<part::MaterialEdgeReference> sources;
+    for (const auto& edge : stage->result_topology->edges) {
+        const auto ref = part::authorMaterialEdgeReference(
+            *stage->result_topology, edge.runtime_token);
+        if (!ref.ok()) {
+            continue;
+        }
+        const auto scoped = kernel.bindEdgeToBody(
+            stage->result_solid, edge.runtime_token);
+        if (!scoped) {
+            continue;
+        }
+        const auto projected = kernel.projectEdgeToPlane(
+            stage->result_solid, *scoped, xy);
+        if (!projected.ok() ||
+            !std::holds_alternative<kernel::Line2>(*projected.curve) ||
+            std::find(sources.begin(), sources.end(), *ref.reference)
+                != sources.end()) {
+            continue;
+        }
+        sources.push_back(*ref.reference);
+        if (sources.size() == 2U) {
+            break;
+        }
+    }
+    CHECK(sources.size() == 2U);
+    const auto new_sketch = fixture.session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(new_sketch.ok() && new_sketch.sketch_id);
+    const auto id = *new_sketch.sketch_id;
+    const auto old_revision = fixture.session.document().revision();
+    const auto batch = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, old_revision, sources,
+            sketch::EntityRole::construction}, kernel);
+    CHECK(batch.ok());
+    CHECK(batch.entity_ids.size() == 2U);
+    const auto* sketch = fixture.session.document().findSketch(id);
+    CHECK(sketch && sketch->projection_bindings.size() == 2U);
+    CHECK(sketch->model.entityCount() == 2U);
+    for (const auto entity : batch.entity_ids) {
+        const auto* line = sketch->model.findLine(entity);
+        CHECK(line && line->role() == sketch::EntityRole::construction);
+    }
+    const auto after = fixture.session.document().state();
+    const auto dup = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, fixture.session.document().revision(),
+            {sources[0], sources[0]},
+            sketch::EntityRole::regular}, kernel);
+    CHECK(!dup.ok() && !dup.changed);
+    CHECK(dup.failing_source_index);
+    CHECK(fixture.session.document().state() == after);
+    const auto stale = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, old_revision, sources,
+            sketch::EntityRole::regular}, kernel);
+    CHECK(!stale.ok() && !stale.changed);
+    CHECK(fixture.session.document().state() == after);
+    const auto incomplete = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, fixture.session.document().revision(),
+            {part::MaterialEdgeReference{}},
+            sketch::EntityRole::regular}, kernel);
+    CHECK(!incomplete.ok() && !incomplete.changed);
+    CHECK(fixture.session.document().state() == after);
+
+    // One batch is one Undo step, preserving both IDs under Redo.
+    CHECK(fixture.session.undo().changed);
+    const auto* undone = fixture.session.document().findSketch(id);
+    CHECK(undone && undone->projection_bindings.empty());
+    CHECK(undone->model.entityCount() == 0U);
+    CHECK(fixture.session.redo().changed);
+    const auto* redone = fixture.session.document().findSketch(id);
+    CHECK(redone && redone->projection_bindings.size() == 2U);
+    CHECK(redone->model.contains(batch.entity_ids[0]));
+    CHECK(redone->model.contains(batch.entity_ids[1]));
+    CHECK(fixture.session.save().ok());
+
+    part::PartDocumentStore store;
+    const auto loaded = store.load(path);
+    CHECK(loaded.ok() && loaded.document);
+    const auto* cold_sketch = loaded.document->findSketch(id);
+    CHECK(cold_sketch && cold_sketch->projection_bindings.size() == 2U);
+    CHECK(cold_sketch->model.contains(batch.entity_ids[0]));
+    CHECK(cold_sketch->model.contains(batch.entity_ids[1]));
+    kernel_occt::OcctSolidModelingKernel cold;
+    const auto current = part::evaluatePart(
+        *loaded.document, cold);
+    const auto effective = part::evaluateEffectiveSketchProjection(
+        *loaded.document, id, current, cold);
+    CHECK(effective && effective->allResolved());
+    std::cout
+        << "PG01B_B4_ATOMIC_EDGE_BATCH_PASS"
+        << " edges=2 undo_steps=1"
+        << " cold_reproject=1\n";
+}
+
 void verifyPg01bNativeDerivedProfileExtrude() {
     TempDirectory temp;
     const auto path =
@@ -979,6 +1088,7 @@ void verifyPg01bNativeDerivedProfileExtrude() {
 } // namespace
 
 int main() {
+    verifyPg01bAtomicProjectedEdges();
     verifyPg01bNativeDerivedProfileExtrude();
     TempDirectory temp;
 
