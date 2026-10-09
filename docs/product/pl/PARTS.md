@@ -132,6 +132,7 @@ Modify
   Rotate
   Scale
   Mirror
+  Project Geometry
 
 Inspect
   Measure
@@ -308,6 +309,21 @@ Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywu
 Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin, planarną Face Body albo Datum Plane, a następnie **Apply Support**, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported, Blocked albo powodujący cykl jest odrzucany bez częściowej mutacji. Zmiana źródła/Offsetu upstream Datuma przelicza world frame Sketchu bez przepisywania jego lokalnej geometrii. Undo/Redo przywraca poprzedni semantyczny support.
 
 Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver i authored dimensions pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
+
+<!-- section-id: product.parts.project-geometry -->
+## Project Geometry — rzutowanie krawędzi Body do Sketch
+
+W aktywnym **Sketch Edit** wybierz **Project Geometry** w grupie **Modify** na pasku narzędzi albo wpisz `PROJECT` w globalnym **Command Line**. To jedno narzędzie z jednym stanem: wszystkie opcje znajdują się po prawej stronie w **Operations**. Narzędzie służy do skojarzonego rzutowania **material Edge** bieżącego Body z wcześniejszego etapu tego samego Partu na płaszczyznę edytowanego Sketchu. Nie rzutuje planarnej Face ani całej jej granicy automatycznie.
+
+W panelu zobaczysz etap źródłowy, liczbę zaznaczonych krawędzi, **Regular** lub **Construction** (domyślnie Regular), **Remove**, **Clear**, **Finish Project Geometry** i **Cancel**. Klikaj rzeczywiste krawędzie Body w Viewporcie. Każda poprawna krawędź jest dodawana do tymczasowego wyboru; podgląd jej aktualnej projekcji musi powstać, zanim przycisk Finish stanie się aktywny. Kolor i rodzaj linii podglądu odpowiadają wybranej roli. Wskazanie krawędzi, która nie jest obsługiwana, pochodzi ze złego etapu albo nie ma aktualnego źródła, nie zatwierdza częściowego wyniku.
+
+Naciśnij **Finish Project Geometry**, wpisz `FINISH` albo użyj **Enter** w Viewporcie, aby jednym krokiem Undo utworzyć skojarzone elementy Sketch. Niepoprawny lub pusty Finish nie zmienia modelu. **Remove** usuwa ostatnie wskazanie primary z tymczasowego wyboru, **Clear** czyści wszystkie wskazania, a **Cancel** kończy narzędzie bez zapisania geometrii. Przy zaznaczonych źródłach pierwsze **Esc** czyści wybór, drugie wraca do **Select**. Gdy w Command Line jest niedokończony tekst, pierwsze Esc czyści tylko ten tekst. Wpisane `CANCEL` oraz przycisk Cancel wychodzą natychmiast.
+
+W aktywnym narzędziu Command Line przyjmuje `REGULAR`, `CONSTRUCTION`, `REMOVE`, `CLEAR`, `FINISH` oraz `CANCEL`. Obsługiwany jest także wariant startowy `PROJECTGEOMETRY`. Opcje Command Line i przyciski po prawej stronie zmieniają dokładnie ten sam wybór. Odrzucone polecenie pozostawia narzędzie aktywne i podaje diagnostykę. Zmiana dokumentu, opuszczenie edycji Sketch lub Undo/Redo podczas tworzenia porzuca wybór i podgląd.
+
+Po Finish projektowana **Line, Circle lub Arc** ma widoczne wyróżnienie linked, niezależne od roli Regular/Construction. **Regular** może uczestniczyć w poprawnym Profile, natomiast **Construction** jest geometrią odniesienia. Zaznaczenie jednego linked elementu w Sketch Select pokazuje źródłowy Feature i aktualny stan w prawym panelu. **Break Link** zachowuje bieżącą geometrię oraz tożsamość elementu Sketch, usuwając samo powiązanie; działa tylko przy poprawnie rozpoznanym aktualnym źródle. Break Link i Delete są operacjami modelu, objętymi Undo/Redo. Po edycji geometrii źródłowej widoczna projekcja musi wynikać z aktualnego Body; niedostępne lub nieobsługiwane źródło nie przywraca starego zapisanego obrysu jako poprawnego linku.
+
+**Zakres:** Obsługiwane są tylko dokładne projekcje Line, Circle i Arc z referencyjnych material Edge poprzedniego etapu. Krawędzie reprezentacyjne, zdegenerowane i krzywe wymagające przybliżenia nie są automatycznie zastępowane polilinią. To nie jest narzędzie kopiowania krawędzi Face, rzutowania między Partami ani tworzenia automatycznych więzów.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Edycja strukturalna — Trim i Extend
