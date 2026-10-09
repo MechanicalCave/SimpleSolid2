@@ -1856,13 +1856,17 @@ PartSketchInteractionController::profileIslandCount() {
     }
 
     const auto current = profileCurrentResult();
-    const auto* hosted = activeSketch();
-    if (!current || hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (!current || current_model == nullptr) {
+        // A linked Profile's island count must never be computed
+        // from persisted seed geometry when its displayed topology
+        // was resolved from a newer source Body revision.
         return 0U;
     }
 
     return sketch::nestedIslandRegions(
-               hosted->model,
+               *current_model,
                profile_analysis_cache_->analysis,
                *current)
         .size();
