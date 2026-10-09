@@ -6,6 +6,7 @@
 **Program:** accepted Part v1 roadmap v1.30, Projection before PM-06
 **Design:** `work/PROJECTION_01_PROJECT_GEOMETRY_DESIGN_PROPOSAL.md`
 **Source donor:** `MechanicalCave/SimpleSolid` SS1 SK-01 kernel API/OCCT geometry and tests
+**Current evidence:** `work/PROJECTION_01A_KERNEL_ACCEPTANCE_EVIDENCE.md`; FOCUSED #1918/#1919/#1920/#1922 PASS, FAST/FULL/Owner final pending.
 **Activation:** Owner explicitly wrote `Akceptuje twoje propozycje - kontynuuj pracę` after reviewing proposed PG-01A contract; `work/ACTIVE.yaml` points to this accepted Work Contract. Authority is confined to this exact Kernel-only scope; PG-01B/C/D/E remain inactive.
 
 ## Objective
