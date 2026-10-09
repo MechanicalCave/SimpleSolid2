@@ -9820,6 +9820,11 @@ void CadWorkbench::tryStageProjectFaceSelection() {
 }
 
 void CadWorkbench::tryStageProjectEdgeSelection() {
+    if (project_edge_switching_mode_) return;
+    if (project_edge_face_mode_) {
+        tryStageProjectFaceSelection();
+        return;
+    }
     if (!project_edge_active_ ||
         !document_session_ ||
         !project_edge_revision_ ||
@@ -9891,6 +9896,30 @@ void CadWorkbench::tryStageProjectEdgeSelection() {
             "PROJECT selection contains unsupported or stale Body topology."));
         return;
     }
+    // Current Edge selection is the complete batch shown by the Viewer.
+    // If one Face member was removed in Edge mode, the Face gesture is no
+    // longer complete: drop its transient membership instead of persisting
+    // a misleading partially selected Face identity.
+    const bool retained_face =
+        project_edge_face_pick_ &&
+        std::includes(
+            project_edge_sources_.begin(),
+            project_edge_sources_.end(),
+            project_edge_face_sources_.begin(),
+            project_edge_face_sources_.end());
+    if (!retained_face) {
+        project_edge_face_pick_.reset();
+        project_edge_face_membership_.reset();
+        project_edge_face_sources_.clear();
+        project_edge_face_skipped_.clear();
+    }
+    project_edge_manual_sources_.clear();
+    std::set_difference(
+        project_edge_sources_.begin(),
+        project_edge_sources_.end(),
+        project_edge_face_sources_.begin(),
+        project_edge_face_sources_.end(),
+        std::back_inserter(project_edge_manual_sources_));
     syncProjectEdgeUi();
     notifyCadInputContextChanged();
 }
