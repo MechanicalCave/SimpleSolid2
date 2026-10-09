@@ -1,0 +1,107 @@
+# PG-01C — Project Edge UI, effective presentation and interaction: D2 design proposal
+
+**Status:** OWNER D2-A–D2-E ACCEPTED 2026-10-09; implementation bounded by separately activated PG-01C Work Contract
+**Date:** 2026-10-09
+**Baseline:** main `8d78320daca8a72a1431fbece49296c3bfb83aec`, PG-01B Owner FINAL PASS and PR #301 squash merged
+**Program:** Part Modeling v1 roadmap v1.30 — Projection before PM-06
+**Accepted upstream:** Projection 00A, PG-01A, PG-01B; Foundation §7.2 associative same-Part, §7.3 future Assembly snapshot CORE
+**Accepted Work Contract:** `work/PROJECTION_01C_PROJECT_EDGE_UI_CONTRACT.md`; Owner approval 2026-10-09 (`zatwierdzam PG-01C - kontynuuj pracę`)
+
+## 1. Purpose / scope boundary
+
+Deliver the **single user-visible Sketch Project Geometry / Rzutuj geometrię tool**, limited to **same-Part material Edges**, using PG-01B's exact source bindings and semantic Commands. Toolbar starts the tool; the **right Operations panel** owns source selection, role, current results/diagnostics, Finish and Cancel. No standalone dialogue or competing tool semantics.
+
+No Face boundary/holes, no cross-document/Assembly projection, no changes to native schema v15, no new geometry class or approximate curves, no topology similarity matching, no hidden automatic membership reconciliation. PG-01D and PG-01E remain separately gated. No PM-06.
+
+## 2. Verified current implementation hazards
+
+1. `src/ui/part_viewport_controller.cpp::buildSketchScene()` currently renders `hosted->model.state()` (authored geometry). For a PG-01B linked entity this is **seed**, not its current projected curve. Using it for linked display/selection would misrepresent the CAD model after source edits.
+2. `buildProfileScene()` currently calls `PartDocument::evaluateProfile()`. PG-01B deliberately fails closed on Profile intent referencing linked geometry there; without a **read-only effective-Sketch** presentation route, even a valid associated Profile can be invisible in Sketch editing.
+3. Existing Sketch interaction/picking/snapping/edit paths must be checked for authored-seed reads. A UI tool must not merely draw correct linked geometry and then permit snaps, relation inputs, measurements, grips or edits against stale seed.
+4. `PartViewportController::selectedMaterialEdgeReferences()`, `setBodyTopologyEdgeDraftMode()` and `setBodyTopologyToolStage()` already provide a typed same-Part material-Edge selection mechanism, with runtime generation and stage validation. Reuse that machinery instead of persisting Viewer tokens or introducing a parallel picker.
+5. PG-01B already owns `CreateProjectedSketchEdgesCommand`, `BreakProjectedEdgeLinkCommand`, stable target EntityIds, atomic batch/Undo and exact `evaluateEffectiveSketchProjection`. UI is an adapter; no second command path or Part owner.
+
+## 3. Proposed D2-A — one active runtime tool + source stage
+
+- Only an open active Part `DocumentSession` in a valid Sketch edit context can start the tool. On activation, stage a **runtime-only** source set; explicitly show the selected upstream `BodyStageRef` and strict `MaterialEdgeReference` meaning. Existing stage-scoped Body picker can show the current legally available stage. It must not silently search the final Body or choose a different stage when the current one is not admissible.
+- Users pick one or many strict material Edges; all must belong to the displayed same-Part source stage and fresh presentation generation. Duplicates are visibly rejected/deduplicated without creating extra entities. Invalid/representation-artifact/ambiguous Edge input fails visibly.
+- The right panel shows source count/list, **Regular** (default) or **Construction**, explicit diagnostics, Finish and Cancel. Source selection is not a durable mutation. The tool may display a preview built exclusively from current exact curves.
+- Before Finish re-resolve current DocumentRevision, SketchId, support Frame, stage, semantic Edge references and all batch projections through the already accepted PG-01B command. **All-or-nothing** for Edge batch. One successful Finish = one transaction, one Undo; zero valid items, rejection or Cancel = zero authored change/Undo.
+- On Esc, document switch, Sketch Finish, provider loss or tool replacement: clear transient source set, preview, tool pick mode and its renderer tokens. No stale Finish after context change. Keyboard Command Line remains one workspace-global adapter as in ADR-0011; no speculative command grammar is added.
+
+## 4. Proposed D2-B — one current effective Sketch for presentation and interaction
+
+- The same revision-bound PG-01B effective Sketch model used by Profile/Extrude/Revolve is the **read-only source for displayed linked curves**, linked hover/selection, snapping and inspection where those operations are supported. It also drives currently valid Profile fill/picking. Never use authored seed as a substitute for unresolved linked geometry.
+- The authoring SketchModel remains unchanged during UI reads. Stable SketchId/EntityId bind temporary presentation tokens to semantic identities. A broken linked target remains durable and inspectable via status/Properties; it is not falsely shown/snapped as a valid curve. Unaffected unlinked geometry and Profiles remain usable.
+- All affected interactive edit paths either use current evaluated geometry safely or **reject linked-controlled edits** with a typed/visible reason. Linked grips do not imply free endpoint/center drag. Existing ordinary unlinked editing behavior must remain intact.
+- Derivation failure is not repaired by replaying a previous scene. Presentation/provider failure uses existing degraded-state diagnostics/retry semantics without rolling back successful CAD commands.
+
+## 5. Proposed D2-C — minimal neutral Viewer visual contract
+
+A linked Sketch entity must be visibly distinguishable from an unlinked authored entity **independently of Regular/Construction role**, with a linked indicator and a typed status in right-side Properties. The current neutral `viewer::SketchLinePresentation` / `SketchCurvePresentation` carry construction role but no distinct link flag.
+
+Preferred bounded option: add a presentation-only `linked` role/flag (or one equivalently narrow typed style) to those neutral Sketch presentation items; adapt Qt/OCCT rendering to a visibly distinct style while preserving geometry, picking and construction styling. This is a **public Viewer contract change (D2)** and needs explicit Owner approval; it must never become authored CAD identity. Do not add a generic styling framework or copy of Part semantics into Viewer.
+
+Broken linked geometry may have a separate status indicator in Properties/tool diagnostics without inventing usable geometry. The actual visible color/style must remain consistent and discernible with selection, hover and Construction.
+
+## 6. Proposed D2-D — Break Link and lifecycle in one UX
+
+- When a linked target is selected, right-side Properties show `Linked`, source description, current `Resolved/Broken` reason and explicit **Break Link** and Delete.
+- Break Link dispatches the existing PG-01B command against **current** resolution; it freezes the latest exact projected curve into authored geometry, retains EntityId/role/compatible references, removes the binding, and is one Undo. Broken links cannot be detached from stale seed; offer typed diagnostic and Delete/repair guidance instead.
+- Save/Close/Reopen, Undo/Redo, upstream edits, source suppression and support changes rebuild display from semantic intent and current provider; they do not reuse previous viewer identity.
+- Do not promise a general constraint-solver repair, Face membership Refresh or Part Feature edit changes in this package.
+
+## 7. Proposed D2-E — complete native Workbench UX, Esc and Command Line grammar
+
+**This is an acceptance requirement, not optional polish.** PG-01C must behave like other SS2 Sketch/Part tools under ADR-0003, ADR-0006, ADR-0009 and ADR-0011. Reuse the existing shared Sketch toolbar, contextual right Operations panel, Workbench status/diagnostics, active-Document CAD input routing, current selection ownership, native viewport navigation, and application shortcut/focus rules. Do not add a modal dialog, independent command console, permanent Operations launcher, hidden tool mode or competing selection authority.
+
+**Single semantic tool session across all adapters.** Toolbar click and a canonical top-level Command Line keyword `PROJECT` (optionally the unambiguous alias `PROJECTGEOMETRY`) enter *the same* project-Edge tool. When active, the right panel and Command Line show the same options and status; neither creates a separate source list or command/Undo path. Precedence is active Sketch semantic request > active Project Geometry tool-local grammar > top-level Workbench command. Textual source IDs are **not** silently resolved to Edges; stages and Edges are picked through the existing semantic stage-scoped Viewer/Tree interaction. Reissuing `PROJECT` while already active must not discard staged picks.
+
+**Complete contextual Command Line grammar to be implemented and tested:**
+
+| Context / token | Required behavior |
+| --- | --- |
+| In active Sketch, no conflicting tool: `PROJECT` | Start Project Geometry; focus stays with the current CAD viewport; show a discoverable prompt and right panel |
+| Active Project Geometry: `REGULAR`, `CONSTRUCTION` | Change the pending output role only; no CAD mutation |
+| Active Project Geometry: `REMOVE`, `CLEAR` | Remove the currently identified staged source or clear all staged sources; deterministic failure/diagnostic if no applicable selection; never detach existing durable links |
+| Active Project Geometry: `FINISH` or empty-buffer Enter | Attempt one exact, revision-checked atomic batch; reject empty/invalid set without dirtying Document or leaving ghost preview |
+| Active Project Geometry: `CANCEL` | Exit the tool, clear all transient state/preview/selection capture and return to **Select**, no Undo/dirty change |
+| Invalid or out-of-context token | Typed contextual prompt/diagnostic, cleared submitted buffer, current tool and authored state unchanged |
+
+**Keyboard, Esc and focus precedence (must match ADR-0009 / ADR-0011):**
+
+1. If the global Command Line buffer contains text, **first Esc clears only that text**, preserving active tool and staged Edge sources; the next Esc reaches Sketch/Project Geometry cancellation.
+2. With an empty buffer, Esc cancels the **innermost temporary pick/request/preview stage** if present; a subsequent Esc leaves Project Geometry and returns to Select. If no nested pending stage exists, Esc leaves the tool directly. There is never an undefined tool, stale picking mode or need for indefinite Esc presses.
+3. Explicit right-panel **Cancel** and Command Line `CANCEL` always exit the Project Geometry session at once, regardless of staged sources. Explicit `Finish`, `FINISH` and eligible viewport Enter converge on the same validation/commit route. Failed Finish stays in tool with diagnostic so the user can correct selection or Cancel; successful Finish resolves the tool and returns to Select.
+4. **Empty-buffer Enter** means Finish only while Project Geometry owns the active semantic context and its candidate stage can be committed; it must not trigger Sketch Repeat Last Command or another tool. **Space is not reassigned** from accepted Sketch semantics. Enter in an actual editable field retains that field's native editing/commit priority.
+5. Typing from normal viewport focus uses the existing workspace-global Command Line **without transferring Qt focus**; the Command Line widget itself and Operations controls are other adapters to that **one tool state**. A focused text editor, property field, IME composition, modal dialog, or system shortcut (Ctrl+S/Ctrl+Z etc.) retains priority; none leaks characters/keys to Project Geometry.
+6. Tool switches, Sketch exit, document tab switch/close, Workspace navigation, Undo/Redo, revision change or provider/presentation loss invalidate or explicitly revalidate all staged source references and visible preview. No background/hidden Document consumes tokens, no stale Enter/Finish after context teardown, no authored change from cleanup.
+
+**Consistent discoverability and feedback.** Enabled/disabled buttons, tool highlight/cursor, prompts, stage/Edge count, role, rejection reason, accepted Finish feedback and Properties status must agree across right panel, viewport and Command Line; no silent rejection or duplicate toast/state. Selection/hover, OSNAP, zoom/orbit, Undo/Redo, Save, Delete, keyboard shortcuts and return to Select must remain consistent with neighboring Sketch and Fillet/Chamfer workflows. Error/status text and product documentation require PL/EN terminology parity.
+
+**Owner D2-E accepted 2026-10-09:** the above *bounded* Project Geometry-specific input grammar and keyboard/lifecycle integration; do not create a new universal CAD command system or change global ADR-0011 routing policy. If `PROJECT` collides with an existing accepted keyword, stop for a narrow Owner-reviewed alternative rather than hijack command precedence.
+
+## 8. Proposed mandatory evidence and Owner gate
+
+1. Native Windows Workbench: real OCCT material Edge pick in actual Sketch edit, source-stage display, single and multiple sources, Regular/Construction, exact staged preview, Finish and Cancel.
+2. Verify one accepted batch/Undo, stable EntityIds across Undo/Redo/Save/Close/Reopen with fresh Kernel, associated Profile/Extrude/Revolve dependency path. A source change changes **displayed linked geometry** and valid Profile presentation, not only downstream solid.
+3. Negative: stale DocumentRevision, changed pick generation/stage, missing/suppressed source, ambiguous/representation-only Edge, unsupported/degenerate exact curve, duplicate source, invalid Sketch frame, provider failure, interrupted tool; zero partial mutation and no false current geometry.
+4. Selection/snapping/Properties/Break Link/Delete work on linked and unlinked geometry without stale-seed leaks; zoom/DPI and ordinary existing Sketch/Body tool interactions unaffected. Confirm provider failure/presentation recovery.
+5. Full **Workbench interaction parity**: toolbar and typed `PROJECT` launch the same session; regular/construction/clear/remove/finish/cancel work from the global Command Line and right panel; empty-buffer Enter Finish, typed-text Esc first clears the buffer, subsequent hierarchical Esc cancels stage then tool; focus in native text fields and other CAD shortcuts is not stolen. Rejected Finish, window/document switch, Sketch exit and tool replacement do not mutate authored state or leave capture active.
+6. Internal as-built, bilingual PL/EN product documentation and regenerated offline Browser; Windows FOCUSED/FAST/one exact-head FULL with explicit failures recorded, then **Owner practical Windows PASS** before final merge.
+
+**Known CI dependency:** [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302) identifies FAST CTest/aggregate mismatch (25 missing build dependencies). No CI/CMake remediation is authorized by PG-01C. If FAST remains untrustworthy, stop for a separate bounded Owner decision rather than relabeling RED as PASS.
+
+## 9. Decision request / stop conditions
+
+**Owner accepted D2-A through D2-E and the bounded PG-01C Work Contract on 2026-10-09.** Explicitly confirm the small Viewer presentation-only contract extension, current effective Sketch as UI/read/interaction authority, and use of existing strict material-edge tool-stage picking.
+
+STOP for Owner if a wider public Viewer/Kernel/Selection API, new durable identity or persistence schema, new solver/evaluator ownership, Face membership semantics, loosening strict source resolution, or unbounded Sketch interaction rewrite becomes necessary. Do not expand scope silently.
+
+Acceptance is not by itself runtime activation: the Owner-approved Work Contract must be installed in `work/ACTIVE.yaml` in a dedicated governance activation commit, validated before changing product source.
+
+## Documentation impact
+
+Internal docs: not required
+User/Product docs: not required
+Reason: this D2 acceptance document contains only decisions and no shipping product mutation; PG-01C implementation requires internal and PL/EN Product docs.
