@@ -2,6 +2,7 @@
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/part/effective_sketch_projection.hpp>
+#include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
@@ -347,6 +348,74 @@ Fixture makeFixture() {
 }
 
 
+
+void verifyPg01bB3KernelProfileUsesEffectiveSketch(
+    const Fixture& fixture) {
+    const auto* base =
+        std::get_if<part::ExtrudeFeature>(
+            &fixture.document.body().features.front().definition);
+    CHECK(base != nullptr);
+    const auto* profile =
+        fixture.document.findProfile(base->profile_id);
+    CHECK(profile != nullptr);
+    const auto* source =
+        fixture.document.findSketch(
+            profile->source_sketch_id);
+    CHECK(source != nullptr);
+    CHECK(source->model.state().lines.size() == 4U);
+    const auto authored =
+        part::resolveKernelProfileInput(
+            fixture.document, profile->id);
+    CHECK(authored.ok());
+
+    auto derived = source->model;
+    const double offset = 20.0;
+    for (const auto& line : source->model.state().lines) {
+        CHECK(derived.updateLine(
+            line.id,
+            {line.start.u + offset, line.start.v},
+            {line.end.u + offset, line.end.v}));
+    }
+    const auto current =
+        part::resolveKernelProfileInput(
+            fixture.document, profile->id,
+            nullptr, nullptr, &derived);
+    CHECK(current.ok());
+    CHECK(current.input->outer.boundary.size() ==
+          authored.input->outer.boundary.size());
+    for (std::size_t i = 0;
+         i < current.input->outer.boundary.size(); ++i) {
+        const auto* old_line =
+            std::get_if<kernel::Line2>(
+                &authored.input->outer.boundary[i].curve);
+        const auto* new_line =
+            std::get_if<kernel::Line2>(
+                &current.input->outer.boundary[i].curve);
+        CHECK(old_line && new_line);
+        CHECK(new_line->start.u == old_line->start.u + offset);
+        CHECK(new_line->end.u == old_line->end.u + offset);
+    }
+    CHECK(fixture.document.findSketch(
+              profile->source_sketch_id)
+              ->model.state().lines.front().start.u !=
+          derived.state().lines.front().start.u);
+    CHECK(derived.erase(source->model.state().lines.front().id));
+    // Authored contour still closes, but the *current* derived contour
+    // is Missing. Never replace it with the stale authored Rectangle.
+    const auto broken =
+        part::resolveKernelProfileInput(
+            fixture.document, profile->id,
+            nullptr, nullptr, &derived);
+    CHECK(!broken.ok());
+    CHECK(fixture.document.evaluateProfile(
+              profile->id).has_value());
+    std::cout
+        << "PG01B_B3_KERNEL_PROFILE_OVERLAY_PASS"
+        << " derived_curve_consumed=1"
+        << " stale_seed_fenced=1"
+        << " authored_unchanged=1\n";
+}
+
 void verifyPg01bB2EffectiveSketch(
     const Fixture& fixture) {
     struct FakeBody final : kernel::RuntimeSolid {};
@@ -662,6 +731,7 @@ int main() {
     const auto fixture = makeFixture();
     verifyPg01bB1BindingStructure(fixture);
     verifyPg01bB2EffectiveSketch(fixture);
+    verifyPg01bB3KernelProfileUsesEffectiveSketch(fixture);
     CHECK(
         fixture.document.body().features.size() ==
         3U);

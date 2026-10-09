@@ -131,7 +131,9 @@ resolveKernelProfileInput(
     const BodyStageTopologyCatalog*
         support_topology,
     const DatumEvaluation*
-        datum_evaluation) {
+        datum_evaluation,
+    const sketch::SketchModel*
+        effective_sketch) {
     const auto* profile =
         document.findProfile(profile_id);
     if (!profile) {
@@ -197,8 +199,18 @@ resolveKernelProfileInput(
             support.diagnostic};
     }
 
+    // Caller must supply an evaluated same-Sketch model derived from
+    // the exact current stage. Mixing authored loop topology with derived
+    // Kernel curve data would silently consume stale source geometry.
+    const auto& current_model =
+        effective_sketch != nullptr
+            ? *effective_sketch
+            : source->model;
     const auto resolved =
-        document.evaluateProfile(profile_id);
+        effective_sketch != nullptr
+            ? resolveProfileRegionIntent(
+                  current_model, profile->region_intent)
+            : document.evaluateProfile(profile_id);
     if (!resolved || !resolved->valid()) {
         return {
             ProfileKernelInputStatus::
@@ -224,7 +236,7 @@ resolveKernelProfileInput(
 
     auto outer =
         convertLoop(
-            source->model,
+            current_model,
             resolved->region->outer,
             0U,
             false);
@@ -243,7 +255,7 @@ resolveKernelProfileInput(
          ++index) {
         auto hole =
             convertLoop(
-                source->model,
+                current_model,
                 resolved->region->holes[index],
                 static_cast<std::uint32_t>(
                     index + 1U),
