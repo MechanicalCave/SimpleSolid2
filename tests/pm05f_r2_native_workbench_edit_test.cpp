@@ -899,6 +899,208 @@ void verifyPg01dNativeTwoHoleFaceBoundary(
               << rebuilt_two_hole_admissions << '\n';
 }
 
+// PG-01D D3 negative boundary seam: keep the real native Body, Face
+// catalog, strict semantic mapping and OCCT provider as the baseline.
+// Inject only a malformed/read-failing provider *answer* to prove Part
+// does not accept a guessed or partially healed boundary. No production
+// fault injection and no fabricated authored CAD identities.
+class Pg01dFaultedBoundaryProvider final
+    : public kernel::IFaceBoundaryQuery {
+public:
+    enum class Fault {
+        none,
+        bind_unavailable,
+        query_failure,
+        missing_outer,
+        duplicate_outer,
+        bogus_edge,
+        duplicated_material_edge,
+    };
+
+    Pg01dFaultedBoundaryProvider(
+        kernel_occt::OcctSolidModelingKernel& native, Fault fault)
+        : native_{native}, fault_{fault} {}
+
+    std::optional<kernel::ScopedBoundaryFace> bindFaceToBody(
+        kernel::RuntimeSolidHandle body,
+        kernel::RuntimeFaceToken face) noexcept override {
+        if (fault_ == Fault::bind_unavailable ||
+            !native_.bindFaceToBody(body, face)) {
+            return std::nullopt;
+        }
+        return makeScopedFace(std::move(body), face);
+    }
+
+    kernel::FaceBoundaryResult queryFaceBoundary(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedBoundaryFace& scoped) noexcept override {
+        using Status = kernel::FaceBoundaryStatus;
+        if (!body || !scoped.valid() ||
+            body.get() != scoped.sourceBody().get()) {
+            return {Status::provider_mismatch, {}};
+        }
+        if (fault_ == Fault::query_failure) {
+            return {Status::provider_failure, {}};
+        }
+        const auto real = native_.bindFaceToBody(
+            body, scoped.face());
+        if (!real) return {Status::face_unavailable, {}};
+        auto result = native_.queryFaceBoundary(body, *real);
+        if (!result.ok() || fault_ == Fault::none) {
+            return result;
+        }
+        switch (fault_) {
+        case Fault::missing_outer:
+            for (auto& wire : result.wires) wire.outer = false;
+            break;
+        case Fault::duplicate_outer: {
+            const auto outer = std::find_if(
+                result.wires.begin(), result.wires.end(),
+                [](const auto& wire) { return wire.outer; });
+            if (outer != result.wires.end()) {
+                result.wires.push_back(*outer);
+            }
+            break;
+        }
+        case Fault::bogus_edge:
+            result.wires.front().edges.front().edge =
+                kernel::RuntimeEdgeToken{
+                    std::numeric_limits<std::uint64_t>::max()};
+            break;
+        case Fault::duplicated_material_edge:
+            result.wires.front().edges.push_back(
+                result.wires.front().edges.front());
+            break;
+        case Fault::none:
+        case Fault::bind_unavailable:
+        case Fault::query_failure:
+            break;
+        }
+        return result;
+    }
+
+private:
+    kernel_occt::OcctSolidModelingKernel& native_;
+    Fault fault_;
+};
+
+void verifyPg01dMalformedBoundaryFailClosed(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    auto session = makeBaseSession(kernel);
+    const auto before = session.document().state();
+    const auto revision = session.document().revision();
+    const auto undo = session.undoDepth();
+    const auto result = part::evaluatePart(
+        session.document(), kernel);
+    CHECK(result.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(result.current_topology);
+    CHECK(result.current_topology->complete());
+    CHECK(!result.features.empty());
+    const auto& stage = result.features.back();
+    std::optional<kernel::RuntimeFaceToken> source_face;
+    for (const auto& face : result.current_topology->faces) {
+        const auto admitted = part::inspectMaterialFaceBoundary(
+            stage, face.runtime_token, kernel);
+        if (admitted.ok() && admitted.wires.size() == 1U &&
+            admitted.wires.front().outer &&
+            admitted.wires.front().edges.size() == 4U) {
+            source_face = face.runtime_token;
+            break;
+        }
+    }
+    CHECK(source_face);
+    const auto valid = part::inspectMaterialFaceBoundary(
+        stage, *source_face, kernel);
+    CHECK(valid.ok());
+    CHECK(valid.wires.size() == 1U);
+    CHECK(valid.wires.front().edges.size() == 4U);
+
+    // No guessed Face when the source token or the entire stage is
+    // unavailable, even though some planar Surface may still exist.
+    const auto no_token = part::inspectMaterialFaceBoundary(
+        stage, kernel::RuntimeFaceToken{}, kernel);
+    CHECK(no_token.status ==
+          part::MaterialFaceBoundaryStatus::face_unavailable);
+    const auto alien_token = part::inspectMaterialFaceBoundary(
+        stage,
+        kernel::RuntimeFaceToken{
+            std::numeric_limits<std::uint64_t>::max()},
+        kernel);
+    CHECK(alien_token.status ==
+          part::MaterialFaceBoundaryStatus::face_unavailable);
+    auto missing_catalog = stage;
+    missing_catalog.result_topology.reset();
+    CHECK(part::inspectMaterialFaceBoundary(
+        missing_catalog, *source_face, kernel).status ==
+        part::MaterialFaceBoundaryStatus::invalid_stage);
+    auto carrier_only = stage;
+    CHECK(carrier_only.result_topology);
+    const auto face_record = std::find_if(
+        carrier_only.result_topology->faces.begin(),
+        carrier_only.result_topology->faces.end(),
+        [&](const auto& item) {
+            return item.runtime_token == *source_face;
+        });
+    CHECK(face_record != carrier_only.result_topology->faces.end());
+    face_record->semantic_address.reset();
+    CHECK(part::inspectMaterialFaceBoundary(
+        carrier_only, *source_face, kernel).status ==
+        part::MaterialFaceBoundaryStatus::face_not_strict);
+
+    using Fault = Pg01dFaultedBoundaryProvider::Fault;
+    const auto expect_failure = [&](Fault fault,
+                                    part::MaterialFaceBoundaryStatus expected) {
+        Pg01dFaultedBoundaryProvider provider{kernel, fault};
+        const auto admitted = part::inspectMaterialFaceBoundary(
+            stage, *source_face, provider);
+        CHECK(!admitted.ok());
+        CHECK(admitted.status == expected);
+        CHECK(admitted.wires.empty());
+        CHECK(!admitted.bounded_face);
+    };
+    expect_failure(
+        Fault::bind_unavailable,
+        part::MaterialFaceBoundaryStatus::native_boundary_unavailable);
+    expect_failure(
+        Fault::query_failure,
+        part::MaterialFaceBoundaryStatus::native_boundary_unavailable);
+    expect_failure(
+        Fault::missing_outer,
+        part::MaterialFaceBoundaryStatus::native_boundary_unavailable);
+    expect_failure(
+        Fault::duplicate_outer,
+        part::MaterialFaceBoundaryStatus::native_boundary_unavailable);
+    expect_failure(
+        Fault::bogus_edge,
+        part::MaterialFaceBoundaryStatus::material_edge_unavailable);
+    expect_failure(
+        Fault::duplicated_material_edge,
+        part::MaterialFaceBoundaryStatus::material_edge_unavailable);
+
+    Pg01dFaultedBoundaryProvider passthrough{
+        kernel, Fault::none};
+    const auto control = part::inspectMaterialFaceBoundary(
+        stage, *source_face, passthrough);
+    CHECK(control.ok());
+    CHECK(control.wires.size() == valid.wires.size());
+    CHECK(control.wires.front().edges.size() ==
+          valid.wires.front().edges.size());
+    for (std::size_t i = 0U; i < valid.wires.front().edges.size(); ++i) {
+        CHECK(control.wires.front().edges[i].reference ==
+              valid.wires.front().edges[i].reference);
+    }
+    CHECK(session.document().state() == before);
+    CHECK(session.document().revision() == revision);
+    CHECK(session.undoDepth() == undo);
+    std::cout << "PG01D_D3_MALFORMED_BOUNDARY_FAIL_CLOSED_PASS"
+              << " native_strict_source=1"
+              << " provider_fault_variants=6"
+              << " invalid_scene_or_carrier_variants=4"
+              << " duplicate_material_rejected=1"
+              << " document_unchanged=1\\n";
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -909,7 +1111,14 @@ int main(int argc, char* argv[]) {
         argc == 2 && std::string_view{argv[1]} == "--pg01d-ui";
     const bool pg01d_d0_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01d-d0";
+    const bool pg01d_negative_only =
+        argc == 2 &&
+        std::string_view{argv[1]} == "--pg01d-negative";
     kernel_occt::OcctSolidModelingKernel kernel;
+    if (pg01d_negative_only) {
+        verifyPg01dMalformedBoundaryFailClosed(kernel);
+        return EXIT_SUCCESS;
+    }
     if (pg01d_d0_only) {
         // PG-01D's real OCCT/Part topology proof must remain isolated
         // from the unrelated, cursor/timing-sensitive PG-01C GUI test.
