@@ -125,6 +125,19 @@ STOP, prepare bounded amendment, request Owner D2/D3 rather than silently expand
 
 A distinct governance activation commit must update `work/ACTIVE.yaml -> active_work` to THIS contract and pass the appropriate gate **before** source changes on a feature branch. PG-01D/E and PM-06 remain gated; final PG-01C product completion and merge require exact-head Windows evidence and separate Owner practical PASS.
 
+## 10. Owner-approved bounded amendment — 2026-10-09 (D2-K/T/P/B)
+
+**Decision:** Owner explicitly approved all four bounded extensions in response to the Sketch 5 / linked Circle / multi-selection findings: `Zatwierdzam - mamy wyniki - kontynuuj`. This is permission to implement and verify, **not** final PG-01C PASS or authorization to merge.
+
+1. **D2-K — exact source topology:** expand this contract to `src/kernel_occt/solid_modeling_kernel.cpp` and strictly necessary related native tests. For a supported OCCT Line Edge, use its **actual oriented TopoDS_Vertex** endpoint coordinates to ensure genuinely shared source vertices project identically. No proximity-based vertex identification, global Sketch tolerance relaxation, broad OCCT healing, new persisted geometry/reference identity, or change to Circle/Arc support policy. A native after-Chamfer exact-region regression is required. Missing/degenerate source fails closed.
+2. **D2-T — Document Tree:** expand to `src/ui/part_document_tree_controller.cpp/.hpp`. Display linked Profile validity from the same revision-bound effective geometry used by Viewer and Properties. Never treat saved linked geometry as a current fallback.
+3. **D2-P — Profile Create/Edit:** expand to `src/application/document_session.cpp`, `src/application/include/simplesolid2/application/document_session.hpp`, and narrow Sketch interaction call sites. Semantic Command execution must revalidate against a current same-Part source provider and document revision, reject provider loss or unresolved links without durable mutation, retain stable ProfileId/RegionIntent/EntityIds and existing v15 schema. Existing authored-only commands must not become a seed-based linked bypass.
+4. **D2-B — atomic batch Break Link:** expand the existing semantic command and Sketch Select UI to support multiple selected linked EntityIds, validate all against the same current provider/revision and commit one all-or-nothing mutation/Undo. Preserve all current geometry, roles and existing Profile identity. Duplicate, mixed unlinked and missing sources reject the entire set; no loop of partial single-target commits.
+
+**Required verification:** focused RED→GREEN native OCCT Chamfer/region, linked Line/Circle and mixed Profile status, Create/Edit current provider and loss, atomic multi-Break Link/Undo/Redo/Save/Reopen, exact-head Windows FULL and separate Owner practical re-test of `Part006.ss2part` Sketch 5. No private CAD fixture is added to the repository. PL/EN canonical docs and deterministic Browser remain mandatory.
+
+**Unchanged STOP:** PG-01D Face, PG-01E, PM-06, independent CI issue #302, new CAD identity, persisted schema changes, broad modeling tolerance policy and automatic endpoint healing are not authorized. Existing ADR-0014 modeling-semantic compatibility rules remain in effect.
+
 ## Documentation impact
 
 Internal docs: required
