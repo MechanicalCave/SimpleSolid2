@@ -1076,6 +1076,122 @@ void PartViewportController::setSketchEditSketch(
     refreshPresentation();
 }
 
+bool PartViewportController::setProjectedEdgeDraftPreview(
+    const std::vector<part::MaterialEdgeReference>& sources,
+    sketch::EntityRole role) {
+    // Empty source staging is a legitimate all-clear. Never keep
+    // a last-good preview after Clear, Esc, Cancel or provider loss.
+    if (sources.empty()) {
+        clearSketchPreview();
+        return true;
+    }
+    const auto fail = [this]() {
+        clearSketchPreview();
+        return false;
+    };
+
+    const auto* hosted = activeSketch();
+    if (session_ == nullptr || hosted == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return fail();
+    }
+
+    auto* query = dynamic_cast<kernel::IEdgeProjectionQuery*>(
+        solid_modeling_kernel_);
+    const auto frame = part::resolveCurrentProjectionSketchFrame(
+        session_->document(), hosted->id, *part_evaluation_cache_);
+    if (query == nullptr || !frame) {
+        return fail();
+    }
+
+    const bool construction =
+        role == sketch::EntityRole::construction;
+    std::vector<SketchPreviewLine2D> preview;
+
+    const auto add_segment =
+        [&preview, construction](
+            sketch::Point2 from, sketch::Point2 to) {
+            const SketchPreviewLine2D item{
+                from, to, construction};
+            if (!item.valid()) {
+                return false;
+            }
+            preview.push_back(item);
+            return true;
+        };
+
+    for (const auto& source : sources) {
+        if (!source.valid() ||
+            source.stage != body_topology_catalog_cache_->stage) {
+            return fail();
+        }
+
+        // Same strict source resolution as headless PG-01B Finish:
+        // exact source stage/generation and analytic Line/Circle/Arc.
+        const auto projected = part::projectStrictMaterialEdge(
+            session_->document(), source,
+            *part_evaluation_cache_, *query, *frame);
+        if (!projected.resolved()) {
+            return fail();
+        }
+
+        if (const auto* line = std::get_if<kernel::Line2>(
+                &*projected.curve)) {
+            if (!add_segment(
+                    {line->start.u, line->start.v},
+                    {line->end.u, line->end.v})) {
+                return fail();
+            }
+            continue;
+        }
+
+        sketch::Point2 center;
+        double radius{};
+        double start_angle{};
+        double sweep_angle{};
+        if (const auto* circle = std::get_if<kernel::Circle2>(
+                &*projected.curve)) {
+            center = {circle->center.u, circle->center.v};
+            radius = circle->radius;
+            sweep_angle = 2.0 * std::numbers::pi_v<double>;
+        } else if (const auto* arc = std::get_if<kernel::Arc2>(
+                       &*projected.curve)) {
+            center = {arc->center.u, arc->center.v};
+            radius = arc->radius;
+            start_angle = arc->start_angle;
+            sweep_angle = arc->sweep_angle;
+        } else {
+            return fail();
+        }
+        // The Part projection is analytic. The transient OCCT display
+        // tessellation matches the ordinary Sketch scene's 2D curve
+        // sampling, and is never stored as authored geometry.
+        const auto segments =
+            curveSegments(center, radius, start_angle, sweep_angle);
+        if (segments.empty()) {
+            return fail();
+        }
+        for (const auto& segment : segments) {
+            if (!add_segment(segment.start, segment.end)) {
+                return fail();
+            }
+        }
+    }
+
+    if (preview.empty() || !setSketchPreview(preview)) {
+        return fail();
+    }
+    return true;
+}
+
 bool PartViewportController::setSketchPreview(
     const std::vector<SketchPreviewLine2D>& lines) {
     if (viewport_ == nullptr) {
