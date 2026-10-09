@@ -348,7 +348,17 @@ void verifyMissingProjectionProviderNeverShowsSeed() {
         *linked_profile.profile_id));
     controller.setSketchEditSketch(*target.sketch_id);
     CHECK(viewport.sketch_scene_.lines.size() == 1U);
+    CHECK(!viewport.sketch_scene_.lines.front().linked);
     CHECK(viewport.sketch_scene_.curves.empty());
+    // OSNAP and Measure must consume the same fail-closed effective
+    // model as the visible Viewport, never the linked saved seed.
+    const auto* visible_model =
+        controller.currentSketchInteractionModel();
+    CHECK(visible_model != nullptr);
+    CHECK(visible_model->contains(*local.entity_id));
+    CHECK(!visible_model->contains(*old_seed.entity_id));
+    CHECK(!sketch::measureEntity(
+        *visible_model, *old_seed.entity_id).has_value());
     CHECK(!controller.sketchPresentationFor(
         *old_seed.entity_id));
     CHECK(controller.sketchPresentationFor(
