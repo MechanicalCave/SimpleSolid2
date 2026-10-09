@@ -1,11 +1,11 @@
 # PG-01D — Planar Face boundary Project Geometry: bounded D2 design PROPOSAL
 
-**Status:** **DRAFT — OWNER D2 DECISION REQUIRED; NOT ACCEPTED / NOT ACTIVE.**  
+**Status:** **OWNER D2-F1–F6 APPROVED 2026-10-09 — DESIGN ACCEPTED; WORK CONTRACT NOT YET ACCEPTED OR ACTIVE.**  
 **Prepared:** 2026-10-09, following Owner FINAL PASS and squash merge of PG-01C.  
 **Verified baseline:** `main` merge commit `d928e8a5d1f5893b73de3e4fcd399d7e0483af83`, [PR #304](https://github.com/MechanicalCave/SimpleSolid2/pull/304), original accepted HEAD `95731b9a4`, Windows FULL #2102 **196/196 PASS** and explicit Owner manual PASS.  
 **Program:** accepted Part Modeling v1 roadmap v1.30 §9B; `work/PROJECTION_01_PROJECT_GEOMETRY_DESIGN_PROPOSAL.md` PG-01D.  
 **Invariants:** Constitution v1.0, Foundation v1.0 §7.2/7.5, Architecture v1.0, ADR-0014/0016/0017, PG-01A/B/C accepted behavior.  
-**Authority boundary:** This is a *read-only design/evidence proposal*. It authorizes **no production code**, **no Work Contract activation**, **no schema/API changes**, and **no merge to main as an accepted design without Owner review**.
+**Authority boundary:** Owner explicitly accepted D2-F1–F6 in conversation: `akceptuje - kontynuuj` (2026-10-09), after receiving the D2 proposal and request for approval. This accepts **the bounded architectural design and the default visible partial-warning UX** (no modal), **not** an unreviewed production Work Contract, new schema, or permission to activate/edit product code. A separate Owner-accepted Work Contract and distinct `ACTIVE.yaml` activation commit remain mandatory.
 
 ## 1. User outcome and package boundary
 
@@ -85,11 +85,11 @@ One Undo/Redo entry, stable targets, construction/regular role parity, and curre
 - Full PG-01C toolbar/Operations/Command Line/Esc/Enter/Cancel/focus and ordinary linked Edge work remain regression-green.
 - Native Windows **FOCUSED → FAST** (record any independent #302 issue without weakening tests), exact-head **FULL**, docs/Browser verification and **separate Owner practical Windows PASS** before merge.
 
-## 5. Owner decision requested — single bounded D2 package
+## 5. Owner-approved D2 design — remaining Work Contract gate
 
-Please explicitly **approve or modify** D2-F1–F6, particularly: **F1 transient Face gesture + only durable per-Edge bindings**, **F2 source-native oriented wire accounting + strict material Edge mapping**, **F3 geometry-Unsupported-only skip**, **F4 semantic identity dedup**, **F5 one existing tool/partial warnings**, and **F6 one exact-current transaction/no new persistence**.
+**Owner decision received:** `akceptuje - kontynuuj` (2026-10-09) approves **D2-F1 transient Face gesture + durable per-Edge bindings**, **D2-F2 provider-owned oriented outer/hole wire accounting + strict material mapping**, **D2-F3 only geometric Unsupported skip**, **D2-F4 semantic-reference deduplication**, **D2-F5 existing single Workbench tool with prominent partial warnings and no added modal confirmation**, **D2-F6 exact-current atomic Finish without Face-token persistence**.
 
-Approval of this **design** alone is not approval to edit production files. The next governance operation would be a separate bounded **PG-01D Work Contract** with documentation impact, acceptance criteria and an explicit Owner activation decision. PG-01E / PM-06 remain gated.
+**Remaining governance gate:** review and separately accept `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT_DRAFT.md`, followed by a **distinct activation commit** to `work/ACTIVE.yaml` on a governance branch; only then may a dedicated production PG-01D branch mutate code. If the native F2 evidence is insufficient to map strict bounded Face and actual oriented wire occurrences, implementation **STOP / new Owner D2**. PG-01E / PM-06 remain gated.
 
 ## Documentation impact
 
