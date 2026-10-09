@@ -1749,33 +1749,50 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
 BreakProjectedEdgeLinkResult DocumentSession::execute(
     const BreakProjectedEdgeLinkCommand& command,
     kernel::ISolidModelingKernel& modeling_kernel) {
+    return execute(
+        BreakProjectedEdgeLinksCommand{
+            command.sketch_id,
+            {command.entity_id},
+            command.expected_revision},
+        modeling_kernel);
+}
+
+BreakProjectedEdgeLinkResult DocumentSession::execute(
+    const BreakProjectedEdgeLinksCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
     using Status = BreakProjectedEdgeLinkStatus;
     if (document_.revision() != command.expected_revision) {
         return {Status::stale_revision};
     }
     const auto* original =
         document_.findSketch(command.sketch_id);
-    if (original == nullptr) {
+    if (!original) {
         return {Status::missing_sketch};
     }
-    const auto binding = std::find_if(
-        original->projection_bindings.begin(),
-        original->projection_bindings.end(),
-        [&command](const part::ProjectedEdgeBinding& item) {
-            return item.target_entity == command.entity_id;
-        });
-    if (binding == original->projection_bindings.end()) {
+    if (command.entity_ids.empty()) {
         return {Status::not_linked};
+    }
+    std::set<sketch::EntityId> unique;
+    for (const auto& id : command.entity_ids) {
+        if (!unique.insert(id).second ||
+            std::none_of(
+                original->projection_bindings.begin(),
+                original->projection_bindings.end(),
+                [&id](const part::ProjectedEdgeBinding& item) {
+                    return item.target_entity == id;
+                })) {
+            return {Status::not_linked};
+        }
     }
     auto* projection_query =
         dynamic_cast<kernel::IEdgeProjectionQuery*>(
             &modeling_kernel);
-    if (projection_query == nullptr) {
+    if (!projection_query) {
         return {Status::provider_unavailable};
     }
 
-    // Re-evaluate the current document. Never accept a caller-supplied
-    // last-good Curve2 or old Body token as Break Link authority.
+    // One revision/provider snapshot authorizes the entire operation.
+    // Never materialize a subset when a source is unavailable.
     const auto current_prefix =
         part::evaluatePart(document_, modeling_kernel);
     const auto effective =
@@ -1785,15 +1802,17 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
     if (!effective) {
         return {Status::source_unavailable};
     }
-    const auto outcome = std::find_if(
-        effective->outcomes.begin(),
-        effective->outcomes.end(),
-        [&command](const part::ProjectedSketchOutcome& item) {
-            return item.target_entity == command.entity_id;
-        });
-    if (outcome == effective->outcomes.end() ||
-        !outcome->resolved()) {
-        return {Status::source_unavailable};
+    for (const auto& id : command.entity_ids) {
+        const auto outcome = std::find_if(
+            effective->outcomes.begin(),
+            effective->outcomes.end(),
+            [&id](const part::ProjectedSketchOutcome& item) {
+                return item.target_entity == id;
+            });
+        if (outcome == effective->outcomes.end() ||
+            !outcome->resolved()) {
+            return {Status::source_unavailable};
+        }
     }
 
     auto after = document_.state();
@@ -1801,35 +1820,33 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
     if (!target) {
         return {Status::missing_sketch};
     }
-    bool materialized = false;
-    if (const auto* line =
-            effective->model.findLine(command.entity_id)) {
-        materialized = target->model.updateLine(
-            command.entity_id,
-            line->start(), line->end());
-    } else if (const auto* circle =
-                   effective->model.findCircle(command.entity_id)) {
-        materialized = target->model.updateCircle(
-            command.entity_id,
-            circle->center(), circle->radius());
-    } else if (const auto* arc =
-                   effective->model.findArc(command.entity_id)) {
-        materialized = target->model.updateArc(
-            command.entity_id,
-            arc->center(), arc->radius(),
-            arc->startAngle(), arc->sweepAngle());
-    }
-    if (!materialized) {
-        return {Status::source_unavailable};
+    for (const auto& id : command.entity_ids) {
+        bool materialized = false;
+        if (const auto* line = effective->model.findLine(id)) {
+            materialized = target->model.updateLine(
+                id, line->start(), line->end());
+        } else if (const auto* circle =
+                       effective->model.findCircle(id)) {
+            materialized = target->model.updateCircle(
+                id, circle->center(), circle->radius());
+        } else if (const auto* arc =
+                       effective->model.findArc(id)) {
+            materialized = target->model.updateArc(
+                id, arc->center(), arc->radius(),
+                arc->startAngle(), arc->sweepAngle());
+        }
+        if (!materialized) {
+            return {Status::source_unavailable};
+        }
     }
     std::erase_if(
         target->projection_bindings,
-        [&command](const part::ProjectedEdgeBinding& item) {
-            return item.target_entity == command.entity_id;
+        [&unique](const part::ProjectedEdgeBinding& item) {
+            return unique.contains(item.target_entity);
         });
     const auto committed = commitCommandState(
         std::move(after),
-        "Part transaction failed while breaking Projected Edge Link");
+        "Part transaction failed while breaking Projected Edge Links");
     if (!committed.ok() || !committed.changed) {
         return {
             Status::transaction_failed,
