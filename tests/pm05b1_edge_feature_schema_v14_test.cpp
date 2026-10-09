@@ -506,7 +506,8 @@ void verifyPg01bB1BindingStructure(
               << " stable_entity=1"
               << " duplicate_reject=1"
               << " stage_cycle_reject=1"
-              << " v15_cold_roundtrip=1"\n              << " malformed_reject=3\n";
+              << " v15_cold_roundtrip=1"
+              << " malformed_reject=3\n";
 }
 
 } // namespace
