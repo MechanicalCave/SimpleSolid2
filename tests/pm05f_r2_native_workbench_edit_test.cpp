@@ -1456,8 +1456,10 @@ int main(int argc, char* argv[]) {
             // without degeneracy. This is genuine OCCT geometry and a
             // genuine strict material Face, not a mocked projection.
             auto partial_session = makeBaseSession(kernel);
+            const auto partial_base_state =
+                partial_session.document().state();
             const auto& partial_base =
-                partial_session.document().state().sketches.front();
+                partial_base_state.sketches.front();
             const double skew_cos = std::cos(0.31);
             const double skew_sin = std::sin(0.31);
             const auto skew = [skew_cos, skew_sin](
