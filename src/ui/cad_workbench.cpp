@@ -3238,7 +3238,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("projectBreakLinkButton"));
     project_link_break_button_->setToolTip(
         QStringLiteral(
-            "Detach this projected Edge using the current resolved source curve; keep its current geometry."));
+            "Detach all selected linked Edges atomically using their current resolved source curves; keep their current geometry (one Undo)."));
     project_link_break_button_->setVisible(false);
     operations_layout->addWidget(project_link_break_button_);
 
@@ -14487,45 +14487,53 @@ void CadWorkbench::syncSketchInteractionUi() {
         // D2-D: a linked source is not an ordinary editable seed.
         // The same Sketch Select context exposes typed source origin
         // and routes Break Link through the existing atomic command.
-        if (selected == 1U &&
+        if (selected > 0U &&
             active_sketch_id_ &&
             document_session_ != nullptr) {
-            const auto target =
-                sketch_interaction_controller_->
-                    selectedEntities().front();
+            const auto targets =
+                sketch_interaction_controller_->selectedEntities();
             const auto* sketch =
                 document_session_->document().findSketch(
                     *active_sketch_id_);
             if (sketch != nullptr) {
-                const auto found = std::find_if(
-                    sketch->projection_bindings.begin(),
-                    sketch->projection_bindings.end(),
-                    [&target](const part::ProjectedEdgeBinding& item) {
-                        return item.target_entity == target;
-                    });
-                if (found != sketch->projection_bindings.end()) {
-                    const auto& source = found->source;
-                    const bool current =
-                        viewport_controller_ != nullptr &&
+                bool all_linked = true;
+                bool all_current = viewport_controller_ != nullptr;
+                for (const auto& target : targets) {
+                    const auto found = std::find_if(
+                        sketch->projection_bindings.begin(),
+                        sketch->projection_bindings.end(),
+                        [&target](const part::ProjectedEdgeBinding& item) {
+                            return item.target_entity == target;
+                        });
+                    if (found == sketch->projection_bindings.end()) {
+                        all_linked = false;
+                        break;
+                    }
+                    all_current = all_current &&
                         viewport_controller_->sketchPresentationFor(
                             target).has_value();
+                }
+                if (all_linked) {
                     if (project_link_status_label_ != nullptr) {
                         project_link_status_label_->setText(
-                            QStringLiteral(
-                                "Projected Edge — %1\nSource stage: %2")
-                                .arg(current
-                                    ? QStringLiteral("Current")
-                                    : QStringLiteral("Unresolved"))
-                                .arg(source.stage.feature_id
-                                    ? fromUtf8(
-                                        source.stage.feature_id->serialized())
-                                    : QStringLiteral("Missing")));
+                            selected == 1U
+                                ? QStringLiteral(
+                                    "Projected Edge — %1")
+                                      .arg(all_current
+                                          ? QStringLiteral("Current")
+                                          : QStringLiteral("Unresolved"))
+                                : QStringLiteral(
+                                    "%1 projected Edges — %2")
+                                      .arg(static_cast<qulonglong>(selected))
+                                      .arg(all_current
+                                          ? QStringLiteral("Current")
+                                          : QStringLiteral("Unresolved")));
                         project_link_status_label_->setVisible(true);
                     }
                     if (project_link_break_button_ != nullptr) {
                         project_link_break_button_->setVisible(true);
                         project_link_break_button_->setEnabled(
-                            current && solid_modeling_kernel_ != nullptr);
+                            all_current && solid_modeling_kernel_ != nullptr);
                     }
                 }
             }
