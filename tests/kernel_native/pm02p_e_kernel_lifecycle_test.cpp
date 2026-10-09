@@ -458,6 +458,85 @@ void verifyPg01aArcProjection() {
         << " tested_orientations=3\n";
 }
 
+void verifyPg01aOnCurrentPartOperations() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const auto box = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("pg01a-part"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(box.ok());
+    kernel::AngularRevolveInput revolve;
+    revolve.profile = rectangle("pg01a-revolve");
+    revolve.axis = {
+        {-20.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0}};
+    revolve.start_angle_radians = 0.0;
+    revolve.end_angle_radians =
+        std::numbers::pi / 2.0;
+    revolve.operation =
+        kernel::SolidBooleanOperation::add;
+    CHECK(revolve.valid());
+    const auto revolved = query.revolve(revolve);
+    CHECK(revolved.ok());
+    const auto filleted = query.edgeFeature(
+        kernel::EdgeFeatureInput{
+            kernel::EdgeFeatureOperation::fillet,
+            {box.current_edges.front()}, 1.0},
+        box.solid);
+    CHECK(filleted.ok());
+    const auto chamfered = query.edgeFeature(
+        kernel::EdgeFeatureInput{
+            kernel::EdgeFeatureOperation::chamfer,
+            {box.current_edges.front()}, 1.0},
+        box.solid);
+    CHECK(chamfered.ok());
+    const kernel::Frame3 xy{};
+    const kernel::Frame3 xz{
+        {0.0, 0.0, 0.0},
+        {1.0, 0.0, 0.0},
+        {0.0, 0.0, 1.0},
+        {0.0, -1.0, 0.0}};
+    std::size_t recognized = 0U;
+    std::size_t unsupported = 0U;
+    for (const auto& result :
+         {box, revolved, filleted, chamfered}) {
+        CHECK(result.ok());
+        CHECK(!result.current_edges.empty());
+        std::size_t supported_stage = 0U;
+        for (const auto token : result.current_edges) {
+            for (const auto& frame : {xy, xz}) {
+                const auto projected =
+                    query.projectEdgeToPlane(
+                        result.solid, token, frame);
+                if (projected.ok()) {
+                    CHECK(projected.curve);
+                    ++supported_stage;
+                    ++recognized;
+                } else {
+                    CHECK(!projected.curve);
+                    CHECK(projected.status ==
+                              Status::unsupported_curve ||
+                          projected.status ==
+                              Status::degenerate_projection);
+                    if (projected.status ==
+                        Status::unsupported_curve) {
+                        ++unsupported;
+                    }
+                }
+            }
+        }
+        CHECK(supported_stage > 0U);
+    }
+    std::cout
+        << "PG01A_PART_FEATURE_PROJECTION_PASS"
+        << " features=4"
+        << " exact_curves=" << recognized
+        << " unsupported=" << unsupported << '\\n';
+}
+
 void verifyPg01aExactProjection() {
     using Status = kernel::EdgeProjectionStatus;
     kernel_occt::OcctSolidModelingKernel query;
@@ -605,6 +684,7 @@ int main() {
     verifyColdRebuild();
     verifyPg01aExactProjection();
     verifyPg01aArcProjection();
+    verifyPg01aOnCurrentPartOperations();
 
     std::cout
         << "PM02P_E_KERNEL_LIFECYCLE_PASS"
