@@ -1,11 +1,11 @@
 # PG-01D — Planar Face boundary Project Geometry: bounded D2 design PROPOSAL
 
-**Status:** **OWNER D2-F1–F6 APPROVED 2026-10-09 — DESIGN ACCEPTED; WORK CONTRACT NOT YET ACCEPTED OR ACTIVE.**  
+**Status:** **OWNER D2-F1–F6 AND BOUNDED WORK CONTRACT APPROVED 2026-10-09 — ACTIVATION PENDING.**  
 **Prepared:** 2026-10-09, following Owner FINAL PASS and squash merge of PG-01C.  
 **Verified baseline:** `main` merge commit `d928e8a5d1f5893b73de3e4fcd399d7e0483af83`, [PR #304](https://github.com/MechanicalCave/SimpleSolid2/pull/304), original accepted HEAD `95731b9a4`, Windows FULL #2102 **196/196 PASS** and explicit Owner manual PASS.  
 **Program:** accepted Part Modeling v1 roadmap v1.30 §9B; `work/PROJECTION_01_PROJECT_GEOMETRY_DESIGN_PROPOSAL.md` PG-01D.  
 **Invariants:** Constitution v1.0, Foundation v1.0 §7.2/7.5, Architecture v1.0, ADR-0014/0016/0017, PG-01A/B/C accepted behavior.  
-**Authority boundary:** Owner explicitly accepted D2-F1–F6 in conversation: `akceptuje - kontynuuj` (2026-10-09), after receiving the D2 proposal and request for approval. This accepts **the bounded architectural design and the default visible partial-warning UX** (no modal), **not** an unreviewed production Work Contract, new schema, or permission to activate/edit product code. A separate Owner-accepted Work Contract and distinct `ACTIVE.yaml` activation commit remain mandatory.
+**Authority boundary:** Owner explicitly accepted D2-F1–F6 in conversation: `akceptuje - kontynuuj` (2026-10-09), after receiving the D2 proposal and request for approval. This accepted **the bounded architectural design and the default visible partial-warning UX** (no modal). The Owner subsequently explicitly accepted the bounded `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT.md` on 2026-10-09. No new schema or permission to edit production exists **until a distinct `ACTIVE.yaml` activation commit is merged**.
 
 ## 1. User outcome and package boundary
 
