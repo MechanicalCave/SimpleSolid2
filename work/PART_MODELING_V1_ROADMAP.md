@@ -1,12 +1,13 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 COMPLETED — PASS; PM-05 COMPLETED — PASS  
-**Version:** 1.29  
-**Owner acceptance:** 2026-10-06 — PM-05A D2 conclusions explicitly accepted; PM-05B authorized. v1.29 is activation-state synchronization only  
-**Previous accepted version:** 1.28 — 2026-10-06  
+**Version:** 1.30  
+**Owner acceptance:** 2026-10-09 — D2 sequencing: Projection before PM-06; bounded same-Part associative Project Geometry, Assembly snapshot unchanged; Projection 00A evidence gate accepted  
+**Previous accepted version:** 1.29 — 2026-10-06
+
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance under `work/PM-05_EDGE_FEATURES.md`  
+**Current active checkpoint:** Projection 00A — Profile/Extrude repair evidence under `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE_CONTRACT.md`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -130,7 +131,9 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **COMPLETED — PASS; Owner final Windows PASS 2026-10-05; translucent Origin/Datum plane fill deferred as PM-06 presentation polish** |
 | 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | **COMPLETED — PASS; runtime FULL #1578 attempt 2; Owner final Windows PASS 2026-10-06** |
 | 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete explicit multi-Edge Fillet/Chamfer lifecycle with connected-corner, lineage/refine handling and repair | **COMPLETED — Owner final PM-05F PASS 2026-10-09; runtime/docs FULL #1902 195/195, evidence FAST #1903 93/93; see work/PM-05F_EDGE_FEATURES_COMPLETION.md** |
-| 9 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
+| 9A | **Projection 00A — Profile Repair Evidence Gate** | test existing Sketch/Profile/Extrude contour changes, explicit repair, stable IDs, Undo/Redo and cold Save/Reopen before designing automatic projection dependency/evaluation | **ACTIVE — Owner accepted 2026-10-09; evidence-only Work Contract, no Project Geometry production code** |
+| 9B | **Projection — Project Geometry in Sketch** | one right-panel tool for selected Edge / planar Face; associative same-Part Regular/Construction, Break Link, partial exact supported Face boundary; stages and lifecycle frozen after 00A evidence | **FUTURE — separate Owner-approved production Work Contract, no implementation yet** |
+| 10 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
 
 No package number authorizes mutation by itself.
 
@@ -329,7 +332,7 @@ The audited design uses O-01...O-12 as a durable decision ledger. Decisions rema
 | --- | --- | --- | --- |
 | O-01 | exact single-Body semantics: creation, Empty, valid one-solid result, no-effect/multi-solid outcomes | one Body in v1; do not alias BodyId to DocumentId | **CLOSED by ADR-0014 / PM-00B** |
 | O-02 | exact datum constructors and Mid semantics | only constructors justified by v1 workflows; no provider-parameter Mid shortcut | owning datum package PM-03 |
-| O-03 | projection curves, snapshot/refresh, atomic face-boundary capture | snapshot intent; exact supported curves or explicit UnsupportedCurve; no silent approximation | **INITIAL MATRIX ACCEPTED by PM-00B; final in separately activated Projection ownership, outside PM-02/PM-03 critical path** |
+| O-03 | projection curves, associativity, Face partial capture and refresh | **Owner D2 amendment 2026-10-09:** same-Part default associative linked Regular/Construction, future Assembly snapshot; partial Face capture skips Unsupported exact curves visibly (Line/Circle/Arc initially) without silent approximation, false rebinding or forced auto-close. New Face members are not automatically authored | **PROGRAM D2 ACCEPTED; Projection 00A evidence gate ACTIVE. Detailed typed source binding, exact dependency/materialization, failure policy and right-panel UI are owned by later separately accepted Projection production contract** |
 | O-04 | support-frame construction, re-support and orientation | full stable O/U/V/N rule; preserve local 2D by default; no silent fallback | **FOUNDATION CLOSED by ADR-0014; dynamic carrier-frame amendment accepted by ADR-0016, evidence PM-02P** |
 | O-05 | topology-reference selector, lineage and split/merge guarantees | semantic producer/stage/role lineage, fail closed, user repair; no Face[n]/Edge[n] | **FOUNDATION CLOSED by ADR-0014; topology/carrier extension accepted by ADR-0016; PM-02P PASS and 2026-10-04 Owner D2 acceptance add bounded semantic branch/provenance discrimination for singular Edge/Curve, otherwise Ambiguous** |
 | O-06 | exact variants/inputs per modeling operation | freeze a bounded v1 matrix; lifecycle completeness over variant breadth | **EXTRUDE MATRIX AMENDED/CLOSED for PM-01 by ADR-0015; later operations remain owned by their packages** |
@@ -538,7 +541,7 @@ PM-05E is COMPLETED — PASS. Exact candidate `88e07b1a2dbdb6ded73d0c2f90dd0a144
 
 PM-05F has completed documentation, cumulative automated acceptance and final Owner supported-Windows package acceptance (2026-10-09). See `work/PM-05F_EDGE_FEATURES_COMPLETION.md` for the exact evidence and preserved exclusions.
 
-PM-05 runtime semantics remain frozen to the accepted bounded implementation. PM-06, Projection and excluded PM-05 variants remain separately gated. The Owner discussed a possible future Projection-before-PM-06 order, but **no sequencing amendment is approved or applied here**.
+PM-05 runtime semantics remain frozen. **Owner amended the roadmap on 2026-10-09:** Projection 00A evidence and then a separately gated Project Geometry production package **precede PM-06**. Only Projection 00A test/evidence mutations are active under its Work Contract; Project Geometry production semantics and PM-06 remain NOT activated.
 
 ## 17. PM-06 — Part v1 Completion / Published References / Evidence
 
@@ -718,3 +721,9 @@ PM-02 is **COMPLETED — PASS**. Final accepted evidence is post-remediation run
 PM-03 is **COMPLETED — PASS**. Final accepted evidence includes F1 Windows FULL #1522, F2a Windows FULL #1523, documentation workflow #1524 on exact docs candidate `439abd15b9e7ec1c4c8b2177cd8ea31f6debda0e` merged as `4e9ecdb4d51f7f81be799bbc0778b98808799f3d`, and Owner final Windows workflow PASS on 2026-10-05. The Owner explicitly accepted the missing neutral translucent plane fill as a presentation-only defer to PM-06, to be fixed coherently for both Origin and Datum planes.
 
 PM-04 is ACTIVE at PM-04F under the Owner-accepted Work Contract. Exact contract candidate `cc84e21b3178af73ddb06b58d4482a5aba67abee` passed Windows PR gate #1526 and merged to main as `8c464cb7447b8fef7d07b10cc6f16eb849b0c41e`. PM-04A, PM-04B, PM-04C, PM-04D and PM-04E are COMPLETED — PASS; PM-05, PM-06 product scope and Projection remain separately gated.
+
+## 19. Owner D2 sequencing amendment v1.30 — 2026-10-09
+
+The Owner explicitly accepted the proposal and pipeline plan to implement **Projection before PM-06**, with same-Part **associative** linked Project Geometry by default, separate snapshot semantics for future Assembly-context capture, one Sketch Project Geometry tool with all controls in the right panel, linked display and Break Link, independent Regular/Construction roles and visible **partial** projection of supported planar Face boundaries. This supersedes only the prior Part-local snapshot DIRECTION in Foundation §7.2 and its corresponding §7.5 table row; Assembly §7.3 CORE remains unchanged. Source binding schema, profile/Sketch recompute policy and nuanced ambiguous/broken-reference behavior require evidence and an approved future production Work Contract, not speculative implementation here.
+
+The accepted initial work is **Projection 00A**, a narrowly scoped *existing-feature evidence test*, not Project Geometry implementation. The result of an upstream contour edit replacing one authored Line with two is unknown until 00A actually tests it. Do not infer automatic new Face-edge membership updates. PM-06 remains behind the separately accepted Projection package. This program decision is effective on this branch subject to standard PR CI and merge, with `work/ACTIVE.yaml` referencing `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE_CONTRACT.md`.

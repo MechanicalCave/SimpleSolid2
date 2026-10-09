@@ -1,12 +1,12 @@
 # Projection 00A — Sketch/Profile/Extrude Repair Evidence Gate (PROPOSAL)
 
-**Status:** DRAFT — EVIDENCE/CONTRACT PROPOSAL; NOT OWNER-ACCEPTED; NO IMPLEMENTATION AUTHORITY
+**Status:** OWNER ACCEPTED 2026-10-09 as design/evidence basis; executable authority strictly limited by `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE_CONTRACT.md`; Project Geometry production NOT AUTHORIZED
 **Prepared:** 2026-10-09
 **Repository:** MechanicalCave/SimpleSolid2
 **Baseline:** `main` at `636a2989b28fc3723e6cde0130e654bf12c17657` — PM-05F final Owner PASS and PR #298 squash-merged
 **Product owner direction (discussion):** Project Edge and Project Face before PM-06; same-Part associative projection, external Assembly-context snapshot, one tool/right panel, linked-geometry appearance and Break Link, Regular/Construction; explicit partial output for supported Face edges
 **Authority:** `governance/CONSTITUTION.md` → `governance/FOUNDATION.md` v1.0 → accepted ADRs → frozen `work/PART_MODELING_V1_ROADMAP.md` v1.29 → Owner-accepted bounded Work Contract
-**Scope of this document:** evidence plan and D2 decision request only. Do not switch `work/ACTIVE.yaml`, alter Foundation/roadmap/ADRs, change product/tests, or begin Projection implementation based only on this draft.
+**Scope of this document:** accepted decision/evidence design background. The Owner explicitly approved D2 sequencing, amended Foundation Part-local DIRECTION and activated a separate bounded 00A TEST-ONLY Work Contract on 2026-10-09. This design file itself grants no broader product authority.
 
 ## Why this gate precedes Projection
 
@@ -66,15 +66,15 @@ Read-only inspiration from `MechanicalCave/SimpleSolid`:
 
 Do **not** import SS1's narrow `ExtrudeGeneratedEdgeReference` as SS2 durable identity; use SS2 strict staged `MaterialEdgeReference` and typed Part topology. Do not copy SS1 subsystem en bloc.
 
-## Required Owner decisions after evidence
+## Accepted and remaining Owner decisions
 
-**D2-A — Program sequence:** amend accepted `work/PART_MODELING_V1_ROADMAP.md` v1.29 to insert a bounded Projection package **before** PM-06 (the Owner has expressed this preference but has not yet accepted an exact roadmap amendment).
+**D2-A — Program sequence: ACCEPTED 2026-10-09.** Roadmap v1.30 places Projection 00A and future Project Geometry ahead of PM-06.
 
-**D2-B — Part-local associativity:** amend Foundation **§7.2** and the Part-local row in **§7.5** (both DIRECTION) from default snapshot to explicitly bounded same-Part associative projection. **§7.3 Assembly snapshot CORE remains unchanged**. Architecture must specify authored source bindings vs transient derived geometry, legal dependency order/cycle avoidance, broken binding and profile behavior, persistence/migration and Sketch role/constraint ownership.
+**D2-B — Part-local associativity: ACCEPTED 2026-10-09.** Foundation §7.2/§7.5 DIRECTION now bounds same-Part associative projection. **§7.3 Assembly snapshot CORE remains unchanged**. Exact source bindings/evaluation, lifecycle and persistence implementation stay pending dedicated production-contract approval.
 
-**D2-C — Project Face partial-mode integrity:** freeze the distinction between Unsupported exact curve (skip with explicit reason) and source semantic identity failures (do not silently skip/rebind). Confirm new-member refresh policy based on 00A test outcomes.
+**D2-C — Project Face partial mode: OWNER DIRECTION ACCEPTED 2026-10-09.** Unsupported exact curve kinds visibly skipped, allowing manual closure. No silent identity rebinding. Auto-new-member refresh is deferred; nuanced identity-failure transaction policy to be frozen for production after evidence.
 
-**D2-D — Active Work Contract:** only after explicit Owner acceptance, point `work/ACTIVE.yaml` at a bounded evidence-only or implementation Work Contract. Then implement A0–A8 tests, review results, freeze production packages, and run exact-head Windows gates.
+**D2-D — Active evidence Work Contract: ACCEPTED 2026-10-09.** `work/ACTIVE.yaml` activates **TEST-ONLY** `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE_CONTRACT.md` on this branch. Implement A0–A7 regression inside existing test CMake targets; A8 practical UI needs later Owner Windows manual testing. Project Geometry production remains separately gated.
 
 ## Documentation impact
 
@@ -84,4 +84,4 @@ Do **not** import SS1's narrow `ExtrudeGeneratedEdgeReference` as SS2 durable id
 
 ## Next action
 
-Owner reviews this **Draft** and explicitly accepts/revises D2 program ordering and evidence Work Contract. Until then no Production/Tests/ACTIVE/roadmap/Foundation mutation is authorized. Do not label A0–A8 PASS until a real automated/native gate and (for A8) Owner GUI evidence have been run.
+Run exact-head FOCUSED evidence test in the existing target, then FAST, then final FULL on Ready. Record observed results; A8 UI remains separately Owner-verified and cannot be inferred from headless tests. Do not start Project Geometry product implementation before the next separately accepted Work Contract.
