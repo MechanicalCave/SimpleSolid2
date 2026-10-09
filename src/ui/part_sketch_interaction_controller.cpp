@@ -496,13 +496,14 @@ profileDraftResolutionStatus() const {
         return std::nullopt;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr) {
         return std::nullopt;
     }
 
     return part::resolveProfileRegionIntent(
-               hosted->model,
+               *current_model,
                *profile_session_->draft_intent)
         .status;
 }
@@ -554,14 +555,15 @@ PartSketchInteractionController::profileCurrentResult()
         return std::nullopt;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr) {
         return std::nullopt;
     }
 
     const auto resolved =
         part::resolveProfileRegionIntent(
-            hosted->model,
+            *current_model,
             *profile_session_->draft_intent);
     return resolved.valid()
         ? resolved.region
@@ -3892,8 +3894,13 @@ ensureProfileAnalysis() {
         return false;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr) {
+        profile_analysis_cache_.reset();
+        profile_session_->hovered_region.reset();
+        profile_session_->hover_result.reset();
+        profile_session_->hover_reuse_key.reset();
         return false;
     }
 
@@ -3919,7 +3926,7 @@ ensureProfileAnalysis() {
         // the original Profile draft expected_revision so Finish remains
         // fail-closed across unrelated authored edits.
         const auto current_state =
-            hosted->model.state();
+            *current_model.state();
         if (profile_analysis_cache_->model_state ==
             current_state) {
             profile_analysis_cache_->
@@ -3930,7 +3937,7 @@ ensureProfileAnalysis() {
     }
 
     const auto current_state =
-        hosted->model.state();
+        *current_model.state();
 
     profile_analysis_cache_ =
         ProfileAnalysisCache{
@@ -3939,8 +3946,10 @@ ensureProfileAnalysis() {
             current_revision,
             current_state,
             sketch::analyzeRegions(
-                hosted->model)};
+                *current_model)};
     ++profile_analysis_build_count_;
+    profile_session_->hovered_region.reset();
+    profile_session_->hover_result.reset();
     profile_session_->hover_reuse_key.reset();
 
     // Preserve the established optimistic-concurrency rule: only a real
@@ -3971,8 +3980,9 @@ updateProfileHover(
         return;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr ||
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr ||
         !profile_analysis_cache_ ||
         session_ == nullptr ||
         !sketch_id_) {
@@ -3983,7 +3993,7 @@ updateProfileHover(
 
     const auto pick =
         sketch::pickRegion(
-            hosted->model,
+            *current_model,
             profile_analysis_cache_->analysis,
             point);
     if (pick.location !=
@@ -4071,7 +4081,7 @@ updateProfileHover(
 
         const auto resolved =
             part::resolveProfileRegionIntent(
-                hosted->model,
+                *current_model,
                 *intent);
         if (!resolved.valid()) {
             profile_session_->hover_result =
@@ -4098,7 +4108,7 @@ updateProfileHover(
 
     profile_session_->hover_result =
         part::applyProfileAreaEdit(
-            hosted->model,
+            *current_model,
             *profile_session_->draft_intent,
             *pick.region_index,
             profile_session_->area_mode);
