@@ -17,6 +17,8 @@ struct SketchLinePresentation final {
     Point3 start{};
     Point3 end{};
     bool construction{false};
+    // UI-only link provenance, independent of creation role and selection.
+    bool linked{false};
 
     [[nodiscard]] bool valid() const noexcept {
         return token.valid() &&
@@ -30,6 +32,7 @@ struct SketchCurvePresentation final {
     PresentationToken token;
     std::vector<Point3> points;
     bool construction{false};
+    bool linked{false};
 
     [[nodiscard]] bool valid() const noexcept {
         if (!token.valid() || points.size() < 2U) {
