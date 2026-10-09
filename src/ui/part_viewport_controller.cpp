@@ -759,6 +759,10 @@ void PartViewportController::setSolidModelingKernel(
 
     solid_modeling_kernel_ =
         modeling_kernel;
+    project_face_feedback_revision_.reset();
+    project_face_feedback_generation_.reset();
+    project_face_feedback_supported_.clear();
+    project_face_feedback_skipped_.clear();
     body_topology_tool_stage_.reset();
     body_scene_revision_.reset();
     body_scene_cache_.reset();
@@ -784,6 +788,11 @@ void PartViewportController::setDocumentSession(
     application::DocumentSession* session) {
     if (session_ != session) {
         selected_feature_contribution_.reset();
+    project_face_feedback_revision_.reset();
+    project_face_feedback_generation_.reset();
+    project_face_feedback_supported_.clear();
+    project_face_feedback_skipped_.clear();
+
         hovered_feature_contribution_.reset();
         sketch_edit_id_.reset();
         sketch_primary_pointer_routing_ =
@@ -844,6 +853,11 @@ void PartViewportController::clear() {
     transient_profile_hide_.reset();
     transient_axis_emphasis_.reset();
     body_topology_tool_stage_.reset();
+    project_face_feedback_revision_.reset();
+    project_face_feedback_generation_.reset();
+    project_face_feedback_supported_.clear();
+    project_face_feedback_skipped_.clear();
+
     body_scene_revision_.reset();
     body_scene_cache_.reset();
     part_evaluation_cache_.reset();
