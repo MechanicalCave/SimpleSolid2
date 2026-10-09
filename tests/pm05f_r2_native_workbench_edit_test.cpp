@@ -1628,6 +1628,33 @@ int main(int argc, char* argv[]) {
             // Profile evaluation; effective source is the authority.
             CHECK(!pg_all_session.document()
                       .evaluateProfile(pg_all_profile.id));
+
+            // D2-T real Workbench Tree must agree with the effective
+            // Viewer/Properties Profile, not label all-linked geometry
+            // Invalid merely because authored-only evaluation refuses.
+            CHECK(workbench.activateDocument(&pg_all_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* pg_linked_profile_tree = nullptr;
+            const auto pg_profile_identity =
+                QString::fromStdString(
+                    pg_all_profile.id.serialized());
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->toolTip(0).contains(
+                        QStringLiteral("ProfileId: ") +
+                        pg_profile_identity)) {
+                    pg_linked_profile_tree = *it;
+                    break;
+                }
+            }
+            CHECK(pg_linked_profile_tree != nullptr);
+            CHECK(!pg_linked_profile_tree->text(0).contains(
+                QStringLiteral("[Invalid]")));
+            CHECK(pg_linked_profile_tree->toolTip(0).contains(
+                QStringLiteral("Status: Valid")));
+            std::cout << "PG01C_D2T_LINKED_TREE_VALID_PASS"
+                      << " all_linked=4"
+                      << " authored_only_rejected=1\\n";
+
             // D2-B: four linked Edges are detached in one semantic
             // transaction without changing Profile or EntityIds. Invalid
             // duplicate input rolls back the whole staged operation.
