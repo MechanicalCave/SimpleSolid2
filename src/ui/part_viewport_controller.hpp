@@ -264,6 +264,12 @@ public:
     void setSketchEditSketch(
         std::optional<sketch::SketchId> sketch_id);
 
+    // Read-only current evaluated Sketch, identical to the one used to
+    // build the visible scene. No new OCCT projection on mouse moves.
+    // Absent on stale revision, switched Document or failed scene.
+    [[nodiscard]] const sketch::SketchModel*
+    currentSketchInteractionModel() const;
+
     // C2: transient exact-source Project Geometry draft. The actual
     // Part and current Sketch remain unchanged until Workbench Finish.
     // A failed source/provider evaluation clears its entire preview.
@@ -708,6 +714,14 @@ private:
         std::uint64_t,
         SketchEntityAddress>
         sketch_entity_bindings_;
+    struct CurrentSketchModelSnapshot final {
+        core::DocumentId document_id;
+        sketch::SketchId sketch_id;
+        core::DocumentRevision revision;
+        sketch::SketchModel model;
+    };
+    std::optional<CurrentSketchModelSnapshot>
+        current_sketch_model_snapshot_;
     std::unordered_map<
         std::uint64_t,
         part::ProfileId>
