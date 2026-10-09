@@ -387,7 +387,7 @@ void verifyPg01bB1BindingStructure(
     auto missing_target = withLink();
     missing_target.sketches.back()
         .projection_bindings[0].target_entity =
-            sketch::EntityId{9999U};
+            *sketch::EntityId::parse("9999");
     CHECK(!part::PartDocument::restore(
         fixture.document.documentId(),
         std::move(missing_target)).ok());
@@ -404,7 +404,7 @@ void verifyPg01bB1BindingStructure(
     auto unallocated = withLink();
     unallocated.sketches.back()
         .projection_bindings[0].source.stage.feature_id =
-            part::FeatureId{9999U};
+            *part::FeatureId::parse("9999");
     CHECK(!part::PartDocument::restore(
         fixture.document.documentId(),
         std::move(unallocated)).ok());
