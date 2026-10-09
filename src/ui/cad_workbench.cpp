@@ -14498,6 +14498,7 @@ void CadWorkbench::syncSketchInteractionUi() {
             if (sketch != nullptr) {
                 bool all_linked = true;
                 bool all_current = viewport_controller_ != nullptr;
+                QString single_source_stage;
                 for (const auto& target : targets) {
                     const auto found = std::find_if(
                         sketch->projection_bindings.begin(),
@@ -14509,6 +14510,14 @@ void CadWorkbench::syncSketchInteractionUi() {
                         all_linked = false;
                         break;
                     }
+                    if (selected == 1U) {
+                        single_source_stage =
+                            found->source.stage.feature_id
+                                ? fromUtf8(
+                                      found->source.stage.feature_id
+                                          ->serialized())
+                                : QStringLiteral("Missing");
+                    }
                     all_current = all_current &&
                         viewport_controller_->sketchPresentationFor(
                             target).has_value();
@@ -14518,10 +14527,11 @@ void CadWorkbench::syncSketchInteractionUi() {
                         project_link_status_label_->setText(
                             selected == 1U
                                 ? QStringLiteral(
-                                    "Projected Edge — %1")
+                                    "Projected Edge — %1\nSource stage: %2")
                                       .arg(all_current
                                           ? QStringLiteral("Current")
                                           : QStringLiteral("Unresolved"))
+                                      .arg(single_source_stage)
                                 : QStringLiteral(
                                     "%1 projected Edges — %2")
                                       .arg(static_cast<qulonglong>(selected))
