@@ -1185,104 +1185,9 @@ int main(int argc, char* argv[]) {
         CHECK(pg_profile_finish->isEnabled());
         CHECK(pg_profile_result->text().contains(
             QStringLiteral("Status: Valid")));
-        // Owner Profile regression: a linked boundary is a valid
-        // source of durable RegionIntent, and detaching it later must
-        // preserve both Profile identity and the region exactly.
-        const auto pg_profile_count_before =
-            pg_reopened.document().profiles().size();
-        pg_profile_finish->click();
-        QApplication::processEvents();
-        CHECK(pg_reopened.document().profiles().size() ==
-              pg_profile_count_before + 1U);
-        const auto pg_durable_profile =
-            pg_reopened.document().profiles().back();
-        const auto pg_durable_profile_id =
-            pg_durable_profile.id;
-        const auto pg_current_profile =
-            pg_ui_controller->currentProfileResolution(
-                pg_durable_profile_id);
-        CHECK(pg_current_profile &&
-              pg_current_profile->valid());
-        CHECK(pg_current_profile->region.has_value());
-        const auto pg_region_snapshot =
-            *pg_current_profile->region;
-        const auto pg_linked_geometry =
-            *pg_recovered_line;
-        const auto pg_profile_undo_before =
-            pg_reopened.undoDepth();
-        const auto pg_profile_detach =
-            pg_reopened.execute(
-                application::BreakProjectedEdgeLinkCommand{
-                    *pg_sketch.sketch_id,
-                    pg_target,
-                    pg_reopened.document().revision()},
-                pg_cold_kernel);
-        CHECK(pg_profile_detach.ok());
-        CHECK(pg_reopened.undoDepth() ==
-              pg_profile_undo_before + 1U);
-        const auto* pg_detached_sketch =
-            pg_reopened.document().findSketch(
-                *pg_sketch.sketch_id);
-        CHECK(pg_detached_sketch);
-        CHECK(pg_detached_sketch->projection_bindings.empty());
-        CHECK(pg_detached_sketch->model.contains(pg_target));
-        CHECK(pg_detached_sketch->model.findLine(pg_target));
-        CHECK(*pg_detached_sketch->model.findLine(pg_target) ==
-              pg_linked_geometry);
-        const auto* pg_preserved_profile =
-            pg_reopened.document().findProfile(
-                pg_durable_profile_id);
-        CHECK(pg_preserved_profile);
-        CHECK(*pg_preserved_profile == pg_durable_profile);
-        const auto pg_detached_resolution =
-            pg_reopened.document().evaluateProfile(
-                pg_durable_profile_id);
-        CHECK(pg_detached_resolution &&
-              pg_detached_resolution->valid());
-        CHECK(pg_detached_resolution->region->outer.boundary ==
-              pg_region_snapshot.outer.boundary);
-        CHECK(pg_detached_resolution->region->holes.size() ==
-              pg_region_snapshot.holes.size());
-        CHECK(pg_detached_resolution->region->area ==
-              pg_region_snapshot.area);
-        CHECK(pg_detached_resolution->region->perimeter ==
-              pg_region_snapshot.perimeter);
-        CHECK(pg_reopened.undo().changed);
-        CHECK(pg_reopened.document()
-                  .findSketch(*pg_sketch.sketch_id)
-                  ->projection_bindings.size() == 1U);
-        CHECK(*pg_reopened.document().findProfile(
-                  pg_durable_profile_id) == pg_durable_profile);
-        CHECK(pg_reopened.redo().changed);
-        CHECK(pg_reopened.document()
-                  .evaluateProfile(pg_durable_profile_id)
-                  ->valid());
-        CHECK(*pg_reopened.document().findProfile(
-                  pg_durable_profile_id) == pg_durable_profile);
-
-        const std::filesystem::path pg_profile_path =
-            std::filesystem::path{
-                pg_persistence_dir.path().toStdWString()} /
-            "ProjectGeometryProfile.ss2part";
-        const auto pg_profile_saved =
-            pg_store.createNew(
-                pg_profile_path, pg_reopened.document());
-        CHECK(pg_profile_saved.ok());
-        const auto pg_profile_loaded =
-            pg_store.load(pg_profile_path);
-        CHECK(pg_profile_loaded.ok());
-        CHECK(pg_profile_loaded.document->findProfile(
-                  pg_durable_profile_id));
-        CHECK(*pg_profile_loaded.document->findProfile(
-                  pg_durable_profile_id) == pg_durable_profile);
-        CHECK(pg_profile_loaded.document
-                  ->evaluateProfile(pg_durable_profile_id)
-                  ->valid());
-        std::cout
-            << "PG01C_OWNER_PROFILE_BREAK_LINK_IDENTITY_PASS"
-            << " profile_stable=1 entity_stable=1"
-            << " geometry_stable=1 undo_redo=1"
-            << " save_reopen=1\\n";
+        pg_reply = workbench.submitCadInput(
+            "CANCEL", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
         std::cout
             << "PG01C_C2_CURRENT_PROFILE_REGIONS_PASS"
             << " persisted_seed_regions=0"
@@ -1435,6 +1340,164 @@ int main(int argc, char* argv[]) {
                       << " native_ctrl_selection=1"
                       << " linked_edges=2"
                       << " undo_batches=1\\n";
+
+            // Owner identity regression: an all-linked rectangle
+            // Profile remains the SAME Profile as each linked Edge is
+            // detached, including mixed linked/authored intermediate
+            // boundaries. No ProfileId or RegionIntent recreation.
+            auto pg_all_session = makeBaseSession(kernel);
+            const auto pg_all_sketch =
+                pg_all_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(pg_all_sketch.ok() &&
+                  pg_all_sketch.sketch_id);
+            std::vector<part::MaterialEdgeReference>
+                pg_cap_sources;
+            for (const auto& probe :
+                 authorableEdgeProbes(pg_all_session, kernel)) {
+                if (std::abs(probe.world.z - 20.0) < 1.0e-6) {
+                    pg_cap_sources.push_back(probe.reference);
+                }
+            }
+            CHECK(pg_cap_sources.size() == 4U);
+            const auto pg_all_authored =
+                pg_all_session.execute(
+                    application::CreateProjectedSketchEdgesCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_all_session.document().revision(),
+                        pg_cap_sources,
+                        sketch::EntityRole::regular},
+                    kernel);
+            CHECK(pg_all_authored.ok());
+            CHECK(pg_all_authored.entity_ids.size() == 4U);
+            const auto* pg_all_linked =
+                pg_all_session.document().findSketch(
+                    *pg_all_sketch.sketch_id);
+            CHECK(pg_all_linked &&
+                  pg_all_linked->projection_bindings.size() == 4U);
+            const auto pg_all_targets =
+                pg_all_linked->projection_bindings;
+            const auto pg_all_body = part::evaluatePart(
+                pg_all_session.document(), kernel);
+            const auto pg_all_effective =
+                part::evaluateEffectiveSketchProjection(
+                    pg_all_session.document(),
+                    *pg_all_sketch.sketch_id,
+                    pg_all_body, kernel);
+            CHECK(pg_all_effective &&
+                  pg_all_effective->allResolved());
+            const auto pg_all_regions =
+                sketch::analyzeRegions(pg_all_effective->model);
+            CHECK(pg_all_regions.complete() &&
+                  pg_all_regions.regions.size() == 1U);
+            const auto pg_all_intent =
+                part::makeProfileRegionIntent(
+                    pg_all_regions.regions.front());
+            CHECK(pg_all_intent);
+            const auto pg_all_created =
+                pg_all_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_all_session.document().revision(),
+                        *pg_all_intent});
+            CHECK(pg_all_created.ok() &&
+                  pg_all_created.profile_id);
+            const auto pg_all_profile =
+                *pg_all_session.document().findProfile(
+                    *pg_all_created.profile_id);
+            // The authored-only API intentionally refuses linked
+            // Profile evaluation; effective source is the authority.
+            CHECK(!pg_all_session.document()
+                      .evaluateProfile(pg_all_profile.id));
+            for (const auto& binding : pg_all_targets) {
+                const auto before_body = part::evaluatePart(
+                    pg_all_session.document(), kernel);
+                const auto before =
+                    part::evaluateEffectiveSketchProjection(
+                        pg_all_session.document(),
+                        *pg_all_sketch.sketch_id,
+                        before_body, kernel);
+                CHECK(before && before->allResolved());
+                const auto* before_line =
+                    before->model.findLine(
+                        binding.target_entity);
+                CHECK(before_line);
+                const auto expected_line = *before_line;
+                const auto detached = pg_all_session.execute(
+                    application::BreakProjectedEdgeLinkCommand{
+                        *pg_all_sketch.sketch_id,
+                        binding.target_entity,
+                        pg_all_session.document().revision()},
+                    kernel);
+                CHECK(detached.ok());
+                const auto* after_sketch =
+                    pg_all_session.document().findSketch(
+                        *pg_all_sketch.sketch_id);
+                CHECK(after_sketch);
+                const auto* frozen_line =
+                    after_sketch->model.findLine(
+                        binding.target_entity);
+                CHECK(frozen_line &&
+                      *frozen_line == expected_line);
+                CHECK(*pg_all_session.document().findProfile(
+                          pg_all_profile.id) == pg_all_profile);
+                const auto after_body = part::evaluatePart(
+                    pg_all_session.document(), kernel);
+                const auto after =
+                    part::evaluateEffectiveSketchProjection(
+                        pg_all_session.document(),
+                        *pg_all_sketch.sketch_id,
+                        after_body, kernel);
+                CHECK(after && after->allResolved());
+                const auto resolved =
+                    part::resolveProfileRegionIntent(
+                        after->model,
+                        pg_all_profile.region_intent);
+                CHECK(resolved.valid());
+                CHECK(resolved.region->area ==
+                      pg_all_regions.regions.front().area);
+            }
+            CHECK(pg_all_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            const auto pg_all_final =
+                pg_all_session.document().evaluateProfile(
+                    pg_all_profile.id);
+            CHECK(pg_all_final && pg_all_final->valid());
+            CHECK(pg_all_session.undo().changed);
+            CHECK(pg_all_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.size() == 1U);
+            CHECK(*pg_all_session.document().findProfile(
+                      pg_all_profile.id) == pg_all_profile);
+            CHECK(pg_all_session.redo().changed);
+            CHECK(pg_all_session.document()
+                      .evaluateProfile(pg_all_profile.id)
+                      ->valid());
+            QTemporaryDir pg_all_dir;
+            CHECK(pg_all_dir.isValid());
+            const auto pg_all_path =
+                std::filesystem::path{
+                    pg_all_dir.path().toStdWString()} /
+                "LinkedProfileBreak.ss2part";
+            const auto pg_all_saved =
+                pg_store.createNew(
+                    pg_all_path, pg_all_session.document());
+            CHECK(pg_all_saved.ok());
+            const auto pg_all_loaded =
+                pg_store.load(pg_all_path);
+            CHECK(pg_all_loaded.ok());
+            CHECK(*pg_all_loaded.document->findProfile(
+                      pg_all_profile.id) == pg_all_profile);
+            CHECK(pg_all_loaded.document
+                      ->evaluateProfile(pg_all_profile.id)
+                      ->valid());
+            std::cout
+                << "PG01C_OWNER_PROFILE_LINK_BREAK_IDENTITY_PASS"
+                << " all_linked=4 mixed_then_authored=1"
+                << " stable_ids=1 undo_redo=1"
+                << " cold_reopen=1\\n";
 
             CHECK(workbench.activateDocument(&session, {}));
             result = EXIT_SUCCESS;
