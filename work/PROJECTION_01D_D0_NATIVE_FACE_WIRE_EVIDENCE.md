@@ -1,6 +1,6 @@
 # PG-01D D0 — native Face wire evidence and SS2 strict semantic stop gate
 
-**Status:** D0 IN PROGRESS — local OCCT native topology result CONFIRMED; native SS2 Kernel-to-Part strict semantic edge mapping NOT YET CERTIFIED.  
+**Status:** D0 CORE NATIVE EVIDENCE PASS (synthetic external OCCT + compiled SS2 through-Cut); bounded D1 scoped Face-query POSITIVE PASS #2123; D1 additional negatives/Face-split proof and later Face UI remain OPEN. Not PG-01D final acceptance.  
 **Owner approval:** D2-F1–F6 accepted and Work Contract accepted 2026-10-09.  
 **Governance:** Work Contract `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT.md`; isolated activation #308 merged on `main` `5eeb4095e628dc0f204b284cf56f560c5448c36a`.  
 **Production branch:** `feature/pg01d-planar-face-native-d0-20261009`, based on activated `main`.  
@@ -37,6 +37,15 @@ CI FAST #2117 **PASS** and Windows native FOCUSED #2118 **PASS 1/1** on exact br
 The provider now owns an optional, revision-scoped `IFaceBoundaryQuery` seam in `src/kernel/include/simplesolid2/kernel/face_boundary.hpp` and `src/kernel_occt/solid_modeling_kernel.cpp`. It requires an **exact same current RuntimeSolidHandle** and current runtime Face token, checks planar Face geometry, reads actual oriented `TopoDS_Wire` uses via `BRepTools::OuterWire` and `BRepTools_WireExplorer`, validates full native wire-use counts, and maps each use to exactly one current provider Edge token by `TopoDS_Shape::IsSame`. It does not author Sketch objects or certify semantic material Edge identity.
 
 The new native Workbench test cross-checks the query against `BodyStageTopologyCatalog` and calls **only** `authorMaterialEdgeReference` for each candidate. It requires a real through-Cut holed Face with strict bounded Face address and an entire hole loop of supported material Edges; if those are absent, CI will remain **RED** and PG-01D Face UI implementation must STOP or request bounded Owner D2. A mismatched provider generation must report `provider_mismatch`.
+
+**Exact-head native result:** [Windows FOCUSED #2123](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37983190239) **PASS 1/1**, tested commit `ba4b671031278b8a9e52411546454691e81ade28` and existing `pg01c.native_project_edge_command` 5.75 seconds. Its test requires:
+- a true SS2 current provider Cut hole with **at least two** planar Face realizations containing separate outer and inner wires;
+- **at least one** strictly semantically addressed bounded Face with a complete, uniquely material `MaterialEdgeReference` for every native outer/hole wire Edge use;
+- unique runtime provider Edge token mapping; no duplicate stored material references;
+- stale scoped Face token used against a *different* `RuntimeSolidHandle` yields `provider_mismatch`, not accidental retargeting.
+
+**This proves one realistic admissible source family, not all possible Face/periodic/seam/split cases.** The subsequent test commit also checks invalid/default scope and nonplanar Surface typed rejection; its own FOCUSED result is pending. Exact current-source geometric Unsupported skips, mixed-source authoring, Face UI and cold persistence are still unimplemented.
+
 
 ## Mandatory remaining D0 tests / STOP
 
