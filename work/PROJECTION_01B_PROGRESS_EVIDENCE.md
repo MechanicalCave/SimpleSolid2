@@ -1,7 +1,7 @@
 # PG-01B — Associative Sketch implementation evidence
 
-**Status:** ACTIVE — B1/v15, B2 effective Sketch, B3 ordered Extrude/Revolve + linked Draft preview, B4 command lifecycle and B5 real OCCT cold linked dependent Feature replay/upstream 40→50 mm repair PASS on native FOCUSED. Wider current-head FAST and exact-head FULL/Owner sign-off still OPEN.
-**Current tested source:** `d7feb9844571f4938b997b0089993846e4053e1b` (draft [PR #301](https://github.com/MechanicalCave/SimpleSolid2/pull/301))
+**Status:** ACTIVE — B1–B5 native semantics and cold v15 source-driven replay characterized; old-schema fixture compatibility repaired after FULL revealed old current-schema assertions. Latest source FOCUSED #1967 PASS 1/1; broader updated-head FAST, exact-head FULL and Owner sign-off still OPEN.
+**Current tested source:** `29da443224e1ccc29c91df2273002f9a0b6f7cc1` (FOCUSED #1967) (draft [PR #301](https://github.com/MechanicalCave/SimpleSolid2/pull/301))
 **Owner D2 + contract acceptance:** 2026-10-09 `zatwierdzam - kontynuuj`
 **PG-01A baseline:** main `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`, Owner final PASS, FULL #1932 195/195.
 
@@ -30,7 +30,13 @@
 - [FOCUSED #1959](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37910682814) on `2c525b98dbbb6ea72836c5387bc0abfe00f0ef7f`: **1/1 PASS** — cold v15 Save/Close/Reopen of upstream Add → linked Regular Sketch → Profile → dependent Cut with intentionally OPEN authored seed; fresh OCCT provider recomputes; suppress source and cold reopen again gives typed unavailable Body, durable repairable binding, no old BRep.
 - [FOCUSED #1960](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37911086710) on `9c250ada377e40b4698482490a374abad954f20c`: **1/1 PASS** — real OCCT Revolve Create Draft preview uses derived linked Profile from source despite OPEN authored seed; produces valid preview mesh with zero authored state changes.
 - [FOCUSED #1961](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37911424866) on `d7feb9844571f4938b997b0089993846e4053e1b`: **1/1 PASS** — upstream rectangle width 40→50 mm via actual Sketch Commands makes dependent Cut fail closed while local contour open, explicit local repair recovers SAME ProfileId/Cut FeatureId, true v15 cold reopen with fresh OCCT reprojects 50 mm Edge and recomputes current Body.
-- **Next:** repeat wider FAST on evidence-sync head, resolve any repeat Viewer failure without modifying unrelated UI as PG-01B work; then Ready-for-Review exact-head Windows FULL and Owner PG-01B final PASS. Not yet claimed.
+- [FAST #1962](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37911782555) on `2700ea586478ac93a08d499b4e29ac98fa1dc874`: **PASS 93/93**, aggregate PASS, identical Viewer test source; earlier Viewer marker count failure #1958 was **not reproduced** (not asserted random).
+- [FULL #1963](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37912054858) on `2700ea586478ac93a08d499b4e29ac98fa1dc874`: **RED**; Core 25/25 PASS, kernel-native 57/57 PASS, Desktop **107/113** with six legacy tests still asserting current schema v14 instead of accepted v15. No product runtime error in these checks, but this is **not** a PASS gate.
+- [FOCUSED #1964](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37913252023) on `529353784d306b1733d50e16619c094d692895ba`: **RED 0/1**, remaining `pm04e1.revolve_persistence` top assertion current_schema_version v14; four more top assertions corrected by `a18045d...`.
+- [FOCUSED #1965](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37913890210) on `a18045d90ab7e42b53af37601cd2fe1850246e58`: **RED 0/1**, exposed malformed test **v12 fixture** assembled by relabeling v15 JSON while retaining new `projected_edges` member. Production parser correctly rejected the extra field. Do not weaken old schema validation.
+- [FOCUSED #1966](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37914184345) on `286caba94aebee4c065d967608c646f638251312`: **PASS 1/1**, v12 migration fixture now strips `projected_edges` **only after asserting its array is empty**; loaded legacy document identities remain verified.
+- [FOCUSED #1967](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37914513902) on `29da443224e1ccc29c91df2273002f9a0b6f7cc1`: **PASS 1/1**, old v8/v9 fixture construction updated with the same no-linked-data-loss check. Matching v9/v11 fixtures for Datum/Axis suites also corrected; full-suite verification pending.
+- **Next:** current-source evidence-sync FAST; then one Ready-for-Review exact-head FULL on stable PR. Do not claim schema migration suites or Owner PG-01B PASS before the full outcome. PG-01C/D/E/PM-06 remain gated.
 
 ## Implemented semantic boundaries
 
