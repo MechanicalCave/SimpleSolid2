@@ -969,6 +969,88 @@ int main(int argc, char* argv[]) {
         CHECK(pg_reopened.document()
                   .findSketch(*pg_sketch.sketch_id)
                   ->model.state() == pg_seed_before);
+        // PG-01C C2: authored linked seed no longer closes a Profile
+        // after the upstream resize, but the current effective source
+        // does. Profile FIND and hover must follow the same rendered
+        // Sketch snapshot as OSNAP/Measure, never the old seed.
+        const auto pg_origin_a = pg_recovered_line->start();
+        const auto pg_origin_b = pg_recovered_line->end();
+        const sketch::Point2 pg_side{
+            (pg_origin_a.v - pg_origin_b.v) * 0.25,
+            (pg_origin_b.u - pg_origin_a.u) * 0.25};
+        const sketch::Point2 pg_far_a{
+            pg_origin_a.u + pg_side.u,
+            pg_origin_a.v + pg_side.v};
+        const sketch::Point2 pg_far_b{
+            pg_origin_b.u + pg_side.u,
+            pg_origin_b.v + pg_side.v};
+        for (const auto& segment : {
+                 std::pair{pg_origin_b, pg_far_b},
+                 std::pair{pg_far_b, pg_far_a},
+                 std::pair{pg_far_a, pg_origin_a}}) {
+            const auto added = pg_reopened.execute(
+                application::AddSketchLineCommand{
+                    *pg_sketch.sketch_id,
+                    segment.first,
+                    segment.second,
+                    sketch::EntityRole::regular});
+            CHECK(added.ok());
+        }
+        const auto* pg_authored_region =
+            pg_reopened.document().findSketch(
+                *pg_sketch.sketch_id);
+        CHECK(pg_authored_region);
+        const auto pg_seed_analysis =
+            sketch::analyzeRegions(pg_authored_region->model);
+        CHECK(pg_seed_analysis.regions.empty());
+        const auto pg_region_eval = part::evaluatePart(
+            pg_reopened.document(), pg_cold_kernel);
+        const auto pg_region_effective =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(),
+                *pg_sketch.sketch_id,
+                pg_region_eval,
+                pg_cold_kernel);
+        CHECK(pg_region_effective);
+        CHECK(pg_region_effective->allResolved());
+        const auto pg_current_regions =
+            sketch::analyzeRegions(pg_region_effective->model);
+        CHECK(pg_current_regions.regions.size() == 1U);
+        CHECK(workbench.activateDocument(&pg_reopened, {}));
+        QApplication::processEvents();
+        QTreeWidgetItem* pg_profile_sketch_item = nullptr;
+        for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+            if ((*it)->text(0) ==
+                QStringLiteral("Sketch 2")) {
+                pg_profile_sketch_item = *it;
+                break;
+            }
+        }
+        CHECK(pg_profile_sketch_item);
+        tree->clearSelection();
+        tree->setCurrentItem(pg_profile_sketch_item);
+        pg_profile_sketch_item->setSelected(true);
+        pg_action->trigger();
+        QApplication::processEvents();
+        pg_reply = workbench.submitCadInput(
+            "PROFILE", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        pg_reply = workbench.submitCadInput(
+            "FIND", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        auto* pg_profile_status = workbench.findChild<QLabel*>(
+            QStringLiteral("workbenchStatus"));
+        CHECK(pg_profile_status);
+        CHECK(pg_profile_status->text().contains(
+            QStringLiteral("Profile regions: 1;")));
+        pg_reply = workbench.submitCadInput(
+            "CANCEL", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        std::cout
+            << "PG01C_C2_CURRENT_PROFILE_REGIONS_PASS"
+            << " persisted_seed_regions=0"
+            << " current_linked_regions=1"
+            << " ui_find_regions=1\\n";
         std::cout
             << "PG01C_C3_SUPPRESSION_RECOVERY_PASS"
             << " no_saved_seed_fallback=1"
