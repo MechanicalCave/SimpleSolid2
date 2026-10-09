@@ -738,6 +738,8 @@ void verifyPg01bAtomicProjectedEdges() {
     CHECK(stage && stage->result_topology && stage->result_solid);
     const kernel::Frame3 xy{};
     std::vector<part::MaterialEdgeReference> sources;
+    std::optional<part::MaterialEdgeReference>
+        projected_point_source;
     for (const auto& edge : stage->result_topology->edges) {
         const auto ref = part::authorMaterialEdgeReference(
             *stage->result_topology, edge.runtime_token);
@@ -751,24 +753,47 @@ void verifyPg01bAtomicProjectedEdges() {
         }
         const auto projected = kernel.projectEdgeToPlane(
             stage->result_solid, *scoped, xy);
-        if (!projected.ok() ||
-            !std::holds_alternative<kernel::Line2>(*projected.curve) ||
-            std::find(sources.begin(), sources.end(), *ref.reference)
-                != sources.end()) {
-            continue;
+        if (projected.status ==
+                kernel::EdgeProjectionStatus::degenerate_projection &&
+            !projected_point_source) {
+            projected_point_source = *ref.reference;
         }
-        sources.push_back(*ref.reference);
-        if (sources.size() == 2U) {
+        if (projected.ok() &&
+            std::holds_alternative<kernel::Line2>(*projected.curve) &&
+            std::find(sources.begin(), sources.end(), *ref.reference)
+                == sources.end() &&
+            sources.size() < 2U) {
+            sources.push_back(*ref.reference);
+        }
+        if (sources.size() == 2U && projected_point_source) {
             break;
         }
     }
     CHECK(sources.size() == 2U);
+    CHECK(projected_point_source);
     const auto new_sketch = fixture.session.execute(
         application::CreatePartSketchCommand{
             core::BuiltinReferenceRole::xy_plane});
     CHECK(new_sketch.ok() && new_sketch.sketch_id);
     const auto id = *new_sketch.sketch_id;
     const auto old_revision = fixture.session.document().revision();
+    // First exact Edge materializes in pending state, but the second
+    // strict source collapses into a Point in XY. The entire two-source
+    // request must fail with no partial authored target/EntityId.
+    const auto before_bad = fixture.session.document().state();
+    const auto bad_batch = fixture.session.execute(
+        application::CreateProjectedSketchEdgesCommand{
+            id, old_revision,
+            {sources.front(), *projected_point_source},
+            sketch::EntityRole::regular}, kernel);
+    CHECK(!bad_batch.ok() && !bad_batch.changed);
+    CHECK(bad_batch.failing_source_index &&
+          *bad_batch.failing_source_index == 1U);
+    CHECK(bad_batch.source_status &&
+          *bad_batch.source_status ==
+              part::ProjectedSketchSourceStatus::degenerate_projection);
+    CHECK(fixture.session.document().state() == before_bad);
+
     const auto batch = fixture.session.execute(
         application::CreateProjectedSketchEdgesCommand{
             id, old_revision, sources,
