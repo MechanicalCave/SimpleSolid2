@@ -7117,8 +7117,7 @@ bool CadWorkbench::startExtrudeTool() {
 
     if (selected_profile_id_) {
         const auto evaluation =
-            document_session->document()
-                .evaluateProfile(
+            evaluateCurrentProfile(
                     *selected_profile_id_);
         if (evaluation &&
             evaluation->valid()) {
@@ -7178,8 +7177,7 @@ void CadWorkbench::tryCompleteExtrudeProfilePick() {
     }
 
     const auto evaluation =
-        document_session->document()
-            .evaluateProfile(
+        evaluateCurrentProfile(
                 *selected_profile_id_);
     if (!evaluation ||
         !evaluation->valid()) {
@@ -7226,8 +7224,7 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
     }
 
     const auto profile_evaluation =
-        document_session->document()
-            .evaluateProfile(
+        evaluateCurrentProfile(
                 *selected_profile_id_);
     if (!profile_evaluation ||
         !profile_evaluation->valid()) {
@@ -7905,8 +7902,7 @@ bool CadWorkbench::startRevolveTool() {
             *document_session);
     if (selected_profile_id_) {
         const auto evaluation =
-            document_session->document()
-                .evaluateProfile(
+            evaluateCurrentProfile(
                     *selected_profile_id_);
         if (evaluation && evaluation->valid()) {
             static_cast<void>(
@@ -8046,8 +8042,7 @@ void CadWorkbench::tryStageRevolveProfile(
     }
 
     const auto evaluation =
-        document_session_->document()
-            .evaluateProfile(*profile_id);
+        evaluateCurrentProfile(*profile_id);
     if (!evaluation || !evaluation->valid()) {
         setStatusText(
             QStringLiteral(
@@ -12448,6 +12443,32 @@ void CadWorkbench::refreshPropertiesContext(
         reference_properties_page_);
 }
 
+std::optional<part::ResolvedProfileRegion>
+CadWorkbench::evaluateCurrentProfile(
+    part::ProfileId profile_id) const {
+    if (document_session_ == nullptr) {
+        return std::nullopt;
+    }
+    if (viewport_controller_ != nullptr) {
+        return viewport_controller_->
+            currentProfileResolution(profile_id);
+    }
+
+    // No provider-backed viewport means no authority to resolve a
+    // source-controlled Profile. Keep ordinary authored Profiles usable.
+    const auto& document = document_session_->document();
+    const auto* profile = document.findProfile(profile_id);
+    if (profile == nullptr) {
+        return std::nullopt;
+    }
+    const auto* source =
+        document.findSketch(profile->source_sketch_id);
+    return source != nullptr &&
+            source->projection_bindings.empty()
+        ? document.evaluateProfile(profile_id)
+        : std::nullopt;
+}
+
 void CadWorkbench::refreshProfileProperties(
     part::ProfileId profile_id) {
     auto* document_session =
@@ -12480,8 +12501,7 @@ void CadWorkbench::refreshProfileProperties(
             profile->visibility));
 
     const auto evaluation =
-        document_session->document()
-            .evaluateProfile(profile_id);
+        evaluateCurrentProfile(profile_id);
     const bool valid =
         evaluation && evaluation->valid();
     profile_status_->setText(
@@ -12489,8 +12509,9 @@ void CadWorkbench::refreshProfileProperties(
             ? QStringLiteral("Valid")
             : QStringLiteral("Invalid"));
 
-    QString diagnostic =
-        QStringLiteral("—");
+    QString diagnostic = evaluation
+        ? QStringLiteral("—")
+        : QStringLiteral("Current Profile source unavailable or stale");
     if (evaluation && !evaluation->valid()) {
         switch (evaluation->status) {
         case part::ProfileIntentResolutionStatus::valid:
