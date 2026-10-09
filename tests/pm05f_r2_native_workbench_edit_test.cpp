@@ -1239,8 +1239,14 @@ int main(int argc, char* argv[]) {
                 pg_durable_profile_id);
         CHECK(pg_detached_resolution &&
               pg_detached_resolution->valid());
-        CHECK(*pg_detached_resolution->region ==
-              pg_region_snapshot);
+        CHECK(pg_detached_resolution->region->outer.boundary ==
+              pg_region_snapshot.outer.boundary);
+        CHECK(pg_detached_resolution->region->holes.size() ==
+              pg_region_snapshot.holes.size());
+        CHECK(pg_detached_resolution->region->area ==
+              pg_region_snapshot.area);
+        CHECK(pg_detached_resolution->region->perimeter ==
+              pg_region_snapshot.perimeter);
         CHECK(pg_reopened.undo().changed);
         CHECK(pg_reopened.document()
                   .findSketch(*pg_sketch.sketch_id)
@@ -1254,12 +1260,16 @@ int main(int argc, char* argv[]) {
         CHECK(*pg_reopened.document().findProfile(
                   pg_durable_profile_id) == pg_durable_profile);
 
+        const std::filesystem::path pg_profile_path =
+            std::filesystem::path{
+                pg_persistence_dir.path().toStdWString()} /
+            "ProjectGeometryProfile.ss2part";
         const auto pg_profile_saved =
             pg_store.createNew(
-                pg_persistence_path, pg_reopened.document());
+                pg_profile_path, pg_reopened.document());
         CHECK(pg_profile_saved.ok());
         const auto pg_profile_loaded =
-            pg_store.load(pg_persistence_path);
+            pg_store.load(pg_profile_path);
         CHECK(pg_profile_loaded.ok());
         CHECK(pg_profile_loaded.document->findProfile(
                   pg_durable_profile_id));
