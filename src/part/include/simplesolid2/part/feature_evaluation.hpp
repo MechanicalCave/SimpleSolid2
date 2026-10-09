@@ -2,6 +2,7 @@
 
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/kernel/reference_status.hpp>
+#include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/feature_id.hpp>
@@ -357,6 +358,57 @@ struct FeatureEvaluation final {
     std::optional<kernel::ReferenceStatus>
         edge_reference_status;
 };
+
+// PG-01D D1 read-only stage-bound Face boundary admission. The Face is
+// an ephemeral selection, never native Part intent. All durable members are
+// existing individually authored MaterialEdgeReferences; a single invalid
+// source Edge blocks the entire Face, never silently drops a loop member.
+enum class MaterialFaceBoundaryStatus {
+    resolved,
+    invalid_stage,
+    face_unavailable,
+    face_not_strict,
+    native_boundary_unavailable,
+    material_edge_unavailable,
+};
+
+struct MaterialFaceBoundaryWire final {
+    bool outer{false};
+    std::vector<MaterialEdgeReference> edges;
+};
+
+struct MaterialFaceBoundaryAdmission final {
+    MaterialFaceBoundaryStatus status{
+        MaterialFaceBoundaryStatus::invalid_stage};
+    std::optional<FeatureFaceAddress> bounded_face;
+    std::vector<MaterialFaceBoundaryWire> wires;
+
+    [[nodiscard]] bool ok() const noexcept {
+        if (status != MaterialFaceBoundaryStatus::resolved ||
+            !bounded_face || !bounded_face->valid() ||
+            wires.empty()) {
+            return false;
+        }
+        std::size_t outer = 0U;
+        for (const auto& wire : wires) {
+            if (wire.edges.empty()) return false;
+            if (wire.outer) ++outer;
+            for (const auto& edge : wire.edges) {
+                if (!edge.valid()) return false;
+            }
+        }
+        return outer == 1U;
+    }
+};
+
+// Runtime FeatureEvaluation contains a same-revision paired Body and
+// complete topology catalog for its exact stage. A Surface carrier alone
+// is NOT a unique bounded Face and cannot pass this admission.
+[[nodiscard]] MaterialFaceBoundaryAdmission
+inspectMaterialFaceBoundary(
+    const FeatureEvaluation& current_stage,
+    kernel::RuntimeFaceToken picked_bounded_face,
+    kernel::IFaceBoundaryQuery& provider);
 
 struct PartEvaluation final {
     core::DocumentRevision source_revision;
