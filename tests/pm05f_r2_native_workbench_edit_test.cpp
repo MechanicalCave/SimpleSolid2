@@ -946,6 +946,11 @@ int main(int argc, char* argv[]) {
             QStringLiteral("projectEdgeFinishButton"));
         CHECK(pg_action && pg_button && pg_panel &&
               pg_count && pg_result && pg_finish);
+        auto* pg_source_edges = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeSourceEdgesButton"));
+        auto* pg_source_face = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeSourceFaceButton"));
+        CHECK(pg_source_edges && pg_source_face);
         QTreeWidgetItem* pg_tree_item = nullptr;
         for (QTreeWidgetItemIterator it(tree); *it; ++it) {
             if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
@@ -973,6 +978,22 @@ int main(int argc, char* argv[]) {
         CHECK(!pg_panel->isHidden());
         CHECK(!pg_finish->isEnabled());
         CHECK(workbench.acceptsEmptyCadInput());
+        CHECK(pg_source_edges->isChecked());
+        CHECK(!pg_source_face->isChecked());
+        pg_reply = workbench.submitCadInput(
+            "FACE", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_source_face->isChecked());
+        CHECK(!pg_source_edges->isChecked());
+        CHECK(!pg_finish->isEnabled());
+        CHECK(pg_session.document().state() == pg_before_state);
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        pg_reply = workbench.submitCadInput(
+            "EDGES", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_source_edges->isChecked());
+        CHECK(!pg_source_face->isChecked());
+        CHECK(pg_session.undoDepth() == pg_before_undo);
         pg_reply = workbench.submitCadInput(
             "CONSTRUCTION", workbench.cadInputContextGeneration());
         CHECK(pg_reply.accepted);
