@@ -485,6 +485,58 @@ kernel::EdgeProjectionResult projectCurrentEdge(
 // The two bodies deliberately restart the same numeric token inventory.
 // Once bound to the OLD runtime solid, the token cannot be redirected to
 // NEW runtime solid despite an equal integer token value.
+// Tilted cylinder Cut crosses planar Box caps on true conic intersection
+// Edges (ellipse or unsupported OCCT approximation). No polyline fallback.
+void verifyPg01aUnsupportedIntersectionCurve() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const auto base = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("pg01a-cut-base"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(base.ok());
+    constexpr double c =
+        0.7071067811865475244;
+    auto tilted = circle("pg01a-tilted-hole");
+    tilted.outer.boundary.front().curve =
+        kernel::Circle2{{0.0, 0.0}, 3.0};
+    tilted.frame = {
+        {20.0, -5.0, -10.0},
+        {1.0, 0.0, 0.0},
+        {0.0, c, -c},
+        {0.0, c, c}};
+    CHECK(tilted.valid());
+    const auto result = query.extrude(
+        kernel::LinearExtrudeInput{
+            tilted, 0.0, 45.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::cut},
+        base.solid);
+    CHECK(result.ok());
+    const kernel::Frame3 xy{};
+    std::size_t rejected_curves = 0U;
+    for (const auto edge : result.current_edges) {
+        const auto projection = projectCurrentEdge(
+            query, result.solid, edge, xy);
+        if (projection.status ==
+            Status::unsupported_curve) {
+            CHECK(!projection.curve);
+            ++rejected_curves;
+        } else {
+            CHECK(projection.ok() ||
+                  projection.status ==
+                      Status::degenerate_projection);
+        }
+    }
+    CHECK(rejected_curves >= 1U);
+    std::cout << "PG01A_BOOLEAN_NONANALYTIC_PASS"
+              << " unsupported="
+              << rejected_curves << '\\n';
+}
+
 void verifyPg01aGenerationScope() {
     using Status = kernel::EdgeProjectionStatus;
     kernel_occt::OcctSolidModelingKernel query;
@@ -759,6 +811,7 @@ int main() {
     verifyPg01aArcProjection();
     verifyPg01aOnCurrentPartOperations();
     verifyPg01aGenerationScope();
+    verifyPg01aUnsupportedIntersectionCurve();
 
     std::cout
         << "PM02P_E_KERNEL_LIFECYCLE_PASS"
