@@ -4071,6 +4071,15 @@ PartViewportController::buildSketchScene() {
     const auto model_state =
         current_model.state();
 
+    const auto linked_source = [hosted](sketch::EntityId id) {
+        return std::any_of(
+            hosted->projection_bindings.begin(),
+            hosted->projection_bindings.end(),
+            [id](const part::ProjectedEdgeBinding& binding) {
+                return binding.target_entity == id;
+            });
+    };
+
     const auto bind = [this, hosted](
         viewer::PresentationToken token,
         sketch::EntityId id) {
@@ -4092,7 +4101,8 @@ PartViewportController::buildSketchScene() {
              *start,
              *end,
              line.role ==
-                 sketch::EntityRole::construction});
+                 sketch::EntityRole::construction,
+             linked_source(line.id)});
     }
 
     const auto add_curve = [&](sketch::EntityId id,
@@ -4112,6 +4122,7 @@ PartViewportController::buildSketchScene() {
         curve.token = *token;
         curve.construction =
             role == sketch::EntityRole::construction;
+        curve.linked = linked_source(id);
         curve.points.reserve(segments.size() + 1U);
 
         const auto first = sketchPointToWorld(*hosted, segments.front().start);
