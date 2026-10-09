@@ -967,6 +967,8 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("projectEdgeSourceEdgesButton"));
             auto* pg_finish = workbench.findChild<QPushButton*>(
                 QStringLiteral("projectEdgeFinishButton"));
+            auto* pg_remove = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeRemoveButton"));
             auto* pg_count = workbench.findChild<QLabel*>(
                 QStringLiteral("projectEdgeSelectionLabel"));
             auto* pg_face_detail = workbench.findChild<QLabel*>(
@@ -980,8 +982,8 @@ int main(int argc, char* argv[]) {
                 }
             }
             CHECK(sketch_edit && face_mode && edge_mode &&
-                  pg_finish && pg_count && pg_face_detail &&
-                  controller);
+                  pg_finish && pg_remove && pg_count &&
+                  pg_face_detail && controller);
             QTreeWidgetItem* sketch_item = nullptr;
             for (QTreeWidgetItemIterator it(tree); *it; ++it) {
                 if ((*it)->text(0) ==
@@ -1227,6 +1229,26 @@ int main(int argc, char* argv[]) {
             CHECK(holed_session.document().state() == holed_state);
             CHECK(holed_session.document().revision() == holed_revision);
             CHECK(holed_session.undoDepth() == holed_undo);
+
+            // Face REMOVE must discard just the transient Face gesture
+            // while retaining the independently acquired manual Edge.
+            CHECK(pg_remove->isEnabled());
+            reply = workbench.submitCadInput(
+                "REMOVE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 1")));
+            CHECK(!pg_face_detail->text().contains(
+                QStringLiteral("Hole 1 Edge 1")));
+            CHECK(holed_session.document().state() == holed_state);
+            CHECK(holed_session.undoDepth() == holed_undo);
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 6")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Hole 2 Edge 1: supported")));
+            CHECK(pg_finish->isEnabled());
 
             // Return to manual Edge selection before Finish. The existing
             // Face gesture must stay authoritative, and the Viewer must
