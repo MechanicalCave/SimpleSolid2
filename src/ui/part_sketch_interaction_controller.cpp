@@ -6747,9 +6747,13 @@ void PartSketchInteractionController::notifyStateChanged() {
     refreshSnapInferencePresentation();
 
     if (viewport_controller_ != nullptr) {
-        if (!profile_session_) {
+        if (!profile_session_ || !ensureProfileAnalysis()) {
+            // An unavailable/currently unresolved linked Sketch cannot
+            // display a stale Profile draft/hover from the saved seed.
             viewport_controller_->clearProfileDraftPreview();
         } else {
+            const auto* current_model =
+                viewport_controller_->currentSketchInteractionModel();
             std::optional<sketch::RegionCandidate2D> preview;
 
             if (profile_session_->options.highlight_on_hover &&
@@ -6758,10 +6762,10 @@ void PartSketchInteractionController::notifyStateChanged() {
                 preview = profile_session_->hover_result->region;
             } else if (
                 profile_session_->draft_intent &&
-                activeSketch() != nullptr) {
+                current_model != nullptr) {
                 const auto resolved =
                     part::resolveProfileRegionIntent(
-                        activeSketch()->model,
+                        *current_model,
                         *profile_session_->draft_intent);
                 if (resolved.valid()) {
                     preview = resolved.region;
