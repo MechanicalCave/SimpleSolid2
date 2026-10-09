@@ -43,6 +43,9 @@
 - **C3 linked Sketch context (post-#1998, validation pending):** Sketch Select with one linked target exposes a read-only source Feature stage/current status and an exact-source `Break Link` button. The button invokes `BreakProjectedEdgeLinkCommand` with current Document revision + SketchId + selected EntityId; no stale model seed is supplied. Native OCCT regression now tests real linked Sketch mouse selection, Break Link result, retained current geometry and one Undo/Redo entry.
 - These new keyboard/C3 code paths **do not inherit FULL #1998's PASS**. Native exact-head FOCUSED below must pass, and all PG-01C C2/C4 remaining acceptance and final FULL are mandatory. Issue #302 FAST registry remains separate, never waived.
 
+- **Native UX checkpoint proven on HEAD `139ebeada252d48afb651ed3e2f1c5d778c85698`:** [Windows FOCUSED #2007](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37930410521) **PASS** for `pg01c.native_project_edge_command`: exact material Edge cursor, staged Esc then tool-exit Esc, toolbar/Command Line parity, one atomic Finish/Undo/Redo, real linked Sketch entity selection and Break Link/Undo/Redo. This focused PASS does **not** replace final Windows FULL.
+- **Global focused Command Line buffer priority:** UI regression `wb02.global_cad_input_ui` asserts first Esc clears typed token but does not dispatch, second empty-buffer Esc dispatches `ESC` through the same semantic CAD endpoint with focus retained. Its exact-head Windows FOCUSED result is requested in the commit below.
+
 ## Validation obligations
 
 1. A real upstream OCCT Line/Circle/Arc source with a deliberately different persisted seed: its linked Sketch display and Profile fill must match **current** derived geometry and source stage.
