@@ -5606,24 +5606,46 @@ public:
 
         for (const auto& group :
              body_topology_overlay_scene_.groups) {
+            // Every Project Geometry highlight belongs to the same
+            // generation-scoped overlay seam as feature contribution,
+            // but has a distinct, unmistakable supported/skip tone.
             const bool selected =
                 group.role ==
                 viewer::BodyTopologyOverlayRole::
                     feature_contribution_selected;
+            const bool supported =
+                group.role ==
+                viewer::BodyTopologyOverlayRole::
+                    project_geometry_supported;
+            const bool unsupported =
+                group.role ==
+                viewer::BodyTopologyOverlayRole::
+                    project_geometry_unsupported;
             const Quantity_Color color =
-                selected
+                unsupported
                     ? Quantity_Color{
-                          0.24, 0.88, 0.38,
-                          Quantity_TOC_RGB}
-                    : Quantity_Color{
-                          0.42, 0.96, 0.54,
-                          Quantity_TOC_RGB};
+                          1.0, 0.30, 0.23, Quantity_TOC_RGB}
+                    : supported
+                        ? Quantity_Color{
+                              0.16, 0.80, 0.98, Quantity_TOC_RGB}
+                        : selected
+                            ? Quantity_Color{
+                                  0.24, 0.88, 0.38,
+                                  Quantity_TOC_RGB}
+                            : Quantity_Color{
+                                  0.42, 0.96, 0.54,
+                                  Quantity_TOC_RGB};
             const double transparency =
-                selected ? 0.34 : 0.52;
+                unsupported || supported
+                    ? 0.16 : (selected ? 0.34 : 0.52);
             const double edge_width =
-                selected ? 3.4 : 2.4;
+                unsupported ? 5.2
+                    : supported ? 3.8
+                    : selected ? 3.4 : 2.4;
             const double point_size =
-                selected ? 10.0 : 8.0;
+                unsupported ? 12.0
+                    : supported ? 10.0
+                    : selected ? 10.0 : 8.0;
 
             for (const auto token :
                  group.tokens) {
