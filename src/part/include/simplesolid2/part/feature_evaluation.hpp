@@ -372,9 +372,20 @@ enum class MaterialFaceBoundaryStatus {
     material_edge_unavailable,
 };
 
+struct MaterialFaceBoundaryMember final {
+    // Transient only; the material reference is the sole authored identity.
+    kernel::RuntimeEdgeToken current_edge;
+    MaterialEdgeReference reference;
+    bool reversed{false};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return current_edge.valid() && reference.valid();
+    }
+};
+
 struct MaterialFaceBoundaryWire final {
     bool outer{false};
-    std::vector<MaterialEdgeReference> edges;
+    std::vector<MaterialFaceBoundaryMember> edges;
 };
 
 struct MaterialFaceBoundaryAdmission final {
