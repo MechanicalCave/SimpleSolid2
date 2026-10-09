@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "part_viewport_controller.hpp"
 
 
 #include <simplesolid2/application/document_session.hpp>
@@ -1038,6 +1039,34 @@ int main(int argc, char* argv[]) {
         pg_profile_sketch_item->setSelected(true);
         pg_action->trigger();
         QApplication::processEvents();
+        // Verify the exact scene authority supplied to Profile before
+        // diagnosing any mouse-to-Sketch coordinate routing.
+        ui::PartViewportController* pg_ui_controller = nullptr;
+        for (auto* object :
+             workbench.findChildren<QObject*>()) {
+            if (auto* candidate =
+                    dynamic_cast<ui::PartViewportController*>(
+                        object)) {
+                pg_ui_controller = candidate;
+                break;
+            }
+        }
+        CHECK(pg_ui_controller);
+        const auto* pg_ui_model =
+            pg_ui_controller->currentSketchInteractionModel();
+        std::cerr << "PG01C_PROFILE_SCENE_DEBUG"
+                  << " current_scene=" << (pg_ui_model != nullptr)
+                  << " lines=" << (pg_ui_model
+                                     ? pg_ui_model->state().lines.size()
+                                     : 0U)
+                  << " regions=" << (pg_ui_model
+                                       ? sketch::analyzeRegions(
+                                             *pg_ui_model).regions.size()
+                                       : 0U)
+                  << std::endl;
+        CHECK(pg_ui_model);
+        CHECK(sketch::analyzeRegions(*pg_ui_model)
+                  .regions.size() == 1U);
         pg_reply = workbench.submitCadInput(
             "PROFILE", workbench.cadInputContextGeneration());
         CHECK(pg_reply.accepted);
