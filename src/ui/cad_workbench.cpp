@@ -5479,9 +5479,11 @@ void CadWorkbench::buildUi() {
     QObject::connect(
         project_edge_remove_button_, &QPushButton::clicked,
         this, [this] {
-            if (viewport_controller_ &&
-                viewport_controller_->
-                    removePrimaryBodyTopologyToolSelection()) {
+            if (project_edge_face_mode_) {
+                removeProjectFaceSelection();
+            } else if (viewport_controller_ &&
+                       viewport_controller_->
+                           removePrimaryBodyTopologyToolSelection()) {
                 tryStageProjectEdgeSelection();
             }
         });
@@ -9670,6 +9672,24 @@ void CadWorkbench::clearProjectEdgeSelection() {
     notifyCadInputContextChanged();
 }
 
+void CadWorkbench::removeProjectFaceSelection() {
+    if (!project_edge_active_ || !project_edge_face_mode_ ||
+        !viewport_controller_ || !project_edge_face_pick_) {
+        return;
+    }
+    project_edge_face_pick_.reset();
+    project_edge_face_membership_.reset();
+    project_edge_face_sources_.clear();
+    project_edge_face_skipped_.clear();
+    project_edge_sources_ = project_edge_manual_sources_;
+    viewport_controller_->clearBodyTopologyToolSelection();
+    refreshProjectEdgePreview();
+    syncProjectEdgeUi();
+    notifyCadInputContextChanged();
+    setStatusText(QStringLiteral(
+        "PROJECT Face removed; prior manual Edge sources preserved."));
+}
+
 void CadWorkbench::refreshProjectEdgePreview() {
     project_edge_preview_valid_ = false;
     if (viewport_controller_ == nullptr) {
@@ -10124,9 +10144,11 @@ void CadWorkbench::syncProjectEdgeUi() {
                 : 0U;
         project_edge_selection_label_->setText(
             QStringLiteral(
-                "Linked material Edges: %1 | Face wires: %2 | Unsupported skipped: %3")
+                "Material Edges selected: %1 | Face wires: %2 (outer 1, holes %3) | Unsupported skipped: %4")
                 .arg(static_cast<qulonglong>(count))
                 .arg(static_cast<qulonglong>(face_wires))
+                .arg(static_cast<qulonglong>(
+                    face_wires == 0U ? 0U : face_wires - 1U))
                 .arg(static_cast<qulonglong>(
                     project_edge_face_skipped_.size())));
     }
@@ -10217,6 +10239,13 @@ CadWorkbench::submitProjectEdgeCadInput(std::string_view text) {
         return {true, {}};
     }
     if (keyword == "REMOVE") {
+        if (project_edge_face_mode_) {
+            if (!project_edge_face_pick_) {
+                return {false, "REMOVE requires one staged planar Face."};
+            }
+            removeProjectFaceSelection();
+            return {true, {}};
+        }
         if (!viewport_controller_ ||
             !viewport_controller_->removePrimaryBodyTopologyToolSelection()) {
             return {false, "REMOVE requires one staged material Edge."};
