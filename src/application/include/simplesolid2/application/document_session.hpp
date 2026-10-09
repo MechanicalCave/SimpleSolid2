@@ -125,6 +125,14 @@ struct BreakProjectedEdgeLinkCommand final {
     core::DocumentRevision expected_revision;
 };
 
+// One atomic transaction/Undo for any number of linked targets.
+// Duplicate, unlinked or unavailable sources reject the entire batch.
+struct BreakProjectedEdgeLinksCommand final {
+    sketch::SketchId sketch_id;
+    std::vector<sketch::EntityId> entity_ids;
+    core::DocumentRevision expected_revision;
+};
+
 struct SetSketchEntityRoleCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
@@ -654,6 +662,9 @@ public:
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] BreakProjectedEdgeLinkResult execute(
         const BreakProjectedEdgeLinkCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] BreakProjectedEdgeLinkResult execute(
+        const BreakProjectedEdgeLinksCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const SetSketchEntityRoleCommand& command);
