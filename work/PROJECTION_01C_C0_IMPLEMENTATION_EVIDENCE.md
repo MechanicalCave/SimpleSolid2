@@ -36,6 +36,13 @@
 - Test is **pending focused Windows validation**; no native PG-01C PASS claim until actual runner output confirms the asserted scenario.
 - Existing native test name is `pm05f_r2.native_workbench_edit` (not `pm05f.r2_native_workbench_edit`); focused request below uses the registered name. The independent FAST target registry issue #302 remains unchanged.
 
+## Latest Owner D2-E / C3 implementation checkpoint (2026-10-09)
+
+- **Real Edge C1 native PASS:** [Windows FULL #1998](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37927423165) exact HEAD `6c649d7df67d0d3576ef011929a4a12a9c28095d`, 25/25 Core, 57/57 Kernel, **114/114 Desktop** (includes `pg01c.native_project_edge_command` real OCCT mouse pick, atomic Finish, Undo/Redo). Historical FULL #1996 RED at `pg_picked`, fixed by Project-only Sketch pointer `presentation_selection` routing; restored to ordinary Sketch `spatial_tool_input` on exit.
+- **D2-E stage hierarchy (post-#1998, validation pending):** Empty Command Line Esc cancels currently staged sources first; second Esc with no source exits `PROJECT`; explicit `CANCEL` exits immediately. Focused global Command Line with nonempty input clears the text **only** on first Esc and dispatches its subsequent empty-buffer `ESC` through the same semantic endpoint. Native test now exercises first/second Esc and toolbar restart; shared Command Line UI test checks focused-text-first Esc.
+- **C3 linked Sketch context (post-#1998, validation pending):** Sketch Select with one linked target exposes a read-only source Feature stage/current status and an exact-source `Break Link` button. The button invokes `BreakProjectedEdgeLinkCommand` with current Document revision + SketchId + selected EntityId; no stale model seed is supplied. Native OCCT regression now tests real linked Sketch mouse selection, Break Link result, retained current geometry and one Undo/Redo entry.
+- These new keyboard/C3 code paths **do not inherit FULL #1998's PASS**. Native exact-head FOCUSED below must pass, and all PG-01C C2/C4 remaining acceptance and final FULL are mandatory. Issue #302 FAST registry remains separate, never waived.
+
 ## Validation obligations
 
 1. A real upstream OCCT Line/Circle/Arc source with a deliberately different persisted seed: its linked Sketch display and Profile fill must match **current** derived geometry and source stage.
