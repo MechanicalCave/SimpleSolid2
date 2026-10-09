@@ -1344,6 +1344,10 @@ void CadWorkbench::buildUi() {
 
     tree_controller_ =
         new PartDocumentTreeController(*document_tree_, this);
+    tree_controller_->setProfileEvaluationProvider(
+        [this](part::ProfileId profile_id) {
+            return evaluateCurrentProfile(profile_id);
+        });
     tree_controller_->setResultHandler(
         [this](
             const application::DocumentSessionResult& result,
