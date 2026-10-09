@@ -1,6 +1,6 @@
 # PG-01B — Associative Sketch implementation evidence
 
-**Status:** ACTIVE — B1–B5 native semantics and cold v15 source-driven replay characterized; old-schema fixture compatibility repaired after FULL revealed old current-schema assertions. Latest source FOCUSED #1967 PASS 1/1; broader updated-head FAST, exact-head FULL and Owner sign-off still OPEN.
+**Status:** ACTIVE — B1–B5 native source/identity semantics and v15 cold rebuild FOCUSED PASS; current-fixture schema migrations repaired. FAST #1968 RED 89/93 on stale warm-cache executables not rebuilt by ss2_tests_fast; current exact-head FULL and Owner PASS still OPEN. PR metadata carries future closure result.
 **Current tested source:** `29da443224e1ccc29c91df2273002f9a0b6f7cc1` (FOCUSED #1967) (draft [PR #301](https://github.com/MechanicalCave/SimpleSolid2/pull/301))
 **Owner D2 + contract acceptance:** 2026-10-09 `zatwierdzam - kontynuuj`
 **PG-01A baseline:** main `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`, Owner final PASS, FULL #1932 195/195.
@@ -36,7 +36,8 @@
 - [FOCUSED #1965](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37913890210) on `a18045d90ab7e42b53af37601cd2fe1850246e58`: **RED 0/1**, exposed malformed test **v12 fixture** assembled by relabeling v15 JSON while retaining new `projected_edges` member. Production parser correctly rejected the extra field. Do not weaken old schema validation.
 - [FOCUSED #1966](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37914184345) on `286caba94aebee4c065d967608c646f638251312`: **PASS 1/1**, v12 migration fixture now strips `projected_edges` **only after asserting its array is empty**; loaded legacy document identities remain verified.
 - [FOCUSED #1967](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37914513902) on `29da443224e1ccc29c91df2273002f9a0b6f7cc1`: **PASS 1/1**, old v8/v9 fixture construction updated with the same no-linked-data-loss check. Matching v9/v11 fixtures for Datum/Axis suites also corrected; full-suite verification pending.
-- **Next:** current-source evidence-sync FAST; then one Ready-for-Review exact-head FULL on stable PR. Do not claim schema migration suites or Owner PG-01B PASS before the full outcome. PG-01C/D/E/PM-06 remain gated.
+- [FAST #1968](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37914810606) on `56dadd47b9946830f9ebe3cb43fe89dbaf4004de`: **RED 89/93**, four tests (`pm05b3.generated_surface_reference_v14`, `pm03e.datum_backed_sketch`, `pm04a.axis_schema_v12`, `pm03a.datum_schema_v10`) reported **old** `current_schema_version == 14` assertions. **Proven stale executables:** checked-out source at the exact HEAD instead asserts 15; CI builds `ss2_tests_fast` and runs `ctest -L tier-fast -NoBuild`; FAST build log has **no** builds of these four test targets even though CTest executes them from warm `D:\\SS2Build\\desktop-debug`. This is a FAST execution/build registry mismatch, not evidence of new Part source behavior. **Do not claim PASS**; keep CI policy/CMake unchanged within PG-01B. One Ready-for-Review FULL, which builds all 113 Desktop executables, must verify current source. A separate Owner-authorized CI registry remediation may be proposed later.
+- **Next:** one stable exact-head Windows FULL and Owner PG-01B final PASS after results, recording failure if current real binaries expose additional migration issues. Do not edit unrelated Viewer or CI registry as part of PG-01B. PG-01C/D/E/PM-06 remain gated.
 
 ## Implemented semantic boundaries
 

@@ -6,7 +6,7 @@
 **Foundation:** §7.2/§7.5 accepted Part-associative DIRECTION, §7.3 Assembly snapshot unchanged
 **Program:** Part Modeling v1 roadmap v1.30, Project Geometry before PM-06
 **D2 authority:** `work/PROJECTION_01B_ASSOCIATIVITY_DESIGN_PROPOSAL.md` §7 five decisions explicitly Owner-accepted on 2026-10-09 (`zatwierdzam - kontynuuj`)
-**Current phase:** B1–B5 semantics/native FOCUSED through #1961 PASS; v15 current-schema regression and true older-fixture migration fixes FOCUSED #1966/#1967 PASS. Earlier FAST #1962 PASS 93/93; FULL #1963 RED on six historical tests still expecting current v14, with v8/v9/v11/v12 fixture corrections now made and full suite **not yet rerun**. Evidence `work/PROJECTION_01B_PROGRESS_EVIDENCE.md`; current-source FAST and exact-head FULL, Owner PG-01B final PASS still OPEN.
+**Current phase:** B1–B5 semantics/native FOCUSED through #1961 PASS; v15 current-schema regression and true older-fixture migration fixes FOCUSED #1966/#1967 PASS. Earlier FAST #1962 PASS 93/93; FULL #1963 RED on six historical current-v14 assertions, v8/v9/v11/v12 fixture corrections FOCUSED #1966/#1967 PASS. FAST #1968 RED 89/93 due to four stale warm-cache test executables not rebuilt in ss2_tests_fast despite CTest selecting them; **not** an accepted PASS and no CI policy/CMake mutation authorized. Current-source exact-head FULL and Owner final acceptance remain OPEN. Evidence `work/PROJECTION_01B_PROGRESS_EVIDENCE.md`; current-source FAST and exact-head FULL, Owner PG-01B final PASS still OPEN.
 **Activation:** `work/ACTIVE.yaml` references THIS Work Contract after a dedicated activation commit. Source changes can follow activation only within PG-01B B1–B5. PG-01C/D/E remain separately gated.
 
 ## Goal and scope
