@@ -1087,6 +1087,19 @@ int main(int argc, char* argv[]) {
             (pg_origin_a.u + pg_origin_b.u + pg_side.u) * 0.5,
             (pg_origin_a.v + pg_origin_b.v + pg_side.v) * 0.5,
             0.0};
+        // Prove the world-space point is inside the current
+        // evaluated region before attributing any failure to Qt input.
+        const auto pg_direct_pick = sketch::pickRegion(
+            *pg_ui_model,
+            sketch::analyzeRegions(*pg_ui_model),
+            sketch::Point2{
+                pg_region_world.x, pg_region_world.y});
+        std::cerr << "PG01C_PROFILE_REGION_DIRECT"
+                  << " location=" << static_cast<int>(
+                         pg_direct_pick.location)
+                  << " region=" << pg_direct_pick.region_index.has_value()
+                  << std::endl;
+        CHECK(pg_direct_pick.region_index.has_value());
         const auto pg_region_pos =
             viewport->projectWorldPoint(pg_region_world);
         CHECK(pg_region_pos);
@@ -1109,12 +1122,16 @@ int main(int argc, char* argv[]) {
                   << " status=" << pg_status->text().toStdString()
                   << " result=" << pg_profile_result->text().toStdString()
                   << std::endl;
-        CHECK(pg_profile_result->text().contains(
-            QStringLiteral("Status: Valid")));
         QTest::mouseClick(
             viewport, Qt::LeftButton,
             Qt::NoModifier, pg_region_pixel);
         QApplication::processEvents();
+        std::cerr << "PG01C_PROFILE_CLICK_DEBUG"
+                  << " result=" << pg_profile_result->text().toStdString()
+                  << " finish=" << pg_profile_finish->isEnabled()
+                  << std::endl;
+        CHECK(pg_profile_result->text().contains(
+            QStringLiteral("Status: Valid")));
         CHECK(pg_profile_finish->isEnabled());
         CHECK(pg_profile_result->text().contains(
             QStringLiteral("Status: Valid")));
