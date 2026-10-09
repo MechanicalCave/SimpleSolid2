@@ -30,7 +30,13 @@ Both `TopAbs_FORWARD` and `TopAbs_REVERSED` planar material Face orientations we
 
 The activated PG-01D production branch adds `verifyPg01dNativeStrictFaceAndMaterialCatalog` to `tests/pm05f_r2_native_workbench_edit_test.cpp`. The fixture constructs a real Extrude Add rectangle and a circular one-sided **through Cut**, evaluates the exact current `BodyStageTopologyCatalog`, counts **strict bounded Face IDs separately from Surface-only carrier occurrences**, checks current material Edges *only* via `part::authorMaterialEdgeReference`, verifies per-stage binding and unique semantic references, and prints `PG01D_D0_NATIVE_STRICT_FACE_CATALOG_PASS`.
 
-CI FAST #2117 on this branch is **PASS**, but FAST does **not** exercise the full-only native Qt/OCCT target. A separate FOCUSED request for existing `pm05f_r2_native_workbench_edit_test` / `pg01c.native_project_edge_command` is therefore required before any native SS2 D0 PASS claim. The test deliberately does **not** claim per-Face oriented wire membership until the D1 provider query exists.
+CI FAST #2117 **PASS** and Windows native FOCUSED #2118 **PASS 1/1** on exact branch head `6adf273c2fa1c9f274324f0ea7c6997bbf949b17`, using existing `pg01c.native_project_edge_command`. This establishes the compiled SS2 native strict Face/material Edge **catalog characterization** only. The present D1 candidate adds a separate scoped, provider-neutral `IFaceBoundaryQuery` and an **unverified** real Cut Face-wire→strict material Edge test. The new D1 FOCUSED gate has not yet passed; do not conflate its result with #2118.
+
+## D1 read-only native provider candidate — source authored, RED→GREEN pending
+
+The provider now owns an optional, revision-scoped `IFaceBoundaryQuery` seam in `src/kernel/include/simplesolid2/kernel/face_boundary.hpp` and `src/kernel_occt/solid_modeling_kernel.cpp`. It requires an **exact same current RuntimeSolidHandle** and current runtime Face token, checks planar Face geometry, reads actual oriented `TopoDS_Wire` uses via `BRepTools::OuterWire` and `BRepTools_WireExplorer`, validates full native wire-use counts, and maps each use to exactly one current provider Edge token by `TopoDS_Shape::IsSame`. It does not author Sketch objects or certify semantic material Edge identity.
+
+The new native Workbench test cross-checks the query against `BodyStageTopologyCatalog` and calls **only** `authorMaterialEdgeReference` for each candidate. It requires a real through-Cut holed Face with strict bounded Face address and an entire hole loop of supported material Edges; if those are absent, CI will remain **RED** and PG-01D Face UI implementation must STOP or request bounded Owner D2. A mismatched provider generation must report `provider_mismatch`.
 
 ## Mandatory remaining D0 tests / STOP
 
