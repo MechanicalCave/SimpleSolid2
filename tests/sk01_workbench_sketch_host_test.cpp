@@ -585,6 +585,15 @@ int main(int argc, char* argv[]) {
     auto* select_sketch_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("selectSketchToolButton"));
+    auto* project_edge_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeToolButton"));
+    auto* project_edge_operations =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("projectEdgeOperationsWidget"));
+    auto* project_edge_finish =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeFinishButton"));
     auto* regular_role_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("sketchRegularRoleButton"));
@@ -740,6 +749,9 @@ int main(int argc, char* argv[]) {
             QStringLiteral("circleSizeModeCombo"));
 
     CHECK(sketch_button != nullptr);
+    CHECK(project_edge_button != nullptr);
+    CHECK(project_edge_operations != nullptr);
+    CHECK(project_edge_finish != nullptr);
     CHECK(cancel_button != nullptr);
     CHECK(finish_button != nullptr);
     CHECK(finish_line_button != nullptr);
@@ -924,6 +936,26 @@ int main(int argc, char* argv[]) {
         viewport->lastStandardView() ==
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
+
+    // PG-01C C1: the single Sketch Project Geometry launcher is visible,
+    // but an unavailable exact modeling provider must prevent entering a
+    // fake authoring state through either toolbar or Command Line.
+    CHECK(!project_edge_button->isHidden());
+    CHECK(!project_edge_button->isEnabled());
+    CHECK(project_edge_operations->isHidden());
+    const auto project_guard_state = session->document().state();
+    const auto project_guard_revision = session->document().revision();
+    const auto project_guard_undo = session->undoDepth();
+    const auto project_denied =
+        workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+    CHECK(!project_denied.accepted);
+    CHECK(!project_edge_button->isChecked());
+    CHECK(project_edge_operations->isHidden());
+    CHECK(!workbench.acceptsEmptyCadInput());
+    CHECK(session->document().state() == project_guard_state);
+    CHECK(session->document().revision() == project_guard_revision);
+    CHECK(session->undoDepth() == project_guard_undo);
 
     // SR-03 reflow is presentation-only: active Sketch identity, history and
     // dirty state survive narrow -> normal transitions unchanged.
