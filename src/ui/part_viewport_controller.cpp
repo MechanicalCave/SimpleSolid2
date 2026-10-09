@@ -4807,6 +4807,7 @@ PartViewportController::rankedBodyTopologyCandidates(
             continue;
         }
         if (body_topology_edge_draft_mode_ &&
+            !body_topology_face_pick_only_ &&
             candidate.kind !=
                 viewer::BodyTopologyPresentationKind::
                     edge) {
@@ -4825,7 +4826,8 @@ PartViewportController::rankedBodyTopologyCandidates(
                 found->second)) {
             continue;
         }
-        if (body_topology_edge_draft_mode_) {
+        if (body_topology_edge_draft_mode_ &&
+            !body_topology_face_pick_only_) {
             if (!body_topology_catalog_cache_) {
                 continue;
             }
@@ -4887,6 +4889,11 @@ void PartViewportController::setBodyTopologyFacePickOnly(
         return;
     }
     body_topology_face_pick_only_ = enabled;
+    // The Edge-draft flag owns the legal tool-stage scene lease, but a
+    // Face query must not inherit the Viewer's Edge-only pick filter.
+    if (body_topology_edge_draft_mode_ && viewport_ != nullptr) {
+        viewport_->setBodyTopologyEdgePickMode(!enabled);
+    }
     clearBodyTopologyPreselection();
 }
 
@@ -5123,6 +5130,63 @@ PartViewportController::selectedMaterialEdgeReferences() const {
         return std::nullopt;
     }
     return result;
+}
+
+part::MaterialFaceBoundaryAdmission
+PartViewportController::selectedMaterialFaceBoundaryAdmission() const {
+    using Status = part::MaterialFaceBoundaryStatus;
+    const auto fail = [](Status status) {
+        part::MaterialFaceBoundaryAdmission result;
+        result.status = status;
+        return result;
+    };
+    if (session_ == nullptr ||
+        !body_scene_revision_ ||
+        *body_scene_revision_ != session_->document().revision() ||
+        !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !body_scene_cache_ ||
+        !body_scene_cache_->generation.valid() ||
+        (body_scene_cache_->purpose !=
+             viewer::BodyScenePurpose::current_body &&
+         !(body_topology_edge_draft_mode_ &&
+           body_scene_cache_->purpose ==
+               viewer::BodyScenePurpose::tool_stage)) ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return fail(Status::invalid_stage);
+    }
+    const auto selected = bodyTopologySelection();
+    if (selected.size() != 1U ||
+        !selected.front().valid() ||
+        selected.front().kind !=
+            viewer::BodyTopologyPresentationKind::face ||
+        selected.front().generation !=
+            body_scene_cache_->generation) {
+        return fail(Status::face_unavailable);
+    }
+    const auto stage = body_topology_catalog_cache_->stage;
+    if (stage.kind != part::BodyStageKind::after_feature ||
+        !stage.feature_id || !stage.feature_id->valid()) {
+        return fail(Status::invalid_stage);
+    }
+    const auto* feature =
+        part_evaluation_cache_->findFeature(*stage.feature_id);
+    if (feature == nullptr || !feature->result_topology ||
+        feature->result_topology->stage != stage) {
+        return fail(Status::invalid_stage);
+    }
+    auto* provider = dynamic_cast<kernel::IFaceBoundaryQuery*>(
+        solid_modeling_kernel_);
+    if (provider == nullptr) {
+        return fail(Status::native_boundary_unavailable);
+    }
+    return part::inspectMaterialFaceBoundary(
+        *feature,
+        kernel::RuntimeFaceToken{
+            selected.front().runtime_token_value},
+        *provider);
 }
 
 void PartViewportController::clearBodyTopologyPreselection() {
