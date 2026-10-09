@@ -1,6 +1,6 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 COMPLETED — PASS; PM-05 ACTIVE  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 COMPLETED — PASS; PM-04 COMPLETED — PASS; PM-05 COMPLETED — PASS  
 **Version:** 1.29  
 **Owner acceptance:** 2026-10-06 — PM-05A D2 conclusions explicitly accepted; PM-05B authorized. v1.29 is activation-state synchronization only  
 **Previous accepted version:** 1.28 — 2026-10-06  
@@ -129,7 +129,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 5 | **PM-02 — Body Semantic Topology / Face-Supported Sketch** | production semantic topology catalog and picking plus Sketch/Profile on arbitrary resolved planar Body surfaces, reusing PM-01 Extrude Add/Cut | **COMPLETED — PASS; runtime FULL #1473, docs #1474, Owner final manual Windows PASS 2026-10-05** |
 | 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **COMPLETED — PASS; Owner final Windows PASS 2026-10-05; translucent Origin/Datum plane fill deferred as PM-06 presentation polish** |
 | 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | **COMPLETED — PASS; runtime FULL #1578 attempt 2; Owner final Windows PASS 2026-10-06** |
-| 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete explicit multi-Edge Fillet/Chamfer lifecycle with connected-corner, lineage/refine handling and repair | **ACTIVE — Owner accepted 2026-10-06; PM-05A/B/C/D/E COMPLETED — PASS; current checkpoint PM-05F** |
+| 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete explicit multi-Edge Fillet/Chamfer lifecycle with connected-corner, lineage/refine handling and repair | **COMPLETED — Owner final PM-05F PASS 2026-10-09; runtime/docs FULL #1902 195/195, evidence FAST #1903 93/93; see work/PM-05F_EDGE_FEATURES_COMPLETION.md** |
 | 9 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
 
 No package number authorizes mutation by itself.
@@ -518,7 +518,7 @@ PM-04E integrated lifecycle / repair / persistence is **COMPLETED — PASS**. E1
 
 PM-04F Axis-designation remediation / documentation / final acceptance is **COMPLETED — PASS**. Exact final runtime/docs candidate `8d6f082137a573aab08a4eee3b383a9923d98a49` passed Windows FULL #1578 attempt 2 with core 25/25, kernel-native 47/47 and desktop 104/104, including canonical documentation/Product Browser verification. The Owner executed the supported Windows acceptance workflow on 2026-10-06 and reported PASS with no errors. Completion evidence is recorded in `work/PM-04_FINAL_ACCEPTANCE_MATRIX.md`.
 
-PM-04 production mutation authority is closed. PM-05 Edge Features is **ACTIVE** under `work/PM-05_EDGE_FEATURES.md`; PM-05A, PM-05B, PM-05C, PM-05D and PM-05E are COMPLETED — PASS and PM-05F is the only active checkpoint. Datum Axis, Projection and PM-06 remain separately gated.
+PM-04 and PM-05 production mutation authority is closed. PM-05A through PM-05F are **COMPLETED — PASS**, with Owner final PM-05F acceptance 2026-10-09 and completion evidence in `work/PM-05F_EDGE_FEATURES_COMPLETION.md`. Datum Axis, Projection and PM-06 remain separately gated; no new product Work Contract is activated.
 
 ## 16. PM-05 — Edge Features: Fillet / Chamfer
 
@@ -536,9 +536,9 @@ PM-05D is COMPLETED — PASS. Exact candidate `7f57726b368c8a5011f8007369f3de945
 
 PM-05E is COMPLETED — PASS. Exact candidate `88e07b1a2dbdb6ded73d0c2f90dd0a1443242cbe` passed Windows FULL #1721 with core-only 25/25, kernel-native 54/54 and desktop 112/112; final `windows-msvc` aggregate PASS and squash merge #292 is `1a1491f7687f32089c1424025123329c74d7b6ca`. Completion evidence: `work/PM-05E_EDGE_FEATURE_LIFECYCLE_PERSISTENCE_COMPLETION.md`.
 
-PM-05F may now complete the accepted documentation / cumulative automated evidence / Owner supported-Windows acceptance checkpoint on top of the closed E lifecycle/persistence behavior. PM-05 is not closed until the final Owner workflow explicitly PASSes.
+PM-05F has completed documentation, cumulative automated acceptance and final Owner supported-Windows package acceptance (2026-10-09). See `work/PM-05F_EDGE_FEATURES_COMPLETION.md` for the exact evidence and preserved exclusions.
 
-PM-05F must keep runtime semantics frozen except for bounded remediation required by failing final acceptance evidence; PM-06 and excluded PM-05 variants remain separately gated.
+PM-05 runtime semantics remain frozen to the accepted bounded implementation. PM-06, Projection and excluded PM-05 variants remain separately gated. The Owner discussed a possible future Projection-before-PM-06 order, but **no sequencing amendment is approved or applied here**.
 
 ## 17. PM-06 — Part v1 Completion / Published References / Evidence
 

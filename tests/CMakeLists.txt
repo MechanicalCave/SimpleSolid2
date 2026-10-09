@@ -992,6 +992,36 @@ set_tests_properties(pm05e2.cad_workbench_edge_lifecycle PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel"
 )
 
+# PM-05F R2: true Qt/OCCT cursor -> Workbench Edit integration.
+# Batched once with test registration; native HWND requires Windows.
+add_executable(pm05f_r2_native_workbench_edit_test
+    pm05f_r2_native_workbench_edit_test.cpp
+)
+target_include_directories(pm05f_r2_native_workbench_edit_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+target_link_libraries(pm05f_r2_native_workbench_edit_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel_occt
+        simplesolid2_part
+        simplesolid2_ui
+        simplesolid2_viewer
+        simplesolid2_viewer_qt_occt
+        Qt6::Widgets
+        Qt6::Test
+)
+target_compile_features(pm05f_r2_native_workbench_edit_test PRIVATE cxx_std_20)
+add_test(
+    NAME pm05f_r2.native_workbench_edit
+    COMMAND pm05f_r2_native_workbench_edit_test
+)
+set_tests_properties(pm05f_r2.native_workbench_edit PROPERTIES
+    TIMEOUT 90
+    LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel;native"
+)
+
 add_executable(pm05c1_edge_semantic_kernel_test
     pm05c1_edge_semantic_kernel_test.cpp
 )

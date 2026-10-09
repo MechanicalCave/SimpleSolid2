@@ -1252,6 +1252,38 @@ bool PartViewportController::setSolidPreview(
         preview);
 }
 
+bool PartViewportController::setSolidMaterialDeltaPreview(
+    const std::optional<kernel::SolidPresentationMesh>& removed,
+    const std::optional<kernel::SolidPresentationMesh>& added) {
+    if (viewport_ == nullptr ||
+        !body_scene_cache_ ||
+        body_scene_cache_->empty() ||
+        !body_scene_cache_->generation.valid() ||
+        (body_scene_cache_->purpose !=
+             viewer::BodyScenePurpose::current_body &&
+         body_scene_cache_->purpose !=
+             viewer::BodyScenePurpose::tool_stage) ||
+        (!removed && !added)) {
+        return false;
+    }
+    viewer::SolidPreviewScene scene;
+    scene.material_delta = true;
+    scene.tone = viewer::SolidPreviewTone::subtractive;
+    scene.generation = body_scene_cache_->generation;
+    if (removed) {
+        const auto mesh = viewerSolidScene(*removed);
+        if (!mesh) return false;
+        scene.triangles = mesh->triangles;
+    }
+    if (added) {
+        const auto mesh = viewerSolidScene(*added);
+        if (!mesh) return false;
+        scene.added_triangles = mesh->triangles;
+    }
+    return scene.valid() &&
+           viewport_->setSolidPreviewScene(scene);
+}
+
 void PartViewportController::clearSolidPreview() {
     if (viewport_ != nullptr) {
         static_cast<void>(
@@ -4607,6 +4639,9 @@ void PartViewportController::setBodyTopologyEdgeDraftMode(
         return;
     }
     body_topology_edge_draft_mode_ = enabled;
+    if (viewport_ != nullptr) {
+        viewport_->setBodyTopologyEdgePickMode(enabled);
+    }
     if (enabled) {
         body_topology_face_pick_only_ = false;
     }

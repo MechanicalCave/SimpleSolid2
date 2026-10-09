@@ -27,7 +27,10 @@ void check(bool value, const char* expression, int line) {
 }
 #define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
 
-part::PartDocument makeBasePart() {
+part::PartDocument makeBasePart(
+    double width = 40.0,
+    double depth = 30.0,
+    double height = 20.0) {
     auto source =
         part::PartDocument::create(
             core::DocumentId::generate());
@@ -47,7 +50,7 @@ part::PartDocument makeBasePart() {
                 *sketch_created.sketch_id,
                 session.document().revision(),
                 {0.0, 0.0},
-                {40.0, 30.0},
+                {width, depth},
                 sketch::EntityRole::regular,
                 false})
             .ok());
@@ -86,7 +89,7 @@ part::PartDocument makeBasePart() {
                 *profile.profile_id,
                 part::ExtrudeOperation::add,
                 part::OneSidedExtrudeExtent{
-                    core::LengthValue{20.0},
+                    core::LengthValue{height},
                     false}}});
 
     auto restored =
@@ -303,7 +306,8 @@ CaseResult runCase(
     const part::FeatureEvaluation& upstream,
     std::vector<part::MaterialEdgeReference> edges,
     kernel::EdgeFeatureOperation operation,
-    kernel_occt::OcctSolidModelingKernel& kernel) {
+    kernel_occt::OcctSolidModelingKernel& kernel,
+    std::optional<double> parameter = std::nullopt) {
     CaseResult result;
     result.requested_count = edges.size();
     std::sort(edges.begin(), edges.end());
@@ -312,7 +316,7 @@ CaseResult runCase(
     if (operation == kernel::EdgeFeatureOperation::fillet) {
         const part::FilletFeature definition{
             edges,
-            core::LengthValue{2.0}};
+            core::LengthValue{parameter.value_or(2.0)}};
         const auto resolved =
             part::resolveKernelEdgeFeatureInput(
                 definition,
@@ -324,7 +328,7 @@ CaseResult runCase(
     } else {
         const part::ChamferFeature definition{
             edges,
-            core::LengthValue{1.5}};
+            core::LengthValue{parameter.value_or(1.5)}};
         const auto resolved =
             part::resolveKernelEdgeFeatureInput(
                 definition,
@@ -402,9 +406,10 @@ CaseResult runCase(
             base,
             edges,
             operation,
-            operation == kernel::EdgeFeatureOperation::fillet
-                ? 2.0
-                : 1.5);
+            parameter.value_or(
+                operation == kernel::EdgeFeatureOperation::fillet
+                    ? 2.0
+                    : 1.5));
     const auto evaluation =
         part::evaluatePart(
             document,
@@ -839,6 +844,59 @@ int main() {
     CHECK(adjacent_fillet_failures == 0U);
     CHECK(fillet_triple_successes == triples.size());
     CHECK(chamfer_triple_successes == triples.size());
+
+    // PM-05F R2-A: compare geometrically reasonable radii on actual cubes,
+    // rather than only the 40x30x20 control prism. A provider-valid exact
+    // corner result must never become a failed/absent product Body stage.
+    for (const double cube_size : {10.0, 20.0}) {
+        const auto cube =
+            makeBasePart(
+                cube_size, cube_size, cube_size);
+        const auto cube_eval =
+            part::evaluatePart(cube, kernel);
+        CHECK(cube_eval.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(cube_eval.features.size() == 1U);
+        CHECK(cube_eval.features.front().result_topology);
+        const auto corner =
+            trihedralReferences(
+                *cube_eval.features.front().result_topology);
+        CHECK(corner.size() == 3U);
+
+        for (const double radius :
+             {1.0, 2.0, 3.0, 4.0}) {
+            if (radius * 2.0 >= cube_size) {
+                continue;
+            }
+            const auto diagnostic =
+                runCase(
+                    cube,
+                    cube_eval.features.front(),
+                    corner,
+                    kernel::EdgeFeatureOperation::fillet,
+                    kernel,
+                    radius);
+            std::cout
+                << "PM05F_R2_CUBE_CORNER"
+                << " size=" << cube_size
+                << " radius=" << radius
+                << " provider_ok="
+                << (diagnostic.provider_ok ? 1 : 0)
+                << " product_status="
+                << static_cast<int>(
+                       diagnostic.product_status)
+                << " complete="
+                << (diagnostic.product_topology_complete ? 1 : 0)
+                << '\n';
+            if (diagnostic.provider_ok) {
+                CHECK(
+                    diagnostic.product_status ==
+                    part::FeatureEvaluationStatus::up_to_date);
+                CHECK(
+                    diagnostic.product_topology_complete);
+            }
+        }
+    }
 
     std::cout
         << "PM05F_FILLET_DIAGNOSTIC_PASS"

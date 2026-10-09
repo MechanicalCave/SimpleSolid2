@@ -227,6 +227,49 @@ int main(int argc, char* argv[]) {
                            seam_token;
             }));
 
+    // PM-05F R2-D: native Viewer installs an atomic two-color local
+    // material-difference preview for the current generation. These
+    // stand-in triangles exercise presentation binding, not B-Rep booleans.
+    viewer::SolidPreviewScene delta_preview;
+    delta_preview.material_delta = true;
+    delta_preview.generation = body_scene.generation;
+    delta_preview.tone =
+        viewer::SolidPreviewTone::subtractive;
+    delta_preview.triangles.push_back(
+        body_scene.triangles.front());
+    delta_preview.added_triangles.push_back(
+        body_scene.triangles.front());
+    CHECK(delta_preview.valid());
+    CHECK(widget.setSolidPreviewScene(delta_preview));
+    auto material_delta_diagnostics =
+        widget.runtimeDiagnostics();
+    CHECK(material_delta_diagnostics.solid_preview_displayed);
+    CHECK(material_delta_diagnostics.solid_preview_style_expected);
+    CHECK(material_delta_diagnostics.solid_committed_displayed);
+    CHECK(material_delta_diagnostics.solid_shading_styles_isolated);
+
+    // One-sided differences do not require a fake zero-area second mesh.
+    auto added_only = delta_preview;
+    added_only.triangles.clear();
+    CHECK(added_only.valid());
+    CHECK(widget.setSolidPreviewScene(added_only));
+    CHECK(widget.runtimeDiagnostics().solid_preview_displayed);
+    CHECK(widget.runtimeDiagnostics().solid_preview_style_expected);
+    CHECK(widget.runtimeDiagnostics().solid_shading_styles_isolated);
+    auto removed_only = delta_preview;
+    removed_only.added_triangles.clear();
+    CHECK(removed_only.valid());
+    CHECK(widget.setSolidPreviewScene(removed_only));
+    CHECK(widget.runtimeDiagnostics().solid_preview_style_expected);
+    CHECK(widget.setSolidPreviewScene(delta_preview));
+    auto stale_delta = delta_preview;
+    stale_delta.generation = {67U};
+    CHECK(!widget.setSolidPreviewScene(stale_delta));
+    CHECK(widget.runtimeDiagnostics().solid_preview_displayed);
+    CHECK(widget.setSolidPreviewScene(
+        viewer::SolidPreviewScene{}));
+    CHECK(!widget.runtimeDiagnostics().solid_preview_displayed);
+
     // PM-02D4: Feature Contribution is a deactivated presentation
     // overlay over the already-installed BodyScene token. It must not create
     // another hit target or perturb the neutral topology query.
@@ -390,23 +433,29 @@ int main(int argc, char* argv[]) {
         last_body_preselection_point.y ==
         body_center.y);
 
+    // Focus and drain unrelated OS/Qt events *before* arming the
+    // deterministic hover. A queued real OS cursor move may otherwise
+    // clear this preselection before Tab reaches QWidget::event().
     widget.setFocus(Qt::MouseFocusReason);
     QApplication::processEvents();
+    sendMouseMove(widget, body_center);
     QTest::keyClick(
         &widget,
         Qt::Key_Tab,
         Qt::NoModifier);
-    QApplication::processEvents();
     CHECK(cycle_forward == 1);
     CHECK(cycle_reverse == 0);
 
+    // Keep the native hover armed between focus-cycle gestures instead of
+    // draining unrelated global mouse events in the middle of the test.
+    sendMouseMove(widget, body_center);
     QTest::keyClick(
         &widget,
         Qt::Key_Tab,
         Qt::ShiftModifier);
-    QApplication::processEvents();
     CHECK(cycle_forward == 1);
     CHECK(cycle_reverse == 1);
+    QApplication::processEvents();
 
     // PM-02J R4: a visible box corner must keep stable Vertex/Edge
     // candidates and hover preselection in an oblique engineering view.
@@ -574,6 +623,202 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // PM-05F R2-E: real Qt/OCCT cursor hit-testing on a curved circular
+    // material boundary. The triangulation is intentionally coarser than
+    // the authored Edge polyline, as in a normal cylindrical Body display.
+    // The test checks two zooms and an occluded rear/bottom boundary.
+    {
+        viewer_qt_occt::QtOcctViewerWidget ring_widget;
+        ring_widget.resize(801, 601);
+        ring_widget.show();
+        QApplication::processEvents();
+
+        constexpr double radius = 10.0;
+        constexpr double top_z = 20.0;
+        constexpr int facets = 64;
+        const double full_turn = 2.0 * std::acos(-1.0);
+
+        viewer::BodyScene ring_scene;
+        ring_scene.generation = {81U};
+        ring_scene.purpose =
+            viewer::BodyScenePurpose::current_body;
+        const viewer::PresentationToken
+            ring_face_token{0x7101U};
+        const viewer::PresentationToken
+            cylinder_face_token{0x7102U};
+        const viewer::PresentationToken
+            top_ring_token{0x7201U};
+        const viewer::PresentationToken
+            bottom_ring_token{0x7202U};
+
+        auto ringPoint = [full_turn](
+            int index,
+            double z) {
+            const double angle =
+                full_turn * static_cast<double>(index) /
+                static_cast<double>(facets);
+            return viewer::Point3{
+                radius * std::cos(angle),
+                radius * std::sin(angle),
+                z};
+        };
+
+        for (int index = 0; index < facets; ++index) {
+            const auto first = ringPoint(index, top_z);
+            const auto next = ringPoint(index + 1, top_z);
+            ring_scene.triangles.push_back(
+                {
+                    {0.0, 0.0, top_z},
+                    first,
+                    next,
+                    {0.0, 0.0, 1.0},
+                    {0.0, 0.0, 1.0},
+                    {0.0, 0.0, 1.0}});
+        }
+        ring_scene.faces.push_back(
+            {
+                ring_face_token,
+                0U,
+                static_cast<std::size_t>(facets)});
+        for (int index = 0; index < facets; ++index) {
+            const auto top_first =
+                ringPoint(index, top_z);
+            const auto top_next =
+                ringPoint(index + 1, top_z);
+            const auto bottom_first =
+                ringPoint(index, 0.0);
+            const auto bottom_next =
+                ringPoint(index + 1, 0.0);
+            const viewer::Vec3 normal{0.0, -1.0, 0.0};
+            ring_scene.triangles.push_back(
+                {
+                    top_first,
+                    bottom_first,
+                    bottom_next,
+                    normal,
+                    normal,
+                    normal});
+            ring_scene.triangles.push_back(
+                {
+                    top_first,
+                    bottom_next,
+                    top_next,
+                    normal,
+                    normal,
+                    normal});
+        }
+        ring_scene.faces.push_back(
+            {
+                cylinder_face_token,
+                static_cast<std::size_t>(facets),
+                static_cast<std::size_t>(2 * facets)});
+
+        viewer::BodyEdgePresentation top_ring{
+            top_ring_token, {}, true, true};
+        viewer::BodyEdgePresentation bottom_ring{
+            bottom_ring_token, {}, true, true};
+        for (int index = 0; index <= 256; ++index) {
+            const double angle =
+                full_turn * static_cast<double>(index) /
+                256.0;
+            const double x = radius * std::cos(angle);
+            const double y = radius * std::sin(angle);
+            top_ring.points.push_back({x, y, top_z});
+            bottom_ring.points.push_back({x, y, 0.0});
+        }
+        ring_scene.edges.push_back(std::move(top_ring));
+        ring_scene.edges.push_back(std::move(bottom_ring));
+        CHECK(ring_scene.valid());
+        CHECK(ring_widget.setBodyScene(ring_scene));
+
+        int ring_clicks = 0;
+        ring_widget.setBodyTopologySelectionIntentHandler(
+            [&ring_clicks,
+             top_ring_token](
+                const viewer::BodyTopologyPickQueryResult& query,
+                viewer::SelectionIntentMode) {
+                CHECK(query.valid());
+                CHECK(query.completed);
+                CHECK(std::any_of(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [top_ring_token](const auto& item) {
+                        return item.token ==
+                               top_ring_token;
+                    }));
+                ++ring_clicks;
+            });
+
+        for (const double scale : {60.0, 35.0}) {
+            const viewer::CameraState camera{
+                viewer::Point3{45.0, -75.0, 55.0},
+                viewer::Point3{0.0, 0.0, 10.0},
+                viewer::Vec3{0.0, 0.0, 1.0},
+                viewer::CameraProjection::orthographic,
+                scale};
+            CHECK(ring_widget.setCameraState(camera));
+            for (const double angle :
+                 {-std::acos(-1.0) / 2.0,
+                  -std::acos(-1.0) / 4.0}) {
+                const viewer::Point3 target{
+                    radius * std::cos(angle),
+                    radius * std::sin(angle),
+                    top_z};
+                const auto screen =
+                    ring_widget.projectWorldPoint(target);
+                CHECK(screen.has_value());
+                const auto query =
+                    ring_widget.queryBodyTopology(
+                        *screen,
+                        viewer::BodyTopologyPickFilter{
+                            false, true, false});
+                CHECK(query.valid());
+                CHECK(query.completed);
+                CHECK(query.generation ==
+                      ring_scene.generation);
+                CHECK(std::any_of(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [top_ring_token](const auto& item) {
+                        return item.token ==
+                               top_ring_token;
+                    }));
+                sendMouseMove(ring_widget, *screen);
+                QTest::mouseClick(
+                    &ring_widget,
+                    Qt::LeftButton,
+                    Qt::NoModifier,
+                    QPoint{
+                        static_cast<int>(std::lround(
+                            screen->x)),
+                        static_cast<int>(std::lround(
+                            screen->y))});
+                QApplication::processEvents();
+                CHECK(ring_clicks > 0);
+            }
+        }
+        CHECK(ring_clicks == 4);
+
+        const auto hidden =
+            ring_widget.projectWorldPoint(
+                {0.0, radius, 0.0});
+        CHECK(hidden.has_value());
+        const auto hidden_query =
+            ring_widget.queryBodyTopology(
+                *hidden,
+                viewer::BodyTopologyPickFilter{
+                    false, true, false});
+        CHECK(hidden_query.valid());
+        CHECK(std::none_of(
+            hidden_query.candidates.begin(),
+            hidden_query.candidates.end(),
+            [bottom_ring_token](const auto& item) {
+                return item.token ==
+                       bottom_ring_token;
+            }));
+        ring_widget.setBodyTopologySelectionIntentHandler({});
+    }
+
     // View Style lives in the same provider-surface HUD family as the
     // navigation controls. Its click emits an action; the callback/controller
     // remains runtime state authority.
@@ -686,6 +931,81 @@ int main(int argc, char* argv[]) {
         diagnostic_body.generation);
     CHECK(diagnostic_query.candidates.empty());
 
+    // PM-05F R2: Edit of an earlier Fillet/Chamfer presents the exact
+    // predecessor Body as a tool_stage scene. Native screen-coordinate
+    // queries and actual mouse clicks must work at that stage, whereas a
+    // diagnostic_prefix remains non-authorable.
+    viewer::BodyScene tool_stage_body = body_scene;
+    tool_stage_body.generation = {79U};
+    tool_stage_body.purpose =
+        viewer::BodyScenePurpose::tool_stage;
+    CHECK(widget.setBodyScene(tool_stage_body));
+    const auto tool_stage_query =
+        widget.queryBodyTopology(
+            body_center,
+            viewer::BodyTopologyPickFilter{
+                false,
+                true,
+                false});
+    CHECK(tool_stage_query.valid());
+    CHECK(tool_stage_query.completed);
+    CHECK(
+        tool_stage_query.generation ==
+        tool_stage_body.generation);
+    CHECK(tool_stage_query.candidates.size() == 1U);
+    CHECK(
+        tool_stage_query.candidates.front().token ==
+        body_edge_token);
+
+    int tool_stage_click_intents = 0;
+    widget.setBodyTopologySelectionIntentHandler(
+        [&tool_stage_click_intents,
+         &tool_stage_body,
+         body_edge_token](
+            const viewer::BodyTopologyPickQueryResult& query,
+            viewer::SelectionIntentMode mode) {
+            CHECK(query.valid());
+            CHECK(query.completed);
+            CHECK(
+                query.generation ==
+                tool_stage_body.generation);
+            CHECK(
+                mode ==
+                viewer::SelectionIntentMode::replace);
+            CHECK(
+                std::any_of(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [body_edge_token](const auto& candidate) {
+                        return candidate.token ==
+                               body_edge_token;
+                    }));
+            ++tool_stage_click_intents;
+        });
+    QTest::mouseClick(
+        &widget,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        QPoint{
+            static_cast<int>(body_center.x),
+            static_cast<int>(body_center.y)});
+    QApplication::processEvents();
+    CHECK(tool_stage_click_intents == 1);
+
+    // The callback belongs to this tool-stage scenario only. Later tests
+    // install unrelated scenes/generations on the same native widget.
+    widget.setBodyTopologySelectionIntentHandler({});
+
+    sendMouseMove(widget, body_center);
+    CHECK(last_body_preselection_query.completed);
+    CHECK(
+        last_body_preselection_query.generation ==
+        tool_stage_body.generation);
+
+    CHECK(widget.setBodyScene(diagnostic_body));
+    CHECK(
+        widget.queryBodyTopology(
+            body_center).candidates.empty());
     CHECK(widget.setBodyScene(body_scene));
     CHECK(widget.setViewStyle(
         viewer::ViewStyle::shaded));
@@ -725,6 +1045,28 @@ int main(int argc, char* argv[]) {
         viewer::SketchOriginPresentation{
             viewer::Point3{0.0, 0.0, 0.0}};
     CHECK(widget.setSketchScene(scene));
+
+    // PM-05F R2 Owner P1: active Fillet/Chamfer Edge hover must be
+    // consistent with the already-correct Edge-only click when a
+    // Sketch line and Origin/reference AIS overlap the Body Edge at the
+    // same screen pixel. Existing front-face occlusion and Body scene
+    // generation remain authoritative; an AIS hit cannot suppress a
+    // genuine current material Edge during explicit Edge acquisition.
+    widget.setBodyTopologyEdgePickMode(true);
+    const auto edge_hover_before =
+        body_preselection_intents;
+    sendMouseMove(widget, body_center);
+    CHECK(body_preselection_intents > edge_hover_before);
+    CHECK(last_body_preselection_query.completed);
+    CHECK(last_body_preselection_query.generation ==
+          body_scene.generation);
+    CHECK(std::any_of(
+        last_body_preselection_query.candidates.begin(),
+        last_body_preselection_query.candidates.end(),
+        [body_edge_token](const auto& candidate) {
+            return candidate.token == body_edge_token;
+        }));
+    widget.setBodyTopologyEdgePickMode(false);
 
     const viewer::SketchGripKey center_grip{
         short_token,

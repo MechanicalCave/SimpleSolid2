@@ -557,6 +557,22 @@ struct SolidModelingResult final {
     }
 };
 
+// Runtime-only exact material difference. One side may be absent;
+// nonempty meshes never convey CAD identity or alter Finish legality.
+struct SolidMaterialDeltaPresentationResult final {
+    SolidPresentationStatus status{
+        SolidPresentationStatus::unsupported};
+    std::optional<SolidPresentationMesh> removed;
+    std::optional<SolidPresentationMesh> added;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status == SolidPresentationStatus::ok &&
+               (removed.has_value() || added.has_value()) &&
+               (!removed || removed->valid()) &&
+               (!added || added->valid());
+    }
+};
+
 class ISolidModelingKernel {
 public:
     ISolidModelingKernel() = default;
@@ -604,6 +620,13 @@ public:
     revolvePreviewMesh(
         const AngularRevolveInput& input,
         RuntimeSolidHandle upstream = {}) noexcept;
+
+    // PM-05F R2-D. Exact before - after and after - before, evaluated
+    // only for two accepted provider solids; preview-only, fail closed.
+    [[nodiscard]] virtual SolidMaterialDeltaPresentationResult
+    materialDifferencePreview(
+        RuntimeSolidHandle before,
+        RuntimeSolidHandle after) noexcept;
 
     // Display-only tessellation. This must never influence authored CAD
     // state, modeling semantics or reference resolution.

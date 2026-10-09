@@ -720,41 +720,61 @@ public:
             context_->IsDisplayed(solid_object_);
         result.solid_preview_displayed =
             !context_.IsNull() &&
-            !solid_preview_object_.IsNull() &&
-            context_->IsDisplayed(
-                solid_preview_object_);
+            ((!solid_preview_object_.IsNull() &&
+              context_->IsDisplayed(solid_preview_object_)) ||
+             (!solid_preview_added_object_.IsNull() &&
+              context_->IsDisplayed(solid_preview_added_object_)));
         result.solid_committed_style_expected =
             solidStyleMatches(
                 solid_object_,
                 committedSolidColor(),
                 kCommittedSolidTransparency);
         result.solid_preview_style_expected =
-            solid_preview_scene_.empty()
-                ? solid_preview_object_.IsNull()
-                : solidStyleMatches(
-                      solid_preview_object_,
-                      previewSolidColor(
-                          solid_preview_scene_.tone),
-                      kPreviewSolidTransparency);
-        if (!solid_object_.IsNull() &&
-            !solid_preview_object_.IsNull() &&
-            !solid_object_->Attributes().IsNull() &&
-            !solid_preview_object_->
-                 Attributes().IsNull()) {
-            const auto committed_shading =
-                solid_object_->Attributes()->
-                    ShadingAspect();
-            const auto preview_shading =
-                solid_preview_object_->Attributes()->
-                    ShadingAspect();
-            result.solid_shading_styles_isolated =
-                !committed_shading.IsNull() &&
-                !preview_shading.IsNull() &&
-                committed_shading != preview_shading;
-        } else {
-            result.solid_shading_styles_isolated =
-                solid_preview_object_.IsNull();
-        }
+            solid_preview_scene_.material_delta
+                ? ((solid_preview_scene_.triangles.empty()
+                        ? solid_preview_object_.IsNull()
+                        : solidStyleMatches(
+                              solid_preview_object_,
+                              previewSolidColor(
+                                  viewer::SolidPreviewTone::subtractive),
+                              kPreviewSolidTransparency)) &&
+                   (solid_preview_scene_.added_triangles.empty()
+                        ? solid_preview_added_object_.IsNull()
+                        : solidStyleMatches(
+                              solid_preview_added_object_,
+                              previewSolidColor(
+                                  viewer::SolidPreviewTone::additive),
+                              kPreviewSolidTransparency)))
+                : (solid_preview_scene_.empty()
+                       ? solid_preview_object_.IsNull()
+                       : solidStyleMatches(
+                             solid_preview_object_,
+                             previewSolidColor(
+                                 solid_preview_scene_.tone),
+                             kPreviewSolidTransparency));
+        // Each transient color owns independent shading state, including
+        // added-only previews where the orange object is intentionally null.
+        const auto isolated =
+            [this](const Handle(AIS_InteractiveObject)& preview) {
+                if (preview.IsNull()) {
+                    return true;
+                }
+                if (solid_object_.IsNull() ||
+                    solid_object_->Attributes().IsNull() ||
+                    preview->Attributes().IsNull()) {
+                    return false;
+                }
+                const auto committed =
+                    solid_object_->Attributes()->ShadingAspect();
+                const auto transient =
+                    preview->Attributes()->ShadingAspect();
+                return !committed.IsNull() &&
+                       !transient.IsNull() &&
+                       committed != transient;
+            };
+        result.solid_shading_styles_isolated =
+            isolated(solid_preview_object_) &&
+            isolated(solid_preview_added_object_);
         return result;
     }
 
@@ -1966,6 +1986,65 @@ public:
         return object;
     }
 
+    // Body geometry is independently validated and already displayed.
+    // Outline AIS objects are display-only decorations. A degenerate
+    // sampled material Edge must not invalidate the current Body, hide it,
+    // or turn a successful CAD transaction into a presentation failure.
+    // Report the exact transient presentation token; never rebind CAD Edge
+    // references or synthesize a replacement curve.
+    void publishBodyEdgeStyleObject(
+        const viewer::BodyEdgePresentation& edge,
+        bool hidden_pass) {
+        Handle(AIS_Shape) object;
+        try {
+            object = makeBodyEdgeStyleObject(edge, hidden_pass);
+            if (object.IsNull()) {
+                qWarning().noquote()
+                    << "SS2 Viewer display-only Edge outline unavailable:"
+                    << "presentation_token=" << edge.token.value
+                    << "point_count=" << edge.points.size()
+                    << "hidden_pass=" << hidden_pass;
+                return;
+            }
+
+            context_->Display(object, false);
+            context_->Deactivate(object);
+            if (hidden_pass) {
+                body_hidden_edge_objects_.push_back(object);
+            } else {
+                body_visible_edge_objects_.push_back(object);
+            }
+            return;
+        } catch (const Standard_Failure& failure) {
+            logProviderFailure(
+                "publishBodyEdgeStyleObject",
+                failure.GetMessageString());
+        } catch (const std::exception& failure) {
+            logProviderFailure(
+                "publishBodyEdgeStyleObject",
+                failure.what());
+        } catch (...) {
+            logProviderFailure(
+                "publishBodyEdgeStyleObject",
+                "<unknown exception>");
+        }
+
+        if (!object.IsNull()) {
+            const auto failed_object = object;
+            guardedVoid(
+                "removeFailedBodyEdgeStyleObject",
+                [this, failed_object] {
+                    context_->Remove(
+                        failed_object, false);
+                });
+        }
+        qWarning().noquote()
+            << "SS2 Viewer display-only Edge outline rejected:"
+            << "presentation_token=" << edge.token.value
+            << "point_count=" << edge.points.size()
+            << "hidden_pass=" << hidden_pass;
+    }
+
     [[nodiscard]] bool syncBodyViewStyle() {
         clearBodyEdgeStyleObjects();
 
@@ -1982,42 +2061,36 @@ public:
                 continue;
             }
 
-            auto visible =
-                makeBodyEdgeStyleObject(
-                    edge,
-                    false);
-            if (visible.IsNull()) {
-                clearBodyEdgeStyleObjects();
-                return false;
+            // A valid OCCT Fillet corner can expose a zero-extent
+            // material Edge whose presentation sampler returns identical
+            // points (Owner Part013: two endpoints at 18,-20,18).
+            // It has no drawable line. Do not ask MakePolygon to build
+            // a zero-length wire; retain the authoritative Body and its
+            // semantic Edge without inventing a line or model tolerance.
+            const auto has_visible_span =
+                std::any_of(
+                    edge.points.begin() + 1,
+                    edge.points.end(),
+                    [&edge](const viewer::Point3& point) {
+                        return point != edge.points.front();
+                    });
+            if (!has_visible_span) {
+                continue;
             }
-            context_->Display(
-                visible,
-                false);
-            context_->Deactivate(
-                visible);
-            body_visible_edge_objects_.push_back(
-                visible);
 
+            publishBodyEdgeStyleObject(
+                edge, false);
             if (view_style_ ==
                 viewer::ViewStyle::
                     shaded_with_hidden_edges) {
-                auto hidden =
-                    makeBodyEdgeStyleObject(
-                        edge,
-                        true);
-                if (hidden.IsNull()) {
-                    clearBodyEdgeStyleObjects();
-                    return false;
-                }
-                context_->Display(
-                    hidden,
-                    false);
-                context_->Deactivate(
-                    hidden);
-                body_hidden_edge_objects_.push_back(
-                    hidden);
+                publishBodyEdgeStyleObject(
+                    edge, true);
             }
         }
+
+        // A partial Edge overlay is reported at its failing runtime token
+        // but does not remove the current committed Body. Face shading and
+        // geometric evaluation are authoritative, not decorative wires.
         return true;
     }
 
@@ -2072,6 +2145,12 @@ public:
             return true;
         }
 
+        if (solid_preview_scene_.material_delta &&
+            (!scene.generation.valid() ||
+             scene.generation !=
+                 solid_preview_scene_.generation)) {
+            clearSolidPreviewScene();
+        }
         clearSolidScene();
 
         if (scene.empty()) {
@@ -2169,55 +2248,70 @@ public:
     bool setSolidPreviewScene(
         const viewer::SolidPreviewScene& scene) {
         if (!scene.valid()) return false;
+        if (scene.material_delta &&
+            (body_scene_.empty() ||
+             body_scene_.generation != scene.generation ||
+             (body_scene_.purpose !=
+                  viewer::BodyScenePurpose::current_body &&
+              body_scene_.purpose !=
+                  viewer::BodyScenePurpose::tool_stage))) {
+            return false;
+        }
 
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
         }
-
         if (scene == solid_preview_scene_) {
             return true;
         }
 
         clearSolidPreviewScene();
-
         if (scene.empty()) {
             solid_preview_scene_ = scene;
-            syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
         }
 
         try {
-            viewer::SolidScene mesh_scene;
-            mesh_scene.triangles =
-                scene.triangles;
-            const auto object =
-                makeSolidObject(mesh_scene);
-            if (object.IsNull()) {
+            const auto make_preview =
+                [this](const auto& triangles,
+                       viewer::SolidPreviewTone tone,
+                       Handle(AIS_InteractiveObject)& slot) {
+                    if (triangles.empty()) {
+                        return true;
+                    }
+                    viewer::SolidScene mesh_scene;
+                    mesh_scene.triangles = triangles;
+                    auto object = makeSolidObject(mesh_scene);
+                    if (object.IsNull()) {
+                        return false;
+                    }
+                    setOwnedSolidShadingStyle(
+                        object,
+                        previewSolidColor(tone),
+                        kPreviewSolidTransparency);
+                    object->SetPolygonOffsets(
+                        Aspect_POM_Fill, -1.0F, -1.0F);
+                    slot = object;
+                    context_->Display(slot, false);
+                    context_->Deactivate(slot);
+                    return true;
+                };
+            if (!make_preview(
+                    scene.triangles,
+                    scene.tone,
+                    solid_preview_object_) ||
+                (scene.material_delta &&
+                 !make_preview(
+                     scene.added_triangles,
+                     viewer::SolidPreviewTone::additive,
+                     solid_preview_added_object_))) {
                 clearSolidPreviewScene();
                 return false;
             }
 
-            setOwnedSolidShadingStyle(
-                object,
-                previewSolidColor(scene.tone),
-                kPreviewSolidTransparency);
-            // Keep coplanar preview boundaries stable against the opaque Body.
-            // This is display-only depth bias, never modeling input.
-            object->SetPolygonOffsets(
-                Aspect_POM_Fill,
-                -1.0F,
-                -1.0F);
-            solid_preview_object_ = object;
-            context_->Display(
-                solid_preview_object_,
-                false);
-            context_->Deactivate(
-                solid_preview_object_);
             solid_preview_scene_ = scene;
-            // The preview mesh is the exact transient operation delta.
-            // Its owned shading aspect is independent from the committed Body.
             syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
@@ -3687,6 +3781,10 @@ public:
             std::move(handler);
     }
 
+    void setBodyTopologyEdgePickMode(bool enabled) {
+        body_topology_edge_pick_mode_ = enabled;
+    }
+
     [[nodiscard]] bool hasBodyTopologyPreselection() const noexcept {
         return body_preselection_token_.has_value();
     }
@@ -3759,6 +3857,27 @@ public:
         if (!std::isfinite(dpr) || dpr <= 0.0) {
             clearBodyTopologyPreselectionIntent();
             return false;
+        }
+
+        // Fillet/Chamfer Edge acquisition has the same Body-only
+        // authority on hover as on click. An overlapping Sketch/Profile
+        // or Origin AIS hit must not suppress an otherwise visible
+        // material Edge while this explicit tool is active.
+        // queryBodyTopology retains front-occlusion, ordinary material
+        // filtering, current generation and the consumed Body stage;
+        // Part retains strict semantic authorability checks.
+        if (body_topology_edge_pick_mode_) {
+            context_->ClearDetected(false);
+            const auto query =
+                queryBodyTopology(
+                    point,
+                    viewer::BodyTopologyPickFilter{
+                        false, true, false});
+            body_topology_preselection_intent_handler_(
+                query, point);
+            return query.valid() &&
+                   query.completed &&
+                   !query.candidates.empty();
         }
 
         const int x = static_cast<int>(
@@ -4065,6 +4184,32 @@ public:
             view_.IsNull() ||
             (!selection_intent_handler_ &&
              !body_topology_selection_intent_handler_)) {
+            return;
+        }
+
+        // Fillet/Chamfer acquisition must not be replaced by an overlapping
+        // Sketch/Profile/Reference AIS hit. A non-authorable or absent Edge
+        // never becomes another kind of selection, nor clears prior Edges.
+        // Part still filters semantic eligibility and stage/generation.
+        if (body_topology_edge_pick_mode_) {
+            const auto edge_query =
+                queryBodyTopology(
+                    viewer::ViewportPoint2{
+                        static_cast<double>(logical_x),
+                        static_cast<double>(logical_y)},
+                    viewer::BodyTopologyPickFilter{
+                        false, true, false});
+            context_->ClearDetected(false);
+            if (body_topology_selection_intent_handler_ &&
+                edge_query.valid() &&
+                edge_query.completed &&
+                !edge_query.candidates.empty()) {
+                body_topology_selection_intent_handler_(
+                    edge_query,
+                    toggle
+                        ? viewer::SelectionIntentMode::toggle
+                        : viewer::SelectionIntentMode::replace);
+            }
             return;
         }
 
@@ -4414,8 +4559,14 @@ public:
         result.generation =
             body_scene_.generation;
 
+        // An Edge Feature Edit presents the exact predecessor Body as
+        // tool_stage. Native hit-testing must still return generation-bound
+        // transient candidates; the controller is the authority for stage
+        // and semantic authoring. Diagnostic prefixes remain non-pickable.
         if (body_scene_.purpose !=
-            viewer::BodyScenePurpose::current_body) {
+                viewer::BodyScenePurpose::current_body &&
+            body_scene_.purpose !=
+                viewer::BodyScenePurpose::tool_stage) {
             return result;
         }
 
@@ -4984,20 +5135,22 @@ public:
 
 
     void clearSolidPreviewScene() noexcept {
-        if (!context_.IsNull() &&
-            !solid_preview_object_.IsNull()) {
-            const auto retained =
-                solid_preview_object_;
-            guardedVoid(
-                "removeSolidPreviewObject",
-                [this, retained] {
-                    context_->Remove(
-                        retained,
-                        false);
-                });
-        }
-
+        const auto remove =
+            [this](const Handle(AIS_InteractiveObject)& object) {
+                if (context_.IsNull() || object.IsNull()) {
+                    return;
+                }
+                const auto retained = object;
+                guardedVoid(
+                    "removeSolidPreviewObject",
+                    [this, retained] {
+                        context_->Remove(retained, false);
+                    });
+            };
+        remove(solid_preview_object_);
+        remove(solid_preview_added_object_);
         solid_preview_object_.Nullify();
+        solid_preview_added_object_.Nullify();
         solid_preview_scene_ =
             viewer::SolidPreviewScene{};
         syncCommittedSolidVisibilityForPreview();
@@ -6272,6 +6425,7 @@ private:
         body_topology_preselection_intent_handler_;
     viewer::BodyTopologyCycleIntentHandler
         body_topology_cycle_intent_handler_;
+    bool body_topology_edge_pick_mode_{};
     viewer::SpatialPointerHandler spatial_pointer_handler_;
     viewer::NavigationCubeActionHandler
         navigation_cube_action_handler_;
@@ -6308,6 +6462,7 @@ private:
         reference_preview_objects_;
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
+    Handle(AIS_InteractiveObject) solid_preview_added_object_;
     viewer::BodyScene body_scene_;
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};
@@ -6575,6 +6730,15 @@ void QtOcctViewerWidget::setBodyTopologyCycleIntentHandler(
         [this, handler = std::move(handler)]() mutable {
             impl_->setBodyTopologyCycleIntentHandler(
                 std::move(handler));
+        });
+}
+
+void QtOcctViewerWidget::setBodyTopologyEdgePickMode(
+    bool enabled) {
+    guardedVoid(
+        "setBodyTopologyEdgePickMode",
+        [this, enabled] {
+            impl_->setBodyTopologyEdgePickMode(enabled);
         });
 }
 

@@ -3528,16 +3528,33 @@ DocumentSession::evaluateFilletDraft(
         return result;
     }
 
-    // Preview the exact successful target stage. During Edit the final Body
-    // may be unavailable because downstream Features are Blocked by the
-    // candidate, but that must not erase a valid target-stage preview.
-    if (target->result_solid != nullptr) {
-        auto preview =
-            modeling_kernel.presentationMesh(
-                target->result_solid);
-        if (preview.ok()) {
-            result.preview_mesh =
-                std::move(preview.mesh);
+    // Exact B0/B1 material-difference preview: read the immediately
+    // preceding evaluated Body stage, not the final downstream Body.
+    // A valid Edit target can coexist with intentionally blocked consumers.
+    // Rendering failure never changes whether Finish is semantically legal.
+    const auto target_it = std::find_if(
+        evaluation.features.begin(),
+        evaluation.features.end(),
+        [target_id](const part::FeatureEvaluation& feature) {
+            return feature.feature_id == target_id;
+        });
+    if (target_it != evaluation.features.end() &&
+        target_it != evaluation.features.begin() &&
+        target_it->result_solid != nullptr) {
+        const auto& before = *std::prev(target_it);
+        if (before.status ==
+                part::FeatureEvaluationStatus::up_to_date &&
+            before.result_solid != nullptr) {
+            auto preview =
+                modeling_kernel.materialDifferencePreview(
+                    before.result_solid,
+                    target_it->result_solid);
+            if (preview.ok()) {
+                result.preview_mesh =
+                    std::move(preview.removed);
+                result.preview_added_mesh =
+                    std::move(preview.added);
+            }
         }
     }
 
@@ -3693,16 +3710,33 @@ DocumentSession::evaluateChamferDraft(
         return result;
     }
 
-    // Preview the exact successful target stage. During Edit the final Body
-    // may be unavailable because downstream Features are Blocked by the
-    // candidate, but that must not erase a valid target-stage preview.
-    if (target->result_solid != nullptr) {
-        auto preview =
-            modeling_kernel.presentationMesh(
-                target->result_solid);
-        if (preview.ok()) {
-            result.preview_mesh =
-                std::move(preview.mesh);
+    // Exact B0/B1 material-difference preview: read the immediately
+    // preceding evaluated Body stage, not the final downstream Body.
+    // A valid Edit target can coexist with intentionally blocked consumers.
+    // Rendering failure never changes whether Finish is semantically legal.
+    const auto target_it = std::find_if(
+        evaluation.features.begin(),
+        evaluation.features.end(),
+        [target_id](const part::FeatureEvaluation& feature) {
+            return feature.feature_id == target_id;
+        });
+    if (target_it != evaluation.features.end() &&
+        target_it != evaluation.features.begin() &&
+        target_it->result_solid != nullptr) {
+        const auto& before = *std::prev(target_it);
+        if (before.status ==
+                part::FeatureEvaluationStatus::up_to_date &&
+            before.result_solid != nullptr) {
+            auto preview =
+                modeling_kernel.materialDifferencePreview(
+                    before.result_solid,
+                    target_it->result_solid);
+            if (preview.ok()) {
+                result.preview_mesh =
+                    std::move(preview.removed);
+                result.preview_added_mesh =
+                    std::move(preview.added);
+            }
         }
     }
 

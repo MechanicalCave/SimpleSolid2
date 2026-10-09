@@ -396,23 +396,44 @@ enum class SolidPreviewTone {
 };
 
 struct SolidPreviewScene final {
+    // Existing one-color Extrude/Revolve preview. In material_delta mode,
+    // these triangles contain ONLY the removed volume (orange).
     std::vector<SolidTrianglePresentation>
         triangles;
     SolidPreviewTone tone{
         SolidPreviewTone::additive};
+    // PM-05F R2-D atomic two-color extension: added volume (blue).
+    std::vector<SolidTrianglePresentation>
+        added_triangles;
+    BodyPresentationGeneration generation;
+    bool material_delta{};
 
     [[nodiscard]] bool valid() const noexcept {
-        return std::all_of(
-            triangles.begin(),
-            triangles.end(),
-            [](const SolidTrianglePresentation&
-                   triangle) {
-                return triangle.valid();
-            });
+        const auto all_valid =
+            [](const auto& mesh) {
+                return std::all_of(
+                    mesh.begin(), mesh.end(),
+                    [](const SolidTrianglePresentation& triangle) {
+                        return triangle.valid();
+                    });
+            };
+        if (!all_valid(triangles) ||
+            !all_valid(added_triangles)) {
+            return false;
+        }
+        if (!material_delta) {
+            return added_triangles.empty() &&
+                   !generation.valid();
+        }
+        return generation.valid() &&
+               tone == SolidPreviewTone::subtractive &&
+               (!triangles.empty() ||
+                !added_triangles.empty());
     }
 
     [[nodiscard]] bool empty() const noexcept {
-        return triangles.empty();
+        return triangles.empty() &&
+               added_triangles.empty();
     }
 
     friend bool operator==(

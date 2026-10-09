@@ -122,6 +122,13 @@ public:
         (void)handler;
     }
 
+    // UI-only routing authority: active Fillet/Chamfer Edge acquisition
+    // takes precedence over unrelated overlapping AIS reference objects.
+    // It does not grant durable identity or bypass Part authoring.
+    virtual void setBodyTopologyEdgePickMode(bool enabled) {
+        (void)enabled;
+    }
+
     virtual bool setBodyTopologyPreselection(
         std::optional<PresentationToken> token) {
         return !token.has_value();

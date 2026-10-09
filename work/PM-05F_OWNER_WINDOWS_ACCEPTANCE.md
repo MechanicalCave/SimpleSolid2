@@ -1,6 +1,6 @@
 # PM-05F — Owner Windows Acceptance
 
-**Status:** READY FOR OWNER RETEST — FINAL AUTOMATED PASS
+**Status:** COMPLETED — OWNER FINAL PM-05F PASS 2026-10-09; runtime/docs FULL #1902 PASS (195/195), evidence-sync FAST #1903 PASS (93/93); PR #298 final merge gate separate
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
 **Date prepared:** 2026-10-07
@@ -41,6 +41,22 @@ Automated regressions now prove:
 - no relaxation of the existing tangent-chain input-contour guard.
 
 A repeat Owner Windows test is now required on `main` `f5570b3bcde458670943718e78cdf4a7a77667ea`. The minimum remediation-focused retest is: adjacent 2-Edge Fillet on a cube, trihedral 3-Edge Fillet, additional multi-Edge cube selections, a curved/circular material Edge, and mixed straight/curved generated-Edge Fillet after an unrelated Chamfer. The full acceptance workflow below remains the closure authority.
+
+## Owner Windows acceptance attempt 2 — 2026-10-08 — FAIL
+
+The Owner repeated manual testing after the PR #296 remediation on the subsequent unmodified-runtime main candidate (baseline `b0f6e148c25027aa7f6cbf5a6a33250685d7591c`). Behavior improved, but the following acceptance blockers were observed:
+
+1. Fillet/Chamfer preview visually colors/highlights the entire Body instead of the changed material volume. Convex removed material should be orange, concave added material blue, while unmodified Body remains neutral.
+2. Simple-box Chamfer is acceptable; a Fillet on the three Edges sharing one cube vertex can make the *entire Body disappear after Finish*, despite preview being ready.
+3. Fillet/Chamfer cannot even pick normal Edges on whole/partial Revolve Bodies.
+4. Existing Fillet/Chamfer enters Edit mode, but existing Edges cannot be deselected and additional Edges cannot be selected.
+5. Selection of certain visible curved Edges is inaccurate, particularly a ring Edge on revolved/cylindrical geometry (Owner screenshot).
+
+An independent code audit additionally confirmed a `tool_stage` gate contradiction in the native Viewer and identified deflection/projection/triangulated visibility and semantically rejected Edge candidates as possible sources of issue 5. Those mechanisms must not be conflated with proven runtime root causes.
+
+Owner accepted a separate bounded R2 acceptance-remediation plan on 2026-10-08; authority and stop conditions are in `work/PM-05F_R2_OWNER_ACCEPTANCE_REMEDIATION.md`. The prior Windows FULL #1744 remains correct for its exact earlier candidate but **does not accept** the newly reported behavior. No new automated or manual PASS has been asserted for R2.
+
+**Repeat acceptance gate:** after bounded R2 correction, run a new exact-head Windows FULL, and repeat this entire Owner workflow plus dedicated three-Edge corner, Revolve, local preview, Edit-stage cursor-picking and curved/silhouette selection tests. Only an explicit Owner PASS closes PM-05.
 
 ## Preconditions
 
@@ -113,12 +129,26 @@ A repeat Owner Windows test is now required on `main` `f5570b3bcde458670943718e7
 40. Confirm docs describe selection-first/command-first, Operations/Command Line parity, Edit preserving FeatureId, explicit repair, Suppress/Delete/Undo/Redo and Save/Reopen.
 41. Confirm docs do not claim variable-radius/full-round/face Fillet, distance-angle/asymmetric Chamfer or automatic tangent-chain authoring.
 
+## Owner R2 targeted re-test — 2026-10-08 — PASS (scoped)
+
+**Exact manually tested candidate:** `af85a6fafea643739393b4f29673eca56c666519` on PR #298.
+
+The Owner reported **"manual test - pass"** after receiving Windows start instructions and a four-part targeted checklist: Part008 three-Edge Chamfer; Edit/Finish/Cancel/Undo/Redo/Save/Reopen; complex Edge-picking P1; and rejection diagnostics. Record an explicit **targeted Owner manual PASS**, without fabricating a per-step result. The full 41-step aggregate PM-05F acceptance matrix was not independently itemized.
+
+**Exact automated evidence:** Windows FOCUSED [#1898](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37842345000) **PASS 1/1** on the same SHA, including 18 Chamfer variants, unique 21-Face ownership, actual source-Vertex/selected-Edge incidence and native lifecycle. Earlier FAST [#1893](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37839379219) **PASS 93/93** was on a different HEAD.
+
+**Exact-head FULL now PASS:** [#1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905), `5996583e99b20bbad16e252abb2f56c6904d69ef`, core 25/25, kernel-native 57/57, desktop 113/113; `windows-msvc` PASS. Cumulative evidence: `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`. **Owner aggregate approval:** explicitly supplied on 2026-10-09 as **"PM-05F - Pass"**. Evidence-only synchronization [FAST #1903](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37849063919) PASS 93/93 on `49fb043750c9c6e2ef2af3e585431c1118757436`; final PR readiness/merge CI is checked separately. No implied broader geometry policy, no permanent acceptance of untested edge networks, no D3 planar corner rule, no PM-06 activation.
+
 ## Result
 
-Owner result: **FAIL — remediation required before repeat acceptance**.
-
-This acceptance attempt has returned PM-05F to bounded remediation. After remediation, the exact replacement candidate must pass a fresh Windows FULL and the Owner workflow must be repeated. Only a later explicit Owner PASS closes PM-05.
+Owner results: **ATTEMPT 1 FAIL; ATTEMPT 2 FAIL; targeted R2 re-test PASS (2026-10-08); FINAL PM-05F AGGREGATE OWNER PASS (2026-10-09)**. This is a package-level acceptance decision; individual outcomes for all 41 manual steps were not supplied, and none are fabricated.
 
 ## Completion boundary
 
-Until Owner PASS, PM-05 remains ACTIVE, PM-05F remains the current checkpoint, PM-06 is not activated, and no advanced Fillet/Chamfer variant is implied by this workflow.
+The aggregate Owner acceptance and evidence-sync FAST #1903 gates are now met. The PM-05F Work Contract is **COMPLETED — PASS**; PR #298 may proceed through final ready-for-review exact-head CI and gated merge. PM-06 and Projection remain **NOT AUTHORIZED**, and no advanced Fillet/Chamfer variant is implied.
+
+## Final Owner disposition — 2026-10-09
+
+The Owner explicitly replied **`PM-05F - Pass`** to the question whether their previous manual PASS accepted the entire PM-05F, rather than only targeted R2 scenarios. Record this as an **explicit aggregate Owner acceptance decision** over the accepted contract's scope and its documented automated evidence (`work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`). This is not an invented per-step 41-row manual transcript.
+
+Runtime/test equivalence: targeted owner-tested `af85a6fafea643739393b4f29673eca56c666519` → runtime/docs FULL #1902 `5996583e99b20bbad16e252abb2f56c6904d69ef` → evidence-only FAST #1903 `49fb043750c9c6e2ef2af3e585431c1118757436`. No intervening product source mutation in the latter two transitions. Formal closure/docs update after the Owner decision remains `work/**`-only, pending its own required branch CI before merge.

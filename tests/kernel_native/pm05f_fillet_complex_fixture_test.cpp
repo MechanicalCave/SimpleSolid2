@@ -1,9 +1,11 @@
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/application/edge_feature_draft.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <numbers>
@@ -61,7 +63,7 @@ std::optional<part::ProfileId> createProfile(
         : std::nullopt;
 }
 
-Fixture makeCapsuleCutPart() {
+Fixture makeCapsuleCutPart(double cut_depth = 20.0) {
     auto source =
         part::PartDocument::create(
             core::DocumentId::generate());
@@ -166,7 +168,7 @@ Fixture makeCapsuleCutPart() {
                 *cut_profile,
                 part::ExtrudeOperation::cut,
                 part::OneSidedExtrudeExtent{
-                    core::LengthValue{20.0},
+                    core::LengthValue{cut_depth},
                     false}}});
 
     auto restored =
@@ -632,6 +634,294 @@ int main() {
         part::FeatureEvaluationStatus::up_to_date);
     CHECK(direct_fillet.result_topology);
     CHECK(direct_fillet.result_topology->complete());
+
+    // PM-05F R2-D: production mixed Line/Circle capsule cut and its
+    // four-Edge Fillet must produce a presentation-only exact local delta.
+    // Neither preview mesh may be substituted with the final full Body.
+    CHECK(cut.result_solid != nullptr);
+    CHECK(direct_fillet.result_solid != nullptr);
+    const auto delta_started =
+        std::chrono::steady_clock::now();
+    const auto complex_delta =
+        kernel.materialDifferencePreview(
+            cut.result_solid,
+            direct_fillet.result_solid);
+    const auto delta_ms =
+        std::chrono::duration_cast<
+            std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - delta_started)
+            .count();
+    CHECK(complex_delta.ok());
+    CHECK(complex_delta.removed || complex_delta.added);
+    CHECK(!complex_delta.removed ||
+          complex_delta.removed->valid());
+    CHECK(!complex_delta.added ||
+          complex_delta.added->valid());
+    const auto unchanged_delta =
+        kernel.materialDifferencePreview(
+            cut.result_solid,
+            cut.result_solid);
+    CHECK(!unchanged_delta.ok());
+    CHECK(!unchanged_delta.removed);
+    CHECK(!unchanged_delta.added);
+    std::cout
+        << "PM05F_R2_COMPLEX_EXACT_DELTA"
+        << " removed=" << (complex_delta.removed ? 1 : 0)
+        << " added=" << (complex_delta.added ? 1 : 0)
+        << " elapsed_ms=" << delta_ms << '\n';
+
+    // PM-05F R2-D concave pocket: unlike the opening rim (a
+    // cross-producer Boolean Intersection), the bottom wall/floor seam is
+    // the Cut generator's own cap/side Curve. Select it via exact semantic
+    // producer + Surface-pair relation, never by XYZ or provider ordering.
+    {
+        const auto pocket =
+            makeCapsuleCutPart(10.0);
+        const auto evaluated_pocket =
+            part::evaluatePart(pocket.document, kernel);
+        CHECK(evaluated_pocket.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(evaluated_pocket.features.size() == 2U);
+        const auto& pocket_cut =
+            evaluated_pocket.features.back();
+        CHECK(pocket_cut.result_solid != nullptr);
+        CHECK(pocket_cut.result_topology);
+        CHECK(pocket_cut.result_topology->complete());
+
+        std::vector<part::MaterialEdgeReference> floor_edges;
+        std::size_t observed_cap_side = 0U;
+        for (const auto& curve :
+             pocket_cut.produced_curves) {
+            if (curve.address.producer_feature_id !=
+                    pocket.cut_id ||
+                curve.address.role !=
+                    part::FeatureCurveRoleKind::cap_side) {
+                continue;
+            }
+            ++observed_cap_side;
+            if (curve.strict_edge_status !=
+                    kernel::ReferenceStatus::resolved ||
+                curve.current_edges.size() != 1U) {
+                continue;
+            }
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    *pocket_cut.result_topology,
+                    curve.current_edges.front());
+            if (authored.ok()) {
+                floor_edges.push_back(*authored.reference);
+            }
+        }
+        std::sort(floor_edges.begin(), floor_edges.end());
+        floor_edges.erase(
+            std::unique(
+                floor_edges.begin(), floor_edges.end()),
+            floor_edges.end());
+
+        std::cout
+            << "PM05F_R2_POCKET_FLOOR_AUTHORED"
+            << " cap_side=" << observed_cap_side
+            << " authorable=" << floor_edges.size()
+            << '\n';
+        CHECK(floor_edges.size() == 4U);
+        const auto candidate =
+            appendEdgeFeature(
+                pocket.document,
+                floor_edges,
+                kernel::EdgeFeatureOperation::fillet,
+                1.0);
+        const auto after =
+            part::evaluatePart(candidate, kernel);
+        CHECK(after.features.size() == 3U);
+        const auto& floor_fillet =
+            after.features.back();
+        CHECK(floor_fillet.status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(floor_fillet.result_solid != nullptr);
+        const auto delta =
+            kernel.materialDifferencePreview(
+                pocket_cut.result_solid,
+                floor_fillet.result_solid);
+        CHECK(delta.ok());
+        CHECK(delta.added.has_value());
+        CHECK(delta.added->valid());
+        std::cout
+            << "PM05F_R2_CONCAVE_FLOOR_DELTA"
+            << " removed=" << (delta.removed ? 1 : 0)
+            << " added=" << (delta.added ? 1 : 0)
+            << '\n';
+
+        // Owner R2-A PASS; next P0: adding one exterior convex Edge
+        // to an already selected concave pocket-floor Edge must either
+        // evaluate the complete explicit pair or fail in a controlled
+        // way. In particular it may never terminate the process during
+        // synchronous draft re-evaluation or exact material preview.
+        // Both inputs are authored from the same, current Cut stage.
+        const auto& pocket_catalog =
+            *pocket_cut.result_topology;
+        std::vector<part::MaterialEdgeReference>
+            exterior_edges;
+        for (const auto& edge : pocket_catalog.edges) {
+            if (edge.accounting_class !=
+                    part::TopologyAccountingClass::
+                        referenceable ||
+                edge.referenceability !=
+                    kernel::ReferenceStatus::resolved ||
+                edge.curve_kind !=
+                    kernel::CurveKind::line ||
+                edge.periodic_seam ||
+                edge.representation_partition) {
+                continue;
+            }
+            const bool from_cut =
+                std::any_of(
+                    edge.curve_candidates.begin(),
+                    edge.curve_candidates.end(),
+                    [&pocket](const auto& address) {
+                        return address.producer_feature_id ==
+                               pocket.cut_id;
+                    });
+            if (from_cut) {
+                continue;
+            }
+            const auto authored =
+                part::authorMaterialEdgeReference(
+                    pocket_catalog, edge.runtime_token);
+            if (authored.ok()) {
+                exterior_edges.push_back(
+                    *authored.reference);
+            }
+        }
+        std::sort(
+            exterior_edges.begin(),
+            exterior_edges.end());
+        exterior_edges.erase(
+            std::unique(
+                exterior_edges.begin(),
+                exterior_edges.end()),
+            exterior_edges.end());
+        CHECK(!exterior_edges.empty());
+
+        auto restored_for_draft =
+            part::PartDocument::restore(
+                pocket.document.documentId(),
+                pocket.document.state(),
+                pocket.document.revision());
+        CHECK(restored_for_draft.ok());
+        application::DocumentSession preview_session{
+            {}, std::move(*restored_for_draft.document)};
+        const auto source_revision =
+            preview_session.document().revision();
+        const auto source_feature_count =
+            preview_session.document().body().features.size();
+
+        // Explicit bounded matrix, never guessed material Edge identity:
+        // 4 known concave pocket-floor inputs x up to 4 inherited convex
+        // outer lines x Fillet/Chamfer. One selected Edge is previewed
+        // before adding the second, matching Owner's reported ordering.
+        const auto convex_count = std::min<std::size_t>(
+            exterior_edges.size(), 4U);
+        std::size_t mixed_cases = 0U;
+        for (std::size_t fi = 0U;
+             fi < floor_edges.size(); ++fi) {
+            for (std::size_t ci = 0U;
+                 ci < convex_count; ++ci) {
+                const auto& concave = floor_edges[fi];
+                const auto& convex = exterior_edges[ci];
+                CHECK(concave != convex);
+                for (const auto operation : {
+                         kernel::EdgeFeatureOperation::fillet,
+                         kernel::EdgeFeatureOperation::chamfer}) {
+                    const bool fillet =
+                        operation ==
+                        kernel::EdgeFeatureOperation::fillet;
+                    std::cerr
+                        << "PM05F_R2_MIXED_P0_STAGE"
+                        << " operation="
+                        << (fillet ? "FILLET" : "CHAMFER")
+                        << " concave_index=" << fi
+                        << " convex_index=" << ci
+                        << " step=concave_only"
+                        << std::endl;
+                    if (fillet) {
+                        auto draft =
+                            application::FilletDraft::beginCreate(
+                                preview_session, {concave});
+                        CHECK(draft);
+                        CHECK(draft->setRadius(
+                            core::LengthValue{1.0}));
+                        const auto solo =
+                            preview_session.evaluateFilletDraft(
+                                *draft, kernel);
+                        CHECK(solo.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::ok ||
+                              solo.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::
+                                target_failed);
+                        CHECK(draft->setEdges({concave, convex}));
+                        std::cerr
+                            << "PM05F_R2_MIXED_P0_STAGE"
+                            << " operation=FILLET"
+                            << " concave_index=" << fi
+                            << " convex_index=" << ci
+                            << " step=mixed"
+                            << std::endl;
+                        const auto mixed =
+                            preview_session.evaluateFilletDraft(
+                                *draft, kernel);
+                        CHECK(mixed.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::ok ||
+                              mixed.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::
+                                target_failed);
+                    } else {
+                        auto draft =
+                            application::ChamferDraft::beginCreate(
+                                preview_session, {concave});
+                        CHECK(draft);
+                        CHECK(draft->setDistance(
+                            core::LengthValue{1.0}));
+                        const auto solo =
+                            preview_session.evaluateChamferDraft(
+                                *draft, kernel);
+                        CHECK(solo.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::ok ||
+                              solo.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::
+                                target_failed);
+                        CHECK(draft->setEdges({concave, convex}));
+                        std::cerr
+                            << "PM05F_R2_MIXED_P0_STAGE"
+                            << " operation=CHAMFER"
+                            << " concave_index=" << fi
+                            << " convex_index=" << ci
+                            << " step=mixed"
+                            << std::endl;
+                        const auto mixed =
+                            preview_session.evaluateChamferDraft(
+                                *draft, kernel);
+                        CHECK(mixed.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::ok ||
+                              mixed.status ==
+                            application::EdgeFeatureDraftEvaluationStatus::
+                                target_failed);
+                    }
+                    CHECK(preview_session.document().revision() ==
+                          source_revision);
+                    CHECK(preview_session.document().body()
+                              .features.size() == source_feature_count);
+                    ++mixed_cases;
+                }
+            }
+        }
+        CHECK(mixed_cases ==
+              floor_edges.size() * convex_count * 2U);
+        std::cout
+            << "PM05F_R2_MIXED_P0_DRAFT_COMPLETES"
+            << " fillet=1 chamfer=1"
+            << " mutation=0"
+            << " cases=" << mixed_cases << '\n';
+    }
 
     // Old-project analogue: first Chamfer an unrelated exterior Edge, then
     // re-author the same Cut Curve meanings at the new stage and Fillet the

@@ -1,6 +1,6 @@
 # PM-05 — Edge Features: Fillet / Chamfer
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-06  
+**Status:** COMPLETED — PASS; Owner full PM-05F acceptance 2026-10-09  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.29 — PM-05  
@@ -8,7 +8,7 @@
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
 **Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** PM-05A, PM-05B, PM-05C, PM-05D and PM-05E are COMPLETED — PASS; PM-05F documentation / cumulative automated evidence / Owner Windows acceptance is the current authorized checkpoint after PM-05E exact-head PASS and completion synchronization
+**Production mutation:** PM-05A through PM-05F COMPLETED — PASS; final Owner aggregate PM-05F PASS on 2026-10-09. No post-PM-05 product mutation authorized.
 
 ## 1. Goal
 
@@ -795,4 +795,24 @@ Bounded remediation automated evidence is **COMPLETED — PASS**:
 - final governance-synchronized exact candidate `e1c358cf54fd051f15252ea198d116de0b6a9cdc` passed Windows FULL #1744 with core-only 25/25, kernel-native 57/57 and desktop 112/112; final `windows-msvc` aggregate PASS;
 - PR #296 squash merge is `f5570b3bcde458670943718e78cdf4a7a77667ea`.
 
-PM-05F remains active only for the repeat Owner supported-Windows acceptance workflow. PM-05 cannot close until the Owner explicitly reports PASS on the remediated main candidate.
+PM-05F Owner acceptance attempt 2 on 2026-10-08 returned **FAIL** after the #296 remediation. Owner explicitly accepted bounded **R2** acceptance remediation, recorded in `work/PM-05F_R2_OWNER_ACCEPTANCE_REMEDIATION.md`, for the observed invisible Body after trihedral Fillet Finish, native `tool_stage` edit picking, Revolve material-Edge selection, local orange/blue material-difference preview and curved/silhouette Edge picking plus diagnostics.
+
+This is an acceptance-discovered D0/D1 amendment **within PM-05's existing accepted Feature semantics**, not authorization for PM-06, a topology-identity change, generic picker migration or CI policy changes. The remediation document classifies required reproductions and D2/D3 stop conditions. The final fresh exact-head FULL and explicit Owner manual Windows PASS remain required; previously recorded #1744 PASS does not close newly found defects.
+
+Owner additionally accepted on 2026-10-08 the bounded D2 `work/PM-05F_R2_UNIFIED_BODY_TOPOLOGY_D2.md`: the existing BodyStageTopologyCatalog and semantic Surface/Curve/Point reference model must apply coherently to all Part generators. R2-C is authorized to extend the common analytic Curve relationship rules to Revolve without a new durable identity scheme or schema. Existing Extrude and fail-closed rules remain normative; if the current address vocabulary proves insufficient, stop for a new versioned D2.
+
+The same Owner accepted the separate performance *direction* in `work/PART_RUNTIME_PERFORMANCE_EVIDENCE_DIRECTION.md`, which calls for benchmark-first stage-prefix, topology indexing and Viewer optimization. Runtime performance implementation, CI-05 and PM-06 are not activated by that direction.
+
+PM-05F remains active for R2 remediation and repeat Owner acceptance. PM-05 cannot close until the Owner explicitly reports PASS on the repaired exact candidate.
+
+On 2026-10-08 the Owner additionally approved the bounded D2 `work/PM-05F_R2_EDGE_PREVIEW_DELTA_D2_PROPOSAL.md`: presentation-only exact removed/orange and added/blue volume deltas against the immediate upstream Body, atomic stage-generation publication, neutral unchanged Body, and no substitute whole-Body blue coloring. This does not change authored semantics, durable reference formats, Kernel modeling tolerance or Finish authority. Initial Windows FOCUSED #1772/#1774/#1775/#1776/#1777/#1779 support the implementation; final R2 Windows FULL and explicit Owner manual PASS remain mandatory.
+
+## PM-05F exact-head FULL evidence checkpoint — 2026-10-08
+
+Windows [FULL #1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905) passed on exact runtime/docs candidate `5996583e99b20bbad16e252abb2f56c6904d69ef`: Core 25/25, kernel-native 57/57, desktop 113/113 (195/195); documentation verification and `windows-msvc` aggregate PASS. Earlier FOCUSED #1898 and FAST #1900 were also successful. Owner reported targeted manual PASS on runtime-equivalent `af85a6fafea643739393b4f29673eca56c666519`, but did not supply an individually itemized full PM-05F 41-step Owner acceptance matrix. The cumulative §27 evidence matrix is `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`. **Owner supplied final aggregate `PM-05F - Pass` on 2026-10-09, and evidence-sync #1903 FAST 93/93 plus aggregate passed.** The final closure-head PR CI/merge state is verified separately; no other package is activated by PM-05 completion.
+
+## PM-05F Owner final acceptance and package completion — 2026-10-09
+
+The Owner explicitly answered **`PM-05F - Pass`** when asked to disambiguate targeted R2 manual testing from the complete PM-05F package acceptance. The complete Work Contract is **COMPLETED — PASS**. This Owner decision does not fabricate a 41-step manual transcript: the recorded targeted 2026-10-08 manual PASS and accepted cumulative §27 automated matrix remain the concrete evidence. Production runtime/docs candidate `5996583e99b20bbad16e252abb2f56c6904d69ef` passed [Windows FULL #1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905) with core 25/25, kernel-native 57/57, desktop 113/113; documentation and aggregate gate PASS. Evidence-only `49fb043750c9c6e2ef2af3e585431c1118757436` passed [FAST #1903](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37849063919) 93/93 and aggregate gate. Formal closure evidence is `work/PM-05F_EDGE_FEATURES_COMPLETION.md`.
+
+No additional Fillet/Chamfer variants, global planar-corner Chamfer policy, general topology healing, new Viewer reason-specific picking API, PM-06 or Projection are authorized by completion. The Owner separately signaled that Projection may need to precede PM-06; this is an **unapproved roadmap sequencing proposal** requiring explicit D2 program amendment, not a change made here.

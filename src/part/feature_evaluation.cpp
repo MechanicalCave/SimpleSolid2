@@ -1751,12 +1751,38 @@ void propagateCurrentReferences(
 [[nodiscard]] bool isSideSurface(
     const FeatureSurfaceAddress& address) noexcept {
     return address.role ==
-           FeatureSurfaceRoleKind::side;
+               FeatureSurfaceRoleKind::side ||
+           address.role ==
+               FeatureSurfaceRoleKind::revolve_side;
 }
 
 [[nodiscard]] bool isCapSurface(
     const FeatureSurfaceAddress& address) noexcept {
-    return !isSideSurface(address);
+    switch (address.role) {
+    case FeatureSurfaceRoleKind::profile_cap:
+    case FeatureSurfaceRoleKind::extent_cap:
+    case FeatureSurfaceRoleKind::negative_cap:
+    case FeatureSurfaceRoleKind::positive_cap:
+    case FeatureSurfaceRoleKind::revolve_start_cap:
+    case FeatureSurfaceRoleKind::revolve_end_cap:
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] bool isRevolveSideSurface(
+    const FeatureSurfaceAddress& address) noexcept {
+    return address.role ==
+           FeatureSurfaceRoleKind::revolve_side;
+}
+
+[[nodiscard]] bool isRevolveCapSurface(
+    const FeatureSurfaceAddress& address) noexcept {
+    return address.role ==
+               FeatureSurfaceRoleKind::revolve_start_cap ||
+           address.role ==
+               FeatureSurfaceRoleKind::revolve_end_cap;
 }
 
 [[nodiscard]] bool isEdgeFeatureSurface(
@@ -1953,25 +1979,74 @@ curveRelationForObservation(
             first_side
                 ? semantic_surfaces[0]
                 : semantic_surfaces[1];
-        switch (side.kind) {
-        case kernel::SurfaceKind::plane:
-            result.curve_kind =
-                kernel::CurveKind::line;
-            break;
-        case kernel::SurfaceKind::cylinder:
-            result.curve_kind =
-                kernel::CurveKind::circle;
-            break;
-        default:
-            return std::nullopt;
+        const auto& cap =
+            first_cap
+                ? semantic_surfaces[0]
+                : semantic_surfaces[1];
+        if (isRevolveSideSurface(side.address)) {
+            if (!isRevolveCapSurface(cap.address)) {
+                return std::nullopt;
+            }
+            // The semantic Surface pair is durable meaning. The current
+            // analytic line/circle classification is provider evidence,
+            // not a provider Edge token or a geometry-nearest identity.
+            switch (observation.provider_curve_kind) {
+            case kernel::CurveKind::line:
+            case kernel::CurveKind::circle:
+                result.curve_kind =
+                    observation.provider_curve_kind;
+                break;
+            default:
+                return std::nullopt;
+            }
+        } else {
+            // Preserve the accepted Extrude cap/side analytic contract.
+            if (isRevolveCapSurface(cap.address)) {
+                return std::nullopt;
+            }
+            switch (side.kind) {
+            case kernel::SurfaceKind::plane:
+                result.curve_kind =
+                    kernel::CurveKind::line;
+                break;
+            case kernel::SurfaceKind::cylinder:
+                result.curve_kind =
+                    kernel::CurveKind::circle;
+                break;
+            default:
+                return std::nullopt;
+            }
         }
     } else if (same_producer &&
                first_side &&
                second_side) {
         result.role =
             FeatureCurveRoleKind::side_side;
-        result.curve_kind =
-            kernel::CurveKind::line;
+        if (isRevolveSideSurface(
+                semantic_surfaces[0].address) ||
+            isRevolveSideSurface(
+                semantic_surfaces[1].address)) {
+            if (!isRevolveSideSurface(
+                    semantic_surfaces[0].address) ||
+                !isRevolveSideSurface(
+                    semantic_surfaces[1].address)) {
+                return std::nullopt;
+            }
+            // Revolve side/side boundaries can be circles; an Extrude
+            // side/side relation is still required to be a line.
+            switch (observation.provider_curve_kind) {
+            case kernel::CurveKind::line:
+            case kernel::CurveKind::circle:
+                result.curve_kind =
+                    observation.provider_curve_kind;
+                break;
+            default:
+                return std::nullopt;
+            }
+        } else {
+            result.curve_kind =
+                kernel::CurveKind::line;
+        }
     } else if (!same_producer) {
         result.role =
             FeatureCurveRoleKind::
