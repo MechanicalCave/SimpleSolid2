@@ -2118,6 +2118,11 @@ bool PartSketchInteractionController::finishProfile() {
             "Profile draft is not valid against the current Sketch.");
         return false;
     }
+    if (solid_modeling_kernel_ == nullptr) {
+        reportStatus(
+            "Profile source provider is unavailable.");
+        return false;
+    }
 
     const auto kind =
         profile_session_->kind;
@@ -2133,7 +2138,8 @@ bool PartSketchInteractionController::finishProfile() {
                 application::CreateProfileCommand{
                     *sketch_id_,
                     expected,
-                    draft});
+                    draft},
+                *solid_modeling_kernel_);
         if (!result.ok()) {
             reportStatus(
                 result.diagnostic.message.empty()
@@ -2175,7 +2181,8 @@ bool PartSketchInteractionController::finishProfile() {
                     ReplaceProfileRegionIntentCommand{
                         *profile_session_->profile_id,
                         expected,
-                        draft});
+                        draft},
+                *solid_modeling_kernel_);
         if (!result.ok()) {
             reportStatus(
                 result.diagnostic.message.empty()
