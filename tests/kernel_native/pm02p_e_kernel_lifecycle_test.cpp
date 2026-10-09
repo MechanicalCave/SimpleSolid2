@@ -1,12 +1,15 @@
 #include <simplesolid2/kernel/evidence.hpp>
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
-
+#include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <memory>
+#include <variant>
+#include <numbers>
 #include <utility>
 
 using namespace simplesolid2;
@@ -357,6 +360,468 @@ void verifyColdRebuild() {
     CHECK(first.dynamic_support.ok());
 }
 
+
+kernel::EdgeProjectionResult projectCurrentEdge(
+    kernel_occt::OcctSolidModelingKernel& query,
+    kernel::RuntimeSolidHandle body,
+    kernel::RuntimeEdgeToken current_edge,
+    const kernel::Frame3& frame);
+
+kernel::PlanarProfileInput circularSegmentProfile(
+    double start_angle,
+    double sweep_angle) {
+    const double end_angle =
+        start_angle + sweep_angle;
+    const kernel::Point2 from{
+        10.0 * std::cos(start_angle),
+        10.0 * std::sin(start_angle)};
+    const kernel::Point2 to{
+        10.0 * std::cos(end_angle),
+        10.0 * std::sin(end_angle)};
+    kernel::PlanarProfileInput input;
+    input.outer.boundary = {
+        kernel::BoundaryUse2D{
+            kernel::Arc2{
+                {0.0, 0.0}, 10.0,
+                start_angle, sweep_angle},
+            0.0, 1.0, true, false, false,
+            kernel::BoundaryUseProvenance{
+                "pg01a-arc", 0U, 0U, false}},
+        lineUse(
+            to, from, "pg01a-chord", 1U)};
+    CHECK(input.valid());
+    return input;
+}
+
+void verifyPg01aArcProjection() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const kernel::Frame3 xy{};
+    const kernel::Frame3 yz{
+        {0.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0},
+        {1.0, 0.0, 0.0}};
+    const double pi = std::numbers::pi;
+    const struct {
+        double start;
+        double sweep;
+    } cases[] = {
+        {0.0, pi},
+        {pi, -pi},
+        {5.0 * pi / 3.0, pi / 2.0}
+    };
+    std::size_t verified_arcs = 0U;
+    for (const auto& arc : cases) {
+        const auto body = query.extrude(
+            kernel::LinearExtrudeInput{
+                circularSegmentProfile(
+                    arc.start, arc.sweep),
+                0.0, 10.0,
+                kernel::ExtrudeCapRole::profile_cap,
+                kernel::ExtrudeCapRole::extent_cap,
+                kernel::SolidBooleanOperation::add});
+        CHECK(body.ok());
+        std::size_t arcs_in_body = 0U;
+        for (const auto edge : body.current_edges) {
+            const auto projection =
+                projectCurrentEdge(query,
+                    body.solid, edge, xy);
+            if (!projection.ok() ||
+                !std::holds_alternative<kernel::Arc2>(
+                    *projection.curve)) {
+                continue;
+            }
+            const auto& result =
+                std::get<kernel::Arc2>(
+                    *projection.curve);
+            CHECK(near(result.radius, 10.0));
+            CHECK(near(result.center.u, 0.0));
+            CHECK(near(result.center.v, 0.0));
+            CHECK(near(
+                std::abs(result.sweep_angle),
+                std::abs(arc.sweep)));
+            const auto angled =
+                projectCurrentEdge(query,
+                    body.solid, edge, yz);
+            CHECK(angled.status ==
+                  Status::unsupported_curve);
+            CHECK(!angled.curve);
+            const auto repeated =
+                projectCurrentEdge(query,
+                    body.solid, edge, xy);
+            CHECK(repeated.ok());
+            CHECK(repeated.curve == projection.curve);
+            ++arcs_in_body;
+        }
+        CHECK(arcs_in_body >= 2U);
+        verified_arcs += arcs_in_body;
+    }
+    std::cout
+        << "PG01A_EXACT_ARC_PROJECTION_PASS"
+        << " native_arcs=" << verified_arcs
+        << " tested_orientations=3\n";
+}
+
+kernel::EdgeProjectionResult projectCurrentEdge(
+    kernel_occt::OcctSolidModelingKernel& query,
+    kernel::RuntimeSolidHandle body,
+    kernel::RuntimeEdgeToken current_edge,
+    const kernel::Frame3& frame) {
+    using Status = kernel::EdgeProjectionStatus;
+    if (!body || !current_edge.valid()) {
+        return {Status::invalid_input, std::nullopt};
+    }
+    const auto bound =
+        query.bindEdgeToBody(body, current_edge);
+    if (!bound) {
+        return {Status::edge_unavailable, std::nullopt};
+    }
+    return query.projectEdgeToPlane(
+        body, *bound, frame);
+}
+
+// The two bodies deliberately restart the same numeric token inventory.
+// Once bound to the OLD runtime solid, the token cannot be redirected to
+// NEW runtime solid despite an equal integer token value.
+// Tilted cylinder Cut crosses planar Box caps on true conic intersection
+// Edges (ellipse or unsupported OCCT approximation). No polyline fallback.
+void verifyPg01aUnsupportedIntersectionCurve() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const auto base = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("pg01a-cut-base"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(base.ok());
+    constexpr double c =
+        0.7071067811865475244;
+    auto tilted = circle("pg01a-tilted-hole");
+    tilted.outer.boundary.front().curve =
+        kernel::Circle2{{0.0, 0.0}, 3.0};
+    tilted.frame = {
+        {20.0, -5.0, -10.0},
+        {1.0, 0.0, 0.0},
+        {0.0, c, -c},
+        {0.0, c, c}};
+    CHECK(tilted.valid());
+    const auto result = query.extrude(
+        kernel::LinearExtrudeInput{
+            tilted, 0.0, 45.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::cut},
+        base.solid);
+    CHECK(result.ok());
+    const kernel::Frame3 xy{};
+    std::size_t rejected_curves = 0U;
+    for (const auto edge : result.current_edges) {
+        const auto projection = projectCurrentEdge(
+            query, result.solid, edge, xy);
+        if (projection.status ==
+            Status::unsupported_curve) {
+            CHECK(!projection.curve);
+            ++rejected_curves;
+        } else {
+            CHECK(projection.ok() ||
+                  projection.status ==
+                      Status::degenerate_projection);
+        }
+    }
+    CHECK(rejected_curves >= 1U);
+    std::cout << "PG01A_BOOLEAN_NONANALYTIC_PASS"
+              << " unsupported="
+              << rejected_curves << '\\n';
+}
+
+void verifyPg01aOcctExceptionGuard() {
+    using Status = kernel::EdgeProjectionStatus;
+    const auto evidence =
+        kernel_occt::buildEdgeProjectionExceptionEvidence();
+    CHECK(evidence.occt_invocations == 1U);
+    CHECK(evidence.occt_failure.status ==
+          Status::kernel_failure);
+    CHECK(!evidence.occt_failure.ok());
+    CHECK(!evidence.occt_failure.curve);
+    CHECK(evidence.unexpected_failure.status ==
+          Status::kernel_failure);
+    CHECK(!evidence.unexpected_failure.curve);
+    CHECK(evidence.success.ok());
+    CHECK(evidence.success.curve);
+    CHECK(std::holds_alternative<kernel::Line2>(
+        *evidence.success.curve));
+    std::cout
+        << "PG01A_INJECTED_OCCT_EXCEPTION_PASS"
+        << " standard_failure=1"
+        << " generic_failure=1"
+        << " success_passthrough=1\n";
+}
+
+void verifyPg01aGenerationScope() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const auto old_body = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("pg01a-old"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    const auto new_body = query.extrude(
+        kernel::LinearExtrudeInput{
+            circle("pg01a-new"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(old_body.ok() && new_body.ok());
+    CHECK(old_body.current_edges.front().value ==
+          new_body.current_edges.front().value);
+    const auto old_scoped = query.bindEdgeToBody(
+        old_body.solid, old_body.current_edges.front());
+    CHECK(old_scoped && old_scoped->valid());
+    const kernel::Frame3 xy{};
+    CHECK(query.projectEdgeToPlane(
+              new_body.solid, *old_scoped, xy).status ==
+          Status::provider_mismatch);
+    CHECK(!query.bindEdgeToBody(
+              old_body.solid, kernel::RuntimeEdgeToken{}));
+    CHECK(!query.bindEdgeToBody(
+              new_body.solid,
+              kernel::RuntimeEdgeToken{999999999U}));
+    struct ForeignSolid final : kernel::RuntimeSolid {};
+    CHECK(!query.bindEdgeToBody(
+              std::make_shared<ForeignSolid>(),
+              old_body.current_edges.front()));
+    const auto now = query.bindEdgeToBody(
+        new_body.solid, new_body.current_edges.front());
+    CHECK(now && now->valid());
+    CHECK(query.projectEdgeToPlane(
+              new_body.solid, *now, xy).status !=
+          Status::provider_mismatch);
+    std::cout << "PG01A_SCOPED_GENERATION_PASS"
+              << " colliding_token_retarget_rejected=1\n";
+}
+
+void verifyPg01aOnCurrentPartOperations() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const auto box = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("pg01a-part"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(box.ok());
+    kernel::AngularRevolveInput revolve;
+    revolve.profile = rectangle("pg01a-revolve");
+    revolve.axis = {
+        {-20.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0}};
+    revolve.start_angle_radians = 0.0;
+    revolve.end_angle_radians =
+        std::numbers::pi / 2.0;
+    revolve.operation =
+        kernel::SolidBooleanOperation::add;
+    CHECK(revolve.valid());
+    const auto revolved = query.revolve(revolve);
+    CHECK(revolved.ok());
+    const auto filleted = query.edgeFeature(
+        kernel::EdgeFeatureInput{
+            kernel::EdgeFeatureOperation::fillet,
+            {box.current_edges.front()}, 1.0},
+        box.solid);
+    CHECK(filleted.ok());
+    const auto chamfered = query.edgeFeature(
+        kernel::EdgeFeatureInput{
+            kernel::EdgeFeatureOperation::chamfer,
+            {box.current_edges.front()}, 1.0},
+        box.solid);
+    CHECK(chamfered.ok());
+    const kernel::Frame3 xy{};
+    const kernel::Frame3 xz{
+        {0.0, 0.0, 0.0},
+        {1.0, 0.0, 0.0},
+        {0.0, 0.0, 1.0},
+        {0.0, -1.0, 0.0}};
+    std::size_t recognized = 0U;
+    std::size_t unsupported = 0U;
+    for (const auto& result :
+         {box, revolved, filleted, chamfered}) {
+        CHECK(result.ok());
+        CHECK(!result.current_edges.empty());
+        std::size_t supported_stage = 0U;
+        for (const auto token : result.current_edges) {
+            for (const auto& frame : {xy, xz}) {
+                const auto projected =
+                    projectCurrentEdge(query,
+                        result.solid, token, frame);
+                if (projected.ok()) {
+                    CHECK(projected.curve);
+                    ++supported_stage;
+                    ++recognized;
+                } else {
+                    CHECK(!projected.curve);
+                    CHECK(projected.status ==
+                              Status::unsupported_curve ||
+                          projected.status ==
+                              Status::degenerate_projection);
+                    if (projected.status ==
+                        Status::unsupported_curve) {
+                        ++unsupported;
+                    }
+                }
+            }
+        }
+        CHECK(supported_stage > 0U);
+    }
+    std::cout
+        << "PG01A_PART_FEATURE_PROJECTION_PASS"
+        << " features=4"
+        << " exact_curves=" << recognized
+        << " unsupported=" << unsupported << '\\n';
+}
+
+void verifyPg01aExactProjection() {
+    using Status = kernel::EdgeProjectionStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+    const auto box = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("pg01a"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(box.ok());
+    CHECK(box.current_edges.size() >= 12U);
+    const kernel::Frame3 xy{};
+    const kernel::Frame3 xz{
+        {0.0, 0.0, 0.0},
+        {1.0, 0.0, 0.0},
+        {0.0, 0.0, 1.0},
+        {0.0, -1.0, 0.0}};
+    const kernel::Frame3 yz{
+        {0.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0},
+        {1.0, 0.0, 0.0}};
+    const kernel::Frame3 displaced{
+        {25.0, 5.0, 0.0},
+        {0.0, 1.0, 0.0},
+        {-1.0, 0.0, 0.0},
+        {0.0, 0.0, 1.0}};
+    for (const auto& frame : {xy, xz, yz, displaced}) {
+        CHECK(frame.valid());
+        std::size_t lines = 0U;
+        std::size_t degenerate = 0U;
+        for (const auto edge : box.current_edges) {
+            const auto result =
+                projectCurrentEdge(query,
+                    box.solid, edge, frame);
+            CHECK(result.ok() ||
+                  result.status == Status::degenerate_projection);
+            if (result.status == Status::degenerate_projection) {
+                ++degenerate;
+            }
+            if (result.ok()) {
+                CHECK(std::holds_alternative<kernel::Line2>(
+                    *result.curve));
+                ++lines;
+                const auto repeated =
+                    projectCurrentEdge(query,
+                        box.solid, edge, frame);
+                CHECK(repeated.ok());
+                CHECK(repeated.curve == result.curve);
+            }
+        }
+        CHECK(lines >= 4U);
+        CHECK(degenerate > 0U);
+    }
+    // One exactly horizontal Edge must yield an exact Sketch Line in XY.
+    bool found_bottom = false;
+    for (const auto edge : box.current_edges) {
+        const auto result =
+            projectCurrentEdge(query,
+                box.solid, edge, xy);
+        if (!result.ok() ||
+            !std::holds_alternative<kernel::Line2>(
+                *result.curve)) {
+            continue;
+        }
+        const auto& line =
+            std::get<kernel::Line2>(*result.curve);
+        if ((near(line.start.u, 0.0) &&
+             near(line.end.u, 40.0) ||
+             near(line.start.u, 40.0) &&
+             near(line.end.u, 0.0)) &&
+             near(line.start.v, 0.0) &&
+             near(line.end.v, 0.0)) {
+            found_bottom = true;
+        }
+    }
+    CHECK(found_bottom);
+    CHECK(projectCurrentEdge(query,
+              box.solid, {}, xy).status ==
+          Status::invalid_input);
+    auto bad = xy;
+    bad.v_axis = {2.0, 0.0, 0.0};
+    CHECK(projectCurrentEdge(query,
+              box.solid, box.current_edges.front(),
+              bad).status ==
+          Status::invalid_input);
+    struct ForeignSolid final : kernel::RuntimeSolid {};
+    const auto first_scope = query.bindEdgeToBody(
+        box.solid, box.current_edges.front());
+    CHECK(first_scope && first_scope->valid());
+    CHECK(query.projectEdgeToPlane(
+              std::make_shared<ForeignSolid>(),
+              *first_scope, xy).status ==
+          Status::provider_mismatch);
+    CHECK(projectCurrentEdge(query,
+              box.solid,
+              kernel::RuntimeEdgeToken{999999999U},
+              xy).status ==
+          Status::edge_unavailable);
+
+    const auto cylinder = query.extrude(
+        kernel::LinearExtrudeInput{
+            circle("pg01a-circle"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(cylinder.ok());
+    std::size_t projected_circles = 0U;
+    std::size_t tilted_rejections = 0U;
+    for (const auto edge : cylinder.current_edges) {
+        const auto result =
+            projectCurrentEdge(query,
+                cylinder.solid, edge, xy);
+        if (result.ok() &&
+            std::holds_alternative<kernel::Circle2>(
+                *result.curve)) {
+            const auto& c =
+                std::get<kernel::Circle2>(*result.curve);
+            CHECK(near(c.radius, 10.0));
+            CHECK(near(c.center.u, 0.0));
+            CHECK(near(c.center.v, 0.0));
+            ++projected_circles;
+            const auto oblique =
+                projectCurrentEdge(query,
+                    cylinder.solid, edge, yz);
+            CHECK(oblique.status ==
+                  Status::unsupported_curve);
+            CHECK(!oblique.curve);
+            ++tilted_rejections;
+        }
+    }
+    CHECK(projected_circles >= 2U);
+    CHECK(tilted_rejections == projected_circles);
+    std::cout << "PG01A_EXACT_EDGE_PROJECTION"
+              << " box_lines=4+"
+              << " circles=" << projected_circles
+              << " tilted_unsupported="
+              << tilted_rejections << '\\n';
+}
+
 } // namespace
 
 int main() {
@@ -364,6 +829,12 @@ int main() {
     verifyGeometrySimilarityTrap();
     verifyProspectiveDynamicSketchSupport();
     verifyColdRebuild();
+    verifyPg01aExactProjection();
+    verifyPg01aArcProjection();
+    verifyPg01aOnCurrentPartOperations();
+    verifyPg01aGenerationScope();
+    verifyPg01aUnsupportedIntersectionCurve();
+    verifyPg01aOcctExceptionGuard();
 
     std::cout
         << "PM02P_E_KERNEL_LIFECYCLE_PASS"

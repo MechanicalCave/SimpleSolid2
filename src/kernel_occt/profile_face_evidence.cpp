@@ -1,4 +1,5 @@
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
+#include <simplesolid2/kernel_occt/detail/edge_projection_exception_guard.hpp>
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRep_Builder.hxx>
@@ -45,6 +46,7 @@
 #include <iostream>
 #include <numbers>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -5283,6 +5285,40 @@ buildMultiStageLineageEvidence(
             kernel::EvidenceStatus::provider_failure;
         return evidence;
     }
+}
+
+EdgeProjectionExceptionEvidence
+buildEdgeProjectionExceptionEvidence() noexcept {
+    using Status = kernel::EdgeProjectionStatus;
+    EdgeProjectionExceptionEvidence evidence;
+
+    // Execute the same guard used in the production projectEdgeToPlane.
+    // Only this OCCT evidence module (already compiled with OCCT headers)
+    // deliberately constructs and raises Standard_Failure.
+    evidence.occt_failure =
+        detail::guardedExactEdgeProjection(
+            [&]() -> kernel::EdgeProjectionResult {
+                ++evidence.occt_invocations;
+                throw Standard_Failure(
+                    "PG-01A injected native OCCT failure");
+                return {Status::ok, kernel::Line2{}};
+            });
+    evidence.unexpected_failure =
+        detail::guardedExactEdgeProjection(
+            []() -> kernel::EdgeProjectionResult {
+                throw std::runtime_error(
+                    "PG-01A unexpected provider exception");
+            });
+    evidence.success =
+        detail::guardedExactEdgeProjection(
+            []() -> kernel::EdgeProjectionResult {
+                return {
+                    Status::ok,
+                    kernel::Line2{
+                        {1.0, 2.0},
+                        {4.0, 6.0}}};
+            });
+    return evidence;
 }
 
 } // namespace simplesolid2::kernel_occt

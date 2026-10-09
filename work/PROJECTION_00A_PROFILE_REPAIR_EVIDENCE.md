@@ -1,6 +1,6 @@
 # Projection 00A — Existing Profile/Extrude Repair Evidence
 
-**Status:** Automated semantic A0–A7 FOCUSED PASS, wider FAST #1913 PASS 93/93; final closure-head FULL and Owner practical GUI A8 not yet accepted/verified.
+**Status:** COMPLETED — Owner final Projection 00A PASS 2026-10-09; Core 25/25 + native 57/57 + Desktop 113/113 = FULL #1915 195/195 PASS, docs and aggregate PASS; A8 practical UI separately NOT CLAIMED.
 **Date:** 2026-10-09
 **Authority:** Owner-accepted `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE_CONTRACT.md`
 **Baseline:** `main` `636a2989b28fc3723e6cde0130e654bf12c17657`
@@ -39,8 +39,12 @@
 
 ## CI / evidence closure
 
-**FAST #1913 already PASS 93/93** for the invalid candidate and cross-suite regression. Next: run **one** Ready-for-Review exact-head FULL (Core + native kernel + desktop + docs) before formal package closeout / squash merge. No clean FULL during iteration; keep CMake/CI unchanged.
+**FAST #1913 PASS 93/93** plus evidence-sync FAST #1914 PASS 93/93. **Ready-for-Review exact-head FULL #1915 PASS 195/195** on `efcba9ad4d436b40d533510dc076538a94d4392e`, documentation and aggregate PASS. **PR #299 squash-merged to `main` as `2cda8e04d7d0e2594edae7dc90e88cbb90dcae35`.** Owner explicitly accepted full Projection 00A PASS. The evidence gate is closed; A8 practical UI remains separate.
 
 ## Documentation impact
 
 No product behavior changed. Internal and user-facing current-state documentation are unchanged by this evidence/test-only package. PL/EN Product docs and generated Browser are mandatory for a separately Owner-approved shipping Project Geometry package.
+
+## Owner final acceptance and merge — 2026-10-09
+
+Owner's **`Zatwierdzam 00A - kontynuuj`** is final package acceptance for the defined A0–A7 semantic evidence scope. [Windows FULL #1915](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37890913601) passed **195/195**, docs and aggregate on exact PR HEAD `efcba9ad4d436b40d533510dc076538a94d4392e`; guarded [PR #299](https://github.com/MechanicalCave/SimpleSolid2/pull/299) squash merge is `2cda8e04d7d0e2594edae7dc90e88cbb90dcae35`. Real GUI A8 was not performed and is not asserted. A next Project Geometry contract must be independently activated.
