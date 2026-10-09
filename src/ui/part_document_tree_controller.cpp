@@ -1799,9 +1799,20 @@ void PartDocumentTreeController::rebuild(
                     continue;
                 }
 
+                // Linked Profiles use the exact current provider-backed
+                // Sketch, never the authored seed. Without the adapter
+                // linked status must fail closed, not become falsely Valid.
+                const auto* source_sketch =
+                    session_->document().findSketch(
+                        profile.source_sketch_id);
                 const auto evaluation =
-                    session_->document()
-                        .evaluateProfile(profile.id);
+                    profile_evaluation_provider_
+                        ? profile_evaluation_provider_(profile.id)
+                        : (source_sketch &&
+                               source_sketch->projection_bindings.empty()
+                               ? session_->document().evaluateProfile(
+                                     profile.id)
+                               : std::nullopt);
                 const bool valid =
                     evaluation &&
                     evaluation->valid();
