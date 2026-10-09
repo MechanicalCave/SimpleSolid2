@@ -7,7 +7,7 @@
 
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PG-01B — Owner D2 architecture and Work Contract approved 2026-10-09; Part-owned source bindings / effective Sketch / v15 structural persistence under active PG-01B. PG-01A prior Owner FINAL PASS FULL #1932 195/195, [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) merged `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`  
+**Current active checkpoint:** PG-01C — Owner approved D2-A through D2-E and bounded Work Contract 2026-10-09; one same-Part material Edge Project Geometry tool with right Operations/Command Line/Esc parity, effective Sketch presentation, linked status/Break Link; implementation authorized only after the dedicated `ACTIVE.yaml` activation gate. PG-01B Owner FINAL PASS, Windows FULL #1970 195/195 and [PR #301](https://github.com/MechanicalCave/SimpleSolid2/pull/301) merged `8d78320daca8a72a1431fbece49296c3bfb83aec`; PG-01A [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) merged `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`. CI FAST mismatch tracked independently as [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302); no waiver.  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
