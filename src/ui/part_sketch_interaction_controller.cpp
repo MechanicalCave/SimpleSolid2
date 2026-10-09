@@ -2118,9 +2118,17 @@ bool PartSketchInteractionController::finishProfile() {
             "Profile draft is not valid against the current Sketch.");
         return false;
     }
-    if (solid_modeling_kernel_ == nullptr) {
+    // Ordinary authored-only Sketches retain the accepted headless
+    // Create/Edit path. Only linked Sketches need a current exact
+    // projection provider; the no-provider overload refuses them.
+    const auto* profile_source_sketch =
+        session_->document().findSketch(*sketch_id_);
+    const bool linked_source =
+        profile_source_sketch != nullptr &&
+        !profile_source_sketch->projection_bindings.empty();
+    if (linked_source && solid_modeling_kernel_ == nullptr) {
         reportStatus(
-            "Profile source provider is unavailable.");
+            "Profile linked source provider is unavailable.");
         return false;
     }
 
@@ -2133,13 +2141,11 @@ bool PartSketchInteractionController::finishProfile() {
 
     bool committed = false;
     if (kind == ProfileToolSessionKind::create) {
-        const auto result =
-            session_->execute(
-                application::CreateProfileCommand{
-                    *sketch_id_,
-                    expected,
-                    draft},
-                *solid_modeling_kernel_);
+        const application::CreateProfileCommand command{
+            *sketch_id_, expected, draft};
+        const auto result = linked_source
+            ? session_->execute(command, *solid_modeling_kernel_)
+            : session_->execute(command);
         if (!result.ok()) {
             reportStatus(
                 result.diagnostic.message.empty()
@@ -2175,14 +2181,11 @@ bool PartSketchInteractionController::finishProfile() {
             return true;
         }
 
-        const auto result =
-            session_->execute(
-                application::
-                    ReplaceProfileRegionIntentCommand{
-                        *profile_session_->profile_id,
-                        expected,
-                        draft},
-                *solid_modeling_kernel_);
+        const application::ReplaceProfileRegionIntentCommand command{
+            *profile_session_->profile_id, expected, draft};
+        const auto result = linked_source
+            ? session_->execute(command, *solid_modeling_kernel_)
+            : session_->execute(command);
         if (!result.ok()) {
             reportStatus(
                 result.diagnostic.message.empty()
