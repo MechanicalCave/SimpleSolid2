@@ -343,15 +343,19 @@ exact/materialized 2D geometry
 
 The Projection Engine owns geometric conversion, not dependency policy.
 
-### 7.2 Part-local Project Edge — DIRECTION
+### 7.2 Part-local Project Geometry — DIRECTION (Owner D2 amended 2026-10-09)
 
-Projecting currently evaluated Part geometry into a Part 2D model should default to **capture/snapshot semantics**.
+**Same-Part Project Geometry is associative by default** within a legal ordered Part-feature history. An authored target Sketch Entity has durable, strict upstream semantic source binding; its current 2D Line/Circle/Arc geometry is derived on recompute from the current accepted source stage and target Sketch frame. Both linked **Regular** (profile participating) and **Construction** (reference only) roles are allowed independently of the link.
 
-The accepted result becomes authored target 2D geometry.
+The source-controlled geometric degrees of freedom of a linked entity are not freely editable. A visible link indicator and the explicit **Break Link** action are required; Break Link retains the latest currently resolved 2D geometry as local authored Sketch geometry, keeps stable EntityId and compatible constraints, and removes the dependency. A missing, ambiguous or cyclic binding fails closed; it must not silently use old materialized data or guess similar geometry.
 
-Later source changes do not silently modify that captured geometry.
+Projecting a selected planar Face may **partially capture supported exact boundary curves**, including supported hole edges, with explicit per-edge skipped Unsupported diagnostics. The tool neither silently closes gaps nor approximates unsupported curve classes. Source identity failures are distinct from Unsupported geometry. Initial exact set is Line/Circle/Arc; capture and refresh must follow the owning Work Contract.
 
-A future explicit `Reproject`/`Refresh` command may be introduced without making automatic associativity the default.
+Projection auto-recomputes **existing strictly bound entities only**. It does not automatically author new Sketch EntityIds when a Face's membership changes; optional explicit Refresh/Reproject membership reconciliation is deferred until architectural repair evidence and a separate accepted contract.
+
+The shared Projection Engine only computes exact geometry. Part owns dependency/link semantics and command/persistence behavior. This bounded local dependency does **not** create a universal Part/Assembly or project-wide solver/dependency graph.
+
+**This DIRECTION amendment does not change §7.3 CORE**: future Assembly-context projection stays a Part-owned snapshot without any cross-document parametric link.
 
 ### 7.3 Assembly Projection Context — CORE
 
@@ -383,7 +387,7 @@ Projection dependency policy belongs to the host domain.
 Therefore:
 
 ```text
-Part local Project Edge          → authored snapshot
+Part-local Project Edge / Face   → associative derived 2D via durable same-Part binding
 Assembly-context Project Edge    → authored snapshot
 Drawing model View               → derived / regenerable
 Drawing custom overlay           → authored / persistent
