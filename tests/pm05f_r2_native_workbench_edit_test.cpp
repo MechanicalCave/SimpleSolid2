@@ -1064,8 +1064,25 @@ int main(int argc, char* argv[]) {
                       << " undo_redo=1\n";
 
             // D3 fail-closed: a real previously acquired Face cannot be
-            // finished after its source Feature is suppressed. The stale
-            // document revision/generation must not create any links.
+            // finished after its source Feature is suppressed. Undo/Redo
+            // above advanced document revision through the headless
+            // session; rebind the live Workbench scene to that revision
+            // *before* acquiring a genuine native Face anew.
+            CHECK(workbench.activateDocument(&face_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* fresh_sketch_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
+                    fresh_sketch_item = *it;
+                    break;
+                }
+            }
+            CHECK(fresh_sketch_item);
+            tree->clearSelection();
+            tree->setCurrentItem(fresh_sketch_item);
+            fresh_sketch_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
             reply = workbench.submitCadInput(
                 "PROJECT", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
