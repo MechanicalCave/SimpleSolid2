@@ -391,6 +391,120 @@ bool clickAuthorableRevolveCircle(
     return false;
 }
 
+// PG-01D D0 native SS2 semantic-side characterization.
+// The independent native OCCT wire/hole proof is recorded in work/.
+// This test checks the *actual* current Part/OCCT catalog, not OCP:
+// strict bounded Face identity is distinct from Surface-carrier admission,
+// and only existing material Edge authoring can create accepted sources.
+// The provider-facing wire membership query is intentionally NOT invented.
+void verifyPg01dNativeStrictFaceAndMaterialCatalog(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    auto session = makeBaseSession(kernel);
+    const auto hole_sketch =
+        session.execute(application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(hole_sketch.ok() && hole_sketch.sketch_id);
+    const auto circle = session.execute(
+        application::AddSketchCircleCommand{
+            *hole_sketch.sketch_id,
+            {20.0, 15.0},
+            5.0,
+            sketch::EntityRole::regular});
+    CHECK(circle.ok());
+    const auto* authored =
+        session.document().findSketch(*hole_sketch.sketch_id);
+    CHECK(authored != nullptr);
+    const auto regions = sketch::analyzeRegions(authored->model);
+    CHECK(regions.complete() && regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(regions.regions.front());
+    CHECK(intent.has_value());
+    const auto profile = session.execute(
+        application::CreateProfileCommand{
+            *hole_sketch.sketch_id,
+            session.document().revision(),
+            *intent});
+    CHECK(profile.ok() && profile.profile_id);
+    const auto through_cut = session.execute(
+        application::CreateExtrudeFeatureCommand{
+            *profile.profile_id,
+            session.document().revision(),
+            part::ExtrudeOperation::cut,
+            part::OneSidedExtrudeExtent{
+                core::LengthValue{25.0}, false},
+            "PG01D native through-hole D0"},
+        kernel);
+    CHECK(through_cut.ok() && through_cut.feature_id);
+
+    const auto evaluation =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluation.current_topology.has_value());
+    const auto& catalog = *evaluation.current_topology;
+    CHECK(catalog.complete());
+    CHECK(catalog.stage.feature_id &&
+          *catalog.stage.feature_id == *through_cut.feature_id);
+
+    std::size_t strict_face_count = 0U;
+    std::size_t carrier_only_face_count = 0U;
+    std::size_t other_face_count = 0U;
+    for (const auto& face : catalog.faces) {
+        CHECK(face.valid());
+        if (face.semantic_address) {
+            ++strict_face_count;
+            CHECK(!face.surface_candidates.empty());
+        } else if (!face.surface_candidates.empty()) {
+            // Sketch-support admission by Surface is NOT strict
+            // bounded-Face Project Geometry authoring permission.
+            ++carrier_only_face_count;
+        } else {
+            ++other_face_count;
+        }
+    }
+    CHECK(!catalog.faces.empty());
+    CHECK(strict_face_count > 0U);
+
+    std::vector<part::MaterialEdgeReference>
+        current_material_edges;
+    std::size_t nonmaterial_edge_count = 0U;
+    for (const auto& edge : catalog.edges) {
+        CHECK(edge.valid());
+        const auto authored_edge =
+            part::authorMaterialEdgeReference(
+                catalog, edge.runtime_token);
+        if (!authored_edge.ok()) {
+            ++nonmaterial_edge_count;
+            continue;
+        }
+        CHECK(authored_edge.reference.has_value());
+        CHECK(authored_edge.reference->stage == catalog.stage);
+        current_material_edges.push_back(
+            *authored_edge.reference);
+    }
+    CHECK(!current_material_edges.empty());
+    std::sort(
+        current_material_edges.begin(),
+        current_material_edges.end());
+    CHECK(std::adjacent_find(
+        current_material_edges.begin(),
+        current_material_edges.end()) ==
+        current_material_edges.end());
+    CHECK(strict_face_count + carrier_only_face_count +
+              other_face_count == catalog.faces.size());
+    CHECK(current_material_edges.size() +
+              nonmaterial_edge_count == catalog.edges.size());
+
+    std::cout << "PG01D_D0_NATIVE_STRICT_FACE_CATALOG_PASS"
+              << " strict_faces=" << strict_face_count
+              << " carrier_only_faces=" << carrier_only_face_count
+              << " other_faces=" << other_face_count
+              << " material_edges=" << current_material_edges.size()
+              << " rejected_nonmaterial=" << nonmaterial_edge_count
+              << " provider_face_wires_not_yet_claimed=1"
+              << '\\n';
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -398,6 +512,7 @@ int main(int argc, char* argv[]) {
     const bool pg01c_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01c";
     kernel_occt::OcctSolidModelingKernel kernel;
+    verifyPg01dNativeStrictFaceAndMaterialCatalog(kernel);
     viewer_qt_occt::QtOcctViewerWidget* viewport = nullptr;
     ui::CadWorkbench workbench{
         [&viewport](QWidget* parent) {
