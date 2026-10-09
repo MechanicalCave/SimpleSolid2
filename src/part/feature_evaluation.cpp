@@ -753,7 +753,8 @@ resolveKernelRevolveInput(
     const PartDocument& document,
     const RevolveFeature& feature,
     const PartEvaluation* prefix_evaluation,
-    const DatumEvaluation* datum_evaluation) {
+    const DatumEvaluation* datum_evaluation,
+    const sketch::SketchModel* effective_sketch) {
     RevolveKernelInputResult result;
 
     if (!revolveFeatureStructurallyValid(
@@ -784,7 +785,8 @@ resolveKernelRevolveInput(
             document,
             profile->id,
             support_topology,
-            datum_evaluation);
+            datum_evaluation,
+            effective_sketch);
     if (!materialized.ok()) {
         result.status =
             materialized.status ==
@@ -4652,6 +4654,41 @@ PartEvaluation evaluatePart(
                         result);
             }
 
+            // PG-01B/B3: only the currently evaluated upstream Feature
+            // prefix may author an effective Sketch geometry snapshot.
+            // The snapshot is disposable; no authored model, provider
+            // token, identity or DocumentRevision is mutated by it.
+            // If an active linked Regular source cannot be reprojected,
+            // resolveKernelProfileInput fails closed on the derived
+            // missing Entity rather than taking its stale authored seed.
+            std::optional<EffectiveSketchProjection>
+                effective_profile_sketch;
+            if (const auto* source_sketch =
+                    document.findSketch(
+                        profile->source_sketch_id);
+                source_sketch &&
+                !source_sketch->projection_bindings.empty()) {
+                if (auto* projection_query =
+                        dynamic_cast<
+                            kernel::IEdgeProjectionQuery*>(
+                            &modeling_kernel)) {
+                    effective_profile_sketch =
+                        evaluateEffectiveSketchProjection(
+                            document,
+                            profile->source_sketch_id,
+                            result,
+                            *projection_query,
+                            authored.id);
+                }
+                // Without a matching projection provider, the normal
+                // authored Profile safety fence retains fail-closed
+                // behavior. It never fabricates current linked truth.
+            }
+            const auto* evaluated_model =
+                effective_profile_sketch
+                    ? &effective_profile_sketch->model
+                    : nullptr;
+
             if (extrude != nullptr) {
                 auto materialized_profile =
                     resolveKernelProfileInput(
@@ -4660,7 +4697,8 @@ PartEvaluation evaluatePart(
                         support_topology,
                         support_datums
                             ? &*support_datums
-                            : nullptr);
+                            : nullptr,
+                        evaluated_model);
                 if (!materialized_profile.ok()) {
                     evaluated.status =
                         materialized_profile.status ==
@@ -4743,7 +4781,8 @@ PartEvaluation evaluatePart(
                         &result,
                         support_datums
                             ? &*support_datums
-                            : nullptr);
+                            : nullptr,
+                        evaluated_model);
                 if (!resolved.ok()) {
                     evaluated.status =
                         resolved.status ==

@@ -474,7 +474,10 @@ resolveKernelRevolveInput(
     const PartDocument& document,
     const RevolveFeature& feature,
     const PartEvaluation* prefix_evaluation,
-    const DatumEvaluation* datum_evaluation);
+    const DatumEvaluation* datum_evaluation,
+    // Optional strictly evaluated same-Sketch source: Region, input
+    // curves and Revolve axis checks use the same current profile.
+    const sketch::SketchModel* effective_sketch = nullptr);
 
 // Builds the exact provider-neutral modeling input for one authored
 // Extrude definition. This is transient derived data shared by evaluation
