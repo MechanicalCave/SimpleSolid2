@@ -246,10 +246,13 @@ void runProjection00AProfileRepairEvidence() {
     if (!erased.ok()) {
         CHECK(!erased.changed);
         CHECK(session.document().state() == before_erase);
-        std::cout << "PROJECTION00A_A2_ERASE_REJECTED_NO_MUTATION\n";
-        return;
+        std::cerr << "PROJECTION00A_A2_ERASE_REJECTED_NO_MUTATION: "
+                  << erased.diagnostic.message << '\n';
     }
-    CHECK(erased.changed);
+    // The proposed repair path requires authorable, dangling intent. If
+    // current SS2 rejects the erase, leave this strict RED as architecture
+    // evidence rather than silently skipping all later repair assertions.
+    CHECK(erased.ok() && erased.changed);
     CHECK(session.document().findProfile(profile_id) != nullptr);
     CHECK(session.document().findFeature(feature_id) != nullptr);
 
@@ -290,10 +293,9 @@ void runProjection00AProfileRepairEvidence() {
             << "PROJECTION00A_A3_NEW_REGION_UNAVAILABLE"
             << " regions=" << regions.regions.size()
             << " complete=" << regions.complete() << '\n';
-        // This is a precise limitation of the current region analyzer, not
-        // permission to patch production source under evidence-only scope.
-        CHECK(session.document().findFeature(feature_id)->id == feature_id);
-        return;
+        // A missing valid region is a real evidence RED, not a skipped PASS.
+        // No production code changes are allowed by the 00A Work Contract.
+        CHECK(regions.complete() && regions.regions.size() == 1U);
     }
     const auto replacement_intent = part::makeProfileRegionIntent(
         regions.regions.front());
