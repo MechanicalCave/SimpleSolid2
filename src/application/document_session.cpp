@@ -2591,6 +2591,18 @@ DuplicateSketchGeometryResult DocumentSession::execute(
 
 CreateProfileResult DocumentSession::execute(
     const CreateProfileCommand& command) {
+    return executeCreateProfile(command, nullptr);
+}
+
+CreateProfileResult DocumentSession::execute(
+    const CreateProfileCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    return executeCreateProfile(command, &modeling_kernel);
+}
+
+CreateProfileResult DocumentSession::executeCreateProfile(
+    const CreateProfileCommand& command,
+    kernel::ISolidModelingKernel* modeling_kernel) {
     if (document_.revision() !=
         command.expected_revision) {
         const auto failed = failure(
@@ -2629,9 +2641,39 @@ CreateProfileResult DocumentSession::execute(
             failed.diagnostic};
     }
 
+    // A linked source never validates against persisted projected seeds.
+    // Re-resolve from this exact revision, current source stage and
+    // provider at semantic Command execution time.
+    const sketch::SketchModel* current_model = &source->model;
+    std::optional<part::EffectiveSketchProjection> effective;
+    if (!source->projection_bindings.empty()) {
+        auto* query = modeling_kernel
+            ? dynamic_cast<kernel::IEdgeProjectionQuery*>(
+                  modeling_kernel)
+            : nullptr;
+        if (!query) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Create Profile requires current exact projection provider",
+                path_);
+            return {false, std::nullopt, failed.diagnostic};
+        }
+        const auto prefix =
+            part::evaluatePart(document_, *modeling_kernel);
+        effective = part::evaluateEffectiveSketchProjection(
+            document_, command.source_sketch_id, prefix, *query);
+        if (!effective || !effective->allResolved()) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Create Profile linked Sketch has unresolved current sources",
+                path_);
+            return {false, std::nullopt, failed.diagnostic};
+        }
+        current_model = &effective->model;
+    }
     const auto resolved =
         part::resolveProfileRegionIntent(
-            source->model,
+            *current_model,
             command.region_intent);
     if (!resolved.valid()) {
         const auto failed = failure(
@@ -2685,6 +2727,18 @@ CreateProfileResult DocumentSession::execute(
 
 DocumentSessionResult DocumentSession::execute(
     const ReplaceProfileRegionIntentCommand& command) {
+    return executeEditProfile(command, nullptr);
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const ReplaceProfileRegionIntentCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    return executeEditProfile(command, &modeling_kernel);
+}
+
+DocumentSessionResult DocumentSession::executeEditProfile(
+    const ReplaceProfileRegionIntentCommand& command,
+    kernel::ISolidModelingKernel* modeling_kernel) {
     if (document_.revision() !=
         command.expected_revision) {
         return failure(
@@ -2720,8 +2774,34 @@ DocumentSessionResult DocumentSession::execute(
             path_);
     }
 
+    const sketch::SketchModel* current_model = &source->model;
+    std::optional<part::EffectiveSketchProjection> effective;
+    if (!source->projection_bindings.empty()) {
+        auto* query = modeling_kernel
+            ? dynamic_cast<kernel::IEdgeProjectionQuery*>(
+                  modeling_kernel)
+            : nullptr;
+        if (!query) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Edit Profile requires current exact projection provider",
+                path_);
+        }
+        const auto prefix =
+            part::evaluatePart(document_, *modeling_kernel);
+        effective = part::evaluateEffectiveSketchProjection(
+            document_, profile->source_sketch_id,
+            prefix, *query);
+        if (!effective || !effective->allResolved()) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Edit Profile linked Sketch has unresolved current sources",
+                path_);
+        }
+        current_model = &effective->model;
+    }
     if (!part::resolveProfileRegionIntent(
-             source->model,
+             *current_model,
              command.region_intent)
              .valid()) {
         return failure(
