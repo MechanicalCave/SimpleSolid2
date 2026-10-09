@@ -107,6 +107,6 @@ No edits to Foundation, accepted ADRs, program roadmap semantics, `src/part/part
 
 ## Documentation impact
 
-**Internal docs: required** — introduce provider-neutral Face wire query/strict bounded Face ↔ material Edge mapping and current-source diagnostics.  
-**User/Product docs: required** — new planar Face mode, outer/hole, partial Unsupported behavior and repair/Finish workflows; both Polish and English.  
-**Reason:** this package changes a shipping Sketch tool, public/native runtime query ownership and end-user failure/recovery behavior. Update current as-built Markdown and bilingual current Product docs, regenerate Browser; do not publish speculative DRAFT behavior as shipped functionality.
+Internal docs: required
+User/Product docs: required
+Reason: PG-01D introduces a native Face-wire read contract, strict bounded Face/material Edge semantics, one Sketch Project Geometry Face mode, visible partial failures and linked lifecycle. Ship current internal as-built documentation and paired Polish/English Product docs; regenerate the Browser via `.\\ss2.ps1 docs` before PG-01D acceptance.
