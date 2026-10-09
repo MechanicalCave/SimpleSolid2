@@ -1,5 +1,6 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
+#include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
@@ -433,6 +434,98 @@ void verifyPartIntegration() {
                                unsupported;
             });
     CHECK(partition_count >= 1);
+
+    // PG-01D D1: the Surface carrier remains one semantic Surface even
+    // where it spans two distinct current bounded Face realizations.
+    // Read *each* native Face's real oriented wires independently; do
+    // not reinterpret the carrier as one guessed Face perimeter.
+    CHECK(final_eval.body_solid);
+    std::vector<kernel::RuntimeFaceToken> observed_faces;
+    std::size_t carrier_only_faces = 0U;
+    std::size_t admitted_strict_faces = 0U;
+    std::size_t boundary_material_uses = 0U;
+    std::size_t boundary_partition_uses = 0U;
+    std::size_t boundary_other_nonmaterial_uses = 0U;
+    for (const auto token : current_side->current_faces) {
+        CHECK(std::find(
+            observed_faces.begin(),
+            observed_faces.end(), token) == observed_faces.end());
+        observed_faces.push_back(token);
+        const auto* face = [&]() -> const part::BodyFaceTopologyRecord* {
+            for (const auto& record : topology.faces) {
+                if (record.runtime_token == token) return &record;
+            }
+            return nullptr;
+        }();
+        CHECK(face != nullptr);
+        CHECK(face->surface_candidates.size() == 1U);
+        CHECK(face->surface_candidates.front() ==
+              current_side->address);
+        if (face->semantic_address) {
+            ++admitted_strict_faces;
+        } else {
+            // A resolved Surface carrier with ambiguous strict Face
+            // meaning MUST NOT authorize Face-mode authoring.
+            ++carrier_only_faces;
+        }
+        const auto scoped =
+            provider.bindFaceToBody(final_eval.body_solid, token);
+        CHECK(scoped && scoped->valid());
+        const auto native =
+            provider.queryFaceBoundary(final_eval.body_solid, *scoped);
+        CHECK(native.ok());
+        std::size_t outer_wires = 0U;
+        for (const auto& wire : native.wires) {
+            CHECK(wire.valid());
+            if (wire.outer) ++outer_wires;
+            for (const auto& occurrence : wire.edges) {
+                CHECK(occurrence.valid());
+                const auto edge = std::find_if(
+                    topology.edges.begin(),
+                    topology.edges.end(),
+                    [&occurrence](const auto& record) {
+                        return record.runtime_token ==
+                               occurrence.edge;
+                    });
+                CHECK(edge != topology.edges.end());
+                const auto author =
+                    part::authorMaterialEdgeReference(
+                        topology, occurrence.edge);
+                if (edge->representation_partition ||
+                    edge->periodic_seam) {
+                    // Native wires contain representation artifacts.
+                    // These are never material Sketch source references.
+                    CHECK(!author.ok());
+                    ++boundary_partition_uses;
+                } else if (author.ok()) {
+                    CHECK(author.reference &&
+                          author.reference->stage == topology.stage);
+                    ++boundary_material_uses;
+                } else {
+                    ++boundary_other_nonmaterial_uses;
+                }
+            }
+        }
+        CHECK(outer_wires == 1U);
+    }
+    CHECK(observed_faces.size() ==
+          current_side->current_faces.size());
+    CHECK(carrier_only_faces + admitted_strict_faces ==
+          observed_faces.size());
+    CHECK(carrier_only_faces >= 1U);
+    CHECK(boundary_material_uses > 0U);
+    CHECK(boundary_partition_uses >= 1U);
+    std::cout
+        << "PG01D_D1_SPLIT_FACE_BOUNDARY_PASS"
+        << " face_realizations=" << observed_faces.size()
+        << " carrier_only=" << carrier_only_faces
+        << " strict_face=" << admitted_strict_faces
+        << " material_uses=" << boundary_material_uses
+        << " rejected_partition_or_seam="
+        << boundary_partition_uses
+        << " other_nonmaterial="
+        << boundary_other_nonmaterial_uses
+        << '\n';
 
     const part::SurfaceReference final_side_ref{
         topology.stage,
