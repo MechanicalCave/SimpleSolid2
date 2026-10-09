@@ -132,6 +132,7 @@ Modify
   Rotate
   Scale
   Mirror
+  Project Geometry
 
 Inspect
   Measure
@@ -308,6 +309,21 @@ Creation tools preserve pre-existing selection but hide/deactivate grips while a
 An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane, planar Body Face or Datum Plane, then **Apply Support** to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported, Blocked or cycle-causing targets are rejected without partial mutation. Editing an upstream Datum source/Offset recomputes the Sketch world frame without rewriting its local geometry. Undo/Redo restores the previous semantic support intent.
 
 Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver and authored dimensions remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
+
+<!-- section-id: product.parts.project-geometry -->
+## Project Geometry — projecting Body edges into a Sketch
+
+While **Sketch Edit** is active, choose **Project Geometry** from the **Modify** toolbar group or enter `PROJECT` in the global **Command Line**. This is one tool with one shared state; the options appear in the right-hand **Operations** panel. It creates associative projections of **material Edges** from the current Body at an earlier stage of the same Part onto the editing Sketch plane. It does not project a planar Face or automatically capture a whole face boundary.
+
+Operations shows the source stage, selected Edge count, **Regular** or **Construction** (Regular by default), **Remove**, **Clear**, **Finish Project Geometry** and **Cancel**. Click real Body edges in the Viewport. Valid edges enter a temporary selection, and their current projection must resolve into a live preview before Finish becomes enabled. Preview style reflects the selected role. Unsupported edges, wrong-stage edges and unavailable current sources do not produce a partial committed result.
+
+Choose **Finish Project Geometry**, enter `FINISH`, or press **Enter** with the Viewport focused to create the linked Sketch entities in one Undo step. An empty or invalid Finish does not modify the Part. **Remove** drops the primary staged Edge, **Clear** removes all staged Edges, and **Cancel** exits with no authored changes. When Edge sources are staged, the first **Esc** clears the source selection and the second returns to **Select**. If Command Line contains unfinished text, the first Esc only clears that text. Typed `CANCEL` and the Cancel button always exit immediately.
+
+While the tool is active, Command Line accepts `REGULAR`, `CONSTRUCTION`, `REMOVE`, `CLEAR`, `FINISH` and `CANCEL`. The `PROJECTGEOMETRY` start alias is also supported. Command Line and the right-hand buttons operate on the same staged selection. A rejected keyword leaves the tool active and reports a diagnostic. Switching Documents, ending Sketch Edit, or issuing Undo/Redo during staging clears the selection and preview.
+
+After Finish, a projected **Line, Circle or Arc** has a distinct linked visual style, independent of its Regular/Construction role. **Regular** geometry can participate in a valid Profile; **Construction** geometry remains reference-only. Selecting one linked entity in Sketch Select shows its source Feature and current status in the right panel. **Break Link** preserves the entity's current geometry and Sketch identity while removing its source association; it requires a successfully resolved current source. Break Link and Delete are Undo/Redo-capable model operations. When upstream source geometry changes, the projected display derives from the current Body; an unavailable or unsupported source never revives a previously saved curve as a valid linked source.
+
+**Scope:** Only exact Line, Circle and Arc projections of referenceable material Edges from an earlier Body stage are supported. Representation-partition edges, degenerate projections and curves needing approximation are not silently converted to polylines. This is not a face-boundary capture tool, cross-Part projection or automatic constraint creation.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Structural editing — Trim and Extend
