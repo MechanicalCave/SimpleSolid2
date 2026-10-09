@@ -1956,6 +1956,34 @@ DocumentSession::execute(
             failed.diagnostic};
     }
 
+    // Structural-edit evaluators use authored Sketch input today, not
+    // the current provider-derived Sketch. Reject linked targets AND linked
+    // reference boundaries rather than accidentally using a stale seed.
+    // A future provider-aware overload may accept linked boundaries once
+    // it evaluates them from the current upstream Body stage.
+    const bool touches_linked_geometry = std::any_of(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [&command](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == command.target ||
+                    std::find(
+                        command.boundaries.begin(),
+                        command.boundaries.end(),
+                        binding.target_entity) !=
+                        command.boundaries.end();
+        });
+    if (touches_linked_geometry) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Trim cannot use linked source-controlled Sketch geometry until it is re-evaluated",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
     const auto evaluated =
         sketch::evaluateTrim(
             target->model,
@@ -2037,6 +2065,34 @@ DocumentSession::execute(
             failed.diagnostic};
     }
 
+    // Structural-edit evaluators use authored Sketch input today, not
+    // the current provider-derived Sketch. Reject linked targets AND linked
+    // reference boundaries rather than accidentally using a stale seed.
+    // A future provider-aware overload may accept linked boundaries once
+    // it evaluates them from the current upstream Body stage.
+    const bool touches_linked_geometry = std::any_of(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [&command](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == command.target ||
+                    std::find(
+                        command.boundaries.begin(),
+                        command.boundaries.end(),
+                        binding.target_entity) !=
+                        command.boundaries.end();
+        });
+    if (touches_linked_geometry) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend cannot use linked source-controlled Sketch geometry until it is re-evaluated",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
     const auto evaluated =
         sketch::evaluateExtend(
             target->model,
@@ -2114,6 +2170,30 @@ DocumentSession::execute(
         return {
             false,
             sketch::StructuralEditStatus::missing_entity,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    // Structural-edit evaluators use authored Sketch input today, not
+    // the current provider-derived Sketch. Reject linked targets AND linked
+    // reference boundaries rather than accidentally using a stale seed.
+    // A future provider-aware overload may accept linked boundaries once
+    // it evaluates them from the current upstream Body stage.
+    const bool touches_linked_geometry = std::any_of(
+        target->projection_bindings.begin(),
+        target->projection_bindings.end(),
+        [&command](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == command.first_line ||
+                    binding.target_entity == command.second_line;
+        });
+    if (touches_linked_geometry) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend Both cannot use linked source-controlled Sketch geometry until it is re-evaluated",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
             std::nullopt,
             failed.diagnostic};
     }

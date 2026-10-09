@@ -466,6 +466,8 @@ void verifyPg01bB2EffectiveSketch(
     const auto id = target.model.addLine(
         {1.0, 2.0}, {3.0, 4.0});
     target.projection_bindings.push_back({id, source});
+    const auto other_id =
+        target.model.addLine({0.0, 0.0}, {0.0, 10.0});
     const auto sketch_id = target.id;
     state.sketches.push_back(std::move(target));
     auto document = part::PartDocument::restore(
@@ -560,6 +562,37 @@ void verifyPg01bB2EffectiveSketch(
             {{id, {8.0, 9.0}, {18.0, 19.0}}}});
     CHECK(!rejected.ok() && !rejected.changed);
     CHECK(session.document().state() == before);
+
+    const auto trim = session.execute(
+        application::TrimSketchCommand{
+            sketch_id, session.document().revision(),
+            id, {}, {0.0, 0.0}});
+    CHECK(!trim.changed);
+    CHECK(trim.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    const auto trim_ref = session.execute(
+        application::TrimSketchCommand{
+            sketch_id, session.document().revision(),
+            other_id, {id}, {0.0, 0.0}});
+    CHECK(!trim_ref.changed);
+    CHECK(trim_ref.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    const auto extend = session.execute(
+        application::ExtendSketchCommand{
+            sketch_id, session.document().revision(),
+            id, {}, sketch::StructuralEndpointRole::end});
+    CHECK(!extend.changed);
+    CHECK(extend.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    const auto both = session.execute(
+        application::ExtendBothSketchLinesCommand{
+            sketch_id, session.document().revision(),
+            other_id, id});
+    CHECK(!both.changed);
+    CHECK(both.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    CHECK(session.document().state() == before);
+
     const auto erased = session.execute(
         application::EraseSketchEntityCommand{
             sketch_id, id});
@@ -584,6 +617,7 @@ void verifyPg01bB2EffectiveSketch(
     std::cout << "PG01B_B4A_LINKED_EDIT_ERASE_PASS"
               << " direct_edit_blocked=1"
               << " atomic_erase_binding=1"
+              << " trim_extend_guarded=1"
               << " undo_redo=1\n";
     std::cout << "PG01B_B2_EFFECTIVE_SKETCH_PASS"
               << " stable_entity=1"
