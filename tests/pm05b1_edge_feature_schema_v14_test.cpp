@@ -547,6 +547,44 @@ void verifyPg01bB2EffectiveSketch(
     CHECK(missing->outcomes.front().status ==
           part::ProjectedSketchSourceStatus::missing_stage);
 
+    // B4a: direct geometry editing of a linked target is an invalid
+    // semantic mutation; Erase atomically removes its binding and Undo
+    // restores both the stable EntityId and source intent.
+    application::DocumentSession session{
+        {}, std::move(*document.document)};
+    const auto before = session.document().state();
+    const auto rejected = session.execute(
+        application::UpdateSketchLinesCommand{
+            sketch_id,
+            session.document().revision(),
+            {{id, {8.0, 9.0}, {18.0, 19.0}}}});
+    CHECK(!rejected.ok() && !rejected.changed);
+    CHECK(session.document().state() == before);
+    const auto erased = session.execute(
+        application::EraseSketchEntityCommand{
+            sketch_id, id});
+    CHECK(erased.ok() && erased.changed);
+    CHECK(!session.document().findSketch(sketch_id)
+              ->model.contains(id));
+    CHECK(session.document().findSketch(sketch_id)
+              ->projection_bindings.empty());
+    CHECK(session.undo().changed);
+    CHECK(session.document().findSketch(sketch_id)
+              ->model.contains(id));
+    CHECK(session.document().findSketch(sketch_id)
+              ->projection_bindings.size() == 1U);
+    CHECK(session.document().findSketch(sketch_id)
+              ->projection_bindings.front().target_entity == id);
+    CHECK(session.redo().changed);
+    CHECK(!session.document().findSketch(sketch_id)
+              ->model.contains(id));
+    CHECK(session.document().findSketch(sketch_id)
+              ->projection_bindings.empty());
+
+    std::cout << "PG01B_B4A_LINKED_EDIT_ERASE_PASS"
+              << " direct_edit_blocked=1"
+              << " atomic_erase_binding=1"
+              << " undo_redo=1\n";
     std::cout << "PG01B_B2_EFFECTIVE_SKETCH_PASS"
               << " stable_entity=1"
               << " pure_seed=1"

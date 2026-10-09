@@ -1523,6 +1523,13 @@ DocumentSessionResult DocumentSession::execute(
             "Erase Sketch Entity target EntityId does not exist",
             path_);
     }
+    // A linked target and its source intent form one authored semantic fact.
+    // Erase is one atomic Command/Undo, never a dangling projection binding.
+    std::erase_if(
+        target->projection_bindings,
+        [&command](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == command.entity_id;
+        });
 
     return commitCommandState(
         std::move(after),
@@ -1580,6 +1587,11 @@ DocumentSessionResult DocumentSession::execute(
                 path_);
         }
     }
+    std::erase_if(
+        target->projection_bindings,
+        [&unique](const part::ProjectedEdgeBinding& binding) {
+            return unique.contains(binding.target_entity);
+        });
 
     return commitCommandState(
         std::move(after),
@@ -1686,6 +1698,15 @@ DocumentSessionResult DocumentSession::execute(
     }
 
     std::set<sketch::EntityId> unique;
+    const auto is_linked =
+        [target](sketch::EntityId entity) {
+            return std::any_of(
+                target->projection_bindings.begin(),
+                target->projection_bindings.end(),
+                [entity](const part::ProjectedEdgeBinding& binding) {
+                    return binding.target_entity == entity;
+                });
+        };
 
     for (const auto& line : command.lines) {
         if (!line.entity_id.valid() ||
@@ -1693,6 +1714,7 @@ DocumentSessionResult DocumentSession::execute(
             !line.end.finite() ||
             line.start == line.end ||
             !unique.insert(line.entity_id).second ||
+            is_linked(line.entity_id) ||
             target->model.findLine(line.entity_id) ==
                 nullptr) {
             return failure(
@@ -1708,6 +1730,7 @@ DocumentSessionResult DocumentSession::execute(
             !std::isfinite(circle.radius) ||
             circle.radius <= 0.0 ||
             !unique.insert(circle.entity_id).second ||
+            is_linked(circle.entity_id) ||
             target->model.findCircle(circle.entity_id) ==
                 nullptr) {
             return failure(
@@ -1730,6 +1753,7 @@ DocumentSessionResult DocumentSession::execute(
             std::abs(arc.sweep_angle) >=
                 full_turn ||
             !unique.insert(arc.entity_id).second ||
+            is_linked(arc.entity_id) ||
             target->model.findArc(arc.entity_id) ==
                 nullptr) {
             return failure(
