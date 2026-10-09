@@ -9504,8 +9504,19 @@ bool CadWorkbench::startProjectEdgeTool() {
 
     viewport_controller_->clearBodyTopologyToolSelection();
     viewport_controller_->setBodyTopologyEdgeDraftMode(true);
-    // Select keeps ordinary pointer navigation and camera controls;
-    // the provider's existing Edge pick mode owns source collection.
+    // Sketch Select normally routes left clicks to spatial_tool_input,
+    // bypassing the Viewer's Body picker entirely. PROJECT is a strict
+    // stage-scoped material Edge acquisition tool, so it temporarily
+    // owns presentation selection instead. All other Sketch tools keep
+    // their accepted spatial routing policy.
+    if (!viewport_controller_->setSketchPrimaryPointerRouting(
+            viewer::PrimaryPointerRouting::
+                presentation_selection)) {
+        clearProjectEdgeRuntimeContext();
+        setStatusText(QStringLiteral(
+            "PROJECT could not acquire the Sketch Edge pick route."));
+        return false;
+    }
     syncSketchInteractionUi();
     syncProjectEdgeUi();
     syncActionState();
@@ -9531,6 +9542,12 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
     if (viewport_controller_ != nullptr) {
         viewport_controller_->setBodyTopologyEdgeDraftMode(false);
         viewport_controller_->clearBodyTopologyToolSelection();
+        // Return control to the existing Sketcher input grammar.
+        // Do not activate Select here: a different Sketch tool may have
+        // replaced PROJECT and must retain its own active tool identity.
+        static_cast<void>(
+            viewport_controller_->setSketchPrimaryPointerRouting(
+                viewer::PrimaryPointerRouting::spatial_tool_input));
     }
     syncSketchInteractionUi();
     syncProjectEdgeUi();
