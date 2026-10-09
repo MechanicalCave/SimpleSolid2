@@ -1,11 +1,11 @@
 # Projection 00A — Existing Sketch / Profile / Extrude Repair Evidence Work Contract
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-09
+**Status:** COMPLETED — OWNER FINAL PASS 2026-10-09; PR #299 squash-merged to main as `2cda8e04d7d0e2594edae7dc90e88cbb90dcae35`
 **Program:** Part Modeling v1 v1.30 — Projection-before-PM-06 sequencing
 **Baseline:** `636a2989b28fc3723e6cde0130e654bf12c17657` (PM-05F merged)
 **D2 amendment:** Foundation §7.2 and §7.5 same-Part default associativity; Assembly §7.3 snapshot CORE unchanged
 **Evidence design:** `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE_PROPOSAL.md`
-**Current automated evidence:** `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE.md` — FOCUSED #1910/#1912 PASS 1/1; FAST #1913 PASS 93/93 (2026-10-09), full closing PR gate pending.
+**Current automated evidence:** `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE.md` — FOCUSED #1910/#1912 PASS 1/1; FAST #1913 PASS 93/93 (2026-10-09), FULL #1915 PASS 195/195 on exact PR head `efcba9ad4d436b40d533510dc076538a94d4392e`; Owner accepted final Projection 00A PASS.
 **Goal:** characterize existing SS2 Sketch topology edits, semantic Profile repair, existing Extrude reuse and identity/lifecycle; **do not implement Projection**.
 
 ## Allowed edits
@@ -58,3 +58,7 @@ SS2-Focus-Mode: kernel
 Internal docs: not required
 User/Product docs: not required
 Reason: Evidence-only characterization, existing production behavior unchanged. When future Projection production is authorized, as-built internal and bilingual PL/EN Product docs (plus generated Browser) are mandatory.
+
+## Formal final disposition — 2026-10-09
+
+Owner explicitly wrote **`Zatwierdzam 00A - kontynuuj`**. Thus 00A is **COMPLETED — PASS** after real Core 25/25, kernel-native 57/57, Desktop 113/113 Windows FULL [#1915](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37890913601) (195/195, docs and aggregate success) on exact PR HEAD `efcba9ad4d436b40d533510dc076538a94d4392e` and guarded squash merge [PR #299](https://github.com/MechanicalCave/SimpleSolid2/pull/299) as `2cda8e04d7d0e2594edae7dc90e88cbb90dcae35`. A8 practical Windows Workbench acceptance remains **not tested / not claimed**, outside this semantic evidence acceptance. **00A mutation authority is closed**. Future Project Geometry production requires its own exact Owner-accepted Work Contract.
