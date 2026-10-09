@@ -449,6 +449,7 @@ Modify
   Rotate
   Scale
   Mirror
+  Project Geometry
 
 Inspect
   Measure
@@ -527,6 +528,19 @@ Grip Copy remains available only in Reshape and Move. Cycling into Rotate/Scale/
 LMB or Enter commits through the existing semantic command paths; Esc cancels transient manipulation while preserving accepted selection and previously committed copies. Cycling or numeric locks create no authored mutation by themselves.
 
 Switching tools or Documents clears uncommitted transform/COPY/direct-manipulation state safely. Space inside text-entry focus remains text input.
+
+<!-- section-id: internal.cad-workbench-viewer.project-geometry -->
+## Linked Project Geometry: Workbench tool and Viewer current-source routing
+
+`CadWorkbench` owns the sole transient `project_edge_active_` state when an editable Part Sketch, current Body-stage topology and exact OCCT projection provider exist. The **Project Geometry** Sketch Modify launcher and the right Operations panel (stage/count, Regular/Construction, Remove/Clear, Finish/Cancel) share this state with the existing global CAD-input `PROJECT`, `REGULAR`, `CONSTRUCTION`, `REMOVE`, `CLEAR`, `FINISH` and `CANCEL` semantic endpoint. Only `CreateProjectedSketchEdgesCommand` mutates Part state on Finish. It rechecks `DocumentRevision`, current Sketch support, source semantic stage and live provider references and commits an entire batch or none. `BreakProjectedEdgeLinkCommand` is used by the linked-only context action and obtains latest resolved geometry rather than copying authored seeds.
+
+During Edge collection the Workbench temporarily changes Sketch Select's `PrimaryPointerRouting` from `spatial_tool_input` to `presentation_selection`, reusing the existing strict material Body Edge pick transport. Cleanup restores the normal Sketch routing. The staged `MaterialEdgeReference` list, role and `project_edge_preview_valid_` are runtime-only. `PartViewportController::setProjectedEdgeDraftPreview` resolves `Line2`, `Circle2` and `Arc2` against the same source revision and Sketch Frame used by the Part command. Analytic circles/arcs are segmented **only for disposable Viewer preview**, not persisted as approximated geometry. Failed provider/stage/revision/current-curve projection clears the whole preview and blocks Finish. Clear/Cancel/Esc/context switch drop picks and overlays without authoring.
+
+Tool-local Esc is hierarchical: with staged Edges the first unbuffered Esc clears them; a subsequent Esc exits to Select. Explicit `CANCEL` immediately exits. The Workspace `CadInputSession` retains typed-buffer priority: the first focused Command Line Esc with text clears only the text, while an empty-buffer Esc dispatches the tool-local `ESC` via the same semantic endpoint. Viewport Enter, `FINISH` and the right Finish button call the same guarded commit. The persistent one-row Command Line reserves fixed prompt/diagnostic widths, with full prompt and long diagnostics available as tooltips; it never shrinks the typing field on tool changes.
+
+The visible Sketch Scene uses a **disposable effective model** derived from PG-01B current ordered Part evaluation, not saved linked Line/Circle/Arc seeds. A successful scene caches the same `SketchModel` with `DocumentId + SketchId + DocumentRevision`; `currentSketchInteractionModel()` is the read-only source for OSNAP, nearest/intersection/tangent/extension and Measure. It returns no data on stale, switched or degraded linked presentation. Unlinked Sketches keep their ordinary model. Missing/unresolved projection strips linked entities from the disposable snapshot, while keeping unrelated unlinked geometry selectable and measurable. Viewer `SketchLinePresentation::linked` / `SketchCurvePresentation::linked` flags affect base color only; Regular/Construction stroke style and priority of selection, measurement highlight and hover remain independent. A selected linked entity shows source Feature and current/unresolved status; Break Link is enabled only for a current resolved source.
+
+This boundary does not authorize Part schema changes, persistent topology tokens, cross-Part/Assembly geometry, Face boundary capture, or a second input router. Strict structural-edit Commands reject linked targets/boundaries that cannot be evaluated safely in their current authored-only implementation; wider interaction/transform correctness remains an explicit PG-01C acceptance obligation.
 
 <!-- section-id: internal.cad-workbench-viewer.measure -->
 ## R8 Measure — quick inspection and relational runtime targets
