@@ -54,6 +54,13 @@
 - First native compilation/interaction regression on the new visual seam is **pending** the focused run requested below. Manual Windows assessment of exact color/style, profiles, camera and DPI remains mandatory. Final FULL/Owner PASS not inferred from a FOCUSED result.
 - D2-C approved only this bounded runtime styling hint. No new authored attribute or general Sketch color redesign.
 
+## C2 staged exact source preview (post-#2013; focused check required)
+
+- `PartViewportController::setProjectedEdgeDraftPreview` reads the **same revision-bound** evaluated Body and exact `IEdgeProjectionQuery` used by current Sketch, then calls `resolveCurrentProjectionSketchFrame` and `projectStrictMaterialEdge` for every staged source. No authored-state mutation or Viewer token materialization.
+- Accepted analytic projected Line/Circle/Arc are represented as existing disposable Sketch Preview Line segments (Circle/Arc tessellated only for display, with the same curve segmentation convention as Sketch scenes). The shared regular/construction role survives.
+- All sources are atomic for preview: provider loss, stale revision, unsupported/missing source or invalid support clears the **whole** preview, not last-good partials. Workbench Finish requires an exact preview successfully resolved on current staged sources and stage/revision verification; Cancel/Clear/staged Esc/Finish all clear the preview.
+- Native `pg01c.native_project_edge_command` now necessarily validates the strict positive preview through its `projectEdgeFinishButton` enabled expectation after a genuine OCCT click; a source without current projection keeps Finish disabled. This is not yet the full native visual/hover/lighting/DPI assessment, nor PL/EN docs/Owner final PASS.
+
 ## Validation obligations
 
 1. A real upstream OCCT Line/Circle/Arc source with a deliberately different persisted seed: its linked Sketch display and Profile fill must match **current** derived geometry and source stage.
