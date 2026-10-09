@@ -3896,6 +3896,23 @@ void CadWorkbench::buildUi() {
     project_edge_stage_label_->setWordWrap(true);
     project_layout->addWidget(project_edge_stage_label_);
 
+    auto* source_row = new QWidget(project_edge_operations_widget_);
+    auto* source_layout = new QHBoxLayout(source_row);
+    source_layout->setContentsMargins(0, 0, 0, 0);
+    project_edge_edges_button_ =
+        new QPushButton(QStringLiteral("Edges"), source_row);
+    project_edge_edges_button_->setObjectName(
+        QStringLiteral("projectEdgeSourceEdgesButton"));
+    project_edge_edges_button_->setCheckable(true);
+    project_edge_face_button_ =
+        new QPushButton(QStringLiteral("Planar Face"), source_row);
+    project_edge_face_button_->setObjectName(
+        QStringLiteral("projectEdgeSourceFaceButton"));
+    project_edge_face_button_->setCheckable(true);
+    source_layout->addWidget(project_edge_edges_button_);
+    source_layout->addWidget(project_edge_face_button_);
+    project_layout->addWidget(source_row);
+
     project_edge_selection_label_ =
         new QLabel(project_edge_operations_widget_);
     project_edge_selection_label_->setObjectName(
@@ -5439,6 +5456,12 @@ void CadWorkbench::buildUi() {
                 static_cast<void>(startProjectEdgeTool());
             }
         });
+    QObject::connect(
+        project_edge_edges_button_, &QPushButton::clicked,
+        this, [this] { setProjectEdgeFaceMode(false); });
+    QObject::connect(
+        project_edge_face_button_, &QPushButton::clicked,
+        this, [this] { setProjectEdgeFaceMode(true); });
     QObject::connect(
         project_edge_regular_button_, &QPushButton::clicked,
         this, [this] {
