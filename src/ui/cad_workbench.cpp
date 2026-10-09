@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <iterator>
 #include <numbers>
 #include <string>
 #include <string_view>
@@ -10100,6 +10101,14 @@ void CadWorkbench::syncProjectEdgeUi() {
         return;
     }
     const auto count = project_edge_sources_.size();
+    if (project_edge_edges_button_ != nullptr) {
+        project_edge_edges_button_->setChecked(
+            !project_edge_face_mode_);
+    }
+    if (project_edge_face_button_ != nullptr) {
+        project_edge_face_button_->setChecked(
+            project_edge_face_mode_);
+    }
     if (project_edge_stage_label_ != nullptr) {
         project_edge_stage_label_->setText(
             project_edge_stage_ && project_edge_stage_->feature_id
@@ -10109,9 +10118,17 @@ void CadWorkbench::syncProjectEdgeUi() {
                 : QStringLiteral("Source stage: unavailable"));
     }
     if (project_edge_selection_label_ != nullptr) {
+        const auto face_wires =
+            project_edge_face_membership_
+                ? project_edge_face_membership_->wires.size()
+                : 0U;
         project_edge_selection_label_->setText(
-            QStringLiteral("Material Edges selected: %1")
-                .arg(static_cast<qulonglong>(count)));
+            QStringLiteral(
+                "Linked material Edges: %1 | Face wires: %2 | Unsupported skipped: %3")
+                .arg(static_cast<qulonglong>(count))
+                .arg(static_cast<qulonglong>(face_wires))
+                .arg(static_cast<qulonglong>(
+                    project_edge_face_skipped_.size())));
     }
     if (project_edge_regular_button_ != nullptr) {
         project_edge_regular_button_->setChecked(
@@ -10137,7 +10154,13 @@ void CadWorkbench::syncProjectEdgeUi() {
     }
     if (project_edge_result_label_ != nullptr) {
         project_edge_result_label_->setText(
-            count == 0U
+            !project_edge_face_skipped_.empty()
+                ? QStringLiteral(
+                    "PARTIAL Face: %1 unsupported geometric Edge(s) skipped, without closing gaps. %2 supported linked Edge(s); an open contour may not create a Profile.")
+                    .arg(static_cast<qulonglong>(
+                        project_edge_face_skipped_.size()))
+                    .arg(static_cast<qulonglong>(count))
+                : count == 0U
                 ? QStringLiteral(
                     "Pick one or more exact material Edges, then Finish; Cancel makes no changes.")
                 : !project_edge_preview_valid_
@@ -10175,6 +10198,16 @@ CadWorkbench::submitProjectEdgeCadInput(std::string_view text) {
         cancelProjectEdgeTool();
         return {true, {}};
     }
+    if (keyword == "EDGES" || keyword == "EDGE") {
+        setProjectEdgeFaceMode(false);
+        return {true, {}};
+    }
+    if (keyword == "FACE" ||
+        keyword == "PLANARFACE" ||
+        keyword == "PLANAR FACE") {
+        setProjectEdgeFaceMode(true);
+        return {true, {}};
+    }
     if (keyword == "REGULAR") {
         setProjectEdgeRole(sketch::EntityRole::regular);
         return {true, {}};
@@ -10203,7 +10236,7 @@ CadWorkbench::submitProjectEdgeCadInput(std::string_view text) {
     }
     return {
         false,
-        "PROJECT expects REGULAR, CONSTRUCTION, REMOVE, CLEAR, FINISH or CANCEL."};
+        "PROJECT expects EDGES, FACE, REGULAR, CONSTRUCTION, REMOVE, CLEAR, FINISH or CANCEL."};
 }
 
 void CadWorkbench::setSketchSelectionRole(
