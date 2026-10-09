@@ -4170,6 +4170,95 @@ authorMaterialEdgeReference(
     return result;
 }
 
+MaterialFaceBoundaryAdmission
+inspectMaterialFaceBoundary(
+    const FeatureEvaluation& current_stage,
+    kernel::RuntimeFaceToken picked_bounded_face,
+    kernel::IFaceBoundaryQuery& provider) {
+    using Status = MaterialFaceBoundaryStatus;
+    const auto fail = [](Status status) {
+        MaterialFaceBoundaryAdmission result;
+        result.status = status;
+        return result;
+    };
+
+    if (current_stage.status !=
+            FeatureEvaluationStatus::up_to_date ||
+        !current_stage.feature_id.valid() ||
+        !current_stage.result_solid ||
+        !current_stage.result_topology ||
+        !current_stage.result_topology->complete() ||
+        current_stage.result_topology->stage.kind !=
+            BodyStageKind::after_feature ||
+        current_stage.result_topology->stage.feature_id !=
+            current_stage.feature_id) {
+        return fail(Status::invalid_stage);
+    }
+    if (!picked_bounded_face.valid()) {
+        return fail(Status::face_unavailable);
+    }
+    const auto& catalog = *current_stage.result_topology;
+    const auto face = std::find_if(
+        catalog.faces.begin(), catalog.faces.end(),
+        [picked_bounded_face](const auto& record) {
+            return record.runtime_token ==
+                   picked_bounded_face;
+        });
+    if (face == catalog.faces.end()) {
+        return fail(Status::face_unavailable);
+    }
+    if (!face->semantic_address ||
+        !face->semantic_address->valid() ||
+        face->accounting_class !=
+            TopologyAccountingClass::referenceable) {
+        return fail(Status::face_not_strict);
+    }
+
+    const auto scoped = provider.bindFaceToBody(
+        current_stage.result_solid, picked_bounded_face);
+    if (!scoped || !scoped->valid()) {
+        return fail(Status::native_boundary_unavailable);
+    }
+    const auto native = provider.queryFaceBoundary(
+        current_stage.result_solid, *scoped);
+    if (!native.ok()) {
+        return fail(Status::native_boundary_unavailable);
+    }
+
+    MaterialFaceBoundaryAdmission result;
+    result.status = Status::resolved;
+    result.bounded_face = face->semantic_address;
+    result.wires.reserve(native.wires.size());
+    for (const auto& wire : native.wires) {
+        MaterialFaceBoundaryWire mapped;
+        mapped.outer = wire.outer;
+        mapped.edges.reserve(wire.edges.size());
+        for (const auto& use : wire.edges) {
+            const auto authored =
+                authorMaterialEdgeReference(
+                    catalog, use.edge);
+            if (!authored.ok() ||
+                !authored.reference ||
+                authored.reference->stage !=
+                    catalog.stage) {
+                // A native partition, seam, unsupported semantic Curve or
+                // ambiguous Edge is NOT a skippable geometric projection.
+                // It blocks the entire Face; no partial authoring result.
+                return fail(Status::material_edge_unavailable);
+            }
+            mapped.edges.push_back(
+                MaterialFaceBoundaryMember{
+                    use.edge, *authored.reference,
+                    use.reversed});
+        }
+        result.wires.push_back(std::move(mapped));
+    }
+    if (!result.ok()) {
+        return fail(Status::native_boundary_unavailable);
+    }
+    return result;
+}
+
 namespace {
 
 [[nodiscard]] EdgeFeatureKernelInputResult
