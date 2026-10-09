@@ -441,6 +441,7 @@ void verifyPartIntegration() {
     // not reinterpret the carrier as one guessed Face perimeter.
     CHECK(final_eval.body_solid);
     std::vector<kernel::RuntimeFaceToken> observed_faces;
+    std::vector<part::FeatureFaceAddress> strict_bounded_addresses;
     std::size_t carrier_only_faces = 0U;
     std::size_t admitted_strict_faces = 0U;
     std::size_t boundary_material_uses = 0U;
@@ -462,10 +463,18 @@ void verifyPartIntegration() {
         CHECK(face->surface_candidates.front() ==
               current_side->address);
         if (face->semantic_address) {
+            // Each bounded Face is independent current semantic meaning
+            // even when the shared Surface carrier cannot name one Face.
+            CHECK(std::find(
+                strict_bounded_addresses.begin(),
+                strict_bounded_addresses.end(),
+                *face->semantic_address) ==
+                strict_bounded_addresses.end());
+            strict_bounded_addresses.push_back(
+                *face->semantic_address);
             ++admitted_strict_faces;
         } else {
-            // A resolved Surface carrier with ambiguous strict Face
-            // meaning MUST NOT authorize Face-mode authoring.
+            // Surface-carrier support alone does not authorize a Face.
             ++carrier_only_faces;
         }
         const auto scoped =
@@ -512,9 +521,12 @@ void verifyPartIntegration() {
           current_side->current_faces.size());
     CHECK(carrier_only_faces + admitted_strict_faces ==
           observed_faces.size());
-    CHECK(carrier_only_faces >= 1U);
+    CHECK(strict_bounded_addresses.size() ==
+          admitted_strict_faces);
+    // The Surface reference is ambiguous for bounded Face selection,
+    // but individual Face addresses can still be strict and distinct.
+    CHECK(admitted_strict_faces >= 2U);
     CHECK(boundary_material_uses > 0U);
-    CHECK(boundary_partition_uses >= 1U);
     std::cout
         << "PG01D_D1_SPLIT_FACE_BOUNDARY_PASS"
         << " face_realizations=" << observed_faces.size()
@@ -526,6 +538,9 @@ void verifyPartIntegration() {
         << " other_nonmaterial="
         << boundary_other_nonmaterial_uses
         << '\n';
+    // The former shared-Surface partition Edge is an actual native
+    // boundary use and must never be promoted into material identity.
+    CHECK(boundary_partition_uses >= 1U);
 
     const part::SurfaceReference final_side_ref{
         topology.stage,
