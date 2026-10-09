@@ -1395,12 +1395,28 @@ int main(int argc, char* argv[]) {
                 part::makeProfileRegionIntent(
                     pg_all_regions.regions.front());
             CHECK(pg_all_intent);
+            const auto pg_legacy_revision =
+                pg_all_session.document().revision();
+            const auto pg_legacy_undo =
+                pg_all_session.undoDepth();
+            const auto pg_legacy_rejected =
+                pg_all_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_legacy_revision,
+                        *pg_all_intent});
+            CHECK(!pg_legacy_rejected.ok());
+            CHECK(pg_all_session.document().revision() ==
+                  pg_legacy_revision);
+            CHECK(pg_all_session.undoDepth() ==
+                  pg_legacy_undo);
             const auto pg_all_created =
                 pg_all_session.execute(
                     application::CreateProfileCommand{
                         *pg_all_sketch.sketch_id,
                         pg_all_session.document().revision(),
-                        *pg_all_intent});
+                        *pg_all_intent},
+                    kernel);
             CHECK(pg_all_created.ok() &&
                   pg_all_created.profile_id);
             const auto pg_all_profile =
@@ -1410,6 +1426,85 @@ int main(int argc, char* argv[]) {
             // Profile evaluation; effective source is the authority.
             CHECK(!pg_all_session.document()
                       .evaluateProfile(pg_all_profile.id));
+            // D2-B: four linked Edges are detached in one semantic
+            // transaction without changing Profile or EntityIds. Invalid
+            // duplicate input rolls back the whole staged operation.
+            const auto pg_clone =
+                part::PartDocument::restore(
+                    pg_all_session.document().documentId(),
+                    pg_all_session.document().state(),
+                    pg_all_session.document().revision());
+            CHECK(pg_clone.ok());
+            application::DocumentSession pg_batch_detach_session{
+                {}, std::move(*pg_clone.document)};
+            std::vector<sketch::EntityId> pg_batch_targets;
+            for (const auto& binding : pg_all_targets) {
+                pg_batch_targets.push_back(binding.target_entity);
+            }
+            const auto pg_batch_revision =
+                pg_batch_detach_session.document().revision();
+            const auto pg_batch_undo =
+                pg_batch_detach_session.undoDepth();
+            const auto pg_batch_reject =
+                pg_batch_detach_session.execute(
+                    application::BreakProjectedEdgeLinksCommand{
+                        *pg_all_sketch.sketch_id,
+                        {pg_batch_targets.front(),
+                         pg_batch_targets.front()},
+                        pg_batch_revision},
+                    kernel);
+            CHECK(!pg_batch_reject.ok());
+            CHECK(pg_batch_detach_session.document().revision() ==
+                  pg_batch_revision);
+            CHECK(pg_batch_detach_session.undoDepth() ==
+                  pg_batch_undo);
+            const auto pg_batch_detach =
+                pg_batch_detach_session.execute(
+                    application::BreakProjectedEdgeLinksCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_batch_targets,
+                        pg_batch_revision},
+                    kernel);
+            CHECK(pg_batch_detach.ok());
+            CHECK(pg_batch_detach_session.undoDepth() ==
+                  pg_batch_undo + 1U);
+            CHECK(pg_batch_detach_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            CHECK(*pg_batch_detach_session.document().findProfile(
+                      pg_all_profile.id) == pg_all_profile);
+            const auto pg_batch_authored =
+                pg_batch_detach_session.document().findSketch(
+                    *pg_all_sketch.sketch_id);
+            CHECK(pg_batch_authored);
+            for (const auto& binding : pg_all_targets) {
+                const auto* actual =
+                    pg_batch_authored->model.findLine(
+                        binding.target_entity);
+                const auto* expected =
+                    pg_all_effective->model.findLine(
+                        binding.target_entity);
+                CHECK(actual && expected && *actual == *expected);
+            }
+            CHECK(pg_batch_detach_session.document()
+                      .evaluateProfile(pg_all_profile.id)->valid());
+            CHECK(pg_batch_detach_session.undo().changed);
+            CHECK(pg_batch_detach_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.size() == 4U);
+            CHECK(*pg_batch_detach_session.document().findProfile(
+                      pg_all_profile.id) == pg_all_profile);
+            CHECK(pg_batch_detach_session.redo().changed);
+            CHECK(pg_batch_detach_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            CHECK(pg_batch_detach_session.document()
+                      .evaluateProfile(pg_all_profile.id)->valid());
+            std::cout << "PG01C_D2B_ATOMIC_BREAK_LINK_PASS"
+                      << " linked=4 undo_batches=1"
+                      << " invalid_rollbacks=1"
+                      << " profile_unchanged=1\\n";
+
             for (const auto& binding : pg_all_targets) {
                 const auto before_body = part::evaluatePart(
                     pg_all_session.document(), kernel);
