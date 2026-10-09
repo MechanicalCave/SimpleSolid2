@@ -1061,6 +1061,19 @@ int main(int argc, char* argv[]) {
         CHECK(viewport->rect().contains(pg_region_pixel));
         QTest::mouseMove(viewport, pg_region_pixel);
         QApplication::processEvents();
+        auto* pg_profile_panel = workbench.findChild<QWidget*>(
+            QStringLiteral("profileOperationsWidget"));
+        auto* pg_status = workbench.findChild<QLabel*>(
+            QStringLiteral("workbenchStatus"));
+        CHECK(pg_profile_panel && pg_status);
+        std::cerr << "PG01C_PROFILE_POINTER_DEBUG"
+                  << " profile_panel_hidden=" << pg_profile_panel->isHidden()
+                  << " finish_enabled=" << pg_profile_finish->isEnabled()
+                  << " region_px=" << pg_region_pixel.x()
+                  << "," << pg_region_pixel.y()
+                  << " status=" << pg_status->text().toStdString()
+                  << " result=" << pg_profile_result->text().toStdString()
+                  << std::endl;
         CHECK(pg_profile_result->text().contains(
             QStringLiteral("Status: Valid")));
         QTest::mouseClick(
