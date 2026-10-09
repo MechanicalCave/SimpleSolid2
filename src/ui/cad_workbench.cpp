@@ -9688,6 +9688,137 @@ void CadWorkbench::refreshProjectEdgePreview() {
     }
 }
 
+void CadWorkbench::setProjectEdgeFaceMode(bool enabled) {
+    if (!project_edge_active_ || !viewport_controller_ ||
+        project_edge_face_mode_ == enabled) {
+        return;
+    }
+    // Switching source acquisition must not fabricate an authored change.
+    // Staged semantic Edges remain; only transient Viewer picks are swapped.
+    project_edge_switching_mode_ = true;
+    project_edge_face_mode_ = enabled;
+    viewport_controller_->setBodyTopologyFacePickOnly(enabled);
+    viewport_controller_->clearBodyTopologyToolSelection();
+    if (!enabled && !project_edge_sources_.empty()) {
+        const auto unresolved =
+            viewport_controller_->restoreMaterialEdgeToolSelection(
+                project_edge_sources_);
+        if (!unresolved || !unresolved->empty()) {
+            // Stale scene must never make old sources authoritative.
+            project_edge_sources_.clear();
+            project_edge_manual_sources_.clear();
+            project_edge_face_sources_.clear();
+            project_edge_face_skipped_.clear();
+            project_edge_face_membership_.reset();
+            project_edge_face_pick_.reset();
+            project_edge_preview_valid_ = false;
+            viewport_controller_->clearSketchPreview();
+        }
+    }
+    project_edge_switching_mode_ = false;
+    refreshProjectEdgePreview();
+    syncProjectEdgeUi();
+    notifyCadInputContextChanged();
+    setStatusText(enabled
+        ? QStringLiteral(
+            "PROJECT Planar Face — select one current bounded planar Face; only geometric Unsupported curves may be skipped.")
+        : QStringLiteral(
+            "PROJECT Edges — staged Face members remain linked sources; pick more material Edges."));
+}
+
+void CadWorkbench::tryStageProjectFaceSelection() {
+    if (!project_edge_active_ || !project_edge_face_mode_ ||
+        !document_session_ || !project_edge_revision_ ||
+        !project_edge_stage_ || !viewport_controller_ ||
+        document_session_->document().revision() !=
+            *project_edge_revision_) {
+        return;
+    }
+    const auto picked =
+        viewport_controller_->primaryBodyTopologySelection();
+    if (!picked || !picked->valid() ||
+        picked->kind !=
+            viewer::BodyTopologyPresentationKind::face) {
+        return;
+    }
+    const auto admitted =
+        viewport_controller_->selectedMaterialFaceBoundaryAdmission();
+    if (!admitted.ok()) {
+        // No partial Face if topology/semantic identity itself is invalid.
+        setStatusText(QStringLiteral(
+            "PROJECT Face rejected: bounded Face or material boundary identity unavailable; previous staging preserved."));
+        return;
+    }
+    std::vector<part::MaterialEdgeReference> accepted;
+    std::vector<part::MaterialEdgeReference> skipped;
+    for (const auto& wire : admitted.wires) {
+        for (const auto& member : wire.edges) {
+            if (member.reference.stage != *project_edge_stage_) {
+                setStatusText(QStringLiteral(
+                    "PROJECT Face rejected: wrong source stage."));
+                return;
+            }
+            const auto status =
+                viewport_controller_->currentMaterialEdgeProjectionStatus(
+                    member.reference);
+            if (status ==
+                    part::ProjectedSketchSourceStatus::resolved) {
+                accepted.push_back(member.reference);
+            } else if (status ==
+                       part::ProjectedSketchSourceStatus::
+                           unsupported_projection) {
+                skipped.push_back(member.reference);
+            } else {
+                // Missing, Ambiguous, provider failure, degenerate and stale
+                // are not licensed per-Edge skip outcomes.
+                setStatusText(QStringLiteral(
+                    "PROJECT Face rejected: unresolved source, degenerate image or provider failure; no partial commit."));
+                return;
+            }
+        }
+    }
+    std::sort(accepted.begin(), accepted.end());
+    accepted.erase(
+        std::unique(accepted.begin(), accepted.end()),
+        accepted.end());
+    std::sort(skipped.begin(), skipped.end());
+    skipped.erase(
+        std::unique(skipped.begin(), skipped.end()),
+        skipped.end());
+
+    auto combined = project_edge_manual_sources_;
+    combined.insert(
+        combined.end(), accepted.begin(), accepted.end());
+    std::sort(combined.begin(), combined.end());
+    combined.erase(
+        std::unique(combined.begin(), combined.end()),
+        combined.end());
+    if (!combined.empty() &&
+        !viewport_controller_->setProjectedEdgeDraftPreview(
+            combined, project_edge_role_)) {
+        refreshProjectEdgePreview();
+        setStatusText(QStringLiteral(
+            "PROJECT Face preview rejected; previously staged sources preserved."));
+        return;
+    }
+
+    project_edge_face_pick_ = *picked;
+    project_edge_face_membership_ = admitted;
+    project_edge_face_sources_ = std::move(accepted);
+    project_edge_face_skipped_ = std::move(skipped);
+    project_edge_sources_ = std::move(combined);
+    project_edge_preview_valid_ = !project_edge_sources_.empty();
+    if (!project_edge_preview_valid_) {
+        viewport_controller_->clearSketchPreview();
+    }
+    syncProjectEdgeUi();
+    notifyCadInputContextChanged();
+    setStatusText(project_edge_face_skipped_.empty()
+        ? QStringLiteral("PROJECT Face staged: exact material outer/hole members.")
+        : QStringLiteral(
+            "PROJECT Face PARTIAL: unsupported geometric members skipped; open contour may not form a Profile."));
+}
+
 void CadWorkbench::tryStageProjectEdgeSelection() {
     if (!project_edge_active_ ||
         !document_session_ ||
