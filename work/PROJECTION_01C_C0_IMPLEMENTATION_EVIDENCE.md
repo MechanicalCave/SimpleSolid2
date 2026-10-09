@@ -15,6 +15,13 @@
 - `PartSketchInteractionController`: other interaction routes (Snap, Measure, source geometry transformation, structural edits, profile authoring) need explicit current-model-or-reject audit. Do not claim all snappable linked geometry complete until provider-derived interactive queries are proven.
 - Viewer presentation contracts lack orthogonal linked styling; D2-C permits only a narrow runtime flag/style in a future gated C2 slice.
 
+## Current implementation checkpoint
+
+- `PartViewportController` now derives disposable current linked Sketch models from the same revision-bound Part evaluation and exact edge-projection provider, strips linked seeds on unavailable source, and uses the resulting model for Sketch scene, Profile region/fill and Profile draft sample; linked target grips remain non-editable.
+- Added native Qt controller regression `sk04b.part_viewport_selection_bridge` with a structurally valid linked Circle bound to an upstream Feature but no active projection provider. The stale authored Circle must be hidden, unrelated local Line visible, and the linked Profile never falsely presented. This is a **focused subset**, not full PG-01C GUI acceptance.
+- FAST #1980 was RED at C++ compilation: changed Profile presentation signature left two preview callers and a lambda capture stale. Both issues were explicitly corrected, not suppressed. Run current exact-head FOCUSED regression before further expansion.
+- FAST registry issue #302 is independent and remains RED. Do not infer one focused green test means all FAST/GUI gates pass.
+
 ## Validation obligations
 
 1. A real upstream OCCT Line/Circle/Arc source with a deliberately different persisted seed: its linked Sketch display and Profile fill must match **current** derived geometry and source stage.
