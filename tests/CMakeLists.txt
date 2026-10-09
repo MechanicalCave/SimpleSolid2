@@ -2623,7 +2623,8 @@ function(ss2_resolve_test_build_target test_name out_var)
     # This is an explicit CI-04 build mapping, not a new CI policy.
     if(test_name STREQUAL "pg01c.native_project_edge_command" OR
        test_name STREQUAL "pg01d.native_face_boundary_d0" OR
-       test_name STREQUAL "pg01d.native_face_ui")
+       test_name STREQUAL "pg01d.native_face_ui" OR
+       test_name STREQUAL "pg01d.native_face_fail_closed")
         set(${out_var} "pm05f_r2_native_workbench_edit_test" PARENT_SCOPE)
         return()
     endif()
