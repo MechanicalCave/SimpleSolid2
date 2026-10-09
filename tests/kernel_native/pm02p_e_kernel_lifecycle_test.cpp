@@ -362,6 +362,12 @@ void verifyColdRebuild() {
 }
 
 
+kernel::EdgeProjectionResult projectCurrentEdge(
+    kernel_occt::OcctSolidModelingKernel& query,
+    kernel::RuntimeSolidHandle body,
+    kernel::RuntimeEdgeToken current_edge,
+    const kernel::Frame3& frame);
+
 kernel::PlanarProfileInput circularSegmentProfile(
     double start_angle,
     double sweep_angle) {
