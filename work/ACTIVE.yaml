@@ -1,6 +1,6 @@
 version: 1
 status: active
-active_work: "work/PROJECTION_01A_EXACT_KERNEL_CONTRACT.md"
+active_work: "work/PROJECTION_01B_ASSOCIATIVITY_CONTRACT.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
 program_roadmap_version: "1.30"
@@ -23,6 +23,7 @@ accepted_adrs:
   - "adr/ADR-0016-body-semantic-topology-carrier-geometry-and-face-supported-sketch.md"
   - "adr/ADR-0017-boolean-add-surface-continuation-and-representation-partition-edges.md"
 next:
+  - PG-01B ACTIVE 2026-10-09: Owner explicitly approved D2 architecture five choices (Part-owned stable EntityId→MaterialEdgeReference, derived effective Sketch, typed fail-closed, earlier-stage/cycle+Break Link, v15 native Part schema) and bounded PG-01B Work Contract with `zatwierdzam - kontynuuj`. Dedicated activation commit before production mutation. Active work: work/PROJECTION_01B_ASSOCIATIVITY_CONTRACT.md, stages B1→B5. This does NOT activate UI/Face/Assembly/PM-06. Source phase B1 first: Part-owned binding + structural validation, verified Windows FOCUSED/FAST as warranted. No tests marked PASS until actual CI.
   - PG-01A Owner FINAL PASS / MERGED 2026-10-09: Owner `Zatwierdzam - kontynuuj` explicitly accepted PG-01A + merge. Exact PR HEAD 9d60b67f34020f75e8bbe104e85d790fb6e155a2: native injected OCCT exception FOCUSED #1930 1/1 PASS, FAST #1931 93/93 PASS, Windows FULL #1932 Core 25/25 + kernel-native 57/57 + Desktop 113/113 = 195/195 PASS, docs/bootstrap/aggregate PASS. PR #300 guarded squash MERGED onto main as 27268d4ec10fbc09721a16ab8f0e2d59bb54833f. PG-01A mutation scope CLOSED. ACTIVE pointer retains completed contract solely for single-contract traceability; **no new production work is active** until Owner separately accepts D2 PG-01B design and activates a new Work Contract. New draft: work/PROJECTION_01B_ASSOCIATIVITY_DESIGN_PROPOSAL.md and work/PROJECTION_01B_ASSOCIATIVITY_CONTRACT_DRAFT.md. No PG-01B/C/D/E code authority yet.
   - PG-01A exception injection boundary RESOLVED 2026-10-09: after isolated test-only issues #1927/#1928 (OCCT header not on native consumer include path) and #1929 (installed Standard_Failure lacks static Raise), actual provider-native `throw Standard_Failure(...)` and unrelated std::runtime_error now run through production exact projection guard. FOCUSED #1930 1/1 PASS on 62fd10849446dff1f03b439ac6f6d346da2e16db. No public runtime fault flag or CMake change; now evidence-sync FAST and final exact-head Ready-for-Review FULL pending. No Owner final PG-01A PASS yet; PG-01B/C/D/E not activated.
   - PG-01A Owner-approved Standard_Failure native injected negative 2026-10-09: test uses provider-internal `detail::guardedExactEdgeProjection` also invoked by OCCT production projectEdgeToPlane; deliberate OCCT `Standard_Failure::Raise` and unrelated std::runtime_error must map to KernelFailure/no curve, no fault switch in public API. Initial READY PR #1927 selected FULL instead of FOCUSED; superseded by docs/source sync commit before final exact-head gate. Old FULL #1926 PASS 195/195 but does not cover new injection. Owner PG-01A final PASS still pending; PG-01B/C/D/E not active.

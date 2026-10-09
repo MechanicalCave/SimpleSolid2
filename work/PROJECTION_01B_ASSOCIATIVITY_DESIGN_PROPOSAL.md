@@ -1,12 +1,12 @@
 # PG-01B — Same-Part Associative Project Geometry: D2 Architecture Proposal
 
-**Status:** DRAFT — OWNER D2 ARCHITECTURE REVIEW REQUIRED; NOT ACTIVATED
+**Status:** OWNER D2 ARCHITECTURE ACCEPTED 2026-10-09 — five §7 decisions approved; PG-01B ACTIVE by separate Work Contract
 **Prepared:** 2026-10-09
 **Baseline:** main `27268d4ec10fbc09721a16ab8f0e2d59bb54833f` — PG-01A FINAL OWNER PASS, exact-head [Windows FULL #1932](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37897152384) 195/195, [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) squash merged
 **Program:** accepted Part Modeling v1 roadmap v1.30; Projection before PM-06
 **Existing accepted direction:** Foundation §7.2/§7.5 same-Part associative; future Assembly-context snapshot §7.3 unchanged; Project Geometry single right-panel tool with Regular/Construction and partial planar Face projection in later packages
-**Proposed Work Contract:** `work/PROJECTION_01B_ASSOCIATIVITY_CONTRACT_DRAFT.md`
-**Authority:** `work/ACTIVE.yaml` still names *completed* PG-01A. A design proposal is not production authorization.
+**Accepted Work Contract:** `work/PROJECTION_01B_ASSOCIATIVITY_CONTRACT.md`
+**Authority:** `work/ACTIVE.yaml` names Owner-accepted `work/PROJECTION_01B_ASSOCIATIVITY_CONTRACT.md` after dedicated activation. Product mutation limited to that contract.
 
 ## 1. Hard technical findings from current SS2
 
@@ -81,13 +81,13 @@ A deliberate design distinction: structural-invalid linkage (e.g. duplicate/inva
 4. **Schema:** new v15 for linked PartSketch bindings, backward-compatible v14/no-link migration; no persistent OCCT generation data.
 5. **Dependency integration:** common effective Sketch path for Profile evaluation, Kernel input, Edit/preview, UI diagnostic reads; strict ordered dependency and cycle checks, no parallel legacy path reading linked seeds.
 
-These choices require explicit Owner D2 acceptance **before** changing the model/schema. Accepted PG-01A does not implicitly settle them. Specific implementation names may be refined without relaxing these invariants.
+These five D2 choices were **explicitly accepted by Owner on 2026-10-09** (`zatwierdzam - kontynuuj`). PG-01B is authorized only under the separately activated bounded Work Contract; no later package is thereby approved. Specific implementation names may be refined without relaxing these invariants.
 
 ## 8. Package boundary, cost and next gate
 
 `work/PROJECTION_01B_ASSOCIATIVITY_CONTRACT_DRAFT.md` proposes bounded Part/Sketch/Application/Persistence source, tests and internal docs. PG-01C UI/Project Edge and PG-01D planar Face partial capture are separate Work Contracts. No global kernel refactor, no Assembly, no new general geometry kernel. During iteration prefer Windows **FOCUSED**, then **FAST**, final single Ready-for-Review exact-head **FULL**; do not weaken CI to save time.
 
-**Approval request:** Owner explicitly accept the five D2 choices above **and** the PG-01B Work Contract. Only then create an activation commit changing `work/ACTIVE.yaml` to the accepted PG-01B contract **before modifying code**.
+**D2 accepted:** Owner approved the five choices and PG-01B Work Contract 2026-10-09. The separate activation commit updates `work/ACTIVE.yaml` **before modifying code**. B1–B5 can proceed under the accepted contract, not PG-01C/D/E.
 
 ## Documentation impact
 

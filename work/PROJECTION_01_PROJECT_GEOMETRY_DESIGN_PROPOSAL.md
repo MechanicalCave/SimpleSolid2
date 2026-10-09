@@ -1,11 +1,11 @@
 # Project Geometry — Part v1 Production Design and Staging PROPOSAL
 
-**Status:** STAGING PLAN OWNER ACCEPTED 2026-10-09; PG-01A Owner final PASS and MERGED, PG-01B D2 architecture + draft Work Contract proposed but NOT active; PG-01C/D/E remain gated
+**Status:** STAGING PLAN OWNER ACCEPTED 2026-10-09; PG-01A Owner final PASS and MERGED, PG-01B D2 architecture and bounded Work Contract explicitly Owner-accepted and ACTIVE; PG-01C/D/E remain gated
 **Prepared:** 2026-10-09
 **Baseline:** main `2cda8e04d7d0e2594edae7dc90e88cbb90dcae35`, Projection 00A **COMPLETED — Owner PASS**; [PR #299](https://github.com/MechanicalCave/SimpleSolid2/pull/299) merged; [FULL #1915](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37890913601) PASS 195/195
 **Accepted program:** Part Modeling v1 roadmap v1.30, Projection **before PM-06**
 **Accepted D2 direction:** Foundation §7.2 and §7.5: same-Part **associative**; §7.3 future Assembly-context **snapshot** CORE unchanged
-**Current authority:** `work/ACTIVE.yaml` still points to **completed** `work/PROJECTION_01A_EXACT_KERNEL_CONTRACT.md` for traceability. PG-01A mutation authority is closed. No PG-01B/C/D/E production package is activated. Next D2 proposal: `work/PROJECTION_01B_ASSOCIATIVITY_DESIGN_PROPOSAL.md`.
+**Current authority:** `work/ACTIVE.yaml` points to Owner-accepted `work/PROJECTION_01B_ASSOCIATIVITY_CONTRACT.md` after dedicated activation. PG-01B B1–B5 only, PG-01C/D/E excluded.
 
 ## Product behavior that has already been agreed with Owner
 
@@ -58,7 +58,7 @@ Reuse existing FOCUSED Kernel/Part/native targets and warm persistent build tree
 
 ## Proposed next activation
 
-**PG-01A formally completed:** Owner final PASS 2026-10-09 and guarded [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) squash merge `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`; exact-head Windows FULL #1932 PASS 195/195. Next PG-01B has an independently prepared **D2 architecture proposal and DRAFT Work Contract**. Owner must explicitly approve architecture and exact package before ACTIVE can point to PG-01B or code implementation begins.
+**PG-01A formally completed:** Owner final PASS 2026-10-09 and guarded [PR #300](https://github.com/MechanicalCave/SimpleSolid2/pull/300) squash merge `27268d4ec10fbc09721a16ab8f0e2d59bb54833f`; exact-head Windows FULL #1932 PASS 195/195. PG-01B five D2 architecture choices and exact Work Contract were explicitly approved by Owner 2026-10-09 and separately activated through `work/ACTIVE.yaml` **before** production code work. PG-01C/D/E remain gated.
 
 ## Documentation impact
 
