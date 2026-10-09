@@ -2,11 +2,11 @@
 
 **Status:** DRAFT / UNACCEPTED — NO IMPLEMENTATION AUTHORITY
 **Prepared:** 2026-10-09
-**Baseline:** main \`8d78320daca8a72a1431fbece49296c3bfb83aec\` after Owner PG-01B FINAL PASS and [PR #301](https://github.com/MechanicalCave/SimpleSolid2/pull/301) merge
-**Program:** \`work/PART_MODELING_V1_ROADMAP.md\` v1.30, Projection before PM-06
+**Baseline:** main `8d78320daca8a72a1431fbece49296c3bfb83aec` after Owner PG-01B FINAL PASS and [PR #301](https://github.com/MechanicalCave/SimpleSolid2/pull/301) merge
+**Program:** `work/PART_MODELING_V1_ROADMAP.md` v1.30, Projection before PM-06
 **Prerequisites:** Projection 00A, PG-01A, PG-01B completed; same-Part associativity D2 approved, Assembly §7.3 snapshot unchanged
-**Architecture authorization required:** Owner review of \`work/PROJECTION_01C_PROJECT_EDGE_UI_D2_PROPOSAL.md\` D2-A/B/C/D
-**Current authority:** \`work/ACTIVE.yaml\` still points to PG-01B for traceability. Do NOT activate this draft implicitly.
+**Architecture authorization required:** Owner review of `work/PROJECTION_01C_PROJECT_EDGE_UI_D2_PROPOSAL.md` D2-A/B/C/D
+**Current authority:** `work/ACTIVE.yaml` still points to PG-01B for traceability. Do NOT activate this draft implicitly.
 **Known independent CI defect:** [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302)
 
 ## 1. Goal
@@ -17,10 +17,10 @@ The workflow must be usable end-to-end: pick one/many Edges, select Regular/Cons
 
 ## 2. In scope
 
-- One runtime tool state in current Sketch edit and active Part session. Reuse current Body tool-stage Edge pick selection and its strict \`MaterialEdgeReference\` translation, same-revision/stage/generation guards and duplicate detection.
+- One runtime tool state in current Sketch edit and active Part session. Reuse current Body tool-stage Edge pick selection and its strict `MaterialEdgeReference` translation, same-revision/stage/generation guards and duplicate detection.
 - Right Operations tool controls: clear active selection, source stage/context, source list/count, role Regular (default) / Construction, live typed validation, Finish, Cancel; no authored mutation before Finish.
-- Semantic Finish through existing \`CreateProjectedSketchEdgesCommand\` with exact current revision and one atomic batch/one Undo, no UI/Viewer direct Part mutation. \`BreakProjectedEdgeLinkCommand\` and existing Delete/role commands are the only durable actions for linked targets.
-- Read-only effective Sketch integration for existing linked entities in 3D Sketch scene, selection, supported snap/inspection, valid Profile fill/selection and right-side Properties; no authored-seed fallback for unresolved source. Use PG-01B \`evaluateEffectiveSketchProjection\` and same-revision Part evaluation.
+- Semantic Finish through existing `CreateProjectedSketchEdgesCommand` with exact current revision and one atomic batch/one Undo, no UI/Viewer direct Part mutation. `BreakProjectedEdgeLinkCommand` and existing Delete/role commands are the only durable actions for linked targets.
+- Read-only effective Sketch integration for existing linked entities in 3D Sketch scene, selection, supported snap/inspection, valid Profile fill/selection and right-side Properties; no authored-seed fallback for unresolved source. Use PG-01B `evaluateEffectiveSketchProjection` and same-revision Part evaluation.
 - Narrow neutral Viewer linked visual styling / provider adapter **only if Owner D2-C accepts it**. Display Regular/Construction orthogonally to linked state.
 - Tool/editor lifecycle on Esc/Finish/Cancel/Undo/Redo/document change/Sketch exit/provider failure; stale visual or pending pick state must be rejected/cleared.
 - Focused Qt/OCCT native regressions, exact-CAD semantic tests and docs.
@@ -35,7 +35,7 @@ The workflow must be usable end-to-end: pick one/many Edges, select Regular/Cons
 
 ## 4. Architecture, identity and safety
 
-\`\`\`text
+```text
 Qt Workbench / right Operations panel / Viewer pick transport
   -> stage only current runtime semantic Edge candidates
   -> exact Part same-revision source + support-frame resolution
@@ -43,9 +43,9 @@ Qt Workbench / right Operations panel / Viewer pick transport
   -> Validation -> Transaction -> owning PartDocument
   -> pure effective Sketch -> Profile/Feature evaluation
   -> neutral Viewer scenes / Properties / diagnostics
-\`\`\`
+```
 
-- Part owns the only durable \`EntityId -> MaterialEdgeReference\` mapping and role. Viewer runtime generation/token, Qt widget/Tree identity and currently sampled curve are **never persisted as source identity**.
+- Part owns the only durable `EntityId -> MaterialEdgeReference` mapping and role. Viewer runtime generation/token, Qt widget/Tree identity and currently sampled curve are **never persisted as source identity**.
 - One tool state; no duplicate pipeline hidden in Qt or command-line transport. Any keyboard action uses the existing global CAD Input semantic routing policy.
 - Source must be a strict material Edge at an explicitly displayed and current legal Body stage, from the **same Part**; stage ordering and cycles are checked by PG-01B. No selection from arbitrary final Body when declared stage differs.
 - On every redraw and user-facing query, linked curves come only from current resolved effective Sketch; missing/ambiguous/unsupported/broken links do not present/snaps/commit stale authored seed. Unaffected entities and regions remain usable.
@@ -55,15 +55,15 @@ Qt Workbench / right Operations panel / Viewer pick transport
 
 ## 5. Permitted bounded file scope AFTER formal activation
 
-- \`src/ui/cad_workbench.cpp/.hpp\`: one tool and right panel, command dispatch, status and lifecycle.
-- \`src/ui/part_viewport_controller.cpp/.hpp\`: reuse stage-scoped material Edge picking; read-only current effective Sketch / linked scene and Profile scene projection, transient binding and diagnostics.
-- \`src/ui/part_sketch_interaction_controller.cpp/.hpp\`: only necessary linked-aware read/interaction/selection/typed edit protection; no generalized new tool architecture.
-- \`src/viewer/**\`: only approved D2-C narrow, provider-neutral transient linked-style surface and Qt/OCCT presentation/pick parity. Stop before public contract expansion beyond D2-C.
-- \`src/application/**\` and \`src/part/**\`: **only** bounded read-only reuse/factor of existing PG-01B current effective projection and typed diagnostics if demonstrably necessary; any new persistence/identity/Feature semantic mutation needs Owner D2 STOP.
-- \`tests/**\`: bounded existing Qt/OCCT Workbench/Sketch/Part regressions. New test/CMake registration only when intrinsically justified, separately reviewed for [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302) consistency.
-- \`docs/internal/**\`, \`docs/product/pl/**\`, \`docs/product/en/**\`, canonical \`docs/browser/index.html\` **via \`.\ss2.ps1 docs\` only**, \`work/**\` evidence and acceptance.
+- `src/ui/cad_workbench.cpp/.hpp`: one tool and right panel, command dispatch, status and lifecycle.
+- `src/ui/part_viewport_controller.cpp/.hpp`: reuse stage-scoped material Edge picking; read-only current effective Sketch / linked scene and Profile scene projection, transient binding and diagnostics.
+- `src/ui/part_sketch_interaction_controller.cpp/.hpp`: only necessary linked-aware read/interaction/selection/typed edit protection; no generalized new tool architecture.
+- `src/viewer/**`: only approved D2-C narrow, provider-neutral transient linked-style surface and Qt/OCCT presentation/pick parity. Stop before public contract expansion beyond D2-C.
+- `src/application/**` and `src/part/**`: **only** bounded read-only reuse/factor of existing PG-01B current effective projection and typed diagnostics if demonstrably necessary; any new persistence/identity/Feature semantic mutation needs Owner D2 STOP.
+- `tests/**`: bounded existing Qt/OCCT Workbench/Sketch/Part regressions. New test/CMake registration only when intrinsically justified, separately reviewed for [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302) consistency.
+- `docs/internal/**`, `docs/product/pl/**`, `docs/product/en/**`, canonical `docs/browser/index.html` **via `.\ss2.ps1 docs` only**, `work/**` evidence and acceptance.
 
-No edits to \`main\` except through approved PR merge.
+No edits to `main` except through approved PR merge.
 
 ## 6. Planned bounded execution stages
 
@@ -75,9 +75,9 @@ No edits to \`main\` except through approved PR merge.
 
 **C3 — lifecycle:** stable preview and one Finish, one Undo; Break Link and Delete via headless semantic Commands, Undo/Redo, upstream source edit/suppress/missing recovery, Save/Close/Reopen, current support frame and provider loss. No last-good preview or stale token command authority.
 
-**C4 — evidence/docs/closeout:** focused native UI tests, FAST, final exact-head Windows FULL and Owner practical Windows walkthrough; internal current-as-built and bilingual Product docs parity, Browser regeneration and \`ss2 verify\` pass. Retain all RED-to-GREEN evidence and independent CI #302.
+**C4 — evidence/docs/closeout:** focused native UI tests, FAST, final exact-head Windows FULL and Owner practical Windows walkthrough; internal current-as-built and bilingual Product docs parity, Browser regeneration and `ss2 verify` pass. Retain all RED-to-GREEN evidence and independent CI #302.
 
-Each stage is strictly within this Work Contract after Owner D2 + contract approval and dedicated \`ACTIVE.yaml\` activation. FOCUSED success alone does not close PG-01C.
+Each stage is strictly within this Work Contract after Owner D2 + contract approval and dedicated `ACTIVE.yaml` activation. FOCUSED success alone does not close PG-01C.
 
 ## 7. Mandatory acceptance cases
 
@@ -109,10 +109,10 @@ This draft is not sufficient authority. Owner must explicitly accept:
 - PG-01C D2-A/B/C/D design choices (including bounded transient Viewer contract), and
 - this PG-01C Work Contract with declared source/testing/documentation scope.
 
-Then create a dedicated governance activation commit updating \`work/ACTIVE.yaml -> active_work\` to the accepted contract, pass the required gate, and **only then** start product code changes on a new feature branch. Neither PG-01B PASS nor a draft PR activates PG-01C automatically.
+Then create a dedicated governance activation commit updating `work/ACTIVE.yaml -> active_work` to the accepted contract, pass the required gate, and **only then** start product code changes on a new feature branch. Neither PG-01B PASS nor a draft PR activates PG-01C automatically.
 
 ## Documentation impact
 
 Internal docs: required
 User/Product docs: required
-Reason: new linked Sketch presentation and Project Geometry/Break Link end-user command workflows, diagnostics and interaction/lifecycle behavior. Provide canonical bilingual PL/EN docs, regenerate Browser, and run \`ss2 verify\`.
+Reason: new linked Sketch presentation and Project Geometry/Break Link end-user command workflows, diagnostics and interaction/lifecycle behavior. Provide canonical bilingual PL/EN docs, regenerate Browser, and run `ss2 verify`.
