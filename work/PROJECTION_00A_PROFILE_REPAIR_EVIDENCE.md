@@ -1,6 +1,6 @@
 # Projection 00A — Existing Profile/Extrude Repair Evidence
 
-**Status:** Automated semantic evidence A0–A7 PASS on two exact-head Windows FOCUSED runs; broader FAST / final FULL / Owner practical GUI A8 outstanding as of this record.
+**Status:** Automated semantic A0–A7 FOCUSED PASS, wider FAST #1913 PASS 93/93; final closure-head FULL and Owner practical GUI A8 not yet accepted/verified.
 **Date:** 2026-10-09
 **Authority:** Owner-accepted `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE_CONTRACT.md`
 **Baseline:** `main` `636a2989b28fc3723e6cde0130e654bf12c17657`
@@ -12,6 +12,7 @@
 - [Windows FOCUSED #1910](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37890070002), exact SHA `1041097855e3c8cf5133c36cbca370bd85745cea`: **PASS 1/1** `pm01c.feature_commands`, Kernel Release on the existing warm `D:\SS2Build\kernel-release` tree. This tightened the test to **require** the full successful A2–A4 path, no early return/skipped branch masquerading as PASS.
 - [Windows FOCUSED #1912](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37890452599), exact SHA `3f2a199a812da6000f9f22d525ab3da9f6b1c6ae`: **PASS 1/1** `pm01g.feature_cold_persistence`, with independent fresh `PartDocumentStore::load` and fresh deterministic `ColdKernel` after Save/Close.
 - The test-only fixture in #1911 failed to compile on `const PartDocument` copied into a session (`C2280`). Fixed ownership transfer via `std::move`; #1912 PASS. Previous #1907/#1908 failed documentation validator due to boldface rather than plain literal required `Internal docs:` declaration; fixed and later #1909/#1910 PASS. None of these initial RED findings required a product-source change.
+- [Windows FAST #1913](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37890618543), exact SHA `48fda02317628f10d93e843627fb10cb4f7f66b6`: **PASS 93/93**, `windows-msvc-fast` and aggregate `windows-msvc` PASS, includes strict invalid `EditExtrudeFeatureCommand` ProfileId negative (mutation-free) and both A0–A7 fixture tests.
 - The tests use **deterministic fake `ISolidModelingKernel` implementations** and the real SS2 Domain/Application Commands, Profile/Sketch region analyzer, document store and evaluator. These results are NOT claims about the correctness of OCCT projected-curve algorithms, complex face-boundary selection, or native GUI.
 
 ## Scenario matrix
@@ -38,7 +39,7 @@
 
 ## CI / evidence closure
 
-Next: run Draft **FAST** for the additional invalid-candidate negative and cross-suite regression without a focus trailer. Once green, run **one** Ready-for-Review exact-head FULL (Core + native kernel + desktop + docs) before formal package closeout / squash merge. No clean FULL during iteration; keep CMake/CI unchanged.
+**FAST #1913 already PASS 93/93** for the invalid candidate and cross-suite regression. Next: run **one** Ready-for-Review exact-head FULL (Core + native kernel + desktop + docs) before formal package closeout / squash merge. No clean FULL during iteration; keep CMake/CI unchanged.
 
 ## Documentation impact
 

@@ -5,6 +5,7 @@
 **Baseline:** `636a2989b28fc3723e6cde0130e654bf12c17657` (PM-05F merged)
 **D2 amendment:** Foundation §7.2 and §7.5 same-Part default associativity; Assembly §7.3 snapshot CORE unchanged
 **Evidence design:** `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE_PROPOSAL.md`
+**Current automated evidence:** `work/PROJECTION_00A_PROFILE_REPAIR_EVIDENCE.md` — FOCUSED #1910/#1912 PASS 1/1; FAST #1913 PASS 93/93 (2026-10-09), full closing PR gate pending.
 **Goal:** characterize existing SS2 Sketch topology edits, semantic Profile repair, existing Extrude reuse and identity/lifecycle; **do not implement Projection**.
 
 ## Allowed edits
