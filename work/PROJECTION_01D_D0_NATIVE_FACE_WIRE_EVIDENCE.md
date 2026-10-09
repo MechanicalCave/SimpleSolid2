@@ -44,7 +44,7 @@ The new native Workbench test cross-checks the query against `BodyStageTopologyC
 - unique runtime provider Edge token mapping; no duplicate stored material references;
 - stale scoped Face token used against a *different* `RuntimeSolidHandle` yields `provider_mismatch`, not accidental retargeting.
 
-**This proves one realistic admissible source family, not all possible Face/periodic/seam/split cases.** The subsequent test commit also checks invalid/default scope and nonplanar Surface typed rejection; its own FOCUSED result is pending. Exact current-source geometric Unsupported skips, mixed-source authoring, Face UI and cold persistence are still unimplemented.
+**This proves one realistic admissible source family, not all possible Face/periodic/seam/split cases.** The next native [Windows FOCUSED #2125](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37983494685) also completed **PASS 1/1** on exact tested commit `7480496e576828ea751ecf49f621a9108c273fc8`, verifying invalid/default scoped Face, invalid token, nonplanar Face typed rejection and cross-generation provider mismatch. The existing PG-01C native Project Geometry regression stayed green. **Only this D0/D1 synthetic through-Cut source family is certified**, not general Face membership changes or finished UI. Exact current-source geometric Unsupported skips, mixed-source authoring, Face UI and cold persistence are still unimplemented.
 
 
 ## Mandatory remaining D0 tests / STOP
