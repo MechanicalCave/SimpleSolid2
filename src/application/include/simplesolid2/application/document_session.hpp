@@ -106,6 +106,14 @@ struct EraseSketchEntitiesCommand final {
     std::vector<sketch::EntityId> entity_ids;
 };
 
+// Detach a linked target using only its newly resolved current projection.
+// The caller cannot supply a stale evaluated curve or runtime token.
+struct BreakProjectedEdgeLinkCommand final {
+    sketch::SketchId sketch_id;
+    sketch::EntityId entity_id;
+    core::DocumentRevision expected_revision;
+};
+
 struct SetSketchEntityRoleCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
@@ -326,6 +334,31 @@ struct DocumentSessionResult final {
 
     [[nodiscard]] bool ok() const noexcept {
         return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
+enum class BreakProjectedEdgeLinkStatus {
+    detached,
+    stale_revision,
+    missing_sketch,
+    not_linked,
+    provider_unavailable,
+    source_unavailable,
+    transaction_failed,
+};
+
+struct BreakProjectedEdgeLinkResult final {
+    BreakProjectedEdgeLinkStatus status{
+        BreakProjectedEdgeLinkStatus::source_unavailable};
+    bool changed{false};
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status ==
+                   BreakProjectedEdgeLinkStatus::detached &&
+               changed &&
+               diagnostic.code ==
+                   DocumentSessionErrorCode::none;
     }
 };
 
@@ -592,6 +625,9 @@ public:
         const EraseSketchEntityCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchEntitiesCommand& command);
+    [[nodiscard]] BreakProjectedEdgeLinkResult execute(
+        const BreakProjectedEdgeLinkCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const SetSketchEntityRoleCommand& command);
     [[nodiscard]] DocumentSessionResult execute(

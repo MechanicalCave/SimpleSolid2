@@ -890,6 +890,46 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               ->model.findLine(*sourceLine.entity_id)
               ->start().v == -8.0);
 
+    // Break Link must freeze the exact CURRENT evaluation, not the
+    // broken (-8 mm) persisted seed. The same EntityId survives and
+    // one Undo restores the original durable semantic source.
+    auto break_copy = part::PartDocument::restore(
+        restored.document->documentId(),
+        restored.document->state());
+    CHECK(break_copy.ok());
+    application::DocumentSession detached{
+        {}, std::move(*break_copy.document)};
+    const auto broken_revision =
+        detached.document().revision();
+    const auto broken_link =
+        detached.execute(
+            application::BreakProjectedEdgeLinkCommand{
+                id, *sourceLine.entity_id,
+                broken_revision},
+            cold);
+    CHECK(broken_link.ok());
+    CHECK(detached.document().findSketch(id)
+              ->projection_bindings.empty());
+    CHECK(close(detached.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v, 0.0));
+    CHECK(detached.undo().changed);
+    CHECK(detached.document().findSketch(id)
+              ->projection_bindings.size() == 1U);
+    CHECK(detached.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+    CHECK(detached.redo().changed);
+    CHECK(detached.document().findSketch(id)
+              ->projection_bindings.empty());
+    const auto not_linked =
+        detached.execute(
+            application::BreakProjectedEdgeLinkCommand{
+                id, *sourceLine.entity_id,
+                detached.document().revision()},
+            cold);
+    CHECK(!not_linked.ok() && !not_linked.changed);
+
     auto suppressed = restored.document->state();
     suppressed.body.features.front().suppressed = true;
     auto unavailable = part::PartDocument::restore(
@@ -908,7 +948,8 @@ void verifyPg01bNativeDerivedProfileExtrude() {
         << " current_occt_edge=1"
         << " authored_seed_stale=1"
         << " same_profile_id=1"
-        << " missing_source_fail_closed=1\n";
+        << " missing_source_fail_closed=1"
+        << " break_link_undo_redo=1\n";
 }
 
 } // namespace
