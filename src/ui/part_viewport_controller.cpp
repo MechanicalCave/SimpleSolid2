@@ -2,6 +2,7 @@
 #include "sketch_viewport_mapping.hpp"
 
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <QPointer>
 
@@ -2334,6 +2335,17 @@ bool PartViewportController::projectSketchInteraction(
                 };
 
             for (const auto id : selected) {
+                // A linked entity is source-controlled. Do not show
+                // editable grips at its stale authored seed position.
+                const bool linked = std::any_of(
+                    hosted->projection_bindings.begin(),
+                    hosted->projection_bindings.end(),
+                    [id](const part::ProjectedEdgeBinding& binding) {
+                        return binding.target_entity == id;
+                    });
+                if (linked) {
+                    continue;
+                }
                 const auto token = sketchPresentationFor(id);
                 if (!token) return false;
 
@@ -3860,9 +3872,48 @@ PartViewportController::buildBodyScene() {
     return *body_scene_cache_;
 }
 
+sketch::SketchModel
+PartViewportController::effectiveSketchModelForPresentation(
+    const part::PartSketch& hosted) const {
+    if (hosted.projection_bindings.empty()) {
+        return hosted.model;
+    }
+
+    // Never render the saved coordinates of a linked entity as current
+    // source truth. Reuse the evaluated Body stage from this refresh cycle.
+    if (session_ != nullptr &&
+        part_evaluation_cache_ &&
+        part_evaluation_cache_->source_revision ==
+            session_->document().revision() &&
+        solid_modeling_kernel_ != nullptr) {
+        if (auto* query =
+                dynamic_cast<kernel::IEdgeProjectionQuery*>(
+                    solid_modeling_kernel_)) {
+            auto effective =
+                part::evaluateEffectiveSketchProjection(
+                    session_->document(),
+                    hosted.id,
+                    *part_evaluation_cache_,
+                    *query);
+            if (effective) {
+                return std::move(effective->model);
+            }
+        }
+    }
+
+    // Provider loss or failed evaluation does not erase Part intent.
+    // Unrelated authored entities remain visible, linked seeds do not.
+    auto safe = hosted.model;
+    for (const auto& binding : hosted.projection_bindings) {
+        (void)safe.erase(binding.target_entity);
+    }
+    return safe;
+}
+
 std::optional<viewer::ProfileRegionPresentation>
 PartViewportController::buildProfileRegionPresentation(
     const part::PartSketch& source,
+    const sketch::SketchModel& evaluated_model,
     const sketch::RegionCandidate2D& region) const {
     const auto sample_loop =
         [this, &source](
@@ -3873,7 +3924,7 @@ PartViewportController::buildProfileRegionPresentation(
             for (const auto& use : loop.boundary) {
                 const auto points =
                     sampleProfileUse(
-                        source.model,
+                        evaluated_model,
                         use);
                 if (!points || points->empty()) {
                     return std::nullopt;
@@ -3943,13 +3994,6 @@ PartViewportController::buildProfileScene() {
             continue;
         }
 
-        const auto evaluation =
-            session_->document()
-                .evaluateProfile(profile.id);
-        if (!evaluation || !evaluation->valid()) {
-            continue;
-        }
-
         const auto* source =
             session_->document().findSketch(
                 profile.source_sketch_id);
@@ -3958,10 +4002,23 @@ PartViewportController::buildProfileScene() {
             return std::nullopt;
         }
 
+        // PG-01B authored-only evaluateProfile deliberately refuses
+        // linked boundaries. A valid linked Profile is instead resolved
+        // and sampled from the exact same current, disposable Sketch.
+        const auto model =
+            effectiveSketchModelForPresentation(*source);
+        const auto evaluation =
+            source->projection_bindings.empty()
+                ? session_->document().evaluateProfile(profile.id)
+                : part::resolveProfileRegionIntent(
+                      model, profile.region_intent);
+        if (!evaluation.valid()) {
+            continue;
+        }
+
         const auto region =
             buildProfileRegionPresentation(
-                *source,
-                *evaluation->region);
+                *source, model, *evaluation.region);
         const auto token =
             allocatePresentationToken();
         if (!region || !token ||
@@ -4004,8 +4061,10 @@ PartViewportController::buildSketchScene() {
         viewer::SketchOriginPresentation{
             *origin};
 
+    const auto current_model =
+        effectiveSketchModelForPresentation(*hosted);
     const auto model_state =
-        hosted->model.state();
+        current_model.state();
 
     const auto bind = [this, hosted](
         viewer::PresentationToken token,
