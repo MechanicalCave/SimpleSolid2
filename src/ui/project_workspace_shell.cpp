@@ -755,9 +755,27 @@ bool ProjectWorkspaceShell::eventFilter(
             return true;
         }
         if (key_event->key() == Qt::Key_Escape) {
-            cad_input_.clearBuffer();
+            // PG-01C shares the single CadInputSession buffer with
+            // viewport-typed commands. On the first Esc, preserve
+            // focused Command Line ownership and pending source Edges.
+            // On empty-buffer Esc, dispatch the stage-local semantic
+            // request through the *same* endpoint as typed "ESC".
+            const bool project_context =
+                cad_input_.prompt().starts_with(
+                    "Command: PROJECT");
+            const bool typed_buffer =
+                !cad_input_.buffer().empty();
+            if (typed_buffer) {
+                cad_input_.clearBuffer();
+            } else if (project_context) {
+                cad_input_.setBuffer("ESC");
+                static_cast<void>(cad_input_.submit());
+            } else {
+                cad_input_.clearBuffer();
+            }
             refreshCadInputPresentation();
-            if (document_workbench_ != nullptr) {
+            if (!project_context &&
+                document_workbench_ != nullptr) {
                 document_workbench_->setFocus(
                     Qt::OtherFocusReason);
             }
