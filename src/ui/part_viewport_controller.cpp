@@ -5230,6 +5230,71 @@ PartViewportController::currentMaterialEdgeProjectionStatus(
         *query, *frame).status;
 }
 
+bool PartViewportController::setProjectFaceSourceFeedback(
+    const std::vector<part::MaterialEdgeReference>& supported,
+    const std::vector<part::MaterialEdgeReference>& skipped) {
+    const auto clear = [this]() {
+        project_face_feedback_revision_.reset();
+        project_face_feedback_generation_.reset();
+        project_face_feedback_supported_.clear();
+        project_face_feedback_skipped_.clear();
+        return applyFeatureContributionOverlay();
+    };
+    if (supported.empty() && skipped.empty()) {
+        return clear();
+    }
+    if (session_ == nullptr || !body_scene_revision_ ||
+        *body_scene_revision_ != session_->document().revision() ||
+        !body_scene_cache_ ||
+        !body_scene_cache_->generation.valid() ||
+        (body_scene_cache_->purpose !=
+             viewer::BodyScenePurpose::current_body &&
+         !(body_topology_edge_draft_mode_ &&
+           body_scene_cache_->purpose ==
+               viewer::BodyScenePurpose::tool_stage)) ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        static_cast<void>(clear());
+        return false;
+    }
+    std::vector<part::MaterialEdgeReference> all = supported;
+    all.insert(all.end(), skipped.begin(), skipped.end());
+    std::sort(all.begin(), all.end());
+    if (std::adjacent_find(all.begin(), all.end()) != all.end()) {
+        static_cast<void>(clear());
+        return false;
+    }
+    for (const auto& source : all) {
+        if (!source.valid() ||
+            source.stage != body_topology_catalog_cache_->stage) {
+            static_cast<void>(clear());
+            return false;
+        }
+        const auto resolution =
+            part::resolveMaterialEdgeReference(
+                source, *body_topology_catalog_cache_);
+        if (!resolution || !resolution->resolved() ||
+            resolution->current_edges.size() != 1U ||
+            !bodyPresentationTokenFor(
+                viewer::BodyTopologyPresentationKind::edge,
+                resolution->current_edges.front().value)) {
+            static_cast<void>(clear());
+            return false;
+        }
+    }
+    project_face_feedback_revision_ =
+        session_->document().revision();
+    project_face_feedback_generation_ =
+        body_scene_cache_->generation;
+    project_face_feedback_supported_ = supported;
+    project_face_feedback_skipped_ = skipped;
+    if (!applyFeatureContributionOverlay()) {
+        static_cast<void>(clear());
+        return false;
+    }
+    return true;
+}
+
 void PartViewportController::clearBodyTopologyPreselection() {
     body_topology_candidate_stack_.reset();
     if (viewport_ != nullptr) {
