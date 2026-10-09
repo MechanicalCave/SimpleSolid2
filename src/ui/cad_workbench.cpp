@@ -9524,6 +9524,8 @@ bool CadWorkbench::startProjectEdgeTool() {
     project_edge_stage_ = summary->stage;
     project_edge_role_ = sketch::EntityRole::regular;
     project_edge_sources_.clear();
+    project_edge_preview_valid_ = false;
+    viewport_controller_->clearSketchPreview();
 
     viewport_controller_->clearBodyTopologyToolSelection();
     viewport_controller_->setBodyTopologyEdgeDraftMode(true);
@@ -9561,8 +9563,10 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
     project_edge_revision_.reset();
     project_edge_stage_.reset();
     project_edge_sources_.clear();
+    project_edge_preview_valid_ = false;
     project_edge_role_ = sketch::EntityRole::regular;
     if (viewport_controller_ != nullptr) {
+        viewport_controller_->clearSketchPreview();
         viewport_controller_->setBodyTopologyEdgeDraftMode(false);
         viewport_controller_->clearBodyTopologyToolSelection();
         // Return control to the existing Sketcher input grammar.
@@ -9615,9 +9619,30 @@ void CadWorkbench::clearProjectEdgeSelection() {
         return;
     }
     project_edge_sources_.clear();
+    project_edge_preview_valid_ = false;
+    viewport_controller_->clearSketchPreview();
     viewport_controller_->clearBodyTopologyToolSelection();
     syncProjectEdgeUi();
     notifyCadInputContextChanged();
+}
+
+void CadWorkbench::refreshProjectEdgePreview() {
+    project_edge_preview_valid_ = false;
+    if (viewport_controller_ == nullptr) {
+        return;
+    }
+    if (!project_edge_active_ ||
+        project_edge_sources_.empty()) {
+        viewport_controller_->clearSketchPreview();
+        return;
+    }
+    project_edge_preview_valid_ =
+        viewport_controller_->setProjectedEdgeDraftPreview(
+            project_edge_sources_, project_edge_role_);
+    if (!project_edge_preview_valid_) {
+        setStatusText(QStringLiteral(
+            "PROJECT preview unavailable: exact current Edge source, provider or Sketch support invalid; no authored geometry changed."));
+    }
 }
 
 void CadWorkbench::tryStageProjectEdgeSelection() {
@@ -9657,6 +9682,7 @@ void CadWorkbench::tryStageProjectEdgeSelection() {
             "PROJECT selection contains unsupported or stale Body topology."));
         return;
     }
+    refreshProjectEdgePreview();
     syncProjectEdgeUi();
     notifyCadInputContextChanged();
 }
@@ -9671,7 +9697,8 @@ bool CadWorkbench::finishProjectEdgeTool() {
         *sketch_edit_document_id_ != session->documentId() ||
         session->document().revision() !=
             *project_edge_revision_ ||
-        project_edge_sources_.empty()) {
+        project_edge_sources_.empty() ||
+        !project_edge_preview_valid_) {
         setStatusText(QStringLiteral(
             "PROJECT Finish rejected: selection empty or Sketch/Document context stale."));
         return false;
@@ -9728,6 +9755,7 @@ void CadWorkbench::setProjectEdgeRole(sketch::EntityRole role) {
         return;
     }
     project_edge_role_ = role;
+    refreshProjectEdgePreview();
     syncProjectEdgeUi();
     notifyCadInputContextChanged();
 }
@@ -9766,7 +9794,8 @@ void CadWorkbench::syncProjectEdgeUi() {
     }
     if (project_edge_finish_button_ != nullptr) {
         project_edge_finish_button_->setEnabled(
-            count > 0U && document_session_ != nullptr &&
+            count > 0U && project_edge_preview_valid_ &&
+            document_session_ != nullptr &&
             project_edge_revision_ &&
             document_session_->document().revision() ==
                 *project_edge_revision_);
@@ -9782,13 +9811,16 @@ void CadWorkbench::syncProjectEdgeUi() {
             count == 0U
                 ? QStringLiteral(
                     "Pick one or more exact material Edges, then Finish; Cancel makes no changes.")
-                : QStringLiteral(
-                    "Current batch: %1 Edge(s), %2. FINISH commits once; REMOVE/CLEAR or CANCEL.")
-                    .arg(static_cast<qulonglong>(count))
-                    .arg(project_edge_role_ ==
-                             sketch::EntityRole::regular
-                             ? QStringLiteral("Regular")
-                             : QStringLiteral("Construction")));
+                : !project_edge_preview_valid_
+                    ? QStringLiteral(
+                        "Current source unresolved — exact projection preview unavailable; Finish disabled. Clear/Remove or Cancel.")
+                    : QStringLiteral(
+                        "Current preview: %1 derived Edge(s), %2. FINISH commits once; REMOVE/CLEAR or CANCEL.")
+                        .arg(static_cast<qulonglong>(count))
+                        .arg(project_edge_role_ ==
+                                 sketch::EntityRole::regular
+                                 ? QStringLiteral("Regular")
+                                 : QStringLiteral("Construction")));
     }
     if (operations_placeholder_ != nullptr) {
         operations_placeholder_->setText(
