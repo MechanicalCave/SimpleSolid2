@@ -500,6 +500,7 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
     // runtime tokens. Every admitted material use must pass the existing
     // PG-01B authorMaterialEdgeReference contract.
     std::size_t planar_faces = 0U;
+    std::size_t nonplanar_faces = 0U;
     std::size_t native_faces_with_holes = 0U;
     std::size_t strict_faces_with_holes = 0U;
     std::size_t fully_material_strict_holed_faces = 0U;
@@ -515,6 +516,7 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
         if (boundary.status ==
                 kernel::FaceBoundaryStatus::
                     unsupported_surface) {
+            ++nonplanar_faces;
             continue;
         }
         CHECK(boundary.ok());
@@ -564,6 +566,7 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
     std::cerr
         << "PG01D_D0_NATIVE_FACE_WIRE_STATUS"
         << " planar=" << planar_faces
+        << " nonplanar=" << nonplanar_faces
         << " holes=" << native_faces_with_holes
         << " strict_holes=" << strict_faces_with_holes
         << " strict_holes_all_material="
@@ -571,11 +574,21 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
         << " material_rejections=" << hole_rejected_edges
         << std::endl;
     CHECK(native_faces_with_holes >= 2U);
+    CHECK(nonplanar_faces >= 1U);
     CHECK(strict_faces_with_holes > 0U);
     CHECK(fully_material_strict_holed_faces > 0U);
 
     // A token scoped to one provider realization must not gain authority
     // over a different body just because its numeric Face ID is reused.
+    CHECK(!kernel.bindFaceToBody(
+        evaluation.body_solid, kernel::RuntimeFaceToken{}));
+    const auto invalid_scope =
+        kernel.queryFaceBoundary(
+            evaluation.body_solid,
+            kernel::ScopedBoundaryFace{});
+    CHECK(invalid_scope.status ==
+          kernel::FaceBoundaryStatus::invalid_input);
+
     const auto fresh_evaluation =
         part::evaluatePart(session.document(), kernel);
     CHECK(fresh_evaluation.body_solid);
