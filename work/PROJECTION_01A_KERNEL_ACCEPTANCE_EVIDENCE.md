@@ -1,6 +1,6 @@
 # PG-01A — Kernel / OCCT Exact Projection Evidence
 
-**Status:** IMPLEMENTING; Windows FOCUSED #1924 PASS for actual Boolean-generated nonanalytic source, FAST #1923 PASS 93/93 on earlier docs/head; current evidence sync FAST and final exact-head FULL pending. Not Owner-final PASS.
+**Status:** IMPLEMENTING; Windows FULL #1926 195/195 PASS on pre-injection head `0a8483d`; Owner approved additional Standard_Failure injection test. New exact-head FULL including this test and synced docs PENDING. Owner final PG-01A PASS not claimed.
 **Date:** 2026-10-09
 **PR:** [#300](https://github.com/MechanicalCave/SimpleSolid2/pull/300)
 **Contract:** `work/PROJECTION_01A_EXACT_KERNEL_CONTRACT.md`
@@ -18,6 +18,10 @@
 - [**FAST #1923**](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37894202004) on `0e93c876758c4cfc5413795cc467aef2bc19b8d8`: **93/93 PASS** (aggregate `windows-msvc` PASS), canonical internal docs and generated Browser verified on that runtime candidate.
 - [**FOCUSED #1924**](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37894403082) on `34267b15237ead2c29900c56bf7d9fc07f522687`: **1/1 PASS**, current-box Boolean Cut by tilted cylinder produces at least one actual OCCT non-Line/non-Circle Edge that yields exact typed Unsupported, no polyline approximation. This test is a real OCCT boolean, not a synthetic fake provider.
 
+- [**FAST #1925**](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37894615835) on `0a8483d0535ba27bc33e9380b79b3bd292c25918`: **93/93 PASS**, aggregate PASS.
+- [**FULL #1926**](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37894816134) on `0a8483d0535ba27bc33e9380b79b3bd292c25918`: **195/195 PASS** (25 Core + 57 kernel-native + 113 Desktop), docs/bootstrap/aggregate PASS. **Earlier head only; excludes added OCCT-exception injection test.**
+- **Owner additional test authorization:** `ok, akceptuje` after explicit proposal to test `Standard_Failure` with FOCUSED. Test is added using the exact provider-internal production exception guard, with deliberate `Standard_Failure::Raise()` plus unexpected `std::runtime_error` and success passthrough. Because PR was already Ready for Review, CI automatically chose FULL for the code change; this evidence/docs synchronization supersedes that HEAD. **New latest-head CI still pending — no PASS claim for injection until confirmed.**
+
 ## Coverage vs remaining gate
 
 | Area | Verified / open |
@@ -27,9 +31,10 @@
 | Provider-scoped Edge reused with different runtime Body having same numeric token | FOCUSED PASS — `provider_mismatch`, no silent geometry |
 | Initial **semantic** capture of the correct current-stage Edge | PG-01B Part responsibility, not done here. Binding a copied raw integer to the wrong Body would still be semantically incorrect without caller validation |
 | Unsupported **actual OCCT nonanalytic Boolean intersection** | FOCUSED #1924 PASS — oblique Cylinder Cut produced at least one exact Unsupported source; no approximation |
-| Specific synthetic B-Spline constructor, synthetic provider-exception branch | OPEN test coverage; generic Unsupported and KernelFailure branches implemented; **no direct thrown-exception injection test** claimed |
+| Direct deliberate `Standard_Failure` and unexpected C++ exception in the same guard used by production projection | **New native test written; awaiting latest-head CI.** Verifies `kernel_failure`, empty curve, and nonthrowing recovery. No production fault flag. |
+| Specific synthetic B-Spline constructor | OPEN: true nonanalytic Boolean intersection is covered, but an independent explicit B-Spline construction case has not been run |
 | Wider FAST | #1923 PASS 93/93 on earlier head; latest source/evidence synchronization FAST pending |
-| Ready-for-Review exact-head Windows FULL | PENDING |
+| Ready-for-Review exact-head Windows FULL covering **new injection test** | PENDING — #1926 passed older commit, not this candidate |
 | Owner final PG-01A acceptance and merge | PENDING |
 
 **Source boundaries:** SS2 `kernel/edge_projection.hpp`, `kernel_occt/solid_modeling_kernel.hpp/.cpp` and existing `pm02p.e_kernel_lifecycle`; no Part/Sketch/UI/persistence/PM-06 changes or CMake modifications. Canonical internal as-built doc `docs/internal/PART_EDGE_PROJECTION_KERNEL.md` and generated Browser updated together. No user-facing Project Geometry feature ships in PG-01A.

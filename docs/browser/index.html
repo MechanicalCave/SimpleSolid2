@@ -1916,14 +1916,14 @@ An OCCT Line produces oriented 2D endpoints; projection collapsing below `Precis
 <!-- section-id: internal.part-edge-projection-kernel.failure -->
 ## Status and current limits
 
-`EdgeProjectionStatus`: `ok`, `invalid_input`, `provider_mismatch`, `edge_unavailable`, `unsupported_curve`, `degenerate_projection`, `kernel_failure`. Failures contain no curve; OCCT exceptions are contained. This does not implement asso, a derived Sketch view, Face boundary capture, Break Link, Save/Reopen, UI or Assembly.
+`EdgeProjectionStatus`: `ok`, `invalid_input`, `provider_mismatch`, `edge_unavailable`, `unsupported_curve`, `degenerate_projection`, `kernel_failure`. Failures contain no curve. OCCT work is executed inside the provider-internal `detail::guardedExactEdgeProjection()` exception boundary, which maps both `Standard_Failure` and unexpected C++ exceptions to `kernel_failure` with **no curve**. The same guarded callable is exercised by the native test with deliberate `Standard_Failure::Raise()` and `std::runtime_error`, without exposing any fault-injection switch in the public projection API. This does not implement asso, a derived Sketch view, Face boundary capture, Break Link, Save/Reopen, UI or Assembly.
 
 <!-- section-id: internal.part-edge-projection-kernel.evidence -->
 ## Native tests
 
 The already-registered `pm02p.e_kernel_lifecycle` test covers real Extrude/Revolve/Fillet/Chamfer runtime Edge inventories, XY/XZ/YZ/offset-rotated frames, Line/full Circle/Arc, reverse and seam-crossing arc inputs, tilted circle/arc Unsupported, degenerate Line, foreign/invalid inputs, repeated deterministic results and cross-generation old scoped Edge rejection despite identical raw tokens.
 
-Windows FOCUSED: [#1918](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37892785961), [#1919](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37893017161), [#1920](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37893301439), [#1922](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37893703340): **1/1 PASS each** on their respective tested revisions. More specific synthetic B-Spline and injected OCCT-exception coverage remains open and is not inferred from these results. See `work/PROJECTION_01A_KERNEL_ACCEPTANCE_EVIDENCE.md`.
+Windows FOCUSED: [#1918](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37892785961), [#1919](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37893017161), [#1920](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37893301439), [#1922](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37893703340): **1/1 PASS each** on their respective tested revisions. A direct Standard_Failure/unknown-exception guard regression was added after those focused runs; confirm its PASS in the latest exact-head CI, not by inference from older runs. Direct synthetic B-Spline construction remains outside the currently executed cases. See `work/PROJECTION_01A_KERNEL_ACCEPTANCE_EVIDENCE.md`.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.persistence" data-kind="internal" data-lang="en" data-path="docs/internal/PERSISTENCE.md">
 # Persistence — As-built
