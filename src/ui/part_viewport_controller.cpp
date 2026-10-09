@@ -4010,15 +4010,16 @@ PartViewportController::buildProfileScene() {
         const auto evaluation =
             source->projection_bindings.empty()
                 ? session_->document().evaluateProfile(profile.id)
-                : part::resolveProfileRegionIntent(
-                      model, profile.region_intent);
-        if (!evaluation.valid()) {
+                : std::optional<part::ResolvedProfileRegion>{
+                      part::resolveProfileRegionIntent(
+                          model, profile.region_intent)};
+        if (!evaluation || !evaluation->valid()) {
             continue;
         }
 
         const auto region =
             buildProfileRegionPresentation(
-                *source, model, *evaluation.region);
+                *source, model, *evaluation->region);
         const auto token =
             allocatePresentationToken();
         if (!region || !token ||
