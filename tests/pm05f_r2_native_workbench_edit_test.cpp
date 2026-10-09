@@ -1035,14 +1035,41 @@ int main(int argc, char* argv[]) {
         pg_reply = workbench.submitCadInput(
             "PROFILE", workbench.cadInputContextGeneration());
         CHECK(pg_reply.accepted);
-        pg_reply = workbench.submitCadInput(
-            "FIND", workbench.cadInputContextGeneration());
-        CHECK(pg_reply.accepted);
-        auto* pg_profile_status = workbench.findChild<QLabel*>(
-            QStringLiteral("workbenchStatus"));
-        CHECK(pg_profile_status);
-        CHECK(pg_profile_status->text().contains(
-            QStringLiteral("Profile regions: 1;")));
+        // UI Profile uses its existing tool/viewport pointer
+        // grammar; FIND is intentionally not a global CAD keyword.
+        // Hover/click the CURRENT derived interior, which does not
+        // exist as a closed region in the authored linked seed model.
+        auto* pg_profile_result = workbench.findChild<QLabel*>(
+            QStringLiteral("profileCurrentResult"));
+        auto* pg_profile_finish = workbench.findChild<QPushButton*>(
+            QStringLiteral("profileFinishButton"));
+        CHECK(pg_profile_result && pg_profile_finish);
+        CHECK(viewport->setStandardView(
+            viewer::StandardView::top));
+        viewport->fitAll();
+        QApplication::processEvents();
+        const viewer::Point3 pg_region_world{
+            (pg_origin_a.u + pg_origin_b.u + pg_side.u) * 0.5,
+            (pg_origin_a.v + pg_origin_b.v + pg_side.v) * 0.5,
+            0.0};
+        const auto pg_region_pos =
+            viewport->projectWorldPoint(pg_region_world);
+        CHECK(pg_region_pos);
+        const QPoint pg_region_pixel{
+            static_cast<int>(std::lround(pg_region_pos->x)),
+            static_cast<int>(std::lround(pg_region_pos->y))};
+        CHECK(viewport->rect().contains(pg_region_pixel));
+        QTest::mouseMove(viewport, pg_region_pixel);
+        QApplication::processEvents();
+        CHECK(pg_profile_result->text().contains(
+            QStringLiteral("Status: Valid")));
+        QTest::mouseClick(
+            viewport, Qt::LeftButton,
+            Qt::NoModifier, pg_region_pixel);
+        QApplication::processEvents();
+        CHECK(pg_profile_finish->isEnabled());
+        CHECK(pg_profile_result->text().contains(
+            QStringLiteral("Status: Valid")));
         pg_reply = workbench.submitCadInput(
             "CANCEL", workbench.cadInputContextGeneration());
         CHECK(pg_reply.accepted);
@@ -1050,7 +1077,8 @@ int main(int argc, char* argv[]) {
             << "PG01C_C2_CURRENT_PROFILE_REGIONS_PASS"
             << " persisted_seed_regions=0"
             << " current_linked_regions=1"
-            << " ui_find_regions=1\\n";
+            << " native_profile_hover=1"
+            << " native_profile_draft=1\\n";
         std::cout
             << "PG01C_C3_SUPPRESSION_RECOVERY_PASS"
             << " no_saved_seed_fallback=1"
