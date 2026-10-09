@@ -1094,6 +1094,168 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               ->model.findLine(*sourceLine.entity_id)
               ->start().v == -8.0);
 
+    // B5 source edit across the strict semantic binding. Moving the
+    // upstream rectangle from 40 to 50 makes the downstream linked
+    // bottom Edge grow, while the three locally authored sides are still
+    // at x=40. The dependent Feature MUST fail closed until those three
+    // sides are explicitly repaired; old seed x=40 must not hide the gap.
+    auto edit_copy = part::PartDocument::restore(
+        cold_load.document->documentId(),
+        cold_load.document->state());
+    CHECK(edit_copy.ok());
+    application::DocumentSession edit_session{
+        {}, std::move(*edit_copy.document)};
+    const auto* base_definition =
+        std::get_if<part::ExtrudeFeature>(
+            &edit_session.document()
+                 .findFeature(fixture.base_id)->definition);
+    CHECK(base_definition);
+    const auto* base_profile =
+        edit_session.document().findProfile(
+            base_definition->profile_id);
+    CHECK(base_profile != nullptr);
+    const auto base_sketch_id =
+        base_profile->source_sketch_id;
+    const auto* base_sketch =
+        edit_session.document().findSketch(base_sketch_id);
+    CHECK(base_sketch != nullptr);
+    std::vector<application::SketchLineGeometryUpdate>
+        upstream_updates;
+    for (const auto& line :
+         base_sketch->model.state().lines) {
+        auto start = line.start;
+        auto end = line.end;
+        if (close(start.u, 40.0)) {
+            start.u = 50.0;
+        }
+        if (close(end.u, 40.0)) {
+            end.u = 50.0;
+        }
+        upstream_updates.push_back(
+            {line.id, start, end});
+    }
+    CHECK(upstream_updates.size() == 4U);
+    const auto move_source = edit_session.execute(
+        application::UpdateSketchLinesCommand{
+            base_sketch_id,
+            edit_session.document().revision(),
+            upstream_updates});
+    CHECK(move_source.ok() && move_source.changed);
+    kernel_occt::OcctSolidModelingKernel edited_kernel;
+    const auto gap_evaluation =
+        part::evaluatePart(
+            edit_session.document(), edited_kernel);
+    CHECK(gap_evaluation.body_status !=
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(!gap_evaluation.body_solid);
+    const auto* gap_cut =
+        gap_evaluation.findFeature(*cut.feature_id);
+    CHECK(gap_cut && gap_cut->status !=
+          part::FeatureEvaluationStatus::up_to_date);
+
+    // Only the three ordinary local Lines may be edited. The linked
+    // source-controlled bottom retains its target EntityId and its OPEN
+    // authored seed. After explicit contour repair the SAME old Profile
+    // and Cut Feature become evaluable again.
+    const auto* prior_target =
+        edit_session.document().findSketch(id);
+    CHECK(prior_target != nullptr);
+    std::vector<application::SketchLineGeometryUpdate>
+        target_updates;
+    for (const auto& line :
+         prior_target->model.state().lines) {
+        if (line.id == *sourceLine.entity_id) {
+            continue;
+        }
+        auto start = line.start;
+        auto end = line.end;
+        if (close(start.u, 40.0)) {
+            start.u = 50.0;
+        }
+        if (close(end.u, 40.0)) {
+            end.u = 50.0;
+        }
+        target_updates.push_back(
+            {line.id, start, end});
+    }
+    CHECK(target_updates.size() == 3U);
+    const auto repair = edit_session.execute(
+        application::UpdateSketchLinesCommand{
+            id,
+            edit_session.document().revision(),
+            target_updates});
+    CHECK(repair.ok() && repair.changed);
+    const auto now_current =
+        part::evaluatePart(
+            edit_session.document(), edited_kernel);
+    CHECK(now_current.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto* resized_cut =
+        now_current.findFeature(*cut.feature_id);
+    CHECK(resized_cut && resized_cut->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    const auto widened =
+        part::evaluateEffectiveSketchProjection(
+            edit_session.document(), id,
+            now_current, edited_kernel,
+            *cut.feature_id);
+    CHECK(widened && widened->allResolved());
+    const auto* resized_line =
+        widened->model.findLine(*sourceLine.entity_id);
+    CHECK(resized_line != nullptr);
+    CHECK(close(
+        std::min(resized_line->start().u,
+                 resized_line->end().u), 0.0));
+    CHECK(close(
+        std::max(resized_line->start().u,
+                 resized_line->end().u), 50.0));
+    CHECK(edit_session.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+    CHECK(edit_session.document().findProfile(
+              *profile.profile_id)->id ==
+          *profile.profile_id);
+    CHECK(edit_session.document().findFeature(
+              *cut.feature_id)->id ==
+          *cut.feature_id);
+
+    // A new provider must reproduce the *edited* 50 mm source geometry
+    // from the saved v15 model rather than a previously cached BRep.
+    const auto resized_path =
+        temp.path / "Pg01bResizedUpstream.ss2part";
+    CHECK(linked_store.createNew(
+              resized_path, edit_session.document()).ok());
+    const auto reopened_resized =
+        linked_store.load(resized_path);
+    CHECK(reopened_resized.ok() &&
+          reopened_resized.document);
+    CHECK(reopened_resized.document->state() ==
+          edit_session.document().state());
+    kernel_occt::OcctSolidModelingKernel new_provider;
+    const auto rebuilt =
+        part::evaluatePart(
+            *reopened_resized.document, new_provider);
+    CHECK(rebuilt.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(rebuilt.findFeature(*cut.feature_id)->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    const auto rebuilt_sketch =
+        part::evaluateEffectiveSketchProjection(
+            *reopened_resized.document, id, rebuilt,
+            new_provider, *cut.feature_id);
+    CHECK(rebuilt_sketch && rebuilt_sketch->allResolved());
+    const auto* cold_widened =
+        rebuilt_sketch->model.findLine(
+            *sourceLine.entity_id);
+    CHECK(cold_widened);
+    CHECK(close(
+        std::max(cold_widened->start().u,
+                 cold_widened->end().u), 50.0));
+    std::cout << "PG01B_B5_SOURCE_EDIT_REPAIR_PASS"
+              << " old_profile_id=1 old_cut_id=1"
+              << " gap_blocked=1 manual_contour_repair=1"
+              << " cold_50mm_projection=1\n";
+
     // A structurally valid but suppressed source must remain durable
     // and repairable after a SECOND cold save. No serialized last-good
     // geometry or previous provider token may revive the blocked Cut.
