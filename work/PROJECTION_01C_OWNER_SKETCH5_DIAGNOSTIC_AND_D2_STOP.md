@@ -1,6 +1,6 @@
 # PG-01C — Owner Sketch 5: numerical endpoint diagnosis and bounded D2 STOP
 
-**Status:** DIAGNOSTIC / OWNER DECISION REQUIRED; not a production repair or PG-01C acceptance.  
+**Status:** DIAGNOSTIC CLOSED FOR OWNER D2 DECISION — D2-K/T/P/B approved 2026-10-09 and implemented on PR #304; verification and Owner FINAL PASS remain OPEN.  
 **Observed on:** 2026-10-09, Owner Windows re-test of PR #304 at `0f338a3`.  
 **Scope authority:** `work/PROJECTION_01C_PROJECT_EDGE_UI_CONTRACT.md`, particularly §§3, 5 and 8.  
 **Owner input:** a locally supplied native v15 Part. The file, its complete coordinates, names, document ID and payload are **not committed**. This report uses only a topology summary and rounded magnitudes.
@@ -29,6 +29,10 @@ A separate native OCCT 7.9.3 experiment built a four-sided deliberately skewed p
 - `BRep_Tool::Pnt(shared_vertex)` is the one canonical point associated with each matching vertex, regardless of which incident Edge is inspected. The observed differences therefore can arise solely from separate analytic edge-parameter evaluations; they are not proof of an open 3D vertex wire.
 - This is reproducible **mechanism evidence**, not source-topology certification of the Owner's saved Part, nor proof that directly substituting vertex coordinates is always modeling-semantics-compatible. The Part-specific common-vertex check, geometry validity and safety boundaries in D2-K remain mandatory.
 - The experiment ran locally with Python bindings to OCCT rather than against the application's selected Kernel build. It does not constitute a Windows C++ regression PASS.
+
+## Owner decision update — 2026-10-09
+
+The Owner subsequently explicitly approved **D2-K, D2-T, D2-P and D2-B** ("Zatwierdzam - mamy wyniki - kontynuuj"). The pending-decision phrasing below is retained as the *original investigation proposal*, not current authority status. The approved scope is now canonically recorded in `work/PROJECTION_01C_PROJECT_EDGE_UI_CONTRACT.md` §10. The implemented changes remain candidates pending exact-head FULL and manual Windows re-test; this document does not itself constitute acceptance.
 
 ## Bounded follow-up decisions
 
