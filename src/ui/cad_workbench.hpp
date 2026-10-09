@@ -299,6 +299,7 @@ private:
     void cancelProjectEdgeTool();
     void clearProjectEdgeRuntimeContext();
     void clearProjectEdgeSelection();
+    void removeProjectFaceSelection();
     void tryStageProjectEdgeSelection();
     void tryStageProjectFaceSelection();
     void setProjectEdgeFaceMode(bool enabled);
