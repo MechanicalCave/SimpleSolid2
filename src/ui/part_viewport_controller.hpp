@@ -8,6 +8,7 @@
 #include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
@@ -490,6 +491,18 @@ public:
     // current scene. Wires are transient, never authored Face identity.
     [[nodiscard]] part::MaterialFaceBoundaryAdmission
     selectedMaterialFaceBoundaryAdmission() const;
+
+    // Recheck a previously staged transient Face using the *current*
+    // scene lease; the argument is never persisted or used as identity.
+    [[nodiscard]] part::MaterialFaceBoundaryAdmission
+    inspectCurrentMaterialFaceBoundary(
+        const BodyTopologySelectionAddress& source) const;
+
+    // Classify each strict Edge's current geometric projection separately
+    // so only geometric Unsupported may be skipped from a Face batch.
+    [[nodiscard]] part::ProjectedSketchSourceStatus
+    currentMaterialEdgeProjectionStatus(
+        const part::MaterialEdgeReference& source) const;
 
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
