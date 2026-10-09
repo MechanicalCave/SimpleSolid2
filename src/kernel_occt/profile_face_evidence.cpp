@@ -5299,7 +5299,7 @@ buildEdgeProjectionExceptionEvidence() noexcept {
         detail::guardedExactEdgeProjection(
             [&]() -> kernel::EdgeProjectionResult {
                 ++evidence.occt_invocations;
-                Standard_Failure::Raise(
+                throw Standard_Failure(
                     "PG-01A injected native OCCT failure");
                 return {Status::ok, kernel::Line2{}};
             });
