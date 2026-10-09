@@ -3298,6 +3298,31 @@ DocumentSession::evaluateExtrudeDraft(
         }
     }
 
+    // The committed Feature above was evaluated using the current
+    // provider-derived Sketch. Preview MUST use that same stage-scoped
+    // geometry, never the old authored Line/Circle/Arc seed.
+    std::optional<part::EffectiveSketchProjection>
+        preview_effective_sketch;
+    if (const auto* profile =
+            candidate.document->findProfile(
+                definition.profile_id)) {
+        if (const auto* source =
+                candidate.document->findSketch(
+                    profile->source_sketch_id);
+            source && !source->projection_bindings.empty()) {
+            if (auto* projection_query =
+                    dynamic_cast<
+                        kernel::IEdgeProjectionQuery*>(
+                        &modeling_kernel)) {
+                preview_effective_sketch =
+                    part::evaluateEffectiveSketchProjection(
+                        *candidate.document,
+                        profile->source_sketch_id,
+                        evaluation, *projection_query,
+                        target_id);
+            }
+        }
+    }
     auto preview_input =
         part::makeKernelExtrudeInput(
             *candidate.document,
@@ -3305,6 +3330,9 @@ DocumentSession::evaluateExtrudeDraft(
             preview_support_topology,
             preview_support_datums
                 ? &*preview_support_datums
+                : nullptr,
+            preview_effective_sketch
+                ? &preview_effective_sketch->model
                 : nullptr);
     if (preview_input &&
         preview_upstream_ready) {
@@ -3554,12 +3582,41 @@ DocumentSession::evaluateRevolveDraft(
                 part::evaluateDatums(
                     *candidate.document,
                     prefix_evaluation);
+            // Preview uses the identical current effective Sketch as
+            // candidate Feature evaluation, never linked authored seeds.
+            std::optional<part::EffectiveSketchProjection>
+                preview_effective_sketch;
+            if (const auto* profile =
+                    candidate.document->findProfile(
+                        definition.profile_id)) {
+                if (const auto* source =
+                        candidate.document->findSketch(
+                            profile->source_sketch_id);
+                    source &&
+                    !source->projection_bindings.empty()) {
+                    if (auto* projection_query =
+                            dynamic_cast<
+                                kernel::IEdgeProjectionQuery*>(
+                                &modeling_kernel)) {
+                        preview_effective_sketch =
+                            part::evaluateEffectiveSketchProjection(
+                                *candidate.document,
+                                profile->source_sketch_id,
+                                prefix_evaluation,
+                                *projection_query,
+                                target_id);
+                    }
+                }
+            }
             const auto resolved =
                 part::resolveKernelRevolveInput(
                     *candidate.document,
                     definition,
                     &prefix_evaluation,
-                    &datums);
+                    &datums,
+                    preview_effective_sketch
+                        ? &preview_effective_sketch->model
+                        : nullptr);
             if (resolved.ok() &&
                 preview_upstream_ready) {
                 auto preview =

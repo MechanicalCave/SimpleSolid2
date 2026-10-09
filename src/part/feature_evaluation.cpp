@@ -732,13 +732,16 @@ makeKernelExtrudeInput(
     const BodyStageTopologyCatalog*
         support_topology,
     const DatumEvaluation*
-        datum_evaluation) {
+        datum_evaluation,
+    const sketch::SketchModel*
+        effective_sketch) {
     auto profile =
         resolveKernelProfileInput(
             document,
             feature.profile_id,
             support_topology,
-            datum_evaluation);
+            datum_evaluation,
+            effective_sketch);
     if (!profile.ok()) {
         return std::nullopt;
     }

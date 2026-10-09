@@ -890,6 +890,30 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               ->model.findLine(*sourceLine.entity_id)
               ->start().v == -8.0);
 
+    // B3 draft regression: Finish already uses the effective source.
+    // The live Edit Extrude preview must use it too, not the OPEN
+    // authored line at v=-8 which cannot produce this Profile.
+    auto preview_copy = part::PartDocument::restore(
+        restored.document->documentId(),
+        restored.document->state());
+    CHECK(preview_copy.ok());
+    application::DocumentSession preview_session{
+        {}, std::move(*preview_copy.document)};
+    const auto edit_draft =
+        application::ExtrudeDraft::beginEdit(
+            preview_session, *cut.feature_id);
+    CHECK(edit_draft);
+    const auto edit_preview =
+        preview_session.evaluateExtrudeDraft(
+            *edit_draft, kernel);
+    CHECK(edit_preview.committable());
+    CHECK(edit_preview.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(edit_preview.previewSolidAvailable());
+    CHECK(preview_session.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+
     // Break Link must freeze the exact CURRENT evaluation, not the
     // broken (-8 mm) persisted seed. The same EntityId survives and
     // one Undo restores the original durable semantic source.
