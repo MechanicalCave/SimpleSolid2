@@ -3926,7 +3926,7 @@ ensureProfileAnalysis() {
         // the original Profile draft expected_revision so Finish remains
         // fail-closed across unrelated authored edits.
         const auto current_state =
-            *current_model.state();
+            current_model->state();
         if (profile_analysis_cache_->model_state ==
             current_state) {
             profile_analysis_cache_->
@@ -3937,7 +3937,7 @@ ensureProfileAnalysis() {
     }
 
     const auto current_state =
-        *current_model.state();
+        current_model->state();
 
     profile_analysis_cache_ =
         ProfileAnalysisCache{
