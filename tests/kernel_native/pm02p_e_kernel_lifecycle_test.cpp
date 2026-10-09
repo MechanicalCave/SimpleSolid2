@@ -1,10 +1,6 @@
 #include <simplesolid2/kernel/evidence.hpp>
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
-#include <simplesolid2/kernel_occt/detail/edge_projection_exception_guard.hpp>
-
-#include <Standard_Failure.hxx>
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -14,7 +10,6 @@
 #include <memory>
 #include <variant>
 #include <numbers>
-#include <stdexcept>
 #include <utility>
 
 using namespace simplesolid2;
@@ -543,45 +538,20 @@ void verifyPg01aUnsupportedIntersectionCurve() {
 
 void verifyPg01aOcctExceptionGuard() {
     using Status = kernel::EdgeProjectionStatus;
-    std::size_t occt_calls = 0U;
-    const auto occt_failure =
-        kernel_occt::detail::guardedExactEdgeProjection(
-            [&]() -> kernel::EdgeProjectionResult {
-                ++occt_calls;
-                // A real OCCT Standard_Failure is deliberately raised
-                // through the *production* projection's exception guard.
-                // The native process must not crash or leak a partial curve.
-                Standard_Failure::Raise(
-                    "PG-01A deliberately injected OCCT failure");
-                return {Status::ok, kernel::Line2{}};
-            });
-    CHECK(occt_calls == 1U);
-    CHECK(occt_failure.status == Status::kernel_failure);
-    CHECK(!occt_failure.ok());
-    CHECK(!occt_failure.curve);
-
-    const auto generic_failure =
-        kernel_occt::detail::guardedExactEdgeProjection(
-            []() -> kernel::EdgeProjectionResult {
-                throw std::runtime_error(
-                    "PG-01A deliberate unexpected provider exception");
-            });
-    CHECK(generic_failure.status == Status::kernel_failure);
-    CHECK(!generic_failure.curve);
-
-    const auto success =
-        kernel_occt::detail::guardedExactEdgeProjection(
-            []() -> kernel::EdgeProjectionResult {
-                return {
-                    Status::ok,
-                    kernel::Line2{
-                        {1.0, 2.0},
-                        {4.0, 6.0}}};
-            });
-    CHECK(success.ok());
-    CHECK(success.curve);
+    const auto evidence =
+        kernel_occt::buildEdgeProjectionExceptionEvidence();
+    CHECK(evidence.occt_invocations == 1U);
+    CHECK(evidence.occt_failure.status ==
+          Status::kernel_failure);
+    CHECK(!evidence.occt_failure.ok());
+    CHECK(!evidence.occt_failure.curve);
+    CHECK(evidence.unexpected_failure.status ==
+          Status::kernel_failure);
+    CHECK(!evidence.unexpected_failure.curve);
+    CHECK(evidence.success.ok());
+    CHECK(evidence.success.curve);
     CHECK(std::holds_alternative<kernel::Line2>(
-        *success.curve));
+        *evidence.success.curve));
     std::cout
         << "PG01A_INJECTED_OCCT_EXCEPTION_PASS"
         << " standard_failure=1"

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <simplesolid2/kernel/evidence.hpp>
+#include <simplesolid2/kernel/edge_projection.hpp>
+
+#include <cstddef>
 #include <simplesolid2/kernel/profile_input.hpp>
 
 namespace simplesolid2::kernel_occt {
@@ -94,5 +97,18 @@ buildFaceMergeHistoryEvidence(
 buildMultiStageLineageEvidence(
     kernel::MultiStageProbeScenario scenario,
     double extrusion_height) noexcept;
+
+// OCCT-specific negative scenario lives in the already existing evidence
+// adapter (which owns the OCCT include path). The actual test target remains
+// provider-neutral and does not gain an OCCT header/CMake dependency.
+struct EdgeProjectionExceptionEvidence final {
+    kernel::EdgeProjectionResult occt_failure;
+    kernel::EdgeProjectionResult unexpected_failure;
+    kernel::EdgeProjectionResult success;
+    std::size_t occt_invocations{};
+};
+
+[[nodiscard]] EdgeProjectionExceptionEvidence
+buildEdgeProjectionExceptionEvidence() noexcept;
 
 } // namespace simplesolid2::kernel_occt
