@@ -565,6 +565,13 @@ private:
     [[nodiscard]] std::optional<viewer::BodyScene>
     buildBodyScene();
 
+    // PG-01C: disposable same-revision Sketch geometry for drawing and
+    // sampling. Missing projection provider/evaluation strips linked seeds,
+    // preserving unaffected unlinked entities without touching Part intent.
+    [[nodiscard]] sketch::SketchModel
+    effectiveSketchModelForPresentation(
+        const part::PartSketch& hosted) const;
+
     [[nodiscard]] std::optional<viewer::SketchScene>
     buildSketchScene();
 
@@ -574,6 +581,7 @@ private:
     [[nodiscard]] std::optional<viewer::ProfileRegionPresentation>
     buildProfileRegionPresentation(
         const part::PartSketch& source,
+        const sketch::SketchModel& evaluated_model,
         const sketch::RegionCandidate2D& region) const;
 
     [[nodiscard]] std::optional<viewer::PresentationToken>
