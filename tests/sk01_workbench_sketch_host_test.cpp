@@ -1013,9 +1013,17 @@ int main(int argc, char* argv[]) {
         QStringLiteral(
             "Trim — Select boundaries (0 selected); Enter/RMB to continue"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: TRIM — Select finite boundaries; Enter/RMB to continue"));
+    // The full semantic prompt remains exact; only its single-row UI
+    // presentation is elided to keep the Command Line input width stable.
+    CHECK(command_prompt->width() == 240);
+    CHECK(command_prompt->text() ==
+          command_prompt->fontMetrics().elidedText(
+              command_prompt->toolTip(),
+              Qt::ElideRight,
+              std::max(0, command_prompt->width() - 4)));
     QTest::keyClick(viewport, Qt::Key_Return);
     QApplication::processEvents();
     CHECK(trim_button->isChecked());
@@ -1030,7 +1038,7 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(extend_button->isChecked());
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: EXTEND — Select finite boundaries; Enter/RMB to continue"));
     QTest::mouseClick(
@@ -1055,7 +1063,7 @@ int main(int argc, char* argv[]) {
         QStringLiteral(
             "Extend Both — Choose first Line"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: EXTEND BOTH — Choose first Line"));
     CHECK(
@@ -1073,7 +1081,7 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(extend_both_button->isChecked());
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: EXTEND BOTH — Choose first Line"));
     QTest::keyClick(viewport, Qt::Key_Escape);
@@ -1374,7 +1382,7 @@ int main(int argc, char* argv[]) {
         QStringLiteral(
             "Rectangle — Specify first corner; Role: Regular; Draw Diagonals: Off"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: RECTANGLE — Specify first corner"));
 
@@ -1459,7 +1467,7 @@ int main(int argc, char* argv[]) {
         operations_label->text() ==
         QStringLiteral("Profile — Create"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: PROFILE — Add Area — Hover/click bounded region"));
 
@@ -1472,7 +1480,7 @@ int main(int argc, char* argv[]) {
     CHECK(profile_subtract_button->isChecked());
     CHECK(!profile_add_button->isChecked());
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: PROFILE — Subtract Area — Hover/click bounded region"));
 
@@ -1512,7 +1520,7 @@ int main(int argc, char* argv[]) {
     CHECK(!profile_button->isChecked());
     CHECK(profile_operations->isHidden());
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral("Command: SELECT"));
 
     CHECK(
@@ -1668,7 +1676,7 @@ int main(int argc, char* argv[]) {
         QStringLiteral(
             "Profile — Edit — Profile001"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: EDITPROFILE — Add Area — Hover/click bounded region"));
     profile_cancel_button->click();
@@ -1756,7 +1764,7 @@ int main(int argc, char* argv[]) {
         operations_label->text().contains(
             QStringLiteral("Radius:")));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: MEASURE — Click Line/Circle/Arc; BETWEEN for relational; Esc ends"));
     CHECK(
@@ -2159,7 +2167,7 @@ int main(int argc, char* argv[]) {
         QStringLiteral(
             "Copy — Select objects; Enter/Space/RMB to continue"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: COPY — Select objects; Enter/Space/RMB to continue"));
     QTest::keyClick(viewport, Qt::Key_Escape);
@@ -2178,7 +2186,7 @@ int main(int argc, char* argv[]) {
         QStringLiteral(
             "Copy — Select objects; Enter/Space/RMB to continue"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: COPY — Select objects; Enter/Space/RMB to continue"));
     QTest::keyClick(viewport, Qt::Key_Escape);
@@ -2193,7 +2201,7 @@ int main(int argc, char* argv[]) {
         QStringLiteral(
             "Rotate — Select objects; Enter/Space/RMB to continue"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: ROTATE — Select objects; Enter/Space/RMB to continue"));
     QTest::keyClick(viewport, Qt::Key_Escape);
@@ -2241,7 +2249,7 @@ int main(int argc, char* argv[]) {
         QStringLiteral(
             "Move — Select objects; Enter/Space/RMB to continue"));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: MOVE — Select objects; Enter/Space/RMB to continue"));
 
@@ -2595,7 +2603,7 @@ int main(int argc, char* argv[]) {
         operations_label->text().contains(
             QStringLiteral("Length:")));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: MEASURE — Click Line/Circle/Arc; BETWEEN for relational; Esc ends"));
     CHECK(session->document().state() == measure_ui_state);
@@ -2616,7 +2624,7 @@ int main(int argc, char* argv[]) {
         operations_label->text().contains(
             QStringLiteral("Target A: Choose")));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: MEASURE BETWEEN — Choose Target A; Esc returns to Measure"));
     CHECK(!viewport->measureMarkerScene().markers.empty());
@@ -2637,7 +2645,7 @@ int main(int argc, char* argv[]) {
         operations_label->text().contains(
             QStringLiteral("Target A: Point [")));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: MEASURE BETWEEN — Choose Target B; Esc returns to Measure"));
     CHECK(
@@ -2660,7 +2668,7 @@ int main(int argc, char* argv[]) {
             QStringLiteral(
                 "Line semantics: infinite supporting line")));
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: MEASURE BETWEEN — Result shown; choose next Target A; Esc returns to Measure"));
     CHECK(!viewport->measureCueScene().empty());
@@ -2676,7 +2684,7 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->measureMarkerScene().empty());
     CHECK(viewport->measureCueScene().empty());
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: MEASURE — Click Line/Circle/Arc; BETWEEN for relational; Esc ends"));
 
@@ -2689,7 +2697,7 @@ int main(int argc, char* argv[]) {
     CHECK(measure_between_button->isChecked());
     CHECK(command_input->text().isEmpty());
     CHECK(
-        command_prompt->text() ==
+        command_prompt->toolTip() ==
         QStringLiteral(
             "Command: MEASURE BETWEEN — Choose Target A; Esc returns to Measure"));
 
