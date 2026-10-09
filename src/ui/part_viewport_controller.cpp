@@ -1033,6 +1033,30 @@ void PartViewportController::setPresentationDegraded(
     }
 }
 
+const sketch::SketchModel*
+PartViewportController::currentSketchInteractionModel() const {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || session_ == nullptr ||
+        presentation_degraded_) {
+        return nullptr;
+    }
+    if (hosted->projection_bindings.empty()) {
+        return &hosted->model;
+    }
+    // Only the exact model snapshot that backed the visible scene may
+    // feed OSNAP/Measure. No authored linked seed or provider requery
+    // is permitted in a mouse-move path.
+    if (!current_sketch_model_snapshot_ ||
+        current_sketch_model_snapshot_->document_id !=
+            session_->documentId() ||
+        current_sketch_model_snapshot_->sketch_id != hosted->id ||
+        current_sketch_model_snapshot_->revision !=
+            session_->document().revision()) {
+        return nullptr;
+    }
+    return &current_sketch_model_snapshot_->model;
+}
+
 void PartViewportController::setSketchEditSketch(
     std::optional<sketch::SketchId> sketch_id) {
     if (sketch_edit_id_ == sketch_id) {
@@ -4165,6 +4189,7 @@ PartViewportController::buildProfileScene() {
 std::optional<viewer::SketchScene>
 PartViewportController::buildSketchScene() {
     sketch_entity_bindings_.clear();
+    current_sketch_model_snapshot_.reset();
 
     const auto* hosted = activeSketch();
     if (hosted == nullptr) {
@@ -4282,6 +4307,13 @@ PartViewportController::buildSketchScene() {
         return std::nullopt;
     }
 
+    // Atomically expose the exact scene-authority geometry only after
+    // the scene has passed validation, never a last-good linked seed.
+    current_sketch_model_snapshot_ = CurrentSketchModelSnapshot{
+        session_->documentId(),
+        hosted->id,
+        session_->document().revision(),
+        current_model};
     return scene;
 }
 
