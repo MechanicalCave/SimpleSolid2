@@ -9555,6 +9555,22 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
     notifyCadInputContextChanged();
 }
 
+void CadWorkbench::escapeProjectEdgeTool() {
+    if (!project_edge_active_) {
+        return;
+    }
+    // One staged selection is an unfinished source-pick stage. The
+    // first empty-buffer Esc discards it; only the next Esc exits.
+    // Explicit CANCEL always exits immediately, in contrast.
+    if (!project_edge_sources_.empty()) {
+        clearProjectEdgeSelection();
+        setStatusText(QStringLiteral(
+            "PROJECT — Edge source selection cleared; Esc again to Cancel."));
+        return;
+    }
+    cancelProjectEdgeTool();
+}
+
 void CadWorkbench::cancelProjectEdgeTool() {
     if (!project_edge_active_) {
         return;
@@ -9767,7 +9783,11 @@ CadWorkbench::submitProjectEdgeCadInput(std::string_view text) {
     if (keyword == "PROJECT" || keyword == "PROJECTGEOMETRY") {
         return {true, {}};
     }
-    if (keyword == "CANCEL" || keyword == "ESC") {
+    if (keyword == "ESC") {
+        escapeProjectEdgeTool();
+        return {true, {}};
+    }
+    if (keyword == "CANCEL") {
         cancelProjectEdgeTool();
         return {true, {}};
     }
@@ -11548,8 +11568,11 @@ CadWorkbench::submitCadInput(
 }
 QString CadWorkbench::cadInputPromptText() const {
     if (project_edge_active_) {
-        return QStringLiteral(
-            "Command: PROJECT — pick material Edges · REGULAR/CONSTRUCTION · REMOVE/CLEAR · FINISH/Enter or CANCEL/Esc");
+        return project_edge_sources_.empty()
+            ? QStringLiteral(
+                "Command: PROJECT — pick material Edges · REGULAR/CONSTRUCTION · REMOVE/CLEAR · FINISH/Enter · CANCEL/Esc")
+            : QStringLiteral(
+                "Command: PROJECT — Edges staged · Esc clears sources, next Esc cancels · FINISH/Enter · CANCEL");
     }
     if (sketch_support_pick_active_) {
         if (pending_sketch_support_) {
@@ -13392,7 +13415,7 @@ bool CadWorkbench::eventFilter(
         if (watched == viewport_widget_ &&
             project_edge_active_) {
             if (key_event->key() == Qt::Key_Escape) {
-                cancelProjectEdgeTool();
+                escapeProjectEdgeTool();
                 return true;
             }
             if (key_event->key() == Qt::Key_Return ||
