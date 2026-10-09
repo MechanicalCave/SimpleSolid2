@@ -753,9 +753,19 @@ int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
     const bool pg01c_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01c";
+    const bool pg01d_d0_only =
+        argc == 2 && std::string_view{argv[1]} == "--pg01d-d0";
     kernel_occt::OcctSolidModelingKernel kernel;
-    verifyPg01dNativeStrictFaceAndMaterialCatalog(kernel);
-    verifyPg01dNativeTwoHoleFaceBoundary(kernel);
+    if (pg01d_d0_only) {
+        // PG-01D's real OCCT/Part topology proof must remain isolated
+        // from the unrelated, cursor/timing-sensitive PG-01C GUI test.
+        // Reuse this compiled native test target without Viewer actions.
+        verifyPg01dNativeStrictFaceAndMaterialCatalog(kernel);
+        verifyPg01dNativeTwoHoleFaceBoundary(kernel);
+        std::cout << "PG01D_D0_D1_ISOLATED_NATIVE_PASS"
+                  << std::endl;
+        return EXIT_SUCCESS;
+    }
     viewer_qt_occt::QtOcctViewerWidget* viewport = nullptr;
     ui::CadWorkbench workbench{
         [&viewport](QWidget* parent) {
