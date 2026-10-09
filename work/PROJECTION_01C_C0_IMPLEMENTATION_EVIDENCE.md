@@ -1,0 +1,111 @@
+# PG-01C — C0 linked Sketch current-truth audit and implementation evidence
+
+**Status:** C0 IN PROGRESS — Owner-approved PG-01C C0–C4 only
+**Date:** 2026-10-09
+**Baseline:** main `83af8e62fabbe1056705b255ef5a0d6256c2a6e0`, Owner-approved D2-A–E active contract `work/PROJECTION_01C_PROJECT_EDGE_UI_CONTRACT.md`
+**Known separate CI issue:** #302 FAST CTest registry vs aggregate target; do not weaken or fix in this package
+
+## Current truth leak inventory (read directly from main)
+
+- `src/ui/part_viewport_controller.cpp::refreshPresentation`: builds Body first, then Profile and Sketch scenes. Thus the same-revision `part_evaluation_cache_` is available to link rendering if the Body evaluation completed.
+- `buildSketchScene`: currently renders `hosted->model.state()`, which is authored seed for linked Line/Circle/Arc. This is stale after an upstream Feature edit; replace with PG-01B `evaluateEffectiveSketchProjection` from the same upstream evaluation and exact provider. When no current provider/evaluation exists, hide linked seed geometry, not ordinary unlinked geometry.
+- `buildProfileScene`: currently calls `PartDocument::evaluateProfile(profile.id)`, intentionally fail closed when linked boundaries are referenced. Need current effective Sketch `resolveProfileRegionIntent(model, intent)` and sampling from the **same derived model**, not `source.model`. Invalid linked intent remains absent, not drawn from stale seed.
+- `buildProfileRegionPresentation`: `sampleProfileUse(source.model,...)` must take the resolved source model argument so displayed fill and pick points agree.
+- `projectSketchInteraction`: draws line/circle/arc grips from `hosted->model`; until current-provider-aware linked manipulation is explicitly supported, **linked entity grips must not display editable stale seed**. Preserve ordinary unlinked grips and EntityId selection.
+- `PartSketchInteractionController`: other interaction routes (Snap, Measure, source geometry transformation, structural edits, profile authoring) need explicit current-model-or-reject audit. Do not claim all snappable linked geometry complete until provider-derived interactive queries are proven.
+- Viewer presentation contracts lack orthogonal linked styling; D2-C permits only a narrow runtime flag/style in a future gated C2 slice.
+
+## Current implementation checkpoint
+
+- `PartViewportController` now derives disposable current linked Sketch models from the same revision-bound Part evaluation and exact edge-projection provider, strips linked seeds on unavailable source, and uses the resulting model for Sketch scene, Profile region/fill and Profile draft sample; linked target grips remain non-editable.
+- Added native Qt controller regression `sk04b.part_viewport_selection_bridge` with a structurally valid linked Circle bound to an upstream Feature but no active projection provider. The stale authored Circle must be hidden, unrelated local Line visible, and the linked Profile never falsely presented. This is a **focused subset**, not full PG-01C GUI acceptance.
+- FAST #1980 was RED at C++ compilation: changed Profile presentation signature left two preview callers and a lambda capture stale. Both issues were explicitly corrected, not suppressed. Run current exact-head FOCUSED regression before further expansion.
+- FAST registry issue #302 is independent and remains RED. Do not infer one focused green test means all FAST/GUI gates pass.
+
+## C1 native Workbench first integration (unverified until exact-head Windows)
+
+- Added Sketch Modify toolbar launcher `projectEdgeToolButton` and right Operations `projectEdgeOperationsWidget` with stage, Edge count, Regular/Construction, Remove/Clear, Finish/Cancel. One transient `CadWorkbench` state shared by direct buttons and global `PROJECT/PROJECTGEOMETRY` Command Line tokens.
+- Existing Body stage-scoped semantic `selectedMaterialEdgeReferences()` and `setBodyTopologyEdgeDraftMode()` are reused, never storing Viewer token as persistent Part data; default source stage is visibly declared from the **current** complete Body topology, and exact command guards stale DocumentRevision/SketchId/source-stage and current selection before atomic Finish.
+- Command Line text `FINISH`, empty Enter, `CANCEL`, role keywords, REMOVE/CLEAR, viewport Esc/Enter and toolbar Cancel use one Finish/Cancel code path; Sketch Select/tool change, document deactivate, Undo/Redo clean pending state.
+- **Limitations not covered by this slice:** current exact pre-Finish projection preview and linked visual styling, durable Properties/Break Link action, positive provider-supported native Edge clicking while Sketch is active, full focus/Esc hierarchy and interactive snapping. These remain mandatory C2–C4 before feature acceptance.
+- This remains a **draft**, not a claim that C1 product UX is complete. Native focused compilation/negative routing and later real OCCT Qt tests must prove the implementation.
+
+## C1 native OCCT end-to-end verification
+
+- Extended existing full-only native test `tests/pm05f_r2_native_workbench_edit_test.cpp` with isolated later Sketch source-stage workflow. This probes a real material Body Edge by mouse click under Qt/OCCT, the right Operations count/Finish state, Command Line START/REGULAR/CONSTRUCTION/FINISH/CANCEL, zero authored mutation for invalid Finish/Cancel and one atomic link Undo/Redo.
+- Test is **pending focused Windows validation**; no native PG-01C PASS claim until actual runner output confirms the asserted scenario.
+- Existing native test name is `pm05f_r2.native_workbench_edit` (not `pm05f.r2_native_workbench_edit`); focused request below uses the registered name. The independent FAST target registry issue #302 remains unchanged.
+
+## Latest Owner D2-E / C3 implementation checkpoint (2026-10-09)
+
+- **Real Edge C1 native PASS:** [Windows FULL #1998](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37927423165) exact HEAD `6c649d7df67d0d3576ef011929a4a12a9c28095d`, 25/25 Core, 57/57 Kernel, **114/114 Desktop** (includes `pg01c.native_project_edge_command` real OCCT mouse pick, atomic Finish, Undo/Redo). Historical FULL #1996 RED at `pg_picked`, fixed by Project-only Sketch pointer `presentation_selection` routing; restored to ordinary Sketch `spatial_tool_input` on exit.
+- **D2-E stage hierarchy (post-#1998, validation pending):** Empty Command Line Esc cancels currently staged sources first; second Esc with no source exits `PROJECT`; explicit `CANCEL` exits immediately. Focused global Command Line with nonempty input clears the text **only** on first Esc and dispatches its subsequent empty-buffer `ESC` through the same semantic endpoint. Native test now exercises first/second Esc and toolbar restart; shared Command Line UI test checks focused-text-first Esc.
+- **C3 linked Sketch context (post-#1998, validation pending):** Sketch Select with one linked target exposes a read-only source Feature stage/current status and an exact-source `Break Link` button. The button invokes `BreakProjectedEdgeLinkCommand` with current Document revision + SketchId + selected EntityId; no stale model seed is supplied. Native OCCT regression now tests real linked Sketch mouse selection, Break Link result, retained current geometry and one Undo/Redo entry.
+- These new keyboard/C3 code paths **do not inherit FULL #1998's PASS**. Native exact-head FOCUSED below must pass, and all PG-01C C2/C4 remaining acceptance and final FULL are mandatory. Issue #302 FAST registry remains separate, never waived.
+
+- **Native UX checkpoint proven on HEAD `139ebeada252d48afb651ed3e2f1c5d778c85698`:** [Windows FOCUSED #2007](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37930410521) **PASS** for `pg01c.native_project_edge_command`: exact material Edge cursor, staged Esc then tool-exit Esc, toolbar/Command Line parity, one atomic Finish/Undo/Redo, real linked Sketch entity selection and Break Link/Undo/Redo. This focused PASS does **not** replace final Windows FULL.
+- **Global focused Command Line buffer priority:** UI regression `wb02.global_cad_input_ui` asserts first Esc clears typed token but does not dispatch, second empty-buffer Esc dispatches `ESC` through the same semantic CAD endpoint with focus retained. Its exact-head Windows FOCUSED result is requested in the commit below.
+
+## C2 linked Sketch visual semantics (Qt/OCCT)
+
+- Provider-neutral transient `viewer::SketchLinePresentation::linked` and `viewer::SketchCurvePresentation::linked` flags; no persistence, no semantic reference in Viewer.
+- PartViewportController marks linked only when current evaluated geometry has an authored `ProjectedEdgeBinding` for the exact target EntityId; failed current provider projection removes the entity and therefore never creates a linked visual ghost.
+- Qt/OCCT stores this flag in the existing `SketchObject` and uses a distinct blue base color for linked Line/Circle/Arc. The `construction` flag still determines dash independently; primary selection, regular selection, measure highlight and hover continue to override the base color exactly as before.
+- First native compilation/interaction regression on the new visual seam is **pending** the focused run requested below. Manual Windows assessment of exact color/style, profiles, camera and DPI remains mandatory. Final FULL/Owner PASS not inferred from a FOCUSED result.
+- D2-C approved only this bounded runtime styling hint. No new authored attribute or general Sketch color redesign.
+
+## C2 staged exact source preview (post-#2013; focused check required)
+
+- `PartViewportController::setProjectedEdgeDraftPreview` reads the **same revision-bound** evaluated Body and exact `IEdgeProjectionQuery` used by current Sketch, then calls `resolveCurrentProjectionSketchFrame` and `projectStrictMaterialEdge` for every staged source. No authored-state mutation or Viewer token materialization.
+- Accepted analytic projected Line/Circle/Arc are represented as existing disposable Sketch Preview Line segments (Circle/Arc tessellated only for display, with the same curve segmentation convention as Sketch scenes). The shared regular/construction role survives.
+- All sources are atomic for preview: provider loss, stale revision, unsupported/missing source or invalid support clears the **whole** preview, not last-good partials. Workbench Finish requires an exact preview successfully resolved on current staged sources and stage/revision verification; Cancel/Clear/staged Esc/Finish all clear the preview.
+- Native `pg01c.native_project_edge_command` now necessarily validates the strict positive preview through its `projectEdgeFinishButton` enabled expectation after a genuine OCCT click; a source without current projection keeps Finish disabled. This is not yet the full native visual/hover/lighting/DPI assessment, nor PL/EN docs/Owner final PASS.
+
+## C2 linked live OSNAP + Measure source (post-#2019)
+
+- **Preview regression:** [Windows FOCUSED #2019](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37932235495) PASS on `bddb1d5f869207b42476b85f926f800c3d462b01`. A real OCCT material Edge produced an enabled *current analytic preview*, role Regular/Construction re-projection without mutation, staged Esc cleared the preview/selection and Finish disabled.
+- **Scene-consistent interaction model:** `PartViewportController::currentSketchInteractionModel()` provides a read-only, DocumentId/SketchId/revision-bound snapshot of the **same effective Sketch model that generated the visible SketchScene**. No repeat OCCT projection per mouse event; unlinked Sketch uses its normal authored model. Missing cache, degraded Viewport, stale revision or switched Sketch returns null (fail closed). Failed current Edge projection strips only linked seeds from the disposable scene snapshot.
+- **OSNAP and Measure C2:** `PartSketchInteractionController::resolvePointerInput()` (static, tangent, extension, intersection, perpendicular, nearest), single Measure, relational Measure and Measure marker presentation consume that snapshot rather than persisted linked seed. Source-controlled edits remain under existing PG-01B command gates; broad Sketch editor redesign out of scope.
+- **Missing-provider focused regression:** `sk04b.part_viewport_selection_bridge` asserts linked Circle seed unavailable to query/measure while unrelated unlinked Line and its original visual semantics remain. [Windows FOCUSED #2025](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37932840371) RED on MSVC C++ member-access syntax (before functional test). Corrected in `7b0606fdf484e63b22681ebf30b4b76e2e994f08`, [Windows FOCUSED #2026](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37933191795) PASS. No historical RED relabel.
+- **Not yet proven:** positive native OSNAP on source-edited linked Line/Circle/Arc against deliberately wrong seed and all structural/transform previews; complete native C3 lifecycle and final exact-head FULL still mandatory. Follow-up focused native test below is an added regression gate, not Owner product PASS.
+
+## C3 + C4 current native and documentation checkpoint (2026-10-09)
+
+- [FOCUSED #2034](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37935719801) PASS: GUI real source picked, native v15 `.ss2part` Save/Close/Reopen, new OCCT provider, reopened linked Sketch viewer query.
+- [FOCUSED #2035](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37936080842) PASS: upstream exact rectangle `40×30 → 50×40` with semantic `UpdateSketchLinesCommand` changes current derived linked Edge, authored seed state stays unchanged.
+- [FOCUSED #2036](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37936410337) PASS: suppress source Feature => no authored-seed resurrection, semantic binding survives; unsuppress => linked geometry re-resolves to the current Edge from the same source.
+- [FOCUSED #2037](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37936766518) PASS: native **two** distinct material Edges selected via Ctrl+click, live preview of two, one atomic Finish, Undo removes both, Redo retains exact target Id/source bindings.
+- Canonical documentation: `docs/product/pl/PARTS.md` and `docs/product/en/PARTS.md` have one new parallel `product.parts.project-geometry` section for as-built tool/status/keyboard/Ctrl+click/Break Link/limits; `docs/internal/CAD_WORKBENCH_VIEWER.md` documents runtime routing, preview, persistent Part Command path, OSNAP/Measure; `docs/internal/PART_DOCUMENTS.md` replaces obsolete „UI not shipped” statement. `docs/browser/index.html` recreated from these exact canonical Markdown sources following the verified `scripts/docs/ss2-docs-core.ps1::New-BrowserHtml` algorithm; baseline main generator match was byte-for-byte exact before regeneration.
+- [FAST #2041](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37937205174) **RED 92/93**, with **documentation verification PASSED**; only `sk01.workbench_sketch_host` failed because its legacy expectations compared the full prompt to visually elided text. Do not confuse this with historical warm-cache issue #302. All **20** original full semantic prompt expectations are retained against the full tooltip, with a new assertion for fixed 240px prompt region and exact Qt text elision. [FOCUSED #2042](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37937649951) PASS on the corrected `sk01.workbench_sketch_host`.
+- **Next gates:** exact-head FAST, final exact-head FULL (including `ss2 docs`/Browser diff, all Core/Kernel/Desktop), and Owner practical Windows walk-through `work/PROJECTION_01C_OWNER_WINDOWS_TEST_PLAN.md`. No automatic merge/Owner FINAL PASS is claimed here.
+
+## C2 Profile editor current-geometry authority — additional audit
+
+- Following [FULL #2044](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37938228332) PASS on `c315a2250...`, a bounded UI audit located an authored-only `hosted->model` read in the Profile Create/Edit region analysis and hover preview even though linked Sketch scenes and OSNAP/Measure already consume current effective geometry. The Work Contract prohibits a displayed stale linked seed. Updated `PartSketchInteractionController` analysis, selection hover, resolution status and draft presentation to use `PartViewportController::currentSketchInteractionModel()` instead, with null/stale context fail-closed handling.
+- [FULL #2047](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37939208004) RED at two MSVC pointer dereferences before CTest; fixed. [FULL #2048](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37939410795) RED 113/114 Desktop because new test wrongly attempted unsupported `FIND` as global CAD command. [FULL #2049](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37940136978) RED 113/114: actual Profile hover did not produce Valid. [FULL #2050](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37940653158) RED 113/114; diagnostics exposed stale Sketch edit context after direct out-of-band session revision change. [FOCUSED #2051](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37941177670) RED 1/1 after explicitly switching documents to rebuild Workbench context; UI hover still reports Ready even though direct current effective region analysis returns one region. These are **real REDs and not PASS**.
+- Current test separates `PartViewportController` current displayed Sketch snapshot from native mouse-to-Sketch hover mapping, and requires a live current region in both; FOCUSED CI result pending. No existing test assertions weakened. The public Profile Command Line grammar is unchanged (no speculative `FIND` token), no new Part persistence/identity or Profile creation Command semantics introduced.
+- PR #304 converted back to **DRAFT** pending repair; no user test readiness or merge claim. PL/EN Product and generated Browser remain up to date for accepted Project Edge UI.
+
+## Current linked Profile input / island analysis checkpoint (2026-10-09)
+
+- **Earlier exact-head gate:** [Windows FULL #2044](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37938228332) **PASS 196/196** on `c315a2250ad55e0953af464a9afa3af01b1cc3a7`. That FULL predates the following current Profile changes and is not a final gate for them.
+- **Found stale read:** `PartSketchInteractionController` region hover analysis, region picking, Profile draft resolution, additive/subtractive region composition and preview originally used `hosted->model` instead of the authoritative current scene snapshot. These read-only operations now use `PartViewportController::currentSketchInteractionModel()` and fail closed when absent. They retain source-edit transaction guards and one semantic Part Profile Finish.
+- **Native positive region fixture:** after Save/Close/Reopen and `40×30 → 50×40` source update, a linked edge plus three independent lines form one *current* bounded region, while the intentionally old persisted linked seed closes **zero** regions. Real Part Sketch Profile operates on current model. [FOCUSED #2053](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37941618384) **RED** because mouse-move-only `QTest::mouseMove` left the Profile status Ready; no false PASS. [FOCUSED #2054](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37943777951) **PASS** after separating the exact analytic inside-region assertion from a genuine Qt/OCCT **mouse-click** at the rendered region, which produces Status Valid and an enabled Profile Finish draft.
+- **Additional stale read fixed:** `profileIslandCount()` used `hosted->model`, inconsistent with current Profile analysis. It now uses the same revision-bound effective Sketch as region analysis, picking, hover and preview; no seed fallback. [FOCUSED #2055](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37944094633) **PASS** on `7e9312234a49c99863e88f9edc95d5d8ba31b24f`.
+- **Remaining Owner manual attention:** visually confirm *hover before click* on current linked Profile region with real mouse on Windows, after moving away/back. The synthetic single mouse-move-only diagnostic RED is not independently closed by the click regression, so no unqualified hover-only PASS is asserted.
+- This evidence supersedes earlier tentative "Profile reader still authored" statements for the implementation as of this HEAD; final exact-head Windows FULL and Owner practical PASS remain mandatory before merge.
+
+## Validation obligations
+
+1. A real upstream OCCT Line/Circle/Arc source with a deliberately different persisted seed: its linked Sketch display and Profile fill must match **current** derived geometry and source stage.
+2. Source suppressed/missing/ambiguous/unsupported/provider failure: linked geometry is not drawn, snapped, used as a Profile or detached from last-good geometry. Unlinked geometry remains visible.
+3. Undo/Redo, Save/Close/Reopen on a fresh OCCT kernel, stage/revision mismatch, invalid Sketch support, display scene failure and generation changes cannot resurrect a stale linked curve.
+4. Native Windows FOCUSED Qt/OCCT regression on exact commit, final package FAST and FULL still required, including panel/Command Line/Esc/Enter/Cancel parity.
+
+**STOP:** This audit alone does not satisfy PG-01C; current visible behavior remains incomplete until all linked source model readers are resolved or fail closed, and one coherent right-panel tool plus Owner native GUI acceptance are proven.
+
+## Documentation impact
+
+Internal docs: required
+User/Product docs: required
+Reason: current audit records engineering progress; shipping PG-01C additionally needs current as-built and bilingual PL/EN user documentation plus generated Browser.

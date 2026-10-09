@@ -65,6 +65,11 @@ public:
         std::function<void(
             const std::vector<part::ProfileId>&,
             std::optional<part::ProfileId>)>;
+    // Read-only effective/revision-bound Profile status from Workbench.
+    // No stale authored linked seed can be used as a fallback.
+    using ProfileEvaluationProvider =
+        std::function<std::optional<part::ResolvedProfileRegion>(
+            part::ProfileId)>;
     using AxisSelectionHandler =
         std::function<void(
             const std::vector<part::AxisId>&,
@@ -159,6 +164,11 @@ public:
         ProfileSelectionHandler handler) {
         profile_selection_handler_ =
             std::move(handler);
+    }
+    void setProfileEvaluationProvider(
+        ProfileEvaluationProvider provider) {
+        profile_evaluation_provider_ = std::move(provider);
+        rebuild(true);
     }
     void setProfileEditHandler(
         ProfileEditHandler handler) {
@@ -320,6 +330,7 @@ private:
     SketchSupportChangeHandler
         sketch_support_change_handler_;
     ProfileSelectionHandler profile_selection_handler_;
+    ProfileEvaluationProvider profile_evaluation_provider_;
     ProfileEditHandler profile_edit_handler_;
     AxisSelectionHandler axis_selection_handler_;
     AxisEditHandler axis_edit_handler_;

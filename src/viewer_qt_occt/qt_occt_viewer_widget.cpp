@@ -1778,7 +1778,8 @@ public:
                     viewer::PresentationToken token,
                     const viewer::Point3& start_point,
                     const viewer::Point3& end_point,
-                    bool construction) {
+                    bool construction,
+                    bool linked) {
                     Handle(Geom_CartesianPoint) start =
                         new Geom_CartesianPoint(
                             toPoint(start_point));
@@ -1792,7 +1793,8 @@ public:
                         SketchObject{
                             token,
                             object,
-                            construction});
+                            construction,
+                            linked});
                     context_->Display(object, false);
                 };
 
@@ -1801,7 +1803,8 @@ public:
                     line.token,
                     line.start,
                     line.end,
-                    line.construction);
+                    line.construction,
+                    line.linked);
             }
 
             for (const auto& curve : scene.curves) {
@@ -1845,7 +1848,8 @@ public:
                     SketchObject{
                         curve.token,
                         object,
-                        curve.construction});
+                        curve.construction,
+                        curve.linked});
                 context_->Display(object, false);
             }
 
@@ -4796,6 +4800,7 @@ public:
         viewer::PresentationToken token;
         Handle(AIS_InteractiveObject) object;
         bool construction{false};
+        bool linked{false};
     };
 
     struct ProfileObject final {
@@ -6029,9 +6034,13 @@ public:
                             ? Quantity_Color{
                                   0.22, 0.82, 0.96,
                                   Quantity_TOC_RGB}
-                            : Quantity_Color{
-                                  0.92, 0.92, 0.94,
-                                  Quantity_TOC_RGB};
+                            : entry.linked
+                                ? Quantity_Color{
+                                      0.58, 0.72, 1.0,
+                                      Quantity_TOC_RGB}
+                                : Quantity_Color{
+                                      0.92, 0.92, 0.94,
+                                      Quantity_TOC_RGB};
             const double width =
                 primary
                     ? 4.0

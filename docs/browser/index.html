@@ -995,6 +995,7 @@ Modify
   Rotate
   Scale
   Mirror
+  Project Geometry
 
 Inspect
   Measure
@@ -1073,6 +1074,21 @@ Grip Copy remains available only in Reshape and Move. Cycling into Rotate/Scale/
 LMB or Enter commits through the existing semantic command paths; Esc cancels transient manipulation while preserving accepted selection and previously committed copies. Cycling or numeric locks create no authored mutation by themselves.
 
 Switching tools or Documents clears uncommitted transform/COPY/direct-manipulation state safely. Space inside text-entry focus remains text input.
+
+<!-- section-id: internal.cad-workbench-viewer.project-geometry -->
+## Linked Project Geometry: Workbench tool and Viewer current-source routing
+
+`CadWorkbench` owns the sole transient `project_edge_active_` state when an editable Part Sketch, current Body-stage topology and exact OCCT projection provider exist. The **Project Geometry** Sketch Modify launcher and the right Operations panel (stage/count, Regular/Construction, Remove/Clear, Finish/Cancel) share this state with the existing global CAD-input `PROJECT`, `REGULAR`, `CONSTRUCTION`, `REMOVE`, `CLEAR`, `FINISH` and `CANCEL` semantic endpoint. Only `CreateProjectedSketchEdgesCommand` mutates Part state on Finish. It rechecks `DocumentRevision`, current Sketch support, source semantic stage and live provider references and commits an entire batch or none. `BreakProjectedEdgeLinkCommand` is used by the linked-only context action and obtains latest resolved geometry rather than copying authored seeds.
+
+The Sketch Select action now uses atomic `BreakProjectedEdgeLinksCommand` for one or many currently resolved linked targets; all linked inputs must be current, and a failure leaves every link in place. The singular command delegates to that transaction. `PartSketchInteractionController::finishProfile` uses the revision-aware kernel-backed Create/Edit Profile commands only for linked sources; ordinary authored-only Sketches retain their provider-free Create/Edit path; the Document Tree uses the same Workbench read-only current Profile resolution as Properties and Viewer. No authored linked seed is a source of live geometry. OCCT Line projection consumes topological source-vertex points rather than independently computed analytic end samples, preserving genuinely shared endpoints without tolerance snapping.
+
+During Edge collection the Workbench temporarily changes Sketch Select's `PrimaryPointerRouting` from `spatial_tool_input` to `presentation_selection`, reusing the existing strict material Body Edge pick transport. Cleanup restores the normal Sketch routing. The staged `MaterialEdgeReference` list, role and `project_edge_preview_valid_` are runtime-only. `PartViewportController::setProjectedEdgeDraftPreview` resolves `Line2`, `Circle2` and `Arc2` against the same source revision and Sketch Frame used by the Part command. Analytic circles/arcs are segmented **only for disposable Viewer preview**, not persisted as approximated geometry. Failed provider/stage/revision/current-curve projection clears the whole preview and blocks Finish. Clear/Cancel/Esc/context switch drop picks and overlays without authoring.
+
+Tool-local Esc is hierarchical: with staged Edges the first unbuffered Esc clears them; a subsequent Esc exits to Select. Explicit `CANCEL` immediately exits. The Workspace `CadInputSession` retains typed-buffer priority: the first focused Command Line Esc with text clears only the text, while an empty-buffer Esc dispatches the tool-local `ESC` via the same semantic endpoint. Viewport Enter, `FINISH` and the right Finish button call the same guarded commit. The persistent one-row Command Line reserves fixed prompt/diagnostic widths, with full prompt and long diagnostics available as tooltips; it never shrinks the typing field on tool changes.
+
+The visible Sketch Scene uses a **disposable effective model** derived from PG-01B current ordered Part evaluation, not saved linked Line/Circle/Arc seeds. A successful scene caches the same `SketchModel` with `DocumentId + SketchId + DocumentRevision`; `currentSketchInteractionModel()` is the read-only source for OSNAP, nearest/intersection/tangent/extension and Measure. It returns no data on stale, switched or degraded linked presentation. Unlinked Sketches keep their ordinary model. Missing/unresolved projection strips linked entities from the disposable snapshot, while keeping unrelated unlinked geometry selectable and measurable. Viewer `SketchLinePresentation::linked` / `SketchCurvePresentation::linked` flags affect base color only; Regular/Construction stroke style and priority of selection, measurement highlight and hover remain independent. A selected linked entity shows source Feature and current/unresolved status; Break Link is enabled only for a current resolved source.
+
+This boundary does not authorize Part schema changes, persistent topology tokens, cross-Part/Assembly geometry, Face boundary capture, or a second input router. Strict structural-edit Commands reject linked targets/boundaries that cannot be evaluated safely in their current authored-only implementation; wider interaction/transform correctness remains an explicit PG-01C acceptance obligation.
 
 <!-- section-id: internal.cad-workbench-viewer.measure -->
 ## R8 Measure — quick inspection and relational runtime targets
@@ -1467,7 +1483,9 @@ Evaluated solid geometry and Datum frames are derived. Ordered Part evaluation p
 
 Part owns `PartSketch::projection_bindings`: a canonical, unique and ordered mapping of existing Sketch `EntityId` targets to semantic `MaterialEdgeReference` sources (producer/BodyStage/curve/branch). The source is Part-local durable engineering intent. Linked authored Line/Circle/Arc parameters are **seed state only** and must not be mistaken for current evaluated geometry; provider tokens and B-Rep topology ordinals are absent from persisted bindings. On reconstruction, Part rejects duplicate or missing target EntityIds, invalid/unallocated source provenance and direct forward/cyclic Profile-consuming references. Missing *historical* yet allocated source Features can remain repairable intent.
 
-The standalone `PartDocument::evaluateProfile` remains a safe authored-only query: it refuses a Profile directly referencing linked targets or their intersection anchors instead of interpreting persisted seed geometry as current truth. In contrast, ordered Feature evaluation materializes a disposable **effective Sketch** from the exact same-revision upstream Body stage and supplies it to both Profile region resolution and exact Extrude/Revolve input. Headless Project Edge creation, Break Link and draft-preview protection are internal PG-01B capabilities; the user-facing right-panel Project Geometry tool and Face-boundary capture are not shipped.
+The standalone `PartDocument::evaluateProfile` remains a safe authored-only query: it refuses a Profile directly referencing linked targets or their intersection anchors instead of interpreting persisted seed geometry as current truth. In contrast, ordered Feature evaluation materializes a disposable **effective Sketch** from the exact same-revision upstream Body stage and supplies it to both Profile region resolution and exact Extrude/Revolve input. Project Edge creation and Break Link remain the authoritative PG-01B DocumentSession semantic Commands. The kernel/revision-aware `BreakProjectedEdgeLinksCommand` atomically detaches any unique selection of linked Sketch entities in a single transaction and Undo step. It fails in full on a duplicate, unlinked or unresolved source; the legacy single-target command delegates to the same implementation. It freezes each exact current Line/Circle/Arc and preserves its EntityId, role and any existing ProfileId and RegionIntent. `CreateProfileCommand` and `ReplaceProfileRegionIntentCommand` now require their kernel-backed overload for sketches with linked geometry; the no-provider overload rejects such inputs instead of trusting persisted seeds. `PartDocument::evaluateProfile` remains authored-only and fail-closed, while UI/Features resolve linked Profiles through the current effective Sketch. The OCCT linear Edge projection derives endpoints from oriented `TopoDS_Vertex` identities, not independent analytic curve samples. No proximity-based healing or sketch tolerance changes are involved.
+
+The Part-hosted Sketch editor now exposes same-Part material Edge **Project Geometry** from its Sketch toolbar and right Operations, while planar Face boundary capture remains outside this tool. The tool holds stage-bound `MaterialEdgeReference` selections and a disposable exact-projection preview; only Finish creates authored bindings in one transaction. Break Link uses the latest resolved curve and preserves the target EntityId and role. Unsupported, missing, stale or ambiguous sources cannot be silently interpreted as the persisted seed.
 
 <!-- section-id: internal.part-documents.origin -->
 ## Built-in Document Origin
@@ -2780,6 +2798,7 @@ Modify
   Rotate
   Scale
   Mirror
+  Project Geometry
 
 Inspect
   Measure
@@ -2956,6 +2975,21 @@ Creation tools preserve pre-existing selection but hide/deactivate grips while a
 An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane, planar Body Face or Datum Plane, then **Apply Support** to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported, Blocked or cycle-causing targets are rejected without partial mutation. Editing an upstream Datum source/Offset recomputes the Sketch world frame without rewriting its local geometry. Undo/Redo restores the previous semantic support intent.
 
 Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver and authored dimensions remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
+
+<!-- section-id: product.parts.project-geometry -->
+## Project Geometry — projecting Body edges into a Sketch
+
+While **Sketch Edit** is active, choose **Project Geometry** from the **Modify** toolbar group or enter `PROJECT` in the global **Command Line**. This is one tool with one shared state; the options appear in the right-hand **Operations** panel. It creates associative projections of **material Edges** from the current Body at an earlier stage of the same Part onto the editing Sketch plane. It does not project a planar Face or automatically capture a whole face boundary.
+
+Operations shows the source stage, selected Edge count, **Regular** or **Construction** (Regular by default), **Remove**, **Clear**, **Finish Project Geometry** and **Cancel**. Click the first real Body edge in the Viewport; use **Ctrl + Left click** to add further edges to the same selection. Valid edges enter a temporary selection, and their current projection must resolve into a live preview before Finish becomes enabled. Preview style reflects the selected role. Unsupported edges, wrong-stage edges and unavailable current sources do not produce a partial committed result.
+
+Choose **Finish Project Geometry**, enter `FINISH`, or press **Enter** with the Viewport focused to create the linked Sketch entities in one Undo step. An empty or invalid Finish does not modify the Part. **Remove** drops the primary staged Edge, **Clear** removes all staged Edges, and **Cancel** exits with no authored changes. When Edge sources are staged, the first **Esc** clears the source selection and the second returns to **Select**. If Command Line contains unfinished text, the first Esc only clears that text. Typed `CANCEL` and the Cancel button always exit immediately.
+
+While the tool is active, Command Line accepts `REGULAR`, `CONSTRUCTION`, `REMOVE`, `CLEAR`, `FINISH` and `CANCEL`. The `PROJECTGEOMETRY` start alias is also supported. Command Line and the right-hand buttons operate on the same staged selection. A rejected keyword leaves the tool active and reports a diagnostic. Switching Documents, ending Sketch Edit, or issuing Undo/Redo during staging clears the selection and preview.
+
+After Finish, a projected **Line, Circle or Arc** has a distinct linked visual style, independent of its Regular/Construction role. **Regular** geometry can participate in a valid Profile; **Construction** geometry remains reference-only. Selecting linked geometry in Sketch Select shows its current status in the right panel. You can select **multiple linked entities** and choose **Break Link**: in one transaction and one Undo step, it detaches all selected entities while preserving their current geometry, EntityIds, roles and existing Profile. If any selected entity is not linked or its current source is unavailable, none is detached. Single-entity Break Link follows the same rules. Break Link and Delete remain undoable and redoable. When upstream source geometry changes, the projected display derives from the current Body; an unavailable or unsupported source never revives a previously saved curve as a valid linked source.
+
+**Scope:** Only exact Line, Circle and Arc projections of referenceable material Edges from an earlier Body stage are supported. Representation-partition edges, degenerate projections and curves needing approximation are not silently converted to polylines. This is not a face-boundary capture tool, cross-Part projection or automatic constraint creation.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Structural editing — Trim and Extend
@@ -3573,6 +3607,7 @@ Modify
   Rotate
   Scale
   Mirror
+  Project Geometry
 
 Inspect
   Measure
@@ -3749,6 +3784,21 @@ Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywu
 Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin, planarną Face Body albo Datum Plane, a następnie **Apply Support**, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported, Blocked albo powodujący cykl jest odrzucany bez częściowej mutacji. Zmiana źródła/Offsetu upstream Datuma przelicza world frame Sketchu bez przepisywania jego lokalnej geometrii. Undo/Redo przywraca poprzedni semantyczny support.
 
 Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver i authored dimensions pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
+
+<!-- section-id: product.parts.project-geometry -->
+## Project Geometry — rzutowanie krawędzi Body do Sketch
+
+W aktywnym **Sketch Edit** wybierz **Project Geometry** w grupie **Modify** na pasku narzędzi albo wpisz `PROJECT` w globalnym **Command Line**. To jedno narzędzie z jednym stanem: wszystkie opcje znajdują się po prawej stronie w **Operations**. Narzędzie służy do skojarzonego rzutowania **material Edge** bieżącego Body z wcześniejszego etapu tego samego Partu na płaszczyznę edytowanego Sketchu. Nie rzutuje planarnej Face ani całej jej granicy automatycznie.
+
+W panelu zobaczysz etap źródłowy, liczbę zaznaczonych krawędzi, **Regular** lub **Construction** (domyślnie Regular), **Remove**, **Clear**, **Finish Project Geometry** i **Cancel**. Kliknij pierwszą rzeczywistą krawędź Body w Viewporcie; aby dodać kolejne do tego samego wyboru, użyj **Ctrl + lewy klik**. Poprawne krawędzie są gromadzone w tymczasowym wyborze; podgląd jej aktualnej projekcji musi powstać, zanim przycisk Finish stanie się aktywny. Kolor i rodzaj linii podglądu odpowiadają wybranej roli. Wskazanie krawędzi, która nie jest obsługiwana, pochodzi ze złego etapu albo nie ma aktualnego źródła, nie zatwierdza częściowego wyniku.
+
+Naciśnij **Finish Project Geometry**, wpisz `FINISH` albo użyj **Enter** w Viewporcie, aby jednym krokiem Undo utworzyć skojarzone elementy Sketch. Niepoprawny lub pusty Finish nie zmienia modelu. **Remove** usuwa ostatnie wskazanie primary z tymczasowego wyboru, **Clear** czyści wszystkie wskazania, a **Cancel** kończy narzędzie bez zapisania geometrii. Przy zaznaczonych źródłach pierwsze **Esc** czyści wybór, drugie wraca do **Select**. Gdy w Command Line jest niedokończony tekst, pierwsze Esc czyści tylko ten tekst. Wpisane `CANCEL` oraz przycisk Cancel wychodzą natychmiast.
+
+W aktywnym narzędziu Command Line przyjmuje `REGULAR`, `CONSTRUCTION`, `REMOVE`, `CLEAR`, `FINISH` oraz `CANCEL`. Obsługiwany jest także wariant startowy `PROJECTGEOMETRY`. Opcje Command Line i przyciski po prawej stronie zmieniają dokładnie ten sam wybór. Odrzucone polecenie pozostawia narzędzie aktywne i podaje diagnostykę. Zmiana dokumentu, opuszczenie edycji Sketch lub Undo/Redo podczas tworzenia porzuca wybór i podgląd.
+
+Po Finish projektowana **Line, Circle lub Arc** ma widoczne wyróżnienie linked, niezależne od roli Regular/Construction. **Regular** może uczestniczyć w poprawnym Profile, natomiast **Construction** jest geometrią odniesienia. Zaznaczenie skojarzonej geometrii w Sketch Select pokazuje jej aktualny stan w prawym panelu. Możesz zaznaczyć **wiele linked elementów** i użyć **Break Link**: w jednej transakcji i jednym Undo odłącza wszystkie wskazane elementy, zachowując ich bieżącą geometrię, EntityId, rolę i istniejący Profile. Jeżeli choć jeden wybrany element nie jest skojarzony albo jego aktualne źródło jest niedostępne, nie odłączany jest żaden. Pojedynczy Break Link działa tak samo. Break Link i Delete pozostają odwracalne przez Undo/Redo. Po edycji geometrii źródłowej widoczna projekcja musi wynikać z aktualnego Body; niedostępne lub nieobsługiwane źródło nie przywraca starego zapisanego obrysu jako poprawnego linku.
+
+**Zakres:** Obsługiwane są tylko dokładne projekcje Line, Circle i Arc z referencyjnych material Edge poprzedniego etapu. Krawędzie reprezentacyjne, zdegenerowane i krzywe wymagające przybliżenia nie są automatycznie zastępowane polilinią. To nie jest narzędzie kopiowania krawędzi Face, rzutowania między Partami ani tworzenia automatycznych więzów.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Edycja strukturalna — Trim i Extend

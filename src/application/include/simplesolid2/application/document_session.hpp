@@ -125,6 +125,14 @@ struct BreakProjectedEdgeLinkCommand final {
     core::DocumentRevision expected_revision;
 };
 
+// One atomic transaction/Undo for any number of linked targets.
+// Duplicate, unlinked or unavailable sources reject the entire batch.
+struct BreakProjectedEdgeLinksCommand final {
+    sketch::SketchId sketch_id;
+    std::vector<sketch::EntityId> entity_ids;
+    core::DocumentRevision expected_revision;
+};
+
 struct SetSketchEntityRoleCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
@@ -655,6 +663,9 @@ public:
     [[nodiscard]] BreakProjectedEdgeLinkResult execute(
         const BreakProjectedEdgeLinkCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] BreakProjectedEdgeLinkResult execute(
+        const BreakProjectedEdgeLinksCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const SetSketchEntityRoleCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
@@ -669,10 +680,18 @@ public:
         const ExtendBothSketchLinesCommand& command);
     [[nodiscard]] DuplicateSketchGeometryResult execute(
         const DuplicateSketchGeometryCommand& command);
+    // No-provider form handles authored-only sketches. A linked
+    // source requires the exact current provider on the overload.
     [[nodiscard]] CreateProfileResult execute(
         const CreateProfileCommand& command);
+    [[nodiscard]] CreateProfileResult execute(
+        const CreateProfileCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const ReplaceProfileRegionIntentCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const ReplaceProfileRegionIntentCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const SetProfilePropertiesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
@@ -807,6 +826,12 @@ private:
             std::declval<SketchEntityIdCursorMap&>().swap(
                 std::declval<SketchEntityIdCursorMap&>())));
 
+    [[nodiscard]] CreateProfileResult executeCreateProfile(
+        const CreateProfileCommand& command,
+        kernel::ISolidModelingKernel* modeling_kernel);
+    [[nodiscard]] DocumentSessionResult executeEditProfile(
+        const ReplaceProfileRegionIntentCommand& command,
+        kernel::ISolidModelingKernel* modeling_kernel);
     [[nodiscard]] DocumentSessionResult verifyRevision() const;
     [[nodiscard]] DocumentSessionResult commitCommandState(
         part::PartAuthoredState after,

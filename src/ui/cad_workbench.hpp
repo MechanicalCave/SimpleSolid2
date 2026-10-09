@@ -145,7 +145,8 @@ public:
             expected_context_generation) override;
     [[nodiscard]] bool
     acceptsEmptyCadInput() const noexcept override {
-        return axis_draft_.has_value() ||
+        return project_edge_active_ ||
+               axis_draft_.has_value() ||
                datum_plane_draft_.has_value() ||
                extrude_draft_.has_value() ||
                revolve_draft_.has_value() ||
@@ -291,6 +292,21 @@ private:
     [[nodiscard]] application::CadInputSubmitResult
     submitEdgeFeatureCadInput(std::string_view text);
 
+    // PG-01C single Sketch Project Geometry tool; semantic state is
+    // transient. Only DocumentSession commands author the Part.
+    [[nodiscard]] bool startProjectEdgeTool();
+    void escapeProjectEdgeTool();
+    void cancelProjectEdgeTool();
+    void clearProjectEdgeRuntimeContext();
+    void clearProjectEdgeSelection();
+    void tryStageProjectEdgeSelection();
+    void refreshProjectEdgePreview();
+    [[nodiscard]] bool finishProjectEdgeTool();
+    void syncProjectEdgeUi();
+    [[nodiscard]] application::CadInputSubmitResult
+    submitProjectEdgeCadInput(std::string_view text);
+    void setProjectEdgeRole(sketch::EntityRole role);
+
     void setSketchSelectionRole(
         sketch::EntityRole role);
     void setSketchLineAxisDesignation(
@@ -333,6 +349,7 @@ private:
     void finishSketchLine();
     void cancelSketchLine();
     void deleteSketchSelection();
+    void breakSelectedProjectedEdgeLink();
     void syncSketchInteractionUi();
     void clearSketchRuntimeContext();
     void reconcileSketchRuntimeContext();
@@ -347,6 +364,8 @@ private:
     void restoreActiveViewState();
     void refreshPropertiesContext(
         std::optional<core::BuiltinReferenceRole> primary);
+    [[nodiscard]] std::optional<part::ResolvedProfileRegion>
+    evaluateCurrentProfile(part::ProfileId profile_id) const;
     void refreshProfileProperties(
         part::ProfileId profile_id);
     void refreshAxisProperties(
@@ -613,6 +632,7 @@ private:
     QLabel* part_modify_tools_label_{};
     QPushButton* fillet_button_{};
     QPushButton* chamfer_button_{};
+    QPushButton* project_edge_button_{};
     QPushButton* select_sketch_button_{};
     QLabel* create_tools_label_{};
     QPushButton* line_sketch_button_{};
@@ -641,6 +661,8 @@ private:
     QPushButton* cancel_line_button_{};
     QPushButton* delete_selection_button_{};
     QLabel* entity_role_label_{};
+    QLabel* project_link_status_label_{};
+    QPushButton* project_link_break_button_{};
     QPushButton* regular_role_button_{};
     QPushButton* construction_role_button_{};
     QLabel* line_part_reference_label_{};
@@ -740,6 +762,24 @@ private:
     bool edge_feature_parameter_input_valid_{true};
     bool syncing_edge_feature_ui_{};
     bool syncing_edge_feature_selection_{};
+
+    QWidget* project_edge_operations_widget_{};
+    QLabel* project_edge_stage_label_{};
+    QLabel* project_edge_selection_label_{};
+    QLabel* project_edge_result_label_{};
+    QPushButton* project_edge_regular_button_{};
+    QPushButton* project_edge_construction_button_{};
+    QPushButton* project_edge_remove_button_{};
+    QPushButton* project_edge_clear_button_{};
+    QPushButton* project_edge_finish_button_{};
+    QPushButton* project_edge_cancel_button_{};
+    bool project_edge_active_{false};
+    bool project_edge_preview_valid_{false};
+    std::optional<core::DocumentRevision> project_edge_revision_;
+    std::optional<part::BodyStageRef> project_edge_stage_;
+    std::vector<part::MaterialEdgeReference> project_edge_sources_;
+    sketch::EntityRole project_edge_role_{
+        sketch::EntityRole::regular};
 
     QWidget* profile_operations_widget_{};
     QPushButton* profile_add_area_button_{};

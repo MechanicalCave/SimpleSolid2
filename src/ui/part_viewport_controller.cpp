@@ -2,6 +2,7 @@
 #include "sketch_viewport_mapping.hpp"
 
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <QPointer>
 
@@ -1032,6 +1033,30 @@ void PartViewportController::setPresentationDegraded(
     }
 }
 
+const sketch::SketchModel*
+PartViewportController::currentSketchInteractionModel() const {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || session_ == nullptr ||
+        presentation_degraded_) {
+        return nullptr;
+    }
+    if (hosted->projection_bindings.empty()) {
+        return &hosted->model;
+    }
+    // Only the exact model snapshot that backed the visible scene may
+    // feed OSNAP/Measure. No authored linked seed or provider requery
+    // is permitted in a mouse-move path.
+    if (!current_sketch_model_snapshot_ ||
+        current_sketch_model_snapshot_->document_id !=
+            session_->documentId() ||
+        current_sketch_model_snapshot_->sketch_id != hosted->id ||
+        current_sketch_model_snapshot_->revision !=
+            session_->document().revision()) {
+        return nullptr;
+    }
+    return &current_sketch_model_snapshot_->model;
+}
+
 void PartViewportController::setSketchEditSketch(
     std::optional<sketch::SketchId> sketch_id) {
     if (sketch_edit_id_ == sketch_id) {
@@ -1073,6 +1098,122 @@ void PartViewportController::setSketchEditSketch(
 
     applySketchViewportMode();
     refreshPresentation();
+}
+
+bool PartViewportController::setProjectedEdgeDraftPreview(
+    const std::vector<part::MaterialEdgeReference>& sources,
+    sketch::EntityRole role) {
+    // Empty source staging is a legitimate all-clear. Never keep
+    // a last-good preview after Clear, Esc, Cancel or provider loss.
+    if (sources.empty()) {
+        clearSketchPreview();
+        return true;
+    }
+    const auto fail = [this]() {
+        clearSketchPreview();
+        return false;
+    };
+
+    const auto* hosted = activeSketch();
+    if (session_ == nullptr || hosted == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return fail();
+    }
+
+    auto* query = dynamic_cast<kernel::IEdgeProjectionQuery*>(
+        solid_modeling_kernel_);
+    const auto frame = part::resolveCurrentProjectionSketchFrame(
+        session_->document(), hosted->id, *part_evaluation_cache_);
+    if (query == nullptr || !frame) {
+        return fail();
+    }
+
+    const bool construction =
+        role == sketch::EntityRole::construction;
+    std::vector<SketchPreviewLine2D> preview;
+
+    const auto add_segment =
+        [&preview, construction](
+            sketch::Point2 from, sketch::Point2 to) {
+            const SketchPreviewLine2D item{
+                from, to, construction};
+            if (!item.valid()) {
+                return false;
+            }
+            preview.push_back(item);
+            return true;
+        };
+
+    for (const auto& source : sources) {
+        if (!source.valid() ||
+            source.stage != body_topology_catalog_cache_->stage) {
+            return fail();
+        }
+
+        // Same strict source resolution as headless PG-01B Finish:
+        // exact source stage/generation and analytic Line/Circle/Arc.
+        const auto projected = part::projectStrictMaterialEdge(
+            session_->document(), source,
+            *part_evaluation_cache_, *query, *frame);
+        if (!projected.resolved()) {
+            return fail();
+        }
+
+        if (const auto* line = std::get_if<kernel::Line2>(
+                &*projected.curve)) {
+            if (!add_segment(
+                    {line->start.u, line->start.v},
+                    {line->end.u, line->end.v})) {
+                return fail();
+            }
+            continue;
+        }
+
+        sketch::Point2 center;
+        double radius{};
+        double start_angle{};
+        double sweep_angle{};
+        if (const auto* circle = std::get_if<kernel::Circle2>(
+                &*projected.curve)) {
+            center = {circle->center.u, circle->center.v};
+            radius = circle->radius;
+            sweep_angle = 2.0 * std::numbers::pi_v<double>;
+        } else if (const auto* arc = std::get_if<kernel::Arc2>(
+                       &*projected.curve)) {
+            center = {arc->center.u, arc->center.v};
+            radius = arc->radius;
+            start_angle = arc->start_angle;
+            sweep_angle = arc->sweep_angle;
+        } else {
+            return fail();
+        }
+        // The Part projection is analytic. The transient OCCT display
+        // tessellation matches the ordinary Sketch scene's 2D curve
+        // sampling, and is never stored as authored geometry.
+        const auto segments =
+            curveSegments(center, radius, start_angle, sweep_angle);
+        if (segments.empty()) {
+            return fail();
+        }
+        for (const auto& segment : segments) {
+            if (!add_segment(segment.start, segment.end)) {
+                return fail();
+            }
+        }
+    }
+
+    if (preview.empty() || !setSketchPreview(preview)) {
+        return fail();
+    }
+    return true;
 }
 
 bool PartViewportController::setSketchPreview(
@@ -1318,11 +1459,14 @@ bool PartViewportController::setProfileDraftPreview(
     viewer::ProfilePreviewScene scene;
     scene.show_boundary = show_boundary;
     scene.tone = tone;
+    const auto current_model =
+        effectiveSketchModelForPresentation(*hosted);
 
     if (region) {
         scene.region =
             buildProfileRegionPresentation(
                 *hosted,
+                current_model,
                 *region);
         if (!scene.region) return false;
     }
@@ -1331,6 +1475,7 @@ bool PartViewportController::setProfileDraftPreview(
         scene.emphasis_region =
             buildProfileRegionPresentation(
                 *hosted,
+                current_model,
                 *emphasis_region);
         if (!scene.emphasis_region) return false;
     }
@@ -2334,6 +2479,17 @@ bool PartViewportController::projectSketchInteraction(
                 };
 
             for (const auto id : selected) {
+                // A linked entity is source-controlled. Do not show
+                // editable grips at its stale authored seed position.
+                const bool linked = std::any_of(
+                    hosted->projection_bindings.begin(),
+                    hosted->projection_bindings.end(),
+                    [id](const part::ProjectedEdgeBinding& binding) {
+                        return binding.target_entity == id;
+                    });
+                if (linked) {
+                    continue;
+                }
                 const auto token = sketchPresentationFor(id);
                 if (!token) return false;
 
@@ -3860,12 +4016,86 @@ PartViewportController::buildBodyScene() {
     return *body_scene_cache_;
 }
 
+std::optional<part::ResolvedProfileRegion>
+PartViewportController::currentProfileResolution(
+    part::ProfileId profile_id) const {
+    if (session_ == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto& document = session_->document();
+    const auto* profile = document.findProfile(profile_id);
+    if (profile == nullptr) {
+        return std::nullopt;
+    }
+    const auto* source = document.findSketch(
+        profile->source_sketch_id);
+    if (source == nullptr) {
+        return std::nullopt;
+    }
+    if (source->projection_bindings.empty()) {
+        return document.evaluateProfile(profile_id);
+    }
+
+    // A linked Profile must resolve on the current evaluated Body,
+    // exactly like the visible Profile scene. An authored linked seed
+    // is not a valid substitute after an upstream edit/provider loss.
+    if (!part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            document.revision()) {
+        return std::nullopt;
+    }
+    const auto model =
+        effectiveSketchModelForPresentation(*source);
+    return part::resolveProfileRegionIntent(
+        model, profile->region_intent);
+}
+
+sketch::SketchModel
+PartViewportController::effectiveSketchModelForPresentation(
+    const part::PartSketch& hosted) const {
+    if (hosted.projection_bindings.empty()) {
+        return hosted.model;
+    }
+
+    // Never render the saved coordinates of a linked entity as current
+    // source truth. Reuse the evaluated Body stage from this refresh cycle.
+    if (session_ != nullptr &&
+        part_evaluation_cache_ &&
+        part_evaluation_cache_->source_revision ==
+            session_->document().revision() &&
+        solid_modeling_kernel_ != nullptr) {
+        if (auto* query =
+                dynamic_cast<kernel::IEdgeProjectionQuery*>(
+                    solid_modeling_kernel_)) {
+            auto effective =
+                part::evaluateEffectiveSketchProjection(
+                    session_->document(),
+                    hosted.id,
+                    *part_evaluation_cache_,
+                    *query);
+            if (effective) {
+                return std::move(effective->model);
+            }
+        }
+    }
+
+    // Provider loss or failed evaluation does not erase Part intent.
+    // Unrelated authored entities remain visible, linked seeds do not.
+    auto safe = hosted.model;
+    for (const auto& binding : hosted.projection_bindings) {
+        (void)safe.erase(binding.target_entity);
+    }
+    return safe;
+}
+
 std::optional<viewer::ProfileRegionPresentation>
 PartViewportController::buildProfileRegionPresentation(
     const part::PartSketch& source,
+    const sketch::SketchModel& evaluated_model,
     const sketch::RegionCandidate2D& region) const {
     const auto sample_loop =
-        [this, &source](
+        [this, &source, &evaluated_model](
             const sketch::RegionLoop2D& loop)
             -> std::optional<
                 std::vector<viewer::Point3>> {
@@ -3873,7 +4103,7 @@ PartViewportController::buildProfileRegionPresentation(
             for (const auto& use : loop.boundary) {
                 const auto points =
                     sampleProfileUse(
-                        source.model,
+                        evaluated_model,
                         use);
                 if (!points || points->empty()) {
                     return std::nullopt;
@@ -3943,13 +4173,6 @@ PartViewportController::buildProfileScene() {
             continue;
         }
 
-        const auto evaluation =
-            session_->document()
-                .evaluateProfile(profile.id);
-        if (!evaluation || !evaluation->valid()) {
-            continue;
-        }
-
         const auto* source =
             session_->document().findSketch(
                 profile.source_sketch_id);
@@ -3958,10 +4181,24 @@ PartViewportController::buildProfileScene() {
             return std::nullopt;
         }
 
+        // PG-01B authored-only evaluateProfile deliberately refuses
+        // linked boundaries. A valid linked Profile is instead resolved
+        // and sampled from the exact same current, disposable Sketch.
+        const auto model =
+            effectiveSketchModelForPresentation(*source);
+        const auto evaluation =
+            source->projection_bindings.empty()
+                ? session_->document().evaluateProfile(profile.id)
+                : std::optional<part::ResolvedProfileRegion>{
+                      part::resolveProfileRegionIntent(
+                          model, profile.region_intent)};
+        if (!evaluation || !evaluation->valid()) {
+            continue;
+        }
+
         const auto region =
             buildProfileRegionPresentation(
-                *source,
-                *evaluation->region);
+                *source, model, *evaluation->region);
         const auto token =
             allocatePresentationToken();
         if (!region || !token ||
@@ -3987,6 +4224,7 @@ PartViewportController::buildProfileScene() {
 std::optional<viewer::SketchScene>
 PartViewportController::buildSketchScene() {
     sketch_entity_bindings_.clear();
+    current_sketch_model_snapshot_.reset();
 
     const auto* hosted = activeSketch();
     if (hosted == nullptr) {
@@ -4004,8 +4242,19 @@ PartViewportController::buildSketchScene() {
         viewer::SketchOriginPresentation{
             *origin};
 
+    const auto current_model =
+        effectiveSketchModelForPresentation(*hosted);
     const auto model_state =
-        hosted->model.state();
+        current_model.state();
+
+    const auto linked_source = [hosted](sketch::EntityId id) {
+        return std::any_of(
+            hosted->projection_bindings.begin(),
+            hosted->projection_bindings.end(),
+            [id](const part::ProjectedEdgeBinding& binding) {
+                return binding.target_entity == id;
+            });
+    };
 
     const auto bind = [this, hosted](
         viewer::PresentationToken token,
@@ -4028,7 +4277,8 @@ PartViewportController::buildSketchScene() {
              *start,
              *end,
              line.role ==
-                 sketch::EntityRole::construction});
+                 sketch::EntityRole::construction,
+             linked_source(line.id)});
     }
 
     const auto add_curve = [&](sketch::EntityId id,
@@ -4048,6 +4298,7 @@ PartViewportController::buildSketchScene() {
         curve.token = *token;
         curve.construction =
             role == sketch::EntityRole::construction;
+        curve.linked = linked_source(id);
         curve.points.reserve(segments.size() + 1U);
 
         const auto first = sketchPointToWorld(*hosted, segments.front().start);
@@ -4091,6 +4342,13 @@ PartViewportController::buildSketchScene() {
         return std::nullopt;
     }
 
+    // Atomically expose the exact scene-authority geometry only after
+    // the scene has passed validation, never a last-good linked seed.
+    current_sketch_model_snapshot_ = CurrentSketchModelSnapshot{
+        session_->documentId(),
+        hosted->id,
+        session_->document().revision(),
+        current_model};
     return scene;
 }
 

@@ -496,13 +496,14 @@ profileDraftResolutionStatus() const {
         return std::nullopt;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr) {
         return std::nullopt;
     }
 
     return part::resolveProfileRegionIntent(
-               hosted->model,
+               *current_model,
                *profile_session_->draft_intent)
         .status;
 }
@@ -554,14 +555,15 @@ PartSketchInteractionController::profileCurrentResult()
         return std::nullopt;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr) {
         return std::nullopt;
     }
 
     const auto resolved =
         part::resolveProfileRegionIntent(
-            hosted->model,
+            *current_model,
             *profile_session_->draft_intent);
     return resolved.valid()
         ? resolved.region
@@ -1854,13 +1856,17 @@ PartSketchInteractionController::profileIslandCount() {
     }
 
     const auto current = profileCurrentResult();
-    const auto* hosted = activeSketch();
-    if (!current || hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (!current || current_model == nullptr) {
+        // A linked Profile's island count must never be computed
+        // from persisted seed geometry when its displayed topology
+        // was resolved from a newer source Body revision.
         return 0U;
     }
 
     return sketch::nestedIslandRegions(
-               hosted->model,
+               *current_model,
                profile_analysis_cache_->analysis,
                *current)
         .size();
@@ -2112,6 +2118,19 @@ bool PartSketchInteractionController::finishProfile() {
             "Profile draft is not valid against the current Sketch.");
         return false;
     }
+    // Ordinary authored-only Sketches retain the accepted headless
+    // Create/Edit path. Only linked Sketches need a current exact
+    // projection provider; the no-provider overload refuses them.
+    const auto* profile_source_sketch =
+        session_->document().findSketch(*sketch_id_);
+    const bool linked_source =
+        profile_source_sketch != nullptr &&
+        !profile_source_sketch->projection_bindings.empty();
+    if (linked_source && solid_modeling_kernel_ == nullptr) {
+        reportStatus(
+            "Profile linked source provider is unavailable.");
+        return false;
+    }
 
     const auto kind =
         profile_session_->kind;
@@ -2122,12 +2141,11 @@ bool PartSketchInteractionController::finishProfile() {
 
     bool committed = false;
     if (kind == ProfileToolSessionKind::create) {
-        const auto result =
-            session_->execute(
-                application::CreateProfileCommand{
-                    *sketch_id_,
-                    expected,
-                    draft});
+        const application::CreateProfileCommand command{
+            *sketch_id_, expected, draft};
+        const auto result = linked_source
+            ? session_->execute(command, *solid_modeling_kernel_)
+            : session_->execute(command);
         if (!result.ok()) {
             reportStatus(
                 result.diagnostic.message.empty()
@@ -2163,13 +2181,11 @@ bool PartSketchInteractionController::finishProfile() {
             return true;
         }
 
-        const auto result =
-            session_->execute(
-                application::
-                    ReplaceProfileRegionIntentCommand{
-                        *profile_session_->profile_id,
-                        expected,
-                        draft});
+        const application::ReplaceProfileRegionIntentCommand command{
+            *profile_session_->profile_id, expected, draft};
+        const auto result = linked_source
+            ? session_->execute(command, *solid_modeling_kernel_)
+            : session_->execute(command);
         if (!result.ok()) {
             reportStatus(
                 result.diagnostic.message.empty()
@@ -2483,7 +2499,11 @@ PartSketchInteractionController::measureResult() const {
     if (!target || hosted == nullptr) {
         return std::nullopt;
     }
-    return sketch::measureEntity(hosted->model, *target);
+    const auto* current =
+        viewport_controller_->currentSketchInteractionModel();
+    return current != nullptr
+        ? sketch::measureEntity(*current, *target)
+        : std::nullopt;
 }
 
 bool PartSketchInteractionController::activateMeasureBetween() {
@@ -2512,10 +2532,10 @@ PartSketchInteractionController::measureRelationalResult() const {
         !interaction_.measureBetweenActive()) {
         return std::nullopt;
     }
-    const auto* hosted = activeSketch();
-    return hosted != nullptr
-        ? interaction_.measureRelationalResult(
-              hosted->model)
+    const auto* current =
+        viewport_controller_->currentSketchInteractionModel();
+    return current != nullptr
+        ? interaction_.measureRelationalResult(*current)
         : std::nullopt;
 }
 
@@ -3888,8 +3908,13 @@ ensureProfileAnalysis() {
         return false;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr) {
+        profile_analysis_cache_.reset();
+        profile_session_->hovered_region.reset();
+        profile_session_->hover_result.reset();
+        profile_session_->hover_reuse_key.reset();
         return false;
     }
 
@@ -3915,7 +3940,7 @@ ensureProfileAnalysis() {
         // the original Profile draft expected_revision so Finish remains
         // fail-closed across unrelated authored edits.
         const auto current_state =
-            hosted->model.state();
+            current_model->state();
         if (profile_analysis_cache_->model_state ==
             current_state) {
             profile_analysis_cache_->
@@ -3926,7 +3951,7 @@ ensureProfileAnalysis() {
     }
 
     const auto current_state =
-        hosted->model.state();
+        current_model->state();
 
     profile_analysis_cache_ =
         ProfileAnalysisCache{
@@ -3935,8 +3960,10 @@ ensureProfileAnalysis() {
             current_revision,
             current_state,
             sketch::analyzeRegions(
-                hosted->model)};
+                *current_model)};
     ++profile_analysis_build_count_;
+    profile_session_->hovered_region.reset();
+    profile_session_->hover_result.reset();
     profile_session_->hover_reuse_key.reset();
 
     // Preserve the established optimistic-concurrency rule: only a real
@@ -3967,8 +3994,9 @@ updateProfileHover(
         return;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr ||
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr ||
         !profile_analysis_cache_ ||
         session_ == nullptr ||
         !sketch_id_) {
@@ -3979,7 +4007,7 @@ updateProfileHover(
 
     const auto pick =
         sketch::pickRegion(
-            hosted->model,
+            *current_model,
             profile_analysis_cache_->analysis,
             point);
     if (pick.location !=
@@ -4067,7 +4095,7 @@ updateProfileHover(
 
         const auto resolved =
             part::resolveProfileRegionIntent(
-                hosted->model,
+                *current_model,
                 *intent);
         if (!resolved.valid()) {
             profile_session_->hover_result =
@@ -4094,7 +4122,7 @@ updateProfileHover(
 
     profile_session_->hover_result =
         part::applyProfileAreaEdit(
-            hosted->model,
+            *current_model,
             *profile_session_->draft_intent,
             *pick.region_index,
             profile_session_->area_mode);
@@ -4364,7 +4392,10 @@ void PartSketchInteractionController::handleMeasurePointer(
     }
 
     const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (hosted == nullptr || current_model == nullptr) {
+        reportStatus("Measure requires a current resolved Sketch scene.");
         return;
     }
 
@@ -4380,7 +4411,7 @@ void PartSketchInteractionController::handleMeasurePointer(
         if (!queried.hit) {
             static_cast<void>(
                 interaction_.setMeasureTarget(
-                    hosted->model,
+                    *current_model,
                     std::nullopt));
             notifyStateChanged();
             return;
@@ -4394,7 +4425,7 @@ void PartSketchInteractionController::handleMeasurePointer(
         }
 
         if (!interaction_.setMeasureTarget(
-                hosted->model,
+                *current_model,
                 queried.hit->entity_id)) {
             reportStatus("Measure target was rejected.");
             return;
@@ -4403,7 +4434,7 @@ void PartSketchInteractionController::handleMeasurePointer(
         if (!measureResult()) {
             static_cast<void>(
                 interaction_.setMeasureTarget(
-                    hosted->model,
+                    *current_model,
                     std::nullopt));
             reportStatus(
                 "Measure result is not finite for the selected geometry.");
@@ -4455,7 +4486,7 @@ void PartSketchInteractionController::handleMeasurePointer(
 
         const auto first =
             sketch::resolveMeasurePoint(
-                hosted->model,
+                *current_model,
                 hits.front().point);
         if (!first) {
             reportStatus(
@@ -4468,7 +4499,7 @@ void PartSketchInteractionController::handleMeasurePointer(
              ++index) {
             const auto resolved =
                 sketch::resolveMeasurePoint(
-                    hosted->model,
+                    *current_model,
                     hits[index].point);
             if (!resolved) {
                 reportStatus(
@@ -4509,7 +4540,7 @@ void PartSketchInteractionController::handleMeasurePointer(
             return;
         }
 
-        if (hosted->model.findLine(
+        if (current_model->findLine(
                 entity_query.hit->entity_id) != nullptr) {
             target =
                 sketch::MeasureRelationTarget{
@@ -4528,7 +4559,7 @@ void PartSketchInteractionController::handleMeasurePointer(
 
     const auto outcome =
         interaction_.acceptMeasureRelationTarget(
-            hosted->model,
+            *current_model,
             std::move(*target));
     switch (outcome) {
     case sketch::MeasureRelationAcceptOutcome::
@@ -5735,6 +5766,14 @@ PartSketchInteractionController::resolvePointerInput(
     // assistance participates only when Shared2D proves the candidate leaves
     // the locked result at the same advertised point.
     const auto* hosted = activeSketch();
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (hosted == nullptr || current_model == nullptr) {
+        // Viewer scene is unavailable/stale: no snap may read
+        // persisted linked seed coordinates or old OCCT geometry.
+        snap_capture_.clear();
+        return raw();
+    }
     if (hosted != nullptr) {
         const auto modes =
             staticSnapModes(eligibility);
@@ -5753,7 +5792,7 @@ PartSketchInteractionController::resolvePointerInput(
                 snap_policy{};
             auto semantic_candidates =
                 sketch::staticSnapCandidates(
-                    hosted->model,
+                    *current_model,
                     modes);
 
             std::vector<sketch::EntityId>
@@ -5816,7 +5855,7 @@ PartSketchInteractionController::resolvePointerInput(
                 for (const auto entity :
                      nearby_entities) {
                     const auto* line =
-                        hosted->model.findLine(entity);
+                        current_model->findLine(entity);
                     if (line == nullptr) {
                         continue;
                     }
@@ -5889,7 +5928,7 @@ PartSketchInteractionController::resolvePointerInput(
                     const auto reference =
                         sketch::
                             makeLineExtensionReference(
-                                hosted->model,
+                                *current_model,
                                 best_extension_endpoint->
                                     entity,
                                 best_extension_endpoint->
@@ -5941,16 +5980,16 @@ PartSketchInteractionController::resolvePointerInput(
 
                     for (const auto entity :
                          nearby_entities) {
-                        if (hosted->model.findCircle(entity) ==
+                        if (current_model->findCircle(entity) ==
                                 nullptr &&
-                            hosted->model.findArc(entity) ==
+                            current_model->findArc(entity) ==
                                 nullptr) {
                             continue;
                         }
 
                         const auto nearest =
                             sketch::nearestSnapCandidate(
-                                hosted->model,
+                                *current_model,
                                 entity,
                                 input.position);
                         if (!nearest) {
@@ -5992,7 +6031,7 @@ PartSketchInteractionController::resolvePointerInput(
                         const auto reference =
                             sketch::
                                 makeTangentCurveReference(
-                                    hosted->model,
+                                    *current_model,
                                     best_source->entity);
                         if (reference &&
                             interaction_.
@@ -6026,7 +6065,7 @@ PartSketchInteractionController::resolvePointerInput(
                         const auto second_reference =
                             sketch::
                                 makeTangentCurveReference(
-                                    hosted->model,
+                                    *current_model,
                                     entity);
                         if (!second_reference) {
                             continue;
@@ -6035,7 +6074,7 @@ PartSketchInteractionController::resolvePointerInput(
                         const auto branches =
                             sketch::
                                 commonTangentCandidates(
-                                    hosted->model,
+                                    *current_model,
                                     *deferred,
                                     *second_reference);
                         for (const auto& common :
@@ -6091,7 +6130,7 @@ PartSketchInteractionController::resolvePointerInput(
 
                     const auto selected =
                         sketch::resolveScreenSnap(
-                            hosted->model,
+                            *current_model,
                             snap_capture_,
                             common_screen,
                             snap_policy);
@@ -6138,7 +6177,7 @@ PartSketchInteractionController::resolvePointerInput(
                         auto intersections =
                             sketch::
                                 intersectionSnapCandidates(
-                                    hosted->model,
+                                    *current_model,
                                     nearby_entities[first],
                                     nearby_entities[second]);
                         semantic_candidates.insert(
@@ -6155,7 +6194,7 @@ PartSketchInteractionController::resolvePointerInput(
                     if (const auto nearest =
                             sketch::
                                 nearestSnapCandidate(
-                                    hosted->model,
+                                    *current_model,
                                     entity,
                                     input.position)) {
                         semantic_candidates.push_back(
@@ -6168,7 +6207,7 @@ PartSketchInteractionController::resolvePointerInput(
                     auto perpendicular =
                         sketch::
                             perpendicularSnapCandidates(
-                                hosted->model,
+                                *current_model,
                                 entity,
                                 *request->base);
                     semantic_candidates.insert(
@@ -6182,7 +6221,7 @@ PartSketchInteractionController::resolvePointerInput(
                     auto tangent =
                         sketch::
                             tangentSnapCandidates(
-                                hosted->model,
+                                *current_model,
                                 entity,
                                 *request->base);
                     semantic_candidates.insert(
@@ -6230,7 +6269,7 @@ PartSketchInteractionController::resolvePointerInput(
 
             const auto snap =
                 sketch::resolveScreenSnap(
-                    hosted->model,
+                    *current_model,
                     snap_capture_,
                     screen_candidates,
                     snap_policy);
@@ -6271,7 +6310,7 @@ PartSketchInteractionController::resolvePointerInput(
         if (eligibility.extension) {
             extension_point =
                 sketch::projectPointToLineExtension(
-                    hosted->model,
+                    *current_model,
                     *deferred_reference,
                     input.position);
         } else if (
@@ -6280,7 +6319,7 @@ PartSketchInteractionController::resolvePointerInput(
             extension_point =
                 sketch::
                     perpendicularPointOnLineExtension(
-                        hosted->model,
+                        *current_model,
                         *deferred_reference,
                         *request->base);
         }
@@ -6541,14 +6580,15 @@ void PartSketchInteractionController::projectMeasureInteraction() {
         return;
     }
 
-    const auto* hosted = activeSketch();
-    if (hosted == nullptr) {
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    if (current_model == nullptr) {
         viewport_controller_->clearSketchMeasurePresentation();
         return;
     }
 
     const auto catalog =
-        sketch::measurePointCatalog(hosted->model);
+        sketch::measurePointCatalog(*current_model);
 
     std::vector<sketch::MeasurePointRef>
         selected_points;
@@ -6573,7 +6613,7 @@ void PartSketchInteractionController::projectMeasureInteraction() {
         cue;
     if (const auto result =
             interaction_.measureRelationalResult(
-                hosted->model)) {
+                *current_model)) {
         cue =
             sketch::makeRelationalMeasurementCue(
                 *result);
@@ -6721,9 +6761,13 @@ void PartSketchInteractionController::notifyStateChanged() {
     refreshSnapInferencePresentation();
 
     if (viewport_controller_ != nullptr) {
-        if (!profile_session_) {
+        if (!profile_session_ || !ensureProfileAnalysis()) {
+            // An unavailable/currently unresolved linked Sketch cannot
+            // display a stale Profile draft/hover from the saved seed.
             viewport_controller_->clearProfileDraftPreview();
         } else {
+            const auto* current_model =
+                viewport_controller_->currentSketchInteractionModel();
             std::optional<sketch::RegionCandidate2D> preview;
 
             if (profile_session_->options.highlight_on_hover &&
@@ -6732,10 +6776,10 @@ void PartSketchInteractionController::notifyStateChanged() {
                 preview = profile_session_->hover_result->region;
             } else if (
                 profile_session_->draft_intent &&
-                activeSketch() != nullptr) {
+                current_model != nullptr) {
                 const auto resolved =
                     part::resolveProfileRegionIntent(
-                        activeSketch()->model,
+                        *current_model,
                         *profile_session_->draft_intent);
                 if (resolved.valid()) {
                     preview = resolved.region;

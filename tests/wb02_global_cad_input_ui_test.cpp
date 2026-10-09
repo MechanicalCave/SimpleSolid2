@@ -34,6 +34,7 @@ class FakeEndpoint final
     : public simplesolid2::application::ICadInputEndpoint {
 public:
     std::string last;
+    std::string active_prompt{"Command: FAKE"};
     std::string rejection{
         "Rejected by fake endpoint."};
     bool accept{true};
@@ -52,7 +53,7 @@ public:
 
     [[nodiscard]] std::string
     cadInputPrompt() const override {
-        return "Command: FAKE";
+        return active_prompt;
     }
 
     [[nodiscard]]
@@ -365,6 +366,31 @@ int main(int argc, char* argv[]) {
     CHECK(first.last == "MOVE");
     CHECK(input->text().isEmpty());
     CHECK(QApplication::focusWidget() == cad_surface);
+
+    // PG-01C D2-E: when the *focused* global Command Line owns a
+    // partial input token, first Esc only clears that token and keeps
+    // focus. The second Esc with an empty buffer is dispatched through
+    // the original CAD semantic endpoint, not a second UI tool path.
+    first.active_prompt =
+        "Command: PROJECT — staged material Edge sources";
+    shell.refreshCadInputPresentation();
+    input->setFocus(Qt::OtherFocusReason);
+    CHECK(QApplication::focusWidget() == input);
+    QTest::keyClicks(
+        input, QStringLiteral("REGUL"));
+    CHECK(input->text() == QStringLiteral("REGUL"));
+    QTest::keyClick(input, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(first.last == "MOVE");
+    CHECK(input->text().isEmpty());
+    CHECK(QApplication::focusWidget() == input);
+    QTest::keyClick(input, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(first.last == "ESC");
+    CHECK(input->text().isEmpty());
+    first.active_prompt = "Command: FAKE";
+    shell.refreshCadInputPresentation();
+    cad_surface->setFocus(Qt::OtherFocusReason);
 
     ordinary_editor->clear();
     ordinary_editor->setFocus(Qt::OtherFocusReason);

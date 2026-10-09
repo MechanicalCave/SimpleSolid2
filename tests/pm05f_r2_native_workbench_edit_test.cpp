@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "part_viewport_controller.hpp"
 
 
 #include <simplesolid2/application/document_session.hpp>
@@ -9,6 +10,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
+#include <QAction>
 #include <QApplication>
 #include <QDebug>
 #include <QLabel>
@@ -18,6 +20,7 @@
 #include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QTreeWidgetItemIterator>
 
 #include <algorithm>
 #include <atomic>
@@ -30,6 +33,7 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -391,6 +395,8 @@ bool clickAuthorableRevolveCircle(
 
 int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
+    const bool pg01c_only =
+        argc == 2 && std::string_view{argv[1]} == "--pg01c";
     kernel_occt::OcctSolidModelingKernel kernel;
     viewer_qt_occt::QtOcctViewerWidget* viewport = nullptr;
     ui::CadWorkbench workbench{
@@ -419,6 +425,1410 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+        if (pg01c_only) {
+        // PG-01C C1: real OCCT native cursor -> Workbench Project Geometry,
+        // not a fabricated presentation token. The separate later Sketch
+        // makes the base Extrude a legal prior Body stage.
+        auto pg_session = makeBaseSession(kernel);
+        const auto pg_sketch =
+            pg_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+        CHECK(pg_sketch.ok() && pg_sketch.sketch_id);
+        CHECK(workbench.activateDocument(&pg_session, {}));
+        QApplication::processEvents();
+
+        auto* pg_action = workbench.findChild<QAction*>(
+            QStringLiteral("editSketchAction"));
+        auto* pg_button = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeToolButton"));
+        auto* pg_panel = workbench.findChild<QWidget*>(
+            QStringLiteral("projectEdgeOperationsWidget"));
+        auto* pg_count = workbench.findChild<QLabel*>(
+            QStringLiteral("projectEdgeSelectionLabel"));
+        auto* pg_result = workbench.findChild<QLabel*>(
+            QStringLiteral("projectEdgeResultLabel"));
+        auto* pg_finish = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeFinishButton"));
+        CHECK(pg_action && pg_button && pg_panel &&
+              pg_count && pg_result && pg_finish);
+        QTreeWidgetItem* pg_tree_item = nullptr;
+        for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+            if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
+                pg_tree_item = *it;
+                break;
+            }
+        }
+        CHECK(pg_tree_item);
+        tree->clearSelection();
+        tree->setCurrentItem(pg_tree_item);
+        pg_tree_item->setSelected(true);
+        pg_action->trigger();
+        QApplication::processEvents();
+        CHECK(!pg_button->isHidden());
+        CHECK(pg_button->isEnabled());
+
+        const auto pg_before_state = pg_session.document().state();
+        const auto pg_before_revision =
+            pg_session.document().revision();
+        const auto pg_before_undo = pg_session.undoDepth();
+        auto pg_reply = workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_button->isChecked());
+        CHECK(!pg_panel->isHidden());
+        CHECK(!pg_finish->isEnabled());
+        CHECK(workbench.acceptsEmptyCadInput());
+        pg_reply = workbench.submitCadInput(
+            "CONSTRUCTION", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        pg_reply = workbench.submitCadInput(
+            "FINISH", workbench.cadInputContextGeneration());
+        CHECK(!pg_reply.accepted);
+        CHECK(pg_session.document().state() == pg_before_state);
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+        pg_reply = workbench.submitCadInput(
+            "CANCEL", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_panel->isHidden());
+        CHECK(pg_session.document().state() == pg_before_state);
+
+        // Repeat through the same semantic Command Line activation and
+        // select an exact source Edge in the native provider.
+        pg_reply = workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        const auto pg_probes = authorableEdgeProbes(pg_session, kernel);
+        bool pg_picked = false;
+        std::optional<viewer::Point3> pg_source_point;
+        int native_queries = 0;
+        int native_clicks = 0;
+        // Try the same genuine native picking from several standard
+        // cameras. Exact Body pick/occlusion and Sketch support overlays
+        // vary by camera; no synthetic provider token is accepted.
+        for (const auto orientation : {
+                 viewer::StandardView::top_front_right,
+                 viewer::StandardView::top_front_left,
+                 viewer::StandardView::top_back_right,
+                 viewer::StandardView::bottom_front_right,
+                 viewer::StandardView::bottom_back_left}) {
+            CHECK(viewport->setStandardView(orientation));
+            viewport->fitAll();
+            QApplication::processEvents();
+            for (const auto& probe : pg_probes) {
+                // Only horizontal caps project as non-degenerate
+                // Line onto the selected XY Sketch support.
+                if (std::abs(probe.world.z) > 1.0e-6 &&
+                    std::abs(probe.world.z - 20.0) > 1.0e-6) {
+                    continue;
+                }
+                const auto point =
+                    viewport->projectWorldPoint(probe.world);
+                if (!point) continue;
+                const auto query = viewport->queryBodyTopology(
+                    *point,
+                    viewer::BodyTopologyPickFilter{
+                        false, true, false});
+                if (query.valid() && query.completed &&
+                    !query.candidates.empty()) {
+                    ++native_queries;
+                }
+                if (!nativeClick(*viewport, probe.world)) {
+                    continue;
+                }
+                ++native_clicks;
+                std::cerr << "PG01C_NATIVE_PICK_ATTEMPT"
+                          << " orientation=" << static_cast<int>(orientation)
+                          << " label=" << pg_count->text().toStdString()
+                          << " project_active=" << pg_button->isChecked()
+                          << " query_edges=" << query.candidates.size()
+                          << std::endl;
+                CHECK(pg_button->isChecked());
+                pg_picked = pg_count->text().contains(
+                    QStringLiteral("selected: 1"));
+                if (pg_picked) {
+                    pg_source_point = probe.world;
+                    break;
+                }
+                pg_reply = workbench.submitCadInput(
+                    "CLEAR", workbench.cadInputContextGeneration());
+                CHECK(pg_reply.accepted);
+            }
+            if (pg_picked) break;
+        }
+        std::cerr << "PG01C_NATIVE_PICK_SUMMARY"
+                  << " queries=" << native_queries
+                  << " clicks=" << native_clicks
+                  << " selected=" << pg_count->text().toStdString()
+                  << std::endl;
+        CHECK(pg_picked && pg_source_point);
+        CHECK(pg_finish->isEnabled());
+        // C2: a live strict analytic projection preview, rather than
+        // only a staged Edge token, is required to enable Finish.
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Current preview: 1 derived Edge(s)")));
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Regular")));
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+        pg_reply = workbench.submitCadInput(
+            "CONSTRUCTION", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Construction")));
+        CHECK(pg_finish->isEnabled());
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+        pg_reply = workbench.submitCadInput(
+            "REGULAR", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Regular")));
+
+        // Owner remediation: a real material vertical Edge projected
+        // onto this XY Sketch is degenerate. Reject that *new* pick
+        // without destroying an already staged valid horizontal Edge.
+        ui::PartViewportController* pg_reject_controller = nullptr;
+        for (auto* object : workbench.findChildren<QObject*>()) {
+            if (auto* candidate =
+                    dynamic_cast<ui::PartViewportController*>(
+                        object)) {
+                pg_reject_controller = candidate;
+                break;
+            }
+        }
+        CHECK(pg_reject_controller);
+        const auto pg_prior_selection =
+            pg_reject_controller->selectedMaterialEdgeReferences();
+        CHECK(pg_prior_selection &&
+              pg_prior_selection->size() == 1U);
+        const auto pg_vertical = std::find_if(
+            pg_probes.begin(), pg_probes.end(),
+            [](const WorldEdgeProbe& probe) {
+                return probe.world.z > 1.0e-6 &&
+                       probe.world.z < 20.0 - 1.0e-6;
+            });
+        CHECK(pg_vertical != pg_probes.end());
+        auto pg_unsupported_batch = *pg_prior_selection;
+        pg_unsupported_batch.push_back(
+            pg_vertical->reference);
+        const auto pg_restored_tokens =
+            pg_reject_controller->
+                restoreMaterialEdgeToolSelection(
+                    pg_unsupported_batch);
+        CHECK(pg_restored_tokens &&
+              pg_restored_tokens->empty());
+        QApplication::processEvents();
+        const auto pg_after_reject =
+            pg_reject_controller->selectedMaterialEdgeReferences();
+        CHECK(pg_after_reject &&
+              *pg_after_reject == *pg_prior_selection);
+        CHECK(pg_count->text().contains(
+            QStringLiteral("selected: 1")));
+        CHECK(pg_result->text().contains(
+            QStringLiteral("Current preview: 1 derived Edge(s)")));
+        CHECK(pg_finish->isEnabled());
+        CHECK(pg_session.document().revision() ==
+              pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+        std::cout
+            << "PG01C_OWNER_UNSUPPORTED_PICK_PRESERVES_STAGING_PASS"
+            << " prior=1 rejected=1 committed=0\\n";
+
+        // Rejected Command Line text is diagnostic-only: it does not
+        // discard the exact staged source or leave the tool.
+        pg_reply = workbench.submitCadInput(
+            "UNSUPPORTED", workbench.cadInputContextGeneration());
+        CHECK(!pg_reply.accepted);
+        CHECK(pg_button->isChecked());
+        CHECK(pg_finish->isEnabled());
+
+        // Hierarchical Esc while a material source is staged: discard
+        // pending selection first, exit Sketch Project tool on next Esc.
+        QTest::keyClick(viewport, Qt::Key_Escape);
+        QApplication::processEvents();
+        CHECK(pg_button->isChecked());
+        CHECK(!pg_panel->isHidden());
+        CHECK(!pg_finish->isEnabled());
+        CHECK(pg_count->text().contains(
+            QStringLiteral("selected: 0")));
+        CHECK(!pg_result->text().contains(
+            QStringLiteral("Current preview:")));
+        CHECK(pg_session.document().state() == pg_before_state);
+        QTest::keyClick(viewport, Qt::Key_Escape);
+        QApplication::processEvents();
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_panel->isHidden());
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        CHECK(pg_session.undoDepth() == pg_before_undo);
+
+        // Toolbar and Command Line re-enter the *same* stage-scoped
+        // material Edge picker; use the same genuine OCCT source click.
+        pg_button->click();
+        QApplication::processEvents();
+        CHECK(pg_button->isChecked());
+        CHECK(!pg_panel->isHidden());
+        CHECK(nativeClick(*viewport, *pg_source_point));
+        CHECK(pg_count->text().contains(
+            QStringLiteral("selected: 1")));
+        CHECK(pg_finish->isEnabled());
+
+        pg_reply = workbench.submitCadInput(
+            "REGULAR", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        pg_finish->click();
+        QApplication::processEvents();
+        const auto* pg_authored =
+            pg_session.document().findSketch(*pg_sketch.sketch_id);
+        CHECK(pg_authored);
+        CHECK(pg_authored->projection_bindings.size() == 1U);
+        CHECK(pg_authored->model.entityCount() == 1U);
+        CHECK(pg_session.undoDepth() == pg_before_undo + 1U);
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_panel->isHidden());
+        CHECK(pg_session.undo().changed);
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        CHECK(pg_session.redo().changed);
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+
+        // D2-E: all three Finish adapters must reach the same atomic
+        // command path. The above pass used the right-panel button;
+        // redo/undo is followed by typed FINISH, then viewport Enter.
+        auto* pg_undo = workbench.findChild<QPushButton*>(
+            QStringLiteral("undoDocumentButton"));
+        CHECK(pg_undo);
+        pg_undo->click();
+        QApplication::processEvents();
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        pg_reply = workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(nativeClick(*viewport, *pg_source_point));
+        CHECK(pg_finish->isEnabled());
+        pg_reply = workbench.submitCadInput(
+            "FINISH", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(pg_session.undoDepth() == pg_before_undo + 1U);
+
+        pg_undo->click();
+        QApplication::processEvents();
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        pg_reply = workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(nativeClick(*viewport, *pg_source_point));
+        CHECK(pg_finish->isEnabled());
+        QTest::keyClick(viewport, Qt::Key_Return);
+        QApplication::processEvents();
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_panel->isHidden());
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(pg_session.undoDepth() == pg_before_undo + 1U);
+
+        // PG-01C C3: durable Save -> close/open with a cold OCCT provider.
+        // Use the native v15 .ss2part store, not a fabricated in-memory
+        // restored Part or a serialized Viewer token.
+        QTemporaryDir pg_persistence_dir;
+        CHECK(pg_persistence_dir.isValid());
+        const std::filesystem::path pg_persistence_path =
+            std::filesystem::path{
+                pg_persistence_dir.path().toStdWString()} /
+            "ProjectGeometry.ss2part";
+        const part::PartDocumentStore pg_store;
+        const auto pg_saved = pg_store.createNew(
+            pg_persistence_path, pg_session.document());
+        CHECK(pg_saved.ok());
+        auto pg_loaded = pg_store.load(pg_persistence_path);
+        CHECK(pg_loaded.ok());
+        CHECK(pg_loaded.document->documentId() ==
+              pg_session.documentId());
+        CHECK(pg_loaded.document->state() ==
+              pg_session.document().state());
+        application::DocumentSession pg_reopened{
+            pg_persistence_path,
+            std::move(*pg_loaded.document),
+            *pg_loaded.checkpoint};
+        kernel_occt::OcctSolidModelingKernel pg_cold_kernel;
+        const auto pg_cold_evaluation = part::evaluatePart(
+            pg_reopened.document(), pg_cold_kernel);
+        CHECK(pg_cold_evaluation.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto pg_cold_projection =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(), *pg_sketch.sketch_id,
+                pg_cold_evaluation, pg_cold_kernel);
+        CHECK(pg_cold_projection);
+        CHECK(pg_cold_projection->allResolved());
+        CHECK(pg_cold_projection->outcomes.size() == 1U);
+        CHECK(pg_cold_projection->model.entityCount() == 1U);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+
+        // C3 D2-D: select the *linked Sketch curve* through a real
+        // Viewport mouse pick after the Project tool has finished.
+        // The Operations Break Link action must detach the currently
+        // evaluated source geometry with one new Undo transaction.
+        CHECK(workbench.activateDocument(&pg_session, {}));
+        QApplication::processEvents();
+        auto* pg_link_status = workbench.findChild<QLabel*>(
+            QStringLiteral("projectLinkedEdgeStatusLabel"));
+        auto* pg_break = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectBreakLinkButton"));
+        CHECK(pg_link_status && pg_break);
+        const auto* pg_linked =
+            pg_session.document().findSketch(*pg_sketch.sketch_id);
+        CHECK(pg_linked &&
+              pg_linked->projection_bindings.size() == 1U);
+        const auto pg_target =
+            pg_linked->projection_bindings.front().target_entity;
+        const auto* pg_line = pg_linked->model.findLine(pg_target);
+        CHECK(pg_line);
+        const viewer::Point3 pg_linked_midpoint{
+            (pg_line->start().u + pg_line->end().u) / 2.0,
+            (pg_line->start().v + pg_line->end().v) / 2.0,
+            0.0};
+        bool pg_sketch_selected = false;
+        for (const auto orientation : {
+                 viewer::StandardView::top,
+                 viewer::StandardView::top_front_right,
+                 viewer::StandardView::top_front_left,
+                 viewer::StandardView::bottom_front_right}) {
+            CHECK(viewport->setStandardView(orientation));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto cursor =
+                viewport->projectWorldPoint(pg_linked_midpoint);
+            if (!cursor) continue;
+            const QPoint pixel{
+                static_cast<int>(std::lround(cursor->x)),
+                static_cast<int>(std::lround(cursor->y))};
+            if (!viewport->rect().contains(pixel)) continue;
+            const auto queried =
+                viewport->querySketchPresentation(*cursor);
+            std::cerr
+                << "PG01C_BREAK_LINK_SKETCH_PICK"
+                << " view=" << static_cast<int>(orientation)
+                << " completed=" << queried.completed
+                << " token=" << queried.token.has_value()
+                << std::endl;
+            if (!queried.valid() || !queried.completed ||
+                !queried.token) continue;
+            QTest::mouseMove(viewport, pixel);
+            QTest::mouseClick(
+                viewport, Qt::LeftButton,
+                Qt::NoModifier, pixel);
+            QApplication::processEvents();
+            pg_sketch_selected = !pg_break->isHidden() &&
+                                 pg_break->isEnabled();
+            if (pg_sketch_selected) break;
+        }
+        CHECK(pg_sketch_selected);
+        CHECK(pg_link_status->text().contains(
+            QStringLiteral("Projected Edge")));
+        CHECK(pg_link_status->text().contains(
+            QStringLiteral("Source stage:")));
+        const auto pg_break_undo = pg_session.undoDepth();
+        pg_break->click();
+        QApplication::processEvents();
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->model.contains(pg_target));
+        CHECK(pg_session.undoDepth() == pg_break_undo + 1U);
+        CHECK(pg_session.undo().changed);
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(pg_session.redo().changed);
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        // Open the saved native file as a new Workbench session after
+        // the original was edited further. The persisted link is
+        // independent of transient selection/Undo state of pg_session.
+        CHECK(workbench.activateDocument(&pg_reopened, {}));
+        QApplication::processEvents();
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        QTreeWidgetItem* pg_reopened_item = nullptr;
+        for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+            if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
+                pg_reopened_item = *it;
+                break;
+            }
+        }
+        CHECK(pg_reopened_item);
+        tree->clearSelection();
+        tree->setCurrentItem(pg_reopened_item);
+        pg_reopened_item->setSelected(true);
+        pg_action->trigger();
+        QApplication::processEvents();
+        CHECK(!pg_button->isHidden());
+        CHECK(viewport->setStandardView(
+            viewer::StandardView::top));
+        viewport->fitAll();
+        QApplication::processEvents();
+        const auto* pg_cold_line =
+            pg_cold_projection->model.findLine(pg_target);
+        CHECK(pg_cold_line);
+        const viewer::Point3 pg_reopened_midpoint{
+            (pg_cold_line->start().u +
+             pg_cold_line->end().u) / 2.0,
+            (pg_cold_line->start().v +
+             pg_cold_line->end().v) / 2.0,
+            0.0};
+        const auto pg_reopened_cursor =
+            viewport->projectWorldPoint(pg_reopened_midpoint);
+        CHECK(pg_reopened_cursor);
+        const auto pg_reopened_pick =
+            viewport->querySketchPresentation(
+                *pg_reopened_cursor);
+        CHECK(pg_reopened_pick.valid());
+        CHECK(pg_reopened_pick.completed);
+        CHECK(pg_reopened_pick.token.has_value());
+
+        // Source change after cold reopen: stretch the *upstream*
+        // rectangle from 40 x 30 to 50 x 40 using one semantic
+        // UpdateSketchLinesCommand. Every cap Edge changes, including
+        // a bottom/left source; its linked local seed MUST remain
+        // unchanged while current projection follows the new Body.
+        const auto& pg_upstream =
+            pg_reopened.document().state().sketches.front();
+        CHECK(pg_upstream.id != *pg_sketch.sketch_id);
+        std::vector<application::SketchLineGeometryUpdate>
+            pg_upstream_updates;
+        const auto upstream_lines = pg_upstream.model.state().lines;
+        CHECK(upstream_lines.size() == 4U);
+        for (const auto& item : upstream_lines) {
+            const auto remap = [](sketch::Point2 point) {
+                if (point.u == 40.0) point.u = 50.0;
+                if (point.v == 30.0) point.v = 40.0;
+                return point;
+            };
+            pg_upstream_updates.push_back({
+                item.id,
+                remap(item.start),
+                remap(item.end)});
+        }
+        const auto pg_seed_before =
+            pg_reopened.document()
+                .findSketch(*pg_sketch.sketch_id)
+                ->model.state();
+        const auto pg_upstream_update =
+            pg_reopened.execute(
+                application::UpdateSketchLinesCommand{
+                    pg_upstream.id,
+                    pg_reopened.document().revision(),
+                    std::move(pg_upstream_updates)});
+        CHECK(pg_upstream_update.ok());
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->model.state() == pg_seed_before);
+        const auto pg_updated_body =
+            part::evaluatePart(
+                pg_reopened.document(), pg_cold_kernel);
+        CHECK(pg_updated_body.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto pg_updated_projection =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(),
+                *pg_sketch.sketch_id,
+                pg_updated_body,
+                pg_cold_kernel);
+        CHECK(pg_updated_projection);
+        CHECK(pg_updated_projection->allResolved());
+        const auto* pg_updated_line =
+            pg_updated_projection->model.findLine(pg_target);
+        CHECK(pg_updated_line);
+        CHECK(*pg_updated_line != *pg_cold_line);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+
+        // Suppression/recovery on the exact same FeatureId must not
+        // discard binding intent or materialize the old authored seed
+        // as a currently resolved Sketch entity.
+        CHECK(pg_reopened.document().state().body.features.size() == 1U);
+        const auto pg_source_feature =
+            pg_reopened.document().state().body.features.front().id;
+        const auto pg_suppress = pg_reopened.execute(
+            application::SetFeatureSuppressedCommand{
+                pg_source_feature,
+                pg_reopened.document().revision(),
+                true});
+        CHECK(pg_suppress.ok());
+        const auto pg_missing_body = part::evaluatePart(
+            pg_reopened.document(), pg_cold_kernel);
+        const auto pg_missing_projection =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(),
+                *pg_sketch.sketch_id,
+                pg_missing_body,
+                pg_cold_kernel);
+        CHECK(!pg_missing_projection ||
+              (!pg_missing_projection->allResolved() &&
+               !pg_missing_projection->model.contains(pg_target)));
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->model.state() == pg_seed_before);
+
+        const auto pg_unsuppress = pg_reopened.execute(
+            application::SetFeatureSuppressedCommand{
+                pg_source_feature,
+                pg_reopened.document().revision(),
+                false});
+        CHECK(pg_unsuppress.ok());
+        const auto pg_recovered_body = part::evaluatePart(
+            pg_reopened.document(), pg_cold_kernel);
+        CHECK(pg_recovered_body.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto pg_recovered_projection =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(),
+                *pg_sketch.sketch_id,
+                pg_recovered_body,
+                pg_cold_kernel);
+        CHECK(pg_recovered_projection);
+        CHECK(pg_recovered_projection->allResolved());
+        const auto* pg_recovered_line =
+            pg_recovered_projection->model.findLine(pg_target);
+        CHECK(pg_recovered_line);
+        CHECK(*pg_recovered_line == *pg_updated_line);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->model.state() == pg_seed_before);
+        // PG-01C C2: authored linked seed no longer closes a Profile
+        // after the upstream resize, but the current effective source
+        // does. Profile FIND and hover must follow the same rendered
+        // Sketch snapshot as OSNAP/Measure, never the old seed.
+        const auto pg_origin_a = pg_recovered_line->start();
+        const auto pg_origin_b = pg_recovered_line->end();
+        const sketch::Point2 pg_side{
+            (pg_origin_a.v - pg_origin_b.v) * 0.25,
+            (pg_origin_b.u - pg_origin_a.u) * 0.25};
+        const sketch::Point2 pg_far_a{
+            pg_origin_a.u + pg_side.u,
+            pg_origin_a.v + pg_side.v};
+        const sketch::Point2 pg_far_b{
+            pg_origin_b.u + pg_side.u,
+            pg_origin_b.v + pg_side.v};
+        for (const auto& segment : {
+                 std::pair{pg_origin_b, pg_far_b},
+                 std::pair{pg_far_b, pg_far_a},
+                 std::pair{pg_far_a, pg_origin_a}}) {
+            const auto added = pg_reopened.execute(
+                application::AddSketchLineCommand{
+                    *pg_sketch.sketch_id,
+                    segment.first,
+                    segment.second,
+                    sketch::EntityRole::regular});
+            CHECK(added.ok());
+        }
+        const auto* pg_authored_region =
+            pg_reopened.document().findSketch(
+                *pg_sketch.sketch_id);
+        CHECK(pg_authored_region);
+        const auto pg_seed_analysis =
+            sketch::analyzeRegions(pg_authored_region->model);
+        CHECK(pg_seed_analysis.regions.empty());
+        const auto pg_region_eval = part::evaluatePart(
+            pg_reopened.document(), pg_cold_kernel);
+        const auto pg_region_effective =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(),
+                *pg_sketch.sketch_id,
+                pg_region_eval,
+                pg_cold_kernel);
+        CHECK(pg_region_effective);
+        CHECK(pg_region_effective->allResolved());
+        const auto pg_current_regions =
+            sketch::analyzeRegions(pg_region_effective->model);
+        CHECK(pg_current_regions.regions.size() == 1U);
+        // The upstream update above intentionally bypassed the GUI.
+        // Tear down the *old* edit context before revisiting this
+        // Document, otherwise Workbench legitimately rejects a second
+        // Edit Sketch and the revision-bound scene fails closed.
+        CHECK(workbench.activateDocument(&session, {}));
+        QApplication::processEvents();
+        CHECK(workbench.activateDocument(&pg_reopened, {}));
+        QApplication::processEvents();
+        QTreeWidgetItem* pg_profile_sketch_item = nullptr;
+        for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+            if ((*it)->text(0) ==
+                QStringLiteral("Sketch 2")) {
+                pg_profile_sketch_item = *it;
+                break;
+            }
+        }
+        CHECK(pg_profile_sketch_item);
+        tree->clearSelection();
+        tree->setCurrentItem(pg_profile_sketch_item);
+        pg_profile_sketch_item->setSelected(true);
+        pg_action->trigger();
+        QApplication::processEvents();
+        // Verify the exact scene authority supplied to Profile before
+        // diagnosing any mouse-to-Sketch coordinate routing.
+        ui::PartViewportController* pg_ui_controller = nullptr;
+        for (auto* object :
+             workbench.findChildren<QObject*>()) {
+            if (auto* candidate =
+                    dynamic_cast<ui::PartViewportController*>(
+                        object)) {
+                pg_ui_controller = candidate;
+                break;
+            }
+        }
+        CHECK(pg_ui_controller);
+        const auto* pg_ui_model =
+            pg_ui_controller->currentSketchInteractionModel();
+        std::cerr << "PG01C_PROFILE_SCENE_DEBUG"
+                  << " current_scene=" << (pg_ui_model != nullptr)
+                  << " lines=" << (pg_ui_model
+                                     ? pg_ui_model->state().lines.size()
+                                     : 0U)
+                  << " regions=" << (pg_ui_model
+                                       ? sketch::analyzeRegions(
+                                             *pg_ui_model).regions.size()
+                                       : 0U)
+                  << std::endl;
+        CHECK(pg_ui_model);
+        CHECK(sketch::analyzeRegions(*pg_ui_model)
+                  .regions.size() == 1U);
+        pg_reply = workbench.submitCadInput(
+            "PROFILE", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        // UI Profile uses its existing tool/viewport pointer
+        // grammar; FIND is intentionally not a global CAD keyword.
+        // Hover/click the CURRENT derived interior, which does not
+        // exist as a closed region in the authored linked seed model.
+        auto* pg_profile_result = workbench.findChild<QLabel*>(
+            QStringLiteral("profileCurrentResult"));
+        auto* pg_profile_finish = workbench.findChild<QPushButton*>(
+            QStringLiteral("profileFinishButton"));
+        CHECK(pg_profile_result && pg_profile_finish);
+        CHECK(viewport->setStandardView(
+            viewer::StandardView::top));
+        viewport->fitAll();
+        QApplication::processEvents();
+        const viewer::Point3 pg_region_world{
+            (pg_origin_a.u + pg_origin_b.u + pg_side.u) * 0.5,
+            (pg_origin_a.v + pg_origin_b.v + pg_side.v) * 0.5,
+            0.0};
+        // Prove the world-space point is inside the current
+        // evaluated region before attributing any failure to Qt input.
+        const auto pg_direct_pick = sketch::pickRegion(
+            *pg_ui_model,
+            sketch::analyzeRegions(*pg_ui_model),
+            sketch::Point2{
+                pg_region_world.x, pg_region_world.y});
+        std::cerr << "PG01C_PROFILE_REGION_DIRECT"
+                  << " location=" << static_cast<int>(
+                         pg_direct_pick.location)
+                  << " region=" << pg_direct_pick.region_index.has_value()
+                  << std::endl;
+        CHECK(pg_direct_pick.region_index.has_value());
+        const auto pg_region_pos =
+            viewport->projectWorldPoint(pg_region_world);
+        CHECK(pg_region_pos);
+        const QPoint pg_region_pixel{
+            static_cast<int>(std::lround(pg_region_pos->x)),
+            static_cast<int>(std::lround(pg_region_pos->y))};
+        CHECK(viewport->rect().contains(pg_region_pixel));
+        QTest::mouseMove(viewport, pg_region_pixel);
+        QApplication::processEvents();
+        auto* pg_profile_panel = workbench.findChild<QWidget*>(
+            QStringLiteral("profileOperationsWidget"));
+        auto* pg_status = workbench.findChild<QLabel*>(
+            QStringLiteral("workbenchStatus"));
+        CHECK(pg_profile_panel && pg_status);
+        std::cerr << "PG01C_PROFILE_POINTER_DEBUG"
+                  << " profile_panel_hidden=" << pg_profile_panel->isHidden()
+                  << " finish_enabled=" << pg_profile_finish->isEnabled()
+                  << " region_px=" << pg_region_pixel.x()
+                  << "," << pg_region_pixel.y()
+                  << " status=" << pg_status->text().toStdString()
+                  << " result=" << pg_profile_result->text().toStdString()
+                  << std::endl;
+        QTest::mouseClick(
+            viewport, Qt::LeftButton,
+            Qt::NoModifier, pg_region_pixel);
+        QApplication::processEvents();
+        std::cerr << "PG01C_PROFILE_CLICK_DEBUG"
+                  << " result=" << pg_profile_result->text().toStdString()
+                  << " finish=" << pg_profile_finish->isEnabled()
+                  << std::endl;
+        CHECK(pg_profile_result->text().contains(
+            QStringLiteral("Status: Valid")));
+        CHECK(pg_profile_finish->isEnabled());
+        CHECK(pg_profile_result->text().contains(
+            QStringLiteral("Status: Valid")));
+        pg_reply = workbench.submitCadInput(
+            "CANCEL", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        std::cout
+            << "PG01C_C2_CURRENT_PROFILE_REGIONS_PASS"
+            << " persisted_seed_regions=0"
+            << " current_linked_regions=1"
+            << " native_profile_hover=1"
+            << " native_profile_draft=1\\n";
+        std::cout
+            << "PG01C_C3_SUPPRESSION_RECOVERY_PASS"
+            << " no_saved_seed_fallback=1"
+            << " same_source_id=1"
+            << " exact_reprojection=1\\n";
+        std::cout
+            << "PG01C_C3_UPSTREAM_RECOMPUTE_PASS"
+            << " current_curve_changed=1"
+            << " authored_seed_unchanged=1"
+            << " cold_occt=1\\n";
+        std::cout
+            << "PG01C_C3_NATIVE_SAVE_REOPEN_PASS"
+            << " native_v15=1"
+            << " cold_occt=1"
+            << " current_linked_scene=1\\n";
+        std::cout
+            << "PG01C_C3_NATIVE_BREAK_LINK_PASS"
+            << " real_sketch_pick=1"
+            << " current_geometry=1"
+            << " undo_redo=1\\n";
+        std::cout
+            << "PG01C_C1_NATIVE_EDGE_TOOL_PASS"
+            << " actual_cursor=1"
+            << " semantic_finish=1"
+            << " cancel_zero_mutation=1"
+            << " undo_redo=1\n";
+
+            // PG-01C C1 acceptance: two different actual OCCT cap
+            // material Edges are staged through one native multi-pick
+            // session (Ctrl-click adds to the staged selection), and
+            // Finish authors two linked entities in ONE Undo entry.
+            auto pg_batch_session = makeBaseSession(kernel);
+            const auto pg_batch_sketch =
+                pg_batch_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(pg_batch_sketch.ok() && pg_batch_sketch.sketch_id);
+            CHECK(workbench.activateDocument(&pg_batch_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* pg_batch_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    pg_batch_item = *it;
+                    break;
+                }
+            }
+            CHECK(pg_batch_item);
+            tree->clearSelection();
+            tree->setCurrentItem(pg_batch_item);
+            pg_batch_item->setSelected(true);
+            pg_action->trigger();
+            QApplication::processEvents();
+            pg_reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(pg_reply.accepted);
+            const auto pg_batch_before_undo =
+                pg_batch_session.undoDepth();
+            const auto pg_batch_before_revision =
+                pg_batch_session.document().revision();
+            bool pg_batch_picked = false;
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::bottom_front_right,
+                     viewer::StandardView::bottom_back_left}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                if (!nativeClick(*viewport, *pg_source_point) ||
+                    !pg_count->text().contains(
+                        QStringLiteral("selected: 1"))) {
+                    pg_reply = workbench.submitCadInput(
+                        "CLEAR", workbench.cadInputContextGeneration());
+                    CHECK(pg_reply.accepted);
+                    continue;
+                }
+                for (const auto& probe : pg_probes) {
+                    if (std::abs(probe.world.z) > 1.0e-6 &&
+                        std::abs(probe.world.z - 20.0) > 1.0e-6) {
+                        continue;
+                    }
+                    if (probe.world == *pg_source_point) {
+                        continue;
+                    }
+                    const auto pixel_pos =
+                        viewport->projectWorldPoint(probe.world);
+                    if (!pixel_pos) continue;
+                    const QPoint pixel{
+                        static_cast<int>(std::lround(pixel_pos->x)),
+                        static_cast<int>(std::lround(pixel_pos->y))};
+                    if (!viewport->rect().contains(pixel)) continue;
+                    QTest::mouseMove(viewport, pixel);
+                    QTest::mouseClick(
+                        viewport, Qt::LeftButton,
+                        Qt::ControlModifier, pixel);
+                    QApplication::processEvents();
+                    if (pg_count->text().contains(
+                            QStringLiteral("selected: 2")) &&
+                        pg_finish->isEnabled()) {
+                        pg_batch_picked = true;
+                        break;
+                    }
+                    pg_reply = workbench.submitCadInput(
+                        "CLEAR", workbench.cadInputContextGeneration());
+                    CHECK(pg_reply.accepted);
+                    CHECK(nativeClick(*viewport, *pg_source_point));
+                    CHECK(pg_count->text().contains(
+                        QStringLiteral("selected: 1")));
+                }
+                if (pg_batch_picked) break;
+                pg_reply = workbench.submitCadInput(
+                    "CLEAR", workbench.cadInputContextGeneration());
+                CHECK(pg_reply.accepted);
+            }
+            CHECK(pg_batch_picked);
+            CHECK(pg_result->text().contains(
+                QStringLiteral("Current preview: 2 derived Edge(s)")));
+            CHECK(pg_batch_session.document().revision() ==
+                  pg_batch_before_revision);
+            CHECK(pg_batch_session.undoDepth() ==
+                  pg_batch_before_undo);
+            pg_finish->click();
+            QApplication::processEvents();
+            const auto* pg_batch_authored =
+                pg_batch_session.document().findSketch(
+                    *pg_batch_sketch.sketch_id);
+            CHECK(pg_batch_authored);
+            CHECK(pg_batch_authored->projection_bindings.size() == 2U);
+            CHECK(pg_batch_session.undoDepth() ==
+                  pg_batch_before_undo + 1U);
+            const auto pg_batch_links =
+                pg_batch_authored->projection_bindings;
+            CHECK(pg_batch_session.undo().changed);
+            CHECK(pg_batch_session.document()
+                      .findSketch(*pg_batch_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            CHECK(pg_batch_session.redo().changed);
+            CHECK(pg_batch_session.document()
+                      .findSketch(*pg_batch_sketch.sketch_id)
+                      ->projection_bindings == pg_batch_links);
+            std::cout << "PG01C_C1_TWO_EDGE_ATOMIC_PASS"
+                      << " native_ctrl_selection=1"
+                      << " linked_edges=2"
+                      << " undo_batches=1\\n";
+
+            // D2-K synthetic native OCCT regression: a rectangle
+            // after Chamfer is authored from four real same-stage
+            // material Edges. Their projected end vertices must be
+            // exactly connected; no Sketcher tolerance healing.
+            auto pg_chamfer_session = makeBaseSession(kernel);
+            // A skewed source forces nontrivial analytic endpoint
+            // evaluation. Equal authored source vertices are mapped
+            // with one function so they remain exactly shared.
+            const auto pg_skew_authored =
+                pg_chamfer_session.document().state();
+            const auto& pg_skew_source =
+                pg_skew_authored.sketches.front();
+            const double skew_cos = std::cos(0.31);
+            const double skew_sin = std::sin(0.31);
+            const auto rotate = [skew_cos, skew_sin](
+                                    sketch::Point2 p) {
+                return sketch::Point2{
+                    p.u * skew_cos - p.v * skew_sin,
+                    p.u * skew_sin + p.v * skew_cos};
+            };
+            std::vector<application::SketchLineGeometryUpdate>
+                pg_skew_updates;
+            for (const auto& line :
+                 pg_skew_source.model.state().lines) {
+                pg_skew_updates.push_back({
+                    line.id,
+                    rotate(line.start),
+                    rotate(line.end)});
+            }
+            CHECK(pg_skew_updates.size() == 4U);
+            CHECK(pg_chamfer_session.execute(
+                application::UpdateSketchLinesCommand{
+                    pg_skew_source.id,
+                    pg_chamfer_session.document().revision(),
+                    std::move(pg_skew_updates)}).ok());
+            std::vector<part::MaterialEdgeReference>
+                pg_pre_chamfer_cap;
+            for (const auto& probe :
+                 authorableEdgeProbes(pg_chamfer_session, kernel)) {
+                if (std::abs(probe.world.z - 20.0) < 1.0e-6) {
+                    pg_pre_chamfer_cap.push_back(probe.reference);
+                }
+            }
+            CHECK(pg_pre_chamfer_cap.size() == 4U);
+            std::sort(
+                pg_pre_chamfer_cap.begin(),
+                pg_pre_chamfer_cap.end());
+            const auto pg_chamfer =
+                pg_chamfer_session.execute(
+                    application::CreateChamferFeatureCommand{
+                        pg_pre_chamfer_cap,
+                        pg_chamfer_session.document().revision(),
+                        core::LengthValue{2.0},
+                        "PG01C vertex continuity Chamfer"},
+                    kernel);
+            CHECK(pg_chamfer.ok());
+            const auto pg_chamfer_sketch =
+                pg_chamfer_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(pg_chamfer_sketch.ok() &&
+                  pg_chamfer_sketch.sketch_id);
+            std::vector<part::MaterialEdgeReference>
+                pg_post_chamfer_cap;
+            for (const auto& probe :
+                 authorableEdgeProbes(pg_chamfer_session, kernel)) {
+                if (std::abs(probe.world.z - 20.0) < 1.0e-6) {
+                    pg_post_chamfer_cap.push_back(probe.reference);
+                }
+            }
+            CHECK(pg_post_chamfer_cap.size() == 4U);
+            const auto pg_chamfer_projected =
+                pg_chamfer_session.execute(
+                    application::CreateProjectedSketchEdgesCommand{
+                        *pg_chamfer_sketch.sketch_id,
+                        pg_chamfer_session.document().revision(),
+                        pg_post_chamfer_cap,
+                        sketch::EntityRole::regular},
+                    kernel);
+            CHECK(pg_chamfer_projected.ok());
+            CHECK(pg_chamfer_projected.entity_ids.size() == 4U);
+            const auto pg_chamfer_current =
+                part::evaluateEffectiveSketchProjection(
+                    pg_chamfer_session.document(),
+                    *pg_chamfer_sketch.sketch_id,
+                    part::evaluatePart(
+                        pg_chamfer_session.document(), kernel),
+                    kernel);
+            CHECK(pg_chamfer_current &&
+                  pg_chamfer_current->allResolved());
+            const auto pg_chamfer_regions =
+                sketch::analyzeRegions(pg_chamfer_current->model);
+            CHECK(pg_chamfer_regions.complete());
+            CHECK(pg_chamfer_regions.regions.size() == 1U);
+            const auto pg_chamfer_intent =
+                part::makeProfileRegionIntent(
+                    pg_chamfer_regions.regions.front());
+            CHECK(pg_chamfer_intent);
+            const auto pg_chamfer_profile =
+                pg_chamfer_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_chamfer_sketch.sketch_id,
+                        pg_chamfer_session.document().revision(),
+                        *pg_chamfer_intent},
+                    kernel);
+            CHECK(pg_chamfer_profile.ok());
+            std::cout << "PG01C_D2K_CHAMFER_LINKED_REGION_PASS"
+                      << " edges=4 native_occt=1"
+                      << " no_tolerance_heal=1\\n";
+
+            // Owner identity regression: an all-linked rectangle
+            // Profile remains the SAME Profile as each linked Edge is
+            // detached, including mixed linked/authored intermediate
+            // boundaries. No ProfileId or RegionIntent recreation.
+            auto pg_all_session = makeBaseSession(kernel);
+            const auto pg_all_sketch =
+                pg_all_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(pg_all_sketch.ok() &&
+                  pg_all_sketch.sketch_id);
+            std::vector<part::MaterialEdgeReference>
+                pg_cap_sources;
+            for (const auto& probe :
+                 authorableEdgeProbes(pg_all_session, kernel)) {
+                if (std::abs(probe.world.z - 20.0) < 1.0e-6) {
+                    pg_cap_sources.push_back(probe.reference);
+                }
+            }
+            CHECK(pg_cap_sources.size() == 4U);
+            const auto pg_all_authored =
+                pg_all_session.execute(
+                    application::CreateProjectedSketchEdgesCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_all_session.document().revision(),
+                        pg_cap_sources,
+                        sketch::EntityRole::regular},
+                    kernel);
+            CHECK(pg_all_authored.ok());
+            CHECK(pg_all_authored.entity_ids.size() == 4U);
+            const auto* pg_all_linked =
+                pg_all_session.document().findSketch(
+                    *pg_all_sketch.sketch_id);
+            CHECK(pg_all_linked &&
+                  pg_all_linked->projection_bindings.size() == 4U);
+            const auto pg_all_targets =
+                pg_all_linked->projection_bindings;
+            const auto pg_all_body = part::evaluatePart(
+                pg_all_session.document(), kernel);
+            const auto pg_all_effective =
+                part::evaluateEffectiveSketchProjection(
+                    pg_all_session.document(),
+                    *pg_all_sketch.sketch_id,
+                    pg_all_body, kernel);
+            CHECK(pg_all_effective &&
+                  pg_all_effective->allResolved());
+            const auto pg_all_regions =
+                sketch::analyzeRegions(pg_all_effective->model);
+            CHECK(pg_all_regions.complete() &&
+                  pg_all_regions.regions.size() == 1U);
+            const auto pg_all_intent =
+                part::makeProfileRegionIntent(
+                    pg_all_regions.regions.front());
+            CHECK(pg_all_intent);
+
+            // D2-P: change the upstream rectangle *after* projecting
+            // all four linked targets. Persisted linked seeds stay
+            // identical; the new current region (50x40) must be the
+            // semantic authority for Create Profile, not old 40x30.
+            auto pg_changed_doc =
+                part::PartDocument::restore(
+                    pg_all_session.document().documentId(),
+                    pg_all_session.document().state(),
+                    pg_all_session.document().revision());
+            CHECK(pg_changed_doc.ok());
+            application::DocumentSession pg_changed_session{
+                {}, std::move(*pg_changed_doc.document)};
+            const auto pg_changed_authored_state =
+                pg_changed_session.document().state();
+            const auto& pg_changed_upstream =
+                pg_changed_authored_state.sketches.front();
+            CHECK(pg_changed_upstream.id != *pg_all_sketch.sketch_id);
+            std::vector<application::SketchLineGeometryUpdate>
+                pg_changed_updates;
+            const auto pg_changed_lines =
+                pg_changed_upstream.model.state().lines;
+            CHECK(pg_changed_lines.size() == 4U);
+            for (const auto& item : pg_changed_lines) {
+                const auto remap = [](sketch::Point2 p) {
+                    if (p.u == 40.0) p.u = 50.0;
+                    if (p.v == 30.0) p.v = 40.0;
+                    return p;
+                };
+                pg_changed_updates.push_back({
+                    item.id, remap(item.start), remap(item.end)});
+            }
+            const auto pg_changed_seed =
+                pg_changed_session.document()
+                    .findSketch(*pg_all_sketch.sketch_id)->model.state();
+            const auto pg_changed_result =
+                pg_changed_session.execute(
+                    application::UpdateSketchLinesCommand{
+                        pg_changed_upstream.id,
+                        pg_changed_session.document().revision(),
+                        std::move(pg_changed_updates)});
+            CHECK(pg_changed_result.ok());
+            CHECK(pg_changed_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->model.state() == pg_changed_seed);
+            const auto pg_changed_effective =
+                part::evaluateEffectiveSketchProjection(
+                    pg_changed_session.document(),
+                    *pg_all_sketch.sketch_id,
+                    part::evaluatePart(
+                        pg_changed_session.document(), kernel),
+                    kernel);
+            CHECK(pg_changed_effective &&
+                  pg_changed_effective->allResolved());
+            const auto pg_changed_regions =
+                sketch::analyzeRegions(pg_changed_effective->model);
+            CHECK(pg_changed_regions.complete() &&
+                  pg_changed_regions.regions.size() == 1U);
+            CHECK(pg_changed_regions.regions.front().area !=
+                  pg_all_regions.regions.front().area);
+            const auto pg_changed_intent =
+                part::makeProfileRegionIntent(
+                    pg_changed_regions.regions.front());
+            CHECK(pg_changed_intent);
+            const auto pg_changed_rev =
+                pg_changed_session.document().revision();
+            const auto pg_changed_reject =
+                pg_changed_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_changed_rev,
+                        *pg_changed_intent});
+            CHECK(!pg_changed_reject.ok());
+            CHECK(pg_changed_session.document().revision() ==
+                  pg_changed_rev);
+            const auto pg_changed_profile =
+                pg_changed_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_changed_rev,
+                        *pg_changed_intent},
+                    kernel);
+            CHECK(pg_changed_profile.ok() &&
+                  pg_changed_profile.profile_id);
+            CHECK(pg_changed_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->model.state() == pg_changed_seed);
+            std::cout << "PG01C_D2P_MOVED_SOURCE_CREATE_PASS"
+                      << " authored_seed_stale=1"
+                      << " current_provider=1"
+                      << " no_provider_rejected=1\\n";
+
+            const auto pg_legacy_revision =
+                pg_all_session.document().revision();
+            const auto pg_legacy_undo =
+                pg_all_session.undoDepth();
+            const auto pg_legacy_rejected =
+                pg_all_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_legacy_revision,
+                        *pg_all_intent});
+            CHECK(!pg_legacy_rejected.ok());
+            CHECK(pg_all_session.document().revision() ==
+                  pg_legacy_revision);
+            CHECK(pg_all_session.undoDepth() ==
+                  pg_legacy_undo);
+            const auto pg_all_created =
+                pg_all_session.execute(
+                    application::CreateProfileCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_all_session.document().revision(),
+                        *pg_all_intent},
+                    kernel);
+            CHECK(pg_all_created.ok() &&
+                  pg_all_created.profile_id);
+            const auto pg_all_profile =
+                *pg_all_session.document().findProfile(
+                    *pg_all_created.profile_id);
+            // The authored-only API intentionally refuses linked
+            // Profile evaluation; effective source is the authority.
+            CHECK(!pg_all_session.document()
+                      .evaluateProfile(pg_all_profile.id));
+
+            // D2-T real Workbench Tree must agree with the effective
+            // Viewer/Properties Profile, not label all-linked geometry
+            // Invalid merely because authored-only evaluation refuses.
+            CHECK(workbench.activateDocument(&pg_all_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* pg_linked_profile_tree = nullptr;
+            const auto pg_profile_identity =
+                QString::fromStdString(
+                    pg_all_profile.id.serialized());
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->toolTip(0).contains(
+                        QStringLiteral("ProfileId: ") +
+                        pg_profile_identity)) {
+                    pg_linked_profile_tree = *it;
+                    break;
+                }
+            }
+            CHECK(pg_linked_profile_tree != nullptr);
+            CHECK(!pg_linked_profile_tree->text(0).contains(
+                QStringLiteral("[Invalid]")));
+            CHECK(pg_linked_profile_tree->toolTip(0).contains(
+                QStringLiteral("Status: Valid")));
+            std::cout << "PG01C_D2T_LINKED_TREE_VALID_PASS"
+                      << " all_linked=4"
+                      << " authored_only_rejected=1\\n";
+
+            // D2-B: four linked Edges are detached in one semantic
+            // transaction without changing Profile or EntityIds. Invalid
+            // duplicate input rolls back the whole staged operation.
+            auto pg_clone =
+                part::PartDocument::restore(
+                    pg_all_session.document().documentId(),
+                    pg_all_session.document().state(),
+                    pg_all_session.document().revision());
+            CHECK(pg_clone.ok());
+            application::DocumentSession pg_batch_detach_session{
+                {}, std::move(*pg_clone.document)};
+            std::vector<sketch::EntityId> pg_batch_targets;
+            for (const auto& binding : pg_all_targets) {
+                pg_batch_targets.push_back(binding.target_entity);
+            }
+            const auto pg_batch_revision =
+                pg_batch_detach_session.document().revision();
+            const auto pg_batch_undo =
+                pg_batch_detach_session.undoDepth();
+            const auto pg_batch_reject =
+                pg_batch_detach_session.execute(
+                    application::BreakProjectedEdgeLinksCommand{
+                        *pg_all_sketch.sketch_id,
+                        {pg_batch_targets.front(),
+                         pg_batch_targets.front()},
+                        pg_batch_revision},
+                    kernel);
+            CHECK(!pg_batch_reject.ok());
+            CHECK(pg_batch_detach_session.document().revision() ==
+                  pg_batch_revision);
+            CHECK(pg_batch_detach_session.undoDepth() ==
+                  pg_batch_undo);
+            const auto pg_batch_detach =
+                pg_batch_detach_session.execute(
+                    application::BreakProjectedEdgeLinksCommand{
+                        *pg_all_sketch.sketch_id,
+                        pg_batch_targets,
+                        pg_batch_revision},
+                    kernel);
+            CHECK(pg_batch_detach.ok());
+            CHECK(pg_batch_detach_session.undoDepth() ==
+                  pg_batch_undo + 1U);
+            CHECK(pg_batch_detach_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            CHECK(*pg_batch_detach_session.document().findProfile(
+                      pg_all_profile.id) == pg_all_profile);
+            const auto* pg_detach_authored =
+                pg_batch_detach_session.document().findSketch(
+                    *pg_all_sketch.sketch_id);
+            CHECK(pg_detach_authored);
+            for (const auto& binding : pg_all_targets) {
+                const auto* actual =
+                    pg_detach_authored->model.findLine(
+                        binding.target_entity);
+                const auto* expected =
+                    pg_all_effective->model.findLine(
+                        binding.target_entity);
+                CHECK(actual && expected && *actual == *expected);
+            }
+            CHECK(pg_batch_detach_session.document()
+                      .evaluateProfile(pg_all_profile.id)->valid());
+            CHECK(pg_batch_detach_session.undo().changed);
+            CHECK(pg_batch_detach_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.size() == 4U);
+            CHECK(*pg_batch_detach_session.document().findProfile(
+                      pg_all_profile.id) == pg_all_profile);
+            CHECK(pg_batch_detach_session.redo().changed);
+            CHECK(pg_batch_detach_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            CHECK(pg_batch_detach_session.document()
+                      .evaluateProfile(pg_all_profile.id)->valid());
+            std::cout << "PG01C_D2B_ATOMIC_BREAK_LINK_PASS"
+                      << " linked=4 undo_batches=1"
+                      << " invalid_rollbacks=1"
+                      << " profile_unchanged=1\\n";
+
+            for (const auto& binding : pg_all_targets) {
+                const auto before_body = part::evaluatePart(
+                    pg_all_session.document(), kernel);
+                const auto before =
+                    part::evaluateEffectiveSketchProjection(
+                        pg_all_session.document(),
+                        *pg_all_sketch.sketch_id,
+                        before_body, kernel);
+                CHECK(before && before->allResolved());
+                const auto* before_line =
+                    before->model.findLine(
+                        binding.target_entity);
+                CHECK(before_line);
+                const auto expected_line = *before_line;
+                const auto detached = pg_all_session.execute(
+                    application::BreakProjectedEdgeLinkCommand{
+                        *pg_all_sketch.sketch_id,
+                        binding.target_entity,
+                        pg_all_session.document().revision()},
+                    kernel);
+                CHECK(detached.ok());
+                const auto* after_sketch =
+                    pg_all_session.document().findSketch(
+                        *pg_all_sketch.sketch_id);
+                CHECK(after_sketch);
+                const auto* frozen_line =
+                    after_sketch->model.findLine(
+                        binding.target_entity);
+                CHECK(frozen_line &&
+                      *frozen_line == expected_line);
+                CHECK(*pg_all_session.document().findProfile(
+                          pg_all_profile.id) == pg_all_profile);
+                const auto after_body = part::evaluatePart(
+                    pg_all_session.document(), kernel);
+                const auto after =
+                    part::evaluateEffectiveSketchProjection(
+                        pg_all_session.document(),
+                        *pg_all_sketch.sketch_id,
+                        after_body, kernel);
+                CHECK(after && after->allResolved());
+                const auto resolved =
+                    part::resolveProfileRegionIntent(
+                        after->model,
+                        pg_all_profile.region_intent);
+                CHECK(resolved.valid());
+                CHECK(resolved.region->area ==
+                      pg_all_regions.regions.front().area);
+            }
+            CHECK(pg_all_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            const auto pg_all_final =
+                pg_all_session.document().evaluateProfile(
+                    pg_all_profile.id);
+            CHECK(pg_all_final && pg_all_final->valid());
+            CHECK(pg_all_session.undo().changed);
+            CHECK(pg_all_session.document()
+                      .findSketch(*pg_all_sketch.sketch_id)
+                      ->projection_bindings.size() == 1U);
+            CHECK(*pg_all_session.document().findProfile(
+                      pg_all_profile.id) == pg_all_profile);
+            CHECK(pg_all_session.redo().changed);
+            CHECK(pg_all_session.document()
+                      .evaluateProfile(pg_all_profile.id)
+                      ->valid());
+            QTemporaryDir pg_all_dir;
+            CHECK(pg_all_dir.isValid());
+            const auto pg_all_path =
+                std::filesystem::path{
+                    pg_all_dir.path().toStdWString()} /
+                "LinkedProfileBreak.ss2part";
+            const auto pg_all_saved =
+                pg_store.createNew(
+                    pg_all_path, pg_all_session.document());
+            CHECK(pg_all_saved.ok());
+            const auto pg_all_loaded =
+                pg_store.load(pg_all_path);
+            CHECK(pg_all_loaded.ok());
+            CHECK(*pg_all_loaded.document->findProfile(
+                      pg_all_profile.id) == pg_all_profile);
+            CHECK(pg_all_loaded.document
+                      ->evaluateProfile(pg_all_profile.id)
+                      ->valid());
+            std::cout
+                << "PG01C_OWNER_PROFILE_LINK_BREAK_IDENTITY_PASS"
+                << " all_linked=4 mixed_then_authored=1"
+                << " stable_ids=1 undo_redo=1"
+                << " cold_reopen=1\\n";
+
+            CHECK(workbench.activateDocument(&session, {}));
+            result = EXIT_SUCCESS;
+            workbench.close();
+            app.quit();
+            return;
+        }
         CHECK(viewport->setStandardView(
             viewer::StandardView::top_front_right));
         viewport->fitAll();

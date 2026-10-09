@@ -206,6 +206,172 @@ public:
             system_default};
 };
 
+// PG-01C/C0: a linked Circle's authored seed may be a valid local
+// Circle/closed Profile, but it is never current geometric truth without
+// the corresponding current upstream Body stage and exact provider.
+void verifyMissingProjectionProviderNeverShowsSeed() {
+    auto document =
+        part::PartDocument::create(
+            core::DocumentId::generate());
+    application::DocumentSession authored{
+        std::filesystem::path{
+            "pg01c-broken-presentation.ss2part"},
+        std::move(document)};
+
+    const auto upstream = authored.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(upstream.ok() && upstream.sketch_id);
+    const auto rectangle = authored.execute(
+        application::AddSketchRectangleCommand{
+            *upstream.sketch_id,
+            authored.document().revision(),
+            {-15.0, -10.0},
+            {15.0, 10.0},
+            sketch::EntityRole::regular,
+            false});
+    CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+    const auto* upstream_sketch =
+        authored.document().findSketch(*upstream.sketch_id);
+    CHECK(upstream_sketch);
+    const auto upstream_regions =
+        sketch::analyzeRegions(upstream_sketch->model);
+    CHECK(upstream_regions.complete());
+    CHECK(upstream_regions.regions.size() == 1U);
+    const auto upstream_intent =
+        part::makeProfileRegionIntent(
+            upstream_regions.regions.front());
+    CHECK(upstream_intent);
+    const auto upstream_profile = authored.execute(
+        application::CreateProfileCommand{
+            *upstream.sketch_id,
+            authored.document().revision(),
+            *upstream_intent});
+    CHECK(upstream_profile.ok() && upstream_profile.profile_id);
+
+    const auto target = authored.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(target.ok() && target.sketch_id);
+    const auto old_seed = authored.execute(
+        application::AddSketchCircleCommand{
+            *target.sketch_id,
+            {55.0, 60.0},
+            8.0});
+    const auto local = authored.execute(
+        application::AddSketchLineCommand{
+            *target.sketch_id,
+            {0.0, 0.0},
+            {6.0, 0.0}});
+    CHECK(old_seed.ok() && old_seed.entity_id);
+    CHECK(local.ok() && local.entity_id);
+    const auto* target_sketch =
+        authored.document().findSketch(*target.sketch_id);
+    CHECK(target_sketch);
+    const auto region =
+        sketch::analyzeRegions(target_sketch->model);
+    CHECK(region.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(region.regions.front());
+    CHECK(intent);
+    const auto linked_profile = authored.execute(
+        application::CreateProfileCommand{
+            *target.sketch_id,
+            authored.document().revision(),
+            *intent});
+    CHECK(linked_profile.ok() && linked_profile.profile_id);
+
+    auto state = authored.document().state();
+    const auto producer = state.body.next_feature_id.allocate();
+    CHECK(producer);
+    state.body.features.push_back(
+        part::PartFeature{
+            *producer,
+            "Upstream",
+            false,
+            part::ExtrudeFeature{
+                *upstream_profile.profile_id,
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0},
+                    false}}});
+    const part::FeatureSurfaceAddress cap{
+        *producer,
+        part::FeatureSurfaceRoleKind::extent_cap,
+        std::nullopt,
+        0U,
+        0U,
+        false};
+    const part::FeatureSurfaceAddress side{
+        *producer,
+        part::FeatureSurfaceRoleKind::side,
+        rectangle.entity_ids.front(),
+        0U,
+        0U,
+        false};
+    std::vector<part::FeatureSurfaceAddress> surfaces{cap, side};
+    std::sort(surfaces.begin(), surfaces.end());
+    part::MaterialEdgeReference source{
+        {part::BodyStageKind::after_feature, *producer},
+        {*producer,
+         part::FeatureCurveRoleKind::cap_side,
+         std::move(surfaces)},
+        part::SingularAtAuthoredStage{}};
+    CHECK(source.valid());
+    auto staged = std::find_if(
+        state.sketches.begin(), state.sketches.end(),
+        [&target](const part::PartSketch& item) {
+            return item.id == *target.sketch_id;
+        });
+    CHECK(staged != state.sketches.end());
+    staged->projection_bindings.push_back(
+        {*old_seed.entity_id, source});
+
+    auto restored = part::PartDocument::restore(
+        authored.document().documentId(),
+        std::move(state),
+        authored.document().revision());
+    CHECK(restored.ok() && restored.document);
+    application::DocumentSession session{
+        std::filesystem::path{"pg01c-restored.ss2part"},
+        std::move(*restored.document)};
+
+    QTreeWidget tree;
+    ui::PartDocumentTreeController tree_controller{tree};
+    TestViewport viewport;
+    ui::PartViewportController controller{
+        tree_controller, &viewport};
+    // Deliberately no ModelingKernel/EdgeProjectionQuery: the linked
+    // source is structurally valid intent but cannot currently resolve.
+    controller.setDocumentSession(&session);
+    CHECK(!controller.profilePresentationFor(
+        *linked_profile.profile_id));
+    controller.setSketchEditSketch(*target.sketch_id);
+    CHECK(viewport.sketch_scene_.lines.size() == 1U);
+    CHECK(!viewport.sketch_scene_.lines.front().linked);
+    CHECK(viewport.sketch_scene_.curves.empty());
+    // OSNAP and Measure must consume the same fail-closed effective
+    // model as the visible Viewport, never the linked saved seed.
+    const auto* visible_model =
+        controller.currentSketchInteractionModel();
+    CHECK(visible_model != nullptr);
+    CHECK(visible_model->contains(*local.entity_id));
+    CHECK(!visible_model->contains(*old_seed.entity_id));
+    CHECK(!sketch::measureEntity(
+        *visible_model, *old_seed.entity_id).has_value());
+    CHECK(!controller.sketchPresentationFor(
+        *old_seed.entity_id));
+    CHECK(controller.sketchPresentationFor(
+        *local.entity_id));
+    CHECK(!controller.profilePresentationFor(
+        *linked_profile.profile_id));
+    controller.refreshPresentation();
+    CHECK(viewport.sketch_scene_.lines.size() == 1U);
+    CHECK(viewport.sketch_scene_.curves.empty());
+    CHECK(!controller.sketchPresentationFor(
+        *old_seed.entity_id));
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -652,5 +818,6 @@ int main(int argc, char* argv[]) {
              *first.entity_id)
              .has_value());
 
+    verifyMissingProjectionProviderNeverShowsSeed();
     return EXIT_SUCCESS;
 }

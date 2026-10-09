@@ -9,6 +9,7 @@
 #include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
+#include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
 #include <QObject>
@@ -263,6 +264,25 @@ public:
 
     void setSketchEditSketch(
         std::optional<sketch::SketchId> sketch_id);
+
+    // Read-only current evaluated Sketch, identical to the one used to
+    // build the visible scene. No new OCCT projection on mouse moves.
+    // Absent on stale revision, switched Document or failed scene.
+    [[nodiscard]] const sketch::SketchModel*
+    currentSketchInteractionModel() const;
+
+    // Current stage-aware Profile resolution for Workbench Properties and
+    // Feature pick gates. Matches the effective Sketch used by the Viewer;
+    // linked authored seeds are never accepted as current geometry.
+    [[nodiscard]] std::optional<part::ResolvedProfileRegion>
+    currentProfileResolution(part::ProfileId profile_id) const;
+
+    // C2: transient exact-source Project Geometry draft. The actual
+    // Part and current Sketch remain unchanged until Workbench Finish.
+    // A failed source/provider evaluation clears its entire preview.
+    [[nodiscard]] bool setProjectedEdgeDraftPreview(
+        const std::vector<part::MaterialEdgeReference>& sources,
+        sketch::EntityRole role);
 
     [[nodiscard]] bool setSketchPreview(
         const std::vector<SketchPreviewLine2D>& lines);
@@ -565,6 +585,13 @@ private:
     [[nodiscard]] std::optional<viewer::BodyScene>
     buildBodyScene();
 
+    // PG-01C: disposable same-revision Sketch geometry for drawing and
+    // sampling. Missing projection provider/evaluation strips linked seeds,
+    // preserving unaffected unlinked entities without touching Part intent.
+    [[nodiscard]] sketch::SketchModel
+    effectiveSketchModelForPresentation(
+        const part::PartSketch& hosted) const;
+
     [[nodiscard]] std::optional<viewer::SketchScene>
     buildSketchScene();
 
@@ -574,6 +601,7 @@ private:
     [[nodiscard]] std::optional<viewer::ProfileRegionPresentation>
     buildProfileRegionPresentation(
         const part::PartSketch& source,
+        const sketch::SketchModel& evaluated_model,
         const sketch::RegionCandidate2D& region) const;
 
     [[nodiscard]] std::optional<viewer::PresentationToken>
@@ -693,6 +721,14 @@ private:
         std::uint64_t,
         SketchEntityAddress>
         sketch_entity_bindings_;
+    struct CurrentSketchModelSnapshot final {
+        core::DocumentId document_id;
+        sketch::SketchId sketch_id;
+        core::DocumentRevision revision;
+        sketch::SketchModel model;
+    };
+    std::optional<CurrentSketchModelSnapshot>
+        current_sketch_model_snapshot_;
     std::unordered_map<
         std::uint64_t,
         part::ProfileId>
