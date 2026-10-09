@@ -855,6 +855,69 @@ int main(int argc, char* argv[]) {
         CHECK(pg_reopened_pick.valid());
         CHECK(pg_reopened_pick.completed);
         CHECK(pg_reopened_pick.token.has_value());
+
+        // Source change after cold reopen: stretch the *upstream*
+        // rectangle from 40 x 30 to 50 x 40 using one semantic
+        // UpdateSketchLinesCommand. Every cap Edge changes, including
+        // a bottom/left source; its linked local seed MUST remain
+        // unchanged while current projection follows the new Body.
+        const auto& pg_upstream =
+            pg_reopened.document().state().sketches.front();
+        CHECK(pg_upstream.id != *pg_sketch.sketch_id);
+        std::vector<application::SketchLineGeometryUpdate>
+            pg_upstream_updates;
+        const auto upstream_lines = pg_upstream.model.state().lines;
+        CHECK(upstream_lines.size() == 4U);
+        for (const auto& item : upstream_lines) {
+            const auto remap = [](sketch::Point2 point) {
+                if (point.u == 40.0) point.u = 50.0;
+                if (point.v == 30.0) point.v = 40.0;
+                return point;
+            };
+            pg_upstream_updates.push_back({
+                item.id,
+                remap(item.start),
+                remap(item.end)});
+        }
+        const auto pg_seed_before =
+            pg_reopened.document()
+                .findSketch(*pg_sketch.sketch_id)
+                ->model.state();
+        const auto pg_upstream_update =
+            pg_reopened.execute(
+                application::UpdateSketchLinesCommand{
+                    pg_upstream.id,
+                    pg_reopened.document().revision(),
+                    std::move(pg_upstream_updates)});
+        CHECK(pg_upstream_update.ok());
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->model.state() == pg_seed_before);
+        const auto pg_updated_body =
+            part::evaluatePart(
+                pg_reopened.document(), pg_cold_kernel);
+        CHECK(pg_updated_body.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto pg_updated_projection =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(),
+                *pg_sketch.sketch_id,
+                pg_updated_body,
+                pg_cold_kernel);
+        CHECK(pg_updated_projection);
+        CHECK(pg_updated_projection->allResolved());
+        const auto* pg_updated_line =
+            pg_updated_projection->model.findLine(pg_target);
+        CHECK(pg_updated_line);
+        CHECK(*pg_updated_line != *pg_cold_line);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        std::cout
+            << "PG01C_C3_UPSTREAM_RECOMPUTE_PASS"
+            << " current_curve_changed=1"
+            << " authored_seed_unchanged=1"
+            << " cold_occt=1\\n";
         std::cout
             << "PG01C_C3_NATIVE_SAVE_REOPEN_PASS"
             << " native_v15=1"
