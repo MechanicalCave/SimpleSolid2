@@ -1,6 +1,6 @@
 # PM-05F — cumulative automated acceptance / Owner evidence
 
-**Status:** automated technical gate PASS on runtime/docs candidate `5996583e99b20bbad16e252abb2f56c6904d69ef`; aggregate Owner acceptance not yet itemized
+**Status:** PM-05F COMPLETED — Owner aggregate PASS 2026-10-09; automated technical FULL #1902 PASS on runtime/docs `5996583e99b20bbad16e252abb2f56c6904d69ef`; final PR merge CI separate
 **Authority:** `work/PM-05_EDGE_FEATURES.md` §27 and `work/PM-05F_OWNER_WINDOWS_ACCEPTANCE.md`
 **Date:** 2026-10-08
 **PR:** [#298](https://github.com/MechanicalCave/SimpleSolid2/pull/298) — Draft until all final gates
@@ -44,7 +44,7 @@ These are existing executable suite names and accepted earlier package records. 
 | 24 | Save/Close/Reopen | `pm05b1.edge_feature_schema_v14`; `pm05e3.edge_feature_cold_rebuild` |
 | 25 | True cold reconstruction | `pm05e3.edge_feature_cold_rebuild`; `pm05f_r2.native_workbench_edit` |
 | 26 | Internal + PL/EN Product docs and generated Browser | `docs/internal/{PART_DOCUMENTS,CAD_WORKBENCH_VIEWER}.md`; `docs/product/{pl,en}/PARTS.md`; `docs/browser/index.html`; FULL #1902 documentation verification |
-| 27 | Final Owner Windows PASS | **Targeted manual R2 PASS recorded**, but complete 41-step Owner matrix was not separately itemized; aggregate acceptance **PENDING Owner confirmation** |
+| 27 | Final Owner Windows PASS | **Final aggregate Owner PM-05F PASS** explicitly reported 2026-10-09, following scoped manual R2 PASS 2026-10-08. No fabricated per-step 41-row transcript |
 
 ### Additional R2 / Owner Part008 regression
 
@@ -58,8 +58,12 @@ These are existing executable suite names and accepted earlier package records. 
 - Owner personally exercised earlier R2-A Body visibility and mixed local Fillet Part008 preview/Finish as recorded in the R2 remediation history.
 - On the runtime/test candidate `af85a6fafea643739393b4f29673eca56c666519`, Owner reported **"manual test - pass"** after receiving the focused Part008 3-Edge Chamfer / Edit / Undo / Save-Reopen / P1 picking instructions. This is a **scoped manual PASS**; the report did not enumerate 41 outcomes from the full PM-05F Owner Windows workflow.
 - The FULL candidate `5996583e99b20bbad16e252abb2f56c6904d69ef` differs from that Owner-tested runtime/test candidate only through evidence/governance files under `work/**`. There are no post-Owner product runtime/test changes. This preserves runtime equivalence, not an invented new manual test.
-- **Blocker before claiming PM-05 COMPLETED:** explicitly confirm the aggregate Owner workflow scope, including unsupported/rejected cases and downstream repair. Then reconcile final CI on the evidence-only commit, release status and merge authority. Do not merge #298 or activate PM-06/Projection solely on this matrix.
+- **Owner confirmation received 2026-10-09:** the Owner explicitly confirmed complete PM-05F acceptance as `PM-05F - Pass`. The full manual procedure is accepted at package level, without additional itemized 41-step evidence. [FAST #1903](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37849063919) PASS 93/93 plus aggregate PASS on evidence-only `49fb043750c9c6e2ef2af3e585431c1118757436`. Final PR readiness/merge requires exact closure-head CI; PM-06 and Projection still require separate authorization.
 
 ## Authority boundary
 
-This file describes evidence, not new product semantics or an architecture amendment. ACTIVE continues to point at PM-05 while its closure prerequisites remain open; any future sequencing change for Projection/PM-06 needs its own explicit Owner D2 roadmap decision.
+This file describes evidence, not new product semantics or an architecture amendment. After formal PM-05 closure, ACTIVE retains the last accepted contract reference as historical context until a separate next Work Contract is Owner-authorized; no new production mutation follows automatically. Any future sequencing change for Projection/PM-06 needs its own explicit Owner D2 roadmap decision.
+
+## FINAL PM-05F acceptance decision — 2026-10-09
+
+The Owner explicitly confirmed **`PM-05F - Pass`** in direct response to the question of whether the prior manual test was a full PM-05F acceptance or only R2 targeted acceptance. This closes the *aggregate acceptance decision*, not the missing item-by-item trace: no claim is made that 41 independent manual outcomes were reported. Scope, exclusions, fail-closed reference rules and D2-B restrictions remain unchanged. Branch final ready-for-review CI and merge are separately evidenced by GitHub Actions and PR state.

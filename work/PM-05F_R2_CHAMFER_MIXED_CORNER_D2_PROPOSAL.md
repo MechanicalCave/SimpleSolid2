@@ -1,6 +1,6 @@
 # PM-05F R2 — Mixed Chamfer Corner Remediation (Owner-approved D2-B)
 
-**Status:** D2-B Owner-APPROVED; targeted Owner manual PASS on `af85a6fafea643739393b4f29673eca56c666519` (2026-10-08); FOCUSED #1898 PASS; exact-head FULL #1902 PASS on `5996583e99b20bbad16e252abb2f56c6904d69ef`; aggregate Owner PM-05F acceptance PENDING
+**Status:** D2-B Owner-APPROVED; targeted Owner manual PASS 2026-10-08; exact-head FULL #1902 PASS 195/195; final Owner aggregate PM-05F PASS 2026-10-09; D2-B restricted scope unchanged
 **Authority:** PM-05 Edge Features / PM-05F R2 Owner remediation
 **Decision:** Owner accepted bounded OCCT-private D2-B geometry/lineage implementation; no wider D3 geometry policy or public/persistent contract expansion
 **Production mutation authorization:** D2-B APPROVED by Owner on 2026-10-08, strictly for the bounded provider-private fallback and provenance ledger described below; no public/persistent contract or product D3 extension authorized
@@ -107,3 +107,7 @@ Windows FOCUSED [#1898](https://github.com/MechanicalCave/SimpleSolid2/actions/r
 ## Exact-head FULL checkpoint — 2026-10-08
 
 The final runtime/docs candidate `5996583e99b20bbad16e252abb2f56c6904d69ef` passed manually dispatched Windows [FULL #1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905): Core 25/25, kernel-native 57/57 and desktop 113/113; `windows-msvc` aggregate PASS. This satisfies technical verification on that SHA, not an unreported complete 41-step manual Owner acceptance. Cumulative §27 evidence is `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`; D2-B bounds are unchanged.
+
+## Final Owner closure of PM-05F — 2026-10-09
+
+Owner explicitly stated **`PM-05F - Pass`** for the aggregate PM-05F acceptance after scoped R2 Owner PASS and exact runtime/docs Windows FULL #1902 PASS. This closes the Owner package gate without extending D2-B's provider-private Chamfer applicability, semantics, tolerance or reference-policy scope. The 41-step individual results were not separately itemized; see `work/PM-05F_OWNER_WINDOWS_ACCEPTANCE.md` and `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`.

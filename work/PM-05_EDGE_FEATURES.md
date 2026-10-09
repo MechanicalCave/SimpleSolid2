@@ -1,6 +1,6 @@
 # PM-05 — Edge Features: Fillet / Chamfer
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-06  
+**Status:** COMPLETED — PASS; Owner full PM-05F acceptance 2026-10-09  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.29 — PM-05  
@@ -8,7 +8,7 @@
 **Predecessor:** PM-04 Axis / Revolve — COMPLETED PASS  
 **Candidate baseline:** main `abeed19a8f1120fd149a119cd383b933c7cd4021`  
 **Owner acceptance:** 2026-10-06 — exact bounded contract accepted, including multi-edge production scope, connected-corner behavior, full lifecycle and Part-toolbar Create/Modify grouping  
-**Production mutation:** PM-05A, PM-05B, PM-05C, PM-05D and PM-05E are COMPLETED — PASS; PM-05F documentation / cumulative automated evidence / Owner Windows acceptance is the current authorized checkpoint after PM-05E exact-head PASS and completion synchronization
+**Production mutation:** PM-05A through PM-05F COMPLETED — PASS; final Owner aggregate PM-05F PASS on 2026-10-09. No post-PM-05 product mutation authorized.
 
 ## 1. Goal
 
@@ -809,4 +809,10 @@ On 2026-10-08 the Owner additionally approved the bounded D2 `work/PM-05F_R2_EDG
 
 ## PM-05F exact-head FULL evidence checkpoint — 2026-10-08
 
-Windows [FULL #1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905) passed on exact runtime/docs candidate `5996583e99b20bbad16e252abb2f56c6904d69ef`: Core 25/25, kernel-native 57/57, desktop 113/113 (195/195); documentation verification and `windows-msvc` aggregate PASS. Earlier FOCUSED #1898 and FAST #1900 were also successful. Owner reported targeted manual PASS on runtime-equivalent `af85a6fafea643739393b4f29673eca56c666519`, but did not supply an individually itemized full PM-05F 41-step Owner acceptance matrix. The cumulative §27 evidence matrix is `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`. **Completion decision remains pending confirmation of the aggregate Owner workflow and successful governance-sync CI; do not merge PR #298 or activate another package by implication.**
+Windows [FULL #1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905) passed on exact runtime/docs candidate `5996583e99b20bbad16e252abb2f56c6904d69ef`: Core 25/25, kernel-native 57/57, desktop 113/113 (195/195); documentation verification and `windows-msvc` aggregate PASS. Earlier FOCUSED #1898 and FAST #1900 were also successful. Owner reported targeted manual PASS on runtime-equivalent `af85a6fafea643739393b4f29673eca56c666519`, but did not supply an individually itemized full PM-05F 41-step Owner acceptance matrix. The cumulative §27 evidence matrix is `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`. **Owner supplied final aggregate `PM-05F - Pass` on 2026-10-09, and evidence-sync #1903 FAST 93/93 plus aggregate passed.** The final closure-head PR CI/merge state is verified separately; no other package is activated by PM-05 completion.
+
+## PM-05F Owner final acceptance and package completion — 2026-10-09
+
+The Owner explicitly answered **`PM-05F - Pass`** when asked to disambiguate targeted R2 manual testing from the complete PM-05F package acceptance. The complete Work Contract is **COMPLETED — PASS**. This Owner decision does not fabricate a 41-step manual transcript: the recorded targeted 2026-10-08 manual PASS and accepted cumulative §27 automated matrix remain the concrete evidence. Production runtime/docs candidate `5996583e99b20bbad16e252abb2f56c6904d69ef` passed [Windows FULL #1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905) with core 25/25, kernel-native 57/57, desktop 113/113; documentation and aggregate gate PASS. Evidence-only `49fb043750c9c6e2ef2af3e585431c1118757436` passed [FAST #1903](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37849063919) 93/93 and aggregate gate. Formal closure evidence is `work/PM-05F_EDGE_FEATURES_COMPLETION.md`.
+
+No additional Fillet/Chamfer variants, global planar-corner Chamfer policy, general topology healing, new Viewer reason-specific picking API, PM-06 or Projection are authorized by completion. The Owner separately signaled that Projection may need to precede PM-06; this is an **unapproved roadmap sequencing proposal** requiring explicit D2 program amendment, not a change made here.

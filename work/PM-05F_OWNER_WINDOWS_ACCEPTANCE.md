@@ -1,6 +1,6 @@
 # PM-05F — Owner Windows Acceptance
 
-**Status:** R2 TARGETED OWNER MANUAL PASS 2026-10-08 on `af85a6fafea643739393b4f29673eca56c666519`; exact-head Windows FULL #1902 PASS (195/195); complete PM-05F Owner matrix confirmation PENDING
+**Status:** COMPLETED — OWNER FINAL PM-05F PASS 2026-10-09; runtime/docs FULL #1902 PASS (195/195), evidence-sync FAST #1903 PASS (93/93); PR #298 final merge gate separate
 **Parent Work Contract:** work/PM-05_EDGE_FEATURES.md
 **Checkpoint:** PM-05F — documentation / cumulative automated evidence / Owner Windows acceptance
 **Date prepared:** 2026-10-07
@@ -137,12 +137,18 @@ The Owner reported **"manual test - pass"** after receiving Windows start instru
 
 **Exact automated evidence:** Windows FOCUSED [#1898](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37842345000) **PASS 1/1** on the same SHA, including 18 Chamfer variants, unique 21-Face ownership, actual source-Vertex/selected-Edge incidence and native lifecycle. Earlier FAST [#1893](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37839379219) **PASS 93/93** was on a different HEAD.
 
-**Exact-head FULL now PASS:** [#1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905), `5996583e99b20bbad16e252abb2f56c6904d69ef`, core 25/25, kernel-native 57/57, desktop 113/113; `windows-msvc` PASS. Cumulative evidence: `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`. **Still required:** explicit confirmation of the complete aggregate PM-05F Owner workflow, evidence-only synchronization CI and final release/merge gate. No implied broader geometry policy, no permanent acceptance of untested edge networks, no D3 planar corner rule, no PM-06 activation.
+**Exact-head FULL now PASS:** [#1902](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37846779905), `5996583e99b20bbad16e252abb2f56c6904d69ef`, core 25/25, kernel-native 57/57, desktop 113/113; `windows-msvc` PASS. Cumulative evidence: `work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`. **Owner aggregate approval:** explicitly supplied on 2026-10-09 as **"PM-05F - Pass"**. Evidence-only synchronization [FAST #1903](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37849063919) PASS 93/93 on `49fb043750c9c6e2ef2af3e585431c1118757436`; final PR readiness/merge CI is checked separately. No implied broader geometry policy, no permanent acceptance of untested edge networks, no D3 planar corner rule, no PM-06 activation.
 
 ## Result
 
-Owner results: **ATTEMPT 1 FAIL; ATTEMPT 2 FAIL; targeted R2 re-test PASS (2026-10-08)**. Aggregate PM-05F remains **PENDING**, not a completed Work Contract.
+Owner results: **ATTEMPT 1 FAIL; ATTEMPT 2 FAIL; targeted R2 re-test PASS (2026-10-08); FINAL PM-05F AGGREGATE OWNER PASS (2026-10-09)**. This is a package-level acceptance decision; individual outcomes for all 41 manual steps were not supplied, and none are fabricated.
 
 ## Completion boundary
 
-Until the aggregate Owner acceptance and subsequent evidence-sync CI gates are met, PM-05 remains ACTIVE, PR #298 remains Draft, PM-06 is not activated, and no advanced Fillet/Chamfer variant is implied by this workflow.
+The aggregate Owner acceptance and evidence-sync FAST #1903 gates are now met. The PM-05F Work Contract is **COMPLETED — PASS**; PR #298 may proceed through final ready-for-review exact-head CI and gated merge. PM-06 and Projection remain **NOT AUTHORIZED**, and no advanced Fillet/Chamfer variant is implied.
+
+## Final Owner disposition — 2026-10-09
+
+The Owner explicitly replied **`PM-05F - Pass`** to the question whether their previous manual PASS accepted the entire PM-05F, rather than only targeted R2 scenarios. Record this as an **explicit aggregate Owner acceptance decision** over the accepted contract's scope and its documented automated evidence (`work/PM-05F_CUMULATIVE_ACCEPTANCE_EVIDENCE.md`). This is not an invented per-step 41-row manual transcript.
+
+Runtime/test equivalence: targeted owner-tested `af85a6fafea643739393b4f29673eca56c666519` → runtime/docs FULL #1902 `5996583e99b20bbad16e252abb2f56c6904d69ef` → evidence-only FAST #1903 `49fb043750c9c6e2ef2af3e585431c1118757436`. No intervening product source mutation in the latter two transitions. Formal closure/docs update after the Owner decision remains `work/**`-only, pending its own required branch CI before merge.
