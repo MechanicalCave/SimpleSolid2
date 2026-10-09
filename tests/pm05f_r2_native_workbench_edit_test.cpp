@@ -621,6 +621,93 @@ int main(int argc, char* argv[]) {
         CHECK(pg_session.document()
                   .findSketch(*pg_sketch.sketch_id)
                   ->projection_bindings.size() == 1U);
+
+        // C3 D2-D: select the *linked Sketch curve* through a real
+        // Viewport mouse pick after the Project tool has finished.
+        // The Operations Break Link action must detach the currently
+        // evaluated source geometry with one new Undo transaction.
+        CHECK(workbench.activateDocument(&pg_session, {}));
+        QApplication::processEvents();
+        auto* pg_link_status = workbench.findChild<QLabel*>(
+            QStringLiteral("projectLinkedEdgeStatusLabel"));
+        auto* pg_break = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectBreakLinkButton"));
+        CHECK(pg_link_status && pg_break);
+        const auto* pg_linked =
+            pg_session.document().findSketch(*pg_sketch.sketch_id);
+        CHECK(pg_linked &&
+              pg_linked->projection_bindings.size() == 1U);
+        const auto pg_target =
+            pg_linked->projection_bindings.front().target_entity;
+        const auto* pg_line = pg_linked->model.findLine(pg_target);
+        CHECK(pg_line);
+        const viewer::Point3 pg_linked_midpoint{
+            (pg_line->start().u + pg_line->end().u) / 2.0,
+            (pg_line->start().v + pg_line->end().v) / 2.0,
+            0.0};
+        bool pg_sketch_selected = false;
+        for (const auto orientation : {
+                 viewer::StandardView::top,
+                 viewer::StandardView::top_front_right,
+                 viewer::StandardView::top_front_left,
+                 viewer::StandardView::bottom_front_right}) {
+            CHECK(viewport->setStandardView(orientation));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto cursor =
+                viewport->projectWorldPoint(pg_linked_midpoint);
+            if (!cursor) continue;
+            const QPoint pixel{
+                static_cast<int>(std::lround(cursor->x)),
+                static_cast<int>(std::lround(cursor->y))};
+            if (!viewport->rect().contains(pixel)) continue;
+            const auto queried =
+                viewport->querySketchPresentation(*cursor);
+            std::cerr
+                << "PG01C_BREAK_LINK_SKETCH_PICK"
+                << " view=" << static_cast<int>(orientation)
+                << " completed=" << queried.completed
+                << " token=" << queried.token.has_value()
+                << std::endl;
+            if (!queried.valid() || !queried.completed ||
+                !queried.token) continue;
+            QTest::mouseMove(viewport, pixel);
+            QTest::mouseClick(
+                viewport, Qt::LeftButton,
+                Qt::NoModifier, pixel);
+            QApplication::processEvents();
+            pg_sketch_selected = !pg_break->isHidden() &&
+                                 pg_break->isEnabled();
+            if (pg_sketch_selected) break;
+        }
+        CHECK(pg_sketch_selected);
+        CHECK(pg_link_status->text().contains(
+            QStringLiteral("Projected Edge")));
+        CHECK(pg_link_status->text().contains(
+            QStringLiteral("Source stage:")));
+        const auto pg_break_undo = pg_session.undoDepth();
+        pg_break->click();
+        QApplication::processEvents();
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->model.contains(pg_target));
+        CHECK(pg_session.undoDepth() == pg_break_undo + 1U);
+        CHECK(pg_session.undo().changed);
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(pg_session.redo().changed);
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        std::cout
+            << "PG01C_C3_NATIVE_BREAK_LINK_PASS"
+            << " real_sketch_pick=1"
+            << " current_geometry=1"
+            << " undo_redo=1\\n";
         std::cout
             << "PG01C_C1_NATIVE_EDGE_TOOL_PASS"
             << " actual_cursor=1"
