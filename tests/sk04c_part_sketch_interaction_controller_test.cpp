@@ -832,8 +832,7 @@ int main(int argc, char* argv[]) {
             << " resolution=" << (current_status
                 ? static_cast<int>(*current_status)
                 : -1)
-            << " revision=" << session.document().revision().serialized()
-            << '\\n';
+            << std::endl;
     }
     CHECK(profile_finished);
     CHECK(!interaction.profileToolActive());
