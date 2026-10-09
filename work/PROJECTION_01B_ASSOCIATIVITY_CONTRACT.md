@@ -55,6 +55,8 @@ If implementing a subphase exposes a new D2 decision, STOP and seek explicit Own
 - Core-only, existing native kernel, Windows Desktop regression, internal docs/build Browser checks and aggregate Ready-for-Review FULL on exact SHA.
 - Tested error scenarios do not depend on Qt selection tokens, viewport tessellation, or source geometry fallback; no Team/Assembly runtime dependency.
 
+**Current B5 verification:** native cold linked Cut + suppressed source #1959 PASS 1/1, real Revolve Create Draft #1960 PASS 1/1, upstream source width 40→50 mm fail-closed/repair + v15 fresh-provider replay #1961 PASS 1/1. Earlier wider FAST #1958 RED 92/93 on untouched Viewer marker test; current-head broader FAST, final exact-head FULL and Owner final acceptance are still pending.
+
 ## CI efficiency and evidence
 
 Use FOCUSED trailers with exact registered targets during iteration, and persist Windows warm trees. If first new test requires CMake, collect one justified registration change rather than compromising code organization. Close with FAST full regression then exactly one justified full native Desktop verification at Ready-for-Review on stable PR head. Maintain one evidence report with RED→fix timeline, exact SHAs, counts, docs and cold path; do not claim GUI product behavior before PG-01C.
