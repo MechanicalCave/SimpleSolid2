@@ -46,6 +46,14 @@
 - **Native UX checkpoint proven on HEAD `139ebeada252d48afb651ed3e2f1c5d778c85698`:** [Windows FOCUSED #2007](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/37930410521) **PASS** for `pg01c.native_project_edge_command`: exact material Edge cursor, staged Esc then tool-exit Esc, toolbar/Command Line parity, one atomic Finish/Undo/Redo, real linked Sketch entity selection and Break Link/Undo/Redo. This focused PASS does **not** replace final Windows FULL.
 - **Global focused Command Line buffer priority:** UI regression `wb02.global_cad_input_ui` asserts first Esc clears typed token but does not dispatch, second empty-buffer Esc dispatches `ESC` through the same semantic CAD endpoint with focus retained. Its exact-head Windows FOCUSED result is requested in the commit below.
 
+## C2 linked Sketch visual semantics (Qt/OCCT)
+
+- Provider-neutral transient `viewer::SketchLinePresentation::linked` and `viewer::SketchCurvePresentation::linked` flags; no persistence, no semantic reference in Viewer.
+- PartViewportController marks linked only when current evaluated geometry has an authored `ProjectedEdgeBinding` for the exact target EntityId; failed current provider projection removes the entity and therefore never creates a linked visual ghost.
+- Qt/OCCT stores this flag in the existing `SketchObject` and uses a distinct blue base color for linked Line/Circle/Arc. The `construction` flag still determines dash independently; primary selection, regular selection, measure highlight and hover continue to override the base color exactly as before.
+- First native compilation/interaction regression on the new visual seam is **pending** the focused run requested below. Manual Windows assessment of exact color/style, profiles, camera and DPI remains mandatory. Final FULL/Owner PASS not inferred from a FOCUSED result.
+- D2-C approved only this bounded runtime styling hint. No new authored attribute or general Sketch color redesign.
+
 ## Validation obligations
 
 1. A real upstream OCCT Line/Circle/Arc source with a deliberately different persisted seed: its linked Sketch display and Profile fill must match **current** derived geometry and source stage.
