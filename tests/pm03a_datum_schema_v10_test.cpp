@@ -107,6 +107,15 @@ std::string schema9FromCurrent(
     authored.erase("datum_planes");
     authored.erase("next_axis_id");
     authored.erase("axes");
+    // A historical schema fixture cannot carry v15 projected bindings.
+    // Refuse to downgrade a genuinely linked Sketch and never relax the
+    // production legacy parser to accommodate current-schema extensions.
+    for (auto& sketch_json : authored["sketches"]) {
+        CHECK(sketch_json.contains("projected_edges"));
+        CHECK(sketch_json.at("projected_edges").is_array());
+        CHECK(sketch_json.at("projected_edges").empty());
+        sketch_json.erase("projected_edges");
+    }
 
     auto text = authored.dump(2);
     text.push_back('\n');
