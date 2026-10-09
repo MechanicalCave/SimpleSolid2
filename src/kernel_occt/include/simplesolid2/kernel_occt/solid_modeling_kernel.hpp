@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/kernel/edge_projection.hpp>
+#include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 
 namespace simplesolid2::kernel_occt {
@@ -9,8 +10,19 @@ namespace simplesolid2::kernel_occt {
 // contract. No OCCT handle/type crosses this public header.
 class OcctSolidModelingKernel final
     : public kernel::ISolidModelingKernel,
-      public kernel::IEdgeProjectionQuery {
+      public kernel::IEdgeProjectionQuery,
+      public kernel::IFaceBoundaryQuery {
 public:
+    [[nodiscard]] std::optional<kernel::ScopedBoundaryFace>
+    bindFaceToBody(
+        kernel::RuntimeSolidHandle source_body,
+        kernel::RuntimeFaceToken current_face) noexcept override;
+
+    [[nodiscard]] kernel::FaceBoundaryResult
+    queryFaceBoundary(
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedBoundaryFace& bound_face) noexcept override;
+
     [[nodiscard]] std::optional<kernel::ScopedProjectionEdge>
     bindEdgeToBody(
         kernel::RuntimeSolidHandle source_body,
