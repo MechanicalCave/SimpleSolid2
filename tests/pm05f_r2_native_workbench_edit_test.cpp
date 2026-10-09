@@ -495,6 +495,103 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
     CHECK(current_material_edges.size() +
               nonmaterial_edge_count == catalog.edges.size());
 
+    // First true SS2 native provider/Part reconciliation. The selected
+    // bounded Face remains strict; its native wire uses are only current
+    // runtime tokens. Every admitted material use must pass the existing
+    // PG-01B authorMaterialEdgeReference contract.
+    std::size_t planar_faces = 0U;
+    std::size_t native_faces_with_holes = 0U;
+    std::size_t strict_faces_with_holes = 0U;
+    std::size_t fully_material_strict_holed_faces = 0U;
+    std::size_t hole_rejected_edges = 0U;
+    for (const auto& face : catalog.faces) {
+        const auto source =
+            kernel.bindFaceToBody(
+                evaluation.body_solid, face.runtime_token);
+        CHECK(source && source->valid());
+        const auto boundary =
+            kernel.queryFaceBoundary(
+                evaluation.body_solid, *source);
+        if (boundary.status ==
+                kernel::FaceBoundaryStatus::
+                    unsupported_surface) {
+            continue;
+        }
+        CHECK(boundary.ok());
+        ++planar_faces;
+        if (boundary.wires.size() <= 1U) continue;
+        ++native_faces_with_holes;
+        std::size_t outer_wires = 0U;
+        bool all_material = true;
+        std::vector<part::MaterialEdgeReference>
+            member_sources;
+        for (const auto& wire : boundary.wires) {
+            CHECK(wire.valid());
+            if (wire.outer) ++outer_wires;
+            for (const auto& member : wire.edges) {
+                CHECK(member.valid());
+                const auto authored_source =
+                    part::authorMaterialEdgeReference(
+                        catalog, member.edge);
+                if (!authored_source.ok()) {
+                    ++hole_rejected_edges;
+                    all_material = false;
+                    continue;
+                }
+                CHECK(authored_source.reference &&
+                      authored_source.reference->stage ==
+                          catalog.stage);
+                member_sources.push_back(
+                    *authored_source.reference);
+            }
+        }
+        CHECK(outer_wires == 1U);
+        std::sort(
+            member_sources.begin(),
+            member_sources.end());
+        CHECK(std::adjacent_find(
+            member_sources.begin(),
+            member_sources.end()) ==
+            member_sources.end());
+        if (!face.semantic_address) {
+            continue; // Surface carrier alone cannot admit PG-01D.
+        }
+        ++strict_faces_with_holes;
+        if (all_material) {
+            ++fully_material_strict_holed_faces;
+        }
+    }
+    std::cerr
+        << "PG01D_D0_NATIVE_FACE_WIRE_STATUS"
+        << " planar=" << planar_faces
+        << " holes=" << native_faces_with_holes
+        << " strict_holes=" << strict_faces_with_holes
+        << " strict_holes_all_material="
+        << fully_material_strict_holed_faces
+        << " material_rejections=" << hole_rejected_edges
+        << std::endl;
+    CHECK(native_faces_with_holes >= 2U);
+    CHECK(strict_faces_with_holes > 0U);
+    CHECK(fully_material_strict_holed_faces > 0U);
+
+    // A token scoped to one provider realization must not gain authority
+    // over a different body just because its numeric Face ID is reused.
+    const auto fresh_evaluation =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(fresh_evaluation.body_solid);
+    CHECK(fresh_evaluation.body_solid.get() !=
+          evaluation.body_solid.get());
+    const auto source_face = catalog.faces.front().runtime_token;
+    const auto stale_bound =
+        kernel.bindFaceToBody(
+            evaluation.body_solid, source_face);
+    CHECK(stale_bound);
+    const auto stale_query =
+        kernel.queryFaceBoundary(
+            fresh_evaluation.body_solid, *stale_bound);
+    CHECK(stale_query.status ==
+          kernel::FaceBoundaryStatus::provider_mismatch);
+
     std::cout << "PG01D_D0_NATIVE_STRICT_FACE_CATALOG_PASS"
               << " strict_faces=" << strict_face_count
               << " carrier_only_faces=" << carrier_only_face_count
