@@ -10175,7 +10175,7 @@ void CadWorkbench::syncProjectEdgeUi() {
         project_edge_clear_button_->setEnabled(count > 0U);
     }
     if (project_edge_result_label_ != nullptr) {
-        project_edge_result_label_->setText(
+        QString result_message =
             !project_edge_face_skipped_.empty()
                 ? QStringLiteral(
                     "PARTIAL Face: %1 unsupported geometric Edge(s) skipped, without closing gaps. %2 supported linked Edge(s); an open contour may not create a Profile.")
@@ -10194,7 +10194,49 @@ void CadWorkbench::syncProjectEdgeUi() {
                         .arg(project_edge_role_ ==
                                  sketch::EntityRole::regular
                                  ? QStringLiteral("Regular")
-                                 : QStringLiteral("Construction")));
+                                 : QStringLiteral("Construction"));
+
+        // Source-by-source diagnostics are read from the one currently
+        // staged native Face occurrence. Wire/order labels are transient
+        // presentation aids, never authored Face/Edge identifiers.
+        if (project_edge_face_membership_) {
+            QStringList members;
+            std::size_t hole_number = 0U;
+            for (const auto& wire :
+                 project_edge_face_membership_->wires) {
+                if (!wire.outer) ++hole_number;
+                for (std::size_t index = 0U;
+                     index < wire.edges.size(); ++index) {
+                    const auto& member = wire.edges[index];
+                    const bool skipped = std::binary_search(
+                        project_edge_face_skipped_.begin(),
+                        project_edge_face_skipped_.end(),
+                        member.reference);
+                    const QString location = wire.outer
+                        ? QStringLiteral("Outer Edge %1")
+                              .arg(static_cast<qulonglong>(index + 1U))
+                        : QStringLiteral("Hole %1 Edge %2")
+                              .arg(static_cast<qulonglong>(hole_number))
+                              .arg(static_cast<qulonglong>(index + 1U));
+                    members.push_back(
+                        QStringLiteral("%1: %2 (Feature %3)")
+                            .arg(location)
+                            .arg(skipped
+                                ? QStringLiteral(
+                                    "SKIPPED — geometric Unsupported")
+                                : QStringLiteral("supported"))
+                            .arg(fromUtf8(
+                                member.reference.curve
+                                    .producer_feature_id.serialized())));
+                }
+            }
+            if (!members.empty()) {
+                result_message += QStringLiteral("\n");
+                result_message += members.join(
+                    QStringLiteral("\n"));
+            }
+        }
+        project_edge_result_label_->setText(result_message);
     }
     if (operations_placeholder_ != nullptr) {
         operations_placeholder_->setText(
