@@ -143,13 +143,13 @@ void runProjection00AColdRepairEvidence() {
     const auto path = temp.path / "Projection00ARepair.ss2part";
     part::PartDocumentStore store;
     const auto document_id = core::DocumentId::generate();
-    const auto created_document = part::PartDocument::create(document_id);
+    auto created_document = part::PartDocument::create(document_id);
     const auto created = store.createNew(path, created_document);
     CHECK(created.ok());
 
     const part::ProfileId original_profile_id = [&] {
         application::DocumentSession session{
-            path, created_document, *created.checkpoint};
+            path, std::move(created_document), *created.checkpoint};
         const auto profile_id =
             createRectangleProfile(session, 0.0, 0.0, 40.0, 30.0);
         const auto cut_profile_id =
