@@ -448,6 +448,21 @@ int main() {
             legacy_current_path);
     CHECK(legacy_current_package.ok());
 
+    // A v12 fixture must contain the actual v12 Sketch record shape,
+    // not the v15-only projected_edges member introduced by PG-01B.
+    // No linked targets may be silently downgraded or lost.
+    auto legacy_v12_authored =
+        nlohmann::json::parse(
+            legacy_current_package.package->authored_json);
+    for (auto& sketch_json :
+         legacy_v12_authored.at("sketches")) {
+        CHECK(sketch_json.contains("projected_edges"));
+        CHECK(
+            sketch_json.at("projected_edges").is_array());
+        CHECK(
+            sketch_json.at("projected_edges").empty());
+        sketch_json.erase("projected_edges");
+    }
     const auto legacy_v12_path =
         temp.path / "LegacyV12.ss2part";
     writeBytes(
@@ -455,8 +470,7 @@ int main() {
         repackage(
             *legacy_current_package.package,
             12,
-            legacy_current_package.package
-                ->authored_json));
+            legacy_v12_authored.dump()));
 
     const auto legacy_loaded =
         store.load(legacy_v12_path);
