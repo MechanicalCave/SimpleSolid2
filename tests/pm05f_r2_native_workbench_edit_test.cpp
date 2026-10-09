@@ -969,6 +969,8 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("projectEdgeFinishButton"));
             auto* pg_remove = workbench.findChild<QPushButton*>(
                 QStringLiteral("projectEdgeRemoveButton"));
+            auto* pg_clear = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeClearButton"));
             auto* pg_count = workbench.findChild<QLabel*>(
                 QStringLiteral("projectEdgeSelectionLabel"));
             auto* pg_face_detail = workbench.findChild<QLabel*>(
@@ -982,7 +984,7 @@ int main(int argc, char* argv[]) {
                 }
             }
             CHECK(sketch_edit && face_mode && edge_mode &&
-                  pg_finish && pg_remove && pg_count &&
+                  pg_finish && pg_remove && pg_clear && pg_count &&
                   pg_face_detail && controller);
             QTreeWidgetItem* sketch_item = nullptr;
             for (QTreeWidgetItemIterator it(tree); *it; ++it) {
@@ -1682,6 +1684,133 @@ int main(int argc, char* argv[]) {
                       << " linked=4"
                       << " open_no_profile=1"
                       << " one_undo=1\\n";
+
+            // D3 all-Unsupported gate: one native circle-only planar cap
+            // projects obliquely to YZ. Strict Face admission succeeds,
+            // but no representable Edge remains: Finish must stay disabled
+            // and even a typed FINISH must not author a partial empty batch.
+            auto disk_document = part::PartDocument::create(
+                core::DocumentId::generate());
+            application::DocumentSession disk_session{
+                {}, std::move(disk_document)};
+            const auto disk_source = disk_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+            CHECK(disk_source.ok() && disk_source.sketch_id);
+            CHECK(disk_session.execute(
+                application::AddSketchCircleCommand{
+                    *disk_source.sketch_id,
+                    {20.0, 15.0}, 9.0,
+                    sketch::EntityRole::regular}).ok());
+            const auto* disk_source_sketch =
+                disk_session.document().findSketch(
+                    *disk_source.sketch_id);
+            CHECK(disk_source_sketch);
+            const auto disk_regions =
+                sketch::analyzeRegions(disk_source_sketch->model);
+            CHECK(disk_regions.complete() &&
+                  disk_regions.regions.size() == 1U);
+            const auto disk_intent =
+                part::makeProfileRegionIntent(
+                    disk_regions.regions.front());
+            CHECK(disk_intent);
+            const auto disk_profile = disk_session.execute(
+                application::CreateProfileCommand{
+                    *disk_source.sketch_id,
+                    disk_session.document().revision(),
+                    *disk_intent});
+            CHECK(disk_profile.ok() && disk_profile.profile_id);
+            const auto disk_extrude = disk_session.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *disk_profile.profile_id,
+                    disk_session.document().revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{20.0}, false},
+                    "PG01D circular cap source"},
+                kernel);
+            CHECK(disk_extrude.ok() && disk_extrude.feature_id);
+            const auto disk_target = disk_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::yz_plane});
+            CHECK(disk_target.ok() && disk_target.sketch_id);
+            CHECK(workbench.activateDocument(&disk_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* disk_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    disk_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(disk_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(disk_tree_item);
+            disk_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            const auto disk_original = disk_session.document().state();
+            const auto disk_revision =
+                disk_session.document().revision();
+            const auto disk_undo = disk_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            const auto disk_admitted =
+                controller->selectedMaterialFaceBoundaryAdmission();
+            CHECK(disk_admitted.ok());
+            CHECK(disk_admitted.wires.size() == 1U);
+            CHECK(disk_admitted.wires.front().outer);
+            CHECK(disk_admitted.wires.front().edges.size() == 1U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 0")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face: 1")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 1U);
+            CHECK(!pg_finish->isEnabled());
+            CHECK(pg_clear->isEnabled());
+            CHECK(pg_remove->isEnabled());
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(!reply.accepted);
+            CHECK(disk_session.document().state() == disk_original);
+            CHECK(disk_session.document().revision() == disk_revision);
+            CHECK(disk_session.undoDepth() == disk_undo);
+            CHECK(disk_session.document().findSketch(
+                *disk_target.sketch_id)
+                ->projection_bindings.empty());
+            reply = workbench.submitCadInput(
+                "CLEAR", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            CHECK(disk_session.document().state() == disk_original);
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(disk_session.document().revision() == disk_revision);
+            CHECK(disk_session.undoDepth() == disk_undo);
+            std::cout << "PG01D_D3_NATIVE_ALL_UNSUPPORTED_NOOP_PASS"
+                      << " red_ais=1"
+                      << " finish_blocked=1"
+                      << " clear_cancel_noop=1\\n";
 
             result = EXIT_SUCCESS;
             workbench.close();
