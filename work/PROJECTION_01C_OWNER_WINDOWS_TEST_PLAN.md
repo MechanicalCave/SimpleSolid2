@@ -45,8 +45,9 @@ Powyższe konfiguruje, buduje bieżący program `simplesolid2` i uruchamia `Simp
 1. Po utworzeniu linked Edge kliknij go w Sketch Select. Sprawdź odrębne oznaczenie linku (niebieska linia bazowa), źródłowy Feature/status oraz zgodność Regular/Construction.
 2. Wybierz **Break Link**: bieżąca pozycja i identyfikator geometrii pozostają, zależność znika; Undo przywraca link, Redo ponownie odłącza. Sprawdź również zwykły Delete i Undo.
 3. Edytuj **upstream** bazowy prostokąt z 40×30 na 50×40, nie edytując linked entity. Linked Sketch i snap/Measure powinny pokazywać nową rzeczywistą projekcję, bez zachowania starej seed geometry. Profile z linked geometry nie może być błędnie wypełnione starym obrysem.
-4. Stłum/wyłącz źródłowy Extrude. Linked geometria z niedostępnym źródłem nie może udawać poprawnej ani umożliwiać Break Link na starym seed. Przywróć Extrude; ten sam link ma wrócić bez ręcznego przepinania.
-5. Wykonaj **Save**, **Close Part**, ponownie **Open** z aktualnego `.ss2part` i, jeśli to możliwe, zrestartuj aplikację. Sprawdź źródła linked Edge, geometrię, status, rolę i zachowanie Undo/Redo. Powtórz z dwoma otwartymi Partami i przełączeniem Document Tabs.
+4. **Profile i aktualny linked obrys:** w drugim Sketch użyj skojarzonej krawędzi oraz trzech zwykłych odcinków, aby utworzyć jeden zamknięty region. Po zmianie upstream przesuń kursor do jego środka **bez klikania** i sprawdź podświetlenie/stan regionu, następnie kliknij i sprawdź prawidłowy podgląd Profile oraz liczbę wysp. Wskazany region musi odpowiadać bieżącej projekcji, nie zapisanemu seed. To ważny test ręczny: test syntetycznego hover-only #2053 pozostaje RED, natomiast natywne kliknięcie i stan Valid przeszły #2054.
+5. Stłum/wyłącz źródłowy Extrude. Linked geometria z niedostępnym źródłem nie może udawać poprawnej ani umożliwiać Break Link na starym seed. Przywróć Extrude; ten sam link ma wrócić bez ręcznego przepinania.
+6. Wykonaj **Save**, **Close Part**, ponownie **Open** z aktualnego `.ss2part` i, jeśli to możliwe, zrestartuj aplikację. Sprawdź źródła linked Edge, geometrię, status, rolę i zachowanie Undo/Redo. Powtórz z dwoma otwartymi Partami i przełączeniem Document Tabs.
 
 ## Raport Ownera
 
