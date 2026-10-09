@@ -811,7 +811,7 @@ void verifyPg01bAtomicProjectedEdges() {
         fixture.session.document().state();
     const auto geometry =
         sketch::captureSketchTransformGeometry(
-            authored->model, {batch.entity_ids.front()});
+            sketch->model, {batch.entity_ids.front()});
     CHECK(geometry && !geometry->empty());
     const auto stale_copy = fixture.session.execute(
         application::DuplicateSketchGeometryCommand{
