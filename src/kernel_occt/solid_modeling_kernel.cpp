@@ -4,6 +4,7 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepAdaptor_Curve.hxx>
+#include <GeomAbs_CurveType.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -5622,6 +5623,147 @@ OcctSolidModelingKernel::bodyPresentation(
                 provider_failure;
         result.body = {};
         return result;
+    }
+}
+
+
+kernel::EdgeProjectionResult
+OcctSolidModelingKernel::projectEdgeToPlane(
+    kernel::RuntimeSolidHandle source_body,
+    kernel::RuntimeEdgeToken current_edge,
+    const kernel::Frame3& target_frame) noexcept {
+
+    using Status = kernel::EdgeProjectionStatus;
+    const auto fail = [](Status status) -> kernel::EdgeProjectionResult {
+        return {status, std::nullopt};
+    };
+    if (!source_body || !current_edge.valid() ||
+        !target_frame.valid()) {
+        return fail(Status::invalid_input);
+    }
+
+    // Frame3::valid() permits general non-orthogonal frames for other
+    // consumers. Exact Circle/Arc projection specifically needs an
+    // orthonormal right-handed Sketch basis, otherwise the image is
+    // represented by an ellipse despite the output type saying Circle.
+    const auto dot = [](const kernel::Point3& a,
+                        const kernel::Point3& b) noexcept {
+        return a.x * b.x + a.y * b.y + a.z * b.z;
+    };
+    const auto& u = target_frame.u_axis;
+    const auto& v = target_frame.v_axis;
+    const auto& n = target_frame.normal;
+    const kernel::Point3 uxv{
+        u.y * v.z - u.z * v.y,
+        u.z * v.x - u.x * v.z,
+        u.x * v.y - u.y * v.x};
+    const double angular_tol = Precision::Angular();
+    if (std::abs(dot(u, u) - 1.0) > angular_tol ||
+        std::abs(dot(v, v) - 1.0) > angular_tol ||
+        std::abs(dot(n, n) - 1.0) > angular_tol ||
+        std::abs(dot(u, v)) > angular_tol ||
+        dot(uxv, n) < 1.0 - angular_tol) {
+        return fail(Status::invalid_input);
+    }
+    const auto* runtime =
+        dynamic_cast<const OcctRuntimeSolid*>(source_body.get());
+    if (runtime == nullptr) {
+        return fail(Status::provider_mismatch);
+    }
+    const auto found =
+        runtime->inventory_edges.find(current_edge.value);
+    if (found == runtime->inventory_edges.end() ||
+        found->second.IsNull()) {
+        return fail(Status::edge_unavailable);
+    }
+    const auto project = [&](const gp_Pnt& p) noexcept -> kernel::Point2 {
+        const kernel::Point3 delta{
+            p.X() - target_frame.origin.x,
+            p.Y() - target_frame.origin.y,
+            p.Z() - target_frame.origin.z};
+        return {dot(delta, u), dot(delta, v)};
+    };
+    const auto squaredDistance =
+        [](const kernel::Point2& a,
+           const kernel::Point2& b) noexcept {
+            const double du = a.u - b.u;
+            const double dv = a.v - b.v;
+            return du * du + dv * dv;
+        };
+    try {
+        const auto& edge = found->second;
+        const BRepAdaptor_Curve curve{edge};
+        const double first = curve.FirstParameter();
+        const double last = curve.LastParameter();
+        if (!std::isfinite(first) || !std::isfinite(last) ||
+            last < first) {
+            return fail(Status::kernel_failure);
+        }
+        const bool reversed =
+            edge.Orientation() == TopAbs_REVERSED;
+        if (curve.GetType() == GeomAbs_Line) {
+            const auto start =
+                project(curve.Value(reversed ? last : first));
+            const auto end =
+                project(curve.Value(reversed ? first : last));
+            if (squaredDistance(start, end) <=
+                Precision::Confusion() *
+                    Precision::Confusion()) {
+                return fail(Status::degenerate_projection);
+            }
+            return {Status::ok, kernel::Line2{start, end}};
+        }
+        if (curve.GetType() != GeomAbs_Circle) {
+            return fail(Status::unsupported_curve);
+        }
+        const gp_Circ circle = curve.Circle();
+        const auto axis = circle.Axis().Direction();
+        const double alignment =
+            axis.X() * n.x + axis.Y() * n.y + axis.Z() * n.z;
+        // An obliquely projected circle/arc has an elliptical image.
+        if (std::abs(std::abs(alignment) - 1.0) >
+            angular_tol) {
+            return fail(Status::unsupported_curve);
+        }
+        const double radius = circle.Radius();
+        if (!std::isfinite(radius) ||
+            radius <= Precision::Confusion()) {
+            return fail(Status::degenerate_projection);
+        }
+        const auto center = project(circle.Location());
+        const double span = last - first;
+        if (span <= 0.0 ||
+            span > 2.0 * std::numbers::pi +
+                angular_tol) {
+            return fail(Status::kernel_failure);
+        }
+        if (std::abs(span - 2.0 * std::numbers::pi) <=
+            angular_tol) {
+            return {
+                Status::ok,
+                kernel::Circle2{center, radius}};
+        }
+        const auto start =
+            project(curve.Value(reversed ? last : first));
+        const double angle = std::atan2(
+            start.v - center.v, start.u - center.u);
+        const double orientation =
+            (reversed ? -1.0 : 1.0) *
+            (alignment < 0.0 ? -1.0 : 1.0);
+        const double sweep = orientation * span;
+        if (!std::isfinite(angle) ||
+            !std::isfinite(sweep) ||
+            std::abs(sweep) <= angular_tol) {
+            return fail(Status::degenerate_projection);
+        }
+        return {
+            Status::ok,
+            kernel::Arc2{
+                center, radius, angle, sweep}};
+    } catch (const Standard_Failure&) {
+        return fail(Status::kernel_failure);
+    } catch (...) {
+        return fail(Status::kernel_failure);
     }
 }
 
