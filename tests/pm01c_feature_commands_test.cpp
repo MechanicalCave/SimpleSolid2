@@ -4,6 +4,7 @@
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -168,6 +169,184 @@ part::ExtrudeExtent oneSide(double distance) {
     return part::OneSidedExtrudeExtent{
         core::LengthValue{distance},
         false};
+}
+
+
+void runProjection00AProfileRepairEvidence() {
+    // Characterize existing command semantics only: no projected entities,
+    // no private document mutation and no new Profile/Extrude implementation.
+    FakeKernel kernel;
+    auto fixture = makeFixture();
+    auto& session = fixture.session;
+    const auto profile_id = fixture.profile_id;
+    const auto* initial_profile = session.document().findProfile(profile_id);
+    CHECK(initial_profile != nullptr);
+    const auto sketch_id = initial_profile->source_sketch_id;
+    const auto* source = session.document().findSketch(sketch_id);
+    CHECK(source != nullptr);
+    const auto rectangle_lines = source->model.state().lines;
+    CHECK(rectangle_lines.size() == 4U);
+
+    // A0: ProfileId/FeatureId are stable authored identities.
+    const auto add = session.execute(
+        application::CreateExtrudeFeatureCommand{
+            profile_id,
+            session.document().revision(),
+            part::ExtrudeOperation::add,
+            oneSide(9.0),
+            "Projection 00A Base"},
+        kernel);
+    CHECK(add.ok() && add.feature_id);
+    const auto feature_id = *add.feature_id;
+    const auto baseline = part::evaluatePart(session.document(), kernel);
+    CHECK(baseline.body_status == part::BodyEvaluationStatus::up_to_date);
+    CHECK(session.document().findProfile(profile_id) != nullptr);
+    CHECK(session.document().findFeature(feature_id) != nullptr);
+
+    // A1: alter rectangle width without changing any Sketch EntityId.
+    std::vector<application::SketchLineGeometryUpdate> updates;
+    for (const auto& line : rectangle_lines) {
+        auto start = line.start;
+        auto end = line.end;
+        if (start.u == 40.0) { start.u = 55.0; }
+        if (end.u == 40.0) { end.u = 55.0; }
+        updates.push_back({line.id, start, end});
+    }
+    const auto change = session.execute(
+        application::UpdateSketchLinesCommand{
+            sketch_id, session.document().revision(), updates});
+    CHECK(change.ok() && change.changed);
+    CHECK(session.document().findProfile(profile_id)->id == profile_id);
+    CHECK(session.document().findFeature(feature_id)->id == feature_id);
+    const auto moved = part::evaluatePart(session.document(), kernel);
+    CHECK(moved.body_status == part::BodyEvaluationStatus::up_to_date);
+    CHECK(session.undo().changed);
+    CHECK(session.redo().changed);
+    CHECK(part::evaluatePart(session.document(), kernel).body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+
+    // A2: replace one semantic EntityId by two geometrically matching
+    // halves. A rejected erase must leave the entire document untouched.
+    const auto* changed_sketch = session.document().findSketch(sketch_id);
+    CHECK(changed_sketch != nullptr);
+    const auto lines = changed_sketch->model.state().lines;
+    const auto target = std::find_if(
+        lines.begin(), lines.end(),
+        [](const sketch::SketchLineState& line) {
+            return line.start.u == 55.0 && line.end.u == 55.0;
+        });
+    CHECK(target != lines.end());
+    const auto deleted_id = target->id;
+    const auto first = target->start;
+    const auto last = target->end;
+    const sketch::Point2 mid{55.0, 15.0};
+    const auto before_erase = session.document().state();
+    const auto erased = session.execute(
+        application::EraseSketchEntityCommand{sketch_id, deleted_id});
+    if (!erased.ok()) {
+        CHECK(!erased.changed);
+        CHECK(session.document().state() == before_erase);
+        std::cout << "PROJECTION00A_A2_ERASE_REJECTED_NO_MUTATION\n";
+        return;
+    }
+    CHECK(erased.changed);
+    CHECK(session.document().findProfile(profile_id) != nullptr);
+    CHECK(session.document().findFeature(feature_id) != nullptr);
+
+    const auto* missing_sketch = session.document().findSketch(sketch_id);
+    const auto missing_profile = part::resolveProfileRegionIntent(
+        missing_sketch->model,
+        session.document().findProfile(profile_id)->region_intent);
+    CHECK(missing_profile.status ==
+          part::ProfileIntentResolutionStatus::missing_source_entity);
+    CHECK(part::evaluatePart(session.document(), kernel).body_status !=
+          part::BodyEvaluationStatus::up_to_date);
+
+    const auto half1 = session.execute(
+        application::AddSketchLineCommand{
+            sketch_id, first, mid, sketch::EntityRole::regular});
+    const auto half2 = session.execute(
+        application::AddSketchLineCommand{
+            sketch_id, mid, last, sketch::EntityRole::regular});
+    CHECK(half1.ok() && half1.entity_id);
+    CHECK(half2.ok() && half2.entity_id);
+    CHECK(*half1.entity_id != deleted_id);
+    CHECK(*half2.entity_id != deleted_id);
+
+    const auto* repaired_sketch = session.document().findSketch(sketch_id);
+    CHECK(repaired_sketch != nullptr);
+    CHECK(repaired_sketch->model.entityCount() == 5U);
+    // A6: even geometrically equivalent replacement cannot rebind an
+    // authored Profile without a matching semantic EntityId.
+    CHECK(part::resolveProfileRegionIntent(
+              repaired_sketch->model,
+              session.document().findProfile(profile_id)->region_intent)
+              .status ==
+          part::ProfileIntentResolutionStatus::missing_source_entity);
+
+    const auto regions = sketch::analyzeRegions(repaired_sketch->model);
+    if (!regions.complete() || regions.regions.size() != 1U) {
+        std::cout
+            << "PROJECTION00A_A3_NEW_REGION_UNAVAILABLE"
+            << " regions=" << regions.regions.size()
+            << " complete=" << regions.complete() << '\n';
+        // This is a precise limitation of the current region analyzer, not
+        // permission to patch production source under evidence-only scope.
+        CHECK(session.document().findFeature(feature_id)->id == feature_id);
+        return;
+    }
+    const auto replacement_intent = part::makeProfileRegionIntent(
+        regions.regions.front());
+    CHECK(replacement_intent);
+
+    // A3: repair the SAME ProfileId, without generating a replacement.
+    const auto replace = session.execute(
+        application::ReplaceProfileRegionIntentCommand{
+            profile_id, session.document().revision(), *replacement_intent});
+    CHECK(replace.ok() && replace.changed);
+    CHECK(session.document().findProfile(profile_id)->id == profile_id);
+    CHECK(session.document().findFeature(feature_id)->id == feature_id);
+    CHECK(part::evaluatePart(session.document(), kernel).body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(session.undo().changed);
+    const auto* undone_sketch = session.document().findSketch(sketch_id);
+    CHECK(part::resolveProfileRegionIntent(
+              undone_sketch->model,
+              session.document().findProfile(profile_id)->region_intent)
+              .status ==
+          part::ProfileIntentResolutionStatus::missing_source_entity);
+    CHECK(session.redo().changed);
+    CHECK(part::evaluatePart(session.document(), kernel).body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+
+    // A4: separately create Profile002, then repoint the same Extrude001.
+    const auto second_profile = session.execute(
+        application::CreateProfileCommand{
+            sketch_id, session.document().revision(), *replacement_intent});
+    CHECK(second_profile.ok() && second_profile.profile_id);
+    CHECK(*second_profile.profile_id != profile_id);
+    const auto reassign = session.execute(
+        application::EditExtrudeFeatureCommand{
+            feature_id,
+            session.document().revision(),
+            *second_profile.profile_id,
+            part::ExtrudeOperation::add,
+            oneSide(9.0),
+            "Projection 00A Reassigned"},
+        kernel);
+    CHECK(reassign.ok() && reassign.changed);
+    CHECK(session.document().findFeature(feature_id)->id == feature_id);
+    CHECK(part::evaluatePart(session.document(), kernel).body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(session.undo().changed);
+    CHECK(session.redo().changed);
+    CHECK(session.document().findFeature(feature_id)->id == feature_id);
+    CHECK(part::evaluatePart(session.document(), kernel).body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    std::cout
+        << "PROJECTION00A_A0_A4_A6_PASS"
+        << " linked_source_rebinding=0"
+        << " retained_profile_id=1 retained_feature_id=1\n";
 }
 
 } // namespace
@@ -383,6 +562,8 @@ int main() {
         rejected_fixture.session.document()
             .profilePresentationVisible(
                 rejected_fixture.profile_id));
+
+    runProjection00AProfileRepairEvidence();
 
     std::cout
         << "PM01C_FEATURE_COMMANDS_PASS"
