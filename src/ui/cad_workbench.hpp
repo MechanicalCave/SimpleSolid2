@@ -295,6 +295,7 @@ private:
     // PG-01C single Sketch Project Geometry tool; semantic state is
     // transient. Only DocumentSession commands author the Part.
     [[nodiscard]] bool startProjectEdgeTool();
+    void escapeProjectEdgeTool();
     void cancelProjectEdgeTool();
     void clearProjectEdgeRuntimeContext();
     void clearProjectEdgeSelection();
