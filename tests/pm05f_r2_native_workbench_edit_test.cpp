@@ -675,6 +675,7 @@ void verifyPg01dNativeTwoHoleFaceBoundary(
     std::size_t observed_two_hole_faces = 0U;
     std::size_t strict_two_hole_faces = 0U;
     std::size_t strict_two_hole_material_faces = 0U;
+    std::size_t admitted_complete_face_batches = 0U;
     std::size_t excluded_periodic_seams = 0U;
     std::size_t excluded_partition_edges = 0U;
     for (const auto& edge : catalog.edges) {
@@ -729,15 +730,61 @@ void verifyPg01dNativeTwoHoleFaceBoundary(
         std::sort(sources.begin(), sources.end());
         CHECK(std::adjacent_find(
             sources.begin(), sources.end()) == sources.end());
-        if (!face.semantic_address) continue;
+        const auto admitted =
+            part::inspectMaterialFaceBoundary(
+                result.features.back(),
+                face.runtime_token, kernel);
+        if (!face.semantic_address) {
+            CHECK(!admitted.ok());
+            CHECK(admitted.status ==
+                  part::MaterialFaceBoundaryStatus::face_not_strict);
+            continue;
+        }
         ++strict_two_hole_faces;
-        if (all_material) ++strict_two_hole_material_faces;
+        if (!all_material) {
+            CHECK(!admitted.ok());
+            CHECK(admitted.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      material_edge_unavailable);
+            continue;
+        }
+        ++strict_two_hole_material_faces;
+        CHECK(admitted.ok());
+        CHECK(admitted.bounded_face ==
+              face.semantic_address);
+        CHECK(admitted.wires.size() ==
+              boundary.wires.size());
+        std::size_t accepted_members = 0U;
+        for (std::size_t wire_index = 0U;
+             wire_index < admitted.wires.size();
+             ++wire_index) {
+            const auto& actual = admitted.wires[wire_index];
+            const auto& source = boundary.wires[wire_index];
+            CHECK(actual.outer == source.outer);
+            CHECK(actual.edges.size() == source.edges.size());
+            for (std::size_t edge_index = 0U;
+                 edge_index < source.edges.size();
+                 ++edge_index) {
+                const auto& item = actual.edges[edge_index];
+                CHECK(item.valid());
+                CHECK(item.current_edge ==
+                      source.edges[edge_index].edge);
+                CHECK(item.reversed ==
+                      source.edges[edge_index].reversed);
+                CHECK(item.reference.stage == catalog.stage);
+                ++accepted_members;
+            }
+        }
+        CHECK(accepted_members == 6U);
+        ++admitted_complete_face_batches;
     }
     std::cerr << "PG01D_D1_TWO_HOLE_FACE_STATUS"
               << " observed=" << observed_two_hole_faces
               << " strict=" << strict_two_hole_faces
               << " strict_material="
               << strict_two_hole_material_faces
+              << " complete_face_admissions="
+              << admitted_complete_face_batches
               << " excluded_seams="
               << excluded_periodic_seams
               << " excluded_partitions="
@@ -745,6 +792,8 @@ void verifyPg01dNativeTwoHoleFaceBoundary(
     CHECK(observed_two_hole_faces >= 2U);
     CHECK(strict_two_hole_faces > 0U);
     CHECK(strict_two_hole_material_faces > 0U);
+    CHECK(admitted_complete_face_batches ==
+          strict_two_hole_material_faces);
 }
 
 } // namespace
