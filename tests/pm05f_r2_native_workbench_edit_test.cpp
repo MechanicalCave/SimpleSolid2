@@ -646,6 +646,50 @@ int main(int argc, char* argv[]) {
                   .findSketch(*pg_sketch.sketch_id)
                   ->projection_bindings.size() == 1U);
 
+        // D2-E: all three Finish adapters must reach the same atomic
+        // command path. The above pass used the right-panel button;
+        // redo/undo is followed by typed FINISH, then viewport Enter.
+        auto* pg_undo = workbench.findChild<QPushButton*>(
+            QStringLiteral("undoDocumentButton"));
+        CHECK(pg_undo);
+        pg_undo->click();
+        QApplication::processEvents();
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        pg_reply = workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(nativeClick(*viewport, *pg_source_point));
+        CHECK(pg_finish->isEnabled());
+        pg_reply = workbench.submitCadInput(
+            "FINISH", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(pg_session.undoDepth() == pg_before_undo + 1U);
+
+        pg_undo->click();
+        QApplication::processEvents();
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.empty());
+        pg_reply = workbench.submitCadInput(
+            "PROJECT", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(nativeClick(*viewport, *pg_source_point));
+        CHECK(pg_finish->isEnabled());
+        QTest::keyClick(viewport, Qt::Key_Return);
+        QApplication::processEvents();
+        CHECK(!pg_button->isChecked());
+        CHECK(pg_panel->isHidden());
+        CHECK(pg_session.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(pg_session.undoDepth() == pg_before_undo + 1U);
+
         // C3 D2-D: select the *linked Sketch curve* through a real
         // Viewport mouse pick after the Project tool has finished.
         // The Operations Break Link action must detach the currently
