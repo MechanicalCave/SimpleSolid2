@@ -2662,13 +2662,16 @@ CreateProfileResult DocumentSession::executeCreateProfile(
             part::evaluatePart(document_, *modeling_kernel);
         effective = part::evaluateEffectiveSketchProjection(
             document_, command.source_sketch_id, prefix, *query);
-        if (!effective || !effective->allResolved()) {
+        if (!effective) {
             const auto failed = failure(
                 DocumentSessionErrorCode::invalid_command,
-                "Create Profile linked Sketch has unresolved current sources",
+                "Create Profile current linked source snapshot is unavailable",
                 path_);
             return {false, std::nullopt, failed.diagnostic};
         }
+        // Unresolved linked targets are erased by the effective model.
+        // Only the requested RegionIntent determines if their absence
+        // blocks this Profile; independent valid regions remain usable.
         current_model = &effective->model;
     }
     const auto resolved =
@@ -2792,12 +2795,14 @@ DocumentSessionResult DocumentSession::executeEditProfile(
         effective = part::evaluateEffectiveSketchProjection(
             document_, profile->source_sketch_id,
             prefix, *query);
-        if (!effective || !effective->allResolved()) {
+        if (!effective) {
             return failure(
                 DocumentSessionErrorCode::invalid_command,
-                "Edit Profile linked Sketch has unresolved current sources",
+                "Edit Profile current linked source snapshot is unavailable",
                 path_);
         }
+        // RegionIntent resolution rejects missing contributing targets,
+        // not unrelated unavailable linked reference geometry.
         current_model = &effective->model;
     }
     if (!part::resolveProfileRegionIntent(
