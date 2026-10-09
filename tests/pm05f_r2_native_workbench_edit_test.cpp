@@ -913,6 +913,67 @@ int main(int argc, char* argv[]) {
         CHECK(pg_reopened.document()
                   .findSketch(*pg_sketch.sketch_id)
                   ->projection_bindings.size() == 1U);
+
+        // Suppression/recovery on the exact same FeatureId must not
+        // discard binding intent or materialize the old authored seed
+        // as a currently resolved Sketch entity.
+        CHECK(pg_reopened.document().state().body.features.size() == 1U);
+        const auto pg_source_feature =
+            pg_reopened.document().state().body.features.front().id;
+        const auto pg_suppress = pg_reopened.execute(
+            application::SetFeatureSuppressedCommand{
+                pg_source_feature,
+                pg_reopened.document().revision(),
+                true});
+        CHECK(pg_suppress.ok());
+        const auto pg_missing_body = part::evaluatePart(
+            pg_reopened.document(), pg_cold_kernel);
+        const auto pg_missing_projection =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(),
+                *pg_sketch.sketch_id,
+                pg_missing_body,
+                pg_cold_kernel);
+        CHECK(!pg_missing_projection ||
+              (!pg_missing_projection->allResolved() &&
+               !pg_missing_projection->model.contains(pg_target)));
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->projection_bindings.size() == 1U);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->model.state() == pg_seed_before);
+
+        const auto pg_unsuppress = pg_reopened.execute(
+            application::SetFeatureSuppressedCommand{
+                pg_source_feature,
+                pg_reopened.document().revision(),
+                false});
+        CHECK(pg_unsuppress.ok());
+        const auto pg_recovered_body = part::evaluatePart(
+            pg_reopened.document(), pg_cold_kernel);
+        CHECK(pg_recovered_body.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto pg_recovered_projection =
+            part::evaluateEffectiveSketchProjection(
+                pg_reopened.document(),
+                *pg_sketch.sketch_id,
+                pg_recovered_body,
+                pg_cold_kernel);
+        CHECK(pg_recovered_projection);
+        CHECK(pg_recovered_projection->allResolved());
+        const auto* pg_recovered_line =
+            pg_recovered_projection->model.findLine(pg_target);
+        CHECK(pg_recovered_line);
+        CHECK(*pg_recovered_line == *pg_updated_line);
+        CHECK(pg_reopened.document()
+                  .findSketch(*pg_sketch.sketch_id)
+                  ->model.state() == pg_seed_before);
+        std::cout
+            << "PG01C_C3_SUPPRESSION_RECOVERY_PASS"
+            << " no_saved_seed_fallback=1"
+            << " same_source_id=1"
+            << " exact_reprojection=1\\n";
         std::cout
             << "PG01C_C3_UPSTREAM_RECOMPUTE_PASS"
             << " current_curve_changed=1"
