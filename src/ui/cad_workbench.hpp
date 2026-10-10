@@ -797,6 +797,19 @@ private:
         project_edge_face_sources_;
     std::vector<part::MaterialEdgeReference>
         project_edge_face_skipped_;
+    // Location/status is a transient exact geometric result for a
+    // specific native directed Face-wire member; not persisted.
+    struct ProjectBoundarySkippedMember final {
+        std::size_t wire_index{};
+        std::size_t edge_index{};
+        part::MaterialEdgeReference reference;
+        part::ProjectedSketchSourceStatus reason{
+            part::ProjectedSketchSourceStatus::unsupported_projection};
+
+        friend bool operator==(
+            const ProjectBoundarySkippedMember&,
+            const ProjectBoundarySkippedMember&) = default;
+    };
     // Each clicked bounded Face owns a transient, generation-bound
     // native wire/source ledger. It is NEVER persisted as CAD identity.
     struct ProjectBoundaryFaceDraft final {
@@ -804,6 +817,7 @@ private:
         part::SelectedFaceBoundaryAdmission membership;
         std::vector<part::MaterialEdgeReference> accepted;
         std::vector<part::MaterialEdgeReference> skipped;
+        std::vector<ProjectBoundarySkippedMember> skipped_detail;
     };
     std::vector<ProjectBoundaryFaceDraft>
         project_edge_boundary_faces_;
