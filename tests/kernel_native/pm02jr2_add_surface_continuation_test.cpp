@@ -3369,6 +3369,114 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
         reference_order.begin(), reference_order.end()));
     CHECK(certified_orders == 6U);
 
+    // E0 exact native wire enumeration independence. The OCCT
+    // provider does NOT promise which bounded Face wire is returned
+    // first, nor which directed Edge use begins a cyclic outer wire.
+    // Exhaust each independent cyclic rotation of the two REAL
+    // Face outer rings, both Face enumeration orders, and all 3!
+    // authenticated partition cancellation orders. An accidental
+    // dependency on a chosen first Edge or first Face is a STOP.
+    CHECK(twice_outer.size() == 2U);
+    CHECK(twice_outer[0].size() >= 2U);
+    CHECK(twice_outer[1].size() >= 2U);
+    std::size_t native_wire_variants = 0U;
+    std::size_t complete_order_checks = 0U;
+    for (std::size_t first_offset = 0U;
+         first_offset < twice_outer[0].size();
+         ++first_offset) {
+        for (std::size_t second_offset = 0U;
+             second_offset < twice_outer[1].size();
+             ++second_offset) {
+            E0Cycles rotated = twice_outer;
+            std::rotate(
+                rotated[0].begin(),
+                rotated[0].begin() + first_offset,
+                rotated[0].end());
+            std::rotate(
+                rotated[1].begin(),
+                rotated[1].begin() + second_offset,
+                rotated[1].end());
+            CHECK(directed_closed(rotated[0]));
+            CHECK(directed_closed(rotated[1]));
+            for (int swapped = 0; swapped != 2; ++swapped) {
+                if (swapped == 1) {
+                    std::swap(rotated[0], rotated[1]);
+                }
+                auto order = twice_partitions;
+                std::sort(order.begin(), order.end());
+                do {
+                    const auto candidate =
+                        cancel_in_order(rotated, order);
+                    CHECK(candidate.has_value());
+                    CHECK(canonical_signed_cycles(*candidate) ==
+                          expected_cycles);
+                    ++complete_order_checks;
+                } while (std::next_permutation(
+                    order.begin(), order.end()));
+                ++native_wire_variants;
+            }
+        }
+    }
+    CHECK(native_wire_variants ==
+          2U * twice_outer[0].size() * twice_outer[1].size());
+    CHECK(complete_order_checks ==
+          certified_orders * native_wire_variants);
+
+    // Native Vertex tokens matter independently of Edge orientation:
+    // a forged pair of endpoints is not a geometrically close fit.
+    // A missing outer Edge use must also refuse reconstruction.
+    auto false_vertex = twice_outer;
+    bool damaged_vertex = false;
+    for (auto& ring : false_vertex) {
+        for (auto& use : ring) {
+            if (use.edge.value == twice_partitions.front()) {
+                CHECK(use.start_vertex && use.end_vertex);
+                CHECK(use.start_vertex != use.end_vertex);
+                use.start_vertex = use.end_vertex;
+                damaged_vertex = true;
+                break;
+            }
+        }
+        if (damaged_vertex) break;
+    }
+    CHECK(damaged_vertex);
+    CHECK(!cancel_in_order(
+        false_vertex, twice_partitions).has_value());
+    auto dropped_outer_use = twice_outer;
+    bool dropped = false;
+    for (auto& ring : dropped_outer_use) {
+        const auto member = std::find_if(
+            ring.begin(), ring.end(),
+            [&twice_material](const auto& use) {
+                return twice_material.count(
+                    use.edge.value) != 0U;
+            });
+        if (member != ring.end()) {
+            ring.erase(member);
+            dropped = true;
+            break;
+        }
+    }
+    CHECK(dropped);
+    CHECK(!cancel_in_order(
+        dropped_outer_use, twice_partitions).has_value());
+
+    std::cout
+        << "PG01D_E0_NATIVE_WIRE_ENUMERATION_INVARIANCE_PASS"
+        << " native_face_wires=2"
+        << " independent_cyclic_starts="
+        << twice_outer[0].size() * twice_outer[1].size()
+        << " face_order_permutations=2"
+        << " partition_orders=6"
+        << " validated_enumeration_variants="
+        << native_wire_variants
+        << " total_exact_signed_checks="
+        << complete_order_checks
+        << " forged_vertex_endpoints_rejected=1"
+        << " missing_native_material_member_rejected=1"
+        << " xy_coordinate_matching=0"
+        << '\n';
+
     // Negative mutations of the genuine native ledger: input Edge
     // direction and exact Vertex closure are authority, and dropping
     // a partition is never permitted as a partial reconstruction.
