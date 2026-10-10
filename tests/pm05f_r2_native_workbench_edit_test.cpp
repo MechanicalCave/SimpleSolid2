@@ -1475,8 +1475,6 @@ void verifyPg01dMalformedBoundaryFailClosed(
               << " document_unchanged=1\\n";
 }
 
-} // namespace
-
 // Bounded independent native probe for the Owner's Add + Add + Chamfer
 // manual Face rejection. Reuse the already-sanitized two-Add test Part;
 // never copy the Owner's private v15 document or its authored identifiers.
@@ -1604,6 +1602,8 @@ void probePg01dChamferedAddFaceAdmission(
         << " private_document_committed=0"
         << '\n';
 }
+
+} // namespace
 
 int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
