@@ -9702,11 +9702,13 @@ void CadWorkbench::removeProjectFaceSelection() {
     project_edge_face_membership_.reset();
     project_edge_face_sources_.clear();
     project_edge_face_skipped_.clear();
-    static_cast<void>(
-        viewport_controller_->setProjectFaceSourceFeedback({}, {}));
-    project_edge_sources_ = project_edge_manual_sources_;
     viewport_controller_->clearBodyTopologyToolSelection();
-    refreshProjectEdgePreview();
+    if (!commitProjectBoundarySources()) {
+        clearProjectEdgeSelection();
+        setStatusText(QStringLiteral(
+            "PROJECT Face removal found stale source stage; draft cleared."));
+        return;
+    }
     syncProjectEdgeUi();
     notifyCadInputContextChanged();
     setStatusText(QStringLiteral(
@@ -9937,8 +9939,11 @@ void CadWorkbench::tryStageProjectBoundarySelection() {
                     part::ProjectedSketchSourceStatus::resolved) {
                 accepted.push_back(*member.material);
             } else if (status ==
-                       part::ProjectedSketchSourceStatus::
-                           unsupported_projection) {
+                           part::ProjectedSketchSourceStatus::
+                               unsupported_projection ||
+                       status ==
+                           part::ProjectedSketchSourceStatus::
+                               degenerate_projection) {
                 skipped.push_back(*member.material);
             } else {
                 setStatusText(QStringLiteral(
@@ -10038,6 +10043,28 @@ void CadWorkbench::tryStageProjectFaceSelection() {
     auto combined = project_edge_manual_sources_;
     combined.insert(
         combined.end(), accepted.begin(), accepted.end());
+    auto highlighted = accepted;
+    auto highlighted_skipped = skipped;
+    for (const auto& face : project_edge_boundary_faces_) {
+        combined.insert(
+            combined.end(), face.accepted.begin(), face.accepted.end());
+        highlighted.insert(
+            highlighted.end(), face.accepted.begin(),
+            face.accepted.end());
+        highlighted_skipped.insert(
+            highlighted_skipped.end(), face.skipped.begin(),
+            face.skipped.end());
+    }
+    std::sort(highlighted.begin(), highlighted.end());
+    highlighted.erase(
+        std::unique(highlighted.begin(), highlighted.end()),
+        highlighted.end());
+    std::sort(
+        highlighted_skipped.begin(), highlighted_skipped.end());
+    highlighted_skipped.erase(
+        std::unique(
+            highlighted_skipped.begin(), highlighted_skipped.end()),
+        highlighted_skipped.end());
     std::sort(combined.begin(), combined.end());
     combined.erase(
         std::unique(combined.begin(), combined.end()),
@@ -10052,7 +10079,7 @@ void CadWorkbench::tryStageProjectFaceSelection() {
     }
 
     if (!viewport_controller_->setProjectFaceSourceFeedback(
-            accepted, skipped)) {
+            highlighted, highlighted_skipped)) {
         refreshProjectEdgePreview();
         setStatusText(QStringLiteral(
             "PROJECT Face rejected: stale source overlay stage/generation; previous staging preserved."));
@@ -10347,8 +10374,11 @@ bool CadWorkbench::finishProjectEdgeTool() {
                         part::ProjectedSketchSourceStatus::resolved) {
                     accepted.push_back(*member.material);
                 } else if (status ==
-                           part::ProjectedSketchSourceStatus::
-                               unsupported_projection) {
+                               part::ProjectedSketchSourceStatus::
+                                   unsupported_projection ||
+                           status ==
+                               part::ProjectedSketchSourceStatus::
+                                   degenerate_projection) {
                     skipped.push_back(*member.material);
                 } else {
                     setStatusText(QStringLiteral(
