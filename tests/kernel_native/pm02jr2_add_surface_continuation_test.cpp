@@ -2570,6 +2570,28 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
         cut_input, joined.solid);
     CHECK(cut.ok());
     CHECK(cut.solid_count == 1U);
+    // Exact native semantic lineage for the actual CUT-created
+    // cylindrical side, not a geometry/radius-identity inference.
+    const auto* cut_cylinder =
+        newSide(cut, "cross-partition-hole");
+    std::cerr
+        << "PG01D_E0_NATIVE_CUT_SIDE_LINEAGE"
+        << " generated_role_found=" << (cut_cylinder != nullptr)
+        << " kind=" << (cut_cylinder
+            ? static_cast<int>(cut_cylinder->surface_kind) : -1)
+        << " surface_status=" << (cut_cylinder
+            ? static_cast<int>(cut_cylinder->surface_status) : -1)
+        << " unique_token=" << (cut_cylinder &&
+            cut_cylinder->resolved_token.has_value())
+        << " contribution_faces=" << (cut_cylinder
+            ? cut_cylinder->contribution_faces.size() : 0U)
+        << '\n';
+    CHECK(cut_cylinder);
+    CHECK(cut_cylinder->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+    CHECK(cut_cylinder->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(cut_cylinder->resolved_token);
     const auto* inherited = inheritedSurface(
         cut, *base_wall->resolved_token);
     CHECK(inherited);
@@ -2791,6 +2813,44 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
     CHECK(retained_tokens == material_edges);
     CHECK(circle_tokens.size() >= 2U);
     CHECK(circle_bearing_contours == 1U);
+    // A stage-scoped SEMANTIC witness for THIS bounded test:
+    // an opening created by an identified Cut cylindrical side has
+    // all its material boundary edges incident to that exact Cut
+    // Surface token; the external material boundary has none.
+    // Neither contour is classified by Edge shape, winding sign,
+    // coordinates, nesting heuristics or viewer tessellation.
+    std::size_t side_incident_contours = 0U;
+    std::size_t outside_contours = 0U;
+    for (const auto& contour : stitched) {
+        std::size_t touches_cut_side = 0U;
+        for (const auto& use : contour) {
+            const auto observation = std::find_if(
+                cut.current_edge_semantics.begin(),
+                cut.current_edge_semantics.end(),
+                [&use](const auto& item) {
+                    return item.runtime_token == use.edge;
+                });
+            CHECK(observation !=
+                  cut.current_edge_semantics.end());
+            const auto& adjacent = observation->adjacent_surfaces;
+            CHECK(std::find(
+                adjacent.begin(), adjacent.end(),
+                *base_wall->resolved_token) != adjacent.end());
+            const bool incident_to_new_cut_side =
+                std::find(
+                    adjacent.begin(), adjacent.end(),
+                    *cut_cylinder->resolved_token) != adjacent.end();
+            if (incident_to_new_cut_side) ++touches_cut_side;
+        }
+        if (touches_cut_side == contour.size()) {
+            ++side_incident_contours;
+        } else {
+            CHECK(touches_cut_side == 0U);
+            ++outside_contours;
+        }
+    }
+    CHECK(side_incident_contours == 1U);
+    CHECK(outside_contours == 1U);
     // OCCT can give native Circle-arc provenance for one contour,
     // but material Edge curve kind ALONE is not a general
     // certification of outer-vs-hole surface-side classification.
@@ -2808,7 +2868,12 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
         << retained_tokens.size()
         << " native_face_inner_wires=" << native_inner_wires
         << " circular_source_members=" << circle_tokens.size()
-        << " independent_surface_side_witness=0"
+        << " cut_side_exact_semantic_witness=1"
+        << " contour_all_cut_surface_edges="
+        << side_incident_contours
+        << " contour_zero_cut_surface_edges="
+        << outside_contours
+        << " general_outer_hole_witness=0"
         << " coordinate_joins=0"
         << '\n';
 }
