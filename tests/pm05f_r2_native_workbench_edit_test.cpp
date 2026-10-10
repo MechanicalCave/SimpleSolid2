@@ -1177,6 +1177,16 @@ public:
         return result;
     }
 
+    // Manual Face Boundary uses this separate bounded any-surface
+    // observation. For this deliberately planar fault fixture, return
+    // the SAME forged native wire answer as strict Planar Face; this
+    // never creates synthetic authorable Part references.
+    kernel::FaceBoundaryResult queryFaceBoundaryAnySurface(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedBoundaryFace& scoped) noexcept override {
+        return queryFaceBoundary(std::move(body), scoped);
+    }
+
 private:
     kernel_occt::OcctSolidModelingKernel& native_;
     Fault fault_;
@@ -1275,6 +1285,77 @@ void verifyPg01dMalformedBoundaryFailClosed(
     expect_failure(
         Fault::duplicated_material_edge,
         part::MaterialFaceBoundaryStatus::material_edge_unavailable);
+
+    // Later Owner D2: manual chosen-Face admission does not demand
+    // a persistent strict Face address, but EVERY bounded native
+    // occurrence remains integrity-checked. Invalid Face and wire
+    // evidence cannot be reinterpreted as geometric Unsupported.
+    const auto manual_control =
+        part::inspectSelectedFaceBoundary(
+            stage, *source_face, kernel);
+    CHECK(manual_control.ok());
+    CHECK(manual_control.bounded_face == *source_face);
+    CHECK(!part::inspectSelectedFaceBoundary(
+        stage, kernel::RuntimeFaceToken{}, kernel).ok());
+    CHECK(!part::inspectSelectedFaceBoundary(
+        missing_catalog, *source_face, kernel).ok());
+    const auto carrier_only_manual =
+        part::inspectSelectedFaceBoundary(
+            carrier_only, *source_face, kernel);
+    CHECK(carrier_only_manual.ok());
+    CHECK(carrier_only_manual.wires ==
+          manual_control.wires);
+    const auto expect_selected_failure = [&](
+        Fault fault, part::MaterialFaceBoundaryStatus expected) {
+        Pg01dFaultedBoundaryProvider provider{kernel, fault};
+        const auto rejected =
+            part::inspectSelectedFaceBoundary(
+                stage, *source_face, provider);
+        CHECK(!rejected.ok());
+        CHECK(rejected.status == expected);
+        CHECK(rejected.wires.empty());
+        CHECK(!rejected.bounded_face.valid());
+    };
+    expect_selected_failure(
+        Fault::bind_unavailable,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    expect_selected_failure(
+        Fault::query_failure,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    expect_selected_failure(
+        Fault::missing_outer,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    expect_selected_failure(
+        Fault::duplicate_outer,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    expect_selected_failure(
+        Fault::bogus_edge,
+        part::MaterialFaceBoundaryStatus::
+            material_edge_unavailable);
+    {
+        Pg01dFaultedBoundaryProvider provider{
+            kernel, Fault::duplicated_material_edge};
+        const auto rejected =
+            part::inspectSelectedFaceBoundary(
+                stage, *source_face, provider);
+        CHECK(!rejected.ok());
+        CHECK(rejected.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      native_boundary_unavailable ||
+              rejected.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      material_edge_unavailable);
+    }
+    std::cout
+        << "PG01D_MANUAL_FACE_MALFORMED_E0_PASS"
+        << " faults=6"
+        << " no_strict_face_address_required=1"
+        << " unknown_source_skippable=0"
+        << '\n';
 
     Pg01dFaultedBoundaryProvider passthrough{
         kernel, Fault::none};
