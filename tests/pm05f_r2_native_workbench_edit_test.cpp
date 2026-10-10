@@ -1111,6 +1111,7 @@ public:
         query_failure,
         missing_outer,
         duplicate_outer,
+        missing_signed_vertex,
         bogus_edge,
         duplicated_material_edge,
     };
@@ -1160,6 +1161,12 @@ public:
             }
             break;
         }
+        case Fault::missing_signed_vertex:
+            // A malformed native half-populated Vertex occurrence
+            // cannot certify any boundary; never classify as geometric
+            // curve Unsupported.
+            result.wires.front().edges.front().start_vertex.reset();
+            break;
         case Fault::bogus_edge:
             result.wires.front().edges.front().edge =
                 kernel::RuntimeEdgeToken{
@@ -1336,6 +1343,10 @@ void verifyPg01dMalformedBoundaryFailClosed(
         Fault::bogus_edge,
         part::MaterialFaceBoundaryStatus::
             material_edge_unavailable);
+    expect_selected_failure(
+        Fault::missing_signed_vertex,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
     {
         Pg01dFaultedBoundaryProvider provider{
             kernel, Fault::duplicated_material_edge};
@@ -1352,7 +1363,7 @@ void verifyPg01dMalformedBoundaryFailClosed(
     }
     std::cout
         << "PG01D_MANUAL_FACE_MALFORMED_E0_PASS"
-        << " faults=6"
+        << " faults=7"
         << " no_strict_face_address_required=1"
         << " unknown_source_skippable=0"
         << '\n';
