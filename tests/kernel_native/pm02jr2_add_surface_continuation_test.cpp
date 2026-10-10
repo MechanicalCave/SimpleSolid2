@@ -523,6 +523,9 @@ void verifyPartIntegration() {
                 << " private_document_committed=0"
                 << '\n';
             split_chamfer_probed = true;
+            // INTENTIONAL DIAGNOSTIC RED: preserve per-Face native
+            // classification in CTest output, then REMOVE this guard.
+            CHECK(false && "PG01D_SPLIT_CHAMFER_DIAGNOSTIC_ONLY_RED");
             break;
         }
         CHECK(split_chamfer_probed);
