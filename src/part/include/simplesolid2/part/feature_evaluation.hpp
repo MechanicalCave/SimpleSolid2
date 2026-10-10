@@ -309,6 +309,14 @@ authorMaterialEdgeReference(
     const BodyStageTopologyCatalog& catalog,
     kernel::RuntimeEdgeToken edge);
 
+// PG-01D-only authoring fallback for a multi-realization Curve with exactly
+// one uniquely certified semantic endpoint; Fillet/Chamfer continue to use
+// authorMaterialEdgeReference without this extension.
+[[nodiscard]] MaterialEdgeAuthoringResult
+authorProjectedMaterialEdgeReference(
+    const BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeEdgeToken edge);
+
 struct FeatureContribution final {
     // Set-valued current contribution query. These runtime tokens identify
     // current Body realizations only; no member is persisted.

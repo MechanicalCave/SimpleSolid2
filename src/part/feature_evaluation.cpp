@@ -3935,6 +3935,90 @@ resolveMaterialEdgeReference(
             curve->current_edges};
     }
 
+    const auto* single =
+        std::get_if<AtSingleSemanticPoint>(
+            &reference.branch);
+    if (single != nullptr) {
+        // A one-Point branch can never alias a singular Curve. Require
+        // a complete current multi-piece family and exactly one certified
+        // current endpoint on each admissible bounded material Edge.
+        if (curve->current_edges.size() < 2U) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::unsupported, {}};
+        }
+        const auto* point =
+            findPointResolution(catalog, single->point);
+        if (point == nullptr ||
+            point->status == kernel::ReferenceStatus::missing) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::missing, {}};
+        }
+        if (point->status == kernel::ReferenceStatus::unsupported) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::unsupported, {}};
+        }
+        if (point->status != kernel::ReferenceStatus::resolved ||
+            point->current_vertices.size() != 1U) {
+            return MaterialEdgeResolution{
+                kernel::ReferenceStatus::ambiguous, {}};
+        }
+        std::vector<kernel::RuntimeEdgeToken> candidates;
+        for (const auto edge : curve->current_edges) {
+            const auto* record = findEdgeRecord(catalog, edge);
+            if (record == nullptr) return std::nullopt;
+            if (record->accounting_class !=
+                    TopologyAccountingClass::referenceable ||
+                record->periodic_seam ||
+                record->representation_partition ||
+                record->curve_candidates.size() != 1U ||
+                record->curve_candidates.front() != reference.curve) {
+                continue;
+            }
+            std::size_t vertex_count = 0U;
+            std::size_t certified_count = 0U;
+            bool carries_point = false;
+            for (const auto& vertex : catalog.vertices) {
+                if (std::find(
+                        vertex.incident_material_edges.begin(),
+                        vertex.incident_material_edges.end(), edge) ==
+                    vertex.incident_material_edges.end()) {
+                    continue;
+                }
+                ++vertex_count;
+                if (vertex.accounting_class !=
+                        TopologyAccountingClass::referenceable ||
+                    vertex.referenceability !=
+                        kernel::ReferenceStatus::resolved ||
+                    vertex.point_candidates.size() != 1U) {
+                    continue;
+                }
+                const auto& address = vertex.point_candidates.front();
+                const auto* certified =
+                    findPointResolution(catalog, address);
+                if (certified == nullptr ||
+                    certified->status != kernel::ReferenceStatus::resolved ||
+                    certified->current_vertices.size() != 1U ||
+                    certified->current_vertices.front() !=
+                        vertex.runtime_token) {
+                    continue;
+                }
+                ++certified_count;
+                if (address == single->point &&
+                    vertex.runtime_token ==
+                        point->current_vertices.front()) {
+                    carries_point = true;
+                }
+            }
+            if (vertex_count == 2U &&
+                certified_count == 1U && carries_point) {
+                appendUniqueRuntimeToken(candidates, edge);
+            }
+        }
+        return MaterialEdgeResolution{
+            statusForCandidateCount(candidates.size()),
+            std::move(candidates)};
+    }
+
     const auto* endpoints =
         std::get_if<BetweenSemanticPoints>(
             &reference.branch);
@@ -4170,6 +4254,70 @@ authorMaterialEdgeReference(
     return result;
 }
 
+MaterialEdgeAuthoringResult
+authorProjectedMaterialEdgeReference(
+    const BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeEdgeToken edge) {
+    auto legacy = authorMaterialEdgeReference(catalog, edge);
+    if (legacy.ok()) return legacy;
+    if (!edge.valid() || !catalog.complete() ||
+        catalog.stage.kind != BodyStageKind::after_feature) {
+        return {};
+    }
+    const auto* record = findEdgeRecord(catalog, edge);
+    if (record == nullptr ||
+        record->accounting_class != TopologyAccountingClass::referenceable ||
+        record->periodic_seam || record->representation_partition ||
+        record->curve_candidates.size() != 1U) {
+        return {};
+    }
+    const auto& curve_address = record->curve_candidates.front();
+    const auto* curve = findCurveResolution(catalog, curve_address);
+    if (curve == nullptr || curve->current_edges.size() < 2U ||
+        std::find(curve->current_edges.begin(),
+                  curve->current_edges.end(), edge) ==
+            curve->current_edges.end()) {
+        return {};
+    }
+    std::size_t vertex_count = 0U;
+    std::vector<FeaturePointAddress> certified_points;
+    for (const auto& vertex : catalog.vertices) {
+        if (std::find(vertex.incident_material_edges.begin(),
+                      vertex.incident_material_edges.end(), edge) ==
+            vertex.incident_material_edges.end()) {
+            continue;
+        }
+        ++vertex_count;
+        if (vertex.accounting_class !=
+                TopologyAccountingClass::referenceable ||
+            vertex.referenceability != kernel::ReferenceStatus::resolved ||
+            vertex.point_candidates.size() != 1U) {
+            continue;
+        }
+        const auto& address = vertex.point_candidates.front();
+        const auto* point = findPointResolution(catalog, address);
+        if (point != nullptr &&
+            point->status == kernel::ReferenceStatus::resolved &&
+            point->current_vertices.size() == 1U &&
+            point->current_vertices.front() == vertex.runtime_token) {
+            certified_points.push_back(address);
+        }
+    }
+    if (vertex_count != 2U || certified_points.size() != 1U) {
+        return {};
+    }
+    MaterialEdgeReference authored{
+        catalog.stage, curve_address,
+        AtSingleSemanticPoint{certified_points.front()}};
+    const auto resolution =
+        resolveMaterialEdgeReference(authored, catalog);
+    if (!resolution || !resolution->resolved() ||
+        resolution->current_edges.front() != edge) {
+        return {};
+    }
+    return {kernel::ReferenceStatus::resolved, std::move(authored)};
+}
+
 MaterialFaceBoundaryAdmission
 inspectMaterialFaceBoundary(
     const FeatureEvaluation& current_stage,
@@ -4241,7 +4389,7 @@ inspectMaterialFaceBoundary(
         mapped.edges.reserve(wire.edges.size());
         for (const auto& use : wire.edges) {
             const auto authored =
-                authorMaterialEdgeReference(
+                authorProjectedMaterialEdgeReference(
                     catalog, use.edge);
             if (!authored.ok() ||
                 !authored.reference ||
@@ -4433,7 +4581,7 @@ SelectedFaceBoundaryAdmission inspectSelectedFaceBoundary(
                 member.excluded_nonmaterial = true;
             } else {
                 const auto authored =
-                    authorMaterialEdgeReference(
+                    authorProjectedMaterialEdgeReference(
                         catalog, use.edge);
                 if (!authored.ok() ||
                     !authored.reference ||
