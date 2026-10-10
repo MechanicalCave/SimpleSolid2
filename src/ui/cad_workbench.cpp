@@ -10700,9 +10700,11 @@ void CadWorkbench::syncProjectEdgeUi() {
         }
         if (!project_edge_boundary_faces_.empty()) {
             QStringList notes;
-            for (std::size_t i = 0U;
-                 i < project_edge_boundary_faces_.size(); ++i) {
-                const auto& face = project_edge_boundary_faces_[i];
+            for (std::size_t face_index = 0U;
+                 face_index < project_edge_boundary_faces_.size();
+                 ++face_index) {
+                const auto& face =
+                    project_edge_boundary_faces_[face_index];
                 std::size_t excluded = 0U;
                 for (const auto& wire : face.membership.wires) {
                     for (const auto& member : wire.edges) {
@@ -10711,13 +10713,54 @@ void CadWorkbench::syncProjectEdgeUi() {
                 }
                 notes.push_back(
                     QStringLiteral(
-                        "Face %1: %2 supported, %3 SKIPPED geometric Unsupported, %4 native seam/partition excluded")
-                        .arg(static_cast<qulonglong>(i + 1U))
+                        "Face %1: %2 supported, %3 geometrically skipped, %4 native seam/partition excluded")
+                        .arg(static_cast<qulonglong>(face_index + 1U))
                         .arg(static_cast<qulonglong>(
                             face.accepted.size()))
                         .arg(static_cast<qulonglong>(
                             face.skipped.size()))
                         .arg(static_cast<qulonglong>(excluded)));
+                // Every geometric skip has one exact, generation-bound
+                // source Face/wire/member location and a typed reason.
+                // No Face or wire identity is authored in Part v15.
+                for (const auto& skip : face.skipped_detail) {
+                    const auto& wire =
+                        face.membership.wires[skip.wire_index];
+                    std::size_t hole_number = 0U;
+                    for (std::size_t j = 0U;
+                         j <= skip.wire_index; ++j) {
+                        if (!face.membership.wires[j].outer) {
+                            ++hole_number;
+                        }
+                    }
+                    const QString location = wire.outer
+                        ? QStringLiteral("Outer Edge %1")
+                              .arg(static_cast<qulonglong>(
+                                  skip.edge_index + 1U))
+                        : QStringLiteral("Hole %1 Edge %2")
+                              .arg(static_cast<qulonglong>(
+                                  hole_number))
+                              .arg(static_cast<qulonglong>(
+                                  skip.edge_index + 1U));
+                    const QString reason =
+                        skip.reason ==
+                            part::ProjectedSketchSourceStatus::
+                                degenerate_projection
+                        ? QStringLiteral(
+                            "SKIPPED — geometric Degenerate")
+                        : QStringLiteral(
+                            "SKIPPED — geometric Unsupported");
+                    notes.push_back(
+                        QStringLiteral(
+                            "Face %1 %2: %3 (Feature %4)")
+                            .arg(static_cast<qulonglong>(
+                                face_index + 1U))
+                            .arg(location)
+                            .arg(reason)
+                            .arg(fromUtf8(
+                                skip.reference.curve
+                                    .producer_feature_id.serialized())));
+                }
             }
             result_message += QStringLiteral("\n");
             result_message += notes.join(QStringLiteral("\n"));
