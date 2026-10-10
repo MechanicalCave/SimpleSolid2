@@ -421,6 +421,71 @@ inspectMaterialFaceBoundary(
     kernel::RuntimeFaceToken picked_bounded_face,
     kernel::IFaceBoundaryQuery& provider);
 
+// PG-01D Owner manual multi-Face extension: a clicked native Face is
+// scoped only to the current Body generation. Unlike Planar Face above,
+// it does not require a singular authored Face address, and a known
+// representation seam/partition may occur inside its native wires.
+// Exact *material Edge* references remain the only authorable output.
+// Full native wire uses (including excluded artifacts) are retained for
+// lossless same-revision Finish revalidation, never persisted.
+struct SelectedFaceBoundaryMember final {
+    kernel::FaceBoundaryEdgeUse native_use;
+    std::optional<MaterialEdgeReference> material;
+    bool excluded_nonmaterial{false};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return native_use.valid() &&
+            (material.has_value() != excluded_nonmaterial) &&
+            (!material || material->valid());
+    }
+
+    friend bool operator==(
+        const SelectedFaceBoundaryMember&,
+        const SelectedFaceBoundaryMember&) = default;
+};
+
+struct SelectedFaceBoundaryWire final {
+    bool outer{false};
+    std::vector<SelectedFaceBoundaryMember> edges;
+
+    friend bool operator==(
+        const SelectedFaceBoundaryWire&,
+        const SelectedFaceBoundaryWire&) = default;
+};
+
+struct SelectedFaceBoundaryAdmission final {
+    MaterialFaceBoundaryStatus status{
+        MaterialFaceBoundaryStatus::invalid_stage};
+    kernel::RuntimeFaceToken bounded_face;
+    std::vector<SelectedFaceBoundaryWire> wires;
+
+    [[nodiscard]] bool ok() const noexcept {
+        if (status != MaterialFaceBoundaryStatus::resolved ||
+            !bounded_face.valid() || wires.empty()) {
+            return false;
+        }
+        std::size_t outer_count = 0U;
+        for (const auto& wire : wires) {
+            if (wire.outer) ++outer_count;
+            if (wire.edges.empty()) return false;
+            for (const auto& item : wire.edges) {
+                if (!item.valid()) return false;
+            }
+        }
+        return outer_count == 1U;
+    }
+
+    friend bool operator==(
+        const SelectedFaceBoundaryAdmission&,
+        const SelectedFaceBoundaryAdmission&) = default;
+};
+
+[[nodiscard]] SelectedFaceBoundaryAdmission
+inspectSelectedFaceBoundary(
+    const FeatureEvaluation& current_stage,
+    kernel::RuntimeFaceToken picked_bounded_face,
+    kernel::IFaceBoundaryQuery& provider);
+
 struct PartEvaluation final {
     core::DocumentRevision source_revision;
     BodyEvaluationStatus body_status{
