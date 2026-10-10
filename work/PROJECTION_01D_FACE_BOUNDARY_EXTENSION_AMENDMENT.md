@@ -230,6 +230,38 @@ The original Owner practical Face Boundary FAIL, final FULL on exact
 release HEAD, and explicit Owner PG-01D FINAL PASS remain OPEN.
 
 
+
+## 0.5 D2-B next evidence: twelve drastic upstream edits, provenance boundary (2026-10-10)
+
+**Research only, no product identity/schema approval.** On the same
+independent native Add + Add + Chamfer fixture, six markedly different
+Add extents were each tested forward and reversed on an isolated Part
+clone. The source Chamfer stage and its semantic Curve/Point references
+were unchanged; all twelve edits committed. **6 reversed** variants
+made dependent final Body unavailable and the strict stage-scoped
+research selector refused rather than using a prefix. **6 forward**
+variants retained exactly one certified stage-local material Edge
+candidate; no ambiguous current selection appeared. Windows diagnostic
+[RED-for-output #38078985460](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38078985460)
+confirmed 6/6; the forced RED assertion was removed for the final
+GREEN test.
+
+**Important:** exactly one current candidate is not a certificate
+that the *same bounded fragment* survived an upstream edit. Persisted
+semantics could be `Curve + Point` associativity (geometry may deform
+as long as semantic anchors remain unique) or stronger bounded segment
+provenance with failure if per-fragment lineage is unavailable.
+They are different intended products. No runtime OCCT token,
+coordinates, wire ordinal or diagnostic prefix may bridge independent
+revisions. Owner must explicitly decide the associativity semantics
+before a production branch/v16 contract, alongside the previously
+documented canonical source equality and migration policy.
+Details: `work/PROJECTION_01D_ONE_POINT_CURVE_REFERENCE_D2_CONTRACT_DRAFT.md`.
+
+The existing manual Face Boundary Owner FAIL, Draft status and
+exact-HEAD Windows FULL plus practical FINAL PASS remain unchanged.
+
+
 ## 1. Frozen product intent
 
 One `PROJECT` tool with three **source-acquisition modes**, all delegating the resulting unique, exact material Edges to the existing `CreateProjectedSketchEdgesCommand`:
