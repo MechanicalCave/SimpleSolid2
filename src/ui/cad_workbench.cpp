@@ -9932,9 +9932,92 @@ void CadWorkbench::tryStageProjectBoundarySelection() {
         case part::MaterialFaceBoundaryStatus::native_boundary_unavailable:
             reason = QStringLiteral("native wire/provider integrity");
             break;
-        case part::MaterialFaceBoundaryStatus::material_edge_unavailable:
+        case part::MaterialFaceBoundaryStatus::material_edge_unavailable: {
             reason = QStringLiteral("ambiguous/missing material Edge identity");
+            if (admission.rejected_edge) {
+                const auto& detail = *admission.rejected_edge;
+                QString cause;
+                switch (detail.kind) {
+                case part::SelectedFaceBoundaryRejectKind::
+                        missing_catalog_edge:
+                    cause = QStringLiteral("not in current catalog");
+                    break;
+                case part::SelectedFaceBoundaryRejectKind::
+                        uncertified_material_edge:
+                    cause = QStringLiteral("strict reference not authorable");
+                    break;
+                case part::SelectedFaceBoundaryRejectKind::
+                        repeated_material_edge:
+                    cause = QStringLiteral("repeated material wire use");
+                    break;
+                case part::SelectedFaceBoundaryRejectKind::
+                        invalid_member:
+                    cause = QStringLiteral("invalid native member");
+                    break;
+                }
+                QString accounting = QStringLiteral("absent");
+                if (detail.accounting_class) {
+                    switch (*detail.accounting_class) {
+                    case part::TopologyAccountingClass::referenceable:
+                        accounting = QStringLiteral("referenceable");
+                        break;
+                    case part::TopologyAccountingClass::
+                            known_representation_artifact:
+                        accounting = QStringLiteral("representation_artifact");
+                        break;
+                    case part::TopologyAccountingClass::
+                            semantically_unsupported:
+                        accounting = QStringLiteral("semantically_unsupported");
+                        break;
+                    case part::TopologyAccountingClass::integrity_failure:
+                        accounting = QStringLiteral("integrity_failure");
+                        break;
+                    }
+                }
+                QString reference = QStringLiteral("absent");
+                if (detail.referenceability) {
+                    switch (*detail.referenceability) {
+                    case kernel::ReferenceStatus::resolved:
+                        reference = QStringLiteral("resolved");
+                        break;
+                    case kernel::ReferenceStatus::ambiguous:
+                        reference = QStringLiteral("ambiguous");
+                        break;
+                    case kernel::ReferenceStatus::missing:
+                        reference = QStringLiteral("missing");
+                        break;
+                    case kernel::ReferenceStatus::unsupported:
+                        reference = QStringLiteral("unsupported");
+                        break;
+                    }
+                }
+                QString curve = QStringLiteral("other");
+                switch (detail.curve_kind) {
+                case kernel::CurveKind::line:
+                    curve = QStringLiteral("line");
+                    break;
+                case kernel::CurveKind::circle:
+                    curve = QStringLiteral("circle");
+                    break;
+                case kernel::CurveKind::other:
+                    break;
+                }
+                reason += QStringLiteral(
+                    " [Edge token %1, wire %2/member %3, cause=%4, accounting=%5, reference=%6, curve=%7, candidates=%8, seam=%9, partition=%10]")
+                    .arg(static_cast<qulonglong>(detail.edge.value))
+                    .arg(static_cast<qulonglong>(detail.wire_index))
+                    .arg(static_cast<qulonglong>(detail.edge_index))
+                    .arg(cause)
+                    .arg(accounting)
+                    .arg(reference)
+                    .arg(curve)
+                    .arg(static_cast<qulonglong>(
+                        detail.curve_candidate_count))
+                    .arg(detail.periodic_seam ? 1 : 0)
+                    .arg(detail.representation_partition ? 1 : 0);
+            }
             break;
+        }
         case part::MaterialFaceBoundaryStatus::resolved:
             reason = QStringLiteral("inconsistent admission");
             break;
