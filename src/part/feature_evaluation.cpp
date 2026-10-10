@@ -4277,6 +4277,125 @@ inspectMaterialFaceBoundary(
     return result;
 }
 
+SelectedFaceBoundaryAdmission inspectSelectedFaceBoundary(
+    const FeatureEvaluation& current_stage,
+    kernel::RuntimeFaceToken picked_bounded_face,
+    kernel::IFaceBoundaryQuery& provider) {
+    using Status = MaterialFaceBoundaryStatus;
+    const auto fail = [](Status status) {
+        SelectedFaceBoundaryAdmission result;
+        result.status = status;
+        return result;
+    };
+    if (current_stage.status !=
+            FeatureEvaluationStatus::up_to_date ||
+        !current_stage.feature_id.valid() ||
+        !current_stage.result_solid ||
+        !current_stage.result_topology ||
+        !current_stage.result_topology->complete() ||
+        current_stage.result_topology->stage.kind !=
+            BodyStageKind::after_feature ||
+        current_stage.result_topology->stage.feature_id !=
+            current_stage.feature_id) {
+        return fail(Status::invalid_stage);
+    }
+    if (!picked_bounded_face.valid()) {
+        return fail(Status::face_unavailable);
+    }
+    const auto& catalog = *current_stage.result_topology;
+    const auto face = std::find_if(
+        catalog.faces.begin(), catalog.faces.end(),
+        [picked_bounded_face](const auto& record) {
+            return record.runtime_token == picked_bounded_face;
+        });
+    if (face == catalog.faces.end()) {
+        return fail(Status::face_unavailable);
+    }
+    // A unique *current bounded Face* is a transient selection, even
+    // when a semantic Surface has multiple current Face realizations.
+    // Never invent a strict Face semantic address for this new mode.
+    if (face->accounting_class ==
+            TopologyAccountingClass::integrity_failure ||
+        face->accounting_class ==
+            TopologyAccountingClass::known_representation_artifact) {
+        return fail(Status::face_not_strict);
+    }
+    const auto scoped = provider.bindFaceToBody(
+        current_stage.result_solid, picked_bounded_face);
+    if (!scoped || !scoped->valid()) {
+        return fail(Status::native_boundary_unavailable);
+    }
+    const auto native = provider.queryFaceBoundaryAnySurface(
+        current_stage.result_solid, *scoped);
+    if (!native.ok()) {
+        return fail(Status::native_boundary_unavailable);
+    }
+    SelectedFaceBoundaryAdmission result;
+    result.status = Status::resolved;
+    result.bounded_face = picked_bounded_face;
+    std::vector<kernel::RuntimeEdgeToken> seen_material;
+    result.wires.reserve(native.wires.size());
+    for (const auto& wire : native.wires) {
+        SelectedFaceBoundaryWire mapped;
+        mapped.outer = wire.outer;
+        mapped.edges.reserve(wire.edges.size());
+        for (const auto& use : wire.edges) {
+            // E0/E1 signed native proof: a missing Vertex endpoint is
+            // not evidence for exact wire continuity or accounting.
+            if (!use.start_vertex || !use.end_vertex) {
+                return fail(Status::native_boundary_unavailable);
+            }
+            const auto found = std::find_if(
+                catalog.edges.begin(), catalog.edges.end(),
+                [&use](const auto& item) {
+                    return item.runtime_token == use.edge;
+                });
+            if (found == catalog.edges.end()) {
+                return fail(Status::material_edge_unavailable);
+            }
+            SelectedFaceBoundaryMember member;
+            member.native_use = use;
+            if (found->accounting_class ==
+                    TopologyAccountingClass::
+                        known_representation_artifact &&
+                (found->periodic_seam ||
+                 found->representation_partition)) {
+                // A known native seam can legitimately appear TWICE
+                // within one Face wire. Keep both occurrences in the
+                // transient ledger; never author either as material.
+                member.excluded_nonmaterial = true;
+            } else {
+                const auto authored =
+                    authorMaterialEdgeReference(
+                        catalog, use.edge);
+                if (!authored.ok() ||
+                    !authored.reference ||
+                    authored.reference->stage !=
+                        catalog.stage ||
+                    std::find(
+                        seen_material.begin(),
+                        seen_material.end(),
+                        use.edge) != seen_material.end()) {
+                    // Unknown/non-unique Edge semantic identity is NOT
+                    // an unsupported geometric projection. Fail closed.
+                    return fail(Status::material_edge_unavailable);
+                }
+                seen_material.push_back(use.edge);
+                member.material = *authored.reference;
+            }
+            if (!member.valid()) {
+                return fail(Status::material_edge_unavailable);
+            }
+            mapped.edges.push_back(std::move(member));
+        }
+        result.wires.push_back(std::move(mapped));
+    }
+    if (!result.ok()) {
+        return fail(Status::native_boundary_unavailable);
+    }
+    return result;
+}
+
 namespace {
 
 [[nodiscard]] EdgeFeatureKernelInputResult
