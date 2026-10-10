@@ -498,6 +498,13 @@ public:
     inspectCurrentMaterialFaceBoundary(
         const BodyTopologySelectionAddress& source) const;
 
+    // PG-01D manual Face Boundary: the exact picked bounded Face is
+    // transient. Do not infer adjacent Faces or require a strict durable
+    // Face address. Each returned material member is strict independently.
+    [[nodiscard]] part::SelectedFaceBoundaryAdmission
+    inspectCurrentSelectedFaceBoundary(
+        const BodyTopologySelectionAddress& source) const;
+
     // Classify each strict Edge's current geometric projection separately
     // so only geometric Unsupported may be skipped from a Face batch.
     [[nodiscard]] part::ProjectedSketchSourceStatus
