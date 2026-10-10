@@ -662,6 +662,11 @@ void verifyPartIntegration() {
         std::size_t native_multipiece_curve_point_probes = 0U;
         std::size_t native_onepoint_resolved = 0U;
         std::size_t native_onepoint_ambiguous = 0U;
+        std::size_t native_curvepoint_two_point_aliases = 0U;
+        bool tested_predecessor_suppression = false;
+        bool predecessor_suppression_committed = false;
+        bool predecessor_suppression_undo_restored = false;
+        std::size_t predecessor_suppression_rejections = 0U;
         for (const auto& candidate : topology.edges) {
             const auto source =
                 part::authorMaterialEdgeReference(
@@ -715,6 +720,22 @@ void verifyPartIntegration() {
                                 ledger, family.address, point.address);
                         if (candidates.size() == 1U) {
                             ++native_onepoint_resolved;
+                            const auto authored_old =
+                                part::authorMaterialEdgeReference(
+                                    ledger, candidates.front());
+                            if (authored_old.ok() &&
+                                authored_old.reference &&
+                                std::holds_alternative<
+                                    part::BetweenSemanticPoints>(
+                                    authored_old.reference->branch)) {
+                                // The future one-Point candidate would
+                                // identify exactly this native Edge, while
+                                // an existing v15 two-Point reference is
+                                // also authorable. This is a concrete
+                                // cross-branch alias risk in the actual
+                                // OCCT stage; NOT an approved resolver.
+                                ++native_curvepoint_two_point_aliases;
+                            }
                         } else if (candidates.size() > 1U) {
                             ++native_onepoint_ambiguous;
                             std::cout
@@ -1157,6 +1178,78 @@ void verifyPartIntegration() {
                                     CHECK(after_redo_choices.size() == 1U);
                                     tested_undo_redo = true;
                                 }
+                                if (!tested_predecessor_suppression) {
+                                    auto suppressed = part::PartDocument::restore(
+                                        core::DocumentId::generate(),
+                                        trial.document().state());
+                                    CHECK(suppressed.ok());
+                                    application::DocumentSession suppress_session{
+                                        {}, std::move(*suppressed.document)};
+                                    const auto before_suppression =
+                                        suppress_session.document().state();
+                                    const auto suppress =
+                                        suppress_session.execute(
+                                            application::SetFeatureSuppressedCommand{
+                                                *boss.feature_id,
+                                                suppress_session.document()
+                                                    .revision(),
+                                                true});
+                                    if (suppress.ok()) {
+                                        predecessor_suppression_committed = true;
+                                        kernel_occt::OcctSolidModelingKernel
+                                            suppress_provider;
+                                        const auto suppressed_result =
+                                            part::evaluatePart(
+                                                suppress_session.document(),
+                                                suppress_provider);
+                                        if (suppressed_result.body_status ==
+                                                part::BodyEvaluationStatus::
+                                                    up_to_date &&
+                                            suppressed_result.current_topology &&
+                                            suppressed_result.current_topology
+                                                ->complete() &&
+                                            suppressed_result.current_topology
+                                                ->stage == ledger.stage) {
+                                            const auto occurrences =
+                                                pg01dCurveEdgesIncidentToSemanticPoint(
+                                                    *suppressed_result.current_topology,
+                                                    curve_address,
+                                                    *certified_point_address);
+                                            // Never resolve >1 and choose
+                                            // first, nor use prior-stage
+                                            // cached runtime token.
+                                            CHECK(occurrences.size() <= 1U);
+                                        }
+                                        const auto rollback =
+                                            suppress_session.undo();
+                                        CHECK(rollback.ok());
+                                        kernel_occt::OcctSolidModelingKernel
+                                            unsuppressed_provider;
+                                        const auto restored_eval =
+                                            part::evaluatePart(
+                                                suppress_session.document(),
+                                                unsuppressed_provider);
+                                        CHECK(restored_eval.body_status ==
+                                            part::BodyEvaluationStatus::
+                                                up_to_date);
+                                        CHECK(restored_eval.current_topology &&
+                                              restored_eval.current_topology
+                                                  ->complete());
+                                        const auto restored_candidates =
+                                            pg01dCurveEdgesIncidentToSemanticPoint(
+                                                *restored_eval.current_topology,
+                                                curve_address,
+                                                *certified_point_address);
+                                        CHECK(restored_candidates.size() == 1U);
+                                        predecessor_suppression_undo_restored =
+                                            true;
+                                    } else {
+                                        CHECK(suppress_session.document().state() ==
+                                              before_suppression);
+                                        ++predecessor_suppression_rejections;
+                                    }
+                                    tested_predecessor_suppression = true;
+                                }
                                 if (!tested_upstream_edit) {
                                     // Edit the immediately previous Add
                                     // feature, without editing the Chamfer,
@@ -1346,6 +1439,14 @@ void verifyPartIntegration() {
             << native_onepoint_resolved
             << " native_onepoint_ambiguous="
             << native_onepoint_ambiguous
+            << " old_twopoint_alias_candidates="
+            << native_curvepoint_two_point_aliases
+            << " predecessor_suppression_committed="
+            << predecessor_suppression_committed
+            << " predecessor_suppression_rejected="
+            << predecessor_suppression_rejections
+            << " predecessor_suppression_undo_restored="
+            << predecessor_suppression_undo_restored
             << " private_part_committed=0"
             << '\n';
         // Research witness on the accepted immutable Point rule:
@@ -1385,6 +1486,14 @@ void verifyPartIntegration() {
         // the candidate selector to return the entire ambiguous set.
         CHECK(native_onepoint_resolved > 0U);
         CHECK(native_onepoint_ambiguous == 0U);
+        CHECK(tested_predecessor_suppression);
+        CHECK(predecessor_suppression_committed ||
+              predecessor_suppression_rejections > 0U);
+        CHECK(!predecessor_suppression_committed ||
+              predecessor_suppression_undo_restored);
+        // Diagnostic RED solely to publish bounded lineage/alias counts;
+        // never retain this deliberately failing assertion.
+        CHECK(false && "PG01D_D2_SOURCE_SUPPRESSION_ALIAS_AUDIT_ONLY");
     }
 
     const auto contribution =
