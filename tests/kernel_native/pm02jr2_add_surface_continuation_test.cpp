@@ -1851,8 +1851,8 @@ void verifyPartIntegration() {
                 broken_hole[0].start_vertex,
                 broken_hole[0].end_vertex);
             CHECK(!native_directed_closed(broken_hole));
-            CHECK(!kernel::FaceBoundaryWire{
-                false, broken_hole}.valid());
+            CHECK(!(kernel::FaceBoundaryWire{
+                false, broken_hole}).valid());
         }
     }
 
