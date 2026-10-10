@@ -1609,7 +1609,7 @@ void verifyPartIntegration() {
         << " incorrect_single_use_reversal_rejected=1"
         << " exact_start_end_occt_vertex_tokens=1"
         << " xyz_tolerance_joins=0"
-        << '\\n';
+        << '\n';
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_ORDERED_OUTER_TWO_HOLES_PASS"
         << " native_outer_fragments="
