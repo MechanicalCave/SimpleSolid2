@@ -474,6 +474,12 @@ struct SelectedFaceBoundaryRejectDetail final {
     std::size_t curve_candidate_count{};
     bool periodic_seam{false};
     bool representation_partition{false};
+    // Diagnostic-only, current catalog; no native token or identifier is
+    // persisted. Multi-realization Curve families need two certified
+    // Semantic Points to author a specific bounded material Edge.
+    std::size_t curve_family_realizations{};
+    std::size_t incident_vertices{};
+    std::size_t certified_semantic_endpoints{};
 
     friend bool operator==(
         const SelectedFaceBoundaryRejectDetail&,
