@@ -5,6 +5,12 @@ On 2026-10-10 the Owner explicitly approved **semantic associativity option A** 
 
 **STATUS UPDATE — OWNER D2-V16 APPROVED 2026-10-10, WITH NO EXISTING-FILE MIGRATION.** Owner's statement in the active conversation: `Zatwierdzam - migracja plików na tym etapie produkcji nie jest konieczna.` The third persisted branch and schema v16 are now authorized **only** within the added D2-V16 section of `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT.md`, with accepted semantic associativity A and projection-only authoring. Do not build any bulk migrator, conversion job, or retroactive rewrite. Keep historical v1-v15 reads unchanged, reject new kinds under old version numbers, and permit new format on explicit Save. Existing textual labels `proposed` below preserve the proposal history; where conflicting, this status and the Work Contract's later amendment govern. **No Owner FINAL PASS or merge authorization.**
 
+## D2-V16 production candidate checkpoint — 2026-10-10 (NOT accepted)
+
+Implemented on the active PG-01D feature branch, not merged: `AtSingleSemanticPoint` provider-neutral reference and strict multi-Curve/one-certified-Point resolver; a projection-only authoring fallback (general Fillet/Chamfer authoring remains legacy); version-aware recursive v16 read/write with v1–v15 read compatibility and no bulk conversion; opt-in PROJECT-only controller picks; real-OCCT 36-case regression extension, native cold link Save/Reopen, and v15 wrong-version/nested generated-Surface rejection negatives. Candidate source through `c5cc08a372e5ef37d28bfaad671330a8a3e03bcd`. 
+
+**Evidence limitation:** these changes are committed but were **not yet certified** by exact-candidate kernel-native FOCUSED or full Windows test runs at the time of this checkpoint. The earlier FAST attempts were superseded by later implementation commits; no prior CI PASS can be transposed to this candidate. A focused test request accompanies this report-only commit. Product PL/EN and generated Browser remain to be synchronized under documentation governance, exact-head FAST/FULL and Owner real-model practical PG-01D FINAL PASS remain required. This checkpoint neither authorizes merge nor reactivates PM-06/PG-01E.
+
 ## 1. Accepted identity meaning, distinct from B-Rep lineage
 
 A *future* `AtSingleSemanticPoint` reference would mean the authored tuple:
