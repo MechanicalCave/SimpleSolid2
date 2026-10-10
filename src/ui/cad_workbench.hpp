@@ -301,9 +301,12 @@ private:
     void clearProjectEdgeRuntimeContext();
     void clearProjectEdgeSelection();
     void removeProjectFaceSelection();
+    void removeProjectBoundarySelection();
     void tryStageProjectEdgeSelection();
     void tryStageProjectFaceSelection();
+    void tryStageProjectBoundarySelection();
     void setProjectEdgeFaceMode(bool enabled);
+    void setProjectEdgeBoundaryMode();
     void refreshProjectEdgePreview();
     [[nodiscard]] bool finishProjectEdgeTool();
     void syncProjectEdgeUi();
@@ -773,6 +776,7 @@ private:
     QLabel* project_edge_result_label_{};
     QPushButton* project_edge_edges_button_{};
     QPushButton* project_edge_face_button_{};
+    QPushButton* project_edge_boundary_button_{};
     QPushButton* project_edge_regular_button_{};
     QPushButton* project_edge_construction_button_{};
     QPushButton* project_edge_remove_button_{};
@@ -782,6 +786,7 @@ private:
     bool project_edge_active_{false};
     bool project_edge_preview_valid_{false};
     bool project_edge_face_mode_{false};
+    bool project_edge_boundary_mode_{false};
     bool project_edge_switching_mode_{false};
     std::optional<BodyTopologySelectionAddress>
         project_edge_face_pick_;
@@ -791,6 +796,16 @@ private:
         project_edge_face_sources_;
     std::vector<part::MaterialEdgeReference>
         project_edge_face_skipped_;
+    // Each clicked bounded Face owns a transient, generation-bound
+    // native wire/source ledger. It is NEVER persisted as CAD identity.
+    struct ProjectBoundaryFaceDraft final {
+        BodyTopologySelectionAddress picked;
+        part::SelectedFaceBoundaryAdmission membership;
+        std::vector<part::MaterialEdgeReference> accepted;
+        std::vector<part::MaterialEdgeReference> skipped;
+    };
+    std::vector<ProjectBoundaryFaceDraft>
+        project_edge_boundary_faces_;
     std::vector<part::MaterialEdgeReference>
         project_edge_manual_sources_;
     std::optional<core::DocumentRevision> project_edge_revision_;
