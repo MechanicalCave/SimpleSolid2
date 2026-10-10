@@ -4,6 +4,7 @@
 #include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <cmath>
 #include <cstdlib>
@@ -696,15 +697,32 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
                   << "]";
     }
     std::cerr << '\\n';
+    CHECK(rounded.complete());
     CHECK(topology_accurate.complete());
-    CHECK(topology_accurate.regions.size() == 1U);
-    CHECK(topology_accurate.regions.front().holes.size() == 1U);
-    CHECK(part::makeProfileRegionIntent(
-        topology_accurate.regions.front()));
+    // The arrangement deliberately exposes both selectable material
+    // cells: the outer region with one circular hole, AND the circular
+    // interior as its own region. Counting only one would incorrectly
+    // discard a legitimate independent Profile candidate.
+    CHECK(rounded.regions.size() == 2U);
+    CHECK(topology_accurate.regions.size() == 2U);
+    const auto verify_outer_with_hole = [](
+        const sketch::RegionAnalysis2D& regions) {
+        const auto found = std::find_if(
+            regions.regions.begin(), regions.regions.end(),
+            [](const auto& region) {
+                return region.holes.size() == 1U &&
+                    region.outer.boundary.size() == 5U;
+            });
+        CHECK(found != regions.regions.end());
+        CHECK(part::makeProfileRegionIntent(*found));
+    };
+    verify_outer_with_hole(rounded);
+    verify_outer_with_hole(topology_accurate);
     std::cout
         << "PG01D_DATUM_PROJECTED_ARC_REGION_EVIDENCE_PASS"
-        << " analytic_line_arc_region_hole=1"
-        << " exact_vertex_control_region_hole=1"
+        << " outer_region_with_circle_hole=1"
+        << " interior_circle_own_region=1"
+        << " roundoff_not_root_cause=1"
         << " line_line_ulp_gap_still_rejected=1"
         << " global_tolerance_unchanged=1\\n";
 }
