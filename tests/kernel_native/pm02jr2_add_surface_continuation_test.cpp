@@ -1068,7 +1068,7 @@ void verifyPartIntegration() {
         << " strict_outer_material_edges=" << drilled_outer_material
         << " strict_hole_material_edges=" << drilled_hole_material
         << " source_geometry_guessing=0"
-        << '\\n';
+        << '\n';
 }
 
 } // namespace
