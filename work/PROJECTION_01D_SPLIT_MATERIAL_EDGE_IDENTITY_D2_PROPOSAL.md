@@ -1,6 +1,6 @@
 # PG-01D — Split Material Edge strict identity: Owner D2 STOP / proposal
 
-**Status: D2-B BOUNDED RESEARCH OWNER-APPROVED 2026-10-10 (`zatwierdzam - kontynuuj`). No new durable identity design, persisted reference branch, schema or product behavior is approved.**  
+**Status: D2-B RESEARCH AND BOUNDED DESIGN DRAFT OWNER-AUTHORIZED 2026-10-10 (`zatwierdzam - kontynuuj`). Production durable identity branch, schema/version change and shipped behavior remain STOP pending a separate explicit technical D2 decision.**  
 **Date:** 2026-10-10.  
 **Active authority:** `work/ACTIVE.yaml` -> accepted PG-01D Work Contract, later Owner-approved manual multi-Face amendment §0. No separate product phase activated.  
 **Out of scope:** changing native Part v15, Foundation/accepted ADR, general Curve/Point semantics, provider identity, boolean healing, Profile tolerances, viewer picking policy, PG-01E, PM-06, issue #302 or `main` under this diagnostic checkpoint.
@@ -101,6 +101,16 @@ failure when that proof is absent. It avoids automatically minting
 generic two-Surface Point identities. It still requires further evidence
 before being made durable; the current Owner private Face need not fail
 for this exact reason.
+
+**Follow-up Owner authorization:** the Owner approved continuing toward a
+narrow candidate D2 contract after the green same-stage/fresh-provider probe.
+The separately authored
+`work/PROJECTION_01D_ONE_POINT_CURVE_REFERENCE_D2_CONTRACT_DRAFT.md`
+defines proposed cardinality and failure semantics, identity canonicalization
+risk, backward-compatible schema requirements, negative/Undo/Redo/on-disk
+gates, and a STOP before any production material reference or v15 mutation.
+A test-only collision injection (two material Edge incidences at one certified
+Point) is **not** equivalent to a natural OCCT ambiguity fixture.
 
 **STOP until a separate accepted D2 design:** Prove a **negative**
 counterexample where multiple Edge fragments of one Curve touch the
