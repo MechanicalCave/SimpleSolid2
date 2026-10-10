@@ -4330,18 +4330,47 @@ SelectedFaceBoundaryAdmission inspectSelectedFaceBoundary(
     if (!native.ok()) {
         return fail(Status::native_boundary_unavailable);
     }
+    // Do not guess a material source when one Face wire fails.
+    // Record exactly WHICH native Edge failed and WHY, without persisting
+    // runtime tokens or weakening the all-or-nothing admission gate.
+    const auto reject_edge = [&fail](
+        SelectedFaceBoundaryRejectKind kind,
+        std::size_t wire_index, std::size_t edge_index,
+        kernel::RuntimeEdgeToken edge,
+        const BodyEdgeTopologyRecord* record) {
+        auto rejected = fail(Status::material_edge_unavailable);
+        rejected.rejected_edge = SelectedFaceBoundaryRejectDetail{
+            kind, edge, wire_index, edge_index,
+            record
+                ? std::optional<TopologyAccountingClass>{
+                      record->accounting_class}
+                : std::nullopt,
+            record
+                ? std::optional<kernel::ReferenceStatus>{
+                      record->referenceability}
+                : std::nullopt,
+            record ? record->curve_kind : kernel::CurveKind::other,
+            record ? record->curve_candidates.size() : 0U,
+            record != nullptr && record->periodic_seam,
+            record != nullptr && record->representation_partition};
+        return rejected;
+    };
     SelectedFaceBoundaryAdmission result;
     result.status = Status::resolved;
     result.bounded_face = picked_bounded_face;
     std::vector<kernel::RuntimeEdgeToken> seen_material;
     result.wires.reserve(native.wires.size());
-    for (const auto& wire : native.wires) {
+    for (std::size_t wire_index = 0U;
+         wire_index < native.wires.size(); ++wire_index) {
+        const auto& wire = native.wires[wire_index];
         SelectedFaceBoundaryWire mapped;
         mapped.outer = wire.outer;
         mapped.edges.reserve(wire.edges.size());
-        for (const auto& use : wire.edges) {
-            // E0/E1 signed native proof: a missing Vertex endpoint is
-            // not evidence for exact wire continuity or accounting.
+        for (std::size_t edge_index = 0U;
+             edge_index < wire.edges.size(); ++edge_index) {
+            const auto& use = wire.edges[edge_index];
+            // Missing directed endpoints are wire integrity errors,
+            // not semantic Edge rejection and not geometric Unsupported.
             if (!use.start_vertex || !use.end_vertex) {
                 return fail(Status::native_boundary_unavailable);
             }
@@ -4351,7 +4380,10 @@ SelectedFaceBoundaryAdmission inspectSelectedFaceBoundary(
                     return item.runtime_token == use.edge;
                 });
             if (found == catalog.edges.end()) {
-                return fail(Status::material_edge_unavailable);
+                return reject_edge(
+                    SelectedFaceBoundaryRejectKind::
+                        missing_catalog_edge,
+                    wire_index, edge_index, use.edge, nullptr);
             }
             SelectedFaceBoundaryMember member;
             member.native_use = use;
@@ -4371,20 +4403,28 @@ SelectedFaceBoundaryAdmission inspectSelectedFaceBoundary(
                 if (!authored.ok() ||
                     !authored.reference ||
                     authored.reference->stage !=
-                        catalog.stage ||
-                    std::find(
+                        catalog.stage) {
+                    return reject_edge(
+                        SelectedFaceBoundaryRejectKind::
+                            uncertified_material_edge,
+                        wire_index, edge_index, use.edge, &*found);
+                }
+                if (std::find(
                         seen_material.begin(),
                         seen_material.end(),
                         use.edge) != seen_material.end()) {
-                    // Unknown/non-unique Edge semantic identity is NOT
-                    // an unsupported geometric projection. Fail closed.
-                    return fail(Status::material_edge_unavailable);
+                    return reject_edge(
+                        SelectedFaceBoundaryRejectKind::
+                            repeated_material_edge,
+                        wire_index, edge_index, use.edge, &*found);
                 }
                 seen_material.push_back(use.edge);
                 member.material = *authored.reference;
             }
             if (!member.valid()) {
-                return fail(Status::material_edge_unavailable);
+                return reject_edge(
+                    SelectedFaceBoundaryRejectKind::invalid_member,
+                    wire_index, edge_index, use.edge, &*found);
             }
             mapped.edges.push_back(std::move(member));
         }
