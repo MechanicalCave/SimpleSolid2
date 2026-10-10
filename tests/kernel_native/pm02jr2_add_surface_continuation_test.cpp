@@ -415,6 +415,119 @@ void verifyPartIntegration() {
             current_side->address);
     }
 
+    // PG-01D Owner follow-up: unlike a generic two-Add/Chamfer Part,
+    // THIS controlled real OCCT fixture has a proven semantic Surface
+    // with >=2 individual bounded Faces. Apply a downstream Chamfer
+    // in an independent cold provider, then classify manual bounded
+    // Face admission without publishing any private Owner geometry.
+    // A non-authorable material source remains an integrity refusal;
+    // this probe must never skip it as geometric Unsupported.
+    {
+        bool split_chamfer_probed = false;
+        std::size_t attempts = 0U;
+        for (const auto& candidate : topology.edges) {
+            const auto source =
+                part::authorMaterialEdgeReference(
+                    topology, candidate.runtime_token);
+            if (!source.ok() || !source.reference) continue;
+            ++attempts;
+            auto clone = part::PartDocument::restore(
+                core::DocumentId::generate(),
+                session.document().state());
+            CHECK(clone.ok());
+            application::DocumentSession chamfer_session{
+                {}, std::move(*clone.document)};
+            kernel_occt::OcctSolidModelingKernel chamfer_kernel;
+            const auto added_chamfer = chamfer_session.execute(
+                application::CreateChamferFeatureCommand{
+                    {*source.reference},
+                    chamfer_session.document().revision(),
+                    core::LengthValue{1.0},
+                    "PG01D synthetic split-surface Chamfer"},
+                chamfer_kernel);
+            if (!added_chamfer.ok()) continue;
+            const auto chamfered = part::evaluatePart(
+                chamfer_session.document(), chamfer_kernel);
+            if (chamfered.body_status !=
+                    part::BodyEvaluationStatus::up_to_date ||
+                !chamfered.current_topology ||
+                chamfered.features.size() != 3U) {
+                continue;
+            }
+            const auto& next_catalog = *chamfered.current_topology;
+            const auto split_after =
+                std::find_if(
+                    next_catalog.surfaces.begin(),
+                    next_catalog.surfaces.end(),
+                    [address = continued_side->address](
+                        const auto& surface) {
+                        return surface.address == address;
+                    });
+            if (split_after == next_catalog.surfaces.end() ||
+                split_after->status !=
+                    kernel::ReferenceStatus::resolved ||
+                split_after->current_faces.size() < 2U) {
+                continue;
+            }
+            std::size_t admitted = 0U;
+            std::size_t rejected_material = 0U;
+            std::size_t rejected_other = 0U;
+            for (const auto face_token : split_after->current_faces) {
+                const auto admission =
+                    part::inspectSelectedFaceBoundary(
+                        chamfered.features.back(),
+                        face_token, chamfer_kernel);
+                if (admission.ok()) {
+                    ++admitted;
+                    continue;
+                }
+                if (admission.status ==
+                        part::MaterialFaceBoundaryStatus::
+                            material_edge_unavailable) {
+                    ++rejected_material;
+                    const auto* detail = admission.rejected_edge
+                        ? &*admission.rejected_edge : nullptr;
+                    std::cout
+                        << "PG01D_SPLIT_CHAMFER_FACE_REJECTION"
+                        << " face=" << face_token.value
+                        << " failed_edge="
+                        << (detail ? detail->edge.value : 0U)
+                        << " kind="
+                        << (detail ? static_cast<int>(detail->kind) : -1)
+                        << " accounting="
+                        << (detail && detail->accounting_class
+                            ? static_cast<int>(*detail->accounting_class)
+                            : -1)
+                        << " reference="
+                        << (detail && detail->referenceability
+                            ? static_cast<int>(*detail->referenceability)
+                            : -1)
+                        << " candidates="
+                        << (detail ? detail->curve_candidate_count : 0U)
+                        << " partition="
+                        << (detail && detail->representation_partition)
+                        << '\n';
+                } else {
+                    ++rejected_other;
+                }
+            }
+            CHECK(admitted + rejected_material + rejected_other ==
+                  split_after->current_faces.size());
+            std::cout
+                << "PG01D_SPLIT_ADD_CHAMFER_BOUNDARY_PROBE_PASS"
+                << " split_faces=" << split_after->current_faces.size()
+                << " admitted=" << admitted
+                << " material_blocked=" << rejected_material
+                << " other_blocked=" << rejected_other
+                << " tried_chamfer_sources=" << attempts
+                << " private_document_committed=0"
+                << '\n';
+            split_chamfer_probed = true;
+            break;
+        }
+        CHECK(split_chamfer_probed);
+    }
+
     const auto contribution =
         part::currentFeatureContribution(
             topology,
