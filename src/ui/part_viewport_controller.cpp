@@ -763,6 +763,7 @@ void PartViewportController::setSolidModelingKernel(
     project_face_feedback_generation_.reset();
     project_face_feedback_supported_.clear();
     project_face_feedback_skipped_.clear();
+        project_face_feedback_selected_faces_.clear();
     body_topology_tool_stage_.reset();
     body_scene_revision_.reset();
     body_scene_cache_.reset();
@@ -792,6 +793,7 @@ void PartViewportController::setDocumentSession(
     project_face_feedback_generation_.reset();
     project_face_feedback_supported_.clear();
     project_face_feedback_skipped_.clear();
+        project_face_feedback_selected_faces_.clear();
 
         hovered_feature_contribution_.reset();
         sketch_edit_id_.reset();
@@ -857,6 +859,7 @@ void PartViewportController::clear() {
     project_face_feedback_generation_.reset();
     project_face_feedback_supported_.clear();
     project_face_feedback_skipped_.clear();
+        project_face_feedback_selected_faces_.clear();
 
     body_scene_revision_.reset();
     body_scene_cache_.reset();
@@ -3347,6 +3350,13 @@ bool PartViewportController::applyFeatureContributionOverlay() {
                 }
                 return true;
             };
+        if (!project_face_feedback_selected_faces_.empty()) {
+            scene.groups.push_back(
+                viewer::BodyTopologyOverlayGroup{
+                    viewer::BodyTopologyOverlayRole::
+                        project_geometry_face_selected,
+                    project_face_feedback_selected_faces_});
+        }
         if (!append_sources(
                 viewer::BodyTopologyOverlayRole::
                     project_geometry_supported,
@@ -3364,6 +3374,9 @@ bool PartViewportController::applyFeatureContributionOverlay() {
                     [](const auto& group) {
                         return group.role ==
                             viewer::BodyTopologyOverlayRole::
+                                project_geometry_face_selected ||
+                            group.role ==
+                            viewer::BodyTopologyOverlayRole::
                                 project_geometry_supported ||
                             group.role ==
                             viewer::BodyTopologyOverlayRole::
@@ -3374,12 +3387,14 @@ bool PartViewportController::applyFeatureContributionOverlay() {
             project_face_feedback_generation_.reset();
             project_face_feedback_supported_.clear();
             project_face_feedback_skipped_.clear();
+        project_face_feedback_selected_faces_.clear();
         }
     } else {
         project_face_feedback_revision_.reset();
         project_face_feedback_generation_.reset();
         project_face_feedback_supported_.clear();
         project_face_feedback_skipped_.clear();
+        project_face_feedback_selected_faces_.clear();
     }
 
     if (!scene.groups.empty()) {
@@ -5385,15 +5400,18 @@ PartViewportController::currentMaterialEdgeProjectionStatus(
 
 bool PartViewportController::setProjectFaceSourceFeedback(
     const std::vector<part::MaterialEdgeReference>& supported,
-    const std::vector<part::MaterialEdgeReference>& skipped) {
+    const std::vector<part::MaterialEdgeReference>& skipped,
+    const std::vector<BodyTopologySelectionAddress>& selected_faces) {
     const auto clear = [this]() {
         project_face_feedback_revision_.reset();
         project_face_feedback_generation_.reset();
         project_face_feedback_supported_.clear();
         project_face_feedback_skipped_.clear();
+        project_face_feedback_selected_faces_.clear();
         return applyFeatureContributionOverlay();
     };
-    if (supported.empty() && skipped.empty()) {
+    if (supported.empty() && skipped.empty() &&
+        selected_faces.empty()) {
         return clear();
     }
     if (session_ == nullptr || !body_scene_revision_ ||
@@ -5435,12 +5453,35 @@ bool PartViewportController::setProjectFaceSourceFeedback(
             return false;
         }
     }
+    std::vector<viewer::PresentationToken> selected_tokens;
+    selected_tokens.reserve(selected_faces.size());
+    for (const auto& face : selected_faces) {
+        if (!face.valid() ||
+            face.kind !=
+                viewer::BodyTopologyPresentationKind::face ||
+            face.generation != body_scene_cache_->generation) {
+            static_cast<void>(clear());
+            return false;
+        }
+        const auto mapped = bodyPresentationTokenFor(
+            viewer::BodyTopologyPresentationKind::face,
+            face.runtime_token_value);
+        if (!mapped || std::find(
+                selected_tokens.begin(), selected_tokens.end(),
+                *mapped) != selected_tokens.end()) {
+            static_cast<void>(clear());
+            return false;
+        }
+        selected_tokens.push_back(*mapped);
+    }
     project_face_feedback_revision_ =
         session_->document().revision();
     project_face_feedback_generation_ =
         body_scene_cache_->generation;
     project_face_feedback_supported_ = supported;
     project_face_feedback_skipped_ = skipped;
+    project_face_feedback_selected_faces_ =
+        std::move(selected_tokens);
     if (!applyFeatureContributionOverlay()) {
         static_cast<void>(clear());
         return false;
