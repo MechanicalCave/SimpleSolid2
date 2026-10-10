@@ -3546,6 +3546,31 @@ void verifyPg01dE0DirectedWireFailClosedContract() {
         {legacy_outer}}).ok());
     CHECK(!legacy_outer.edges.front().start_vertex);
 
+    // The WHOLE returned FaceBoundaryResult must have one atomic
+    // directed endpoint-coverage mode, including ALL inner wires.
+    // An unsigned inner hole cannot silently pass as a complete
+    // provider-signed Face result merely because its outer is signed.
+    auto legacy_circle = directed_circle;
+    for (auto& use : legacy_circle.edges) {
+        use.start_vertex.reset();
+        use.end_vertex.reset();
+    }
+    CHECK(legacy_circle.valid());
+    CHECK((FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {legacy_outer, legacy_circle}}).ok());
+    CHECK(!(FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {directed_outer, legacy_circle}}).ok());
+    CHECK(!(FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {legacy_outer, directed_circle}}).ok());
+    // Two individually sound wire observations of different
+    // coverage must be refused independent of their input order.
+    CHECK(!(FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {legacy_circle, directed_outer}}).ok());
+
     // Mixed observed/legacy uses within the SAME wire are rejected,
     // even though each individual EdgeUse is structurally valid.
     auto mixed_coverage = directed_outer;
@@ -3580,6 +3605,8 @@ void verifyPg01dE0DirectedWireFailClosedContract() {
         << " wrong_vertex_refused=1"
         << " partial_use_refused=1"
         << " mixed_wire_refused=1"
+        << " mixed_result_outer_inner_refused=1"
+        << " whole_result_legacy_compatible=1"
         << " malformed_hole_refused=1"
         << " legacy_provider_compatible=1"
         << " no_coordinate_matching=1"
