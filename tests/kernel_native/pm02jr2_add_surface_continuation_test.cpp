@@ -1071,11 +1071,12 @@ void verifyPartIntegration() {
         << '\n';
 }
 
-// PG-01D E0 OCCT-only experiment: a full circular base cylinder and a
-// HALF-disc Add on its top, exactly continuing one real cylindrical side
-// over half its circumference. No Face geometry matching is used to name
-// the source: the provider's explicit inherited/new Surface lineage must
-// prove continuation on the same provider-scoped carrier.
+// PG-01D E0 native negative certification: a full circular base
+// cylinder plus a geometrically coaxial half-disc Add. Exact geometric
+// continuation is NOT semantic continuation: current provider Add
+// lineage only certifies planar Surface continuations, not cylinders.
+// A current bounded Face or same radius must never authorize a merged
+// curved Face Boundary without an explicit same-carrier certificate.
 void verifyNativeCurvedSurfaceContinuationE0() {
     kernel_occt::OcctSolidModelingKernel provider;
     kernel::PlanarProfileInput round_base;
@@ -1120,80 +1121,61 @@ void verifyNativeCurvedSurfaceContinuationE0() {
     const auto* inherited = inheritedSurface(
         extended, *source_side->resolved_token);
     CHECK(inherited != nullptr);
-    std::cerr
-        << "PG01D_CURVED_E0_NATIVE_CONTINUATION"
-        << " source_status="
-        << static_cast<int>(inherited->surface_status)
-        << " source_faces=" << inherited->current_faces.size()
-        << '\n';
     CHECK(inherited->surface_status ==
           kernel::ReferenceStatus::resolved);
+    CHECK(inherited->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+    CHECK(inherited->current_faces.size() == 1U);
     const auto* generated = newSide(
         extended, "half-circle-arc");
     CHECK(generated != nullptr);
-    CHECK(generated->continued_into.has_value());
-    CHECK(*generated->continued_into ==
-          *source_side->resolved_token);
-    CHECK(inherited->current_faces.size() >= 2U);
+    CHECK(generated->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+    // Explicit STOP: no same-semantic-carrier certificate despite
+    // exact coaxial geometry and topologically connected Add.
+    CHECK(!generated->continued_into.has_value());
+    CHECK(!generated->contribution_faces.empty());
 
-    std::map<std::uint64_t, std::vector<bool>>
-        same_carrier_oriented_uses;
-    for (const auto face_token : inherited->current_faces) {
-        const auto bound = provider.bindFaceToBody(
-            extended.solid, face_token);
+    std::set<std::uint64_t> inherited_face_tokens;
+    std::size_t inherited_native_wires = 0U;
+    std::size_t created_native_wires = 0U;
+    for (const auto token : inherited->current_faces) {
+        CHECK(inherited_face_tokens.insert(token.value).second);
+        const auto bound =
+            provider.bindFaceToBody(extended.solid, token);
         CHECK(bound && bound->valid());
         CHECK(provider.queryFaceBoundary(
             extended.solid, *bound).status ==
                 kernel::FaceBoundaryStatus::unsupported_surface);
-        const auto native =
-            provider.queryFaceBoundaryAnySurface(
-                extended.solid, *bound);
-        CHECK(native.ok());
-        for (const auto& wire : native.wires) {
-            for (const auto& use : wire.edges) {
-                same_carrier_oriented_uses[
-                    use.edge.value].push_back(use.reversed);
-            }
-        }
+        const auto raw = provider.queryFaceBoundaryAnySurface(
+            extended.solid, *bound);
+        CHECK(raw.ok());
+        inherited_native_wires += raw.wires.size();
     }
-    std::size_t split_partitions = 0U;
-    std::size_t true_perimeter = 0U;
-    std::size_t periodic_seams = 0U;
-    for (const auto& [value, uses] :
-         same_carrier_oriented_uses) {
-        const auto current = std::find_if(
-            extended.current_edge_semantics.begin(),
-            extended.current_edge_semantics.end(),
-            [value](const auto& item) {
-                return item.runtime_token.value == value;
-            });
-        CHECK(current !=
-              extended.current_edge_semantics.end());
-        if (current->periodic_seam) {
-            ++periodic_seams;
-            continue;
-        }
-        if (current->same_surface_partition) {
-            CHECK(current->adjacent_surfaces.size() == 1U);
-            CHECK(current->adjacent_surfaces.front() ==
-                  *source_side->resolved_token);
-            CHECK(uses.size() == 2U);
-            CHECK(uses.front() != uses.back());
-            ++split_partitions;
-        } else {
-            CHECK(uses.size() == 1U);
-            ++true_perimeter;
-        }
+    for (const auto token : generated->contribution_faces) {
+        CHECK(inherited_face_tokens.count(token.value) == 0U);
+        const auto bound =
+            provider.bindFaceToBody(extended.solid, token);
+        CHECK(bound && bound->valid());
+        CHECK(provider.queryFaceBoundary(
+            extended.solid, *bound).status ==
+                kernel::FaceBoundaryStatus::unsupported_surface);
+        const auto raw = provider.queryFaceBoundaryAnySurface(
+            extended.solid, *bound);
+        CHECK(raw.ok());
+        created_native_wires += raw.wires.size();
     }
-    CHECK(split_partitions >= 1U);
-    CHECK(true_perimeter >= 1U);
+    CHECK(inherited_native_wires >= 1U);
+    CHECK(created_native_wires >= 1U);
     std::cout
-        << "PG01D_CURVED_E0_NATIVE_CONTINUATION_PASS"
-        << " fragments=" << inherited->current_faces.size()
-        << " cancelled_partitions=" << split_partitions
-        << " material_perimeter_candidates=" << true_perimeter
-        << " periodic_seam_tokens=" << periodic_seams
-        << " native_geometry_guessing=0"
+        << "PG01D_CURVED_E0_NO_CONTINUATION_CERTIFICATE_PASS"
+        << " inherited_faces=" << inherited->current_faces.size()
+        << " created_contribution_faces="
+        << generated->contribution_faces.size()
+        << " inherited_native_wires=" << inherited_native_wires
+        << " created_native_wires=" << created_native_wires
+        << " claimed_same_carrier=0"
+        << " similarity_rebinding=0"
         << '\n';
 }
 
