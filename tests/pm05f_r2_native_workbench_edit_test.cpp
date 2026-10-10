@@ -527,6 +527,9 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
     // PG-01B authorMaterialEdgeReference contract.
     std::size_t planar_faces = 0U;
     std::size_t nonplanar_faces = 0U;
+    std::size_t nonplanar_native_wires = 0U;
+    std::size_t nonplanar_material_members = 0U;
+    std::size_t nonplanar_nonmaterial_members = 0U;
     std::size_t native_faces_with_holes = 0U;
     std::size_t strict_faces_with_holes = 0U;
     std::size_t fully_material_strict_holed_faces = 0U;
@@ -543,6 +546,38 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
                 kernel::FaceBoundaryStatus::
                     unsupported_surface) {
             ++nonplanar_faces;
+            // Face Boundary E0: the original planar-only query must
+            // continue to reject this native cylinder/curved Face.
+            // The separate optional read is scoped to the same Body
+            // and returns real oriented wires, not a projected Face.
+            const auto raw =
+                kernel.queryFaceBoundaryAnySurface(
+                    evaluation.body_solid, *source);
+            if (!raw.ok()) {
+                continue;
+            }
+            nonplanar_native_wires += raw.wires.size();
+            for (const auto& wire : raw.wires) {
+                CHECK(wire.valid());
+                for (const auto& use : wire.edges) {
+                    const auto catalog_member = std::find_if(
+                        catalog.edges.begin(),
+                        catalog.edges.end(),
+                        [&use](const auto& edge) {
+                            return edge.runtime_token == use.edge;
+                        });
+                    CHECK(catalog_member != catalog.edges.end());
+                    const auto strict =
+                        part::authorMaterialEdgeReference(
+                            catalog, use.edge);
+                    if (strict.ok()) {
+                        CHECK(strict.reference);
+                        ++nonplanar_material_members;
+                    } else {
+                        ++nonplanar_nonmaterial_members;
+                    }
+                }
+            }
             continue;
         }
         CHECK(boundary.ok());
@@ -593,6 +628,11 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
         << "PG01D_D0_NATIVE_FACE_WIRE_STATUS"
         << " planar=" << planar_faces
         << " nonplanar=" << nonplanar_faces
+        << " nonplanar_wires=" << nonplanar_native_wires
+        << " nonplanar_material_uses="
+        << nonplanar_material_members
+        << " nonplanar_nonmaterial_uses="
+        << nonplanar_nonmaterial_members
         << " holes=" << native_faces_with_holes
         << " strict_holes=" << strict_faces_with_holes
         << " strict_holes_all_material="
@@ -601,6 +641,8 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
         << std::endl;
     CHECK(native_faces_with_holes >= 2U);
     CHECK(nonplanar_faces >= 1U);
+    CHECK(nonplanar_native_wires >= 1U);
+    CHECK(nonplanar_material_members >= 1U);
     CHECK(strict_faces_with_holes > 0U);
     CHECK(fully_material_strict_holed_faces > 0U);
 
