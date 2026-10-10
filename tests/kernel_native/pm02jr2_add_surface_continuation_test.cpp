@@ -1058,6 +1058,134 @@ void verifyPartIntegration() {
         drilled_unique_material_sources.begin(),
         drilled_unique_material_sources.end()) ==
         drilled_unique_material_sources.end());
+    // Stronger E0 proof for THIS single-hole planar Surface carrier:
+    // removing certified internal partition uses must leave exactly
+    // one connected native material outer perimeter, plus exactly one
+    // separate, closed native inner Circle wire. We never infer a
+    // connection from endpoint coordinates or curve proximity. The
+    // inner Circle is a full periodic native Edge and is intentionally
+    // NOT forced to have two distinct catalog Vertex endpoints.
+    std::set<std::uint64_t> outer_material_tokens;
+    std::set<std::uint64_t> hole_material_tokens;
+    for (const auto& [value, uses] : drilled_native_uses) {
+        CHECK(!uses.empty());
+        const auto edge = std::find_if(
+            drilled_catalog.edges.begin(),
+            drilled_catalog.edges.end(),
+            [value](const auto& item) {
+                return item.runtime_token.value == value;
+            });
+        CHECK(edge != drilled_catalog.edges.end());
+        if (edge->representation_partition) continue;
+        CHECK(uses.size() == 1U);
+        if (uses.front().inner) {
+            CHECK(hole_material_tokens.insert(value).second);
+        } else {
+            CHECK(outer_material_tokens.insert(value).second);
+        }
+    }
+    CHECK(outer_material_tokens.size() == drilled_outer_material);
+    CHECK(hole_material_tokens.size() == drilled_hole_material);
+    CHECK(hole_material_tokens.size() == 1U);
+    CHECK(outer_material_tokens.count(
+              *hole_material_tokens.begin()) == 0U);
+    const auto hole_edge = std::find_if(
+        drilled_catalog.edges.begin(),
+        drilled_catalog.edges.end(),
+        [hole = *hole_material_tokens.begin()](const auto& item) {
+            return item.runtime_token.value == hole;
+        });
+    CHECK(hole_edge != drilled_catalog.edges.end());
+    CHECK(hole_edge->curve_kind == kernel::CurveKind::circle);
+    CHECK(!hole_edge->periodic_seam);
+    CHECK(!hole_edge->representation_partition);
+
+    // The exact Part catalog's native Vertex -> material Edge incidence
+    // builds an undirected graph for the *outer* material members only.
+    // Every Vertex on this boundary must have degree two, every member
+    // exactly two distinct current Vertices, and every member must be
+    // exhausted by one closed traversal (not several isolated cycles).
+    std::map<std::uint64_t, std::vector<std::uint64_t>>
+        outer_vertex_neighbors;
+    std::map<std::uint64_t, std::vector<std::uint64_t>>
+        outer_edge_endpoints;
+    for (const auto& vertex : drilled_catalog.vertices) {
+        std::vector<std::uint64_t> outer_incident;
+        for (const auto edge : vertex.incident_material_edges) {
+            if (outer_material_tokens.count(edge.value)) {
+                outer_incident.push_back(edge.value);
+            }
+        }
+        if (outer_incident.empty()) continue;
+        CHECK(vertex.runtime_token.valid());
+        CHECK(outer_incident.size() == 2U);
+        CHECK(outer_incident[0] != outer_incident[1]);
+        for (const auto edge : outer_incident) {
+            outer_edge_endpoints[edge].push_back(
+                vertex.runtime_token.value);
+        }
+        CHECK(outer_vertex_neighbors.emplace(
+            vertex.runtime_token.value,
+            std::move(outer_incident)).second);
+    }
+    CHECK(!outer_edge_endpoints.empty());
+    CHECK(outer_edge_endpoints.size() ==
+          outer_material_tokens.size());
+    CHECK(outer_vertex_neighbors.size() ==
+          outer_material_tokens.size());
+    for (const auto& [edge, endpoints] : outer_edge_endpoints) {
+        CHECK(outer_material_tokens.count(edge) == 1U);
+        CHECK(endpoints.size() == 2U);
+        CHECK(endpoints[0] != endpoints[1]);
+    }
+    const auto outer_start_edge =
+        outer_edge_endpoints.begin()->first;
+    const auto outer_start_vertex =
+        outer_edge_endpoints.begin()->second.front();
+    auto active_edge = outer_start_edge;
+    auto active_vertex = outer_start_vertex;
+    std::set<std::uint64_t> visited_outer_edges;
+    for (std::size_t step = 0U;
+         step < outer_material_tokens.size();
+         ++step) {
+        CHECK(visited_outer_edges.insert(active_edge).second);
+        const auto current =
+            outer_edge_endpoints.find(active_edge);
+        CHECK(current != outer_edge_endpoints.end());
+        const auto& ends = current->second;
+        CHECK(ends[0] == active_vertex ||
+              ends[1] == active_vertex);
+        const auto next_vertex =
+            ends[0] == active_vertex ? ends[1] : ends[0];
+        const auto at_vertex =
+            outer_vertex_neighbors.find(next_vertex);
+        CHECK(at_vertex != outer_vertex_neighbors.end());
+        const auto& neighbors = at_vertex->second;
+        CHECK(neighbors.size() == 2U);
+        CHECK(neighbors[0] == active_edge ||
+              neighbors[1] == active_edge);
+        const auto next_edge =
+            neighbors[0] == active_edge
+                ? neighbors[1] : neighbors[0];
+        if (step + 1U == outer_material_tokens.size()) {
+            CHECK(next_vertex == outer_start_vertex);
+            CHECK(next_edge == outer_start_edge);
+        } else {
+            CHECK(next_edge != outer_start_edge);
+        }
+        active_edge = next_edge;
+        active_vertex = next_vertex;
+    }
+    CHECK(visited_outer_edges == outer_material_tokens);
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_OUTER_HOLE_COMPONENT_PROOF"
+        << " native_outer_cycles=1"
+        << " native_closed_circle_holes=1"
+        << " outer_edges=" << outer_material_tokens.size()
+        << " hole_edges=" << hole_material_tokens.size()
+        << " exact_vertex_incidence=1"
+        << " proximity_healing=0"
+        << '\n';
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_SPLIT_CARRIER_HOLE_PASS"
         << " same_semantic_surface=1"
