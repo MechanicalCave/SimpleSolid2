@@ -3207,6 +3207,201 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
         second_hole_sources.end());
     CHECK(!exact_cut_side_classification(
         conflated_cut_sides, second_hole_sources));
+    // E0 ordering invariant on REAL current OCCT native topology:
+    // token-map iteration order is NOT semantic authority. Enumerate
+    // every 3! partition cancellation order and certify identical
+    // signed material contours up to cyclic rotation and contour
+    // permutation. This is TEST-ONLY surgery, not an E1 algorithm.
+    using E0Use = kernel::FaceBoundaryEdgeUse;
+    using E0Cycles = std::vector<std::vector<E0Use>>;
+    const std::set<std::uint64_t> authentic_partitions{
+        twice_partitions.begin(), twice_partitions.end()};
+    CHECK(authentic_partitions.size() == 3U);
+    const auto cancel_in_order =
+        [&](const E0Cycles& original,
+            const std::vector<std::uint64_t>& order)
+            -> std::optional<E0Cycles> {
+            if (order.size() != authentic_partitions.size() ||
+                std::set<std::uint64_t>{
+                    order.begin(), order.end()} !=
+                    authentic_partitions) {
+                return std::nullopt;
+            }
+            auto cycles = original;
+            for (const auto& cycle : cycles) {
+                if (!directed_closed(cycle)) return std::nullopt;
+            }
+            for (const auto partition : order) {
+                std::vector<std::pair<std::size_t, std::size_t>>
+                    locations;
+                for (std::size_t li = 0U; li < cycles.size(); ++li) {
+                    for (std::size_t ui = 0U;
+                         ui < cycles[li].size(); ++ui) {
+                        if (cycles[li][ui].edge.value ==
+                            partition) {
+                            locations.emplace_back(li, ui);
+                        }
+                    }
+                }
+                if (locations.size() != 2U) return std::nullopt;
+                const auto [ai, aj] = locations[0];
+                const auto [bi, bj] = locations[1];
+                const auto& a = cycles[ai][aj];
+                const auto& b = cycles[bi][bj];
+                if (!a.valid() || !b.valid() ||
+                    a.reversed == b.reversed ||
+                    !a.start_vertex || !a.end_vertex ||
+                    a.start_vertex != b.end_vertex ||
+                    a.end_vertex != b.start_vertex) {
+                    return std::nullopt;
+                }
+                E0Cycles next;
+                for (std::size_t li = 0U;
+                     li < cycles.size(); ++li) {
+                    if (li != ai && li != bi) {
+                        next.push_back(std::move(cycles[li]));
+                    }
+                }
+                if (ai != bi) {
+                    std::vector<E0Use> joined;
+                    for (std::size_t i = 1U;
+                         i < cycles[ai].size(); ++i) {
+                        joined.push_back(cycles[ai][
+                            (aj + i) % cycles[ai].size()]);
+                    }
+                    for (std::size_t i = 1U;
+                         i < cycles[bi].size(); ++i) {
+                        joined.push_back(cycles[bi][
+                            (bj + i) % cycles[bi].size()]);
+                    }
+                    if (!directed_closed(joined)) {
+                        return std::nullopt;
+                    }
+                    next.push_back(std::move(joined));
+                } else {
+                    if (aj >= bj) return std::nullopt;
+                    const auto& ring = cycles[ai];
+                    std::vector<E0Use> inside;
+                    std::vector<E0Use> outside;
+                    for (std::size_t i = aj + 1U;
+                         i < bj; ++i) {
+                        inside.push_back(ring[i]);
+                    }
+                    for (std::size_t i = 1U;
+                         i < ring.size() - (bj - aj);
+                         ++i) {
+                        outside.push_back(ring[
+                            (bj + i) % ring.size()]);
+                    }
+                    if (!directed_closed(inside) ||
+                        !directed_closed(outside)) {
+                        return std::nullopt;
+                    }
+                    next.push_back(std::move(inside));
+                    next.push_back(std::move(outside));
+                }
+                cycles = std::move(next);
+            }
+            std::set<std::uint64_t> remaining_material;
+            for (const auto& cycle : cycles) {
+                if (!directed_closed(cycle)) return std::nullopt;
+                for (const auto& use : cycle) {
+                    if (authentic_partitions.count(
+                            use.edge.value) != 0U ||
+                        twice_material.count(
+                            use.edge.value) != 1U ||
+                        !remaining_material.insert(
+                            use.edge.value).second) {
+                        return std::nullopt;
+                    }
+                }
+            }
+            if (remaining_material != twice_material ||
+                cycles.size() != 3U) {
+                return std::nullopt;
+            }
+            return cycles;
+        };
+
+    // Compare complete (Edge token, occurrence direction) sequences,
+    // not only undirected Edge membership. Ignore only cyclic origin
+    // and order of the distinct resulting region contours.
+    const auto canonical_signed_cycles =
+        [](const E0Cycles& cycles) {
+            using SignedEdge =
+                std::pair<std::uint64_t, bool>;
+            std::vector<std::vector<SignedEdge>> signatures;
+            for (const auto& cycle : cycles) {
+                std::vector<SignedEdge> signed_edges;
+                for (const auto& use : cycle) {
+                    signed_edges.emplace_back(
+                        use.edge.value, use.reversed);
+                }
+                const auto smallest = std::min_element(
+                    signed_edges.begin(), signed_edges.end());
+                std::rotate(
+                    signed_edges.begin(), smallest,
+                    signed_edges.end());
+                signatures.push_back(std::move(signed_edges));
+            }
+            std::sort(signatures.begin(), signatures.end());
+            return signatures;
+        };
+    auto reference_order = twice_partitions;
+    std::sort(
+        reference_order.begin(), reference_order.end());
+    const auto initial_cancellation =
+        cancel_in_order(twice_outer, reference_order);
+    CHECK(initial_cancellation.has_value());
+    CHECK(canonical_signed_cycles(*initial_cancellation) ==
+          canonical_signed_cycles(twice_cycles));
+    const auto expected_cycles =
+        canonical_signed_cycles(*initial_cancellation);
+    std::size_t certified_orders = 0U;
+    do {
+        const auto result =
+            cancel_in_order(twice_outer, reference_order);
+        CHECK(result.has_value());
+        CHECK(canonical_signed_cycles(*result) ==
+              expected_cycles);
+        ++certified_orders;
+    } while (std::next_permutation(
+        reference_order.begin(), reference_order.end()));
+    CHECK(certified_orders == 6U);
+
+    // Negative mutations of the genuine native ledger: input Edge
+    // direction and exact Vertex closure are authority, and dropping
+    // a partition is never permitted as a partial reconstruction.
+    auto reversed_partition = twice_outer;
+    std::size_t flipped_occurrences = 0U;
+    for (auto& ring : reversed_partition) {
+        for (auto& use : ring) {
+            if (use.edge.value == twice_partitions.front()) {
+                use.reversed = !use.reversed;
+                ++flipped_occurrences;
+                break;
+            }
+        }
+        if (flipped_occurrences) break;
+    }
+    CHECK(flipped_occurrences == 1U);
+    CHECK(!cancel_in_order(
+        reversed_partition, twice_partitions).has_value());
+    auto truncated_order = twice_partitions;
+    truncated_order.pop_back();
+    CHECK(!cancel_in_order(
+        twice_outer, truncated_order).has_value());
+
+    std::cout
+        << "PG01D_E0_NATIVE_PARTITION_ORDER_INDEPENDENT_PASS"
+        << " native_partition_pairs=3"
+        << " exhaustive_orders=" << certified_orders
+        << " same_signed_material_cycles=3"
+        << " corrupt_native_orientation_rejected=1"
+        << " missing_partition_rejected=1"
+        << " token_iteration_authority=0"
+        << " coordinate_stitching=0"
+        << '\n';
     std::cout
         << "PG01D_E0_TWO_CUT_SIDE_PROVENANCE_FAIL_CLOSED_PASS"
         << " one_missing_edge_rejected=1"
