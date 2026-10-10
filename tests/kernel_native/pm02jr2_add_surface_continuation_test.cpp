@@ -1147,6 +1147,31 @@ void verifyPartIntegration() {
                             if (current_choices.size() == 1U &&
                                 current_choices.front() == detail->edge) {
                                 ++one_semantic_endpoint_unique;
+                                // D2-V16 production selector must prove the
+                                // same exact OCCT material Edge as research.
+                                const auto production =
+                                    part::authorProjectedMaterialEdgeReference(
+                                        ledger, detail->edge);
+                                CHECK(production.ok());
+                                CHECK(std::holds_alternative<
+                                    part::AtSingleSemanticPoint>(
+                                        production.reference->branch));
+                                CHECK(production.reference->stage ==
+                                      ledger.stage);
+                                CHECK(production.reference->curve ==
+                                      curve_address);
+                                CHECK(std::get<
+                                    part::AtSingleSemanticPoint>(
+                                        production.reference->branch).point ==
+                                      *certified_point_address);
+                                const auto resolved =
+                                    part::resolveMaterialEdgeReference(
+                                        *production.reference, ledger);
+                                CHECK(resolved && resolved->resolved());
+                                CHECK(resolved->current_edges.front() ==
+                                      detail->edge);
+                                CHECK(!part::authorMaterialEdgeReference(
+                                    ledger, detail->edge).ok());
                                 // Fresh Part Document and fresh OCCT provider:
                                 // use only durable semantic Curve + Point
                                 // addresses; never compare native tokens
@@ -1239,6 +1264,11 @@ void verifyPartIntegration() {
                                             *certified_point_address);
                                     CHECK(ambiguous.size() == 2U);
                                     CHECK(ambiguous.front() != ambiguous.back());
+                                    // No first/nearest runtime Edge winner.
+                                    const auto rejected =
+                                        part::resolveMaterialEdgeReference(
+                                            *production.reference, injected);
+                                    CHECK(rejected && !rejected->resolved());
                                     tested_ambiguous_incidence = true;
                                 }
                                 if (!tested_missing_reference) {
@@ -1255,6 +1285,11 @@ void verifyPartIntegration() {
                                     CHECK(pg01dCurveEdgesIncidentToSemanticPoint(
                                         missing, curve_address,
                                         *certified_point_address).empty());
+                                    const auto missing_result =
+                                        part::resolveMaterialEdgeReference(
+                                            *production.reference, missing);
+                                    CHECK(missing_result &&
+                                          !missing_result->resolved());
                                     tested_missing_reference = true;
                                 }
 
@@ -1267,13 +1302,50 @@ void verifyPartIntegration() {
                                              std::chrono::steady_clock::now()
                                                  .time_since_epoch().count()) +
                                          ".ss2part");
+                                    // Persist a real v16 linked Sketch
+                                    // EntityId after the three producing
+                                    // Features, not merely the source Body.
+                                    auto linked_state =
+                                        trial.document().state();
+                                    const auto support =
+                                        part::partSketchSupportForBuiltinPlane(
+                                            core::BuiltinReferenceRole::xy_plane);
+                                    CHECK(support.has_value());
+                                    part::PartSketch linked{
+                                        sketch::SketchId::generate(),
+                                        *support, true,
+                                        sketch::SketchModel{}, {}};
+                                    const auto entity =
+                                        linked.model.addLine(
+                                            {0.0, 0.0}, {1.0, 0.0},
+                                            sketch::EntityRole::construction);
+                                    linked.projection_bindings.push_back(
+                                        {entity, *production.reference});
+                                    const auto linked_id = linked.id;
+                                    linked_state.sketches.push_back(
+                                        std::move(linked));
+                                    auto linked_doc =
+                                        part::PartDocument::restore(
+                                            core::DocumentId::generate(),
+                                            std::move(linked_state));
+                                    CHECK(linked_doc.ok());
                                     const auto save = store.createNew(
-                                        path, trial.document());
+                                        path, *linked_doc.document);
                                     CHECK(save.ok());
                                     const auto loaded = store.load(path);
                                     CHECK(loaded.ok());
                                     CHECK(loaded.document->state() ==
-                                          trial.document().state());
+                                          linked_doc.document->state());
+                                    const auto* cold_sketch =
+                                        loaded.document->findSketch(linked_id);
+                                    CHECK(cold_sketch != nullptr);
+                                    CHECK(cold_sketch->projection_bindings.size()
+                                          == 1U);
+                                    CHECK(cold_sketch->projection_bindings.front()
+                                              .target_entity == entity);
+                                    CHECK(cold_sketch->projection_bindings.front()
+                                              .source ==
+                                          *production.reference);
                                     kernel_occt::OcctSolidModelingKernel disk_provider;
                                     const auto disk = part::evaluatePart(
                                         *loaded.document, disk_provider);
@@ -1287,6 +1359,12 @@ void verifyPartIntegration() {
                                             curve_address,
                                             *certified_point_address);
                                     CHECK(disk_choices.size() == 1U);
+                                    const auto disk_exact =
+                                        part::resolveMaterialEdgeReference(
+                                            cold_sketch->projection_bindings.front()
+                                                .source,
+                                            *disk.current_topology);
+                                    CHECK(disk_exact && disk_exact->resolved());
                                     std::error_code removal_error;
                                     CHECK(std::filesystem::remove(
                                         path, removal_error));
