@@ -1,7 +1,7 @@
 # PG-01D — Curve plus one Semantic Point: bounded D2 design contract (DRAFT)
 
-**Status: DESIGN DRAFT — NOT ACCEPTED FOR PRODUCTION MUTATION.**
-Owner authorized continuation of the bounded D2 study on 2026-10-10. This document does **not** activate a separate phase, approve a new identity branch or authorize a file-schema change. Active work remains PG-01D on `work/ACTIVE.yaml` and its accepted amendment. No work on `main`, PG-01E, PM-06, independent CI #302 or tolerance/healing.
+**Status: OWNER APPROVED D2 SEMANTIC ASSOCIATIVITY OPTION A (2026-10-10); PERSISTENCE AND IMPLEMENTATION REMAIN PROPOSED.**
+Owner explicitly confirmed `zatwierdzam - kontynuuj` after a direct choice between A (semantic Curve + one certified Point remains associated across deformations while the exact stage/local cardinality is still strictly proved) and B (stronger per-B-Rep-fragment cross-revision lineage). **A is accepted; B is not a requirement.** This document does **not** activate a separate phase, approve a new persisted identity branch, or authorize a file-schema change. Active work remains PG-01D on `work/ACTIVE.yaml` and its accepted amendment. No work on `main`, PG-01E, PM-06, independent CI #302 or tolerance/healing.
 
 ## 1. Problem and evidence
 
@@ -114,7 +114,7 @@ as a completed E4 suppression proof.
 | E3 — native on-disk Save/Reopen | Actually write/read .ss2part v15, new DocumentSession and provider, compare strict stage resolutions | **PASS existing-address round-trip** real PartDocumentStore createNew/load of v15 plus new OCCT provider, 1/1; new one-Point persisted branch remains NOT IMPLEMENTED |
 | E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **PARTIAL — extensive test-only lifecycle matrix:** native Chamfer Undo/Redo and Add edit/Undo/Redo 1/1; deleting/suppressing source Chamfer and suppressing previous Add strictly invalidates unavailable Body/Stage, Undo restores 1/1; 12 independent major Add extent/direction changes: 6 reversed result in unavailable Body, 6 forward yield one unique stage-local candidate, no ambiguous or cached fallback. Actual persisted one-Point link, changed-fragment provenance, direct parent deletion, v16 migration and radical source equivalence still OPEN |
 | E5 — adverse native geometry | Same Curve + Point incident to multiple actual material Edge fragments, negative stage/cycle cases and equal-looking unrelated geometry | **PARTIAL** injected two-Edge incidence and missing Point fail closed. Native 78-Chamfer survey: 1332 Curve+Point pairs, 260 uniquely selected Edge hits, 0 collisions and 1072 empty. A real OCCT-native ambiguity counterexample, stage/cycles and similar geometry remain OPEN |
-| E6 — schema/migration/canonical identity | Explicit layout/version plan, v15 backwards reading, corrupt/malformed/duplicate rejection, mixed old/new link resolution and cross-branch dedup | **PARTIAL DESIGN ONLY** native evidence 224 legacy two-Point aliases, 36 one-Point-only cases, tested disjoint domain by endpoint cardinality and stage. Actual v16 serialization/migration, mixed persistence and global semantics OPEN — separate Owner D2 before mutation |
+| E6 — schema/migration/canonical identity | Explicit layout/version plan, v15 backwards reading, corrupt/malformed/duplicate rejection, mixed old/new link resolution and cross-branch dedup | **SEMANTICS A OWNER ACCEPTED, IMPLEMENTATION STOP**; 224 legacy two-Point aliases versus 36 one-Point-only cases resolved by strict current-stage endpoint-cardinality domain; proposed v16 JSON/migration and negative fixtures documented separately. Owner D2 approval of v16/write policy/atomic mixed-link validation remains OPEN |
 | E7 — Owner sample + practical result | Typed failure/recovery on private Owner Face, correct manually selected boundaries, then linked cold Save/Reopen and final FULL | **OPEN — Owner FAIL** |
 
 No gate may be marked PASS based on a deliberate RED used solely to surface CTest stdout. Every accepted proof needs a separate final GREEN on its exact test SHA; no exact-head FULL claimed.
@@ -210,24 +210,33 @@ separately reconstructed post-edit history has different runtime
 tokens and cannot be paired with the pre-edit history by token,
 XYZ coordinates, topology ordinal, direction, or nearest geometry.
 
-Before approving durable `AtSingleSemanticPoint`, D2 must state the
-precise intended associativity semantics for an upstream edit:
-(a) guarantee that stable, unambiguous **semantic Curve + Point**
-addresses define the *linked source* and allow its geometry to change,
-subject to the disjoint one-Point domain; or (b) require a stronger
-provider-backed persistent bounded-fragment lineage certificate and
-refuse even unique current matches without it. These are distinct
-product contracts; the above tests cannot choose between them.
+**OWNER DECISION — A ACCEPTED (2026-10-10).** Future associative intent
+is the exact earlier Body stage + established semantic Curve +
+**one independently certified existing semantic Point**. The geometry
+may deform after upstream edits; a new OCCT bounded Edge token does not
+by itself invalidate semantic association. No cross-revision B-Rep
+fragment lineage certificate is required or promised. This is not
+blanket geometric retargeting: failure to certify the *same semantic
+addresses*, strict one-Point/two-Vertex domain, exact material Curve
+membership, source stage, or unique live Edge **must fail closed**.
+A second certified endpoint makes the new branch inapplicable; do not
+silently rewrite it as `BetweenSemanticPoints`.
 
-Neither selection is implied by the approval of this research
-document. No v15 schema or production reference variant has changed.
+**Only the identity meaning was accepted.** A new discriminant,
+persistent v16 schema, old/new mixed-link duplicate semantics, migration,
+product implementation, Windows FULL and Owner manual PASS remain
+separately gated. See
+`work/PROJECTION_01D_D2_A_V16_PERSISTENCE_MIGRATION_PROPOSAL.md`
+for a concrete, **unapproved** v16 design and negative test matrix.
+No production reference implementation, parser or v15 schema has
+changed.
 
 ## 4. Potential conflicts and mandatory decisions
 
 - **File v15 compatibility:** the existing `EdgeBranchDiscriminator` is a two-variant sum (`SingularAtAuthoredStage`, `BetweenSemanticPoints`). A third persisted branch is not covered by v15; **do not silently extend v15 in place**. Proposed baseline is a future v16 additive discriminant plus strict read migration of valid v15, preserving original branch meaning. The final schema number and migration must be approved separately by Owner D2.
 - **No implicit two-Surface Points:** creating a broad `FeaturePointAddress` from two Surfaces is an alternative architecture change; it is not approved merely because 36 current observations were locally unique.
 - **Alias/dedup ambiguity — quantified and bounded, not cleared for production:** `DocumentSession::execute(CreateProjectedSketchEdgesCommand)` rejects duplicates by a `std::set<MaterialEdgeReference>` and compares existing bindings by **structural equality only**. Two different discriminant branches can thus refer to one current Edge while evading duplicate-source validation. Canonical authoring preference alone is insufficient: a previously authored one-Point link may survive an upstream edit that enables two-point authoring for the same Curve fragment. Design must prove a version-stable semantic equivalence/canonicalization rule or a disjoint-domain invariant, including strict behavior for old persisted links, atomically validated command dedup, and feature-generated Surface lineage that embeds MaterialEdgeReferences. Do not substitute geometry/tokens, rewrite stored identity opportunistically or silently duplicate target entities. STOP until explicitly decided by Owner D2.
-- **Lifecycle/retarget:** changing upstream features may change a Curve family from 2 fragments to 1 or >2. A previously authored one-point selector must either uniquely resolve the same proven semantic source or fail closed; never silently adopt a different candidate.
+- **Lifecycle/retarget (Owner-approved semantics A):** changing upstream features may deform a Curve without invalidating association when the **same stable semantic Curve and Point** remain uniquely certified at the same source stage and the strict single-certifiable-endpoint domain still holds. A Curve family collapse to a single fragment, a second certifiable endpoint, unavailable stage, missing/ambiguous Point, or multiple eligible current Edges invalidates the **one-Point** branch. No nearest-geometry or different semantic source retarget, and never reinterpret a saved branch as another branch. Strong cross-revision OCCT bounded-Edge lineage is explicitly **not** guaranteed by A.
 - **Product selection:** `Face Boundary` manually expands individually picked bounded Faces and retains all true shared material Edges, per accepted Owner amendment. It does not mean "exactly three edges" if a selected Face genuinely has four material boundaries; arbitrary subset selection remains the existing **Edges** mode.
 
 ## 5. Narrow work sequence
