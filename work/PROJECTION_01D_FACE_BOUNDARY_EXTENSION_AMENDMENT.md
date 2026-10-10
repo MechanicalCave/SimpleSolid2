@@ -151,16 +151,33 @@ durably discriminate one of two Curve realizations without both proven
 unproven partition exclusion, tolerance change or per-identity partial skip
 can substitute for this accepted reference rule.
 
-**STOP / Owner D2 decision pending:** see
-`work/PROJECTION_01D_SPLIT_MATERIAL_EDGE_IDENTITY_D2_PROPOSAL.md`. It offers
-A: retain the current strict failure and explicitly acknowledge this product
-limit; B: authorize a separately gated identity-design study with provenance,
-cold persistence and compatibility proof; C: separate future non-associative
-copy direction requiring its own authorization. **None is approved by this
-investigation.** Current Owner practical PG-01D result remains FAIL; no final
-FULL, merge or PM-06 permission. Runtime diagnostics now report current
-`curveFamilyEdges` and `certifiedEndpoints` to narrow the one-click
-Owner retest. Exact-head focused verification remains necessary.
+**Owner D2-B investigation APPROVED 2026-10-10, implementation
+STOP:** see
+`work/PROJECTION_01D_SPLIT_MATERIAL_EDGE_IDENTITY_D2_PROPOSAL.md`.
+The Owner approved auditing the existing triple-Surface Point rule and
+researching a stable segment identifier, **not** implementing a new Point,
+durable MaterialEdgeReference branch, provider API, v15 schema or migration.
+The other product alternatives A/C were not approved. Owner practical
+PG-01D remains FAIL; no final FULL, merge or PM-06 permission.
+
+Test-only exact-stage OCCT result capture proves all 36 independent
+synthetic rejected Edge members have a **new Vertex with exactly two
+semantically resolved Surfaces** and no predecessor Vertex lineage claim.
+The accepted three-Surface `PointRelation` therefore intentionally does
+not certify that endpoint. Two-Surface pairs were locally unique 36/36,
+but are **not proven globally durable selectors**. A narrower candidate
+`FeatureCurveAddress + one existing resolved FeaturePointAddress` selected
+the correct individual current material Edge **36/36** and stayed
+uniquely resolvable after fresh Part state restore + fresh OCCT provider
+**36/36**; see deliberately RED-for-log native [#38073995083](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38073995083),
+[#38074273908](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38074273908),
+[#38074545532](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38074545532).
+These are not final candidate PASS: the temporary failing assertion
+was removed, separate cold on-disk Save/Reopen and upstream-edit/
+negative ambiguity proofs are still missing. Test-only proof does not
+alter the public product contract. Runtime Workbench diagnostics include
+`curveFamilyEdges` and `certifiedEndpoints` for the Owner's one-click
+private reproduction. Exact-head focused verification remains required.
 The existing Windows focused graph cannot build the Qt/OCCT Workbench
 target and the kernel-only Add-continuation test in a single desktop
 build: the latter exists only in the `SS2_BUILD_KERNEL_NATIVE`
