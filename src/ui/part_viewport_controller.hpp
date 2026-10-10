@@ -516,7 +516,8 @@ public:
     // as Viewer or durable CAD identity. Empty vectors clear feedback.
     [[nodiscard]] bool setProjectFaceSourceFeedback(
         const std::vector<part::MaterialEdgeReference>& supported,
-        const std::vector<part::MaterialEdgeReference>& skipped);
+        const std::vector<part::MaterialEdgeReference>& skipped,
+        const std::vector<BodyTopologySelectionAddress>& selected_faces = {});
 
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
@@ -737,6 +738,9 @@ private:
         project_face_feedback_supported_;
     std::vector<part::MaterialEdgeReference>
         project_face_feedback_skipped_;
+    // Exact native face presentation tokens scoped to the same scene.
+    std::vector<viewer::PresentationToken>
+        project_face_feedback_selected_faces_;
     std::uint64_t next_body_scene_generation_{1U};
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};
