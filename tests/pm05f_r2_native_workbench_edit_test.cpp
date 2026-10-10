@@ -2664,6 +2664,91 @@ int main(int argc, char* argv[]) {
                 << " one_undo_redo=1"
                 << '\n';
 
+            // E2 D2 fail-closed negative: a transient Face gesture is
+            // revision-bound, even if an external command only changes
+            // an otherwise unrelated Sketch. It must never Finish
+            // against a previously cached provider generation.
+            auto stale_session = makeBaseSession(kernel);
+            const auto stale_target =
+                stale_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(stale_target.ok() && stale_target.sketch_id);
+            CHECK(workbench.activateDocument(
+                &stale_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* stale_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    stale_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(stale_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(stale_tree_item);
+            stale_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{
+                    20.0, 15.0, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_finish->isEnabled());
+            const auto stale_pre_revision =
+                stale_session.document().revision();
+            const auto stale_pre_undo =
+                stale_session.undoDepth();
+            const auto unrelated_edit = stale_session.execute(
+                application::AddSketchLineCommand{
+                    *stale_target.sketch_id,
+                    {2.0, 2.0}, {7.0, 7.0},
+                    sketch::EntityRole::construction});
+            CHECK(unrelated_edit.ok());
+            CHECK(stale_session.document().revision() !=
+                  stale_pre_revision);
+            CHECK(stale_session.undoDepth() ==
+                  stale_pre_undo + 1U);
+            const auto changed_state =
+                stale_session.document().state();
+            const auto changed_revision =
+                stale_session.document().revision();
+            const auto changed_undo = stale_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(!reply.accepted);
+            CHECK(stale_session.document().state() ==
+                  changed_state);
+            CHECK(stale_session.document().revision() ==
+                  changed_revision);
+            CHECK(stale_session.undoDepth() == changed_undo);
+            CHECK(stale_session.document().findSketch(
+                *stale_target.sketch_id)
+                ->projection_bindings.empty());
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            std::cout
+                << "PG01D_MANUAL_FACE_STALE_REVISION_FAIL_CLOSED_PASS"
+                << " drafted_faces=1"
+                << " external_sketch_edit=1"
+                << " invalidated_finish=1"
+                << " additional_undo=0"
+                << '\n';
+
             result = EXIT_SUCCESS;
             workbench.close();
             app.quit();
