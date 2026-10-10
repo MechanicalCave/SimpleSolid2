@@ -605,8 +605,53 @@ void verifyPartIntegration() {
                         ++rejected_material;
                         const auto* detail = admission.rejected_edge
                             ? &*admission.rejected_edge : nullptr;
+                        std::size_t family_realizations = 0U;
+                        std::size_t incident_vertices = 0U;
+                        std::size_t certified_endpoints = 0U;
+                        if (detail) {
+                            const auto record = std::find_if(
+                                ledger.edges.begin(), ledger.edges.end(),
+                                [token = detail->edge](const auto& item) {
+                                    return item.runtime_token == token;
+                                });
+                            if (record != ledger.edges.end() &&
+                                record->curve_candidates.size() == 1U) {
+                                const auto family = std::find_if(
+                                    ledger.curves.begin(),
+                                    ledger.curves.end(),
+                                    [address = record->curve_candidates.front()](
+                                        const auto& item) {
+                                        return item.address == address;
+                                    });
+                                if (family != ledger.curves.end()) {
+                                    family_realizations =
+                                        family->current_edges.size();
+                                }
+                            }
+                            for (const auto& vertex : ledger.vertices) {
+                                if (std::find(
+                                        vertex.incident_material_edges.begin(),
+                                        vertex.incident_material_edges.end(),
+                                        detail->edge) ==
+                                    vertex.incident_material_edges.end()) {
+                                    continue;
+                                }
+                                ++incident_vertices;
+                                if (vertex.accounting_class ==
+                                        part::TopologyAccountingClass::
+                                            referenceable &&
+                                    vertex.referenceability ==
+                                        kernel::ReferenceStatus::resolved &&
+                                    vertex.point_candidates.size() == 1U) {
+                                    ++certified_endpoints;
+                                }
+                            }
+                        }
                         std::cout
                             << "PG01D_CHAMFER_SWEEP_REJECT"
+                            << " family_realizations=" << family_realizations
+                            << " incident_vertices=" << incident_vertices
+                            << " certified_endpoints=" << certified_endpoints
                             << " chamfer_source="
                             << candidate.runtime_token.value
                             << " distance=" << distance
