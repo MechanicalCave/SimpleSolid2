@@ -3134,6 +3134,87 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
     CHECK(first_cut_contours == 1U);
     CHECK(second_cut_contours == 1U);
     CHECK(outer_contours == 1U);
+
+    // E0 negative controls on the actual native Edge/Vertex cycles:
+    // the *classification function* must refuse even one missing,
+    // conflicting, or falsely promoted member of the two Cut source
+    // sets. No partial shape/coordinate healing is permissible.
+    const auto exact_cut_side_classification =
+        [&](const std::set<std::uint64_t>& first_sources,
+            const std::set<std::uint64_t>& second_sources) {
+            std::set<std::uint64_t> once;
+            std::size_t first_contours = 0U;
+            std::size_t second_contours = 0U;
+            std::size_t unclaimed_contours = 0U;
+            for (const auto& ring : twice_cycles) {
+                if (!directed_closed(ring)) return false;
+                std::size_t a = 0U;
+                std::size_t b = 0U;
+                for (const auto& member : ring) {
+                    const auto token = member.edge.value;
+                    if (twice_material.count(token) != 1U ||
+                        !once.insert(token).second) {
+                        return false;
+                    }
+                    if (first_sources.count(token)) ++a;
+                    if (second_sources.count(token)) ++b;
+                }
+                if (a != 0U && b != 0U) return false;
+                if (a == ring.size()) {
+                    ++first_contours;
+                } else if (b == ring.size()) {
+                    ++second_contours;
+                } else if (a == 0U && b == 0U) {
+                    ++unclaimed_contours;
+                } else {
+                    return false;
+                }
+            }
+            return once == twice_material &&
+                first_contours == 1U &&
+                second_contours == 1U &&
+                unclaimed_contours == 1U;
+        };
+    CHECK(exact_cut_side_classification(
+        first_hole_sources, second_hole_sources));
+    CHECK(!first_hole_sources.empty());
+    CHECK(!second_hole_sources.empty());
+    auto missing_first_member = first_hole_sources;
+    missing_first_member.erase(
+        *missing_first_member.begin());
+    CHECK(!exact_cut_side_classification(
+        missing_first_member, second_hole_sources));
+    auto aliased_second_cut = second_hole_sources;
+    aliased_second_cut.insert(
+        *first_hole_sources.begin());
+    CHECK(!exact_cut_side_classification(
+        first_hole_sources, aliased_second_cut));
+    std::set<std::uint64_t> external_members;
+    for (const auto material : twice_material) {
+        if (!first_hole_sources.count(material) &&
+            !second_hole_sources.count(material)) {
+            external_members.insert(material);
+        }
+    }
+    CHECK(!external_members.empty());
+    auto mislabeled_exterior = first_hole_sources;
+    mislabeled_exterior.insert(*external_members.begin());
+    CHECK(!exact_cut_side_classification(
+        mislabeled_exterior, second_hole_sources));
+    auto conflated_cut_sides = first_hole_sources;
+    conflated_cut_sides.insert(
+        second_hole_sources.begin(),
+        second_hole_sources.end());
+    CHECK(!exact_cut_side_classification(
+        conflated_cut_sides, second_hole_sources));
+    std::cout
+        << "PG01D_E0_TWO_CUT_SIDE_PROVENANCE_FAIL_CLOSED_PASS"
+        << " one_missing_edge_rejected=1"
+        << " foreign_cut_alias_rejected=1"
+        << " exterior_edge_false_promote_rejected=1"
+        << " two_cut_origins_conflated_rejected=1"
+        << " genuine_native_contours_preserved=3"
+        << '\n';
     std::cout
         << "PG01D_E0_NATIVE_TWO_CROSS_PARTITION_HOLES_PASS"
         << " same_carrier_faces=2"
