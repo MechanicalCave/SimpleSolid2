@@ -1857,9 +1857,16 @@ void verifyPartIntegration() {
         CHECK(tested_predecessor_stage_suppression);
         CHECK(predecessor_stage_absent == 1U);
         CHECK(predecessor_stage_survived == 0U);
-        // Diagnostic RED only to capture actual upstream-edit outcome
-        // distribution in the self-hosted Windows CTest log.
-        CHECK(false && "PG01D_D2_RADICAL_UPSTREAM_MATRIX_LOG_ONLY");
+        // Controlled OCCT regression: reversed Add invalidates the
+        // dependent Chamfer, and six valid forward variants retain one
+        // strict stage-local candidate. These are *not* sufficient to
+        // certify per-segment provenance under arbitrary geometry edits.
+        CHECK(radical_command_rejected == 0U);
+        CHECK(radical_final_unavailable == 6U);
+        CHECK(radical_stage_missing == 0U);
+        CHECK(radical_source_missing == 0U);
+        CHECK(radical_source_unique == 6U);
+        CHECK(radical_source_ambiguous == 0U);
     }
 
     const auto contribution =
