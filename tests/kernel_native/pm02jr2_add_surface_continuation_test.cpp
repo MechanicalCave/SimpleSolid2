@@ -1828,7 +1828,19 @@ void verifyNativeCylindricalCutSplitE0() {
           kernel::ReferenceStatus::ambiguous);
 
     std::vector<std::set<std::uint64_t>> face_edges;
+    std::vector<std::set<std::uint64_t>> face_material_edges;
     std::vector<std::set<std::uint64_t>> face_vertices;
+    // An OCCT seam is TWO oriented uses of ONE representation-only
+    // Edge on the SAME native bounded Face, never a join between
+    // different Faces sharing one semantic cylindrical carrier.
+    struct NativeSeamUse final {
+        kernel::RuntimeFaceToken face;
+        bool reversed{};
+        kernel::RuntimeVertexToken start;
+        kernel::RuntimeVertexToken end;
+    };
+    std::map<std::uint64_t, std::vector<NativeSeamUse>>
+        seam_native_uses;
     std::size_t seam_uses = 0U;
     for (const auto token : inherited->current_faces) {
         const auto scoped =
@@ -1842,9 +1854,18 @@ void verifyNativeCylindricalCutSplitE0() {
                 cut.solid, *scoped);
         CHECK(native.ok());
         std::set<std::uint64_t> edges;
+        std::set<std::uint64_t> material_edges;
         for (const auto& wire : native.wires) {
-            for (const auto& use : wire.edges) {
+            CHECK(wire.valid());
+            for (std::size_t i = 0U; i < wire.edges.size();
+                 ++i) {
+                const auto& use = wire.edges[i];
+                const auto& next =
+                    wire.edges[(i + 1U) % wire.edges.size()];
                 CHECK(use.valid());
+                CHECK(use.start_vertex && use.end_vertex);
+                CHECK(next.start_vertex);
+                CHECK(*use.end_vertex == *next.start_vertex);
                 edges.insert(use.edge.value);
                 const auto observation = std::find_if(
                     cut.current_edge_semantics.begin(),
@@ -1854,10 +1875,24 @@ void verifyNativeCylindricalCutSplitE0() {
                     });
                 CHECK(observation !=
                       cut.current_edge_semantics.end());
-                if (observation->periodic_seam) ++seam_uses;
+                if (observation->periodic_seam) {
+                    CHECK(!observation->same_surface_partition);
+                    seam_native_uses[use.edge.value].push_back(
+                        NativeSeamUse{
+                            token, use.reversed,
+                            *use.start_vertex, *use.end_vertex});
+                    ++seam_uses;
+                } else {
+                    // Material-only graph: do NOT permit native seam
+                    // edges or known representation partitions as
+                    // contour-joining material authority.
+                    CHECK(!observation->same_surface_partition);
+                    material_edges.insert(use.edge.value);
+                }
             }
         }
         CHECK(!edges.empty());
+        CHECK(!material_edges.empty());
         std::set<std::uint64_t> vertices;
         for (const auto& v : cut.current_vertex_semantics) {
             for (const auto edge : v.incident_material_edges) {
@@ -1867,9 +1902,11 @@ void verifyNativeCylindricalCutSplitE0() {
             }
         }
         face_edges.push_back(std::move(edges));
+        face_material_edges.push_back(std::move(material_edges));
         face_vertices.push_back(std::move(vertices));
     }
     CHECK(face_edges.size() == 2U);
+    CHECK(face_material_edges.size() == 2U);
     CHECK(face_vertices.size() == 2U);
     CHECK(!face_vertices[0].empty());
     CHECK(!face_vertices[1].empty());
@@ -1882,6 +1919,38 @@ void verifyNativeCylindricalCutSplitE0() {
     for (const auto token : face_vertices[0]) {
         CHECK(face_vertices[1].count(token) == 0U);
     }
+    for (const auto token : face_material_edges[0]) {
+        CHECK(face_material_edges[1].count(token) == 0U);
+    }
+    // Provider-signed directed observations guarantee that a seam
+    // cannot sneak into a cross-Face stitching graph: precisely two
+    // opposite uses, same Face, reversed native Vertex endpoints.
+    CHECK(!seam_native_uses.empty());
+    CHECK(seam_uses == 2U * seam_native_uses.size());
+    std::set<std::uint64_t> seam_host_faces;
+    for (const auto& [edge, uses] : seam_native_uses) {
+        CHECK(edge != 0U);
+        CHECK(uses.size() == 2U);
+        CHECK(uses[0].face == uses[1].face);
+        CHECK(uses[0].reversed != uses[1].reversed);
+        CHECK(uses[0].start == uses[1].end);
+        CHECK(uses[0].end == uses[1].start);
+        CHECK(face_material_edges[0].count(edge) == 0U);
+        CHECK(face_material_edges[1].count(edge) == 0U);
+        seam_host_faces.insert(uses[0].face.value);
+    }
+    CHECK(seam_host_faces.size() == 2U);
+    std::cout
+        << "PG01D_CURVED_CUT_E0_DIRECTED_SEAM_ISOLATION_PASS"
+        << " same_carrier_bounded_faces=2"
+        << " strictly_same_face_opposite_oriented_seams="
+        << seam_native_uses.size()
+        << " signed_seam_uses=" << seam_uses
+        << " disconnected_material_components=2"
+        << " seam_material_authority=0"
+        << " cross_face_vertex_stitching=0"
+        << " coordinate_matching=0"
+        << '\n';
     std::cout
         << "PG01D_CURVED_CUT_E0_DISCONNECTED_CARRIER_PASS"
         << " current_same_carrier_faces=" << inherited->current_faces.size()
