@@ -95,8 +95,22 @@ struct FaceBoundaryResult final {
             return false;
         }
         std::size_t outer_count = 0U;
+        // Directed OCCT endpoint observation must be RESULT-ATOMIC,
+        // not just wire-atomic. One legacy (Edge-only) inner wire
+        // alongside a signed outer wire would otherwise report ok()
+        // despite supplying only a PARTIAL native contour proof.
+        // A fully legacy provider remains backward-compatible but
+        // its output is never a signed-continuity certificate.
+        std::optional<bool> has_directed_endpoints;
         for (const auto& wire : wires) {
             if (!wire.valid()) return false;
+            const bool directed =
+                wire.edges.front().start_vertex.has_value();
+            if (has_directed_endpoints &&
+                *has_directed_endpoints != directed) {
+                return false;
+            }
+            has_directed_endpoints = directed;
             if (wire.outer) ++outer_count;
         }
         return outer_count == 1U;
