@@ -5,6 +5,25 @@
 **Active authority:** `work/ACTIVE.yaml` -> accepted PG-01D Work Contract, later Owner-approved manual multi-Face amendment §0. No separate product phase activated.  
 **Out of scope:** changing native Part v15, Foundation/accepted ADR, general Curve/Point semantics, provider identity, boolean healing, Profile tolerances, viewer picking policy, PG-01E, PM-06, issue #302 or `main` under this diagnostic checkpoint.
 
+## D2-A Owner decision update (2026-10-10)
+
+**Approved:** semantic associativity for a future strict split material
+Edge branch means `BodyStageRef + FeatureCurveAddress +
+AtSingleSemanticPoint{FeaturePointAddress}`, using the same certified
+semantic anchors after upstream geometry edits. Geometry may deform
+while strict current material Edge cardinality, exactly one certified
+semantic endpoint, earlier-stage freshness and semantic source
+identity remain proved. This is **not** a cross-revision numeric
+OCCT Edge/Vertex lineage guarantee.
+
+**Not approved:** production third branch or altered
+`MaterialEdgeReference`, v15/v16 parser/writer mutation, schema
+migration and v16 save-version policy, automatic Face expansion,
+merge or Owner FINAL PASS. Full technical decision proposal:
+`work/PROJECTION_01D_D2_A_V16_PERSISTENCE_MIGRATION_PROPOSAL.md`.
+The accepted semantic meaning is recorded in
+`work/PROJECTION_01D_ONE_POINT_CURVE_REFERENCE_D2_CONTRACT_DRAFT.md`.
+
 ## 1. Actual Owner problem versus independent evidence
 
 Owner's private Part: two successive Add Extrudes and a later Chamfer, with two target Sketches hosted on current planar Body Surfaces. A real pointer click on a current referenceable, strictly resolved Face in Project Geometry **Face Boundary** mode at `after Feature 3` rejected the Face:
