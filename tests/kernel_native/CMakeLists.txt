@@ -318,6 +318,13 @@ target_link_libraries(pm02jr2_add_surface_continuation_test
         simplesolid2_sketch
 )
 
+# The PG-01D v16 negative native-container test reads JSON payloads directly.
+# The parser remains private to Part; do not widen production include surfaces.
+target_include_directories(pm02jr2_add_surface_continuation_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
+)
+
 target_compile_features(pm02jr2_add_surface_continuation_test PRIVATE cxx_std_20)
 
 add_test(
