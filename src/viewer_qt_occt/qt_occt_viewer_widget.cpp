@@ -6084,7 +6084,7 @@ public:
                                   Quantity_TOC_RGB}
                             : entry.linked
                                 ? Quantity_Color{
-                                      0.58, 0.72, 1.0,
+                                      0.18, 0.62, 1.0,
                                       Quantity_TOC_RGB}
                                 : Quantity_Color{
                                       0.92, 0.92, 0.94,
@@ -6096,7 +6096,9 @@ public:
                            ? 3.0
                            : (measure_highlighted
                                   ? 3.2
-                                  : (hovered ? 3.0 : 2.0)));
+                                  : (hovered
+                                         ? 3.0
+                                         : (entry.linked ? 3.8 : 2.0))));
 
             const auto line_type =
                 entry.construction
