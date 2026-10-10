@@ -1271,6 +1271,12 @@ void verifyPartIntegration() {
     };
     std::map<std::uint64_t, std::vector<TwoHoleUse>>
         two_native_uses;
+    // Preserve the provider's native ORDER and ORIENTATION of each
+    // Face wire, not merely its set of material Edge tokens.
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        two_face_outer_cycles;
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        two_face_hole_cycles;
     std::set<std::uint64_t> two_hole_face_tokens;
     std::size_t two_native_inner_wires = 0U;
     std::size_t two_native_outer_wires = 0U;
@@ -1296,9 +1302,11 @@ void verifyPartIntegration() {
             if (wire.outer) {
                 ++current_face_outer_wires;
                 ++two_native_outer_wires;
+                two_face_outer_cycles.push_back(wire.edges);
             } else {
                 ++two_native_inner_wires;
                 two_hole_face_tokens.insert(face_token.value);
+                two_face_hole_cycles.push_back(wire.edges);
             }
             for (const auto& use : wire.edges) {
                 CHECK(use.valid());
@@ -1316,6 +1324,7 @@ void verifyPartIntegration() {
     std::set<std::uint64_t> two_outer_tokens;
     std::set<std::uint64_t> two_hole_tokens;
     std::vector<part::MaterialEdgeReference> two_material_sources;
+    std::vector<std::uint64_t> two_partition_tokens;
     std::size_t two_cancelled_partitions = 0U;
     for (const auto& [value, uses] : two_native_uses) {
         const kernel::RuntimeEdgeToken edge_token{value};
@@ -1338,6 +1347,7 @@ void verifyPartIntegration() {
             CHECK(uses[0].face != uses[1].face);
             CHECK(!uses[0].inner && !uses[1].inner);
             CHECK(uses[0].reversed != uses[1].reversed);
+            two_partition_tokens.push_back(value);
             ++two_cancelled_partitions;
             continue;
         }
@@ -1442,6 +1452,126 @@ void verifyPartIntegration() {
         active_two_edge = next_edge;
     }
     CHECK(visited_two_outer == two_outer_tokens);
+
+    // E0 ordered/oriented wire-gluing proof for this exact two-hole
+    // planar fixture. Each certified internal partition appears once
+    // on each of TWO DIFFERENT native outer Face wires, with opposite
+    // orientation. Splice the ordered native cycles at these two uses
+    // and remove the pair. NO spatial intersection, tangent repair,
+    // face-token ordering, curve approximation or sewing is permitted.
+    //
+    // Important: this is a test-only combinatorial construction for
+    // strictly certified partitions. A partition whose occurrences
+    // are in one already-merged loop (or >2 loops) must fail CLOSED;
+    // more general topology needs a separate proof before E1.
+    CHECK(two_face_outer_cycles.size() ==
+          two_side->current_faces.size());
+    CHECK(two_face_hole_cycles.size() == 2U);
+    CHECK(two_partition_tokens.size() ==
+          two_cancelled_partitions);
+    for (const auto& hole : two_face_hole_cycles) {
+        CHECK(hole.size() == 1U);
+        CHECK(two_hole_tokens.count(hole.front().edge.value) == 1U);
+    }
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        stitched_outer = two_face_outer_cycles;
+    std::size_t oriented_splices = 0U;
+    for (const auto partition_token : two_partition_tokens) {
+        std::vector<std::pair<std::size_t, std::size_t>>
+            occurrences;
+        for (std::size_t cycle_index = 0U;
+             cycle_index < stitched_outer.size(); ++cycle_index) {
+            for (std::size_t use_index = 0U;
+                 use_index < stitched_outer[cycle_index].size();
+                 ++use_index) {
+                if (stitched_outer[cycle_index][use_index]
+                        .edge.value == partition_token) {
+                    occurrences.emplace_back(
+                        cycle_index, use_index);
+                }
+            }
+        }
+        CHECK(occurrences.size() == 2U);
+        const auto [first_loop, first_use] = occurrences[0];
+        const auto [second_loop, second_use] = occurrences[1];
+        CHECK(first_loop != second_loop);
+        const auto& left = stitched_outer[first_loop];
+        const auto& right = stitched_outer[second_loop];
+        CHECK(left[first_use].reversed !=
+              right[second_use].reversed);
+        std::vector<kernel::FaceBoundaryEdgeUse> combined;
+        const auto append_after_cancelled =
+            [&combined](
+                const std::vector<kernel::FaceBoundaryEdgeUse>&
+                    original,
+                std::size_t deleted_use) {
+                for (std::size_t offset = 1U;
+                     offset < original.size(); ++offset) {
+                    combined.push_back(
+                        original[
+                            (deleted_use + offset) %
+                            original.size()]);
+                }
+            };
+        append_after_cancelled(left, first_use);
+        append_after_cancelled(right, second_use);
+        CHECK(!combined.empty());
+        std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+            remaining;
+        for (std::size_t i = 0U;
+             i < stitched_outer.size(); ++i) {
+            if (i != first_loop && i != second_loop) {
+                remaining.push_back(
+                    std::move(stitched_outer[i]));
+            }
+        }
+        remaining.push_back(std::move(combined));
+        stitched_outer = std::move(remaining);
+        ++oriented_splices;
+    }
+    CHECK(oriented_splices == two_cancelled_partitions);
+    CHECK(stitched_outer.size() == 1U);
+    const auto& ordered_outer = stitched_outer.front();
+    CHECK(ordered_outer.size() == two_outer_tokens.size());
+    std::set<std::uint64_t> stitched_outer_tokens;
+    for (std::size_t i = 0U;
+         i < ordered_outer.size(); ++i) {
+        const auto current = ordered_outer[i].edge.value;
+        const auto next = ordered_outer[
+            (i + 1U) % ordered_outer.size()].edge.value;
+        CHECK(two_outer_tokens.count(current) == 1U);
+        CHECK(stitched_outer_tokens.insert(current).second);
+        CHECK(current != next);
+        const auto a = two_outer_edge_vertices.find(current);
+        const auto b = two_outer_edge_vertices.find(next);
+        CHECK(a != two_outer_edge_vertices.end());
+        CHECK(b != two_outer_edge_vertices.end());
+        std::size_t common_native_vertices = 0U;
+        for (const auto v : a->second) {
+            if (std::find(
+                    b->second.begin(), b->second.end(), v) !=
+                b->second.end()) {
+                ++common_native_vertices;
+            }
+        }
+        // Ordered neighboring uses share exactly one CURRENT native
+        // material Vertex. The last use must also close to the first.
+        CHECK(common_native_vertices == 1U);
+    }
+    CHECK(stitched_outer_tokens == two_outer_tokens);
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_ORDERED_OUTER_TWO_HOLES_PASS"
+        << " native_outer_fragments="
+        << two_face_outer_cycles.size()
+        << " exact_opposite_oriented_splices="
+        << oriented_splices
+        << " resulting_outer_cycles=" << stitched_outer.size()
+        << " ordered_outer_material_uses=" << ordered_outer.size()
+        << " unchanged_native_inner_wires="
+        << two_face_hole_cycles.size()
+        << " native_vertex_adjacency=1"
+        << " source_geometry_guessing=0"
+        << '\n';
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_SPLIT_TWO_HOLES_PASS"
         << " same_surface_fragments="
