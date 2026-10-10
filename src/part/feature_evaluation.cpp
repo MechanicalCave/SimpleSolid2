@@ -3977,6 +3977,7 @@ resolveMaterialEdgeReference(
             std::size_t vertex_count = 0U;
             std::size_t certified_count = 0U;
             bool carries_point = false;
+            std::vector<kernel::RuntimeVertexToken> endpoint_tokens;
             for (const auto& vertex : catalog.vertices) {
                 if (std::find(
                         vertex.incident_material_edges.begin(),
@@ -3985,6 +3986,7 @@ resolveMaterialEdgeReference(
                     continue;
                 }
                 ++vertex_count;
+                endpoint_tokens.push_back(vertex.runtime_token);
                 if (vertex.accounting_class !=
                         TopologyAccountingClass::referenceable ||
                     vertex.referenceability !=
@@ -4009,8 +4011,33 @@ resolveMaterialEdgeReference(
                     carries_point = true;
                 }
             }
+            // Existing two-Point references can resolve from PointResolution
+            // vertex incidence even if a fabricated catalog omitted the
+            // corresponding Vertex point candidate. Never admit a new
+            // one-Point branch in such an aliased catalog: no semantic
+            // source may have two simultaneously resolved identities.
+            std::size_t resolved_endpoint_points = 0U;
+            bool shadow_point = false;
+            for (const auto& resolved_point : catalog.points) {
+                if (resolved_point.status !=
+                        kernel::ReferenceStatus::resolved ||
+                    resolved_point.current_vertices.size() != 1U ||
+                    std::find(
+                        endpoint_tokens.begin(), endpoint_tokens.end(),
+                        resolved_point.current_vertices.front()) ==
+                        endpoint_tokens.end()) {
+                    continue;
+                }
+                ++resolved_endpoint_points;
+                if (resolved_point.address != single->point ||
+                    resolved_point.current_vertices.front() !=
+                        point->current_vertices.front()) {
+                    shadow_point = true;
+                }
+            }
             if (vertex_count == 2U &&
-                certified_count == 1U && carries_point) {
+                certified_count == 1U && carries_point &&
+                resolved_endpoint_points == 1U && !shadow_point) {
                 appendUniqueRuntimeToken(candidates, edge);
             }
         }

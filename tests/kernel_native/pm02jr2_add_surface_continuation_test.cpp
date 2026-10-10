@@ -761,6 +761,7 @@ void verifyPartIntegration() {
         std::size_t one_semantic_endpoint_ambiguous = 0U;
         std::size_t one_semantic_endpoint_cold_unique = 0U;
         bool tested_ambiguous_incidence = false;
+    bool tested_shadow_point_alias = false;
         bool tested_missing_reference = false;
         bool tested_native_file_reopen = false;
         bool tested_undo_redo = false;
@@ -1273,6 +1274,76 @@ void verifyPartIntegration() {
                                             *production.reference, injected);
                                     CHECK(rejected && !rejected->resolved());
                                     tested_ambiguous_incidence = true;
+                                }
+                                if (!tested_shadow_point_alias) {
+                                    // Fabricate an internally inconsistent,
+                                    // yet structurally valid, duplicate
+                                    // PointResolution at the same provider
+                                    // Vertex. The legacy two-Point resolver
+                                    // must remain unchanged, while the new
+                                    // one-Point branch refuses any alias.
+                                    const auto other_point =
+                                        std::find_if(
+                                            ledger.points.begin(),
+                                            ledger.points.end(),
+                                            [addr = *certified_point_address](
+                                                const auto& entry) {
+                                                return entry.address != addr &&
+                                                    entry.status ==
+                                                        kernel::ReferenceStatus::
+                                                            resolved;
+                                            });
+                                    CHECK(other_point !=
+                                          ledger.points.end());
+                                    auto aliased = ledger;
+                                    auto shadow = std::find_if(
+                                        aliased.points.begin(),
+                                        aliased.points.end(),
+                                        [addr = other_point->address](
+                                            const auto& entry) {
+                                            return entry.address == addr;
+                                        });
+                                    CHECK(shadow != aliased.points.end());
+                                    const auto certified_resolution =
+                                        std::find_if(
+                                            aliased.points.begin(),
+                                            aliased.points.end(),
+                                            [addr = *certified_point_address](
+                                                const auto& entry) {
+                                                return entry.address == addr;
+                                            });
+                                    CHECK(certified_resolution !=
+                                          aliased.points.end());
+                                    CHECK(certified_resolution->
+                                          current_vertices.size() == 1U);
+                                    shadow->current_vertices = {
+                                        certified_resolution->
+                                            current_vertices.front()};
+                                    shadow->candidate_vertex_count = 1U;
+                                    shadow->status =
+                                        kernel::ReferenceStatus::resolved;
+                                    CHECK(aliased.complete());
+                                    auto first = *certified_point_address;
+                                    auto second = other_point->address;
+                                    if (second < first) std::swap(first, second);
+                                    const part::MaterialEdgeReference
+                                        preexisting_two_point{
+                                            ledger.stage, curve_address,
+                                            part::BetweenSemanticPoints{
+                                                first, second}};
+                                    const auto old_result =
+                                        part::resolveMaterialEdgeReference(
+                                            preexisting_two_point, aliased);
+                                    CHECK(old_result &&
+                                          old_result->resolved());
+                                    CHECK(old_result->current_edges.front() ==
+                                          detail->edge);
+                                    const auto new_result =
+                                        part::resolveMaterialEdgeReference(
+                                            *production.reference, aliased);
+                                    CHECK(new_result &&
+                                          !new_result->resolved());
+                                    tested_shadow_point_alias = true;
                                 }
                                 if (!tested_missing_reference) {
                                     auto missing = ledger;
@@ -2050,6 +2121,7 @@ void verifyPartIntegration() {
         CHECK(one_semantic_endpoint_ambiguous == 0U);
         CHECK(one_semantic_endpoint_cold_unique == rejected_material);
         CHECK(tested_ambiguous_incidence);
+        CHECK(tested_shadow_point_alias);
         CHECK(tested_missing_reference);
         CHECK(tested_native_file_reopen);
         CHECK(tested_undo_redo);
