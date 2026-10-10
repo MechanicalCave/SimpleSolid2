@@ -2307,6 +2307,53 @@ int main(int argc, char* argv[]) {
             const auto disk_revision =
                 disk_session.document().revision();
             const auto disk_undo = disk_session.undoDepth();
+            // Manual Face Boundary: all members are semantic material
+            // sources but the oblique Circle image is Unsupported.
+            // A zero-supported Face may remain staged and highlighted;
+            // it must NOT generate a zero-member authored transaction.
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 0")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face Boundary")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 1U);
+            CHECK(!pg_finish->isEnabled());
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(!reply.accepted);
+            CHECK(disk_session.document().state() == disk_original);
+            CHECK(disk_session.document().revision() ==
+                  disk_revision);
+            CHECK(disk_session.undoDepth() == disk_undo);
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            std::cout
+                << "PG01D_MANUAL_ALL_UNSUPPORTED_NOOP_PASS"
+                << " selected_faces=1"
+                << " unsupported_circle=1"
+                << " zero_command=1"
+                << '\n';
+
             reply = workbench.submitCadInput(
                 "PROJECT", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
