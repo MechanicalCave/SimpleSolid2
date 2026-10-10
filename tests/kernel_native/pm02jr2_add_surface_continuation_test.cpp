@@ -2346,6 +2346,149 @@ void verifyNativePartialCylinderCutContinuityProbeE0() {
         << '\n';
 }
 
+// E0 pure native-identity graph counterexample for a GENERAL region
+// stitcher: TWO bounded Face outer rings can share TWO certified
+// opposite-oriented representation partitions, e.g. an annular
+// surface divided into upper and lower sectors. Removing both
+// partitions yields TWO closed material contour cycles, not one.
+// This fixture is synthetic *topology only*, not a claimed native
+// OCCT Part or an Owner model. In particular, identifying which
+// cycle is OUTER vs HOLE requires an independent surface-region
+// containment/side certificate; Edge identity alone cannot do it.
+void verifyPg01dE0CyclicPartitionTwoContours() {
+    using Use = kernel::FaceBoundaryEdgeUse;
+    using kernel::RuntimeEdgeToken;
+    using kernel::RuntimeVertexToken;
+    const auto use = [](
+        std::uint64_t edge, std::uint64_t start,
+        std::uint64_t end, bool reversed = false) {
+        return Use{
+            RuntimeEdgeToken{edge}, reversed,
+            RuntimeVertexToken{start},
+            RuntimeVertexToken{end}};
+    };
+    // Shared exact vertices: outer-left/right 301/302 and
+    // inner-left/right 303/304. Native partition Edge 405 joins
+    // right endpoints, 406 joins left endpoints.
+    const std::vector<Use> top_face{
+        use(401U, 301U, 302U),
+        use(405U, 302U, 304U),
+        use(403U, 304U, 303U),
+        use(406U, 303U, 301U),
+    };
+    const std::vector<Use> bottom_face{
+        use(402U, 302U, 301U),
+        use(406U, 301U, 303U, true),
+        use(404U, 303U, 304U),
+        use(405U, 304U, 302U, true),
+    };
+    const auto closed = [](
+        const std::vector<Use>& ring) {
+        if (ring.empty()) return false;
+        for (std::size_t i = 0U; i < ring.size(); ++i) {
+            const auto& a = ring[i];
+            const auto& b = ring[(i + 1U) % ring.size()];
+            if (!a.valid() || !a.start_vertex ||
+                !a.end_vertex || !b.start_vertex ||
+                *a.end_vertex != *b.start_vertex) return false;
+        }
+        return true;
+    };
+    CHECK(closed(top_face));
+    CHECK(closed(bottom_face));
+    CHECK((kernel::FaceBoundaryWire{true, top_face}).valid());
+    CHECK((kernel::FaceBoundaryWire{true, bottom_face}).valid());
+    CHECK(top_face[1].edge == bottom_face[3].edge);
+    CHECK(top_face[1].reversed != bottom_face[3].reversed);
+    CHECK(top_face[1].start_vertex ==
+          bottom_face[3].end_vertex);
+    CHECK(top_face[1].end_vertex ==
+          bottom_face[3].start_vertex);
+    CHECK(top_face[3].edge == bottom_face[1].edge);
+    CHECK(top_face[3].reversed != bottom_face[1].reversed);
+    CHECK(top_face[3].start_vertex ==
+          bottom_face[1].end_vertex);
+    CHECK(top_face[3].end_vertex ==
+          bottom_face[1].start_vertex);
+
+    // First certified partition 405 joins TWO separate native Face
+    // outer rings. The second partition 406 then occurs twice on
+    // the resulting SAME ring. An implementation that merely
+    // insists every partition joins two different current loops
+    // rejects this valid combinatorial annulus class.
+    std::vector<Use> joined;
+    for (std::size_t k = 1U; k < top_face.size(); ++k) {
+        joined.push_back(
+            top_face[(1U + k) % top_face.size()]);
+    }
+    for (std::size_t k = 1U; k < bottom_face.size(); ++k) {
+        joined.push_back(
+            bottom_face[(3U + k) % bottom_face.size()]);
+    }
+    CHECK(joined.size() == 6U);
+    CHECK(closed(joined));
+    std::vector<std::size_t> second_partition_positions;
+    for (std::size_t i = 0U; i < joined.size(); ++i) {
+        if (joined[i].edge == RuntimeEdgeToken{406U}) {
+            second_partition_positions.push_back(i);
+        }
+    }
+    CHECK(second_partition_positions.size() == 2U);
+    const auto first = second_partition_positions[0];
+    const auto second = second_partition_positions[1];
+    CHECK(joined[first].reversed != joined[second].reversed);
+    CHECK(joined[first].start_vertex ==
+          joined[second].end_vertex);
+    CHECK(joined[first].end_vertex ==
+          joined[second].start_vertex);
+    // Removing the second exact partition pair splits one
+    // directed cyclic list into TWO independently closed loops.
+    std::vector<Use> first_contour;
+    std::vector<Use> second_contour;
+    for (std::size_t i = first + 1U; i < second; ++i) {
+        first_contour.push_back(joined[i]);
+    }
+    for (std::size_t offset = 1U;
+         offset < joined.size() - (second - first);
+         ++offset) {
+        second_contour.push_back(
+            joined[(second + offset) % joined.size()]);
+    }
+    CHECK(first_contour.size() == 2U);
+    CHECK(second_contour.size() == 2U);
+    CHECK(closed(first_contour));
+    CHECK(closed(second_contour));
+    std::set<std::uint64_t> material_sources;
+    for (const auto& ring : {first_contour, second_contour}) {
+        for (const auto& member : ring) {
+            CHECK(member.edge.value != 405U);
+            CHECK(member.edge.value != 406U);
+            CHECK(material_sources.insert(
+                member.edge.value).second);
+        }
+    }
+    CHECK(material_sources ==
+          (std::set<std::uint64_t>{401U, 402U, 403U, 404U}));
+    // Two real original Face OUTER wires are NOT evidence that
+    // their composite has one outer loop: absent an independent
+    // oriented region/containment witness, the provider-owned
+    // source identity can certify TWO contours but NOT label
+    // one of them as the outer vs an opening.
+    CHECK(first_contour.front().edge == RuntimeEdgeToken{401U});
+    CHECK(second_contour.front().edge == RuntimeEdgeToken{404U});
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_CYCLIC_PARTITION_TWO_LOOPS_PASS"
+        << " original_native_outer_rings=2"
+        << " certified_opposite_partition_pairs=2"
+        << " first_partition_joins_rings=1"
+        << " second_partition_splits_ring=1"
+        << " resulting_directed_material_cycles=2"
+        << " unique_material_edges=4"
+        << " external_outer_hole_witness_required=1"
+        << " inferred_hole_from_edge_graph=0"
+        << '\n';
+}
+
 // E0 typed/portable negative matrix: malformed per-use endpoint coverage
 // or wrong native Edge direction must be rejected at FaceBoundaryResult's
 // public validation boundary, BEFORE any Part-authorable sources are used.
@@ -2580,6 +2723,7 @@ int main() {
     verifyNativeCylindricalCutSplitE0();
     verifyNativePartialCylinderCutContinuityProbeE0();
     verifyPg01dE0DirectedWireFailClosedContract();
+    verifyPg01dE0CyclicPartitionTwoContours();
 
     std::cout
         << "PM02JR2_ADD_SURFACE_CONTINUATION_PASS"
