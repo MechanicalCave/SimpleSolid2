@@ -161,6 +161,14 @@ investigation.** Current Owner practical PG-01D result remains FAIL; no final
 FULL, merge or PM-06 permission. Runtime diagnostics now report current
 `curveFamilyEdges` and `certifiedEndpoints` to narrow the one-click
 Owner retest. Exact-head focused verification remains necessary.
+The existing Windows focused graph cannot build the Qt/OCCT Workbench
+target and the kernel-only Add-continuation test in a single desktop
+build: the latter exists only in the `SS2_BUILD_KERNEL_NATIVE`
+configuration. The attempted combined [#38070623955](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38070623955)
+compiled Part/UI and the Workbench test, then failed at an absent
+`pm02jr2_add_surface_continuation_test.vcxproj` before CTest. This is
+**not a semantic test PASS or FAIL**; run separate desktop and kernel
+FOCUSED checks with the established unmodified classifier.
 
 ## 1. Frozen product intent
 
