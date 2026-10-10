@@ -386,6 +386,35 @@ pg01dOnePointDisjointCandidate(
         ? candidates : std::vector<kernel::RuntimeEdgeToken>{};
 }
 
+// D2 research guard: a complete *final* current Body stage is
+// mandatory. A resolved-prefix topology from Failed/Blocked feature
+// evaluation is diagnostic only, never an alternate source catalog.
+[[nodiscard]] std::vector<kernel::RuntimeEdgeToken>
+pg01dStrictFinalStageOnePointCandidates(
+    const part::PartEvaluation& evaluated,
+    const part::BodyStageRef& stage,
+    const part::FeatureCurveAddress& curve,
+    const part::FeaturePointAddress& point) {
+    if (evaluated.body_status !=
+            part::BodyEvaluationStatus::up_to_date ||
+        !evaluated.current_topology ||
+        !evaluated.current_topology->complete() ||
+        evaluated.current_topology->stage != stage ||
+        stage.kind != part::BodyStageKind::after_feature ||
+        !stage.feature_id) {
+        return {};
+    }
+    const auto* feature = evaluated.findFeature(*stage.feature_id);
+    if (!feature ||
+        feature->status != part::FeatureEvaluationStatus::up_to_date ||
+        !feature->result_topology ||
+        feature->result_topology->stage != stage) {
+        return {};
+    }
+    return pg01dOnePointDisjointCandidate(
+        *evaluated.current_topology, stage, curve, point);
+}
+
 void verifyPartIntegration() {
     kernel_occt::OcctSolidModelingKernel provider;
     auto document =
@@ -746,6 +775,11 @@ void verifyPartIntegration() {
         bool predecessor_suppression_committed = false;
         bool predecessor_suppression_undo_restored = false;
         std::size_t predecessor_suppression_rejections = 0U;
+        bool tested_removed_final_stage = false;
+        bool tested_suppressed_final_stage = false;
+        bool tested_predecessor_stage_suppression = false;
+        std::size_t predecessor_stage_absent = 0U;
+        std::size_t predecessor_stage_survived = 0U;
         for (const auto& candidate : topology.edges) {
             const auto source =
                 part::authorMaterialEdgeReference(
@@ -1300,23 +1334,29 @@ void verifyPartIntegration() {
                                             part::evaluatePart(
                                                 suppress_session.document(),
                                                 suppress_provider);
-                                        if (suppressed_result.body_status ==
+                                        const auto source_after_suppression =
+                                            pg01dStrictFinalStageOnePointCandidates(
+                                                suppressed_result, ledger.stage,
+                                                curve_address,
+                                                *certified_point_address);
+                                        CHECK(source_after_suppression.size() <= 1U);
+                                        if (source_after_suppression.empty()) {
+                                            ++predecessor_stage_absent;
+                                        } else {
+                                            ++predecessor_stage_survived;
+                                        }
+                                        // Never replace the final Body
+                                        // with a diagnostically preserved
+                                        // prefix (which may have identical
+                                        // native token integers).
+                                        if (suppressed_result.body_status !=
                                                 part::BodyEvaluationStatus::
-                                                    up_to_date &&
-                                            suppressed_result.current_topology &&
-                                            suppressed_result.current_topology
-                                                ->complete() &&
-                                            suppressed_result.current_topology
-                                                ->stage == ledger.stage) {
-                                            const auto occurrences =
-                                                pg01dCurveEdgesIncidentToSemanticPoint(
-                                                    *suppressed_result.current_topology,
-                                                    curve_address,
-                                                    *certified_point_address);
-                                            // Never resolve >1 and choose
-                                            // first, nor use prior-stage
-                                            // cached runtime token.
-                                            CHECK(occurrences.size() <= 1U);
+                                                    up_to_date) {
+                                            CHECK(!suppressed_result
+                                                .current_topology);
+                                            CHECK(source_after_suppression.empty());
+                                            tested_predecessor_stage_suppression =
+                                                true;
                                         }
                                         const auto rollback =
                                             suppress_session.undo();
@@ -1347,6 +1387,91 @@ void verifyPartIntegration() {
                                         ++predecessor_suppression_rejections;
                                     }
                                     tested_predecessor_suppression = true;
+                                }
+                                if (!tested_removed_final_stage) {
+                                    // Delete the producing Chamfer Feature,
+                                    // not a graphically similar Edge.
+                                    // The old after-Chamfer stage cannot
+                                    // be read from the new final Body.
+                                    auto removed = part::PartDocument::restore(
+                                        core::DocumentId::generate(),
+                                        trial.document().state());
+                                    CHECK(removed.ok());
+                                    application::DocumentSession delete_session{
+                                        {}, std::move(*removed.document)};
+                                    CHECK(delete_session.document()
+                                          .body().features.size() == 3U);
+                                    const auto chamfer_id =
+                                        delete_session.document()
+                                            .body().features.back().id;
+                                    const auto erase = delete_session.execute(
+                                        application::DeleteFeatureCommand{
+                                            chamfer_id,
+                                            delete_session.document().revision()});
+                                    CHECK(erase.ok());
+                                    CHECK(delete_session.document()
+                                          .body().features.size() == 2U);
+                                    kernel_occt::OcctSolidModelingKernel
+                                        deleted_provider;
+                                    const auto deleted_eval = part::evaluatePart(
+                                        delete_session.document(),
+                                        deleted_provider);
+                                    CHECK(pg01dStrictFinalStageOnePointCandidates(
+                                        deleted_eval, ledger.stage,
+                                        curve_address,
+                                        *certified_point_address).empty());
+                                    const auto restore = delete_session.undo();
+                                    CHECK(restore.ok());
+                                    kernel_occt::OcctSolidModelingKernel
+                                        restored_provider;
+                                    const auto restored_eval =
+                                        part::evaluatePart(
+                                            delete_session.document(),
+                                            restored_provider);
+                                    CHECK(pg01dStrictFinalStageOnePointCandidates(
+                                        restored_eval, ledger.stage,
+                                        curve_address,
+                                        *certified_point_address).size() == 1U);
+                                    tested_removed_final_stage = true;
+                                }
+                                if (!tested_suppressed_final_stage) {
+                                    auto disabled = part::PartDocument::restore(
+                                        core::DocumentId::generate(),
+                                        trial.document().state());
+                                    CHECK(disabled.ok());
+                                    application::DocumentSession disable_session{
+                                        {}, std::move(*disabled.document)};
+                                    const auto final_id =
+                                        disable_session.document().body()
+                                            .features.back().id;
+                                    const auto disable = disable_session.execute(
+                                        application::SetFeatureSuppressedCommand{
+                                            final_id,
+                                            disable_session.document().revision(),
+                                            true});
+                                    CHECK(disable.ok());
+                                    kernel_occt::OcctSolidModelingKernel
+                                        disabled_provider;
+                                    const auto disabled_eval =
+                                        part::evaluatePart(
+                                            disable_session.document(),
+                                            disabled_provider);
+                                    CHECK(pg01dStrictFinalStageOnePointCandidates(
+                                        disabled_eval, ledger.stage,
+                                        curve_address,
+                                        *certified_point_address).empty());
+                                    CHECK(disable_session.undo().ok());
+                                    kernel_occt::OcctSolidModelingKernel
+                                        reenabled_provider;
+                                    const auto reenabled =
+                                        part::evaluatePart(
+                                            disable_session.document(),
+                                            reenabled_provider);
+                                    CHECK(pg01dStrictFinalStageOnePointCandidates(
+                                        reenabled, ledger.stage,
+                                        curve_address,
+                                        *certified_point_address).size() == 1U);
+                                    tested_suppressed_final_stage = true;
                                 }
                                 if (!tested_upstream_edit) {
                                     // Edit the immediately previous Add
@@ -1549,6 +1674,14 @@ void verifyPartIntegration() {
             << predecessor_suppression_rejections
             << " predecessor_suppression_undo_restored="
             << predecessor_suppression_undo_restored
+            << " predecessor_stage_absent="
+            << predecessor_stage_absent
+            << " predecessor_stage_survived="
+            << predecessor_stage_survived
+            << " source_stage_removed_undo_restored="
+            << tested_removed_final_stage
+            << " source_stage_suppressed_undo_restored="
+            << tested_suppressed_final_stage
             << " private_part_committed=0"
             << '\n';
         // Research witness on the accepted immutable Point rule:
@@ -1603,6 +1736,11 @@ void verifyPartIntegration() {
               native_onepoint_resolved);
         CHECK(predecessor_suppression_committed);
         CHECK(predecessor_suppression_undo_restored);
+        CHECK(tested_removed_final_stage);
+        CHECK(tested_suppressed_final_stage);
+        // Diagnostic RED only to report predecessor suppression
+        // state; do not leave in the green branch.
+        CHECK(false && "PG01D_D2_STAGE_DELETION_DIAGNOSTIC_ONLY");
     }
 
     const auto contribution =
