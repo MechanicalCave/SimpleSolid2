@@ -54,8 +54,28 @@ struct FaceBoundaryWire final {
 
     [[nodiscard]] bool valid() const noexcept {
         if (edges.empty()) return false;
-        for (const auto& use : edges) {
-            if (!use.valid()) return false;
+        // The optional E0 signed-Vertex observation is wire-ATOMIC:
+        // older providers may omit it on every use, but mixed coverage
+        // cannot be mistaken for a directed certified native boundary.
+        // When supplied, use[i].end must be exactly use[i+1].start,
+        // including the closure from the last use back to the first.
+        // No coordinate comparison, tolerance or curve joining.
+        const bool has_directed_endpoints =
+            edges.front().start_vertex.has_value();
+        for (std::size_t i = 0U; i < edges.size(); ++i) {
+            const auto& use = edges[i];
+            const auto& next =
+                edges[(i + 1U) % edges.size()];
+            if (!use.valid() ||
+                use.start_vertex.has_value() !=
+                    has_directed_endpoints) {
+                return false;
+            }
+            if (has_directed_endpoints &&
+                (!next.start_vertex ||
+                 *use.end_vertex != *next.start_vertex)) {
+                return false;
+            }
         }
         return true;
     }
