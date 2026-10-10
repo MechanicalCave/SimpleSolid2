@@ -649,6 +649,125 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
             ++fully_material_strict_holed_faces;
         }
     }
+    // Owner D2 manual multi-Face scope: native Face selection only,
+    // not an inferred connected Surface region. The existing through-
+    // Cut solid has both planar and cylindrical Face realizations.
+    // Explicit shared MATERIAL Edge identity must survive selecting
+    // two different Faces; a known cylinder seam must not be authored.
+    std::vector<part::SelectedFaceBoundaryAdmission>
+        individually_selected;
+    std::size_t selected_planar = 0U;
+    std::size_t selected_nonplanar = 0U;
+    std::size_t selected_seams = 0U;
+    std::size_t selected_material = 0U;
+    for (const auto& face : catalog.faces) {
+        const auto selected =
+            part::inspectSelectedFaceBoundary(
+                evaluation.features.back(),
+                face.runtime_token, kernel);
+        if (!selected.ok()) {
+            std::cerr
+                << "PG01D_MANUAL_FACE_E0_BLOCKED token="
+                << face.runtime_token.value
+                << " status=" << static_cast<int>(selected.status)
+                << '\n';
+            continue;
+        }
+        CHECK(selected.bounded_face == face.runtime_token);
+        const auto scope =
+            kernel.bindFaceToBody(
+                evaluation.body_solid, face.runtime_token);
+        CHECK(scope && scope->valid());
+        const auto planar = kernel.queryFaceBoundary(
+            evaluation.body_solid, *scope);
+        if (planar.ok()) {
+            ++selected_planar;
+        } else {
+            CHECK(planar.status ==
+                  kernel::FaceBoundaryStatus::
+                      unsupported_surface);
+            ++selected_nonplanar;
+        }
+        std::vector<kernel::RuntimeEdgeToken> own_material;
+        for (const auto& wire : selected.wires) {
+            for (const auto& use : wire.edges) {
+                CHECK(use.valid());
+                CHECK(use.native_use.start_vertex);
+                CHECK(use.native_use.end_vertex);
+                if (use.excluded_nonmaterial) {
+                    CHECK(!use.material);
+                    const auto edge = std::find_if(
+                        catalog.edges.begin(), catalog.edges.end(),
+                        [&use](const auto& item) {
+                            return item.runtime_token ==
+                                use.native_use.edge;
+                        });
+                    CHECK(edge != catalog.edges.end());
+                    CHECK(edge->periodic_seam ||
+                          edge->representation_partition);
+                    CHECK(edge->accounting_class ==
+                          part::TopologyAccountingClass::
+                              known_representation_artifact);
+                    if (edge->periodic_seam) ++selected_seams;
+                } else {
+                    CHECK(use.material);
+                    CHECK(use.material->stage == catalog.stage);
+                    CHECK(std::find(
+                        own_material.begin(), own_material.end(),
+                        use.native_use.edge) ==
+                        own_material.end());
+                    own_material.push_back(use.native_use.edge);
+                    ++selected_material;
+                }
+            }
+        }
+        individually_selected.push_back(selected);
+    }
+    CHECK(selected_planar >= 1U);
+    CHECK(selected_nonplanar >= 1U);
+    CHECK(selected_seams >= 2U);
+    CHECK(selected_material >= 2U);
+    std::size_t shared_material_pairs = 0U;
+    for (std::size_t i = 0U;
+         i < individually_selected.size(); ++i) {
+        for (std::size_t j = i + 1U;
+             j < individually_selected.size(); ++j) {
+            for (const auto& left : individually_selected[i].wires) {
+                for (const auto& a : left.edges) {
+                    if (!a.material) continue;
+                    for (const auto& right :
+                         individually_selected[j].wires) {
+                        for (const auto& b : right.edges) {
+                            if (!b.material ||
+                                *a.material != *b.material) {
+                                continue;
+                            }
+                            CHECK(a.native_use.edge ==
+                                  b.native_use.edge);
+                            ++shared_material_pairs;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    CHECK(shared_material_pairs >= 1U);
+    CHECK(!part::inspectSelectedFaceBoundary(
+        evaluation.features.back(),
+        kernel::RuntimeFaceToken{}, kernel).ok());
+    // Exact current Body generation is provider-bound. Another
+    // evaluation must never reuse a captured scoped Face to cross
+    // provider generations on the strength of numeric token values.
+    std::cout
+        << "PG01D_MANUAL_MULTI_FACE_NATIVE_E0_PASS"
+        << " planar_faces=" << selected_planar
+        << " curved_faces=" << selected_nonplanar
+        << " real_shared_material_pairs=" << shared_material_pairs
+        << " excluded_seam_uses=" << selected_seams
+        << " accepted_material_uses=" << selected_material
+        << " inferred_carrier_region=0"
+        << '\n';
+
     std::cerr
         << "PG01D_D0_NATIVE_FACE_WIRE_STATUS"
         << " planar=" << planar_faces
