@@ -598,7 +598,9 @@ void verifyPartIntegration() {
     // wire ledger. Every remaining source must be an individually
     // referenceable material Edge occurring once on this region's
     // perimeter. This is not yet a contour/wire reconstruction or
-    // an authorization to merge other coplanar Surfaces.
+    // an authorization to merge other coplanar Surfaces. The
+    // surviving set is not yet a certified ordered outer/hole contour:
+    // that requires a separate per-vertex continuity proof.
     std::size_t certified_internal_partitions = 0U;
     std::vector<part::MaterialEdgeReference>
         certified_perimeter_sources;
