@@ -772,6 +772,8 @@ void verifyPartIntegration() {
         std::size_t radical_source_missing = 0U;
         std::size_t radical_source_unique = 0U;
         std::size_t radical_source_ambiguous = 0U;
+        std::size_t radical_v15_cold_forward = 0U;
+        std::size_t radical_v15_cold_reversed = 0U;
         std::size_t native_multipiece_curve_point_probes = 0U;
         std::size_t native_onepoint_resolved = 0U;
         std::size_t native_onepoint_ambiguous = 0U;
@@ -1559,6 +1561,70 @@ void verifyPartIntegration() {
                                             } else {
                                                 ++radical_source_unique;
                                             }
+                                            // Owner-approved D2-A: the stable
+                                            // semantic Curve/Point addresses
+                                            // may select deformed geometry.
+                                            // Test cold v15 restoration of
+                                            // the changed *upstream* Part;
+                                            // the future one-Point reference
+                                            // itself is NOT serialized here.
+                                            if (span == 0.25) {
+                                                part::PartDocumentStore store;
+                                                const auto path =
+                                                    std::filesystem::
+                                                        temp_directory_path() /
+                                                    ("ss2_d2a_edit_" +
+                                                     std::to_string(
+                                                         std::chrono::
+                                                             steady_clock::
+                                                                 now()
+                                                                     .time_since_epoch()
+                                                                     .count()) +
+                                                     (reversed
+                                                          ? "_r.ss2part"
+                                                          : "_f.ss2part"));
+                                                CHECK(store.createNew(
+                                                    path,
+                                                    revised.document()).ok());
+                                                const auto reopen =
+                                                    store.load(path);
+                                                CHECK(reopen.ok());
+                                                CHECK(reopen.document->state() ==
+                                                      revised.document().state());
+                                                kernel_occt::
+                                                    OcctSolidModelingKernel
+                                                        cold_provider;
+                                                const auto cold =
+                                                    part::evaluatePart(
+                                                        *reopen.document,
+                                                        cold_provider);
+                                                const auto cold_choices =
+                                                    pg01dStrictFinalStageOnePointCandidates(
+                                                        cold,
+                                                        ledger.stage,
+                                                        curve_address,
+                                                        *certified_point_address);
+                                                CHECK(cold_choices.size() ==
+                                                      fresh.size());
+                                                if (reversed) {
+                                                    CHECK(cold.body_status !=
+                                                          part::BodyEvaluationStatus::
+                                                              up_to_date);
+                                                    CHECK(cold_choices.empty());
+                                                    ++radical_v15_cold_reversed;
+                                                } else {
+                                                    CHECK(cold.body_status ==
+                                                          part::BodyEvaluationStatus::
+                                                              up_to_date);
+                                                    CHECK(cold_choices.size() ==
+                                                          1U);
+                                                    ++radical_v15_cold_forward;
+                                                }
+                                                std::error_code ec;
+                                                CHECK(std::filesystem::remove(
+                                                    path, ec));
+                                                CHECK(!ec);
+                                            }
                                         }
                                     }
                                     CHECK(radical_attempts == 12U);
@@ -1767,6 +1833,10 @@ void verifyPartIntegration() {
             << radical_source_unique
             << " radical_source_ambiguous="
             << radical_source_ambiguous
+            << " radical_v15_cold_forward="
+            << radical_v15_cold_forward
+            << " radical_v15_cold_reversed="
+            << radical_v15_cold_reversed
             << " native_onepoint_probes="
             << native_multipiece_curve_point_probes
             << " native_onepoint_resolved="
@@ -1867,6 +1937,8 @@ void verifyPartIntegration() {
         CHECK(radical_source_missing == 0U);
         CHECK(radical_source_unique == 6U);
         CHECK(radical_source_ambiguous == 0U);
+        CHECK(radical_v15_cold_forward == 1U);
+        CHECK(radical_v15_cold_reversed == 1U);
     }
 
     const auto contribution =
