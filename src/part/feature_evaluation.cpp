@@ -3962,8 +3962,30 @@ resolveMaterialEdgeReference(
             return MaterialEdgeResolution{
                 kernel::ReferenceStatus::ambiguous, {}};
         }
+        // Cardinality is about *all* current Curve realizations
+        // incident to the certified Point, not just the realizations
+        // that survive the later structural/material admission filters.
+        // Filtering first could silently pick one Edge when the same
+        // Point also carries another, malformed or unsupported Edge.
+        // Such an observation must fail closed as ambiguous.
+        std::vector<kernel::RuntimeEdgeToken> point_incident_edges;
+        for (const auto edge : curve->current_edges) {
+            if (vertexCarriesEdge(
+                    catalog, point->current_vertices, edge)) {
+                appendUniqueRuntimeToken(point_incident_edges, edge);
+            }
+        }
+        if (point_incident_edges.size() != 1U) {
+            return MaterialEdgeResolution{
+                statusForCandidateCount(point_incident_edges.size()),
+                std::move(point_incident_edges)};
+        }
+
         std::vector<kernel::RuntimeEdgeToken> candidates;
         for (const auto edge : curve->current_edges) {
+            if (edge != point_incident_edges.front()) {
+                continue;
+            }
             const auto* record = findEdgeRecord(catalog, edge);
             if (record == nullptr) return std::nullopt;
             if (record->accounting_class !=
