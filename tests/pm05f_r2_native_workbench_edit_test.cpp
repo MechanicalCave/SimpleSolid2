@@ -1324,6 +1324,54 @@ void verifyPg01dMalformedBoundaryFailClosed(
     CHECK(carrier_only_manual.ok());
     CHECK(carrier_only_manual.wires ==
           manual_control.wires);
+
+    // A complete but SEMANTICALLY UNSUPPORTED material Edge must not be
+    // skipped like a geometrically Unsupported projected curve. Make
+    // the failure observable at the exact native wire member, without
+    // copying any Owner Part, document IDs or private fixture geometry.
+    auto unsupported_edge_stage = stage;
+    CHECK(unsupported_edge_stage.result_topology);
+    const auto selected_edge =
+        manual_control.wires.front().edges.front().native_use.edge;
+    auto& records = unsupported_edge_stage.result_topology->edges;
+    const auto unsupported_record = std::find_if(
+        records.begin(), records.end(),
+        [selected_edge](const auto& item) {
+            return item.runtime_token == selected_edge;
+        });
+    CHECK(unsupported_record != records.end());
+    CHECK(unsupported_record->accounting_class ==
+          part::TopologyAccountingClass::referenceable);
+    unsupported_record->accounting_class =
+        part::TopologyAccountingClass::semantically_unsupported;
+    unsupported_record->referenceability =
+        kernel::ReferenceStatus::unsupported;
+    unsupported_record->curve_candidates.clear();
+    CHECK(unsupported_edge_stage.result_topology->complete());
+    const auto semantic_refusal =
+        part::inspectSelectedFaceBoundary(
+            unsupported_edge_stage, *source_face, kernel);
+    CHECK(semantic_refusal.status ==
+          part::MaterialFaceBoundaryStatus::
+              material_edge_unavailable);
+    CHECK(!semantic_refusal.ok());
+    CHECK(semantic_refusal.wires.empty());
+    CHECK(semantic_refusal.rejected_edge);
+    CHECK(semantic_refusal.rejected_edge->edge == selected_edge);
+    CHECK(semantic_refusal.rejected_edge->wire_index == 0U);
+    CHECK(semantic_refusal.rejected_edge->edge_index == 0U);
+    CHECK(semantic_refusal.rejected_edge->kind ==
+          part::SelectedFaceBoundaryRejectKind::
+              uncertified_material_edge);
+    CHECK(semantic_refusal.rejected_edge->accounting_class ==
+          part::TopologyAccountingClass::semantically_unsupported);
+    CHECK(semantic_refusal.rejected_edge->referenceability ==
+          kernel::ReferenceStatus::unsupported);
+    CHECK(semantic_refusal.rejected_edge->curve_candidate_count ==
+          0U);
+    CHECK(!semantic_refusal.rejected_edge->periodic_seam);
+    CHECK(!semantic_refusal.rejected_edge->representation_partition);
+
     const auto expect_selected_failure = [&](
         Fault fault, part::MaterialFaceBoundaryStatus expected) {
         Pg01dFaultedBoundaryProvider provider{kernel, fault};
@@ -1355,6 +1403,23 @@ void verifyPg01dMalformedBoundaryFailClosed(
         Fault::bogus_edge,
         part::MaterialFaceBoundaryStatus::
             material_edge_unavailable);
+    {
+        Pg01dFaultedBoundaryProvider provider{
+            kernel, Fault::bogus_edge};
+        const auto rejected =
+            part::inspectSelectedFaceBoundary(
+                stage, *source_face, provider);
+        CHECK(rejected.rejected_edge);
+        CHECK(rejected.rejected_edge->kind ==
+              part::SelectedFaceBoundaryRejectKind::
+                  missing_catalog_edge);
+        CHECK(rejected.rejected_edge->edge.value ==
+              std::numeric_limits<std::uint64_t>::max());
+        CHECK(rejected.rejected_edge->wire_index == 0U);
+        CHECK(rejected.rejected_edge->edge_index == 0U);
+        CHECK(!rejected.rejected_edge->accounting_class);
+        CHECK(!rejected.rejected_edge->referenceability);
+    }
     expect_selected_failure(
         Fault::missing_signed_vertex,
         part::MaterialFaceBoundaryStatus::
@@ -1373,6 +1438,13 @@ void verifyPg01dMalformedBoundaryFailClosed(
                   part::MaterialFaceBoundaryStatus::
                       material_edge_unavailable);
     }
+    std::cout
+        << "PG01D_BOUNDARY_REJECTION_DETAIL_PASS"
+        << " native_member_identified=1"
+        << " semantically_unsupported_refused=1"
+        << " bogus_catalog_source_refused=1"
+        << " no_partial_authoring=1"
+        << '\\n';
     std::cout
         << "PG01D_MANUAL_FACE_MALFORMED_E0_PASS"
         << " faults=7"
