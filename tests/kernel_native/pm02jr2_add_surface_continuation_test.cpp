@@ -604,6 +604,8 @@ void verifyPartIntegration() {
     std::size_t certified_internal_partitions = 0U;
     std::vector<part::MaterialEdgeReference>
         certified_perimeter_sources;
+    std::vector<kernel::RuntimeEdgeToken>
+        certified_perimeter_tokens;
     for (const auto& [value, occurrences] :
          grouped_same_surface_native_edge_uses) {
         const auto token = kernel::RuntimeEdgeToken{value};
@@ -634,6 +636,7 @@ void verifyPartIntegration() {
         CHECK(occurrences == 1U);
         certified_perimeter_sources.push_back(
             *material.reference);
+        certified_perimeter_tokens.push_back(token);
     }
     CHECK(certified_internal_partitions >= 1U);
     CHECK(!certified_perimeter_sources.empty());
@@ -644,6 +647,42 @@ void verifyPartIntegration() {
         certified_perimeter_sources.begin(),
         certified_perimeter_sources.end()) ==
         certified_perimeter_sources.end());
+    // E0 incidence proof for THIS planar split-carrier fixture only:
+    // every retained material boundary Edge must meet exactly two
+    // current native topology Vertices, each of which has exactly two
+    // incident retained material Edges. These are exact provider
+    // incidence tokens, never coordinate proximity or authored IDs.
+    // This necessary closed-cycle condition does not yet certify
+    // oriented outer/hole ordering, curved seams or other carriers.
+    std::size_t incident_perimeter_vertices = 0U;
+    for (const auto& vertex : topology.vertices) {
+        std::size_t perimeter_degree = 0U;
+        for (const auto token : certified_perimeter_tokens) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    token) != vertex.incident_material_edges.end()) {
+                ++perimeter_degree;
+            }
+        }
+        if (perimeter_degree == 0U) continue;
+        CHECK(perimeter_degree == 2U);
+        ++incident_perimeter_vertices;
+    }
+    CHECK(incident_perimeter_vertices ==
+          certified_perimeter_tokens.size());
+    for (const auto token : certified_perimeter_tokens) {
+        std::size_t endpoints = 0U;
+        for (const auto& vertex : topology.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    token) != vertex.incident_material_edges.end()) {
+                ++endpoints;
+            }
+        }
+        CHECK(endpoints == 2U);
+    }
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_SPLIT_CARRIER_PERIMETER_PASS"
         << " same_semantic_surface=1"
