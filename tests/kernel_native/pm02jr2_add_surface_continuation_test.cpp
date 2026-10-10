@@ -737,6 +737,80 @@ void verifyPartIntegration() {
     }
     CHECK(visited_edges.size() ==
           certified_perimeter_tokens.size());
+    // E0 negative boundary distinction for this real Add-continuation
+    // Body: a native Edge shared with a Face of ANOTHER semantic Surface
+    // must remain a material perimeter member of the selected carrier.
+    // Do not cancel it as a representation partition merely because
+    // OCCT reports the same Edge on two adjacent Face wires.
+    // This is current-stage equality of explicit Surface addresses,
+    // not an inference from normal/coplanarity/curve geometry.
+    std::size_t foreign_carrier_shared_material_edges = 0U;
+    std::vector<part::FeatureSurfaceAddress>
+        observed_distinct_neighbor_carriers;
+    std::set<std::uint64_t> observed_neighbor_material_tokens;
+    for (const auto& foreign_face : topology.faces) {
+        if (foreign_face.surface_candidates.size() != 1U ||
+            foreign_face.surface_candidates.front() ==
+                current_side->address) {
+            continue;
+        }
+        const auto& other_carrier =
+            foreign_face.surface_candidates.front();
+        const auto scoped = provider.bindFaceToBody(
+            final_eval.body_solid, foreign_face.runtime_token);
+        CHECK(scoped && scoped->valid());
+        const auto raw = provider.queryFaceBoundaryAnySurface(
+            final_eval.body_solid, *scoped);
+        CHECK(raw.ok());
+        for (const auto& wire : raw.wires) {
+            for (const auto& use : wire.edges) {
+                if (std::find(
+                        certified_perimeter_tokens.begin(),
+                        certified_perimeter_tokens.end(),
+                        use.edge) ==
+                    certified_perimeter_tokens.end()) {
+                    continue;
+                }
+                const auto in_selected =
+                    grouped_same_surface_native_edge_uses.find(
+                        use.edge.value);
+                CHECK(in_selected !=
+                      grouped_same_surface_native_edge_uses.end());
+                CHECK(in_selected->second == 1U);
+                const auto material =
+                    part::authorMaterialEdgeReference(
+                        topology, use.edge);
+                CHECK(material.ok());
+                const auto edge = std::find_if(
+                    topology.edges.begin(),
+                    topology.edges.end(),
+                    [&use](const auto& record) {
+                        return record.runtime_token == use.edge;
+                    });
+                CHECK(edge != topology.edges.end());
+                CHECK(!edge->representation_partition);
+                CHECK(!edge->periodic_seam);
+                if (observed_neighbor_material_tokens.insert(
+                        use.edge.value).second) {
+                    ++foreign_carrier_shared_material_edges;
+                }
+                if (std::find(
+                        observed_distinct_neighbor_carriers.begin(),
+                        observed_distinct_neighbor_carriers.end(),
+                        other_carrier) ==
+                    observed_distinct_neighbor_carriers.end()) {
+                    observed_distinct_neighbor_carriers.push_back(
+                        other_carrier);
+                }
+            }
+        }
+    }
+    CHECK(foreign_carrier_shared_material_edges >= 1U);
+    CHECK(!observed_distinct_neighbor_carriers.empty());
+    for (const auto& candidate :
+         observed_distinct_neighbor_carriers) {
+        CHECK(candidate != current_side->address);
+    }
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_SPLIT_CARRIER_PERIMETER_PASS"
         << " same_semantic_surface=1"
@@ -746,6 +820,10 @@ void verifyPartIntegration() {
         << " distinct_material_perimeter_edges="
         << certified_perimeter_sources.size()
         << " single_closed_component=1"
+        << " foreign_surface_carriers="
+        << observed_distinct_neighbor_carriers.size()
+        << " foreign_carrier_shared_material_edges="
+        << foreign_carrier_shared_material_edges
         << " source_proximity_guessing=0"
         << '\\n';
     const auto invalid_face =
