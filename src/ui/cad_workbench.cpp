@@ -3912,6 +3912,12 @@ void CadWorkbench::buildUi() {
     project_edge_face_button_->setCheckable(true);
     source_layout->addWidget(project_edge_edges_button_);
     source_layout->addWidget(project_edge_face_button_);
+    project_edge_boundary_button_ =
+        new QPushButton(QStringLiteral("Face Boundary"), source_row);
+    project_edge_boundary_button_->setObjectName(
+        QStringLiteral("projectEdgeSourceBoundaryButton"));
+    project_edge_boundary_button_->setCheckable(true);
+    source_layout->addWidget(project_edge_boundary_button_);
     project_layout->addWidget(source_row);
 
     project_edge_selection_label_ =
@@ -5464,6 +5470,9 @@ void CadWorkbench::buildUi() {
         project_edge_face_button_, &QPushButton::clicked,
         this, [this] { setProjectEdgeFaceMode(true); });
     QObject::connect(
+        project_edge_boundary_button_, &QPushButton::clicked,
+        this, [this] { setProjectEdgeBoundaryMode(); });
+    QObject::connect(
         project_edge_regular_button_, &QPushButton::clicked,
         this, [this] {
             setProjectEdgeRole(sketch::EntityRole::regular);
@@ -5479,7 +5488,9 @@ void CadWorkbench::buildUi() {
     QObject::connect(
         project_edge_remove_button_, &QPushButton::clicked,
         this, [this] {
-            if (project_edge_face_mode_) {
+            if (project_edge_boundary_mode_) {
+                removeProjectBoundarySelection();
+            } else if (project_edge_face_mode_) {
                 removeProjectFaceSelection();
             } else if (viewport_controller_ &&
                        viewport_controller_->
@@ -9555,6 +9566,8 @@ bool CadWorkbench::startProjectEdgeTool() {
     project_edge_face_membership_.reset();
     project_edge_face_pick_.reset();
     project_edge_face_mode_ = false;
+    project_edge_boundary_mode_ = false;
+    project_edge_boundary_faces_.clear();
     project_edge_switching_mode_ = false;
     project_edge_preview_valid_ = false;
     viewport_controller_->clearSketchPreview();
@@ -9593,6 +9606,8 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
     // Clear the tool before viewport callbacks can re-enter selection sync.
     project_edge_active_ = false;
     project_edge_face_mode_ = false;
+    project_edge_boundary_mode_ = false;
+    project_edge_boundary_faces_.clear();
     project_edge_switching_mode_ = false;
     project_edge_face_pick_.reset();
     project_edge_face_membership_.reset();
@@ -9632,7 +9647,8 @@ void CadWorkbench::escapeProjectEdgeTool() {
     // first empty-buffer Esc discards it; only the next Esc exits.
     // Explicit CANCEL always exits immediately, in contrast.
     if (!project_edge_sources_.empty() ||
-        project_edge_face_pick_) {
+        project_edge_face_pick_ ||
+        !project_edge_boundary_faces_.empty()) {
         clearProjectEdgeSelection();
         setStatusText(QStringLiteral(
             "PROJECT — Edge source selection cleared; Esc again to Cancel."));
@@ -9667,6 +9683,7 @@ void CadWorkbench::clearProjectEdgeSelection() {
     project_edge_face_skipped_.clear();
     project_edge_face_membership_.reset();
     project_edge_face_pick_.reset();
+    project_edge_boundary_faces_.clear();
     project_edge_preview_valid_ = false;
     viewport_controller_->clearSketchPreview();
     static_cast<void>(
@@ -9717,13 +9734,15 @@ void CadWorkbench::refreshProjectEdgePreview() {
 
 void CadWorkbench::setProjectEdgeFaceMode(bool enabled) {
     if (!project_edge_active_ || !viewport_controller_ ||
-        project_edge_face_mode_ == enabled) {
+        (project_edge_face_mode_ == enabled &&
+         !project_edge_boundary_mode_)) {
         return;
     }
     // Switching source acquisition must not fabricate an authored change.
     // Staged semantic Edges remain; only transient Viewer picks are swapped.
     project_edge_switching_mode_ = true;
     project_edge_face_mode_ = enabled;
+    project_edge_boundary_mode_ = false;
     viewport_controller_->setBodyTopologyFacePickOnly(enabled);
     viewport_controller_->clearBodyTopologyToolSelection();
     if (!enabled && !project_edge_sources_.empty()) {
@@ -9856,6 +9875,10 @@ void CadWorkbench::tryStageProjectFaceSelection() {
 
 void CadWorkbench::tryStageProjectEdgeSelection() {
     if (project_edge_switching_mode_) return;
+    if (project_edge_boundary_mode_) {
+        tryStageProjectBoundarySelection();
+        return;
+    }
     if (project_edge_face_mode_) {
         tryStageProjectFaceSelection();
         return;
@@ -10137,11 +10160,16 @@ void CadWorkbench::syncProjectEdgeUi() {
     const auto count = project_edge_sources_.size();
     if (project_edge_edges_button_ != nullptr) {
         project_edge_edges_button_->setChecked(
-            !project_edge_face_mode_);
+            !project_edge_face_mode_ &&
+            !project_edge_boundary_mode_);
     }
     if (project_edge_face_button_ != nullptr) {
         project_edge_face_button_->setChecked(
             project_edge_face_mode_);
+    }
+    if (project_edge_boundary_button_ != nullptr) {
+        project_edge_boundary_button_->setChecked(
+            project_edge_boundary_mode_);
     }
     if (project_edge_stage_label_ != nullptr) {
         project_edge_stage_label_->setText(
@@ -10292,6 +10320,12 @@ CadWorkbench::submitProjectEdgeCadInput(std::string_view text) {
         setProjectEdgeFaceMode(true);
         return {true, {}};
     }
+    if (keyword == "FACEBOUNDARY" ||
+        keyword == "FACE BOUNDARY" ||
+        keyword == "FACES") {
+        setProjectEdgeBoundaryMode();
+        return {true, {}};
+    }
     if (keyword == "REGULAR") {
         setProjectEdgeRole(sketch::EntityRole::regular);
         return {true, {}};
@@ -10301,6 +10335,13 @@ CadWorkbench::submitProjectEdgeCadInput(std::string_view text) {
         return {true, {}};
     }
     if (keyword == "REMOVE") {
+        if (project_edge_boundary_mode_) {
+            if (project_edge_boundary_faces_.empty()) {
+                return {false, "REMOVE requires a staged bounded Face."};
+            }
+            removeProjectBoundarySelection();
+            return {true, {}};
+        }
         if (project_edge_face_mode_) {
             if (!project_edge_face_pick_) {
                 return {false, "REMOVE requires one staged planar Face."};
@@ -10327,7 +10368,7 @@ CadWorkbench::submitProjectEdgeCadInput(std::string_view text) {
     }
     return {
         false,
-        "PROJECT expects EDGES, FACE, REGULAR, CONSTRUCTION, REMOVE, CLEAR, FINISH or CANCEL."};
+        "PROJECT expects EDGES, FACE, FACEBOUNDARY, REGULAR, CONSTRUCTION, REMOVE, CLEAR, FINISH or CANCEL."};
 }
 
 void CadWorkbench::setSketchSelectionRole(
