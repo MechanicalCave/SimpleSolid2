@@ -1071,6 +1071,132 @@ void verifyPartIntegration() {
         << '\n';
 }
 
+// PG-01D E0 OCCT-only experiment: a full circular base cylinder and a
+// HALF-disc Add on its top, exactly continuing one real cylindrical side
+// over half its circumference. No Face geometry matching is used to name
+// the source: the provider's explicit inherited/new Surface lineage must
+// prove continuation on the same provider-scoped carrier.
+void verifyNativeCurvedSurfaceContinuationE0() {
+    kernel_occt::OcctSolidModelingKernel provider;
+    kernel::PlanarProfileInput round_base;
+    round_base.outer.boundary = {{
+        kernel::Circle2{{0.0, 0.0}, 10.0},
+        0.0, 1.0, true, false, true,
+        kernel::BoundaryUseProvenance{
+            "cylinder-full-circle", 0U, 0U, false},
+    }};
+    CHECK(round_base.valid());
+    const auto base = provider.extrude(add(round_base, 10.0));
+    CHECK(base.ok());
+    const auto* source_side = newSide(
+        base, "cylinder-full-circle");
+    CHECK(source_side != nullptr);
+    CHECK(source_side->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(source_side->resolved_token.has_value());
+    CHECK(source_side->semantic_surface_kind ==
+          kernel::FaceSurfaceKind::cylinder);
+
+    kernel::Frame3 top_frame;
+    top_frame.origin = {0.0, 0.0, 10.0};
+    CHECK(top_frame.valid());
+    kernel::PlanarProfileInput upper_half;
+    upper_half.frame = top_frame;
+    upper_half.outer.boundary = {{
+        kernel::Arc2{
+            {0.0, 0.0}, 10.0,
+            0.0, std::acos(-1.0)},
+        0.0, 1.0, true, false, false,
+        kernel::BoundaryUseProvenance{
+            "half-circle-arc", 0U, 0U, false},
+    }, lineUse(
+        {-10.0, 0.0}, {10.0, 0.0},
+        "half-circle-diameter", 1U)};
+    CHECK(upper_half.valid());
+    const auto extended =
+        provider.extrude(add(upper_half, 10.0), base.solid);
+    CHECK(extended.ok());
+
+    const auto* inherited = inheritedSurface(
+        extended, *source_side->resolved_token);
+    CHECK(inherited != nullptr);
+    std::cerr
+        << "PG01D_CURVED_E0_NATIVE_CONTINUATION"
+        << " source_status="
+        << static_cast<int>(inherited->surface_status)
+        << " source_faces=" << inherited->current_faces.size()
+        << '\n';
+    CHECK(inherited->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    const auto* generated = newSide(
+        extended, "half-circle-arc");
+    CHECK(generated != nullptr);
+    CHECK(generated->continued_into.has_value());
+    CHECK(*generated->continued_into ==
+          *source_side->resolved_token);
+    CHECK(inherited->current_faces.size() >= 2U);
+
+    std::map<std::uint64_t, std::vector<bool>>
+        same_carrier_oriented_uses;
+    for (const auto face_token : inherited->current_faces) {
+        const auto bound = provider.bindFaceToBody(
+            extended.solid, face_token);
+        CHECK(bound && bound->valid());
+        CHECK(provider.queryFaceBoundary(
+            extended.solid, *bound).status ==
+                kernel::FaceBoundaryStatus::unsupported_surface);
+        const auto native =
+            provider.queryFaceBoundaryAnySurface(
+                extended.solid, *bound);
+        CHECK(native.ok());
+        for (const auto& wire : native.wires) {
+            for (const auto& use : wire.edges) {
+                same_carrier_oriented_uses[
+                    use.edge.value].push_back(use.reversed);
+            }
+        }
+    }
+    std::size_t split_partitions = 0U;
+    std::size_t true_perimeter = 0U;
+    std::size_t periodic_seams = 0U;
+    for (const auto& [value, uses] :
+         same_carrier_oriented_uses) {
+        const auto current = std::find_if(
+            extended.current_edge_semantics.begin(),
+            extended.current_edge_semantics.end(),
+            [value](const auto& item) {
+                return item.runtime_token.value == value;
+            });
+        CHECK(current !=
+              extended.current_edge_semantics.end());
+        if (current->periodic_seam) {
+            ++periodic_seams;
+            continue;
+        }
+        if (current->same_surface_partition) {
+            CHECK(current->adjacent_surfaces.size() == 1U);
+            CHECK(current->adjacent_surfaces.front() ==
+                  *source_side->resolved_token);
+            CHECK(uses.size() == 2U);
+            CHECK(uses.front() != uses.back());
+            ++split_partitions;
+        } else {
+            CHECK(uses.size() == 1U);
+            ++true_perimeter;
+        }
+    }
+    CHECK(split_partitions >= 1U);
+    CHECK(true_perimeter >= 1U);
+    std::cout
+        << "PG01D_CURVED_E0_NATIVE_CONTINUATION_PASS"
+        << " fragments=" << inherited->current_faces.size()
+        << " cancelled_partitions=" << split_partitions
+        << " material_perimeter_candidates=" << true_perimeter
+        << " periodic_seam_tokens=" << periodic_seams
+        << " native_geometry_guessing=0"
+        << '\n';
+}
+
 } // namespace
 
 int main() {
@@ -1180,6 +1306,7 @@ int main() {
     CHECK(partition_edges >= 1U);
 
     verifyPartIntegration();
+    verifyNativeCurvedSurfaceContinuationE0();
 
     std::cout
         << "PM02JR2_ADD_SURFACE_CONTINUATION_PASS"
