@@ -761,7 +761,7 @@ void verifyPartIntegration() {
         std::size_t one_semantic_endpoint_ambiguous = 0U;
         std::size_t one_semantic_endpoint_cold_unique = 0U;
         bool tested_ambiguous_incidence = false;
-    bool tested_shadow_point_alias = false;
+        bool tested_shadow_point_alias = false;
         bool tested_missing_reference = false;
         bool tested_native_file_reopen = false;
         bool tested_undo_redo = false;
@@ -916,14 +916,68 @@ void verifyPartIntegration() {
                         part::inspectSelectedFaceBoundary(
                             evaluated.features.back(),
                             face.runtime_token, native.occt);
+                    // Since PG-01D D2-V16, a strict face admitted by
+                    // the projection-only one-Point branch is no longer
+                    // rejected. Preserve the ORIGINAL legacy-identity gap
+                    // evidence independently of the current Face admission.
+                    // One current Face may therefore count as admitted AND
+                    // carry a historical two-Point-only identity gap.
+                    std::optional<
+                        part::SelectedFaceBoundaryRejectDetail>
+                        legacy_identity_gap;
                     if (admission.ok()) {
                         ++admitted_faces;
-                    } else if (admission.status ==
+                        for (const auto& wire : admission.wires) {
+                            for (const auto& member : wire.edges) {
+                                if (!member.material ||
+                                    !std::holds_alternative<
+                                        part::AtSingleSemanticPoint>(
+                                            member.material->branch)) {
+                                    continue;
+                                }
+                                const auto old_authoring =
+                                    part::authorMaterialEdgeReference(
+                                        ledger, member.native_use.edge);
+                                CHECK(!old_authoring.ok());
+                                const auto record = std::find_if(
+                                    ledger.edges.begin(), ledger.edges.end(),
+                                    [token = member.native_use.edge](
+                                        const auto& item) {
+                                        return item.runtime_token == token;
+                                    });
+                                CHECK(record != ledger.edges.end());
+                                CHECK(record->curve_candidates.size() == 1U);
+                                part::SelectedFaceBoundaryRejectDetail old_gap;
+                                old_gap.kind =
+                                    part::SelectedFaceBoundaryRejectKind::
+                                        uncertified_material_edge;
+                                old_gap.edge = member.native_use.edge;
+                                old_gap.accounting_class =
+                                    record->accounting_class;
+                                old_gap.referenceability =
+                                    record->referenceability;
+                                old_gap.curve_kind = record->curve_kind;
+                                old_gap.curve_candidate_count =
+                                    record->curve_candidates.size();
+                                old_gap.periodic_seam =
+                                    record->periodic_seam;
+                                old_gap.representation_partition =
+                                    record->representation_partition;
+                                legacy_identity_gap = std::move(old_gap);
+                                break;
+                            }
+                            if (legacy_identity_gap) break;
+                        }
+                    }
+                    if (legacy_identity_gap ||
+                        admission.status ==
                             part::MaterialFaceBoundaryStatus::
                                 material_edge_unavailable) {
                         ++rejected_material;
-                        const auto* detail = admission.rejected_edge
-                            ? &*admission.rejected_edge : nullptr;
+                        const auto* detail = legacy_identity_gap
+                            ? &*legacy_identity_gap
+                            : (admission.rejected_edge
+                                ? &*admission.rejected_edge : nullptr);
                         std::size_t family_realizations = 0U;
                         std::size_t incident_vertices = 0U;
                         std::size_t certified_endpoints = 0U;
@@ -2023,7 +2077,7 @@ void verifyPartIntegration() {
             << " committed=" << committed_chamfers
             << " preserved_split=" << preserved_split
             << " admitted_faces=" << admitted_faces
-            << " blocked_material=" << rejected_material
+            << " legacy_two_point_gap=" << rejected_material
             << " blocked_other=" << rejected_other
             << " missing_two_semantic_surfaces="
             << missing_endpoint_two_surfaces
@@ -2097,12 +2151,13 @@ void verifyPartIntegration() {
             << tested_suppressed_final_stage
             << " private_part_committed=0"
             << '\n';
-        // Research witness on the accepted immutable Point rule:
-        // all observed rejected Edge endpoints are newly generated
-        // two-semantic-Surface vertices, NOT inherited stable Points.
-        // Never turn these into authored Points or skip these material
-        // Edges without a further accepted D2 identity contract.
+        // This remains a positive, independent historical two-Point
+        // identity-gap witness, even when the new v16 branch admits the
+        // bounded Face. All observed old-unaddressable endpoints are
+        // newly generated two-Surface vertices; none are reclassified
+        // as authored Points, dropped or rebound by geometry.
         CHECK(rejected_material > 0U);
+        CHECK(admitted_faces > 0U);
         CHECK(missing_endpoint_two_surfaces == rejected_material);
         CHECK(missing_endpoint_three_surfaces == 0U);
         CHECK(missing_endpoint_other_surfaces == 0U);
@@ -2111,10 +2166,10 @@ void verifyPartIntegration() {
         CHECK(missing_endpoint_not_accounted == 0U);
         CHECK(two_surface_pair_unique +
                   two_surface_pair_collided == rejected_material);
-        // Research only: a uniquely resolved semantic Curve + one
-        // already certified Point identifies each blocked Edge in THIS
-        // synthetic family, also after a fresh native Part rebuild.
-        // No authorable branch or v15 schema is introduced here.
+        // v16 production branch must uniquely resolve each previously
+        // two-Point-unaddressable material Edge in THIS native fixture.
+        // Cold persistence, aliasing and negative-case assertions below
+        // continue to run; this is not the Owner's private case.
         CHECK(two_surface_pair_unique == rejected_material);
         CHECK(two_surface_pair_collided == 0U);
         CHECK(one_semantic_endpoint_unique == rejected_material);
