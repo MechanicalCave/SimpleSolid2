@@ -2219,6 +2219,168 @@ int main(int argc, char* argv[]) {
                       << " finish_blocked=1"
                       << " clear_cancel_noop=1\\n";
 
+            // Owner D2 E2: manual Face Boundary is NOT a carrier
+            // traversal. Click two distinct bounded native Faces,
+            // preserve their one actual shared material Edge, and
+            // skip vertical edges whose exact XY image degenerates.
+            // One Finish should author only the unique supported
+            // source references; open/overlapping Sketch geometry
+            // is never silently healed into a Profile.
+            auto manual_session = makeBaseSession(kernel);
+            const auto manual_target =
+                manual_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(manual_target.ok() && manual_target.sketch_id);
+            CHECK(workbench.activateDocument(
+                &manual_session, {}));
+            QApplication::processEvents();
+            auto* boundary_mode =
+                workbench.findChild<QPushButton*>(
+                    QStringLiteral(
+                        "projectEdgeSourceBoundaryButton"));
+            CHECK(boundary_mode);
+            QTreeWidgetItem* manual_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                        QStringLiteral("Sketch 2")) {
+                    manual_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(manual_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(manual_tree_item);
+            manual_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            const auto manual_before =
+                manual_session.document().state();
+            const auto manual_revision =
+                manual_session.document().revision();
+            const auto manual_undo =
+                manual_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(boundary_mode->isChecked());
+            CHECK(!face_mode->isChecked());
+            CHECK(!edge_mode->isChecked());
+            CHECK(!pg_finish->isEnabled());
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            const auto top_picked =
+                controller->primaryBodyTopologySelection();
+            CHECK(top_picked && top_picked->valid());
+            const auto top_native =
+                controller->inspectCurrentSelectedFaceBoundary(
+                    *top_picked);
+            CHECK(top_native.ok());
+            CHECK(top_native.wires.size() == 1U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_finish->isEnabled());
+
+            bool second_staged = false;
+            for (const auto& [camera, point] :
+                 std::array<std::pair<
+                     viewer::StandardView, viewer::Point3>, 2>{{
+                     {viewer::StandardView::front,
+                      viewer::Point3{20.0, 0.0, 10.0}},
+                     {viewer::StandardView::back,
+                      viewer::Point3{20.0, 30.0, 10.0}},
+                 }}) {
+                CHECK(viewport->setStandardView(camera));
+                viewport->fitAll();
+                QApplication::processEvents();
+                if (!nativePlanarFaceClick(*viewport, point)) {
+                    continue;
+                }
+                const auto side_picked =
+                    controller->primaryBodyTopologySelection();
+                if (!side_picked || *side_picked == *top_picked) {
+                    continue;
+                }
+                const auto side_native =
+                    controller->inspectCurrentSelectedFaceBoundary(
+                        *side_picked);
+                CHECK(side_native.ok());
+                if (pg_count->text().contains(
+                        QStringLiteral("Faces staged: 2"))) {
+                    second_staged = true;
+                    break;
+                }
+            }
+            CHECK(second_staged);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 2")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face Boundary")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(manual_session.document().state() == manual_before);
+            CHECK(manual_session.document().revision() ==
+                  manual_revision);
+            CHECK(manual_session.undoDepth() == manual_undo);
+
+            // Selective removal must preserve the first clicked Face.
+            reply = workbench.submitCadInput(
+                "REMOVE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::front));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 0.0, 10.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 2")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_finish->isEnabled());
+
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(manual_session.undoDepth() == manual_undo + 1U);
+            const auto* saved =
+                manual_session.document().findSketch(
+                    *manual_target.sketch_id);
+            CHECK(saved && saved->projection_bindings.size() == 5U);
+            CHECK(manual_session.undo().changed);
+            CHECK(manual_session.document().findSketch(
+                *manual_target.sketch_id)
+                ->projection_bindings.empty());
+            CHECK(manual_session.redo().changed);
+            CHECK(manual_session.document().findSketch(
+                *manual_target.sketch_id)
+                ->projection_bindings.size() == 5U);
+            std::cout
+                << "PG01D_MANUAL_MULTI_FACE_NATIVE_UI_PARTIAL_PASS"
+                << " clicked_faces=2"
+                << " exact_shared_material_dedup=1"
+                << " supported_unique=5"
+                << " geometric_degenerate_skipped=2"
+                << " remove_readd=1"
+                << " one_undo_redo=1"
+                << '\n';
+
             result = EXIT_SUCCESS;
             workbench.close();
             app.quit();
