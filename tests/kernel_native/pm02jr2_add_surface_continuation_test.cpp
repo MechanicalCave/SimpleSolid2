@@ -214,6 +214,35 @@ part::ProfileId createRectangleProfile(
     return *profile.profile_id;
 }
 
+// D2-B research ONLY. Retain the provider's actual final-stage vertex
+// observations from the *same* OCCT evaluation consumed by Part. These
+// runtime tokens are used for diagnostic correlation only, never authoring.
+class Pg01dObservedOcctKernel final
+    : public kernel::ISolidModelingKernel {
+public:
+    kernel_occt::OcctSolidModelingKernel occt;
+    std::optional<kernel::SolidModelingResult>
+        last_edge_feature;
+
+    [[nodiscard]] kernel::SolidModelingResult extrude(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        return occt.extrude(input, std::move(upstream));
+    }
+    [[nodiscard]] kernel::SolidModelingResult revolve(
+        const kernel::AngularRevolveInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        return occt.revolve(input, std::move(upstream));
+    }
+    [[nodiscard]] kernel::SolidModelingResult edgeFeature(
+        const kernel::EdgeFeatureInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        auto result = occt.edgeFeature(input, std::move(upstream));
+        last_edge_feature = result;
+        return result;
+    }
+};
+
 void verifyPartIntegration() {
     kernel_occt::OcctSolidModelingKernel provider;
     auto document =
@@ -557,7 +586,7 @@ void verifyPartIntegration() {
                 CHECK(cloned.ok());
                 application::DocumentSession trial{
                     {}, std::move(*cloned.document)};
-                kernel_occt::OcctSolidModelingKernel native;
+                Pg01dObservedOcctKernel native;
                 const auto finish = trial.execute(
                     application::CreateChamferFeatureCommand{
                         {*source.reference},
@@ -596,7 +625,7 @@ void verifyPartIntegration() {
                     const auto admission =
                         part::inspectSelectedFaceBoundary(
                             evaluated.features.back(),
-                            face.runtime_token, native);
+                            face.runtime_token, native.occt);
                     if (admission.ok()) {
                         ++admitted_faces;
                     } else if (admission.status ==
