@@ -1270,6 +1270,14 @@ void verifyPg01dMalformedBoundaryFailClosed(
         const auto admitted = part::inspectMaterialFaceBoundary(
             stage, *source_face, provider);
         CHECK(!admitted.ok());
+        if (admitted.status != expected) {
+            std::cerr
+                << "PG01D_NEGATIVE_ACTUAL_STATUS fault="
+                << static_cast<int>(fault)
+                << " actual=" << static_cast<int>(admitted.status)
+                << " expected=" << static_cast<int>(expected)
+                << '\n';
+        }
         CHECK(admitted.status == expected);
         CHECK(admitted.wires.empty());
         CHECK(!admitted.bounded_face);
@@ -1289,9 +1297,13 @@ void verifyPg01dMalformedBoundaryFailClosed(
     expect_failure(
         Fault::bogus_edge,
         part::MaterialFaceBoundaryStatus::material_edge_unavailable);
+    // Since the native provider supplies exact directed Vertices,
+    // appended repeated EdgeUse invalidates wire closure itself. It
+    // fails at native topology accounting BEFORE semantic Edge mapping.
     expect_failure(
         Fault::duplicated_material_edge,
-        part::MaterialFaceBoundaryStatus::material_edge_unavailable);
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
 
     // Later Owner D2: manual chosen-Face admission does not demand
     // a persistent strict Face address, but EVERY bounded native
