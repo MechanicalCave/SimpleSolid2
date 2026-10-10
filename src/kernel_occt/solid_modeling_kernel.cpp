@@ -5653,6 +5653,23 @@ kernel::FaceBoundaryResult
 OcctSolidModelingKernel::queryFaceBoundary(
     kernel::RuntimeSolidHandle current_body,
     const kernel::ScopedBoundaryFace& bound_face) noexcept {
+    return queryFaceBoundaryImpl(
+        std::move(current_body), bound_face, true);
+}
+
+kernel::FaceBoundaryResult
+OcctSolidModelingKernel::queryFaceBoundaryAnySurface(
+    kernel::RuntimeSolidHandle current_body,
+    const kernel::ScopedBoundaryFace& bound_face) noexcept {
+    return queryFaceBoundaryImpl(
+        std::move(current_body), bound_face, false);
+}
+
+kernel::FaceBoundaryResult
+OcctSolidModelingKernel::queryFaceBoundaryImpl(
+    kernel::RuntimeSolidHandle current_body,
+    const kernel::ScopedBoundaryFace& bound_face,
+    bool require_planar) noexcept {
     using Status = kernel::FaceBoundaryStatus;
     const auto fail = [](Status status)
         -> kernel::FaceBoundaryResult {
@@ -5681,10 +5698,15 @@ OcctSolidModelingKernel::queryFaceBoundary(
 
     try {
         const TopoDS_Face& face = face_it->second;
-        const BRepAdaptor_Surface adaptor{face};
-        if (adaptor.GetType() != GeomAbs_Plane) {
-            return fail(Status::unsupported_surface);
+        if (require_planar) {
+            const BRepAdaptor_Surface adaptor{face};
+            if (adaptor.GetType() != GeomAbs_Plane) {
+                return fail(Status::unsupported_surface);
+            }
         }
+        // Same exact native oriented wire/member validation for either
+        // surface. This read is not a guarantee that every member can
+        // be strictly authored as a material Edge or a region boundary.
         const TopoDS_Wire outer =
             BRepTools::OuterWire(face);
         if (outer.IsNull()) {
