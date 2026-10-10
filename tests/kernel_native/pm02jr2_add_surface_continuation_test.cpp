@@ -1179,6 +1179,142 @@ void verifyNativeCurvedSurfaceContinuationE0() {
         << '\n';
 }
 
+// E0 separate from Add: a through-circumference GROOVE removes an
+// annular band of an otherwise continuous full cylinder, preserving
+// a single connected solid through the radius-8 interior core. If OCCT
+// correctly splits the inherited side carrier into independent native
+// Faces, their identical semantic carrier must NOT be interpreted as a
+// single CONTIGUOUS material Face Boundary region. Exact native Edge
+// and Vertex incidence, not radius/proximity, establishes the stop.
+void verifyNativeCylindricalCutSplitE0() {
+    kernel_occt::OcctSolidModelingKernel provider;
+    kernel::PlanarProfileInput cylinder;
+    cylinder.outer.boundary = {{
+        kernel::Circle2{{0.0, 0.0}, 10.0},
+        0.0, 1.0, true, false, true,
+        kernel::BoundaryUseProvenance{
+            "cut-split-cylinder", 0U, 0U, false},
+    }};
+    CHECK(cylinder.valid());
+    const auto base = provider.extrude(add(cylinder, 10.0));
+    CHECK(base.ok());
+    const auto* old_side = newSide(
+        base, "cut-split-cylinder");
+    CHECK(old_side && old_side->resolved_token);
+    CHECK(old_side->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(old_side->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+
+    kernel::PlanarProfileInput groove_profile;
+    groove_profile.frame.origin = {0.0, 0.0, 4.0};
+    CHECK(groove_profile.frame.valid());
+    groove_profile.outer.boundary = {{
+        kernel::Circle2{{0.0, 0.0}, 12.0},
+        0.0, 1.0, true, false, true,
+        kernel::BoundaryUseProvenance{
+            "cut-ring-outer", 0U, 0U, false},
+    }};
+    kernel::ProfileLoopInput inner;
+    inner.boundary = {{
+        kernel::Circle2{{0.0, 0.0}, 8.0},
+        0.0, 1.0, true, false, true,
+        kernel::BoundaryUseProvenance{
+            "cut-ring-inner", 1U, 0U, true},
+    }};
+    groove_profile.holes.push_back(std::move(inner));
+    CHECK(groove_profile.valid());
+    auto groove = add(groove_profile, 2.0);
+    groove.operation = kernel::SolidBooleanOperation::cut;
+    CHECK(groove.valid());
+    const auto cut = provider.extrude(groove, base.solid);
+    CHECK(cut.ok());
+    CHECK(cut.solid_count == 1U);
+
+    const auto* inherited = inheritedSurface(
+        cut, *old_side->resolved_token);
+    CHECK(inherited);
+    std::cerr
+        << "PG01D_CURVED_CUT_E0_SPLIT_PROBE"
+        << " status=" << static_cast<int>(inherited->surface_status)
+        << " faces=" << inherited->current_faces.size()
+        << " strict_status="
+        << static_cast<int>(inherited->strict_face_status)
+        << '\n';
+    CHECK(inherited->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(inherited->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+    CHECK(inherited->current_faces.size() == 2U);
+    CHECK(inherited->strict_face_status ==
+          kernel::ReferenceStatus::ambiguous);
+
+    std::vector<std::set<std::uint64_t>> face_edges;
+    std::vector<std::set<std::uint64_t>> face_vertices;
+    std::size_t seam_uses = 0U;
+    for (const auto token : inherited->current_faces) {
+        const auto scoped =
+            provider.bindFaceToBody(cut.solid, token);
+        CHECK(scoped && scoped->valid());
+        CHECK(provider.queryFaceBoundary(
+            cut.solid, *scoped).status ==
+                kernel::FaceBoundaryStatus::unsupported_surface);
+        const auto native =
+            provider.queryFaceBoundaryAnySurface(
+                cut.solid, *scoped);
+        CHECK(native.ok());
+        std::set<std::uint64_t> edges;
+        for (const auto& wire : native.wires) {
+            for (const auto& use : wire.edges) {
+                CHECK(use.valid());
+                edges.insert(use.edge.value);
+                const auto observation = std::find_if(
+                    cut.current_edge_semantics.begin(),
+                    cut.current_edge_semantics.end(),
+                    [&use](const auto& item) {
+                        return item.runtime_token == use.edge;
+                    });
+                CHECK(observation !=
+                      cut.current_edge_semantics.end());
+                if (observation->periodic_seam) ++seam_uses;
+            }
+        }
+        CHECK(!edges.empty());
+        std::set<std::uint64_t> vertices;
+        for (const auto& v : cut.current_vertex_semantics) {
+            for (const auto edge : v.incident_material_edges) {
+                if (edges.count(edge.value)) {
+                    vertices.insert(v.runtime_token.value);
+                }
+            }
+        }
+        face_edges.push_back(std::move(edges));
+        face_vertices.push_back(std::move(vertices));
+    }
+    CHECK(face_edges.size() == 2U);
+    CHECK(face_vertices.size() == 2U);
+    CHECK(!face_vertices[0].empty());
+    CHECK(!face_vertices[1].empty());
+    // These two bounded realizations have no common current material
+    // boundary Edge or material-incidence Vertex. The common Surface
+    // lineage alone is NOT authority for a connected region traversal.
+    for (const auto token : face_edges[0]) {
+        CHECK(face_edges[1].count(token) == 0U);
+    }
+    for (const auto token : face_vertices[0]) {
+        CHECK(face_vertices[1].count(token) == 0U);
+    }
+    std::cout
+        << "PG01D_CURVED_CUT_E0_DISCONNECTED_CARRIER_PASS"
+        << " current_same_carrier_faces=" << inherited->current_faces.size()
+        << " shared_native_edges=0"
+        << " shared_material_vertices=0"
+        << " seam_native_uses=" << seam_uses
+        << " distinct_contiguous_regions=2"
+        << " geometry_proximity_merging=0"
+        << '\n';
+}
+
 } // namespace
 
 int main() {
@@ -1289,6 +1425,7 @@ int main() {
 
     verifyPartIntegration();
     verifyNativeCurvedSurfaceContinuationE0();
+    verifyNativeCylindricalCutSplitE0();
 
     std::cout
         << "PM02JR2_ADD_SURFACE_CONTINUATION_PASS"
