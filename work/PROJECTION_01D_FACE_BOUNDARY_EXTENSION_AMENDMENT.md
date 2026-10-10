@@ -27,6 +27,22 @@
 
 ---
 
+## 0.1 Manual multi-Face implementation checkpoint (2026-10-10; E2 in progress)
+
+**Implemented on the PR branch, NOT merged:** transient Part `inspectSelectedFaceBoundary` reads only the *exact currently picked bounded provider Face* via `queryFaceBoundaryAnySurface`, preserving complete signed native Face wires and classifying individually authorable material Edge references versus certified nonmaterial periodic seams/representation partitions. It never expands selection automatically to an entire semantic Surface region, does not require a durable strict Face address, and does not author Faces. New `Face Boundary` source mode shares the existing `Project Geometry` draft and `CreateProjectedSketchEdgesCommand`; multiple selected Faces are held only as current-generation transient records, deduplicated by exact material source, independently tested for supported/unsupported exact projected geometry, and revalidated at Finish. The original `Planar Face` route is separate and unchanged. Known geometric Unsupported / degenerate images are skipped individually; unknown identity, stale stage, malformed wire and provider failure stop authoring. No Part v15, Profile, global tolerance or persistent carrier change.
+
+**Windows exact-SHA evidence:**
+
+- [FOCUSED #2279](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38056769720) **PASS 1/1** `pg01d.native_face_boundary_d0` on `4ff11221b6e4c5c45564a0393ae8c285060a89cb`: real OCCT planar/nonplanar per-Face native inventory, correctly excluded cylinder seam, shared actual material Edge between distinct Faces, determinism on the same scoped Body.
+- [FOCUSED #2289](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38057652602) **PASS 1/1** `pg01d.native_face_ui` on `6330c256bbd4e68a4878580823c93b667e6be6dc`: two real independent Face clicks in Qt/OCCT, five unique supported linked Edges from the combined set, two exact degenerate projected members skipped, genuine shared material Edge kept/deduplicated once, Remove/re-pick, one atomic Finish, Undo/Redo.
+- [FOCUSED #2291](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38057962295) **PASS 1/1** same UI test on `1043643efb9735c72337d692e3958df44130a45b`: a real four-Line + one Circle Face produces a valid partial manual Face preview with one exact geometrically Unsupported oblique Circle; four supported lines remain. The original Planar Face continuation still passes in the same test.
+- [FOCUSED #2293](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38058335339) **PASS 1/1** `pg01d.native_face_fail_closed` on `5825d866175461b916be3af61c51c580e978fa27`: native malformed signed Vertex/wire, missing and bogus sources, duplicate EdgeUse and invalid scoped Face are rejected; a duplicated directed use can fail native wire validity BEFORE semantic material lookup; no geometric skip for integrity errors. The preceding #2292 RED was an overly specific *test status expectation*, corrected without loosening any production guard.
+- [FOCUSED #2294](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38058573611) **PASS 1/1** `pg01d.native_face_ui` at `ae69ab6f26e14d826bb0270425088fa0ffbf5361`: all-Unsupported manual Face leaves the user-visible skipped source and disables Finish; typed Finish is a complete no-op with unchanged revision, history, and cleared overlay on Cancel. This complements the positive PARTIAL test above. Documentation and bootstrap verified in each successful focused Windows run.
+
+**Open before E4:** targeted real Windows regression for all three source modes / mixed acquisition; stale Face stage and member changes; same-session source overlays and selected Face visual feedback; cold v15 save/reopen of new multi-Face result; paired PL/EN product docs and generated Browser; exact-final-head FULL and Owner practical test / explicit FINAL PASS. Distinguish earlier historical FULL #2189 (199/199 at its earlier SHA) from current multi-Face work. FAST alone does not clear separate test-target completeness issue #302. Keep PR #309 **Draft / Unmerged**. An E2 subset is demonstrated, not a finished release gate.
+
+---
+
 ## 1. Frozen product intent
 
 One `PROJECT` tool with three **source-acquisition modes**, all delegating the resulting unique, exact material Edges to the existing `CreateProjectedSketchEdgesCommand`:
