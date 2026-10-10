@@ -2482,6 +2482,26 @@ int main(int argc, char* argv[]) {
                     *top_picked);
             CHECK(top_native.ok());
             CHECK(top_native.wires.size() == 1U);
+            // A second picked Face token which does not belong to
+            // this exact live Body generation is an identity fault,
+            // never a skippable unsupported curve. The prior valid
+            // Face/UI draft is still present after the refused query.
+            auto forged_new_face = *top_picked;
+            forged_new_face.runtime_token_value =
+                std::numeric_limits<std::uint64_t>::max();
+            const auto refused_new_face =
+                controller->inspectCurrentSelectedFaceBoundary(
+                    forged_new_face);
+            CHECK(!refused_new_face.ok());
+            CHECK(refused_new_face.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      face_unavailable);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(manual_session.document().state() == manual_before);
+            CHECK(manual_session.undoDepth() == manual_undo);
             CHECK(viewport->runtimeDiagnostics()
                 .project_face_selected_overlays_current == 1U);
             CHECK(pg_count->text().contains(
