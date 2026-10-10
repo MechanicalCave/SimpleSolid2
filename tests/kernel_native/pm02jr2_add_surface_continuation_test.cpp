@@ -2063,7 +2063,7 @@ void verifyPartIntegration() {
                             << " partition="
                             << (detail && detail->representation_partition)
                             << '\n';
-                    } else {
+                    } else if (!admission.ok()) {
                         ++rejected_other;
                     }
                 }
