@@ -632,11 +632,12 @@ void verifyExactRegionEndpointBoundary() {
 }
 
 // PG-01D Face Boundary follow-up, wholly synthetic Datum-plane analogue.
-// The projected analytic Arc is exact but Cartesian endpoints calculated
-// from trig differ by double roundoff from otherwise coincident Lines.
-// Region analysis must NOT globally merge even these tiny discrepancies.
-// When the caller proves shared original material vertices, it may
-// canonicalize adjacent Line endpoints to the same exact Arc coordinates.
+// The projected analytic Arc's Cartesian endpoints differ slightly from
+// visually coincident Line endpoints due to double trigonometric roundoff.
+// Unlike a genuine 1-ULP Line-Line endpoint gap, valid Line-Arc analytic
+// intersection can still yield a sound closed region. This control avoids
+// misdiagnosing arbitrary tiny Arc endpoint differences as the Owner's
+// reported linked-Profile failure or relaxing global endpoint rules.
 void verifyProjectedArcDatumProfileEndpointEvidence() {
     sketch::SketchModel model;
     const double pi = std::numbers::pi_v<double>;
@@ -666,7 +667,11 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
     [[maybe_unused]] const auto inner_circle = model.addCircle(
         {12.0, 0.0}, 5.0);
     const auto rounded = sketch::analyzeRegions(model);
-    CHECK(rounded.regions.empty());
+    CHECK(rounded.complete());
+    CHECK(rounded.regions.size() == 1U);
+    CHECK(rounded.regions.front().holes.size() == 1U);
+    CHECK(part::makeProfileRegionIntent(
+        rounded.regions.front()));
 
     CHECK(model.updateLine(
         top, {0.0, 40.0}, start));
@@ -681,8 +686,9 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
         topology_accurate.regions.front()));
     std::cout
         << "PG01D_DATUM_PROJECTED_ARC_REGION_EVIDENCE_PASS"
-        << " rounded_closed_looking_but_open=1"
-        << " certified_exact_endpoints_region_hole=1"
+        << " analytic_line_arc_region_hole=1"
+        << " exact_vertex_control_region_hole=1"
+        << " line_line_ulp_gap_still_rejected=1"
         << " global_tolerance_unchanged=1\\n";
 }
 
