@@ -2651,6 +2651,24 @@ void verifyNativePlanarBranchedSurfaceContinuationsE0() {
     CHECK(!reconstruct(
         native_outer_cycles,
         std::vector<std::uint64_t>{partitions.front()}).has_value());
+    auto duplicate_partition = partitions;
+    duplicate_partition.back() = duplicate_partition.front();
+    CHECK(!reconstruct(
+        native_outer_cycles, duplicate_partition).has_value());
+    auto missing_material = native_outer_cycles;
+    bool removed = false;
+    for (auto& ring : missing_material) {
+        for (auto it = ring.begin(); it != ring.end(); ++it) {
+            if (material_tokens.count(it->edge.value) != 0U) {
+                ring.erase(it);
+                removed = true;
+                break;
+            }
+        }
+        if (removed) break;
+    }
+    CHECK(removed);
+    CHECK(!reconstruct(missing_material, partitions).has_value());
     std::cout
         << "PG01D_E0_BRANCH_FACE_ORDER_INVARIANCE_PASS"
         << " real_native_faces=3"
@@ -2660,6 +2678,8 @@ void verifyNativePlanarBranchedSurfaceContinuationsE0() {
         << " signed_variants=" << permutations_checked
         << " malformed_native_vertex_rejected=1"
         << " omitted_partition_rejected=1"
+        << " duplicate_partition_rejected=1"
+        << " dropped_material_edge_rejected=1"
         << " false_material_boundary=0"
         << '\n';
     std::cout
