@@ -1636,6 +1636,297 @@ void verifyPartIntegration() {
         << " exact_single_outer_cycle=1"
         << " native_geometry_guessing=0"
         << '\n';
+    // E0 mixed multi-edge inner-wire continuation: a THIRD genuine
+    // native through Cut. Rectangle lives entirely within the UPPER
+    // same-Surface fragment but is disjoint from its existing Circle
+    // hole. Crucially its *inner* native OCCT wire has FOUR line uses,
+    // not a single periodic Circle Edge. This is test-only and uses
+    // wholly synthetic coordinates (not an Owner CAD model).
+    CHECK(two_side->canonical_frame.has_value());
+    const part::SurfaceReference third_side_support_ref{
+        two_catalog.stage, two_side->address};
+    const auto third_side_support =
+        part::partSketchSupportForBodyPlanarSurface(
+            third_side_support_ref);
+    CHECK(third_side_support.has_value());
+    const auto rectangle_hole_sketch = session.execute(
+        application::CreatePartSketchOnSupportCommand{
+            *third_side_support,
+            session.document().revision()},
+        &provider);
+    CHECK(rectangle_hole_sketch.ok());
+    CHECK(rectangle_hole_sketch.sketch_id);
+    const auto rectangle_profile = createRectangleProfile(
+        session,
+        *rectangle_hole_sketch.sketch_id,
+        projectToFrame(
+            *two_side->canonical_frame,
+            kernel::Point3{40.0, 20.0, 13.0}),
+        projectToFrame(
+            *two_side->canonical_frame,
+            kernel::Point3{40.0, 23.0, 16.0}));
+    const auto third_cut = session.execute(
+        application::CreateExtrudeFeatureCommand{
+            rectangle_profile,
+            session.document().revision(),
+            part::ExtrudeOperation::cut,
+            part::OneSidedExtrudeExtent{
+                core::LengthValue{45.0},
+                true},
+            "PG01D upper-fragment independent rectangle through-hole"},
+        provider);
+    CHECK(third_cut.ok() && third_cut.feature_id);
+    const auto mixed_drilled =
+        part::evaluatePart(session.document(), provider);
+    CHECK(mixed_drilled.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(mixed_drilled.body_solid);
+    CHECK(mixed_drilled.current_topology);
+    CHECK(mixed_drilled.current_topology->complete());
+    const auto& mixed_catalog = *mixed_drilled.current_topology;
+    CHECK(mixed_catalog.stage.feature_id &&
+          *mixed_catalog.stage.feature_id == *third_cut.feature_id);
+    const auto mixed_carrier = std::find_if(
+        mixed_catalog.surfaces.begin(),
+        mixed_catalog.surfaces.end(),
+        [address = continued_side->address](const auto& surface) {
+            return surface.address == address;
+        });
+    CHECK(mixed_carrier != mixed_catalog.surfaces.end());
+    CHECK(mixed_carrier->status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(mixed_carrier->current_faces.size() >= 2U);
+
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        mixed_outer_cycles;
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        mixed_inner_cycles;
+    std::set<std::uint64_t> mixed_holed_faces;
+    std::map<std::uint64_t, std::vector<TwoHoleUse>>
+        mixed_native_uses;
+    std::size_t mixed_circle_holes = 0U;
+    std::size_t mixed_rectangle_holes = 0U;
+    for (const auto face_token : mixed_carrier->current_faces) {
+        const auto face = std::find_if(
+            mixed_catalog.faces.begin(),
+            mixed_catalog.faces.end(),
+            [face_token](const auto& record) {
+                return record.runtime_token == face_token;
+            });
+        CHECK(face != mixed_catalog.faces.end());
+        CHECK(face->surface_candidates.size() == 1U);
+        CHECK(face->surface_candidates.front() ==
+              mixed_carrier->address);
+        const auto bound = provider.bindFaceToBody(
+            mixed_drilled.body_solid, face_token);
+        CHECK(bound && bound->valid());
+        const auto native = provider.queryFaceBoundaryAnySurface(
+            mixed_drilled.body_solid, *bound);
+        CHECK(native.ok());
+        std::size_t outer_count = 0U;
+        for (const auto& wire : native.wires) {
+            CHECK(native_directed_closed(wire.edges));
+            if (wire.outer) {
+                ++outer_count;
+                mixed_outer_cycles.push_back(wire.edges);
+            } else {
+                mixed_inner_cycles.push_back(wire.edges);
+                mixed_holed_faces.insert(face_token.value);
+                if (wire.edges.size() == 1U) {
+                    ++mixed_circle_holes;
+                } else if (wire.edges.size() == 4U) {
+                    ++mixed_rectangle_holes;
+                } else {
+                    CHECK(false);
+                }
+            }
+            for (const auto& use : wire.edges) {
+                CHECK(use.valid());
+                CHECK(use.start_vertex && use.end_vertex);
+                mixed_native_uses[use.edge.value].push_back(
+                    TwoHoleUse{use.reversed, !wire.outer,
+                               face_token});
+            }
+        }
+        CHECK(outer_count == 1U);
+    }
+    CHECK(mixed_inner_cycles.size() == 3U);
+    CHECK(mixed_circle_holes == 2U);
+    CHECK(mixed_rectangle_holes == 1U);
+    CHECK(mixed_holed_faces.size() == 2U);
+    CHECK(mixed_outer_cycles.size() ==
+          mixed_carrier->current_faces.size());
+
+    std::vector<std::uint64_t> mixed_partition_tokens;
+    std::set<std::uint64_t> mixed_outer_tokens;
+    std::set<std::uint64_t> mixed_hole_tokens;
+    std::vector<part::MaterialEdgeReference>
+        mixed_material_sources;
+    std::size_t mixed_circle_source_edges = 0U;
+    std::size_t mixed_line_source_edges = 0U;
+    for (const auto& [value, uses] : mixed_native_uses) {
+        const kernel::RuntimeEdgeToken token{value};
+        const auto record = std::find_if(
+            mixed_catalog.edges.begin(),
+            mixed_catalog.edges.end(),
+            [token](const auto& item) {
+                return item.runtime_token == token;
+            });
+        CHECK(record != mixed_catalog.edges.end());
+        const auto material = part::authorMaterialEdgeReference(
+            mixed_catalog, token);
+        if (record->representation_partition) {
+            CHECK(!record->periodic_seam);
+            CHECK(record->accounting_class ==
+                  part::TopologyAccountingClass::
+                      known_representation_artifact);
+            CHECK(!material.ok());
+            CHECK(uses.size() == 2U);
+            CHECK(uses[0].face != uses[1].face);
+            CHECK(!uses[0].inner && !uses[1].inner);
+            CHECK(uses[0].reversed != uses[1].reversed);
+            mixed_partition_tokens.push_back(value);
+            continue;
+        }
+        CHECK(!record->periodic_seam);
+        CHECK(material.ok() && material.reference);
+        CHECK(material.reference->stage == mixed_catalog.stage);
+        CHECK(uses.size() == 1U);
+        mixed_material_sources.push_back(*material.reference);
+        if (uses.front().inner) {
+            CHECK(mixed_hole_tokens.insert(value).second);
+            if (record->curve_kind == kernel::CurveKind::circle) {
+                ++mixed_circle_source_edges;
+            } else {
+                CHECK(record->curve_kind ==
+                      kernel::CurveKind::line);
+                ++mixed_line_source_edges;
+            }
+        } else {
+            CHECK(mixed_outer_tokens.insert(value).second);
+        }
+    }
+    CHECK(!mixed_partition_tokens.empty());
+    CHECK(mixed_circle_source_edges == 2U);
+    CHECK(mixed_line_source_edges == 4U);
+    CHECK(mixed_hole_tokens.size() == 6U);
+    CHECK(!mixed_outer_tokens.empty());
+    for (const auto token : mixed_hole_tokens) {
+        CHECK(mixed_outer_tokens.count(token) == 0U);
+    }
+    std::sort(mixed_material_sources.begin(),
+              mixed_material_sources.end());
+    CHECK(std::adjacent_find(
+        mixed_material_sources.begin(),
+        mixed_material_sources.end()) ==
+        mixed_material_sources.end());
+    CHECK(mixed_material_sources.size() ==
+          mixed_outer_tokens.size() + mixed_hole_tokens.size());
+
+    // Multi-edge inner wire: all FOUR directed line members have
+    // distinct exact current Vertex endpoints and form one
+    // independently closed native cycle. Two full Circles instead
+    // close using the SAME exact start/end Vertex token.
+    for (const auto& hole : mixed_inner_cycles) {
+        CHECK(native_directed_closed(hole));
+        if (hole.size() == 1U) {
+            CHECK(hole.front().start_vertex ==
+                  hole.front().end_vertex);
+            CHECK(mixed_hole_tokens.count(
+                hole.front().edge.value) == 1U);
+        } else {
+            CHECK(hole.size() == 4U);
+            std::set<std::uint64_t> hole_vertices;
+            for (const auto& use : hole) {
+                CHECK(use.start_vertex != use.end_vertex);
+                CHECK(mixed_hole_tokens.count(use.edge.value) == 1U);
+                CHECK(hole_vertices.insert(
+                    use.start_vertex->value).second);
+            }
+            CHECK(hole_vertices.size() == 4U);
+            // A negative directed-use reversal within a multi-Edge
+            // hole must fail without needing any coordinate query.
+            auto broken_hole = hole;
+            std::swap(
+                broken_hole[0].start_vertex,
+                broken_hole[0].end_vertex);
+            CHECK(!native_directed_closed(broken_hole));
+            CHECK(!kernel::FaceBoundaryWire{
+                false, broken_hole}.valid());
+        }
+    }
+
+    // The previously proven bounded splice must still work at the
+    // FINAL three-Cut BodyStage. The extra rectangle may subdivide
+    // the native outer carrier edges, but must not change partition
+    // authority or consume any inner material source.
+    auto mixed_stitched_outer = mixed_outer_cycles;
+    for (const auto partition : mixed_partition_tokens) {
+        std::vector<std::pair<std::size_t, std::size_t>>
+            occurrences;
+        for (std::size_t li = 0U;
+             li < mixed_stitched_outer.size(); ++li) {
+            for (std::size_t ui = 0U;
+                 ui < mixed_stitched_outer[li].size(); ++ui) {
+                if (mixed_stitched_outer[li][ui].edge.value ==
+                    partition) {
+                    occurrences.emplace_back(li, ui);
+                }
+            }
+        }
+        CHECK(occurrences.size() == 2U);
+        const auto [li, ui] = occurrences[0];
+        const auto [lj, uj] = occurrences[1];
+        CHECK(li != lj);
+        const auto& a = mixed_stitched_outer[li];
+        const auto& b = mixed_stitched_outer[lj];
+        CHECK(a[ui].reversed != b[uj].reversed);
+        CHECK(a[ui].start_vertex == b[uj].end_vertex);
+        CHECK(a[ui].end_vertex == b[uj].start_vertex);
+        std::vector<kernel::FaceBoundaryEdgeUse> united;
+        for (std::size_t k = 1U; k < a.size(); ++k) {
+            united.push_back(a[(ui + k) % a.size()]);
+        }
+        for (std::size_t k = 1U; k < b.size(); ++k) {
+            united.push_back(b[(uj + k) % b.size()]);
+        }
+        CHECK(!united.empty());
+        CHECK(native_directed_closed(united));
+        std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+            remaining;
+        for (std::size_t index = 0U;
+             index < mixed_stitched_outer.size(); ++index) {
+            if (index != li && index != lj) {
+                remaining.push_back(
+                    std::move(mixed_stitched_outer[index]));
+            }
+        }
+        remaining.push_back(std::move(united));
+        mixed_stitched_outer = std::move(remaining);
+    }
+    CHECK(mixed_stitched_outer.size() == 1U);
+    CHECK(native_directed_closed(
+        mixed_stitched_outer.front()));
+    std::set<std::uint64_t> mixed_stitched_tokens;
+    for (const auto& use : mixed_stitched_outer.front()) {
+        CHECK(mixed_stitched_tokens.insert(use.edge.value).second);
+    }
+    CHECK(mixed_stitched_tokens == mixed_outer_tokens);
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_MIXED_INNER_WIRES_PASS"
+        << " planar_carrier_faces="
+        << mixed_carrier->current_faces.size()
+        << " independent_circle_holes=" << mixed_circle_holes
+        << " four_line_rectangle_holes="
+        << mixed_rectangle_holes
+        << " unique_strict_hole_edges="
+        << mixed_hole_tokens.size()
+        << " certified_partitions="
+        << mixed_partition_tokens.size()
+        << " single_signed_outer_cycle=1"
+        << " native_directed_hole_cycle_reversal_rejected=1"
+        << " xyz_based_joining=0"
+        << '\n';
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_SPLIT_CARRIER_HOLE_PASS"
         << " same_semantic_surface=1"
