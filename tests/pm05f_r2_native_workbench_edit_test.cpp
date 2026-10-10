@@ -2548,6 +2548,48 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("selected: 5")));
             CHECK(pg_finish->isEnabled());
 
+            // Exercise all THREE acquisition modes without applying
+            // a Face union or throwing away previously staged Edges.
+            // The second mode switch is not a second document command.
+            reply = workbench.submitCadInput(
+                "EDGES", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(edge_mode->isChecked());
+            CHECK(!boundary_mode->isChecked());
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 2")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            const auto preserved_edge_picks =
+                controller->selectedMaterialEdgeReferences();
+            CHECK(preserved_edge_picks &&
+                  preserved_edge_picks->size() == 5U);
+            CHECK(pg_finish->isEnabled());
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(face_mode->isChecked());
+            CHECK(!edge_mode->isChecked());
+            CHECK(!boundary_mode->isChecked());
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 2")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_finish->isEnabled());
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(boundary_mode->isChecked());
+            CHECK(!face_mode->isChecked());
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 2")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(manual_session.document().state() == manual_before);
+            CHECK(manual_session.undoDepth() == manual_undo);
+
             reply = workbench.submitCadInput(
                 "FINISH", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
