@@ -453,11 +453,39 @@ struct SelectedFaceBoundaryWire final {
         const SelectedFaceBoundaryWire&) = default;
 };
 
+// Diagnostic evidence from one rejected native Face-wire occurrence.
+// Runtime-only, never stored as a stable material or Face identity.
+enum class SelectedFaceBoundaryRejectKind {
+    missing_catalog_edge,
+    uncertified_material_edge,
+    repeated_material_edge,
+    invalid_member,
+};
+
+struct SelectedFaceBoundaryRejectDetail final {
+    SelectedFaceBoundaryRejectKind kind{
+        SelectedFaceBoundaryRejectKind::uncertified_material_edge};
+    kernel::RuntimeEdgeToken edge;
+    std::size_t wire_index{};
+    std::size_t edge_index{};
+    std::optional<TopologyAccountingClass> accounting_class;
+    std::optional<kernel::ReferenceStatus> referenceability;
+    kernel::CurveKind curve_kind{kernel::CurveKind::other};
+    std::size_t curve_candidate_count{};
+    bool periodic_seam{false};
+    bool representation_partition{false};
+
+    friend bool operator==(
+        const SelectedFaceBoundaryRejectDetail&,
+        const SelectedFaceBoundaryRejectDetail&) = default;
+};
+
 struct SelectedFaceBoundaryAdmission final {
     MaterialFaceBoundaryStatus status{
         MaterialFaceBoundaryStatus::invalid_stage};
     kernel::RuntimeFaceToken bounded_face;
     std::vector<SelectedFaceBoundaryWire> wires;
+    std::optional<SelectedFaceBoundaryRejectDetail> rejected_edge;
 
     [[nodiscard]] bool ok() const noexcept {
         if (status != MaterialFaceBoundaryStatus::resolved ||
