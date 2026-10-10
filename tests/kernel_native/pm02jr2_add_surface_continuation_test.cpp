@@ -659,6 +659,9 @@ void verifyPartIntegration() {
         bool tested_upstream_edit = false;
         bool tested_upstream_edit_undo_redo = false;
         std::size_t rejected_upstream_edits = 0U;
+        std::size_t native_multipiece_curve_point_probes = 0U;
+        std::size_t native_onepoint_resolved = 0U;
+        std::size_t native_onepoint_ambiguous = 0U;
         for (const auto& candidate : topology.edges) {
             const auto source =
                 part::authorMaterialEdgeReference(
@@ -692,6 +695,40 @@ void verifyPartIntegration() {
                 }
                 ++committed_chamfers;
                 const auto& ledger = *evaluated.current_topology;
+                // E5: survey *actual* OCCT material incidence on every
+                // current multi-realization Curve family, without
+                // injecting any fabricated topology. This can expose
+                // genuine Curve + Point cardinality conflicts. The
+                // earlier synthetic two-incidence counterexample
+                // remains a separate fail-closed unit proof.
+                for (const auto& family : ledger.curves) {
+                    if (family.current_edges.size() < 2U) continue;
+                    for (const auto& point : ledger.points) {
+                        if (point.status !=
+                                kernel::ReferenceStatus::resolved ||
+                            point.current_vertices.size() != 1U) {
+                            continue;
+                        }
+                        ++native_multipiece_curve_point_probes;
+                        const auto candidates =
+                            pg01dCurveEdgesIncidentToSemanticPoint(
+                                ledger, family.address, point.address);
+                        if (candidates.size() == 1U) {
+                            ++native_onepoint_resolved;
+                        } else if (candidates.size() > 1U) {
+                            ++native_onepoint_ambiguous;
+                            std::cout
+                                << "PG01D_NATIVE_ONEPOINT_AMBIGUOUS"
+                                << " source=" << candidate.runtime_token.value
+                                << " distance=" << distance
+                                << " family_edges="
+                                << family.current_edges.size()
+                                << " incident_candidates="
+                                << candidates.size()
+                                << '\n';
+                        }
+                    }
+                }
                 const auto continued = std::find_if(
                     ledger.surfaces.begin(), ledger.surfaces.end(),
                     [address = continued_side->address](
@@ -1303,6 +1340,12 @@ void verifyPartIntegration() {
             << tested_upstream_edit_undo_redo
             << " upstream_edit_rejected="
             << rejected_upstream_edits
+            << " native_onepoint_probes="
+            << native_multipiece_curve_point_probes
+            << " native_onepoint_resolved="
+            << native_onepoint_resolved
+            << " native_onepoint_ambiguous="
+            << native_onepoint_ambiguous
             << " private_part_committed=0"
             << '\n';
         // Research witness on the accepted immutable Point rule:
@@ -1334,6 +1377,10 @@ void verifyPartIntegration() {
         CHECK(tested_undo_redo);
         CHECK(tested_upstream_edit);
         CHECK(tested_upstream_edit_undo_redo);
+        CHECK(native_multipiece_curve_point_probes > 0U);
+        // Controlled diagnostic RED: publish native E5 scan counts
+        // and upstream edit outcome in CTest stdout, then REMOVE.
+        CHECK(false && "PG01D_D2_NATIVE_AMBIGUITY_AUDIT_ONLY");
     }
 
     const auto contribution =
