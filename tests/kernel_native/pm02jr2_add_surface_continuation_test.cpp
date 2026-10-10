@@ -2656,7 +2656,161 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
         << " certified_partitions=" << certified_partitions.size()
         << " unique_material_edges=" << material_edges.size()
         << '\n';
-    CHECK(certified_partitions.size() >= 2U);
+    CHECK(certified_partitions.size() == 2U);
+    CHECK(inherited->current_faces.size() == 2U);
+    CHECK(native_outer.size() == 2U);
+    // The transverse through-hole has NO per-Face inner wire:
+    // the hole crosses the representation partition and is instead
+    // represented by MATERIAL arcs on both Face outer wires.
+    CHECK(native_inner_wires == 0U);
+    const auto directed_closed = [](
+        const std::vector<kernel::FaceBoundaryEdgeUse>& ring) {
+        if (ring.empty()) return false;
+        for (std::size_t i = 0; i < ring.size(); ++i) {
+            const auto& a = ring[i];
+            const auto& b = ring[(i + 1U) % ring.size()];
+            if (!a.valid() || !a.end_vertex ||
+                !b.start_vertex ||
+                a.end_vertex != b.start_vertex) {
+                return false;
+            }
+        }
+        return true;
+    };
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        stitched = native_outer;
+    std::size_t joined_rings = 0U;
+    std::size_t split_rings = 0U;
+    for (const auto partition : certified_partitions) {
+        std::vector<std::pair<std::size_t, std::size_t>>
+            positions;
+        for (std::size_t li = 0U; li < stitched.size(); ++li) {
+            for (std::size_t ui = 0U;
+                 ui < stitched[li].size(); ++ui) {
+                if (stitched[li][ui].edge.value == partition) {
+                    positions.emplace_back(li, ui);
+                }
+            }
+        }
+        CHECK(positions.size() == 2U);
+        const auto [first_loop, first_use] = positions[0];
+        const auto [second_loop, second_use] = positions[1];
+        const auto& first = stitched[first_loop][first_use];
+        const auto& second = stitched[second_loop][second_use];
+        CHECK(first.reversed != second.reversed);
+        CHECK(first.start_vertex == second.end_vertex);
+        CHECK(first.end_vertex == second.start_vertex);
+        std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+            next;
+        for (std::size_t li = 0U; li < stitched.size(); ++li) {
+            if (li != first_loop && li != second_loop) {
+                next.push_back(std::move(stitched[li]));
+            }
+        }
+        if (first_loop != second_loop) {
+            // Cancel one internal partition joining TWO distinct
+            // native Face rings. Exact OCCT directed ends, not
+            // geometric point tolerance, close the joined sequence.
+            std::vector<kernel::FaceBoundaryEdgeUse> combined;
+            const auto append_after = [&combined](
+                const std::vector<kernel::FaceBoundaryEdgeUse>&
+                    original,
+                std::size_t removed) {
+                for (std::size_t n = 1U;
+                     n < original.size(); ++n) {
+                    combined.push_back(original[
+                        (removed + n) % original.size()]);
+                }
+            };
+            append_after(
+                stitched[first_loop], first_use);
+            append_after(
+                stitched[second_loop], second_use);
+            CHECK(directed_closed(combined));
+            next.push_back(std::move(combined));
+            ++joined_rings;
+        } else {
+            // The SECOND opposite partition pair is now contained
+            // twice in the SAME native directed loop. Deleting it
+            // must SPLIT the loop into two independently closed
+            // material contours, not fail or silently discard one.
+            CHECK(first_use < second_use);
+            const auto& loop = stitched[first_loop];
+            std::vector<kernel::FaceBoundaryEdgeUse> interior;
+            std::vector<kernel::FaceBoundaryEdgeUse> exterior;
+            for (std::size_t i = first_use + 1U;
+                 i < second_use; ++i) {
+                interior.push_back(loop[i]);
+            }
+            for (std::size_t step = 1U;
+                 step < loop.size() -
+                     (second_use - first_use);
+                 ++step) {
+                exterior.push_back(
+                    loop[(second_use + step) % loop.size()]);
+            }
+            CHECK(directed_closed(interior));
+            CHECK(directed_closed(exterior));
+            next.push_back(std::move(interior));
+            next.push_back(std::move(exterior));
+            ++split_rings;
+        }
+        stitched = std::move(next);
+    }
+    CHECK(joined_rings == 1U);
+    CHECK(split_rings == 1U);
+    CHECK(stitched.size() == 2U);
+    std::set<std::uint64_t> retained_tokens;
+    std::set<std::uint64_t> circle_tokens;
+    std::size_t circle_bearing_contours = 0U;
+    for (const auto& contour : stitched) {
+        CHECK(directed_closed(contour));
+        std::size_t contour_circles = 0U;
+        for (const auto& use : contour) {
+            CHECK(material_edges.count(use.edge.value) == 1U);
+            CHECK(retained_tokens.insert(use.edge.value).second);
+            const auto edge =
+                std::find_if(
+                    cut.current_edge_semantics.begin(),
+                    cut.current_edge_semantics.end(),
+                    [&use](const auto& item) {
+                        return item.runtime_token == use.edge;
+                    });
+            CHECK(edge != cut.current_edge_semantics.end());
+            CHECK(!edge->same_surface_partition);
+            CHECK(!edge->periodic_seam);
+            if (edge->curve_kind == kernel::CurveKind::circle) {
+                ++contour_circles;
+                circle_tokens.insert(use.edge.value);
+            }
+        }
+        if (contour_circles != 0U) {
+            ++circle_bearing_contours;
+        }
+    }
+    CHECK(retained_tokens == material_edges);
+    CHECK(circle_tokens.size() >= 2U);
+    CHECK(circle_bearing_contours == 1U);
+    // OCCT can give native Circle-arc provenance for one contour,
+    // but material Edge curve kind ALONE is not a general
+    // certification of outer-vs-hole surface-side classification.
+    std::cout
+        << "PG01D_E0_NATIVE_CROSS_PARTITION_TWO_CONTOURS_PASS"
+        << " same_carrier_native_faces="
+        << inherited->current_faces.size()
+        << " exact_partition_pairs="
+        << certified_partitions.size()
+        << " cancelled_join_steps=" << joined_rings
+        << " cancelled_split_steps=" << split_rings
+        << " exact_directed_material_contours="
+        << stitched.size()
+        << " retained_unique_material_edges="
+        << retained_tokens.size()
+        << " native_face_inner_wires=" << native_inner_wires
+        << " circular_source_members=" << circle_tokens.size()
+        << " independent_surface_side_witness=0"
+        << " coordinate_joins=0"
+        << '\n';
 }
 
 // Native E0 negative control: a LOCAL side-wall notch leaves the
