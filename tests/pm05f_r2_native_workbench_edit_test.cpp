@@ -1369,6 +1369,11 @@ void verifyPg01dMalformedBoundaryFailClosed(
           kernel::ReferenceStatus::unsupported);
     CHECK(semantic_refusal.rejected_edge->curve_candidate_count ==
           0U);
+    CHECK(semantic_refusal.rejected_edge->curve_family_realizations ==
+          0U);
+    CHECK(semantic_refusal.rejected_edge->
+          certified_semantic_endpoints <=
+          semantic_refusal.rejected_edge->incident_vertices);
     CHECK(!semantic_refusal.rejected_edge->periodic_seam);
     CHECK(!semantic_refusal.rejected_edge->representation_partition);
 
@@ -1419,6 +1424,11 @@ void verifyPg01dMalformedBoundaryFailClosed(
         CHECK(rejected.rejected_edge->edge_index == 0U);
         CHECK(!rejected.rejected_edge->accounting_class);
         CHECK(!rejected.rejected_edge->referenceability);
+        CHECK(rejected.rejected_edge->curve_family_realizations ==
+              0U);
+        CHECK(rejected.rejected_edge->incident_vertices == 0U);
+        CHECK(rejected.rejected_edge->
+              certified_semantic_endpoints == 0U);
     }
     expect_selected_failure(
         Fault::missing_signed_vertex,
