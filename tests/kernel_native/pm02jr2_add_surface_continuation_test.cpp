@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <map>
 #include <cmath>
 #include <optional>
 #include <string>
@@ -447,6 +448,11 @@ void verifyPartIntegration() {
     std::size_t boundary_material_uses = 0U;
     std::size_t boundary_partition_uses = 0U;
     std::size_t boundary_other_nonmaterial_uses = 0U;
+    // E0 Face Boundary is still a read-only native incidence
+    // experiment: one exact same-Surface carrier, several bounded
+    // Faces, current-scoped real provider Edge tokens only.
+    std::map<std::uint64_t, std::size_t>
+        grouped_same_surface_native_edge_uses;
     std::size_t blocked_face_admissions = 0U;
     std::size_t accepted_face_admissions = 0U;
     for (const auto token : current_side->current_faces) {
@@ -492,6 +498,8 @@ void verifyPartIntegration() {
             if (wire.outer) ++outer_wires;
             for (const auto& occurrence : wire.edges) {
                 CHECK(occurrence.valid());
+                ++grouped_same_surface_native_edge_uses[
+                    occurrence.edge.value];
                 const auto edge = std::find_if(
                     topology.edges.begin(),
                     topology.edges.end(),
@@ -583,6 +591,67 @@ void verifyPartIntegration() {
     // boundary use and must never be promoted into material identity.
     CHECK(boundary_partition_uses >= 1U);
     CHECK(blocked_face_admissions >= 1U);
+
+    // Face Boundary E0: cancel ONLY certified internal representation
+    // edges from this one strictly-equal Surface carrier. Every such
+    // partition must occur exactly twice in the real oriented Face
+    // wire ledger. Every remaining source must be an individually
+    // referenceable material Edge occurring once on this region's
+    // perimeter. This is not yet a contour/wire reconstruction or
+    // an authorization to merge other coplanar Surfaces.
+    std::size_t certified_internal_partitions = 0U;
+    std::vector<part::MaterialEdgeReference>
+        certified_perimeter_sources;
+    for (const auto& [value, occurrences] :
+         grouped_same_surface_native_edge_uses) {
+        const auto token = kernel::RuntimeEdgeToken{value};
+        const auto found = std::find_if(
+            topology.edges.begin(), topology.edges.end(),
+            [token](const auto& edge) {
+                return edge.runtime_token == token;
+            });
+        CHECK(found != topology.edges.end());
+        if (found->representation_partition) {
+            CHECK(found->accounting_class ==
+                  part::TopologyAccountingClass::
+                      known_representation_artifact);
+            CHECK(occurrences == 2U);
+            CHECK(!part::authorMaterialEdgeReference(
+                topology, token).ok());
+            ++certified_internal_partitions;
+            continue;
+        }
+        // A periodic seam is a separate representation artifact and
+        // requires its own positive incidence proof on curved faces.
+        CHECK(!found->periodic_seam);
+        const auto material =
+            part::authorMaterialEdgeReference(
+                topology, token);
+        CHECK(material.ok());
+        CHECK(material.reference);
+        CHECK(occurrences == 1U);
+        certified_perimeter_sources.push_back(
+            *material.reference);
+    }
+    CHECK(certified_internal_partitions >= 1U);
+    CHECK(!certified_perimeter_sources.empty());
+    std::sort(
+        certified_perimeter_sources.begin(),
+        certified_perimeter_sources.end());
+    CHECK(std::adjacent_find(
+        certified_perimeter_sources.begin(),
+        certified_perimeter_sources.end()) ==
+        certified_perimeter_sources.end());
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_SPLIT_CARRIER_PERIMETER_PASS"
+        << " same_semantic_surface=1"
+        << " split_faces=" << observed_faces.size()
+        << " cancelled_internal_partitions="
+        << certified_internal_partitions
+        << " distinct_material_perimeter_edges="
+        << certified_perimeter_sources.size()
+        << " source_proximity_guessing=0"
+        << '\\n';
     const auto invalid_face =
         part::inspectMaterialFaceBoundary(
             final_eval.features.back(),
