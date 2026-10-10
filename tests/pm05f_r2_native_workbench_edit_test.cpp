@@ -1444,7 +1444,7 @@ void verifyPg01dMalformedBoundaryFailClosed(
         << " semantically_unsupported_refused=1"
         << " bogus_catalog_source_refused=1"
         << " no_partial_authoring=1"
-        << '\\n';
+        << '\n';
     std::cout
         << "PG01D_MANUAL_FACE_MALFORMED_E0_PASS"
         << " faults=7"
