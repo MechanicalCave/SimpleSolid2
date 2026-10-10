@@ -207,10 +207,18 @@ remaining 36 one-Point-only occurrences; a mismatched source stage
 rejects. Native Windows kernel
 [FOCUSED #38077430304](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38077430304)
 **PASS 1/1** on `1aaaa13e2d07f7c852ae1d619969a1d85e6f1b40`.
-An additional predecessor Add suppression committed and Undo recovered
-the exact single-candidate source, but the linked source status while
-suppressed remains unproven. Detailed formal research and remaining
-versioning/negative-geometry STOP:
+An additional exact-stage research guard now proves in the same
+native OCCT fixture that **Delete/Suppress the source Chamfer Feature**
+invalidates the old final BodyStageRef, while **Suppress predecessor Add**
+makes the dependent final Body source unavailable; Undo restores exactly
+one source in all cases. The diagnostic resolved-prefix topology is
+never an admissible substitute. Intentionally RED-for-log
+[#38078208089](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38078208089)
+provided those counts; its temporary RED was removed and exact-HEAD
+GREEN remains required. This test-only proof does not approve a
+production one-Point reference, nor settle historical retarget,
+native negative geometry or v16 migration. Detailed formal research
+and remaining versioning/negative-geometry STOP:
 `work/PROJECTION_01D_ONE_POINT_CURVE_REFERENCE_D2_CONTRACT_DRAFT.md`.
 
 **No change to the accepted Project Geometry behavior:** Edges and
