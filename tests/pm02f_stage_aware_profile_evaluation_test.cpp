@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <utility>
 #include <variant>
@@ -630,10 +631,66 @@ void verifyExactRegionEndpointBoundary() {
         << " proximity_healing=0\\n";
 }
 
+// PG-01D Face Boundary follow-up, wholly synthetic Datum-plane analogue.
+// The projected analytic Arc is exact but Cartesian endpoints calculated
+// from trig differ by double roundoff from otherwise coincident Lines.
+// Region analysis must NOT globally merge even these tiny discrepancies.
+// When the caller proves shared original material vertices, it may
+// canonicalize adjacent Line endpoints to the same exact Arc coordinates.
+void verifyProjectedArcDatumProfileEndpointEvidence() {
+    sketch::SketchModel model;
+    const double pi = std::numbers::pi_v<double>;
+    const sketch::Point2 arc_center{25.0, 40.0};
+    const double arc_radius = 10.0;
+    const sketch::Point2 start{
+        arc_center.u + arc_radius * std::cos(pi),
+        arc_center.v + arc_radius * std::sin(pi)};
+    const sketch::Point2 end{
+        arc_center.u +
+            arc_radius * std::cos(pi + pi / 2.0),
+        arc_center.v +
+            arc_radius * std::sin(pi + pi / 2.0)};
+    CHECK(start.u == 15.0);
+    CHECK(end.v == 30.0);
+    CHECK(start.v != 40.0 || end.u != 25.0);
+    [[maybe_unused]] const auto left = model.addLine(
+        {0.0, -20.0}, {0.0, 40.0});
+    const auto top = model.addLine(
+        {0.0, 40.0}, {15.0, 40.0});
+    [[maybe_unused]] const auto arc = model.addArc(
+        arc_center, arc_radius, pi, pi / 2.0);
+    const auto right = model.addLine(
+        {25.0, 30.0}, {25.0, -20.0});
+    [[maybe_unused]] const auto bottom = model.addLine(
+        {25.0, -20.0}, {0.0, -20.0});
+    [[maybe_unused]] const auto inner_circle = model.addCircle(
+        {12.0, 0.0}, 5.0);
+    const auto rounded = sketch::analyzeRegions(model);
+    CHECK(rounded.regions.empty());
+
+    CHECK(model.updateLine(
+        top, {0.0, 40.0}, start));
+    CHECK(model.updateLine(
+        right, end, {25.0, -20.0}));
+    const auto topology_accurate =
+        sketch::analyzeRegions(model);
+    CHECK(topology_accurate.complete());
+    CHECK(topology_accurate.regions.size() == 1U);
+    CHECK(topology_accurate.regions.front().holes.size() == 1U);
+    CHECK(part::makeProfileRegionIntent(
+        topology_accurate.regions.front()));
+    std::cout
+        << "PG01D_DATUM_PROJECTED_ARC_REGION_EVIDENCE_PASS"
+        << " rounded_closed_looking_but_open=1"
+        << " certified_exact_endpoints_region_hole=1"
+        << " global_tolerance_unchanged=1\\n";
+}
+
 } // namespace
 
 int main() {
     verifyExactRegionEndpointBoundary();
+    verifyProjectedArcDatumProfileEndpointEvidence();
     auto fixture = makeFixture();
     StageKernel kernel;
 
