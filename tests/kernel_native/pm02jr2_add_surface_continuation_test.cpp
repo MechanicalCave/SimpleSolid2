@@ -1378,9 +1378,13 @@ void verifyPartIntegration() {
         CHECK(tested_upstream_edit);
         CHECK(tested_upstream_edit_undo_redo);
         CHECK(native_multipiece_curve_point_probes > 0U);
-        // Controlled diagnostic RED: publish native E5 scan counts
-        // and upstream edit outcome in CTest stdout, then REMOVE.
-        CHECK(false && "PG01D_D2_NATIVE_AMBIGUITY_AUDIT_ONLY");
+        // The independent OCCT matrix has no naturally ambiguous
+        // Curve+Point pairs; this is a bounded positive observation,
+        // NOT a proof that a native counterexample cannot exist.
+        // The separate injected double-incidence test still requires
+        // the candidate selector to return the entire ambiguous set.
+        CHECK(native_onepoint_resolved > 0U);
+        CHECK(native_onepoint_ambiguous == 0U);
     }
 
     const auto contribution =
