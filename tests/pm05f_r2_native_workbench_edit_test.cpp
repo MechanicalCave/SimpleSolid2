@@ -721,6 +721,11 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
                 }
             }
         }
+        const auto verified_again =
+            part::inspectSelectedFaceBoundary(
+                evaluation.features.back(),
+                face.runtime_token, kernel);
+        CHECK(verified_again == selected);
         individually_selected.push_back(selected);
     }
     CHECK(selected_planar >= 1U);
