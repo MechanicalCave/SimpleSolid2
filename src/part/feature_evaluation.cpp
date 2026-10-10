@@ -4333,7 +4333,7 @@ SelectedFaceBoundaryAdmission inspectSelectedFaceBoundary(
     // Do not guess a material source when one Face wire fails.
     // Record exactly WHICH native Edge failed and WHY, without persisting
     // runtime tokens or weakening the all-or-nothing admission gate.
-    const auto reject_edge = [&fail](
+    const auto reject_edge = [&fail, &catalog](
         SelectedFaceBoundaryRejectKind kind,
         std::size_t wire_index, std::size_t edge_index,
         kernel::RuntimeEdgeToken edge,
@@ -4353,6 +4353,41 @@ SelectedFaceBoundaryAdmission inspectSelectedFaceBoundary(
             record ? record->curve_candidates.size() : 0U,
             record != nullptr && record->periodic_seam,
             record != nullptr && record->representation_partition};
+        auto& detail = *rejected.rejected_edge;
+        if (record && record->curve_candidates.size() == 1U) {
+            const auto* family = findCurveResolution(
+                catalog, record->curve_candidates.front());
+            if (family) {
+                detail.curve_family_realizations =
+                    family->current_edges.size();
+            }
+        }
+        for (const auto& vertex : catalog.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            ++detail.incident_vertices;
+            if (vertex.accounting_class !=
+                    TopologyAccountingClass::referenceable ||
+                vertex.referenceability !=
+                    kernel::ReferenceStatus::resolved ||
+                vertex.point_candidates.size() != 1U) {
+                continue;
+            }
+            const auto* point = findPointResolution(
+                catalog, vertex.point_candidates.front());
+            if (point && point->status ==
+                    kernel::ReferenceStatus::resolved &&
+                point->current_vertices.size() == 1U &&
+                point->current_vertices.front() ==
+                    vertex.runtime_token) {
+                ++detail.certified_semantic_endpoints;
+            }
+        }
         return rejected;
     };
     SelectedFaceBoundaryAdmission result;
