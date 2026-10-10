@@ -2253,6 +2253,91 @@ void verifyNativeCylindricalCutSplitE0() {
         << '\n';
 }
 
+// Native E0 bounded exploration: a LOCAL side-wall notch, unlike the
+// full annular band, leaves a geometrically connected cylinder region.
+// This probe tests whether the CURRENT provider actually reports two
+// (or more) separate Faces of the ONE inherited Surface carrier.
+// A positive connected multi-Face proof is impossible until there is
+// real same-carrier native Face adjacency. No new semantic association
+// may be guessed from coaxial/radius similarity.
+void verifyNativePartialCylinderCutContinuityProbeE0() {
+    kernel_occt::OcctSolidModelingKernel provider;
+    kernel::PlanarProfileInput cylinder;
+    cylinder.outer.boundary = {{
+        kernel::Circle2{{0.0, 0.0}, 10.0},
+        0.0, 1.0, true, false, true,
+        kernel::BoundaryUseProvenance{
+            "partial-cylinder-cut", 0U, 0U, false},
+    }};
+    CHECK(cylinder.valid());
+    const auto base = provider.extrude(add(cylinder, 10.0));
+    CHECK(base.ok());
+    const auto* inherited_source =
+        newSide(base, "partial-cylinder-cut");
+    CHECK(inherited_source);
+    CHECK(inherited_source->resolved_token);
+    CHECK(inherited_source->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+
+    kernel::Frame3 notch_frame;
+    notch_frame.origin = {0.0, 0.0, 4.0};
+    CHECK(notch_frame.valid());
+    auto notch = add(rectangle(
+        notch_frame, 8.5, -3.0, 12.0, 3.0,
+        "partial-groove"), 2.0);
+    notch.operation = kernel::SolidBooleanOperation::cut;
+    CHECK(notch.valid());
+    const auto cut = provider.extrude(notch, base.solid);
+    CHECK(cut.ok());
+    CHECK(cut.solid_count == 1U);
+    const auto* inherited = inheritedSurface(
+        cut, *inherited_source->resolved_token);
+    CHECK(inherited);
+    std::cerr
+        << "PG01D_CURVED_E0_PARTIAL_NOTCH_NATIVE_PROBE"
+        << " inherited_status="
+        << static_cast<int>(inherited->surface_status)
+        << " inherited_faces="
+        << inherited->current_faces.size()
+        << " inherited_strict_face="
+        << static_cast<int>(inherited->strict_face_status)
+        << '\n';
+    CHECK(inherited->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(inherited->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+    CHECK(inherited->current_faces.size() >= 2U);
+    std::map<std::uint64_t, std::set<std::uint64_t>>
+        edge_face_uses;
+    for (const auto token : inherited->current_faces) {
+        const auto bound =
+            provider.bindFaceToBody(cut.solid, token);
+        CHECK(bound && bound->valid());
+        const auto native =
+            provider.queryFaceBoundaryAnySurface(
+                cut.solid, *bound);
+        CHECK(native.ok());
+        for (const auto& wire : native.wires) {
+            CHECK(wire.valid());
+            for (const auto& use : wire.edges) {
+                CHECK(use.start_vertex && use.end_vertex);
+                edge_face_uses[use.edge.value].insert(
+                    token.value);
+            }
+        }
+    }
+    std::size_t shared_native_edges = 0U;
+    for (const auto& [edge, faces] : edge_face_uses) {
+        if (faces.size() > 1U) ++shared_native_edges;
+    }
+    std::cerr
+        << "PG01D_CURVED_E0_PARTIAL_NOTCH_NATIVE_ADJACENCY"
+        << " carrier_faces=" << inherited->current_faces.size()
+        << " shared_native_edges=" << shared_native_edges
+        << '\n';
+    CHECK(shared_native_edges >= 1U);
+}
+
 // E0 typed/portable negative matrix: malformed per-use endpoint coverage
 // or wrong native Edge direction must be rejected at FaceBoundaryResult's
 // public validation boundary, BEFORE any Part-authorable sources are used.
@@ -2485,6 +2570,7 @@ int main() {
     verifyPartIntegration();
     verifyNativeCurvedSurfaceContinuationE0();
     verifyNativeCylindricalCutSplitE0();
+    verifyNativePartialCylinderCutContinuityProbeE0();
     verifyPg01dE0DirectedWireFailClosedContract();
 
     std::cout
