@@ -580,6 +580,8 @@ void verifyPartIntegration() {
         std::size_t missing_endpoint_inherited = 0U;
         std::size_t missing_endpoint_new = 0U;
         std::size_t missing_endpoint_not_accounted = 0U;
+        std::size_t two_surface_pair_unique = 0U;
+        std::size_t two_surface_pair_collided = 0U;
         for (const auto& candidate : topology.edges) {
             const auto source =
                 part::authorMaterialEdgeReference(
@@ -731,6 +733,63 @@ void verifyPartIntegration() {
                                         }
                                     }
                                     CHECK(complete_mapping);
+                                    std::sort(
+                                        semantic_surfaces.begin(),
+                                        semantic_surfaces.end());
+                                    // Does the 2-Surface proposal identify
+                                    // exactly one actual current Vertex?
+                                    // Count identical semantic relations,
+                                    // never geometric proximity or ordinals.
+                                    std::size_t same_pair_vertices = 0U;
+                                    for (const auto& raw_vertex :
+                                         raw.current_vertex_semantics) {
+                                        std::vector<
+                                            part::FeatureSurfaceAddress>
+                                            other_surfaces;
+                                        bool other_resolved = true;
+                                        for (const auto token :
+                                             raw_vertex.adjacent_surfaces) {
+                                            const auto found =
+                                                std::find_if(
+                                                    ledger.surfaces.begin(),
+                                                    ledger.surfaces.end(),
+                                                    [token](const auto& item) {
+                                                        return item.status ==
+                                                            kernel::ReferenceStatus::
+                                                                resolved &&
+                                                            item.runtime_token &&
+                                                            *item.runtime_token ==
+                                                                token;
+                                                    });
+                                            if (found ==
+                                                    ledger.surfaces.end()) {
+                                                other_resolved = false;
+                                                break;
+                                            }
+                                            if (std::find(
+                                                    other_surfaces.begin(),
+                                                    other_surfaces.end(),
+                                                    found->address) ==
+                                                other_surfaces.end()) {
+                                                other_surfaces.push_back(
+                                                    found->address);
+                                            }
+                                        }
+                                        if (!other_resolved) continue;
+                                        std::sort(
+                                            other_surfaces.begin(),
+                                            other_surfaces.end());
+                                        if (other_surfaces ==
+                                            semantic_surfaces) {
+                                            ++same_pair_vertices;
+                                        }
+                                    }
+                                    CHECK(same_pair_vertices > 0U);
+                                    if (same_pair_vertices == 1U) {
+                                        ++two_surface_pair_unique;
+                                    } else {
+                                        ++two_surface_pair_collided;
+                                    }
                                     if (semantic_surfaces.size() == 2U) {
                                         ++missing_endpoint_two_surfaces;
                                     } else if (
@@ -781,6 +840,8 @@ void verifyPartIntegration() {
                                             << current_lineage
                                             << " pointCandidates="
                                             << vertex.point_candidates.size()
+                                            << " sameSemanticPairVertices="
+                                            << same_pair_vertices
                                             << '\n';
                                     }
                                 }
@@ -841,6 +902,10 @@ void verifyPartIntegration() {
             << missing_endpoint_new
             << " missing_endpoints_other_accounting="
             << missing_endpoint_not_accounted
+            << " two_surface_pair_unique="
+            << two_surface_pair_unique
+            << " two_surface_pair_collided="
+            << two_surface_pair_collided
             << " private_part_committed=0"
             << '\n';
         // Research witness on the accepted immutable Point rule:
@@ -855,6 +920,11 @@ void verifyPartIntegration() {
         CHECK(missing_endpoint_inherited == 0U);
         CHECK(missing_endpoint_new == rejected_material);
         CHECK(missing_endpoint_not_accounted == 0U);
+        CHECK(two_surface_pair_unique +
+                  two_surface_pair_collided == rejected_material);
+        // Intentionally RED only to surface counted collision evidence.
+        // Remove after exact-head Windows diagnostic logs.
+        CHECK(false && "PG01D_D2B_PAIR_IDENTITY_AUDIT_ONLY");
     }
 
     const auto contribution =
