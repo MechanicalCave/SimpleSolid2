@@ -878,6 +878,197 @@ void verifyPartIntegration() {
             &provider);
     CHECK(new_sketch.ok());
     CHECK(new_sketch.sketch_id.has_value());
+
+    // PG-01D E0: actual Cut through the LOWER portion of the same
+    // previously split +X material Surface. This is deliberately not
+    // a guessed stitched Face: source Sketch is explicitly supported by
+    // the inherited same-stage semantic Surface, and OCCT re-evaluates
+    // the full Part with a real circular hole in one bounded fragment.
+    CHECK(current_side->canonical_frame.has_value());
+    CHECK(current_side->canonical_frame->normal.x > 0.9);
+    const auto hole_uv = projectToFrame(
+        *current_side->canonical_frame,
+        kernel::Point3{40.0, 15.0, 5.0});
+    const auto hole_circle = session.execute(
+        application::AddSketchCircleCommand{
+            *new_sketch.sketch_id,
+            hole_uv,
+            2.5,
+            sketch::EntityRole::regular});
+    CHECK(hole_circle.ok());
+    const auto* hole_host =
+        session.document().findSketch(*new_sketch.sketch_id);
+    CHECK(hole_host);
+    const auto hole_regions =
+        sketch::analyzeRegions(hole_host->model);
+    CHECK(hole_regions.complete());
+    CHECK(hole_regions.regions.size() == 1U);
+    const auto hole_intent =
+        part::makeProfileRegionIntent(
+            hole_regions.regions.front());
+    CHECK(hole_intent.has_value());
+    const auto hole_profile = session.execute(
+        application::CreateProfileCommand{
+            *new_sketch.sketch_id,
+            session.document().revision(),
+            *hole_intent});
+    CHECK(hole_profile.ok() && hole_profile.profile_id);
+    const auto hole_cut = session.execute(
+        application::CreateExtrudeFeatureCommand{
+            *hole_profile.profile_id,
+            session.document().revision(),
+            part::ExtrudeOperation::cut,
+            part::OneSidedExtrudeExtent{
+                core::LengthValue{45.0},
+                true},
+            "PG01D split-carrier lower side through-hole"},
+        provider);
+    CHECK(hole_cut.ok() && hole_cut.feature_id);
+
+    const auto drilled =
+        part::evaluatePart(session.document(), provider);
+    CHECK(drilled.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(drilled.body_solid && drilled.current_topology);
+    CHECK(drilled.current_topology->complete());
+    const auto& drilled_catalog = *drilled.current_topology;
+    CHECK(drilled_catalog.stage.feature_id &&
+          *drilled_catalog.stage.feature_id == *hole_cut.feature_id);
+    const auto drilled_side = std::find_if(
+        drilled_catalog.surfaces.begin(),
+        drilled_catalog.surfaces.end(),
+        [address = continued_side->address](
+            const auto& surface) {
+            return surface.address == address;
+        });
+    CHECK(drilled_side != drilled_catalog.surfaces.end());
+    CHECK(drilled_side->status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(drilled_side->current_faces.size() >= 2U);
+
+    // Native oriented wire accounting within the ONE certified carrier.
+    // A real hole is identified by the OCCT Face's INNER wire, not by
+    // geometry proximity, Circle radius or viewer outline. Partition
+    // cancellation is allowed only for exactly two opposite-oriented
+    // native uses on different fragments of this same Surface.
+    struct OrientedRegionUse final {
+        bool reversed{};
+        bool inner{};
+    };
+    std::map<std::uint64_t, std::vector<OrientedRegionUse>>
+        drilled_native_uses;
+    std::size_t drilled_native_outer_wires = 0U;
+    std::size_t drilled_native_hole_wires = 0U;
+    std::size_t drilled_faces_with_holes = 0U;
+    for (const auto token : drilled_side->current_faces) {
+        const auto face = std::find_if(
+            drilled_catalog.faces.begin(),
+            drilled_catalog.faces.end(),
+            [token](const auto& item) {
+                return item.runtime_token == token;
+            });
+        CHECK(face != drilled_catalog.faces.end());
+        CHECK(face->surface_candidates.size() == 1U);
+        CHECK(face->surface_candidates.front() ==
+              drilled_side->address);
+        const auto scoped =
+            provider.bindFaceToBody(drilled.body_solid, token);
+        CHECK(scoped && scoped->valid());
+        const auto native = provider.queryFaceBoundaryAnySurface(
+            drilled.body_solid, *scoped);
+        CHECK(native.ok());
+        std::size_t face_outer_wires = 0U;
+        std::size_t face_hole_wires = 0U;
+        for (const auto& wire : native.wires) {
+            if (wire.outer) {
+                ++face_outer_wires;
+                ++drilled_native_outer_wires;
+            } else {
+                ++face_hole_wires;
+                ++drilled_native_hole_wires;
+            }
+            for (const auto& use : wire.edges) {
+                CHECK(use.valid());
+                drilled_native_uses[use.edge.value].push_back(
+                    OrientedRegionUse{
+                        use.reversed,
+                        !wire.outer});
+            }
+        }
+        CHECK(face_outer_wires == 1U);
+        if (face_hole_wires != 0U) {
+            ++drilled_faces_with_holes;
+        }
+    }
+    CHECK(drilled_native_outer_wires ==
+          drilled_side->current_faces.size());
+    CHECK(drilled_native_hole_wires == 1U);
+    CHECK(drilled_faces_with_holes == 1U);
+
+    std::size_t drilled_partition_edges = 0U;
+    std::size_t drilled_outer_material = 0U;
+    std::size_t drilled_hole_material = 0U;
+    std::vector<part::MaterialEdgeReference>
+        drilled_unique_material_sources;
+    for (const auto& [value, uses] : drilled_native_uses) {
+        const kernel::RuntimeEdgeToken token{value};
+        const auto edge = std::find_if(
+            drilled_catalog.edges.begin(),
+            drilled_catalog.edges.end(),
+            [token](const auto& item) {
+                return item.runtime_token == token;
+            });
+        CHECK(edge != drilled_catalog.edges.end());
+        const auto material = part::authorMaterialEdgeReference(
+            drilled_catalog, token);
+        if (edge->representation_partition) {
+            CHECK(edge->accounting_class ==
+                  part::TopologyAccountingClass::
+                      known_representation_artifact);
+            CHECK(!edge->periodic_seam);
+            CHECK(!material.ok());
+            CHECK(uses.size() == 2U);
+            CHECK(uses[0].reversed != uses[1].reversed);
+            CHECK(!uses[0].inner && !uses[1].inner);
+            ++drilled_partition_edges;
+            continue;
+        }
+        // Any periodic seam or unknown nonmaterial source is a STOP
+        // in this planar case, never an omitted partial material link.
+        CHECK(!edge->periodic_seam);
+        CHECK(material.ok() && material.reference);
+        CHECK(material.reference->stage ==
+              drilled_catalog.stage);
+        CHECK(uses.size() == 1U);
+        drilled_unique_material_sources.push_back(
+            *material.reference);
+        if (uses.front().inner) {
+            ++drilled_hole_material;
+        } else {
+            ++drilled_outer_material;
+        }
+    }
+    CHECK(drilled_partition_edges >= 1U);
+    CHECK(drilled_hole_material >= 1U);
+    CHECK(drilled_outer_material >= 1U);
+    std::sort(
+        drilled_unique_material_sources.begin(),
+        drilled_unique_material_sources.end());
+    CHECK(std::adjacent_find(
+        drilled_unique_material_sources.begin(),
+        drilled_unique_material_sources.end()) ==
+        drilled_unique_material_sources.end());
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_SPLIT_CARRIER_HOLE_PASS"
+        << " same_semantic_surface=1"
+        << " native_faces=" << drilled_side->current_faces.size()
+        << " native_outer_wires=" << drilled_native_outer_wires
+        << " native_hole_wires=" << drilled_native_hole_wires
+        << " cancelled_partitions=" << drilled_partition_edges
+        << " strict_outer_material_edges=" << drilled_outer_material
+        << " strict_hole_material_edges=" << drilled_hole_material
+        << " source_geometry_guessing=0"
+        << '\\n';
 }
 
 } // namespace
