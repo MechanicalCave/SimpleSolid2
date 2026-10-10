@@ -2478,6 +2478,8 @@ int main(int argc, char* argv[]) {
                     *top_picked);
             CHECK(top_native.ok());
             CHECK(top_native.wires.size() == 1U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 1U);
             CHECK(pg_count->text().contains(
                 QStringLiteral("Faces staged: 1")));
             CHECK(pg_count->text().contains(
@@ -2515,6 +2517,8 @@ int main(int argc, char* argv[]) {
                 }
             }
             CHECK(second_staged);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 2U);
             CHECK(pg_count->text().contains(
                 QStringLiteral("selected: 5")));
             CHECK(pg_count->text().contains(
@@ -2531,6 +2535,8 @@ int main(int argc, char* argv[]) {
             reply = workbench.submitCadInput(
                 "REMOVE", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 1U);
             CHECK(pg_count->text().contains(
                 QStringLiteral("Faces staged: 1")));
             CHECK(pg_count->text().contains(
@@ -2548,6 +2554,8 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("selected: 5")));
             CHECK(pg_finish->isEnabled());
 
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 2U);
             // Exercise all THREE acquisition modes without applying
             // a Face union or throwing away previously staged Edges.
             // The second mode switch is not a second document command.
@@ -2564,6 +2572,8 @@ int main(int argc, char* argv[]) {
                 controller->selectedMaterialEdgeReferences();
             CHECK(preserved_edge_picks &&
                   preserved_edge_picks->size() == 5U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 2U);
             CHECK(pg_finish->isEnabled());
             reply = workbench.submitCadInput(
                 "FACE", workbench.cadInputContextGeneration());
@@ -2589,10 +2599,14 @@ int main(int argc, char* argv[]) {
             CHECK(pg_finish->isEnabled());
             CHECK(manual_session.document().state() == manual_before);
             CHECK(manual_session.undoDepth() == manual_undo);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 2U);
 
             reply = workbench.submitCadInput(
                 "FINISH", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 0U);
             CHECK(manual_session.undoDepth() == manual_undo + 1U);
             const auto* saved =
                 manual_session.document().findSketch(
