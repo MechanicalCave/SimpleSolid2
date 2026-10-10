@@ -846,7 +846,7 @@ void verifyPartIntegration() {
         << " foreign_carrier_shared_material_edges="
         << foreign_carrier_shared_material_edges
         << " source_proximity_guessing=0"
-        << '\\n';
+        << '\n';
     const auto invalid_face =
         part::inspectMaterialFaceBoundary(
             final_eval.features.back(),
@@ -1278,6 +1278,25 @@ void verifyPartIntegration() {
     std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
         two_face_hole_cycles;
     std::set<std::uint64_t> two_hole_face_tokens;
+    // A strict directed closed wire has one live OCCT start/end
+    // native Vertex per oriented occurrence. Pairwise shared XYZ
+    // or mere unsigned Vertex adjacency is NOT sufficient.
+    const auto native_directed_closed =
+        [](const std::vector<kernel::FaceBoundaryEdgeUse>& uses) {
+            if (uses.empty()) return false;
+            for (std::size_t i = 0U; i < uses.size(); ++i) {
+                const auto& a = uses[i];
+                const auto& next = uses[
+                    (i + 1U) % uses.size()];
+                if (!a.valid() || !next.valid() ||
+                    !a.start_vertex || !a.end_vertex ||
+                    !next.start_vertex || !next.end_vertex ||
+                    *a.end_vertex != *next.start_vertex) {
+                    return false;
+                }
+            }
+            return true;
+        };
     std::size_t two_native_inner_wires = 0U;
     std::size_t two_native_outer_wires = 0U;
     for (const auto face_token : two_side->current_faces) {
@@ -1299,6 +1318,10 @@ void verifyPartIntegration() {
         CHECK(native.ok());
         std::size_t current_face_outer_wires = 0U;
         for (const auto& wire : native.wires) {
+            // Every native Face wire (outer or hole) is a real
+            // directed closed path, certified by OCCT exact Vertex
+            // tokens belonging to this current RuntimeSolid.
+            CHECK(native_directed_closed(wire.edges));
             if (wire.outer) {
                 ++current_face_outer_wires;
                 ++two_native_outer_wires;
@@ -1559,6 +1582,34 @@ void verifyPartIntegration() {
         CHECK(common_native_vertices == 1U);
     }
     CHECK(stitched_outer_tokens == two_outer_tokens);
+    // This stronger condition was NOT provable with Edge+reversed
+    // alone: native signed endpoint evidence now proves that the
+    // exact result of partition splicing has NO backward-traversed
+    // material member, including its cyclic last-to-first join.
+    CHECK(native_directed_closed(ordered_outer));
+    for (const auto& hole : two_face_hole_cycles) {
+        CHECK(native_directed_closed(hole));
+        CHECK(hole.front().start_vertex ==
+              hole.front().end_vertex);
+    }
+    CHECK(ordered_outer.size() >= 3U);
+    auto incorrectly_reversed = ordered_outer;
+    std::swap(
+        incorrectly_reversed.front().start_vertex,
+        incorrectly_reversed.front().end_vertex);
+    // Negative E0 control: reversing one directed material use
+    // without reversing the FULL native wire must be rejected,
+    // although its Edge set and undirected Vertex adjacency
+    // remain identical.
+    CHECK(!native_directed_closed(incorrectly_reversed));
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_DIRECTED_VERTICES_PASS"
+        << " outer_directed_uses=" << ordered_outer.size()
+        << " native_holes=" << two_face_hole_cycles.size()
+        << " incorrect_single_use_reversal_rejected=1"
+        << " exact_start_end_occt_vertex_tokens=1"
+        << " xyz_tolerance_joins=0"
+        << '\\n';
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_ORDERED_OUTER_TWO_HOLES_PASS"
         << " native_outer_fragments="
