@@ -214,14 +214,14 @@ std::optional<FeaturePointAddress>
 parseFeaturePointAddressV14(
     const nlohmann::json& value,
     FeatureIdCursor feature_cursor,
-    std::string& error);
+    int schema_version, std::string& error);
 nlohmann::json materialEdgeReferenceJson(
     const MaterialEdgeReference& edge);
 std::optional<MaterialEdgeReference>
 parseMaterialEdgeReferenceV14(
     const nlohmann::json& value,
     FeatureIdCursor feature_cursor,
-    std::string& error);
+    int schema_version, std::string& error);
 
 nlohmann::json featureSurfaceAddressJson(
     const FeatureSurfaceAddress& surface) {
@@ -300,7 +300,7 @@ std::optional<FeatureSurfaceAddress>
 parseFeatureSurfaceAddressV14(
     const nlohmann::json& value,
     FeatureIdCursor feature_cursor,
-    std::string& error) {
+    int schema_version, std::string& error) {
     if (!value.is_object() ||
         !value.contains("producer_feature_id") ||
         !value.contains("role") ||
@@ -380,7 +380,7 @@ parseFeatureSurfaceAddressV14(
             parseMaterialEdgeReferenceV14(
                 value["source_edge"],
                 feature_cursor,
-                error);
+                schema_version, error);
         if (!source) {
             return std::nullopt;
         }
@@ -401,7 +401,7 @@ parseFeatureSurfaceAddressV14(
             parseFeaturePointAddressV14(
                 value["source_point"],
                 feature_cursor,
-                error);
+                schema_version, error);
         if (!point) {
             return std::nullopt;
         }
@@ -414,7 +414,7 @@ parseFeatureSurfaceAddressV14(
                 parseMaterialEdgeReferenceV14(
                     edge_json,
                     feature_cursor,
-                    error);
+                    schema_version, error);
             if (!edge) {
                 return std::nullopt;
             }
@@ -465,7 +465,7 @@ std::optional<FeatureCurveAddress>
 parseFeatureCurveAddressV14(
     const nlohmann::json& value,
     FeatureIdCursor feature_cursor,
-    std::string& error) {
+    int schema_version, std::string& error) {
     if (!value.is_object() ||
         value.size() != 3U ||
         !value.contains("producer_feature_id") ||
@@ -503,7 +503,7 @@ parseFeatureCurveAddressV14(
             parseFeatureSurfaceAddressV14(
                 item,
                 feature_cursor,
-                error);
+                schema_version, error);
         if (!surface) {
             return std::nullopt;
         }
@@ -547,7 +547,7 @@ std::optional<FeaturePointAddress>
 parseFeaturePointAddressV14(
     const nlohmann::json& value,
     FeatureIdCursor feature_cursor,
-    std::string& error) {
+    int schema_version, std::string& error) {
     if (!value.is_object() ||
         value.size() != 2U ||
         !value.contains("producer_feature_id") ||
@@ -579,7 +579,7 @@ parseFeaturePointAddressV14(
             parseFeatureSurfaceAddressV14(
                 item,
                 feature_cursor,
-                error);
+                schema_version, error);
         if (!surface) {
             return std::nullopt;
         }
@@ -615,6 +615,15 @@ nlohmann::json materialEdgeReferenceJson(
         branch = {
             {"kind",
              "singular_at_authored_stage"},
+        };
+    } else if (const auto* single =
+                   std::get_if<AtSingleSemanticPoint>(
+                       &edge.branch)) {
+        auto point = featurePointAddressJson(single->point);
+        if (point.empty()) return nlohmann::json{};
+        branch = {
+            {"kind", "at_single_semantic_point"},
+            {"point", std::move(point)},
         };
     } else {
         const auto* endpoints =
@@ -660,7 +669,7 @@ std::optional<MaterialEdgeReference>
 parseMaterialEdgeReferenceV14(
     const nlohmann::json& value,
     FeatureIdCursor feature_cursor,
-    std::string& error) {
+    int schema_version, std::string& error) {
     if (!value.is_object() ||
         value.size() != 3U ||
         !value.contains("stage") ||
@@ -701,7 +710,7 @@ parseMaterialEdgeReferenceV14(
         parseFeatureCurveAddressV14(
             value["curve"],
             feature_cursor,
-            error);
+            schema_version, error);
     if (!curve) {
         return std::nullopt;
     }
@@ -740,12 +749,12 @@ parseMaterialEdgeReferenceV14(
             parseFeaturePointAddressV14(
                 branch_json["first"],
                 feature_cursor,
-                error);
+                schema_version, error);
         auto second =
             parseFeaturePointAddressV14(
                 branch_json["second"],
                 feature_cursor,
-                error);
+                schema_version, error);
         if (!first || !second) {
             return std::nullopt;
         }
@@ -758,9 +767,21 @@ parseMaterialEdgeReferenceV14(
             return std::nullopt;
         }
         branch = std::move(endpoints);
+    } else if (kind == "at_single_semantic_point" &&
+               schema_version >= 16) {
+        if (branch_json.size() != 2U ||
+            !branch_json.contains("point")) {
+            error = "Native Part contains malformed schema-v16 one-Point Edge branch";
+            return std::nullopt;
+        }
+        auto point = parseFeaturePointAddressV14(
+            branch_json["point"], feature_cursor,
+            schema_version, error);
+        if (!point) return std::nullopt;
+        branch = AtSingleSemanticPoint{std::move(*point)};
     } else {
         error =
-            "Native Part contains unsupported schema-v14 EdgeBranchDiscriminator";
+            "Native Part contains unsupported versioned EdgeBranchDiscriminator";
         return std::nullopt;
     }
 
@@ -2072,7 +2093,7 @@ std::optional<PartSketchSupport>
 parseSketchSupportV14(
     const nlohmann::json& value,
     FeatureIdCursor feature_cursor,
-    std::string& error) {
+    int schema_version, std::string& error) {
     if (!value.is_object() ||
         !value.contains("kind") ||
         !value["kind"].is_string()) {
@@ -2126,7 +2147,7 @@ parseSketchSupportV14(
         parseFeatureSurfaceAddressV14(
             value["surface"],
             feature_cursor,
-            error);
+            schema_version, error);
     if (!surface) {
         return std::nullopt;
     }
@@ -2212,7 +2233,7 @@ std::optional<PlaneReference>
 parsePlaneReferenceV14(
     const nlohmann::json& value,
     FeatureIdCursor feature_cursor,
-    std::string& error) {
+    int schema_version, std::string& error) {
     if (value.is_object() &&
         value.contains("kind") &&
         value["kind"].is_string() &&
@@ -2222,7 +2243,7 @@ parsePlaneReferenceV14(
             parseSketchSupportV14(
                 value,
                 feature_cursor,
-                error);
+                schema_version, error);
         if (!support) {
             return std::nullopt;
         }
@@ -2289,7 +2310,7 @@ bool parseDatumPlanesV10(
                 ? parsePlaneReferenceV14(
                       item["source"],
                       feature_cursor,
-                      error)
+                      schema_version, error)
                 : parsePlaneReferenceV10(
                       item["source"],
                       error);
@@ -2439,7 +2460,7 @@ bool parseSketches(
                 ? parseSketchSupportV14(
                       item["support"],
                       *feature_cursor,
-                      error)
+                      schema_version, error)
                 : (schema_v11
                        ? parseSketchSupportV11(
                              item["support"],
@@ -2536,7 +2557,7 @@ bool parseSketches(
                 const auto source =
                     parseMaterialEdgeReferenceV14(
                         binding["source"],
-                        *feature_cursor, error);
+                        *feature_cursor, schema_version, error);
                 if (!target || !source ||
                     !model.contains(*target) ||
                     (!bindings.empty() &&
@@ -3270,8 +3291,11 @@ bool parseBodyV8OrV14(
                     parseMaterialEdgeReferenceV14(
                         edge_json,
                         *feature_cursor,
-                        error);
-                if (!edge) {
+                        schema_version, error);
+                if (!edge ||
+                    std::holds_alternative<AtSingleSemanticPoint>(
+                        edge->branch)) {
+                    error = "Native Part forbids projection-only one-Point references as direct Edge Feature inputs";
                     return false;
                 }
                 edges.push_back(
