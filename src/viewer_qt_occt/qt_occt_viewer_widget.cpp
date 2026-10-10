@@ -716,6 +716,7 @@ public:
             sketch_objects_.size();
         std::size_t pg_supported = 0U;
         std::size_t pg_skipped = 0U;
+        std::size_t pg_selected_faces = 0U;
         std::size_t expected_overlay_objects = 0U;
         for (const auto& group : body_topology_overlay_scene_.groups) {
             expected_overlay_objects += group.tokens.size();
@@ -727,6 +728,10 @@ public:
                            viewer::BodyTopologyOverlayRole::
                                project_geometry_unsupported) {
                 pg_skipped = group.tokens.size();
+            } else if (group.role ==
+                           viewer::BodyTopologyOverlayRole::
+                               project_geometry_face_selected) {
+                pg_selected_faces = group.tokens.size();
             }
         }
         // Each successfully displayed native Body topology overlay
@@ -739,6 +744,8 @@ public:
                 pg_supported;
             result.project_face_skipped_overlays_current =
                 pg_skipped;
+            result.project_face_selected_overlays_current =
+                pg_selected_faces;
         }
         result.solid_committed_displayed =
             !context_.IsNull() &&
@@ -5647,8 +5654,15 @@ public:
                 group.role ==
                 viewer::BodyTopologyOverlayRole::
                     project_geometry_unsupported;
+            const bool selected_face =
+                group.role ==
+                viewer::BodyTopologyOverlayRole::
+                    project_geometry_face_selected;
             const Quantity_Color color =
-                unsupported
+                selected_face
+                    ? Quantity_Color{
+                          0.19, 0.65, 0.96, Quantity_TOC_RGB}
+                    : unsupported
                     ? Quantity_Color{
                           1.0, 0.30, 0.23, Quantity_TOC_RGB}
                     : supported
@@ -5662,7 +5676,8 @@ public:
                                   0.42, 0.96, 0.54,
                                   Quantity_TOC_RGB};
             const double transparency =
-                unsupported || supported
+                selected_face ? 0.62
+                : unsupported || supported
                     ? 0.16 : (selected ? 0.34 : 0.52);
             const double edge_width =
                 unsupported ? 5.2
