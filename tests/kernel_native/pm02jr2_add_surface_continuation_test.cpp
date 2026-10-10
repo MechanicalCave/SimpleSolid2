@@ -1048,10 +1048,15 @@ void verifyPartIntegration() {
         CHECK(missing_endpoint_not_accounted == 0U);
         CHECK(two_surface_pair_unique +
                   two_surface_pair_collided == rejected_material);
-        // Diagnostic RED: gather proof-of-concept Curve+one-semantic
-        // Point admission counts and fresh-provider re-evaluation counts.
-        // It is not a new accepted MaterialEdgeReference branch.
-        CHECK(false && "PG01D_D2B_ONE_POINT_COLD_AUDIT_ONLY");
+        // Research only: a uniquely resolved semantic Curve + one
+        // already certified Point identifies each blocked Edge in THIS
+        // synthetic family, also after a fresh native Part rebuild.
+        // No authorable branch or v15 schema is introduced here.
+        CHECK(two_surface_pair_unique == rejected_material);
+        CHECK(two_surface_pair_collided == 0U);
+        CHECK(one_semantic_endpoint_unique == rejected_material);
+        CHECK(one_semantic_endpoint_ambiguous == 0U);
+        CHECK(one_semantic_endpoint_cold_unique == rejected_material);
     }
 
     const auto contribution =
