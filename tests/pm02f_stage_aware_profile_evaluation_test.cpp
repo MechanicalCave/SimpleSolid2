@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <numbers>
 #include <optional>
@@ -727,11 +728,54 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
         << " global_tolerance_unchanged=1\\n";
 }
 
+// PG-01D E3 read-only synthetic reproducer, deliberately failing until
+// independently diagnosed. Do not ship or promote this RED fixture: only
+// capture actual Shared-2D behavior and then remove it before PR closure.
+// The dimensions below are invented and NOT the Owner's private CAD data.
+void verifyBoundedArcEndpointParameterPrecisionRepro() {
+    sketch::SketchModel model;
+    const double pi = std::numbers::pi_v<double>;
+    [[maybe_unused]] const auto left = model.addLine(
+        {-18.0, -40.0}, {-18.0, 0.0});
+    const auto top = model.addLine(
+        {-18.0, 0.0}, {-11.0, 0.0});
+    const auto arc = model.addArc(
+        {0.0, 0.0}, 11.0, pi, pi / 2.0);
+    [[maybe_unused]] const auto right = model.addLine(
+        {0.0, -11.0}, {0.0, -40.0});
+    [[maybe_unused]] const auto bottom = model.addLine(
+        {0.0, -40.0}, {-18.0, -40.0});
+    [[maybe_unused]] const auto opening = model.addCircle(
+        {-8.0, -20.0}, 3.0);
+    const double bounded_intersection_parameter =
+        18.0 / 7.0 - 11.0 / 7.0;
+    const auto relation =
+        sketch::analyzeCurveRelation(model, top, arc);
+    const auto regions = sketch::analyzeRegions(model);
+    std::cerr
+        << "PG01D_ARC_ENDPOINT_PARAMETER_REPRO"
+        << " computed_t=" << std::setprecision(17)
+        << bounded_intersection_parameter
+        << " line_arc_status="
+        << static_cast<int>(relation.status)
+        << " regions=" << regions.regions.size()
+        << " problems=" << regions.diagnostics.size()
+        << '\\n';
+    // Expected *mathematical* result: the Line and Arc meet exactly,
+    // with one outer region / circular hole and one circle interior.
+    // This assertion is deliberately RED evidence, never an accepted
+    // production behavior or tolerance-relaxation authorization.
+    CHECK(relation.status ==
+          sketch::CurveRelationStatus::discrete);
+    CHECK(regions.regions.size() == 2U);
+}
+
 } // namespace
 
 int main() {
     verifyExactRegionEndpointBoundary();
     verifyProjectedArcDatumProfileEndpointEvidence();
+    verifyBoundedArcEndpointParameterPrecisionRepro();
     auto fixture = makeFixture();
     StageKernel kernel;
 
