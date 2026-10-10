@@ -2253,6 +2253,212 @@ void verifyNativeCylindricalCutSplitE0() {
         << '\n';
 }
 
+// Native E0 adjacency-graph exploration on REAL OCCT planar Add.
+// A connected U-shaped top extrusion has TWO DISJOINT strips of +X
+// sidewall attached to a SINGLE inherited base +X side carrier.
+// Thus the ideal certified group is a three-Face TREE with two exact
+// opposite-oriented same-carrier representation partitions, a single
+// outer boundary, and no hole. Nothing may be grouped by XY or normals
+// alone: only provider continuation claims authorize same-carrier uses.
+void verifyNativePlanarBranchedSurfaceContinuationsE0() {
+    kernel_occt::OcctSolidModelingKernel provider;
+    const auto base = provider.extrude(add(
+        rectangle(kernel::Frame3{}, 0.0, 0.0, 40.0, 30.0,
+                  "branch-base"), 10.0));
+    CHECK(base.ok());
+    const auto* inherited_right =
+        newSide(base, "branch-base-right");
+    CHECK(inherited_right && inherited_right->resolved_token);
+    CHECK(inherited_right->surface_kind ==
+          kernel::SurfaceKind::plane);
+    CHECK(inherited_right->surface_status ==
+          kernel::ReferenceStatus::resolved);
+
+    kernel::PlanarProfileInput branched;
+    branched.frame.origin = {0.0, 0.0, 10.0};
+    CHECK(branched.frame.valid());
+    const std::vector<kernel::Point2> corners{
+        {20.0, 5.0},
+        {40.0, 5.0},
+        {40.0, 10.0},
+        {25.0, 10.0},
+        {25.0, 20.0},
+        {40.0, 20.0},
+        {40.0, 25.0},
+        {20.0, 25.0},
+    };
+    for (std::size_t i = 0U; i < corners.size(); ++i) {
+        const auto name = i == 1U
+            ? "branch-top-right-lower"
+            : i == 5U
+                ? "branch-top-right-upper"
+                : "branch-top-other";
+        branched.outer.boundary.push_back(lineUse(
+            corners[i],
+            corners[(i + 1U) % corners.size()],
+            name, static_cast<std::uint32_t>(i)));
+    }
+    CHECK(branched.valid());
+    const auto extended =
+        provider.extrude(add(branched, 10.0), base.solid);
+    CHECK(extended.ok());
+    CHECK(extended.solid_count == 1U);
+    const auto* inherited =
+        inheritedSurface(
+            extended, *inherited_right->resolved_token);
+    CHECK(inherited);
+    const auto* lower =
+        newSide(extended, "branch-top-right-lower");
+    const auto* upper =
+        newSide(extended, "branch-top-right-upper");
+    CHECK(lower && upper);
+    std::cerr
+        << "PG01D_E0_BRANCH_NATIVE_PROBE"
+        << " inherited_status="
+        << static_cast<int>(inherited->surface_status)
+        << " inherited_faces="
+        << inherited->current_faces.size()
+        << " lower_continued=" << lower->continued_into.has_value()
+        << " upper_continued=" << upper->continued_into.has_value()
+        << '\n';
+    CHECK(inherited->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(inherited->current_faces.size() >= 3U);
+    CHECK(lower->continued_into ==
+          inherited_right->resolved_token);
+    CHECK(upper->continued_into ==
+          inherited_right->resolved_token);
+
+    struct NativeUse final {
+        kernel::RuntimeFaceToken face;
+        kernel::FaceBoundaryEdgeUse use;
+        bool outer{};
+    };
+    std::map<std::uint64_t, std::vector<NativeUse>> uses;
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        native_outer_cycles;
+    for (const auto face : inherited->current_faces) {
+        const auto bound =
+            provider.bindFaceToBody(extended.solid, face);
+        CHECK(bound && bound->valid());
+        const auto observed =
+            provider.queryFaceBoundaryAnySurface(
+                extended.solid, *bound);
+        CHECK(observed.ok());
+        for (const auto& wire : observed.wires) {
+            CHECK(wire.valid());
+            CHECK(wire.outer); // U-shaped Add makes no holes.
+            native_outer_cycles.push_back(wire.edges);
+            for (const auto& use : wire.edges) {
+                CHECK(use.start_vertex && use.end_vertex);
+                uses[use.edge.value].push_back(
+                    NativeUse{face, use, wire.outer});
+            }
+        }
+    }
+    CHECK(native_outer_cycles.size() ==
+          inherited->current_faces.size());
+    std::set<std::uint64_t> material_tokens;
+    std::vector<std::uint64_t> partitions;
+    std::map<std::uint64_t,
+             std::set<std::uint64_t>> partition_face_adj;
+    for (const auto& [edge_value, members] : uses) {
+        const kernel::RuntimeEdgeToken token{edge_value};
+        const auto observation = std::find_if(
+            extended.current_edge_semantics.begin(),
+            extended.current_edge_semantics.end(),
+            [token](const auto& item) {
+                return item.runtime_token == token;
+            });
+        CHECK(observation !=
+              extended.current_edge_semantics.end());
+        CHECK(!observation->periodic_seam);
+        if (observation->same_surface_partition) {
+            CHECK(members.size() == 2U);
+            CHECK(members[0].face != members[1].face);
+            CHECK(members[0].use.reversed !=
+                  members[1].use.reversed);
+            CHECK(members[0].use.start_vertex ==
+                  members[1].use.end_vertex);
+            CHECK(members[0].use.end_vertex ==
+                  members[1].use.start_vertex);
+            partitions.push_back(edge_value);
+            partition_face_adj[edge_value].insert(
+                members[0].face.value);
+            partition_face_adj[edge_value].insert(
+                members[1].face.value);
+        } else {
+            CHECK(members.size() == 1U);
+            CHECK(material_tokens.insert(edge_value).second);
+        }
+    }
+    CHECK(partitions.size() >= 2U);
+    CHECK(partition_face_adj.size() == partitions.size());
+    CHECK(!material_tokens.empty());
+    auto stitched = native_outer_cycles;
+    const auto directed_closed = [](
+        const std::vector<kernel::FaceBoundaryEdgeUse>& v) {
+        if (v.empty()) return false;
+        for (std::size_t i = 0; i < v.size(); ++i) {
+            const auto& a = v[i];
+            const auto& b = v[(i + 1U) % v.size()];
+            if (!a.valid() || !a.end_vertex ||
+                !b.start_vertex ||
+                a.end_vertex != b.start_vertex) return false;
+        }
+        return true;
+    };
+    for (const auto partition : partitions) {
+        std::vector<std::pair<std::size_t, std::size_t>>
+            locations;
+        for (std::size_t ring = 0; ring < stitched.size(); ++ring) {
+            for (std::size_t i = 0; i < stitched[ring].size(); ++i) {
+                if (stitched[ring][i].edge.value == partition) {
+                    locations.emplace_back(ring, i);
+                }
+            }
+        }
+        CHECK(locations.size() == 2U);
+        const auto [ai, aj] = locations[0];
+        const auto [bi, bj] = locations[1];
+        CHECK(ai != bi);
+        std::vector<kernel::FaceBoundaryEdgeUse> combined;
+        for (std::size_t i = 1U; i < stitched[ai].size(); ++i) {
+            combined.push_back(
+                stitched[ai][(aj + i) % stitched[ai].size()]);
+        }
+        for (std::size_t i = 1U; i < stitched[bi].size(); ++i) {
+            combined.push_back(
+                stitched[bi][(bj + i) % stitched[bi].size()]);
+        }
+        CHECK(directed_closed(combined));
+        std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+            remaining;
+        for (std::size_t i = 0U; i < stitched.size(); ++i) {
+            if (i != ai && i != bi) {
+                remaining.push_back(std::move(stitched[i]));
+            }
+        }
+        remaining.push_back(std::move(combined));
+        stitched = std::move(remaining);
+    }
+    CHECK(stitched.size() == 1U);
+    CHECK(directed_closed(stitched.front()));
+    std::set<std::uint64_t> retained;
+    for (const auto& use : stitched.front()) {
+        CHECK(retained.insert(use.edge.value).second);
+    }
+    CHECK(retained == material_tokens);
+    std::cout
+        << "PG01D_E0_NATIVE_BRANCHED_PLANAR_TREE_PASS"
+        << " same_carrier_faces=" << inherited->current_faces.size()
+        << " opposite_partitions=" << partitions.size()
+        << " outer_cycles_after_cancel=1"
+        << " retained_material_edges=" << material_tokens.size()
+        << " geometric_stitching=0"
+        << '\n';
+}
+
 // Native E0 negative control: a LOCAL side-wall notch leaves the
 // original cylinder Surface in precisely ONE current bounded Face.
 // FOCUSED #2247 deliberately rejected a two-Face assertion after
@@ -2722,6 +2928,7 @@ int main() {
     verifyNativeCurvedSurfaceContinuationE0();
     verifyNativeCylindricalCutSplitE0();
     verifyNativePartialCylinderCutContinuityProbeE0();
+    verifyNativePlanarBranchedSurfaceContinuationsE0();
     verifyPg01dE0DirectedWireFailClosedContract();
     verifyPg01dE0CyclicPartitionTwoContours();
 
