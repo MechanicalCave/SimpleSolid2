@@ -187,6 +187,41 @@ compiled Part/UI and the Workbench test, then failed at an absent
 **not a semantic test PASS or FAIL**; run separate desktop and kernel
 FOCUSED checks with the established unmodified classifier.
 
+
+## 0.4 Approved D2 research: one-Point identity alias investigation (2026-10-10)
+
+**Research and contract drafting only; no Owner D2 production identity
+or file schema approval.** The synthetic actual-OCCT Curve+Point matrix
+found **224 point/Curve probe occurrences also authorable by the
+existing v15 `BetweenSemanticPoints`**, of 260 unique one-Edge
+incidences. Thus naive new `Curve + Point` authoring would risk
+cross-branch duplicated Sketch sources under the current exact
+`MaterialEdgeReference`-equality dedup contract; a preferred
+authoring order alone is not sufficient.
+
+A bounded **test-only**, strict exact-stage and endpoint-cardinality
+candidate requires a multi-realization Curve and *exactly one*
+uniquely certified semantic Point endpoint of one exact material Edge.
+It rejects all 224 two-Point-authorable occurrences and admits the
+remaining 36 one-Point-only occurrences; a mismatched source stage
+rejects. Native Windows kernel
+[FOCUSED #38077430304](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38077430304)
+**PASS 1/1** on `1aaaa13e2d07f7c852ae1d619969a1d85e6f1b40`.
+An additional predecessor Add suppression committed and Undo recovered
+the exact single-candidate source, but the linked source status while
+suppressed remains unproven. Detailed formal research and remaining
+versioning/negative-geometry STOP:
+`work/PROJECTION_01D_ONE_POINT_CURVE_REFERENCE_D2_CONTRACT_DRAFT.md`.
+
+**No change to the accepted Project Geometry behavior:** Edges and
+Planar Face stay unchanged; manually clicked bounded Faces remain
+exact-only; geometric Unsupported can be skipped individually but
+missing/ambiguous material identity is never skippable. No live
+`MaterialEdgeReference` or native v15 variant was added or loosened.
+The original Owner practical Face Boundary FAIL, final FULL on exact
+release HEAD, and explicit Owner PG-01D FINAL PASS remain OPEN.
+
+
 ## 1. Frozen product intent
 
 One `PROJECT` tool with three **source-acquisition modes**, all delegating the resulting unique, exact material Edges to the existing `CreateProjectedSketchEdgesCommand`:
