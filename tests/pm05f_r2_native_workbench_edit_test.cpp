@@ -2564,6 +2564,54 @@ int main(int argc, char* argv[]) {
             CHECK(manual_session.document().findSketch(
                 *manual_target.sketch_id)
                 ->projection_bindings.size() == 5U);
+            // The Face selection, Face-wire start, native provider
+            // generation and Face token are NOT authored dependencies.
+            // Cold native reopen must reevaluate five independent
+            // strict material Edge references without these picks.
+            QTemporaryDir manual_store_dir;
+            CHECK(manual_store_dir.isValid());
+            const std::filesystem::path manual_path =
+                std::filesystem::path{
+                    manual_store_dir.path().toStdWString()} /
+                "PG01DManualTwoFacePartial.ss2part";
+            const part::PartDocumentStore manual_store;
+            CHECK(manual_store.createNew(
+                manual_path, manual_session.document()).ok());
+            const auto manual_loaded =
+                manual_store.load(manual_path);
+            CHECK(manual_loaded.ok());
+            CHECK(manual_loaded.document->state() ==
+                  manual_session.document().state());
+            const auto* cold_saved =
+                manual_loaded.document->findSketch(
+                    *manual_target.sketch_id);
+            CHECK(cold_saved &&
+                  cold_saved->projection_bindings.size() == 5U);
+            kernel_occt::OcctSolidModelingKernel manual_cold_kernel;
+            const auto cold_manual_part =
+                part::evaluatePart(
+                    *manual_loaded.document, manual_cold_kernel);
+            CHECK(cold_manual_part.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto cold_manual_projection =
+                part::evaluateEffectiveSketchProjection(
+                    *manual_loaded.document,
+                    *manual_target.sketch_id,
+                    cold_manual_part, manual_cold_kernel);
+            CHECK(cold_manual_projection);
+            CHECK(cold_manual_projection->allResolved());
+            CHECK(cold_manual_projection->outcomes.size() == 5U);
+            CHECK(cold_manual_projection->model.entityCount() == 5U);
+            CHECK(cold_manual_projection->model.state().lines.size() ==
+                  5U);
+            CHECK(cold_manual_projection->model.state().circles.empty());
+            std::cout
+                << "PG01D_MANUAL_MULTI_FACE_NATIVE_COLD_V15_PASS"
+                << " unique_links=5"
+                << " skipped_degenerate=2"
+                << " fresh_provider_generation=1"
+                << " recovered_links=5"
+                << '\n';
             std::cout
                 << "PG01D_MANUAL_MULTI_FACE_NATIVE_UI_PARTIAL_PASS"
                 << " clicked_faces=2"
