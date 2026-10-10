@@ -5297,6 +5297,60 @@ PartViewportController::inspectCurrentMaterialFaceBoundary(
         *provider);
 }
 
+part::SelectedFaceBoundaryAdmission
+PartViewportController::inspectCurrentSelectedFaceBoundary(
+    const BodyTopologySelectionAddress& picked) const {
+    using Status = part::MaterialFaceBoundaryStatus;
+    const auto fail = [](Status status) {
+        part::SelectedFaceBoundaryAdmission result;
+        result.status = status;
+        return result;
+    };
+    if (session_ == nullptr ||
+        !body_scene_revision_ ||
+        *body_scene_revision_ != session_->document().revision() ||
+        !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !body_scene_cache_ ||
+        !body_scene_cache_->generation.valid() ||
+        (body_scene_cache_->purpose !=
+             viewer::BodyScenePurpose::current_body &&
+         !(body_topology_edge_draft_mode_ &&
+           body_scene_cache_->purpose ==
+               viewer::BodyScenePurpose::tool_stage)) ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return fail(Status::invalid_stage);
+    }
+    if (!picked.valid() ||
+        picked.kind !=
+            viewer::BodyTopologyPresentationKind::face ||
+        picked.generation != body_scene_cache_->generation) {
+        return fail(Status::face_unavailable);
+    }
+    const auto stage = body_topology_catalog_cache_->stage;
+    if (stage.kind != part::BodyStageKind::after_feature ||
+        !stage.feature_id || !stage.feature_id->valid()) {
+        return fail(Status::invalid_stage);
+    }
+    const auto* feature =
+        part_evaluation_cache_->findFeature(*stage.feature_id);
+    if (feature == nullptr || !feature->result_topology ||
+        feature->result_topology->stage != stage) {
+        return fail(Status::invalid_stage);
+    }
+    auto* provider = dynamic_cast<kernel::IFaceBoundaryQuery*>(
+        solid_modeling_kernel_);
+    if (provider == nullptr) {
+        return fail(Status::native_boundary_unavailable);
+    }
+    return part::inspectSelectedFaceBoundary(
+        *feature,
+        kernel::RuntimeFaceToken{picked.runtime_token_value},
+        *provider);
+}
+
 part::ProjectedSketchSourceStatus
 PartViewportController::currentMaterialEdgeProjectionStatus(
     const part::MaterialEdgeReference& source) const {
