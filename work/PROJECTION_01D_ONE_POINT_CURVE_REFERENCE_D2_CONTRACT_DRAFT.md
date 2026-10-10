@@ -112,7 +112,7 @@ as a completed E4 suppression proof.
 | E1 — same-stage selector uniqueness | 0/1/many returns Missing/Resolved/Ambiguous; never first-wins | **PASS limited synthetic tests** 36/36 positive; negative injected two-Edge incidence and missing Point both fail closed; actual OCCT-native collision remains OPEN |
 | E2 — native provider rebuild | Same semantic selector in independent restored Part and fresh OCCT provider, without native token reuse | **PASS research** 36/36 |
 | E3 — native on-disk Save/Reopen | Actually write/read .ss2part v15, new DocumentSession and provider, compare strict stage resolutions | **PASS existing-address round-trip** real PartDocumentStore createNew/load of v15 plus new OCCT provider, 1/1; new one-Point persisted branch remains NOT IMPLEMENTED |
-| E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **PARTIAL** native Chamfer Undo/Redo and preceding Add extent edit/Undo/Redo 1/1. Predecessor suppression committed and Undo restored 1/1; post-suppression source status and deletion, collapse, relocation/retarget and provenance still OPEN |
+| E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **PARTIAL — supported negative stages now proved in test-only resolver**: native Chamfer Undo/Redo and preceding Add extent edit/Undo/Redo 1/1; deleting or suppressing the final Chamfer invalidates the old exact Body stage and Undo restores 1/1; predecessor Add suppression makes the final source unavailable and Undo restores 1/1. Actual persisted one-Point link, upstream deletion/collapse, relocation/retarget and provenance still OPEN |
 | E5 — adverse native geometry | Same Curve + Point incident to multiple actual material Edge fragments, negative stage/cycle cases and equal-looking unrelated geometry | **PARTIAL** injected two-Edge incidence and missing Point fail closed. Native 78-Chamfer survey: 1332 Curve+Point pairs, 260 uniquely selected Edge hits, 0 collisions and 1072 empty. A real OCCT-native ambiguity counterexample, stage/cycles and similar geometry remain OPEN |
 | E6 — schema/migration/canonical identity | Explicit layout/version plan, v15 backwards reading, corrupt/malformed/duplicate rejection, mixed old/new link resolution and cross-branch dedup | **PARTIAL DESIGN ONLY** native evidence 224 legacy two-Point aliases, 36 one-Point-only cases, tested disjoint domain by endpoint cardinality and stage. Actual v16 serialization/migration, mixed persistence and global semantics OPEN — separate Owner D2 before mutation |
 | E7 — Owner sample + practical result | Typed failure/recovery on private Owner Face, correct manually selected boundaries, then linked cold Save/Reopen and final FULL | **OPEN — Owner FAIL** |
@@ -123,6 +123,54 @@ No gate may be marked PASS based on a deliberate RED used solely to surface CTes
 
 **Verified native lifecycle research:** Windows kernel [FOCUSED #38075613345](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38075613345) **PASS 1/1** at test SHA `a81f00fd23e991ef8320c13e5cf09ad3ce5819a8`. It rebuilt and ran `pm02jr2.add_surface_continuation`, covering the 36/36 Curve+Point witness plus a synthetic duplicate-incidence refusal, a missing-Point refusal, real on-disk v15 `PartDocumentStore::createNew/load` and fresh OCCT evaluation, and native Chamfer Undo/Redo. The collision fixture deliberately changes an in-memory ledger and is NOT evidence that OCCT produces that topology organically. The v15 file contains only existing authored model semantics; it does **not** serialize the unapproved third discriminator.
 
+
+### D2 research: source-stage deletion, suppression and no-prefix-fallback
+
+After the native exact-stage proof, a separate **read-only test-only**
+selector now accepts `PartEvaluation` rather than arbitrarily consuming
+any available topology catalog. It requires:
+
+- `body_status == up_to_date` with a complete **final**
+  `current_topology` exactly matching the requested after-Feature
+  `BodyStageRef`;
+- the referenced exact source Feature exists, is
+  `FeatureEvaluationStatus::up_to_date`, and has its complete
+  `result_topology` for that same stage;
+- the existing strictly disjoint `Curve + exactly one resolved Point`
+  candidate proof. No stored OCCT token, nearest-edge fallback or
+  `resolved_prefix_topology` is consulted.
+
+Independent real OCCT negative transaction probes in the same synthetic
+Add + Add + Chamfer fixture:
+
+1. **Delete final Chamfer** (stage producer): the old after-Chamfer
+   reference returns no candidate, despite a surviving earlier Body;
+   **Undo restores exactly one**.
+2. **Suppress final Chamfer**: same refusal and exact restoration
+   after Undo.
+3. **Suppress predecessor Add**: command committed; the dependent
+   final Body became unavailable in this fixture; the old source
+   reference returns no candidate, and a diagnostically retained
+   `resolved_prefix_topology` cannot substitute. **Undo restores
+   exactly one**.
+
+Windows diagnostic [#38078208089](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38078208089)
+compiled and passed all functional assertions, then was **intentionally
+RED** at a trailing sentinel to expose `predecessor_stage_absent=1`,
+`predecessor_stage_survived=0`,
+`source_stage_removed_undo_restored=1` and
+`source_stage_suppressed_undo_restored=1`. The sentinel was removed
+after evidence capture; its run is **not** a candidate PASS. An
+exact-HEAD green Windows FOCUSED is required separately.
+
+**Inference boundary:** this proves strict *stage disappearance* and
+fail-closed resolution under three specific edits. It does **not**
+establish that a uniquely matched source after arbitrary changed
+topology is still the exact same material fragment. Deleting the
+predecessor Feature outright, a natural native multi-incidence
+counterexample, alias handling for already persisted mixed variants,
+and future v16 on-disk link migration remain OPEN. The production
+`MaterialEdgeReference` and schema v15 have not changed.
 
 ## 4. Potential conflicts and mandatory decisions
 
