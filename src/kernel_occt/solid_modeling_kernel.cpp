@@ -5754,10 +5754,47 @@ OcctSolidModelingKernel::queryFaceBoundaryImpl(
                     !exact_token->valid()) {
                     return fail(Status::malformed_boundary);
                 }
+                // E0 native directed evidence: use the exact oriented
+                // OCCT Edge occurrence reported by WireExplorer, never
+                // geometry-coordinate matching or an unoriented catalog
+                // Edge's arbitrary default direction. Closed periodic
+                // Circles may have the same native start/end Vertex.
+                TopoDS_Vertex first_vertex;
+                TopoDS_Vertex last_vertex;
+                TopExp::Vertices(
+                    edge, first_vertex, last_vertex, true);
+                if (first_vertex.IsNull() ||
+                    last_vertex.IsNull()) {
+                    return fail(Status::malformed_boundary);
+                }
+                const auto native_vertex_token =
+                    [&](const TopoDS_Vertex& selected)
+                        -> std::optional<
+                            kernel::RuntimeVertexToken> {
+                        std::optional<
+                            kernel::RuntimeVertexToken> match;
+                        for (const auto& [value, owned] :
+                             runtime->inventory_vertices) {
+                            if (!owned.IsSame(selected)) continue;
+                            if (match) return std::nullopt;
+                            match = kernel::RuntimeVertexToken{value};
+                        }
+                        return match;
+                    };
+                const auto first_token =
+                    native_vertex_token(first_vertex);
+                const auto last_token =
+                    native_vertex_token(last_vertex);
+                if (!first_token || !last_token ||
+                    !first_token->valid() ||
+                    !last_token->valid()) {
+                    return fail(Status::malformed_boundary);
+                }
                 observed.edges.push_back(
                     kernel::FaceBoundaryEdgeUse{
                         *exact_token,
-                        edge.Orientation() == TopAbs_REVERSED});
+                        edge.Orientation() == TopAbs_REVERSED,
+                        *first_token, *last_token});
             }
 
             // Native wire exploration may terminate early for a malformed
