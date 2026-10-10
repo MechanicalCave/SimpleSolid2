@@ -533,6 +533,122 @@ void verifyPartIntegration() {
             break;
         }
         CHECK(split_chamfer_probed);
+
+        // Additional *diagnostic* sweep over independent authorable
+        // source Edges and nontrivial Chamfer sizes on the controlled
+        // split-Surface Add continuation. No Owner geometry or IDs.
+        // This does not assume every native Edge is durable material.
+        std::size_t possible_sources = 0U;
+        std::size_t committed_chamfers = 0U;
+        std::size_t preserved_split = 0U;
+        std::size_t rejected_material = 0U;
+        std::size_t rejected_other = 0U;
+        std::size_t admitted_faces = 0U;
+        for (const auto& candidate : topology.edges) {
+            const auto source =
+                part::authorMaterialEdgeReference(
+                    topology, candidate.runtime_token);
+            if (!source.ok() || !source.reference) continue;
+            ++possible_sources;
+            for (const double distance : {0.6, 1.7, 3.3, 7.5}) {
+                auto cloned = part::PartDocument::restore(
+                    core::DocumentId::generate(),
+                    session.document().state());
+                CHECK(cloned.ok());
+                application::DocumentSession trial{
+                    {}, std::move(*cloned.document)};
+                kernel_occt::OcctSolidModelingKernel native;
+                const auto finish = trial.execute(
+                    application::CreateChamferFeatureCommand{
+                        {*source.reference},
+                        trial.document().revision(),
+                        core::LengthValue{distance},
+                        "PG01D synthetic varied Chamfer"},
+                    native);
+                if (!finish.ok()) continue;
+                const auto evaluated = part::evaluatePart(
+                    trial.document(), native);
+                if (evaluated.body_status !=
+                        part::BodyEvaluationStatus::up_to_date ||
+                    !evaluated.current_topology ||
+                    !evaluated.current_topology->complete() ||
+                    evaluated.features.size() != 3U) {
+                    continue;
+                }
+                ++committed_chamfers;
+                const auto& ledger = *evaluated.current_topology;
+                const auto continued = std::find_if(
+                    ledger.surfaces.begin(), ledger.surfaces.end(),
+                    [address = continued_side->address](
+                        const auto& item) {
+                        return item.address == address;
+                    });
+                if (continued != ledger.surfaces.end() &&
+                    continued->current_faces.size() >= 2U) {
+                    ++preserved_split;
+                }
+                for (const auto& face : ledger.faces) {
+                    if (face.accounting_class !=
+                            part::TopologyAccountingClass::
+                                referenceable) {
+                        continue;
+                    }
+                    const auto admission =
+                        part::inspectSelectedFaceBoundary(
+                            evaluated.features.back(),
+                            face.runtime_token, native);
+                    if (admission.ok()) {
+                        ++admitted_faces;
+                    } else if (admission.status ==
+                            part::MaterialFaceBoundaryStatus::
+                                material_edge_unavailable) {
+                        ++rejected_material;
+                        const auto* detail = admission.rejected_edge
+                            ? &*admission.rejected_edge : nullptr;
+                        std::cout
+                            << "PG01D_CHAMFER_SWEEP_REJECT"
+                            << " chamfer_source="
+                            << candidate.runtime_token.value
+                            << " distance=" << distance
+                            << " face=" << face.runtime_token.value
+                            << " failed_edge="
+                            << (detail ? detail->edge.value : 0U)
+                            << " kind="
+                            << (detail ? static_cast<int>(detail->kind)
+                                       : -1)
+                            << " accounting="
+                            << (detail && detail->accounting_class
+                                ? static_cast<int>(*detail->accounting_class)
+                                : -1)
+                            << " strict_status="
+                            << (detail && detail->referenceability
+                                ? static_cast<int>(*detail->referenceability)
+                                : -1)
+                            << " candidates="
+                            << (detail ? detail->curve_candidate_count : 0U)
+                            << " partition="
+                            << (detail && detail->representation_partition)
+                            << '\n';
+                    } else {
+                        ++rejected_other;
+                    }
+                }
+            }
+        }
+        CHECK(possible_sources > 1U);
+        CHECK(committed_chamfers > 1U);
+        std::cout
+            << "PG01D_CHAMFER_SWEEP_SUMMARY"
+            << " possible_sources=" << possible_sources
+            << " committed=" << committed_chamfers
+            << " preserved_split=" << preserved_split
+            << " admitted_faces=" << admitted_faces
+            << " blocked_material=" << rejected_material
+            << " blocked_other=" << rejected_other
+            << " private_part_committed=0"
+            << '\n';
+        // Temporary RED for native output visibility under CTest.
+        CHECK(false && "PG01D_SYNTH_SWEEP_DIAGNOSTIC_CAPTURE");
     }
 
     const auto contribution =
