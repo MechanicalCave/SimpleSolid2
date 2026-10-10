@@ -310,6 +310,82 @@ pg01dCurveEdgesIncidentToSemanticPoint(
     return candidates;
 }
 
+// D2 design feasibility ONLY: the proposed third branch must be
+// disjoint from BOTH existing v15 branches at its exact source stage.
+// The point must be the one and only strictly certified Point endpoint
+// of one specific current material Edge in a multi-realization Curve.
+// All native tokens are stage-local evidence, never stored.
+[[nodiscard]] std::vector<kernel::RuntimeEdgeToken>
+pg01dOnePointDisjointCandidate(
+    const part::BodyStageTopologyCatalog& catalog,
+    const part::BodyStageRef& requested_stage,
+    const part::FeatureCurveAddress& curve_address,
+    const part::FeaturePointAddress& point_address) {
+    if (!catalog.complete() ||
+        catalog.stage != requested_stage ||
+        catalog.stage.kind != part::BodyStageKind::after_feature) {
+        return {};
+    }
+    const auto curve = std::find_if(
+        catalog.curves.begin(), catalog.curves.end(),
+        [&curve_address](const auto& item) {
+            return item.address == curve_address;
+        });
+    if (curve == catalog.curves.end() ||
+        curve->current_edges.size() < 2U) {
+        return {};
+    }
+    const auto candidates =
+        pg01dCurveEdgesIncidentToSemanticPoint(
+            catalog, curve_address, point_address);
+    if (candidates.size() != 1U) {
+        // No "first wins" on zero or multiple edges. This helper
+        // only returns admissible unique candidates; the future
+        // resolver must retain separate typed Missing/Ambiguous.
+        return {};
+    }
+    const auto edge = candidates.front();
+    std::size_t incident = 0U;
+    std::size_t certified = 0U;
+    bool selected_point_certified = false;
+    for (const auto& vertex : catalog.vertices) {
+        if (std::find(
+                vertex.incident_material_edges.begin(),
+                vertex.incident_material_edges.end(),
+                edge) ==
+            vertex.incident_material_edges.end()) {
+            continue;
+        }
+        ++incident;
+        if (vertex.accounting_class !=
+                part::TopologyAccountingClass::referenceable ||
+            vertex.referenceability !=
+                kernel::ReferenceStatus::resolved ||
+            vertex.point_candidates.size() != 1U) {
+            continue;
+        }
+        const auto& address = vertex.point_candidates.front();
+        const auto found = std::find_if(
+            catalog.points.begin(), catalog.points.end(),
+            [&address](const auto& item) {
+                return item.address == address;
+            });
+        if (found == catalog.points.end() ||
+            found->status != kernel::ReferenceStatus::resolved ||
+            found->current_vertices.size() != 1U ||
+            found->current_vertices.front() != vertex.runtime_token) {
+            continue;
+        }
+        ++certified;
+        if (address == point_address) {
+            selected_point_certified = true;
+        }
+    }
+    return incident == 2U && certified == 1U &&
+                   selected_point_certified
+        ? candidates : std::vector<kernel::RuntimeEdgeToken>{};
+}
+
 void verifyPartIntegration() {
     kernel_occt::OcctSolidModelingKernel provider;
     auto document =
@@ -663,6 +739,9 @@ void verifyPartIntegration() {
         std::size_t native_onepoint_resolved = 0U;
         std::size_t native_onepoint_ambiguous = 0U;
         std::size_t native_curvepoint_two_point_aliases = 0U;
+        std::size_t disjoint_onepoint_admitted = 0U;
+        std::size_t disjoint_old_twopoint_refused = 0U;
+        bool tested_wrong_stage_refusal = false;
         bool tested_predecessor_suppression = false;
         bool predecessor_suppression_committed = false;
         bool predecessor_suppression_undo_restored = false;
@@ -723,18 +802,37 @@ void verifyPartIntegration() {
                             const auto authored_old =
                                 part::authorMaterialEdgeReference(
                                     ledger, candidates.front());
+                            const auto disjoint =
+                                pg01dOnePointDisjointCandidate(
+                                    ledger, ledger.stage,
+                                    family.address, point.address);
+                            if (!tested_wrong_stage_refusal) {
+                                CHECK(topology.stage != ledger.stage);
+                                CHECK(pg01dOnePointDisjointCandidate(
+                                    ledger, topology.stage,
+                                    family.address, point.address).empty());
+                                tested_wrong_stage_refusal = true;
+                            }
                             if (authored_old.ok() &&
                                 authored_old.reference &&
                                 std::holds_alternative<
                                     part::BetweenSemanticPoints>(
                                     authored_old.reference->branch)) {
-                                // The future one-Point candidate would
-                                // identify exactly this native Edge, while
-                                // an existing v15 two-Point reference is
-                                // also authorable. This is a concrete
-                                // cross-branch alias risk in the actual
-                                // OCCT stage; NOT an approved resolver.
+                                // This actual OCCT material Edge is also
+                                // uniquely selected by Curve+one Point,
+                                // but it already has valid two-Point
+                                // identity in current v15.
                                 ++native_curvepoint_two_point_aliases;
+                                CHECK(disjoint.empty());
+                                ++disjoint_old_twopoint_refused;
+                            } else {
+                                // Existing one-Point-only gaps are the
+                                // ONLY admissible stage domain for the
+                                // proposed third branch.
+                                CHECK(disjoint.size() == 1U);
+                                CHECK(disjoint.front() ==
+                                      candidates.front());
+                                ++disjoint_onepoint_admitted;
                             }
                         } else if (candidates.size() > 1U) {
                             ++native_onepoint_ambiguous;
@@ -1441,6 +1539,10 @@ void verifyPartIntegration() {
             << native_onepoint_ambiguous
             << " old_twopoint_alias_candidates="
             << native_curvepoint_two_point_aliases
+            << " disjoint_onepoint_admitted="
+            << disjoint_onepoint_admitted
+            << " disjoint_old_twopoint_refused="
+            << disjoint_old_twopoint_refused
             << " predecessor_suppression_committed="
             << predecessor_suppression_committed
             << " predecessor_suppression_rejected="
@@ -1491,9 +1593,16 @@ void verifyPartIntegration() {
               predecessor_suppression_rejections > 0U);
         CHECK(!predecessor_suppression_committed ||
               predecessor_suppression_undo_restored);
-        // Diagnostic RED solely to publish bounded lineage/alias counts;
-        // never retain this deliberately failing assertion.
-        CHECK(false && "PG01D_D2_SOURCE_SUPPRESSION_ALIAS_AUDIT_ONLY");
+        CHECK(tested_wrong_stage_refusal);
+        CHECK(native_curvepoint_two_point_aliases > 0U);
+        CHECK(disjoint_onepoint_admitted > 0U);
+        CHECK(disjoint_old_twopoint_refused ==
+              native_curvepoint_two_point_aliases);
+        CHECK(disjoint_onepoint_admitted +
+                  disjoint_old_twopoint_refused ==
+              native_onepoint_resolved);
+        CHECK(predecessor_suppression_committed);
+        CHECK(predecessor_suppression_undo_restored);
     }
 
     const auto contribution =
