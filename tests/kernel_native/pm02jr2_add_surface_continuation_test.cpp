@@ -4,12 +4,15 @@
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/persistence/native_document_container.hpp>
+#include <nlohmann/json.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <set>
@@ -1365,7 +1368,87 @@ void verifyPartIntegration() {
                                                 .source,
                                             *disk.current_topology);
                                     CHECK(disk_exact && disk_exact->resolved());
+                                    // The v16 discriminant must not be parsed
+                                    // in a v15 container, even if manually
+                                    // injected into a recursively nested
+                                    // generated Chamfer Surface source.
+                                    const auto package =
+                                        persistence::readNativeDocumentContainer(
+                                            path);
+                                    CHECK(package.ok());
+                                    CHECK(package.package->descriptor
+                                              .domain_schema_version == 16);
+                                    auto authored = nlohmann::json::parse(
+                                        package.package->authored_json);
+                                    const auto ref_json =
+                                        authored["sketches"].back()
+                                                ["projected_edges"][0]["source"];
+                                    const auto rewrite_package =
+                                        [&](const nlohmann::json& document_json,
+                                            int version,
+                                            const std::filesystem::path&
+                                                output) {
+                                            const auto built =
+                                                persistence::
+                                                    buildNativeDocumentContainer(
+                                                        persistence::
+                                                            NativeDocumentDescriptor{
+                                                                "part",
+                                                                std::string{
+                                                                    loaded.document->
+                                                                        documentId().value()},
+                                                                version},
+                                                        document_json.dump(2));
+                                            CHECK(built.ok());
+                                            std::ofstream stream{
+                                                output, std::ios::binary};
+                                            CHECK(static_cast<bool>(stream));
+                                            stream.write(
+                                                built.bytes->data(),
+                                                static_cast<std::streamsize>(
+                                                    built.bytes->size()));
+                                            CHECK(static_cast<bool>(stream));
+                                            stream.close();
+                                        };
+                                    const auto legacy_path =
+                                        path.parent_path() /
+                                        (path.stem().string() +
+                                         "_legacy.ss2part");
+                                    rewrite_package(authored, 15, legacy_path);
+                                    CHECK(!store.load(legacy_path).ok());
+
+                                    auto nested = authored;
+                                    auto& nested_sketch =
+                                        nested["sketches"].back();
+                                    nested_sketch["projected_edges"] =
+                                        nlohmann::json::array();
+                                    nested_sketch["support"] = {
+                                        {"kind", "body_planar_surface"},
+                                        {"stage", {
+                                            {"kind", "after_feature"},
+                                            {"feature_id",
+                                             ledger.stage.feature_id->
+                                                 serialized()}}},
+                                        {"surface", {
+                                            {"producer_feature_id",
+                                             ledger.stage.feature_id->
+                                                 serialized()},
+                                            {"role", "chamfer_surface"},
+                                            {"source_edge", ref_json}}},
+                                    };
+                                    rewrite_package(nested, 15, legacy_path);
+                                    CHECK(!store.load(legacy_path).ok());
+
+                                    auto malformed = authored;
+                                    malformed["sketches"].back()
+                                        ["projected_edges"][0]["source"]
+                                        ["branch"]["unexpected"] = true;
+                                    rewrite_package(malformed, 16, legacy_path);
+                                    CHECK(!store.load(legacy_path).ok());
                                     std::error_code removal_error;
+                                    CHECK(std::filesystem::remove(
+                                        legacy_path, removal_error));
+                                    CHECK(!removal_error);
                                     CHECK(std::filesystem::remove(
                                         path, removal_error));
                                     CHECK(!removal_error);
