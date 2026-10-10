@@ -253,13 +253,46 @@ as long as semantic anchors remain unique) or stronger bounded segment
 provenance with failure if per-fragment lineage is unavailable.
 They are different intended products. No runtime OCCT token,
 coordinates, wire ordinal or diagnostic prefix may bridge independent
-revisions. Owner must explicitly decide the associativity semantics
-before a production branch/v16 contract, alongside the previously
-documented canonical source equality and migration policy.
+revisions. **Owner approved semantic associativity option A on
+2026-10-10:** the same certified semantic Curve + Point at the same
+earlier Body stage may deform geometrically and still resolve, but
+only with one current strictly certified material Edge in the
+one-certifiable-endpoint domain. Strong provider B-Rep fragment
+lineage across independent revisions is **not** an additional
+requirement. The specific proposed v16 persisted branch, serializer,
+backward reader, mixed-link dedup and save-version policy remain
+separately unapproved; see
+`work/PROJECTION_01D_D2_A_V16_PERSISTENCE_MIGRATION_PROPOSAL.md`.
 Details: `work/PROJECTION_01D_ONE_POINT_CURVE_REFERENCE_D2_CONTRACT_DRAFT.md`.
 
 The existing manual Face Boundary Owner FAIL, Draft status and
 exact-HEAD Windows FULL plus practical FINAL PASS remain unchanged.
+
+
+
+## 0.6 Owner D2-A semantic choice accepted — v16 production STOP (2026-10-10)
+
+**OWNER APPROVED IN CONVERSATION:** A means an **associative semantic
+Curve + one already certified Point address** in the exact earlier
+Body stage. Geometric deformation after an upstream Feature edit is
+allowed as long as the unchanged semantic addresses, source-stage
+freshness, strict material Edge membership and one-endpoint
+disjointness are still certified; missing/ambiguous/stale source
+continues to reject. This does **not** promise the same provider
+bounded Edge fragment token or geometrically identical shape
+between Part revisions. Never silently rewrite an old branch or
+rebind to a different semantic Curve/Point. Strong cross-edit B-Rep
+fragment lineage option B is not required.
+
+**Separate implementation decision required:** third persisted
+`AtSingleSemanticPoint` discriminator, explicit native v16 schema
+bump, v15 reader/migration, v16 old/new atomic dedup and serializer
+failure rules. See proposed
+`work/PROJECTION_01D_D2_A_V16_PERSISTENCE_MIGRATION_PROPOSAL.md`.
+No changes to schema v15, production resolver, Face Boundary user
+behavior, `main`, or Owner PG-01D practical FAIL at this checkpoint.
+A native test-only cold v15 forward-edit/invalid-reverse-edit
+reconstruction regression is in progress; no new v16 link is written.
 
 
 ## 1. Frozen product intent
