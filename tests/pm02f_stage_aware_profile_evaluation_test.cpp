@@ -679,7 +679,7 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
                   << " outer_uses=" << region.outer.boundary.size()
                   << "]";
     }
-    std::cerr << '\n';
+    std::cerr << '\\n';
 
     CHECK(model.updateLine(
         top, {0.0, 40.0}, start));
@@ -760,7 +760,7 @@ void verifyBoundedArcEndpointParameterPrecisionRepro() {
         << static_cast<int>(relation.status)
         << " regions=" << regions.regions.size()
         << " problems=" << regions.diagnostics.size()
-        << '\\n';
+        << '\n';
     // Expected *mathematical* result: the Line and Arc meet exactly,
     // with one outer region / circular hole and one circle interior.
     // This assertion is deliberately RED evidence, never an accepted
