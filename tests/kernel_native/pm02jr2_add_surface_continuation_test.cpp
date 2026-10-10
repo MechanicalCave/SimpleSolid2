@@ -1738,9 +1738,12 @@ void verifyPartIntegration() {
         CHECK(predecessor_suppression_undo_restored);
         CHECK(tested_removed_final_stage);
         CHECK(tested_suppressed_final_stage);
-        // Diagnostic RED only to report predecessor suppression
-        // state; do not leave in the green branch.
-        CHECK(false && "PG01D_D2_STAGE_DELETION_DIAGNOSTIC_ONLY");
+        // In this actual OCCT fixture, predecessor suppression makes
+        // the exact final source Body unavailable; no diagnostic
+        // resolved-prefix catalog may substitute for final truth.
+        CHECK(tested_predecessor_stage_suppression);
+        CHECK(predecessor_stage_absent == 1U);
+        CHECK(predecessor_stage_survived == 0U);
     }
 
     const auto contribution =
