@@ -23,9 +23,22 @@ enum class FaceBoundaryStatus {
 struct FaceBoundaryEdgeUse final {
     RuntimeEdgeToken edge;
     bool reversed{false};
+    // PG-01D E0 OPTIONAL, provider-scoped OCCT evidence for THIS
+    // oriented Face-wire occurrence. These are current runtime Vertex
+    // tokens, never persistent Point/Edge identity. A full-circle
+    // Edge may legitimately have the same start and end Vertex.
+    // Older/other providers may leave both fields absent; consumers
+    // requiring directed continuity must fail closed in that case.
+    std::optional<RuntimeVertexToken> start_vertex;
+    std::optional<RuntimeVertexToken> end_vertex;
 
     [[nodiscard]] bool valid() const noexcept {
-        return edge.valid();
+        if (!edge.valid() ||
+            start_vertex.has_value() != end_vertex.has_value()) {
+            return false;
+        }
+        return !start_vertex ||
+            (start_vertex->valid() && end_vertex->valid());
     }
 
     friend bool operator==(
