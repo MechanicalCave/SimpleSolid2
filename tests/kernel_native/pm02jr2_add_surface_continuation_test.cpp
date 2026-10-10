@@ -2253,13 +2253,12 @@ void verifyNativeCylindricalCutSplitE0() {
         << '\n';
 }
 
-// Native E0 bounded exploration: a LOCAL side-wall notch, unlike the
-// full annular band, leaves a geometrically connected cylinder region.
-// This probe tests whether the CURRENT provider actually reports two
-// (or more) separate Faces of the ONE inherited Surface carrier.
-// A positive connected multi-Face proof is impossible until there is
-// real same-carrier native Face adjacency. No new semantic association
-// may be guessed from coaxial/radius similarity.
+// Native E0 negative control: a LOCAL side-wall notch leaves the
+// original cylinder Surface in precisely ONE current bounded Face.
+// FOCUSED #2247 deliberately rejected a two-Face assertion after
+// OCCT returned inherited_faces=1. Preserve that finding: material
+// continuity in 3D does not itself certify a multi-Face group.
+// No new semantic association may be guessed from coaxial geometry.
 void verifyNativePartialCylinderCutContinuityProbeE0() {
     kernel_occt::OcctSolidModelingKernel provider;
     kernel::PlanarProfileInput cylinder;
@@ -2306,7 +2305,7 @@ void verifyNativePartialCylinderCutContinuityProbeE0() {
           kernel::ReferenceStatus::resolved);
     CHECK(inherited->surface_kind ==
           kernel::SurfaceKind::cylinder);
-    CHECK(inherited->current_faces.size() >= 2U);
+    CHECK(inherited->current_faces.size() == 1U);
     std::map<std::uint64_t, std::set<std::uint64_t>>
         edge_face_uses;
     for (const auto token : inherited->current_faces) {
@@ -2335,7 +2334,16 @@ void verifyNativePartialCylinderCutContinuityProbeE0() {
         << " carrier_faces=" << inherited->current_faces.size()
         << " shared_native_edges=" << shared_native_edges
         << '\n';
-    CHECK(shared_native_edges >= 1U);
+    // One bounded Face supplies no cross-Face native adjacency;
+    // no positive multi-Face certificate can be manufactured here.
+    CHECK(shared_native_edges == 0U);
+    std::cout
+        << "PG01D_CURVED_E0_LOCAL_NOTCH_SINGLE_FACE_STOP_PASS"
+        << " resolved_inherited_cylinder=1"
+        << " same_carrier_native_faces=1"
+        << " shared_between_distinct_faces=0"
+        << " geometry_only_multi_face_inference=0"
+        << '\n';
 }
 
 // E0 typed/portable negative matrix: malformed per-use endpoint coverage
