@@ -2497,6 +2497,171 @@ void verifyNativePlanarBranchedSurfaceContinuationsE0() {
         CHECK(retained.insert(use.edge.value).second);
     }
     CHECK(retained == material_tokens);
+
+    // E0: the real three-Face *branching* topology must not depend on
+    // which native Face/wire is visited first or on which of the TWO
+    // independently certified partition pairs is removed first.
+    // This is a different incidence graph from the two-Face cyclic
+    // two-hole fixture. Every comparison includes native Edge sense
+    // and BOTH exact directed Vertex endpoint tokens.
+    const auto same_signed_cycle = [](
+        const std::vector<kernel::FaceBoundaryEdgeUse>& candidate,
+        const std::vector<kernel::FaceBoundaryEdgeUse>& expected) {
+        if (candidate.empty() ||
+            candidate.size() != expected.size()) return false;
+        for (std::size_t start = 0U; start < candidate.size(); ++start) {
+            bool same = true;
+            for (std::size_t i = 0U; i < expected.size(); ++i) {
+                if (!(candidate[(start + i) % candidate.size()] ==
+                      expected[i])) {
+                    same = false;
+                    break;
+                }
+            }
+            if (same) return true;
+        }
+        return false;
+    };
+    const auto reconstruct = [&](
+        std::vector<std::vector<kernel::FaceBoundaryEdgeUse>> rings,
+        const std::vector<std::uint64_t>& cancel_order)
+        -> std::optional<std::vector<kernel::FaceBoundaryEdgeUse>> {
+        if (rings.size() != 3U ||
+            cancel_order.size() != partitions.size()) {
+            return std::nullopt;
+        }
+        for (const auto& ring : rings) {
+            if (!directed_closed(ring)) return std::nullopt;
+        }
+        for (const auto partition : cancel_order) {
+            std::vector<std::pair<std::size_t, std::size_t>> locations;
+            for (std::size_t r = 0U; r < rings.size(); ++r) {
+                for (std::size_t i = 0U; i < rings[r].size(); ++i) {
+                    if (rings[r][i].edge.value == partition) {
+                        locations.emplace_back(r, i);
+                    }
+                }
+            }
+            if (locations.size() != 2U ||
+                locations[0].first == locations[1].first) {
+                return std::nullopt;
+            }
+            const auto [ar, ai] = locations[0];
+            const auto [br, bi] = locations[1];
+            const auto& a = rings[ar][ai];
+            const auto& b = rings[br][bi];
+            if (a.reversed == b.reversed ||
+                a.start_vertex != b.end_vertex ||
+                a.end_vertex != b.start_vertex) {
+                return std::nullopt;
+            }
+            std::vector<kernel::FaceBoundaryEdgeUse> combined;
+            for (std::size_t i = 1U; i < rings[ar].size(); ++i) {
+                combined.push_back(
+                    rings[ar][(ai + i) % rings[ar].size()]);
+            }
+            for (std::size_t i = 1U; i < rings[br].size(); ++i) {
+                combined.push_back(
+                    rings[br][(bi + i) % rings[br].size()]);
+            }
+            if (!directed_closed(combined)) return std::nullopt;
+            std::vector<std::vector<kernel::FaceBoundaryEdgeUse>> next;
+            for (std::size_t r = 0U; r < rings.size(); ++r) {
+                if (r != ar && r != br) {
+                    next.push_back(std::move(rings[r]));
+                }
+            }
+            next.push_back(std::move(combined));
+            rings = std::move(next);
+        }
+        if (rings.size() != 1U ||
+            !directed_closed(rings.front())) {
+            return std::nullopt;
+        }
+        std::set<std::uint64_t> covered;
+        for (const auto& use : rings.front()) {
+            if (!covered.insert(use.edge.value).second) {
+                return std::nullopt;
+            }
+        }
+        if (covered != material_tokens) return std::nullopt;
+        return std::move(rings.front());
+    };
+
+    std::vector<std::size_t> face_order{0U, 1U, 2U};
+    std::size_t permutations_checked = 0U;
+    do {
+        const auto& c0 = native_outer_cycles[face_order[0]];
+        const auto& c1 = native_outer_cycles[face_order[1]];
+        const auto& c2 = native_outer_cycles[face_order[2]];
+        for (std::size_t s0 = 0U; s0 < c0.size(); ++s0) {
+            for (std::size_t s1 = 0U; s1 < c1.size(); ++s1) {
+                for (std::size_t s2 = 0U; s2 < c2.size(); ++s2) {
+                    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+                        rotated{c0, c1, c2};
+                    const std::vector<std::size_t> starts{s0, s1, s2};
+                    for (std::size_t r = 0U; r < rotated.size(); ++r) {
+                        auto& cycle = rotated[r];
+                        std::rotate(
+                            cycle.begin(),
+                            cycle.begin() + starts[r],
+                            cycle.end());
+                        CHECK(directed_closed(cycle));
+                    }
+                    auto order = partitions;
+                    std::sort(order.begin(), order.end());
+                    do {
+                        const auto result = reconstruct(rotated, order);
+                        CHECK(result.has_value());
+                        CHECK(same_signed_cycle(*result, stitched.front()));
+                        ++permutations_checked;
+                    } while (std::next_permutation(
+                        order.begin(), order.end()));
+                }
+            }
+        }
+    } while (std::next_permutation(
+        face_order.begin(), face_order.end()));
+    CHECK(permutations_checked ==
+          12U * native_outer_cycles[0].size() *
+          native_outer_cycles[1].size() *
+          native_outer_cycles[2].size());
+
+    // Negative controls mutate actual native observations, never
+    // manufacture a geometric proximity join. Reversed endpoint
+    // evidence or omitted partition identity must reject the WHOLE
+    // proposed reconstruction rather than produce a partial outline.
+    auto bad_vertex = native_outer_cycles;
+    bool corrupted = false;
+    for (auto& ring : bad_vertex) {
+        for (auto& use : ring) {
+            if (use.edge.value == partitions.front()) {
+                CHECK(use.start_vertex && use.end_vertex);
+                CHECK(use.start_vertex != use.end_vertex);
+                std::swap(use.start_vertex, use.end_vertex);
+                use.reversed = !use.reversed;
+                corrupted = true;
+                break;
+            }
+        }
+        if (corrupted) break;
+    }
+    CHECK(corrupted);
+    CHECK(!reconstruct(bad_vertex, partitions).has_value());
+    CHECK(!reconstruct(
+        native_outer_cycles,
+        std::vector<std::uint64_t>{partitions.front()}).has_value());
+    std::cout
+        << "PG01D_E0_BRANCH_FACE_ORDER_INVARIANCE_PASS"
+        << " real_native_faces=3"
+        << " certified_partitions=2"
+        << " face_orders=6"
+        << " partition_orders=2"
+        << " signed_variants=" << permutations_checked
+        << " malformed_native_vertex_rejected=1"
+        << " omitted_partition_rejected=1"
+        << " false_material_boundary=0"
+        << '\n';
     std::cout
         << "PG01D_E0_NATIVE_BRANCHED_PLANAR_TREE_PASS"
         << " same_carrier_faces=" << inherited->current_faces.size()
