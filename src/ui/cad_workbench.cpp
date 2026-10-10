@@ -9754,8 +9754,14 @@ bool CadWorkbench::commitProjectBoundarySources() {
             accepted, project_edge_role_)) {
         return false;
     }
+    std::vector<BodyTopologySelectionAddress> highlighted_faces;
+    highlighted_faces.reserve(
+        project_edge_boundary_faces_.size());
+    for (const auto& face : project_edge_boundary_faces_) {
+        highlighted_faces.push_back(face.picked);
+    }
     if (!viewport_controller_->setProjectFaceSourceFeedback(
-            highlighted, skipped)) {
+            highlighted, skipped, highlighted_faces)) {
         return false;
     }
     project_edge_sources_ = std::move(accepted);
@@ -10078,8 +10084,14 @@ void CadWorkbench::tryStageProjectFaceSelection() {
         return;
     }
 
+    std::vector<BodyTopologySelectionAddress> staged_faces;
+    staged_faces.reserve(
+        project_edge_boundary_faces_.size());
+    for (const auto& face : project_edge_boundary_faces_) {
+        staged_faces.push_back(face.picked);
+    }
     if (!viewport_controller_->setProjectFaceSourceFeedback(
-            highlighted, highlighted_skipped)) {
+            highlighted, highlighted_skipped, staged_faces)) {
         refreshProjectEdgePreview();
         setStatusText(QStringLiteral(
             "PROJECT Face rejected: stale source overlay stage/generation; previous staging preserved."));
