@@ -8,6 +8,7 @@
 #include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
@@ -471,6 +472,8 @@ public:
 
     void setBodyTopologyFacePickOnly(bool enabled);
     void setBodyTopologyEdgeDraftMode(bool enabled);
+    // Restrict v16 one-Point authoring to the active PROJECT tool.
+    void setProjectGeometryAuthoringMode(bool enabled);
     [[nodiscard]] bool setBodyTopologyToolStage(
         std::optional<part::BodyStageRef> stage);
     [[nodiscard]] std::optional<
@@ -485,6 +488,38 @@ public:
     [[nodiscard]] std::optional<
         std::vector<part::MaterialEdgeReference>>
     selectedMaterialEdgeReferences() const;
+
+    // PG-01D: read one exact generation-bound bounded Face from the
+    // current scene. Wires are transient, never authored Face identity.
+    [[nodiscard]] part::MaterialFaceBoundaryAdmission
+    selectedMaterialFaceBoundaryAdmission() const;
+
+    // Recheck a previously staged transient Face using the *current*
+    // scene lease; the argument is never persisted or used as identity.
+    [[nodiscard]] part::MaterialFaceBoundaryAdmission
+    inspectCurrentMaterialFaceBoundary(
+        const BodyTopologySelectionAddress& source) const;
+
+    // PG-01D manual Face Boundary: the exact picked bounded Face is
+    // transient. Do not infer adjacent Faces or require a strict durable
+    // Face address. Each returned material member is strict independently.
+    [[nodiscard]] part::SelectedFaceBoundaryAdmission
+    inspectCurrentSelectedFaceBoundary(
+        const BodyTopologySelectionAddress& source) const;
+
+    // Classify each strict Edge's current geometric projection separately
+    // so only geometric Unsupported may be skipped from a Face batch.
+    [[nodiscard]] part::ProjectedSketchSourceStatus
+    currentMaterialEdgeProjectionStatus(
+        const part::MaterialEdgeReference& source) const;
+
+    // Runtime-only Face source feedback: strict material references are
+    // resolved against one current Body scene generation, never stored
+    // as Viewer or durable CAD identity. Empty vectors clear feedback.
+    [[nodiscard]] bool setProjectFaceSourceFeedback(
+        const std::vector<part::MaterialEdgeReference>& supported,
+        const std::vector<part::MaterialEdgeReference>& skipped,
+        const std::vector<BodyTopologySelectionAddress>& selected_faces = {});
 
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
@@ -695,8 +730,20 @@ private:
         body_topology_candidate_stack_;
     bool body_topology_face_pick_only_{false};
     bool body_topology_edge_draft_mode_{false};
+    bool project_geometry_authoring_mode_{false};
     std::optional<part::BodyStageRef>
         body_topology_tool_stage_;
+    std::optional<core::DocumentRevision>
+        project_face_feedback_revision_;
+    std::optional<viewer::BodyPresentationGeneration>
+        project_face_feedback_generation_;
+    std::vector<part::MaterialEdgeReference>
+        project_face_feedback_supported_;
+    std::vector<part::MaterialEdgeReference>
+        project_face_feedback_skipped_;
+    // Exact native face presentation tokens scoped to the same scene.
+    std::vector<viewer::PresentationToken>
+        project_face_feedback_selected_faces_;
     std::uint64_t next_body_scene_generation_{1U};
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};

@@ -31,6 +31,7 @@
 #include <filesystem>
 #include <limits>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -391,13 +392,1256 @@ bool clickAuthorableRevolveCircle(
     return false;
 }
 
+bool nativePlanarFaceClick(
+    viewer_qt_occt::QtOcctViewerWidget& viewport,
+    viewer::Point3 world) {
+    const auto screen = viewport.projectWorldPoint(world);
+    if (!screen || !std::isfinite(screen->x) ||
+        !std::isfinite(screen->y)) {
+        return false;
+    }
+    const QPoint pixel{
+        static_cast<int>(std::lround(screen->x)),
+        static_cast<int>(std::lround(screen->y))};
+    if (!viewport.rect().contains(pixel)) return false;
+    const auto query = viewport.queryBodyTopology(
+        *screen,
+        viewer::BodyTopologyPickFilter{true, false, false});
+    if (!query.valid() || !query.completed ||
+        query.candidates.empty()) {
+        return false;
+    }
+    QTest::mouseMove(&viewport, pixel);
+    QTest::mouseClick(
+        &viewport, Qt::LeftButton, Qt::NoModifier, pixel);
+    QApplication::processEvents();
+    return true;
+}
+
+// PG-01D D0 native SS2 semantic-side characterization.
+// The independent native OCCT wire/hole proof is recorded in work/.
+// This test checks the *actual* current Part/OCCT catalog, not OCP:
+// strict bounded Face identity is distinct from Surface-carrier admission,
+// and only existing material Edge authoring can create accepted sources.
+// The provider-facing wire membership query is intentionally NOT invented.
+void verifyPg01dNativeStrictFaceAndMaterialCatalog(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    auto session = makeBaseSession(kernel);
+    const auto hole_sketch =
+        session.execute(application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(hole_sketch.ok() && hole_sketch.sketch_id);
+    const auto circle = session.execute(
+        application::AddSketchCircleCommand{
+            *hole_sketch.sketch_id,
+            {20.0, 15.0},
+            5.0,
+            sketch::EntityRole::regular});
+    CHECK(circle.ok());
+    const auto* authored =
+        session.document().findSketch(*hole_sketch.sketch_id);
+    CHECK(authored != nullptr);
+    const auto regions = sketch::analyzeRegions(authored->model);
+    CHECK(regions.complete() && regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(regions.regions.front());
+    CHECK(intent.has_value());
+    const auto profile = session.execute(
+        application::CreateProfileCommand{
+            *hole_sketch.sketch_id,
+            session.document().revision(),
+            *intent});
+    CHECK(profile.ok() && profile.profile_id);
+    const auto through_cut = session.execute(
+        application::CreateExtrudeFeatureCommand{
+            *profile.profile_id,
+            session.document().revision(),
+            part::ExtrudeOperation::cut,
+            part::OneSidedExtrudeExtent{
+                core::LengthValue{25.0}, false},
+            "PG01D native through-hole D0"},
+        kernel);
+    CHECK(through_cut.ok() && through_cut.feature_id);
+
+    const auto evaluation =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluation.current_topology.has_value());
+    const auto& catalog = *evaluation.current_topology;
+    CHECK(catalog.complete());
+    CHECK(catalog.stage.feature_id &&
+          *catalog.stage.feature_id == *through_cut.feature_id);
+
+    std::size_t strict_face_count = 0U;
+    std::size_t carrier_only_face_count = 0U;
+    std::size_t other_face_count = 0U;
+    for (const auto& face : catalog.faces) {
+        CHECK(face.valid());
+        if (face.semantic_address) {
+            ++strict_face_count;
+            CHECK(!face.surface_candidates.empty());
+        } else if (!face.surface_candidates.empty()) {
+            // Sketch-support admission by Surface is NOT strict
+            // bounded-Face Project Geometry authoring permission.
+            ++carrier_only_face_count;
+        } else {
+            ++other_face_count;
+        }
+    }
+    CHECK(!catalog.faces.empty());
+    CHECK(strict_face_count > 0U);
+
+    std::vector<part::MaterialEdgeReference>
+        current_material_edges;
+    std::size_t nonmaterial_edge_count = 0U;
+    for (const auto& edge : catalog.edges) {
+        CHECK(edge.valid());
+        const auto authored_edge =
+            part::authorMaterialEdgeReference(
+                catalog, edge.runtime_token);
+        if (!authored_edge.ok()) {
+            ++nonmaterial_edge_count;
+            continue;
+        }
+        CHECK(authored_edge.reference.has_value());
+        CHECK(authored_edge.reference->stage == catalog.stage);
+        current_material_edges.push_back(
+            *authored_edge.reference);
+    }
+    CHECK(!current_material_edges.empty());
+    std::sort(
+        current_material_edges.begin(),
+        current_material_edges.end());
+    CHECK(std::adjacent_find(
+        current_material_edges.begin(),
+        current_material_edges.end()) ==
+        current_material_edges.end());
+    CHECK(strict_face_count + carrier_only_face_count +
+              other_face_count == catalog.faces.size());
+    CHECK(current_material_edges.size() +
+              nonmaterial_edge_count == catalog.edges.size());
+
+    // First true SS2 native provider/Part reconciliation. The selected
+    // bounded Face remains strict; its native wire uses are only current
+    // runtime tokens. Every admitted material use must pass the existing
+    // PG-01B authorMaterialEdgeReference contract.
+    std::size_t planar_faces = 0U;
+    std::size_t nonplanar_faces = 0U;
+    std::size_t nonplanar_native_wires = 0U;
+    std::size_t nonplanar_material_members = 0U;
+    std::size_t nonplanar_nonmaterial_members = 0U;
+    std::size_t nonplanar_periodic_seam_edges = 0U;
+    std::size_t nonplanar_periodic_seam_uses = 0U;
+    std::size_t native_faces_with_holes = 0U;
+    std::size_t strict_faces_with_holes = 0U;
+    std::size_t fully_material_strict_holed_faces = 0U;
+    std::size_t hole_rejected_edges = 0U;
+    for (const auto& face : catalog.faces) {
+        const auto source =
+            kernel.bindFaceToBody(
+                evaluation.body_solid, face.runtime_token);
+        CHECK(source && source->valid());
+        const auto boundary =
+            kernel.queryFaceBoundary(
+                evaluation.body_solid, *source);
+        if (boundary.status ==
+                kernel::FaceBoundaryStatus::
+                    unsupported_surface) {
+            ++nonplanar_faces;
+            // Face Boundary E0: the original planar-only query must
+            // continue to reject this native cylinder/curved Face.
+            // The separate optional read is scoped to the same Body
+            // and returns real oriented wires, not a projected Face.
+            const auto raw =
+                kernel.queryFaceBoundaryAnySurface(
+                    evaluation.body_solid, *source);
+            if (!raw.ok()) {
+                continue;
+            }
+            nonplanar_native_wires += raw.wires.size();
+            // Real OCCT cylinder's parameterization seam is not an
+            // engineering material boundary even if the native Face
+            // wire reports this Edge twice. Only the exact Part
+            // catalog's typed periodic_seam bit is authoritative.
+            std::map<std::uint64_t, std::vector<bool>>
+                native_face_seam_uses;
+            for (const auto& wire : raw.wires) {
+                CHECK(wire.valid());
+                for (const auto& use : wire.edges) {
+                    const auto catalog_member = std::find_if(
+                        catalog.edges.begin(),
+                        catalog.edges.end(),
+                        [&use](const auto& edge) {
+                            return edge.runtime_token == use.edge;
+                        });
+                    CHECK(catalog_member != catalog.edges.end());
+                    const auto strict =
+                        part::authorMaterialEdgeReference(
+                            catalog, use.edge);
+                    if (catalog_member->periodic_seam) {
+                        CHECK(!strict.ok());
+                        CHECK(!catalog_member->representation_partition);
+                        native_face_seam_uses[use.edge.value].push_back(
+                            use.reversed);
+                        ++nonplanar_periodic_seam_uses;
+                    }
+                    if (strict.ok()) {
+                        CHECK(strict.reference);
+                        ++nonplanar_material_members;
+                    } else {
+                        ++nonplanar_nonmaterial_members;
+                    }
+                }
+            }
+            for (const auto& [token, uses] :
+                 native_face_seam_uses) {
+                // Two opposite native wire uses of ONE exact seam Edge.
+                // Distinct token values or one use cannot certify a seam.
+                CHECK(token != 0U);
+                CHECK(uses.size() == 2U);
+                CHECK(uses.front() != uses.back());
+                ++nonplanar_periodic_seam_edges;
+            }
+            continue;
+        }
+        CHECK(boundary.ok());
+        ++planar_faces;
+        if (boundary.wires.size() <= 1U) continue;
+        ++native_faces_with_holes;
+        std::size_t outer_wires = 0U;
+        bool all_material = true;
+        std::vector<part::MaterialEdgeReference>
+            member_sources;
+        for (const auto& wire : boundary.wires) {
+            CHECK(wire.valid());
+            if (wire.outer) ++outer_wires;
+            for (const auto& member : wire.edges) {
+                CHECK(member.valid());
+                const auto authored_source =
+                    part::authorMaterialEdgeReference(
+                        catalog, member.edge);
+                if (!authored_source.ok()) {
+                    ++hole_rejected_edges;
+                    all_material = false;
+                    continue;
+                }
+                CHECK(authored_source.reference &&
+                      authored_source.reference->stage ==
+                          catalog.stage);
+                member_sources.push_back(
+                    *authored_source.reference);
+            }
+        }
+        CHECK(outer_wires == 1U);
+        std::sort(
+            member_sources.begin(),
+            member_sources.end());
+        CHECK(std::adjacent_find(
+            member_sources.begin(),
+            member_sources.end()) ==
+            member_sources.end());
+        if (!face.semantic_address) {
+            continue; // Surface carrier alone cannot admit PG-01D.
+        }
+        ++strict_faces_with_holes;
+        if (all_material) {
+            ++fully_material_strict_holed_faces;
+        }
+    }
+    // Owner D2 manual multi-Face scope: native Face selection only,
+    // not an inferred connected Surface region. The existing through-
+    // Cut solid has both planar and cylindrical Face realizations.
+    // Explicit shared MATERIAL Edge identity must survive selecting
+    // two different Faces; a known cylinder seam must not be authored.
+    std::vector<part::SelectedFaceBoundaryAdmission>
+        individually_selected;
+    std::size_t selected_planar = 0U;
+    std::size_t selected_nonplanar = 0U;
+    std::size_t selected_seams = 0U;
+    std::size_t selected_material = 0U;
+    for (const auto& face : catalog.faces) {
+        const auto selected =
+            part::inspectSelectedFaceBoundary(
+                evaluation.features.back(),
+                face.runtime_token, kernel);
+        if (!selected.ok()) {
+            std::cerr
+                << "PG01D_MANUAL_FACE_E0_BLOCKED token="
+                << face.runtime_token.value
+                << " status=" << static_cast<int>(selected.status)
+                << '\n';
+            continue;
+        }
+        CHECK(selected.bounded_face == face.runtime_token);
+        const auto scope =
+            kernel.bindFaceToBody(
+                evaluation.body_solid, face.runtime_token);
+        CHECK(scope && scope->valid());
+        const auto planar = kernel.queryFaceBoundary(
+            evaluation.body_solid, *scope);
+        if (planar.ok()) {
+            ++selected_planar;
+        } else {
+            CHECK(planar.status ==
+                  kernel::FaceBoundaryStatus::
+                      unsupported_surface);
+            ++selected_nonplanar;
+        }
+        std::vector<kernel::RuntimeEdgeToken> own_material;
+        for (const auto& wire : selected.wires) {
+            for (const auto& use : wire.edges) {
+                CHECK(use.valid());
+                CHECK(use.native_use.start_vertex);
+                CHECK(use.native_use.end_vertex);
+                if (use.excluded_nonmaterial) {
+                    CHECK(!use.material);
+                    const auto edge = std::find_if(
+                        catalog.edges.begin(), catalog.edges.end(),
+                        [&use](const auto& item) {
+                            return item.runtime_token ==
+                                use.native_use.edge;
+                        });
+                    CHECK(edge != catalog.edges.end());
+                    CHECK(edge->periodic_seam ||
+                          edge->representation_partition);
+                    CHECK(edge->accounting_class ==
+                          part::TopologyAccountingClass::
+                              known_representation_artifact);
+                    if (edge->periodic_seam) ++selected_seams;
+                } else {
+                    CHECK(use.material);
+                    CHECK(use.material->stage == catalog.stage);
+                    CHECK(std::find(
+                        own_material.begin(), own_material.end(),
+                        use.native_use.edge) ==
+                        own_material.end());
+                    own_material.push_back(use.native_use.edge);
+                    ++selected_material;
+                }
+            }
+        }
+        const auto verified_again =
+            part::inspectSelectedFaceBoundary(
+                evaluation.features.back(),
+                face.runtime_token, kernel);
+        CHECK(verified_again == selected);
+        individually_selected.push_back(selected);
+    }
+    CHECK(selected_planar >= 1U);
+    CHECK(selected_nonplanar >= 1U);
+    CHECK(selected_seams >= 2U);
+    CHECK(selected_material >= 2U);
+    std::size_t shared_material_pairs = 0U;
+    for (std::size_t i = 0U;
+         i < individually_selected.size(); ++i) {
+        for (std::size_t j = i + 1U;
+             j < individually_selected.size(); ++j) {
+            for (const auto& left : individually_selected[i].wires) {
+                for (const auto& a : left.edges) {
+                    if (!a.material) continue;
+                    for (const auto& right :
+                         individually_selected[j].wires) {
+                        for (const auto& b : right.edges) {
+                            if (!b.material ||
+                                *a.material != *b.material) {
+                                continue;
+                            }
+                            CHECK(a.native_use.edge ==
+                                  b.native_use.edge);
+                            ++shared_material_pairs;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    CHECK(shared_material_pairs >= 1U);
+    CHECK(!part::inspectSelectedFaceBoundary(
+        evaluation.features.back(),
+        kernel::RuntimeFaceToken{}, kernel).ok());
+    // Exact current Body generation is provider-bound. Another
+    // evaluation must never reuse a captured scoped Face to cross
+    // provider generations on the strength of numeric token values.
+    std::cout
+        << "PG01D_MANUAL_MULTI_FACE_NATIVE_E0_PASS"
+        << " planar_faces=" << selected_planar
+        << " curved_faces=" << selected_nonplanar
+        << " real_shared_material_pairs=" << shared_material_pairs
+        << " excluded_seam_uses=" << selected_seams
+        << " accepted_material_uses=" << selected_material
+        << " inferred_carrier_region=0"
+        << '\n';
+
+    std::cerr
+        << "PG01D_D0_NATIVE_FACE_WIRE_STATUS"
+        << " planar=" << planar_faces
+        << " nonplanar=" << nonplanar_faces
+        << " nonplanar_wires=" << nonplanar_native_wires
+        << " nonplanar_material_uses="
+        << nonplanar_material_members
+        << " nonplanar_nonmaterial_uses="
+        << nonplanar_nonmaterial_members
+        << " nonplanar_seam_edges="
+        << nonplanar_periodic_seam_edges
+        << " nonplanar_seam_uses="
+        << nonplanar_periodic_seam_uses
+        << " holes=" << native_faces_with_holes
+        << " strict_holes=" << strict_faces_with_holes
+        << " strict_holes_all_material="
+        << fully_material_strict_holed_faces
+        << " material_rejections=" << hole_rejected_edges
+        << std::endl;
+    CHECK(native_faces_with_holes >= 2U);
+    CHECK(nonplanar_faces >= 1U);
+    CHECK(nonplanar_native_wires >= 1U);
+    CHECK(nonplanar_material_members >= 1U);
+    CHECK(nonplanar_periodic_seam_edges >= 1U);
+    CHECK(nonplanar_periodic_seam_uses ==
+          2U * nonplanar_periodic_seam_edges);
+    CHECK(strict_faces_with_holes > 0U);
+    CHECK(fully_material_strict_holed_faces > 0U);
+
+    // A token scoped to one provider realization must not gain authority
+    // over a different body just because its numeric Face ID is reused.
+    CHECK(!kernel.bindFaceToBody(
+        evaluation.body_solid, kernel::RuntimeFaceToken{}));
+    const auto invalid_scope =
+        kernel.queryFaceBoundary(
+            evaluation.body_solid,
+            kernel::ScopedBoundaryFace{});
+    CHECK(invalid_scope.status ==
+          kernel::FaceBoundaryStatus::invalid_input);
+
+    const auto fresh_evaluation =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(fresh_evaluation.body_solid);
+    CHECK(fresh_evaluation.body_solid.get() !=
+          evaluation.body_solid.get());
+    const auto source_face = catalog.faces.front().runtime_token;
+    const auto stale_bound =
+        kernel.bindFaceToBody(
+            evaluation.body_solid, source_face);
+    CHECK(stale_bound);
+    const auto stale_query =
+        kernel.queryFaceBoundary(
+            fresh_evaluation.body_solid, *stale_bound);
+    CHECK(stale_query.status ==
+          kernel::FaceBoundaryStatus::provider_mismatch);
+
+    std::cout << "PG01D_D0_NATIVE_STRICT_FACE_CATALOG_PASS"
+              << " strict_faces=" << strict_face_count
+              << " carrier_only_faces=" << carrier_only_face_count
+              << " other_faces=" << other_face_count
+              << " material_edges=" << current_material_edges.size()
+              << " rejected_nonmaterial=" << nonmaterial_edge_count
+              << " provider_face_wires_not_yet_claimed=1"
+              << '\n';
+}
+
+// PG-01D D1: the actual SS2 Part-after-two-Cuts case must preserve an
+// *individually bounded* planar Face with two real native inner wires.
+// A Surface carrier alone never grants Face Project Geometry admission.
+void verifyPg01dNativeTwoHoleFaceBoundary(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    auto session = makeBaseSession(kernel);
+    const auto cut_circle = [&](
+        double x, const char* label) {
+        const auto sketch =
+            session.execute(application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(sketch.ok() && sketch.sketch_id);
+        const auto circle = session.execute(
+            application::AddSketchCircleCommand{
+                *sketch.sketch_id,
+                {x, 15.0},
+                4.0,
+                sketch::EntityRole::regular});
+        CHECK(circle.ok());
+        const auto* authored =
+            session.document().findSketch(*sketch.sketch_id);
+        CHECK(authored);
+        const auto regions =
+            sketch::analyzeRegions(authored->model);
+        CHECK(regions.complete() &&
+              regions.regions.size() == 1U);
+        const auto intent =
+            part::makeProfileRegionIntent(regions.regions.front());
+        CHECK(intent);
+        const auto profile = session.execute(
+            application::CreateProfileCommand{
+                *sketch.sketch_id,
+                session.document().revision(),
+                *intent});
+        CHECK(profile.ok() && profile.profile_id);
+        const auto cut = session.execute(
+            application::CreateExtrudeFeatureCommand{
+                *profile.profile_id,
+                session.document().revision(),
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{25.0}, false},
+                label},
+            kernel);
+        CHECK(cut.ok() && cut.feature_id);
+        return *cut.feature_id;
+    };
+    cut_circle(12.0, "PG01D First Through Cut");
+    const auto last_cut_id =
+        cut_circle(28.0, "PG01D Second Through Cut");
+
+    const auto result =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(result.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(result.body_solid && result.current_topology);
+    const auto& catalog = *result.current_topology;
+    CHECK(catalog.complete());
+
+    std::size_t observed_two_hole_faces = 0U;
+    std::size_t strict_two_hole_faces = 0U;
+    std::size_t strict_two_hole_material_faces = 0U;
+    std::size_t admitted_complete_face_batches = 0U;
+    std::size_t excluded_periodic_seams = 0U;
+    std::size_t excluded_partition_edges = 0U;
+    for (const auto& edge : catalog.edges) {
+        if (!edge.periodic_seam &&
+            !edge.representation_partition) {
+            continue;
+        }
+        const auto authored =
+            part::authorMaterialEdgeReference(
+                catalog, edge.runtime_token);
+        CHECK(!authored.ok());
+        if (edge.periodic_seam) ++excluded_periodic_seams;
+        if (edge.representation_partition) {
+            ++excluded_partition_edges;
+        }
+    }
+
+    for (const auto& face : catalog.faces) {
+        const auto scoped =
+            kernel.bindFaceToBody(
+                result.body_solid, face.runtime_token);
+        CHECK(scoped && scoped->valid());
+        const auto boundary =
+            kernel.queryFaceBoundary(result.body_solid, *scoped);
+        if (boundary.status ==
+                kernel::FaceBoundaryStatus::unsupported_surface) {
+            continue;
+        }
+        CHECK(boundary.ok());
+        if (boundary.wires.size() != 3U) continue;
+        ++observed_two_hole_faces;
+        std::size_t outers = 0U;
+        bool all_material = true;
+        std::vector<part::MaterialEdgeReference> sources;
+        for (const auto& wire : boundary.wires) {
+            if (wire.outer) ++outers;
+            for (const auto& member : wire.edges) {
+                const auto identity =
+                    part::authorMaterialEdgeReference(
+                        catalog, member.edge);
+                if (!identity.ok()) {
+                    all_material = false;
+                    continue;
+                }
+                CHECK(identity.reference &&
+                      identity.reference->stage ==
+                          catalog.stage);
+                sources.push_back(*identity.reference);
+            }
+        }
+        CHECK(outers == 1U);
+        std::sort(sources.begin(), sources.end());
+        CHECK(std::adjacent_find(
+            sources.begin(), sources.end()) == sources.end());
+        const auto admitted =
+            part::inspectMaterialFaceBoundary(
+                result.features.back(),
+                face.runtime_token, kernel);
+        if (!face.semantic_address) {
+            CHECK(!admitted.ok());
+            CHECK(admitted.status ==
+                  part::MaterialFaceBoundaryStatus::face_not_strict);
+            continue;
+        }
+        ++strict_two_hole_faces;
+        if (!all_material) {
+            CHECK(!admitted.ok());
+            CHECK(admitted.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      material_edge_unavailable);
+            continue;
+        }
+        ++strict_two_hole_material_faces;
+        CHECK(admitted.ok());
+        CHECK(admitted.bounded_face ==
+              face.semantic_address);
+        CHECK(admitted.wires.size() ==
+              boundary.wires.size());
+        std::size_t accepted_members = 0U;
+        for (std::size_t wire_index = 0U;
+             wire_index < admitted.wires.size();
+             ++wire_index) {
+            const auto& actual = admitted.wires[wire_index];
+            const auto& source = boundary.wires[wire_index];
+            CHECK(actual.outer == source.outer);
+            CHECK(actual.edges.size() == source.edges.size());
+            for (std::size_t edge_index = 0U;
+                 edge_index < source.edges.size();
+                 ++edge_index) {
+                const auto& item = actual.edges[edge_index];
+                CHECK(item.valid());
+                CHECK(item.current_edge ==
+                      source.edges[edge_index].edge);
+                CHECK(item.reversed ==
+                      source.edges[edge_index].reversed);
+                CHECK(item.reference.stage == catalog.stage);
+                ++accepted_members;
+            }
+        }
+        CHECK(accepted_members == 6U);
+        ++admitted_complete_face_batches;
+    }
+    std::cerr << "PG01D_D1_TWO_HOLE_FACE_STATUS"
+              << " observed=" << observed_two_hole_faces
+              << " strict=" << strict_two_hole_faces
+              << " strict_material="
+              << strict_two_hole_material_faces
+              << " complete_face_admissions="
+              << admitted_complete_face_batches
+              << " excluded_seams="
+              << excluded_periodic_seams
+              << " excluded_partitions="
+              << excluded_partition_edges << std::endl;
+    CHECK(observed_two_hole_faces >= 2U);
+    CHECK(strict_two_hole_faces > 0U);
+    CHECK(strict_two_hole_material_faces > 0U);
+    CHECK(admitted_complete_face_batches ==
+          strict_two_hole_material_faces);
+
+    // D1 lifecycle: a Face observed before an authored upstream change
+    // cannot authorize a new read in a different provider generation.
+    // Suppression must reject Face admission without a cached result;
+    // unsuppression must rebuild a fresh, strictly mapped outer+holes.
+    const auto old_scoped = kernel.bindFaceToBody(
+        result.body_solid,
+        catalog.faces.front().runtime_token);
+    CHECK(old_scoped && old_scoped->valid());
+    auto absent_catalog = result.features.back();
+    absent_catalog.result_topology.reset();
+    const auto invalid_catalog = part::inspectMaterialFaceBoundary(
+        absent_catalog,
+        catalog.faces.front().runtime_token, kernel);
+    CHECK(!invalid_catalog.ok());
+    CHECK(invalid_catalog.status ==
+          part::MaterialFaceBoundaryStatus::invalid_stage);
+
+    const auto suppressed = session.execute(
+        application::SetFeatureSuppressedCommand{
+            last_cut_id, session.document().revision(), true});
+    CHECK(suppressed.ok());
+    const auto suppressed_eval =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(suppressed_eval.features.size() ==
+          result.features.size());
+    const auto blocked = part::inspectMaterialFaceBoundary(
+        suppressed_eval.features.back(),
+        catalog.faces.front().runtime_token, kernel);
+    CHECK(!blocked.ok());
+    CHECK(blocked.status ==
+          part::MaterialFaceBoundaryStatus::invalid_stage);
+
+    const auto unsuppressed = session.execute(
+        application::SetFeatureSuppressedCommand{
+            last_cut_id, session.document().revision(), false});
+    CHECK(unsuppressed.ok());
+    const auto rebuilt =
+        part::evaluatePart(session.document(), kernel);
+    CHECK(rebuilt.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(rebuilt.body_solid && rebuilt.current_topology);
+    CHECK(rebuilt.current_topology->complete());
+    CHECK(rebuilt.body_solid.get() != result.body_solid.get());
+    const auto stale_native = kernel.queryFaceBoundary(
+        rebuilt.body_solid, *old_scoped);
+    CHECK(stale_native.status ==
+          kernel::FaceBoundaryStatus::provider_mismatch);
+
+    std::size_t rebuilt_two_hole_admissions = 0U;
+    for (const auto& face : rebuilt.current_topology->faces) {
+        const auto admitted = part::inspectMaterialFaceBoundary(
+            rebuilt.features.back(), face.runtime_token, kernel);
+        if (!admitted.ok() || admitted.wires.size() != 3U) {
+            continue;
+        }
+        std::size_t outer_count = 0U;
+        std::size_t material_members = 0U;
+        for (const auto& wire : admitted.wires) {
+            if (wire.outer) ++outer_count;
+            for (const auto& member : wire.edges) {
+                CHECK(member.valid());
+                CHECK(member.reference.stage ==
+                      rebuilt.current_topology->stage);
+                ++material_members;
+            }
+        }
+        CHECK(outer_count == 1U);
+        CHECK(material_members == 6U);
+        ++rebuilt_two_hole_admissions;
+    }
+    CHECK(rebuilt_two_hole_admissions > 0U);
+    std::cout << "PG01D_D1_SUPPRESS_REBUILD_FACE_PASS"
+              << " refreshed_strict_two_hole_faces="
+              << rebuilt_two_hole_admissions << '\n';
+}
+
+// PG-01D D3 negative boundary seam: keep the real native Body, Face
+// catalog, strict semantic mapping and OCCT provider as the baseline.
+// Inject only a malformed/read-failing provider *answer* to prove Part
+// does not accept a guessed or partially healed boundary. No production
+// fault injection and no fabricated authored CAD identities.
+class Pg01dFaultedBoundaryProvider final
+    : public kernel::IFaceBoundaryQuery {
+public:
+    enum class Fault {
+        none,
+        bind_unavailable,
+        query_failure,
+        missing_outer,
+        duplicate_outer,
+        missing_signed_vertex,
+        bogus_edge,
+        duplicated_material_edge,
+    };
+
+    Pg01dFaultedBoundaryProvider(
+        kernel_occt::OcctSolidModelingKernel& native, Fault fault)
+        : native_{native}, fault_{fault} {}
+
+    std::optional<kernel::ScopedBoundaryFace> bindFaceToBody(
+        kernel::RuntimeSolidHandle body,
+        kernel::RuntimeFaceToken face) noexcept override {
+        if (fault_ == Fault::bind_unavailable ||
+            !native_.bindFaceToBody(body, face)) {
+            return std::nullopt;
+        }
+        return makeScopedFace(std::move(body), face);
+    }
+
+    kernel::FaceBoundaryResult queryFaceBoundary(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedBoundaryFace& scoped) noexcept override {
+        using Status = kernel::FaceBoundaryStatus;
+        if (!body || !scoped.valid() ||
+            body.get() != scoped.sourceBody().get()) {
+            return {Status::provider_mismatch, {}};
+        }
+        if (fault_ == Fault::query_failure) {
+            return {Status::provider_failure, {}};
+        }
+        const auto real = native_.bindFaceToBody(
+            body, scoped.face());
+        if (!real) return {Status::face_unavailable, {}};
+        auto result = native_.queryFaceBoundary(body, *real);
+        if (!result.ok() || fault_ == Fault::none) {
+            return result;
+        }
+        switch (fault_) {
+        case Fault::missing_outer:
+            for (auto& wire : result.wires) wire.outer = false;
+            break;
+        case Fault::duplicate_outer: {
+            const auto outer = std::find_if(
+                result.wires.begin(), result.wires.end(),
+                [](const auto& wire) { return wire.outer; });
+            if (outer != result.wires.end()) {
+                result.wires.push_back(*outer);
+            }
+            break;
+        }
+        case Fault::missing_signed_vertex:
+            // A malformed native half-populated Vertex occurrence
+            // cannot certify any boundary; never classify as geometric
+            // curve Unsupported.
+            result.wires.front().edges.front().start_vertex.reset();
+            break;
+        case Fault::bogus_edge:
+            result.wires.front().edges.front().edge =
+                kernel::RuntimeEdgeToken{
+                    std::numeric_limits<std::uint64_t>::max()};
+            break;
+        case Fault::duplicated_material_edge:
+            result.wires.front().edges.push_back(
+                result.wires.front().edges.front());
+            break;
+        case Fault::none:
+        case Fault::bind_unavailable:
+        case Fault::query_failure:
+            break;
+        }
+        return result;
+    }
+
+    // Manual Face Boundary uses this separate bounded any-surface
+    // observation. For this deliberately planar fault fixture, return
+    // the SAME forged native wire answer as strict Planar Face; this
+    // never creates synthetic authorable Part references.
+    kernel::FaceBoundaryResult queryFaceBoundaryAnySurface(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedBoundaryFace& scoped) noexcept override {
+        return queryFaceBoundary(std::move(body), scoped);
+    }
+
+private:
+    kernel_occt::OcctSolidModelingKernel& native_;
+    Fault fault_;
+};
+
+void verifyPg01dMalformedBoundaryFailClosed(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    auto session = makeBaseSession(kernel);
+    const auto before = session.document().state();
+    const auto revision = session.document().revision();
+    const auto undo = session.undoDepth();
+    const auto result = part::evaluatePart(
+        session.document(), kernel);
+    CHECK(result.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(result.current_topology);
+    CHECK(result.current_topology->complete());
+    CHECK(!result.features.empty());
+    const auto& stage = result.features.back();
+    std::optional<kernel::RuntimeFaceToken> source_face;
+    for (const auto& face : result.current_topology->faces) {
+        const auto admitted = part::inspectMaterialFaceBoundary(
+            stage, face.runtime_token, kernel);
+        if (admitted.ok() && admitted.wires.size() == 1U &&
+            admitted.wires.front().outer &&
+            admitted.wires.front().edges.size() == 4U) {
+            source_face = face.runtime_token;
+            break;
+        }
+    }
+    CHECK(source_face);
+    const auto valid = part::inspectMaterialFaceBoundary(
+        stage, *source_face, kernel);
+    CHECK(valid.ok());
+    CHECK(valid.wires.size() == 1U);
+    CHECK(valid.wires.front().edges.size() == 4U);
+
+    // No guessed Face when the source token or the entire stage is
+    // unavailable, even though some planar Surface may still exist.
+    const auto no_token = part::inspectMaterialFaceBoundary(
+        stage, kernel::RuntimeFaceToken{}, kernel);
+    CHECK(no_token.status ==
+          part::MaterialFaceBoundaryStatus::face_unavailable);
+    const auto alien_token = part::inspectMaterialFaceBoundary(
+        stage,
+        kernel::RuntimeFaceToken{
+            std::numeric_limits<std::uint64_t>::max()},
+        kernel);
+    CHECK(alien_token.status ==
+          part::MaterialFaceBoundaryStatus::face_unavailable);
+    auto missing_catalog = stage;
+    missing_catalog.result_topology.reset();
+    CHECK(part::inspectMaterialFaceBoundary(
+        missing_catalog, *source_face, kernel).status ==
+        part::MaterialFaceBoundaryStatus::invalid_stage);
+    auto carrier_only = stage;
+    CHECK(carrier_only.result_topology);
+    const auto face_record = std::find_if(
+        carrier_only.result_topology->faces.begin(),
+        carrier_only.result_topology->faces.end(),
+        [&](const auto& item) {
+            return item.runtime_token == *source_face;
+        });
+    CHECK(face_record != carrier_only.result_topology->faces.end());
+    face_record->semantic_address.reset();
+    CHECK(part::inspectMaterialFaceBoundary(
+        carrier_only, *source_face, kernel).status ==
+        part::MaterialFaceBoundaryStatus::face_not_strict);
+
+    using Fault = Pg01dFaultedBoundaryProvider::Fault;
+    const auto expect_failure = [&](Fault fault,
+                                    part::MaterialFaceBoundaryStatus expected) {
+        Pg01dFaultedBoundaryProvider provider{kernel, fault};
+        const auto admitted = part::inspectMaterialFaceBoundary(
+            stage, *source_face, provider);
+        CHECK(!admitted.ok());
+        if (admitted.status != expected) {
+            std::cerr
+                << "PG01D_NEGATIVE_ACTUAL_STATUS fault="
+                << static_cast<int>(fault)
+                << " actual=" << static_cast<int>(admitted.status)
+                << " expected=" << static_cast<int>(expected)
+                << '\n';
+        }
+        CHECK(admitted.status == expected);
+        CHECK(admitted.wires.empty());
+        CHECK(!admitted.bounded_face);
+    };
+    expect_failure(
+        Fault::bind_unavailable,
+        part::MaterialFaceBoundaryStatus::native_boundary_unavailable);
+    expect_failure(
+        Fault::query_failure,
+        part::MaterialFaceBoundaryStatus::native_boundary_unavailable);
+    expect_failure(
+        Fault::missing_outer,
+        part::MaterialFaceBoundaryStatus::native_boundary_unavailable);
+    expect_failure(
+        Fault::duplicate_outer,
+        part::MaterialFaceBoundaryStatus::native_boundary_unavailable);
+    expect_failure(
+        Fault::bogus_edge,
+        part::MaterialFaceBoundaryStatus::material_edge_unavailable);
+    // Since the native provider supplies exact directed Vertices,
+    // appended repeated EdgeUse invalidates wire closure itself. It
+    // fails at native topology accounting BEFORE semantic Edge mapping.
+    expect_failure(
+        Fault::duplicated_material_edge,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+
+    // Later Owner D2: manual chosen-Face admission does not demand
+    // a persistent strict Face address, but EVERY bounded native
+    // occurrence remains integrity-checked. Invalid Face and wire
+    // evidence cannot be reinterpreted as geometric Unsupported.
+    const auto manual_control =
+        part::inspectSelectedFaceBoundary(
+            stage, *source_face, kernel);
+    CHECK(manual_control.ok());
+    CHECK(manual_control.bounded_face == *source_face);
+    CHECK(!part::inspectSelectedFaceBoundary(
+        stage, kernel::RuntimeFaceToken{}, kernel).ok());
+    CHECK(!part::inspectSelectedFaceBoundary(
+        missing_catalog, *source_face, kernel).ok());
+    const auto carrier_only_manual =
+        part::inspectSelectedFaceBoundary(
+            carrier_only, *source_face, kernel);
+    CHECK(carrier_only_manual.ok());
+    CHECK(carrier_only_manual.wires ==
+          manual_control.wires);
+
+    // A complete but SEMANTICALLY UNSUPPORTED material Edge must not be
+    // skipped like a geometrically Unsupported projected curve. Make
+    // the failure observable at the exact native wire member, without
+    // copying any Owner Part, document IDs or private fixture geometry.
+    auto unsupported_edge_stage = stage;
+    CHECK(unsupported_edge_stage.result_topology);
+    const auto selected_edge =
+        manual_control.wires.front().edges.front().native_use.edge;
+    auto& records = unsupported_edge_stage.result_topology->edges;
+    const auto unsupported_record = std::find_if(
+        records.begin(), records.end(),
+        [selected_edge](const auto& item) {
+            return item.runtime_token == selected_edge;
+        });
+    CHECK(unsupported_record != records.end());
+    CHECK(unsupported_record->accounting_class ==
+          part::TopologyAccountingClass::referenceable);
+    unsupported_record->accounting_class =
+        part::TopologyAccountingClass::semantically_unsupported;
+    unsupported_record->referenceability =
+        kernel::ReferenceStatus::unsupported;
+    unsupported_record->curve_candidates.clear();
+    CHECK(unsupported_edge_stage.result_topology->complete());
+    const auto semantic_refusal =
+        part::inspectSelectedFaceBoundary(
+            unsupported_edge_stage, *source_face, kernel);
+    CHECK(semantic_refusal.status ==
+          part::MaterialFaceBoundaryStatus::
+              material_edge_unavailable);
+    CHECK(!semantic_refusal.ok());
+    CHECK(semantic_refusal.wires.empty());
+    CHECK(semantic_refusal.rejected_edge);
+    CHECK(semantic_refusal.rejected_edge->edge == selected_edge);
+    CHECK(semantic_refusal.rejected_edge->wire_index == 0U);
+    CHECK(semantic_refusal.rejected_edge->edge_index == 0U);
+    CHECK(semantic_refusal.rejected_edge->kind ==
+          part::SelectedFaceBoundaryRejectKind::
+              uncertified_material_edge);
+    CHECK(semantic_refusal.rejected_edge->accounting_class ==
+          part::TopologyAccountingClass::semantically_unsupported);
+    CHECK(semantic_refusal.rejected_edge->referenceability ==
+          kernel::ReferenceStatus::unsupported);
+    CHECK(semantic_refusal.rejected_edge->curve_candidate_count ==
+          0U);
+    CHECK(semantic_refusal.rejected_edge->curve_family_realizations ==
+          0U);
+    CHECK(semantic_refusal.rejected_edge->
+          certified_semantic_endpoints <=
+          semantic_refusal.rejected_edge->incident_vertices);
+    CHECK(!semantic_refusal.rejected_edge->periodic_seam);
+    CHECK(!semantic_refusal.rejected_edge->representation_partition);
+
+    const auto expect_selected_failure = [&](
+        Fault fault, part::MaterialFaceBoundaryStatus expected) {
+        Pg01dFaultedBoundaryProvider provider{kernel, fault};
+        const auto rejected =
+            part::inspectSelectedFaceBoundary(
+                stage, *source_face, provider);
+        CHECK(!rejected.ok());
+        CHECK(rejected.status == expected);
+        CHECK(rejected.wires.empty());
+        CHECK(!rejected.bounded_face.valid());
+    };
+    expect_selected_failure(
+        Fault::bind_unavailable,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    expect_selected_failure(
+        Fault::query_failure,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    expect_selected_failure(
+        Fault::missing_outer,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    expect_selected_failure(
+        Fault::duplicate_outer,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    expect_selected_failure(
+        Fault::bogus_edge,
+        part::MaterialFaceBoundaryStatus::
+            material_edge_unavailable);
+    {
+        Pg01dFaultedBoundaryProvider provider{
+            kernel, Fault::bogus_edge};
+        const auto rejected =
+            part::inspectSelectedFaceBoundary(
+                stage, *source_face, provider);
+        CHECK(rejected.rejected_edge);
+        CHECK(rejected.rejected_edge->kind ==
+              part::SelectedFaceBoundaryRejectKind::
+                  missing_catalog_edge);
+        CHECK(rejected.rejected_edge->edge.value ==
+              std::numeric_limits<std::uint64_t>::max());
+        CHECK(rejected.rejected_edge->wire_index == 0U);
+        CHECK(rejected.rejected_edge->edge_index == 0U);
+        CHECK(!rejected.rejected_edge->accounting_class);
+        CHECK(!rejected.rejected_edge->referenceability);
+        CHECK(rejected.rejected_edge->curve_family_realizations ==
+              0U);
+        CHECK(rejected.rejected_edge->incident_vertices == 0U);
+        CHECK(rejected.rejected_edge->
+              certified_semantic_endpoints == 0U);
+    }
+    expect_selected_failure(
+        Fault::missing_signed_vertex,
+        part::MaterialFaceBoundaryStatus::
+            native_boundary_unavailable);
+    {
+        Pg01dFaultedBoundaryProvider provider{
+            kernel, Fault::duplicated_material_edge};
+        const auto rejected =
+            part::inspectSelectedFaceBoundary(
+                stage, *source_face, provider);
+        CHECK(!rejected.ok());
+        CHECK(rejected.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      native_boundary_unavailable ||
+              rejected.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      material_edge_unavailable);
+    }
+    std::cout
+        << "PG01D_BOUNDARY_REJECTION_DETAIL_PASS"
+        << " native_member_identified=1"
+        << " semantically_unsupported_refused=1"
+        << " bogus_catalog_source_refused=1"
+        << " no_partial_authoring=1"
+        << '\n';
+    std::cout
+        << "PG01D_MANUAL_FACE_MALFORMED_E0_PASS"
+        << " faults=7"
+        << " no_strict_face_address_required=1"
+        << " unknown_source_skippable=0"
+        << '\n';
+
+    Pg01dFaultedBoundaryProvider passthrough{
+        kernel, Fault::none};
+    const auto control = part::inspectMaterialFaceBoundary(
+        stage, *source_face, passthrough);
+    CHECK(control.ok());
+    CHECK(control.wires.size() == valid.wires.size());
+    CHECK(control.wires.front().edges.size() ==
+          valid.wires.front().edges.size());
+    for (std::size_t i = 0U; i < valid.wires.front().edges.size(); ++i) {
+        CHECK(control.wires.front().edges[i].reference ==
+              valid.wires.front().edges[i].reference);
+    }
+    CHECK(session.document().state() == before);
+    CHECK(session.document().revision() == revision);
+    CHECK(session.undoDepth() == undo);
+    std::cout << "PG01D_D3_MALFORMED_BOUNDARY_FAIL_CLOSED_PASS"
+              << " native_strict_source=1"
+              << " provider_fault_variants=6"
+              << " invalid_scene_or_carrier_variants=4"
+              << " duplicate_material_rejected=1"
+              << " document_unchanged=1\\n";
+}
+
+// Bounded independent native probe for the Owner's Add + Add + Chamfer
+// manual Face rejection. Reuse the already-sanitized two-Add test Part;
+// never copy the Owner's private v15 document or its authored identifiers.
+// This is classification EVIDENCE, not an assertion that every resulting
+// Chamfer boundary must have a durable MaterialEdgeReference.
+void probePg01dChamferedAddFaceAdmission(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    const auto fixture =
+        std::filesystem::path{__FILE__}.parent_path() /
+        "fixtures" / "pm05f_r2_part008_sanitized.ss2part";
+    const part::PartDocumentStore store;
+    auto loaded = store.load(fixture);
+    CHECK(loaded.ok());
+    application::DocumentSession session{
+        {}, std::move(*loaded.document)};
+    CHECK(session.document().body().features.size() == 2U);
+    const auto base = part::evaluatePart(
+        session.document(), kernel);
+    CHECK(base.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(base.current_topology);
+    CHECK(base.current_topology->complete());
+
+    const auto before_revision = session.document().revision();
+    bool chamfer_committed = false;
+    for (const auto& edge : base.current_topology->edges) {
+        const auto reference =
+            part::authorMaterialEdgeReference(
+                *base.current_topology, edge.runtime_token);
+        if (!reference.ok() || !reference.reference) continue;
+        const auto committed = session.execute(
+            application::CreateChamferFeatureCommand{
+                {*reference.reference},
+                session.document().revision(),
+                core::LengthValue{1.0},
+                "PG01D sanitized Add/Chamfer boundary probe"},
+            kernel);
+        if (committed.ok()) {
+            chamfer_committed = true;
+            break;
+        }
+        CHECK(session.document().revision() == before_revision);
+    }
+    CHECK(chamfer_committed);
+    CHECK(session.document().body().features.size() == 3U);
+    const auto evaluated = part::evaluatePart(
+        session.document(), kernel);
+    CHECK(evaluated.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluated.current_topology &&
+          evaluated.current_topology->complete());
+    CHECK(evaluated.features.size() == 3U);
+    const auto& catalog = *evaluated.current_topology;
+
+    std::size_t referenceable_faces = 0U;
+    std::size_t admitted_faces = 0U;
+    std::size_t blocked_material_faces = 0U;
+    std::size_t blocked_other_faces = 0U;
+    std::size_t shared_carrier_pairs = 0U;
+    for (std::size_t i = 0U; i < catalog.faces.size(); ++i) {
+        const auto& face = catalog.faces[i];
+        if (face.accounting_class !=
+                part::TopologyAccountingClass::referenceable) {
+            continue;
+        }
+        ++referenceable_faces;
+        for (std::size_t j = i + 1U;
+             j < catalog.faces.size(); ++j) {
+            const auto& other = catalog.faces[j];
+            for (const auto& carrier : face.surface_candidates) {
+                if (std::find(
+                        other.surface_candidates.begin(),
+                        other.surface_candidates.end(),
+                        carrier) != other.surface_candidates.end()) {
+                    ++shared_carrier_pairs;
+                }
+            }
+        }
+        const auto admission =
+            part::inspectSelectedFaceBoundary(
+                evaluated.features.back(),
+                face.runtime_token, kernel);
+        if (admission.ok()) {
+            ++admitted_faces;
+            continue;
+        }
+        if (admission.status ==
+                part::MaterialFaceBoundaryStatus::
+                    material_edge_unavailable) {
+            ++blocked_material_faces;
+            const auto* failure = admission.rejected_edge
+                ? &*admission.rejected_edge : nullptr;
+            std::cout
+                << "PG01D_ADD_CHAMFER_FACE_BLOCKED"
+                << " face=" << face.runtime_token.value
+                << " failed_edge="
+                << (failure ? failure->edge.value : 0U)
+                << " kind="
+                << (failure ? static_cast<int>(failure->kind) : -1)
+                << " accounting="
+                << (failure && failure->accounting_class
+                    ? static_cast<int>(*failure->accounting_class)
+                    : -1)
+                << " reference="
+                << (failure && failure->referenceability
+                    ? static_cast<int>(*failure->referenceability)
+                    : -1)
+                << " candidates="
+                << (failure ? failure->curve_candidate_count : 0U)
+                << " representation_partition="
+                << (failure && failure->representation_partition)
+                << '\n';
+        } else {
+            ++blocked_other_faces;
+        }
+    }
+    CHECK(referenceable_faces > 0U);
+    std::cout
+        << "PG01D_ADD_CHAMFER_BOUNDARY_PROBE_PASS"
+        << " referenceable_faces=" << referenceable_faces
+        << " admitted=" << admitted_faces
+        << " material_blocked=" << blocked_material_faces
+        << " other_blocked=" << blocked_other_faces
+        << " same_carrier_pairs=" << shared_carrier_pairs
+        << " private_document_committed=0"
+        << '\n';
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
     const bool pg01c_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01c";
+    const bool pg01d_ui_only =
+        argc == 2 && std::string_view{argv[1]} == "--pg01d-ui";
+    const bool pg01d_d0_only =
+        argc == 2 && std::string_view{argv[1]} == "--pg01d-d0";
+    const bool pg01d_negative_only =
+        argc == 2 &&
+        std::string_view{argv[1]} == "--pg01d-negative";
     kernel_occt::OcctSolidModelingKernel kernel;
+    if (pg01d_negative_only) {
+        verifyPg01dMalformedBoundaryFailClosed(kernel);
+        probePg01dChamferedAddFaceAdmission(kernel);
+        return EXIT_SUCCESS;
+    }
+    if (pg01d_d0_only) {
+        // PG-01D's real OCCT/Part topology proof must remain isolated
+        // from the unrelated, cursor/timing-sensitive PG-01C GUI test.
+        // Reuse this compiled native test target without Viewer actions.
+        verifyPg01dNativeStrictFaceAndMaterialCatalog(kernel);
+        verifyPg01dNativeTwoHoleFaceBoundary(kernel);
+        std::cout << "PG01D_D0_D1_ISOLATED_NATIVE_PASS"
+                  << std::endl;
+        return EXIT_SUCCESS;
+    }
     viewer_qt_occt::QtOcctViewerWidget* viewport = nullptr;
     ui::CadWorkbench workbench{
         [&viewport](QWidget* parent) {
@@ -425,6 +1669,1461 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+        if (pg01d_ui_only) {
+            // Real Qt/OCCT Face cursor admission, never a fabricated
+            // Viewer token or a provider ordinal. The target is a
+            // separate XY Sketch after the legal upstream Extrude.
+            auto face_session = makeBaseSession(kernel);
+            const auto target_sketch =
+                face_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(target_sketch.ok() && target_sketch.sketch_id);
+            CHECK(workbench.activateDocument(&face_session, {}));
+            QApplication::processEvents();
+            auto* sketch_edit = workbench.findChild<QAction*>(
+                QStringLiteral("editSketchAction"));
+            auto* face_mode = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeSourceFaceButton"));
+            auto* edge_mode = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeSourceEdgesButton"));
+            auto* pg_finish = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeFinishButton"));
+            auto* pg_remove = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeRemoveButton"));
+            auto* pg_clear = workbench.findChild<QPushButton*>(
+                QStringLiteral("projectEdgeClearButton"));
+            auto* pg_count = workbench.findChild<QLabel*>(
+                QStringLiteral("projectEdgeSelectionLabel"));
+            auto* pg_face_detail = workbench.findChild<QLabel*>(
+                QStringLiteral("projectEdgeResultLabel"));
+            ui::PartViewportController* controller = nullptr;
+            for (auto* child : workbench.children()) {
+                if (auto* found =
+                        dynamic_cast<ui::PartViewportController*>(child)) {
+                    controller = found;
+                    break;
+                }
+            }
+            CHECK(sketch_edit && face_mode && edge_mode &&
+                  pg_finish && pg_remove && pg_clear && pg_count &&
+                  pg_face_detail && controller);
+            QTreeWidgetItem* sketch_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    sketch_item = *it;
+                    break;
+                }
+            }
+            CHECK(sketch_item);
+            tree->clearSelection();
+            tree->setCurrentItem(sketch_item);
+            sketch_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+
+            const auto before_state = face_session.document().state();
+            const auto before_revision =
+                face_session.document().revision();
+            const auto before_undo = face_session.undoDepth();
+            auto reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(face_mode->isChecked());
+            CHECK(!edge_mode->isChecked());
+            CHECK(!pg_finish->isEnabled());
+
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            const auto admission =
+                controller->selectedMaterialFaceBoundaryAdmission();
+            CHECK(admission.ok());
+            CHECK(admission.wires.size() == 1U);
+            CHECK(admission.wires.front().outer);
+            CHECK(admission.wires.front().edges.size() == 4U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Outer Edge 1: supported")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 4U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            CHECK(pg_finish->isEnabled());
+            CHECK(face_session.document().state() == before_state);
+            CHECK(face_session.undoDepth() == before_undo);
+
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(face_session.undoDepth() == before_undo + 1U);
+            CHECK(face_session.document().revision() !=
+                  before_revision);
+            const auto* projected =
+                face_session.document().findSketch(
+                    *target_sketch.sketch_id);
+            CHECK(projected);
+            CHECK(projected->projection_bindings.size() == 4U);
+            CHECK(face_session.undo().changed);
+            CHECK(face_session.document()
+                      .findSketch(*target_sketch.sketch_id)
+                      ->projection_bindings.empty());
+            CHECK(face_session.redo().changed);
+            CHECK(face_session.document()
+                      .findSketch(*target_sketch.sketch_id)
+                      ->projection_bindings.size() == 4U);
+
+            std::cout << "PG01D_D2_NATIVE_FACE_FINISH_PASS"
+                      << " outer_lines=4"
+                      << " linked_entities=4"
+                      << " one_undo=1"
+                      << " undo_redo=1\n";
+
+            // D3 fail-closed: a real previously acquired Face cannot be
+            // finished after its source Feature is suppressed. Undo/Redo
+            // above advanced document revision through the headless
+            // session; rebind the live Workbench scene to that revision
+            // *before* acquiring a genuine native Face anew.
+            CHECK(workbench.activateDocument(&face_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* fresh_sketch_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
+                    fresh_sketch_item = *it;
+                    break;
+                }
+            }
+            CHECK(fresh_sketch_item);
+            tree->clearSelection();
+            tree->setCurrentItem(fresh_sketch_item);
+            fresh_sketch_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 4U);
+            const auto prior_link_count =
+                face_session.document().findSketch(
+                    *target_sketch.sketch_id)
+                    ->projection_bindings.size();
+            const auto base_id =
+                face_session.document().body().features.front().id;
+            CHECK(face_session.execute(
+                application::SetFeatureSuppressedCommand{
+                    base_id, face_session.document().revision(),
+                    true}).ok());
+            const auto suppressed_revision =
+                face_session.document().revision();
+            const auto suppressed_undo =
+                face_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(!reply.accepted);
+            CHECK(face_session.document().revision() ==
+                  suppressed_revision);
+            CHECK(face_session.undoDepth() == suppressed_undo);
+            CHECK(face_session.document().findSketch(
+                *target_sketch.sketch_id)
+                ->projection_bindings.size() == prior_link_count);
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            const auto suppressed_body = part::evaluatePart(
+                face_session.document(), kernel);
+            const auto unresolved_link =
+                part::evaluateEffectiveSketchProjection(
+                    face_session.document(),
+                    *target_sketch.sketch_id,
+                    suppressed_body, kernel);
+            CHECK(!unresolved_link ||
+                  !unresolved_link->allResolved());
+            CHECK(face_session.execute(
+                application::SetFeatureSuppressedCommand{
+                    base_id, face_session.document().revision(),
+                    false}).ok());
+            const auto restored_body = part::evaluatePart(
+                face_session.document(), kernel);
+            const auto restored_links =
+                part::evaluateEffectiveSketchProjection(
+                    face_session.document(),
+                    *target_sketch.sketch_id,
+                    restored_body, kernel);
+            CHECK(restored_links);
+            CHECK(restored_links->allResolved());
+            CHECK(restored_links->outcomes.size() == 4U);
+            std::cout << "PG01D_D3_STALE_SUPPRESSED_FACE_PASS"
+                      << " stale_finish_rejected=1"
+                      << " linked_state_preserved=1"
+                      << " overlay_cleared=1"
+                      << " suppression_recovery=1\n";
+
+            // D3 native Face-with-two-holes: two *real* SS2 Cut features,
+            // not a fabricated wire or a painted/tessellated perimeter.
+            // The top cap has four material outer Lines and two distinct
+            // one-Circle hole wires, all scoped to one legal prior stage.
+            auto holed_session = makeBaseSession(kernel);
+            const auto make_hole = [&](double x, const char* label) {
+                const auto hole_sketch = holed_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+                CHECK(hole_sketch.ok() && hole_sketch.sketch_id);
+                CHECK(holed_session.execute(
+                    application::AddSketchCircleCommand{
+                        *hole_sketch.sketch_id,
+                        {x, 15.0}, 4.0,
+                        sketch::EntityRole::regular}).ok());
+                const auto* authored = holed_session.document()
+                    .findSketch(*hole_sketch.sketch_id);
+                CHECK(authored);
+                const auto regions =
+                    sketch::analyzeRegions(authored->model);
+                CHECK(regions.complete() &&
+                      regions.regions.size() == 1U);
+                const auto intent =
+                    part::makeProfileRegionIntent(
+                        regions.regions.front());
+                CHECK(intent);
+                const auto profile = holed_session.execute(
+                    application::CreateProfileCommand{
+                        *hole_sketch.sketch_id,
+                        holed_session.document().revision(),
+                        *intent});
+                CHECK(profile.ok() && profile.profile_id);
+                const auto cut = holed_session.execute(
+                    application::CreateExtrudeFeatureCommand{
+                        *profile.profile_id,
+                        holed_session.document().revision(),
+                        part::ExtrudeOperation::cut,
+                        part::OneSidedExtrudeExtent{
+                            core::LengthValue{25.0}, false},
+                        label},
+                    kernel);
+                CHECK(cut.ok() && cut.feature_id);
+            };
+            make_hole(12.0, "PG01D D3 native hole 1");
+            make_hole(28.0, "PG01D D3 native hole 2");
+            const auto holed_target = holed_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+            CHECK(holed_target.ok() && holed_target.sketch_id);
+            CHECK(workbench.activateDocument(&holed_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* holed_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 4")) {
+                    holed_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(holed_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(holed_tree_item);
+            holed_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            const auto holed_state = holed_session.document().state();
+            const auto holed_revision =
+                holed_session.document().revision();
+            const auto holed_undo = holed_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+
+            // Mixed acquisition must deduplicate an independently picked
+            // native material cap Edge against that same Edge expanded by
+            // the later Face gesture. The first pick is an actual Viewer
+            // Edge click, not an injected material reference.
+            bool mixed_manual_picked = false;
+            const std::array<viewer::Point3, 4> cap_midpoints{{
+                {20.0, 0.0, 20.0},
+                {20.0, 30.0, 20.0},
+                {0.0, 15.0, 20.0},
+                {40.0, 15.0, 20.0}
+            }};
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::top}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                for (const auto& midpoint : cap_midpoints) {
+                    if (!nativeClick(*viewport, midpoint)) {
+                        continue;
+                    }
+                    if (pg_count->text().contains(
+                            QStringLiteral("selected: 1"))) {
+                        mixed_manual_picked = true;
+                        break;
+                    }
+                    reply = workbench.submitCadInput(
+                        "CLEAR", workbench.cadInputContextGeneration());
+                    CHECK(reply.accepted);
+                }
+                if (mixed_manual_picked) break;
+            }
+            CHECK(mixed_manual_picked);
+            const auto manual_source =
+                controller->selectedMaterialEdgeReferences();
+            CHECK(manual_source && manual_source->size() == 1U);
+            CHECK(holed_session.document().state() == holed_state);
+            CHECK(holed_session.undoDepth() == holed_undo);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            const auto two_hole_admitted =
+                controller->selectedMaterialFaceBoundaryAdmission();
+            CHECK(two_hole_admitted.ok());
+            CHECK(two_hole_admitted.wires.size() == 3U);
+            std::size_t outer_count = 0U;
+            std::size_t inner_count = 0U;
+            std::size_t material_members = 0U;
+            std::vector<part::MaterialEdgeReference>
+                exact_sources;
+            for (const auto& wire : two_hole_admitted.wires) {
+                if (wire.outer) {
+                    ++outer_count;
+                    CHECK(wire.edges.size() == 4U);
+                } else {
+                    ++inner_count;
+                    CHECK(wire.edges.size() == 1U);
+                }
+                for (const auto& member : wire.edges) {
+                    CHECK(member.valid());
+                    exact_sources.push_back(member.reference);
+                    ++material_members;
+                }
+            }
+            std::sort(exact_sources.begin(), exact_sources.end());
+            CHECK(std::adjacent_find(
+                exact_sources.begin(), exact_sources.end()) ==
+                exact_sources.end());
+            CHECK(outer_count == 1U);
+            CHECK(inner_count == 2U);
+            CHECK(material_members == 6U);
+            CHECK(std::binary_search(
+                exact_sources.begin(), exact_sources.end(),
+                manual_source->front()));
+            // A duplicate Edge picked manually and through Face is still
+            // one linked source and will produce only one target EntityId.
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 6")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("holes 2")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Outer Edge 1: supported")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Hole 1 Edge 1: supported")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Hole 2 Edge 1: supported")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 6U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            CHECK(pg_finish->isEnabled());
+            CHECK(holed_session.document().state() == holed_state);
+            CHECK(holed_session.document().revision() == holed_revision);
+            CHECK(holed_session.undoDepth() == holed_undo);
+
+            // Face REMOVE must discard just the transient Face gesture
+            // while retaining the independently acquired manual Edge.
+            CHECK(pg_remove->isEnabled());
+            reply = workbench.submitCadInput(
+                "REMOVE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 1")));
+            CHECK(!pg_face_detail->text().contains(
+                QStringLiteral("Hole 1 Edge 1")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            CHECK(holed_session.document().state() == holed_state);
+            CHECK(holed_session.undoDepth() == holed_undo);
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 6")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Hole 2 Edge 1: supported")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 6U);
+            CHECK(pg_finish->isEnabled());
+
+            // Return to manual Edge selection before Finish. The existing
+            // Face gesture must stay authoritative, and the Viewer must
+            // restore all six generation-bound Edge picks from semantic
+            // references, not leak the old Face presentation token.
+            reply = workbench.submitCadInput(
+                "EDGES", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(edge_mode->isChecked());
+            CHECK(!face_mode->isChecked());
+            const auto restored_sources =
+                controller->selectedMaterialEdgeReferences();
+            CHECK(restored_sources);
+            CHECK(*restored_sources == exact_sources);
+            CHECK(pg_finish->isEnabled());
+
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(holed_session.undoDepth() == holed_undo + 1U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            const auto* holed_linked = holed_session.document()
+                .findSketch(*holed_target.sketch_id);
+            CHECK(holed_linked);
+            CHECK(holed_linked->projection_bindings.size() == 6U);
+            std::vector<part::MaterialEdgeReference> saved_sources;
+            for (const auto& linked :
+                 holed_linked->projection_bindings) {
+                saved_sources.push_back(linked.source);
+            }
+            std::sort(
+                saved_sources.begin(), saved_sources.end());
+            CHECK(saved_sources == exact_sources);
+            CHECK(holed_session.undo().changed);
+            CHECK(holed_session.document()
+                .findSketch(*holed_target.sketch_id)
+                ->projection_bindings.empty());
+            CHECK(holed_session.redo().changed);
+            CHECK(holed_session.document()
+                .findSketch(*holed_target.sketch_id)
+                ->projection_bindings.size() == 6U);
+
+            // Cold OCCT recovery must not depend on the selected Face token,
+            // its wire count, or its original provider generation.
+            QTemporaryDir holed_store_dir;
+            CHECK(holed_store_dir.isValid());
+            const std::filesystem::path holed_path =
+                std::filesystem::path{
+                    holed_store_dir.path().toStdWString()} /
+                "PG01DTwoHoleFace.ss2part";
+            const part::PartDocumentStore store;
+            CHECK(store.createNew(
+                holed_path, holed_session.document()).ok());
+            const auto loaded = store.load(holed_path);
+            CHECK(loaded.ok());
+            CHECK(loaded.document->state() ==
+                  holed_session.document().state());
+            kernel_occt::OcctSolidModelingKernel cold_kernel;
+            const auto cold_body = part::evaluatePart(
+                *loaded.document, cold_kernel);
+            CHECK(cold_body.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto cold_projection =
+                part::evaluateEffectiveSketchProjection(
+                    *loaded.document, *holed_target.sketch_id,
+                    cold_body, cold_kernel);
+            CHECK(cold_projection);
+            CHECK(cold_projection->allResolved());
+            CHECK(cold_projection->outcomes.size() == 6U);
+            CHECK(cold_projection->model.entityCount() == 6U);
+            CHECK(cold_projection->model.state().lines.size() == 4U);
+            CHECK(cold_projection->model.state().circles.size() == 2U);
+            const auto cold_regions =
+                sketch::analyzeRegions(cold_projection->model);
+            CHECK(cold_regions.complete());
+            bool full_face_region = false;
+            for (const auto& region : cold_regions.regions) {
+                if (region.holes.size() == 2U) {
+                    full_face_region = true;
+                }
+            }
+            CHECK(full_face_region);
+            std::cout << "PG01D_D3_NATIVE_TWO_HOLE_COLD_PASS"
+                      << " outer=4"
+                      << " inner=2"
+                      << " linked=6"
+                      << " distinct_semantic_sources=6"
+                      << " mixed_manual_face_dedup=1"
+                      << " restored_edge_picks=6"
+                      << " one_undo=1"
+                      << " cold_v15=1"
+                      << " region_holes=2\n";
+
+
+            // PG-01D D3 positive Partial: exact native Circle cannot be
+            // projected as a Circle/Arc onto a perpendicular YZ Sketch,
+            // but the four *skewed* planar perimeter Lines project
+            // without degeneracy. This is genuine OCCT geometry and a
+            // genuine strict material Face, not a mocked projection.
+            auto partial_session = makeBaseSession(kernel);
+            const auto partial_base_state =
+                partial_session.document().state();
+            const auto& partial_base =
+                partial_base_state.sketches.front();
+            const double skew_cos = std::cos(0.31);
+            const double skew_sin = std::sin(0.31);
+            const auto skew = [skew_cos, skew_sin](
+                                  sketch::Point2 p) {
+                return sketch::Point2{
+                    p.u * skew_cos - p.v * skew_sin,
+                    p.u * skew_sin + p.v * skew_cos};
+            };
+            std::vector<application::SketchLineGeometryUpdate>
+                partial_updates;
+            for (const auto& source :
+                 partial_base.model.state().lines) {
+                partial_updates.push_back({
+                    source.id, skew(source.start),
+                    skew(source.end)});
+            }
+            CHECK(partial_updates.size() == 4U);
+            CHECK(partial_session.execute(
+                application::UpdateSketchLinesCommand{
+                    partial_base.id,
+                    partial_session.document().revision(),
+                    std::move(partial_updates)}).ok());
+            const auto partial_hole = partial_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+            CHECK(partial_hole.ok() && partial_hole.sketch_id);
+            CHECK(partial_session.execute(
+                application::AddSketchCircleCommand{
+                    *partial_hole.sketch_id,
+                    {20.0, 15.0}, 3.0,
+                    sketch::EntityRole::regular}).ok());
+            const auto* partial_hole_model =
+                partial_session.document().findSketch(
+                    *partial_hole.sketch_id);
+            CHECK(partial_hole_model);
+            const auto partial_hole_regions =
+                sketch::analyzeRegions(
+                    partial_hole_model->model);
+            CHECK(partial_hole_regions.complete());
+            CHECK(partial_hole_regions.regions.size() == 1U);
+            const auto partial_hole_intent =
+                part::makeProfileRegionIntent(
+                    partial_hole_regions.regions.front());
+            CHECK(partial_hole_intent);
+            const auto partial_profile =
+                partial_session.execute(
+                    application::CreateProfileCommand{
+                        *partial_hole.sketch_id,
+                        partial_session.document().revision(),
+                        *partial_hole_intent});
+            CHECK(partial_profile.ok() &&
+                  partial_profile.profile_id);
+            const auto partial_cut = partial_session.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *partial_profile.profile_id,
+                    partial_session.document().revision(),
+                    part::ExtrudeOperation::cut,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{25.0}, false},
+                    "PG01D Partial native circular cut"},
+                kernel);
+            CHECK(partial_cut.ok() && partial_cut.feature_id);
+            const auto partial_target = partial_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::yz_plane});
+            CHECK(partial_target.ok() && partial_target.sketch_id);
+            const auto partial_eval = part::evaluatePart(
+                partial_session.document(), kernel);
+            CHECK(partial_eval.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(partial_eval.current_topology);
+            const auto partial_frame =
+                part::resolveCurrentProjectionSketchFrame(
+                    partial_session.document(),
+                    *partial_target.sketch_id, partial_eval);
+            CHECK(partial_frame);
+            std::size_t partial_native_faces = 0U;
+            for (const auto& face :
+                 partial_eval.current_topology->faces) {
+                const auto admitted =
+                    part::inspectMaterialFaceBoundary(
+                        partial_eval.features.back(),
+                        face.runtime_token, kernel);
+                if (!admitted.ok() ||
+                    admitted.wires.size() != 2U) {
+                    continue;
+                }
+                std::size_t supported = 0U;
+                std::size_t unsupported = 0U;
+                for (const auto& wire : admitted.wires) {
+                    for (const auto& member : wire.edges) {
+                        const auto projected =
+                            part::projectStrictMaterialEdge(
+                                partial_session.document(),
+                                member.reference, partial_eval,
+                                kernel, *partial_frame);
+                        if (projected.status ==
+                                part::ProjectedSketchSourceStatus::
+                                    resolved) {
+                            ++supported;
+                        } else if (projected.status ==
+                                   part::ProjectedSketchSourceStatus::
+                                       unsupported_projection) {
+                            ++unsupported;
+                        } else {
+                            CHECK(false);
+                        }
+                    }
+                }
+                if (supported == 4U && unsupported == 1U) {
+                    ++partial_native_faces;
+                }
+            }
+            CHECK(partial_native_faces > 0U);
+            std::cout << "PG01D_D3_NATIVE_GEOMETRIC_PARTIAL_PROOF"
+                      << " strict_face=1"
+                      << " supported_lines=4"
+                      << " unsupported_circle=1\\n";
+
+            CHECK(workbench.activateDocument(
+                &partial_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* partial_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 3")) {
+                    partial_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(partial_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(partial_tree_item);
+            partial_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            const auto partial_original =
+                partial_session.document().state();
+            const auto partial_rev =
+                partial_session.document().revision();
+            const auto partial_undo =
+                partial_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            // Same real unsupported oblique Circle projection, but
+            // through the new manual bounded-Face acquisition. One
+            // unsupported curve does NOT discard four strict Lines.
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto manual_hole_click = skew({20.0, 15.0});
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{
+                    manual_hole_click.u,
+                    manual_hole_click.v, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Face 1 Hole 1 Edge 1: SKIPPED — geometric Unsupported")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face Boundary")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(partial_session.document().state() ==
+                  partial_original);
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(partial_session.document().revision() ==
+                  partial_rev);
+            CHECK(partial_session.undoDepth() == partial_undo);
+            std::cout
+                << "PG01D_MANUAL_FACE_UNSUPPORTED_CIRCLE_PREVIEW_PASS"
+                << " supported_lines=4"
+                << " exact_geometric_circle_skipped=1"
+                << " prior_state_unchanged=1"
+                << '\n';
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto click_point = skew({20.0, 15.0});
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{
+                    click_point.u, click_point.v, 20.0}));
+            const auto partial_admission =
+                controller->selectedMaterialFaceBoundaryAdmission();
+            CHECK(partial_admission.ok());
+            CHECK(partial_admission.wires.size() == 2U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("holes 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("SKIPPED")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 4U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 1U);
+            CHECK(pg_finish->isEnabled());
+            CHECK(partial_session.document().state() ==
+                  partial_original);
+            CHECK(partial_session.document().revision() ==
+                  partial_rev);
+            CHECK(partial_session.undoDepth() == partial_undo);
+
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(partial_session.undoDepth() == partial_undo + 1U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            const auto* partial_linked =
+                partial_session.document().findSketch(
+                    *partial_target.sketch_id);
+            CHECK(partial_linked);
+            CHECK(partial_linked->projection_bindings.size() == 4U);
+            const auto partial_after = part::evaluatePart(
+                partial_session.document(), kernel);
+            const auto partial_projection =
+                part::evaluateEffectiveSketchProjection(
+                    partial_session.document(),
+                    *partial_target.sketch_id,
+                    partial_after, kernel);
+            CHECK(partial_projection);
+            CHECK(partial_projection->allResolved());
+            CHECK(partial_projection->outcomes.size() == 4U);
+            CHECK(partial_projection->model.state().lines.size() == 4U);
+            CHECK(partial_projection->model.state().circles.empty());
+            CHECK(sketch::analyzeRegions(
+                partial_projection->model).regions.empty());
+            CHECK(partial_session.undo().changed);
+            CHECK(partial_session.document().findSketch(
+                *partial_target.sketch_id)
+                ->projection_bindings.empty());
+            CHECK(partial_session.redo().changed);
+            CHECK(partial_session.document().findSketch(
+                *partial_target.sketch_id)
+                ->projection_bindings.size() == 4U);
+            std::cout << "PG01D_D3_NATIVE_PARTIAL_FINISH_PASS"
+                      << " cyan_ais=4 red_ais=1"
+                      << " geometric_skipped=1"
+                      << " linked=4"
+                      << " open_no_profile=1"
+                      << " one_undo=1\\n";
+
+            // D3 all-Unsupported gate: one native circle-only planar cap
+            // projects obliquely to YZ. Strict Face admission succeeds,
+            // but no representable Edge remains: Finish must stay disabled
+            // and even a typed FINISH must not author a partial empty batch.
+            auto disk_document = part::PartDocument::create(
+                core::DocumentId::generate());
+            application::DocumentSession disk_session{
+                {}, std::move(disk_document)};
+            const auto disk_source = disk_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+            CHECK(disk_source.ok() && disk_source.sketch_id);
+            CHECK(disk_session.execute(
+                application::AddSketchCircleCommand{
+                    *disk_source.sketch_id,
+                    {20.0, 15.0}, 9.0,
+                    sketch::EntityRole::regular}).ok());
+            const auto* disk_source_sketch =
+                disk_session.document().findSketch(
+                    *disk_source.sketch_id);
+            CHECK(disk_source_sketch);
+            const auto disk_regions =
+                sketch::analyzeRegions(disk_source_sketch->model);
+            CHECK(disk_regions.complete() &&
+                  disk_regions.regions.size() == 1U);
+            const auto disk_intent =
+                part::makeProfileRegionIntent(
+                    disk_regions.regions.front());
+            CHECK(disk_intent);
+            const auto disk_profile = disk_session.execute(
+                application::CreateProfileCommand{
+                    *disk_source.sketch_id,
+                    disk_session.document().revision(),
+                    *disk_intent});
+            CHECK(disk_profile.ok() && disk_profile.profile_id);
+            const auto disk_extrude = disk_session.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *disk_profile.profile_id,
+                    disk_session.document().revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{20.0}, false},
+                    "PG01D circular cap source"},
+                kernel);
+            CHECK(disk_extrude.ok() && disk_extrude.feature_id);
+            const auto disk_target = disk_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::yz_plane});
+            CHECK(disk_target.ok() && disk_target.sketch_id);
+            CHECK(workbench.activateDocument(&disk_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* disk_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    disk_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(disk_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(disk_tree_item);
+            disk_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            const auto disk_original = disk_session.document().state();
+            const auto disk_revision =
+                disk_session.document().revision();
+            const auto disk_undo = disk_session.undoDepth();
+            // Manual Face Boundary: all members are semantic material
+            // sources but the oblique Circle image is Unsupported.
+            // A zero-supported Face may remain staged and highlighted;
+            // it must NOT generate a zero-member authored transaction.
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 0")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Face 1 Outer Edge 1: SKIPPED — geometric Unsupported")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face Boundary")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 1U);
+            CHECK(!pg_finish->isEnabled());
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(!reply.accepted);
+            CHECK(disk_session.document().state() == disk_original);
+            CHECK(disk_session.document().revision() ==
+                  disk_revision);
+            CHECK(disk_session.undoDepth() == disk_undo);
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            std::cout
+                << "PG01D_MANUAL_ALL_UNSUPPORTED_NOOP_PASS"
+                << " selected_faces=1"
+                << " unsupported_circle=1"
+                << " zero_command=1"
+                << '\n';
+
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            const auto disk_admitted =
+                controller->selectedMaterialFaceBoundaryAdmission();
+            CHECK(disk_admitted.ok());
+            CHECK(disk_admitted.wires.size() == 1U);
+            CHECK(disk_admitted.wires.front().outer);
+            CHECK(disk_admitted.wires.front().edges.size() == 1U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 0")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face: 1")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 1U);
+            CHECK(!pg_finish->isEnabled());
+            CHECK(pg_clear->isEnabled());
+            CHECK(pg_remove->isEnabled());
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(!reply.accepted);
+            CHECK(disk_session.document().state() == disk_original);
+            CHECK(disk_session.document().revision() == disk_revision);
+            CHECK(disk_session.undoDepth() == disk_undo);
+            CHECK(disk_session.document().findSketch(
+                *disk_target.sketch_id)
+                ->projection_bindings.empty());
+            reply = workbench.submitCadInput(
+                "CLEAR", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_supported_overlays_current == 0U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_skipped_overlays_current == 0U);
+            CHECK(disk_session.document().state() == disk_original);
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(disk_session.document().revision() == disk_revision);
+            CHECK(disk_session.undoDepth() == disk_undo);
+            std::cout << "PG01D_D3_NATIVE_ALL_UNSUPPORTED_NOOP_PASS"
+                      << " red_ais=1"
+                      << " finish_blocked=1"
+                      << " clear_cancel_noop=1\\n";
+
+            // Owner D2 E2: manual Face Boundary is NOT a carrier
+            // traversal. Click two distinct bounded native Faces,
+            // preserve their one actual shared material Edge, and
+            // skip vertical edges whose exact XY image degenerates.
+            // One Finish should author only the unique supported
+            // source references; open/overlapping Sketch geometry
+            // is never silently healed into a Profile.
+            auto manual_session = makeBaseSession(kernel);
+            const auto manual_target =
+                manual_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(manual_target.ok() && manual_target.sketch_id);
+            CHECK(workbench.activateDocument(
+                &manual_session, {}));
+            QApplication::processEvents();
+            auto* boundary_mode =
+                workbench.findChild<QPushButton*>(
+                    QStringLiteral(
+                        "projectEdgeSourceBoundaryButton"));
+            CHECK(boundary_mode);
+            QTreeWidgetItem* manual_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                        QStringLiteral("Sketch 2")) {
+                    manual_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(manual_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(manual_tree_item);
+            manual_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            const auto manual_before =
+                manual_session.document().state();
+            const auto manual_revision =
+                manual_session.document().revision();
+            const auto manual_undo =
+                manual_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(boundary_mode->isChecked());
+            CHECK(!face_mode->isChecked());
+            CHECK(!edge_mode->isChecked());
+            CHECK(!pg_finish->isEnabled());
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 15.0, 20.0}));
+            const auto top_picked =
+                controller->primaryBodyTopologySelection();
+            CHECK(top_picked && top_picked->valid());
+            const auto top_native =
+                controller->inspectCurrentSelectedFaceBoundary(
+                    *top_picked);
+            CHECK(top_native.ok());
+            CHECK(top_native.wires.size() == 1U);
+            // A second picked Face token which does not belong to
+            // this exact live Body generation is an identity fault,
+            // never a skippable unsupported curve. The prior valid
+            // Face/UI draft is still present after the refused query.
+            auto forged_new_face = *top_picked;
+            forged_new_face.runtime_token_value =
+                std::numeric_limits<std::uint64_t>::max();
+            const auto refused_new_face =
+                controller->inspectCurrentSelectedFaceBoundary(
+                    forged_new_face);
+            CHECK(!refused_new_face.ok());
+            CHECK(refused_new_face.status ==
+                  part::MaterialFaceBoundaryStatus::
+                      face_unavailable);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(manual_session.document().state() == manual_before);
+            CHECK(manual_session.undoDepth() == manual_undo);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 1U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_finish->isEnabled());
+
+            bool second_staged = false;
+            for (const auto& [camera, point] :
+                 std::array<std::pair<
+                     viewer::StandardView, viewer::Point3>, 2>{{
+                     {viewer::StandardView::front,
+                      viewer::Point3{20.0, 0.0, 10.0}},
+                     {viewer::StandardView::back,
+                      viewer::Point3{20.0, 30.0, 10.0}},
+                 }}) {
+                CHECK(viewport->setStandardView(camera));
+                viewport->fitAll();
+                QApplication::processEvents();
+                if (!nativePlanarFaceClick(*viewport, point)) {
+                    continue;
+                }
+                const auto side_picked =
+                    controller->primaryBodyTopologySelection();
+                if (!side_picked || *side_picked == *top_picked) {
+                    continue;
+                }
+                const auto side_native =
+                    controller->inspectCurrentSelectedFaceBoundary(
+                        *side_picked);
+                CHECK(side_native.ok());
+                if (pg_count->text().contains(
+                        QStringLiteral("Faces staged: 2"))) {
+                    second_staged = true;
+                    break;
+                }
+            }
+            CHECK(second_staged);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 2U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 2")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Face 2 Outer Edge")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("SKIPPED — geometric Degenerate")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face Boundary")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(manual_session.document().state() == manual_before);
+            CHECK(manual_session.document().revision() ==
+                  manual_revision);
+            CHECK(manual_session.undoDepth() == manual_undo);
+
+            // Selective removal must preserve the first clicked Face.
+            reply = workbench.submitCadInput(
+                "REMOVE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 1U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::front));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{20.0, 0.0, 10.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 2")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_finish->isEnabled());
+
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 2U);
+            // Exercise all THREE acquisition modes without applying
+            // a Face union or throwing away previously staged Edges.
+            // The second mode switch is not a second document command.
+            reply = workbench.submitCadInput(
+                "EDGES", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(edge_mode->isChecked());
+            CHECK(!boundary_mode->isChecked());
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 2")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            const auto preserved_edge_picks =
+                controller->selectedMaterialEdgeReferences();
+            CHECK(preserved_edge_picks &&
+                  preserved_edge_picks->size() == 5U);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 2U);
+            CHECK(pg_finish->isEnabled());
+            reply = workbench.submitCadInput(
+                "FACE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(face_mode->isChecked());
+            CHECK(!edge_mode->isChecked());
+            CHECK(!boundary_mode->isChecked());
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 2")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_finish->isEnabled());
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(boundary_mode->isChecked());
+            CHECK(!face_mode->isChecked());
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 2")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(manual_session.document().state() == manual_before);
+            CHECK(manual_session.undoDepth() == manual_undo);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 2U);
+
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 0U);
+            CHECK(manual_session.undoDepth() == manual_undo + 1U);
+            const auto* saved =
+                manual_session.document().findSketch(
+                    *manual_target.sketch_id);
+            CHECK(saved && saved->projection_bindings.size() == 5U);
+            CHECK(manual_session.undo().changed);
+            CHECK(manual_session.document().findSketch(
+                *manual_target.sketch_id)
+                ->projection_bindings.empty());
+            CHECK(manual_session.redo().changed);
+            CHECK(manual_session.document().findSketch(
+                *manual_target.sketch_id)
+                ->projection_bindings.size() == 5U);
+            // The Face selection, Face-wire start, native provider
+            // generation and Face token are NOT authored dependencies.
+            // Cold native reopen must reevaluate five independent
+            // strict material Edge references without these picks.
+            QTemporaryDir manual_store_dir;
+            CHECK(manual_store_dir.isValid());
+            const std::filesystem::path manual_path =
+                std::filesystem::path{
+                    manual_store_dir.path().toStdWString()} /
+                "PG01DManualTwoFacePartial.ss2part";
+            const part::PartDocumentStore manual_store;
+            CHECK(manual_store.createNew(
+                manual_path, manual_session.document()).ok());
+            const auto manual_loaded =
+                manual_store.load(manual_path);
+            CHECK(manual_loaded.ok());
+            CHECK(manual_loaded.document->state() ==
+                  manual_session.document().state());
+            const auto* cold_saved =
+                manual_loaded.document->findSketch(
+                    *manual_target.sketch_id);
+            CHECK(cold_saved &&
+                  cold_saved->projection_bindings.size() == 5U);
+            kernel_occt::OcctSolidModelingKernel manual_cold_kernel;
+            const auto cold_manual_part =
+                part::evaluatePart(
+                    *manual_loaded.document, manual_cold_kernel);
+            CHECK(cold_manual_part.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto cold_manual_projection =
+                part::evaluateEffectiveSketchProjection(
+                    *manual_loaded.document,
+                    *manual_target.sketch_id,
+                    cold_manual_part, manual_cold_kernel);
+            CHECK(cold_manual_projection);
+            CHECK(cold_manual_projection->allResolved());
+            CHECK(cold_manual_projection->outcomes.size() == 5U);
+            CHECK(cold_manual_projection->model.entityCount() == 5U);
+            CHECK(cold_manual_projection->model.state().lines.size() ==
+                  5U);
+            CHECK(cold_manual_projection->model.state().circles.empty());
+            std::cout
+                << "PG01D_MANUAL_MULTI_FACE_NATIVE_COLD_V15_PASS"
+                << " unique_links=5"
+                << " skipped_degenerate=2"
+                << " fresh_provider_generation=1"
+                << " recovered_links=5"
+                << '\n';
+            std::cout
+                << "PG01D_MANUAL_MULTI_FACE_NATIVE_UI_PARTIAL_PASS"
+                << " clicked_faces=2"
+                << " exact_shared_material_dedup=1"
+                << " supported_unique=5"
+                << " geometric_degenerate_skipped=2"
+                << " remove_readd=1"
+                << " one_undo_redo=1"
+                << '\n';
+
+            // E2 D2 fail-closed negative: a transient Face gesture is
+            // revision-bound, even if an external command only changes
+            // an otherwise unrelated Sketch. It must never Finish
+            // against a previously cached provider generation.
+            auto stale_session = makeBaseSession(kernel);
+            const auto stale_target =
+                stale_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(stale_target.ok() && stale_target.sketch_id);
+            CHECK(workbench.activateDocument(
+                &stale_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* stale_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    stale_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(stale_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(stale_tree_item);
+            stale_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{
+                    20.0, 15.0, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_finish->isEnabled());
+            const auto stale_pre_revision =
+                stale_session.document().revision();
+            const auto stale_pre_undo =
+                stale_session.undoDepth();
+            const auto unrelated_edit = stale_session.execute(
+                application::AddSketchLineCommand{
+                    *stale_target.sketch_id,
+                    {2.0, 2.0}, {7.0, 7.0},
+                    sketch::EntityRole::construction});
+            CHECK(unrelated_edit.ok());
+            CHECK(stale_session.document().revision() !=
+                  stale_pre_revision);
+            CHECK(stale_session.undoDepth() ==
+                  stale_pre_undo + 1U);
+            const auto changed_state =
+                stale_session.document().state();
+            const auto changed_revision =
+                stale_session.document().revision();
+            const auto changed_undo = stale_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(!reply.accepted);
+            CHECK(stale_session.document().state() ==
+                  changed_state);
+            CHECK(stale_session.document().revision() ==
+                  changed_revision);
+            CHECK(stale_session.undoDepth() == changed_undo);
+            CHECK(stale_session.document().findSketch(
+                *stale_target.sketch_id)
+                ->projection_bindings.empty());
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            std::cout
+                << "PG01D_MANUAL_FACE_STALE_REVISION_FAIL_CLOSED_PASS"
+                << " drafted_faces=1"
+                << " external_sketch_edit=1"
+                << " invalidated_finish=1"
+                << " additional_undo=0"
+                << '\n';
+
+            // Owner D2 mixed-acquisition contract: one native bounded
+            // Face yields four top-cap edges; one genuinely separately
+            // clicked BOTTOM material Edge survives removing the Face
+            // gesture, regardless of coincident projected coordinates.
+            auto mixed_session = makeBaseSession(kernel);
+            const auto mixed_target =
+                mixed_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(mixed_target.ok() && mixed_target.sketch_id);
+            CHECK(workbench.activateDocument(
+                &mixed_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* mixed_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    mixed_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(mixed_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(mixed_tree_item);
+            mixed_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{
+                    20.0, 15.0, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 1U);
+            reply = workbench.submitCadInput(
+                "EDGES", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::bottom));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativeClick(
+                *viewport, viewer::Point3{20.0, 0.0, 0.0}));
+            const auto mixed_picks =
+                controller->selectedMaterialEdgeReferences();
+            CHECK(mixed_picks && mixed_picks->size() == 5U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 1U);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            reply = workbench.submitCadInput(
+                "REMOVE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 0")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 0U);
+            CHECK(pg_finish->isEnabled());
+            const auto mixed_previous_revision =
+                mixed_session.document().revision();
+            const auto mixed_previous_undo =
+                mixed_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(mixed_session.document().revision() !=
+                  mixed_previous_revision);
+            CHECK(mixed_session.undoDepth() ==
+                  mixed_previous_undo + 1U);
+            const auto* mixed_saved =
+                mixed_session.document().findSketch(
+                    *mixed_target.sketch_id);
+            CHECK(mixed_saved &&
+                  mixed_saved->projection_bindings.size() == 1U);
+            CHECK(mixed_session.undo().changed);
+            CHECK(mixed_session.document().findSketch(
+                *mixed_target.sketch_id)
+                ->projection_bindings.empty());
+            CHECK(mixed_session.redo().changed);
+            CHECK(mixed_session.document().findSketch(
+                *mixed_target.sketch_id)
+                ->projection_bindings.size() == 1U);
+            std::cout
+                << "PG01D_MANUAL_FACE_INDEPENDENT_EDGE_MIX_PASS"
+                << " staged_face=1"
+                << " staged_face_material=4"
+                << " separate_bottom_edge=1"
+                << " face_removed=1"
+                << " manual_edge_survived=1"
+                << " one_undo_redo=1"
+                << '\n';
+
+            result = EXIT_SUCCESS;
+            workbench.close();
+            app.quit();
+            return;
+        }
         if (pg01c_only) {
         // PG-01C C1: real OCCT native cursor -> Workbench Project Geometry,
         // not a fabricated presentation token. The separate later Sketch
@@ -452,6 +3151,11 @@ int main(int argc, char* argv[]) {
             QStringLiteral("projectEdgeFinishButton"));
         CHECK(pg_action && pg_button && pg_panel &&
               pg_count && pg_result && pg_finish);
+        auto* pg_source_edges = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeSourceEdgesButton"));
+        auto* pg_source_face = workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeSourceFaceButton"));
+        CHECK(pg_source_edges && pg_source_face);
         QTreeWidgetItem* pg_tree_item = nullptr;
         for (QTreeWidgetItemIterator it(tree); *it; ++it) {
             if ((*it)->text(0) == QStringLiteral("Sketch 2")) {
@@ -479,6 +3183,22 @@ int main(int argc, char* argv[]) {
         CHECK(!pg_panel->isHidden());
         CHECK(!pg_finish->isEnabled());
         CHECK(workbench.acceptsEmptyCadInput());
+        CHECK(pg_source_edges->isChecked());
+        CHECK(!pg_source_face->isChecked());
+        pg_reply = workbench.submitCadInput(
+            "FACE", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_source_face->isChecked());
+        CHECK(!pg_source_edges->isChecked());
+        CHECK(!pg_finish->isEnabled());
+        CHECK(pg_session.document().state() == pg_before_state);
+        CHECK(pg_session.document().revision() == pg_before_revision);
+        pg_reply = workbench.submitCadInput(
+            "EDGES", workbench.cadInputContextGeneration());
+        CHECK(pg_reply.accepted);
+        CHECK(pg_source_edges->isChecked());
+        CHECK(!pg_source_face->isChecked());
+        CHECK(pg_session.undoDepth() == pg_before_undo);
         pg_reply = workbench.submitCadInput(
             "CONSTRUCTION", workbench.cadInputContextGeneration());
         CHECK(pg_reply.accepted);

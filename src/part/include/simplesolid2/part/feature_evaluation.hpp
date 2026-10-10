@@ -2,6 +2,7 @@
 
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/kernel/reference_status.hpp>
+#include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/feature_id.hpp>
@@ -308,6 +309,14 @@ authorMaterialEdgeReference(
     const BodyStageTopologyCatalog& catalog,
     kernel::RuntimeEdgeToken edge);
 
+// PG-01D-only authoring fallback for a multi-realization Curve with exactly
+// one uniquely certified semantic endpoint; Fillet/Chamfer continue to use
+// authorMaterialEdgeReference without this extension.
+[[nodiscard]] MaterialEdgeAuthoringResult
+authorProjectedMaterialEdgeReference(
+    const BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeEdgeToken edge);
+
 struct FeatureContribution final {
     // Set-valued current contribution query. These runtime tokens identify
     // current Body realizations only; no member is persisted.
@@ -357,6 +366,167 @@ struct FeatureEvaluation final {
     std::optional<kernel::ReferenceStatus>
         edge_reference_status;
 };
+
+// PG-01D D1 read-only stage-bound Face boundary admission. The Face is
+// an ephemeral selection, never native Part intent. All durable members are
+// existing individually authored MaterialEdgeReferences; a single invalid
+// source Edge blocks the entire Face, never silently drops a loop member.
+enum class MaterialFaceBoundaryStatus {
+    resolved,
+    invalid_stage,
+    face_unavailable,
+    face_not_strict,
+    native_boundary_unavailable,
+    material_edge_unavailable,
+};
+
+struct MaterialFaceBoundaryMember final {
+    // Transient only; the material reference is the sole authored identity.
+    kernel::RuntimeEdgeToken current_edge;
+    MaterialEdgeReference reference;
+    bool reversed{false};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return current_edge.valid() && reference.valid();
+    }
+};
+
+struct MaterialFaceBoundaryWire final {
+    bool outer{false};
+    std::vector<MaterialFaceBoundaryMember> edges;
+};
+
+struct MaterialFaceBoundaryAdmission final {
+    MaterialFaceBoundaryStatus status{
+        MaterialFaceBoundaryStatus::invalid_stage};
+    std::optional<FeatureFaceAddress> bounded_face;
+    std::vector<MaterialFaceBoundaryWire> wires;
+
+    [[nodiscard]] bool ok() const noexcept {
+        if (status != MaterialFaceBoundaryStatus::resolved ||
+            !bounded_face || !bounded_face->valid() ||
+            wires.empty()) {
+            return false;
+        }
+        std::size_t outer = 0U;
+        for (const auto& wire : wires) {
+            if (wire.edges.empty()) return false;
+            if (wire.outer) ++outer;
+            for (const auto& edge : wire.edges) {
+                if (!edge.valid()) return false;
+            }
+        }
+        return outer == 1U;
+    }
+};
+
+// Runtime FeatureEvaluation contains a same-revision paired Body and
+// complete topology catalog for its exact stage. A Surface carrier alone
+// is NOT a unique bounded Face and cannot pass this admission.
+[[nodiscard]] MaterialFaceBoundaryAdmission
+inspectMaterialFaceBoundary(
+    const FeatureEvaluation& current_stage,
+    kernel::RuntimeFaceToken picked_bounded_face,
+    kernel::IFaceBoundaryQuery& provider);
+
+// PG-01D Owner manual multi-Face extension: a clicked native Face is
+// scoped only to the current Body generation. Unlike Planar Face above,
+// it does not require a singular authored Face address, and a known
+// representation seam/partition may occur inside its native wires.
+// Exact *material Edge* references remain the only authorable output.
+// Full native wire uses (including excluded artifacts) are retained for
+// lossless same-revision Finish revalidation, never persisted.
+struct SelectedFaceBoundaryMember final {
+    kernel::FaceBoundaryEdgeUse native_use;
+    std::optional<MaterialEdgeReference> material;
+    bool excluded_nonmaterial{false};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return native_use.valid() &&
+            (material.has_value() != excluded_nonmaterial) &&
+            (!material || material->valid());
+    }
+
+    friend bool operator==(
+        const SelectedFaceBoundaryMember&,
+        const SelectedFaceBoundaryMember&) = default;
+};
+
+struct SelectedFaceBoundaryWire final {
+    bool outer{false};
+    std::vector<SelectedFaceBoundaryMember> edges;
+
+    friend bool operator==(
+        const SelectedFaceBoundaryWire&,
+        const SelectedFaceBoundaryWire&) = default;
+};
+
+// Diagnostic evidence from one rejected native Face-wire occurrence.
+// Runtime-only, never stored as a stable material or Face identity.
+enum class SelectedFaceBoundaryRejectKind {
+    missing_catalog_edge,
+    uncertified_material_edge,
+    repeated_material_edge,
+    invalid_member,
+};
+
+struct SelectedFaceBoundaryRejectDetail final {
+    SelectedFaceBoundaryRejectKind kind{
+        SelectedFaceBoundaryRejectKind::uncertified_material_edge};
+    kernel::RuntimeEdgeToken edge;
+    std::size_t wire_index{};
+    std::size_t edge_index{};
+    std::optional<TopologyAccountingClass> accounting_class;
+    std::optional<kernel::ReferenceStatus> referenceability;
+    kernel::CurveKind curve_kind{kernel::CurveKind::other};
+    std::size_t curve_candidate_count{};
+    bool periodic_seam{false};
+    bool representation_partition{false};
+    // Diagnostic-only, current catalog; no native token or identifier is
+    // persisted. Multi-realization Curve families need two certified
+    // Semantic Points to author a specific bounded material Edge.
+    std::size_t curve_family_realizations{};
+    std::size_t incident_vertices{};
+    std::size_t certified_semantic_endpoints{};
+
+    friend bool operator==(
+        const SelectedFaceBoundaryRejectDetail&,
+        const SelectedFaceBoundaryRejectDetail&) = default;
+};
+
+struct SelectedFaceBoundaryAdmission final {
+    MaterialFaceBoundaryStatus status{
+        MaterialFaceBoundaryStatus::invalid_stage};
+    kernel::RuntimeFaceToken bounded_face;
+    std::vector<SelectedFaceBoundaryWire> wires;
+    std::optional<SelectedFaceBoundaryRejectDetail> rejected_edge;
+
+    [[nodiscard]] bool ok() const noexcept {
+        if (status != MaterialFaceBoundaryStatus::resolved ||
+            !bounded_face.valid() || wires.empty()) {
+            return false;
+        }
+        std::size_t outer_count = 0U;
+        for (const auto& wire : wires) {
+            if (wire.outer) ++outer_count;
+            if (wire.edges.empty()) return false;
+            for (const auto& item : wire.edges) {
+                if (!item.valid()) return false;
+            }
+        }
+        return outer_count == 1U;
+    }
+
+    friend bool operator==(
+        const SelectedFaceBoundaryAdmission&,
+        const SelectedFaceBoundaryAdmission&) = default;
+};
+
+[[nodiscard]] SelectedFaceBoundaryAdmission
+inspectSelectedFaceBoundary(
+    const FeatureEvaluation& current_stage,
+    kernel::RuntimeFaceToken picked_bounded_face,
+    kernel::IFaceBoundaryQuery& provider);
 
 struct PartEvaluation final {
     core::DocumentRevision source_revision;

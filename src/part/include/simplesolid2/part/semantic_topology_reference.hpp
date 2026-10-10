@@ -184,10 +184,28 @@ struct BetweenSemanticPoints final {
         const BetweenSemanticPoints&) = default;
 };
 
+// v16: strict single certified semantic endpoint of one Curve segment.
+// Never carries provider tokens, coordinates, or a segment ordinal.
+struct AtSingleSemanticPoint final {
+    FeaturePointAddress point;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return point.valid();
+    }
+
+    friend bool operator==(
+        const AtSingleSemanticPoint&,
+        const AtSingleSemanticPoint&) = default;
+    friend auto operator<=> (
+        const AtSingleSemanticPoint&,
+        const AtSingleSemanticPoint&) = default;
+};
+
 using EdgeBranchDiscriminator =
     std::variant<
         SingularAtAuthoredStage,
-        BetweenSemanticPoints>;
+        BetweenSemanticPoints,
+        AtSingleSemanticPoint>;
 
 struct MaterialEdgeReference final {
     BodyStageRef stage;
@@ -210,8 +228,13 @@ struct MaterialEdgeReference final {
             std::get_if<
                 BetweenSemanticPoints>(
                 &branch);
-        return endpoints != nullptr &&
-               endpoints->valid();
+        if (endpoints != nullptr) {
+            return endpoints->valid();
+        }
+        const auto* single =
+            std::get_if<AtSingleSemanticPoint>(
+                &branch);
+        return single != nullptr && single->valid();
     }
 
     friend bool operator==(

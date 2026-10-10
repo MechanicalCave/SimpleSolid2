@@ -17,6 +17,7 @@
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepTools.hxx>
+#include <BRepTools_WireExplorer.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <Poly_Triangle.hxx>
 #include <Poly_Triangulation.hxx>
@@ -5628,6 +5629,203 @@ OcctSolidModelingKernel::bodyPresentation(
     }
 }
 
+
+std::optional<kernel::ScopedBoundaryFace>
+OcctSolidModelingKernel::bindFaceToBody(
+    kernel::RuntimeSolidHandle source_body,
+    kernel::RuntimeFaceToken current_face) noexcept {
+    if (!source_body || !current_face.valid()) {
+        return std::nullopt;
+    }
+    const auto* runtime =
+        dynamic_cast<const OcctRuntimeSolid*>(
+            source_body.get());
+    if (runtime == nullptr ||
+        runtime->inventory_faces.find(current_face.value) ==
+            runtime->inventory_faces.end()) {
+        return std::nullopt;
+    }
+    return makeScopedFace(
+        std::move(source_body), current_face);
+}
+
+kernel::FaceBoundaryResult
+OcctSolidModelingKernel::queryFaceBoundary(
+    kernel::RuntimeSolidHandle current_body,
+    const kernel::ScopedBoundaryFace& bound_face) noexcept {
+    return queryFaceBoundaryImpl(
+        std::move(current_body), bound_face, true);
+}
+
+kernel::FaceBoundaryResult
+OcctSolidModelingKernel::queryFaceBoundaryAnySurface(
+    kernel::RuntimeSolidHandle current_body,
+    const kernel::ScopedBoundaryFace& bound_face) noexcept {
+    return queryFaceBoundaryImpl(
+        std::move(current_body), bound_face, false);
+}
+
+kernel::FaceBoundaryResult
+OcctSolidModelingKernel::queryFaceBoundaryImpl(
+    kernel::RuntimeSolidHandle current_body,
+    const kernel::ScopedBoundaryFace& bound_face,
+    bool require_planar) noexcept {
+    using Status = kernel::FaceBoundaryStatus;
+    const auto fail = [](Status status)
+        -> kernel::FaceBoundaryResult {
+        return {status, {}};
+    };
+    if (!current_body || !bound_face.valid()) {
+        return fail(Status::invalid_input);
+    }
+    if (current_body.get() !=
+            bound_face.sourceBody().get()) {
+        return fail(Status::provider_mismatch);
+    }
+    const auto* runtime =
+        dynamic_cast<const OcctRuntimeSolid*>(
+            current_body.get());
+    if (!runtime) {
+        return fail(Status::provider_mismatch);
+    }
+    const auto face_it =
+        runtime->inventory_faces.find(
+            bound_face.face().value);
+    if (face_it == runtime->inventory_faces.end() ||
+        face_it->second.IsNull()) {
+        return fail(Status::face_unavailable);
+    }
+
+    try {
+        const TopoDS_Face& face = face_it->second;
+        if (require_planar) {
+            const BRepAdaptor_Surface adaptor{face};
+            if (adaptor.GetType() != GeomAbs_Plane) {
+                return fail(Status::unsupported_surface);
+            }
+        }
+        // Same exact native oriented wire/member validation for either
+        // surface. This read is not a guarantee that every member can
+        // be strictly authored as a material Edge or a region boundary.
+        const TopoDS_Wire outer =
+            BRepTools::OuterWire(face);
+        if (outer.IsNull()) {
+            return fail(Status::malformed_boundary);
+        }
+
+        std::vector<kernel::FaceBoundaryWire> wires;
+        std::size_t outer_count = 0U;
+        for (TopExp_Explorer explorer{
+                 face, TopAbs_WIRE};
+             explorer.More();
+             explorer.Next()) {
+            const auto wire =
+                TopoDS::Wire(explorer.Current());
+            if (wire.IsNull()) {
+                return fail(Status::malformed_boundary);
+            }
+            kernel::FaceBoundaryWire observed;
+            observed.outer = wire.IsSame(outer);
+            if (observed.outer) ++outer_count;
+
+            for (BRepTools_WireExplorer use{
+                     wire, face};
+                 use.More();
+                 use.Next()) {
+                const TopoDS_Edge edge =
+                    TopoDS::Edge(use.Current());
+                if (edge.IsNull() ||
+                    (edge.Orientation() != TopAbs_FORWARD &&
+                     edge.Orientation() != TopAbs_REVERSED)) {
+                    return fail(Status::malformed_boundary);
+                }
+                std::optional<kernel::RuntimeEdgeToken>
+                    exact_token;
+                for (const auto& [value, source] :
+                     runtime->inventory_edges) {
+                    if (!source.IsSame(edge)) continue;
+                    if (exact_token) {
+                        return fail(Status::malformed_boundary);
+                    }
+                    exact_token =
+                        kernel::RuntimeEdgeToken{value};
+                }
+                if (!exact_token ||
+                    !exact_token->valid()) {
+                    return fail(Status::malformed_boundary);
+                }
+                // E0 native directed evidence: use the exact oriented
+                // OCCT Edge occurrence reported by WireExplorer, never
+                // geometry-coordinate matching or an unoriented catalog
+                // Edge's arbitrary default direction. Closed periodic
+                // Circles may have the same native start/end Vertex.
+                TopoDS_Vertex first_vertex;
+                TopoDS_Vertex last_vertex;
+                TopExp::Vertices(
+                    edge, first_vertex, last_vertex, true);
+                if (first_vertex.IsNull() ||
+                    last_vertex.IsNull()) {
+                    return fail(Status::malformed_boundary);
+                }
+                const auto native_vertex_token =
+                    [&](const TopoDS_Vertex& selected)
+                        -> std::optional<
+                            kernel::RuntimeVertexToken> {
+                        std::optional<
+                            kernel::RuntimeVertexToken> match;
+                        for (const auto& [value, owned] :
+                             runtime->inventory_vertices) {
+                            if (!owned.IsSame(selected)) continue;
+                            if (match) return std::nullopt;
+                            match = kernel::RuntimeVertexToken{value};
+                        }
+                        return match;
+                    };
+                const auto first_token =
+                    native_vertex_token(first_vertex);
+                const auto last_token =
+                    native_vertex_token(last_vertex);
+                if (!first_token || !last_token ||
+                    !first_token->valid() ||
+                    !last_token->valid()) {
+                    return fail(Status::malformed_boundary);
+                }
+                observed.edges.push_back(
+                    kernel::FaceBoundaryEdgeUse{
+                        *exact_token,
+                        edge.Orientation() == TopAbs_REVERSED,
+                        *first_token, *last_token});
+            }
+
+            // Native wire exploration may terminate early for a malformed
+            // or unconnected boundary. Never author a partial perimeter.
+            std::size_t native_edge_uses = 0U;
+            for (TopExp_Explorer member{
+                     wire, TopAbs_EDGE};
+                 member.More();
+                 member.Next()) {
+                ++native_edge_uses;
+            }
+            if (!observed.valid() ||
+                observed.edges.size() !=
+                    native_edge_uses) {
+                return fail(Status::malformed_boundary);
+            }
+            wires.push_back(std::move(observed));
+        }
+        kernel::FaceBoundaryResult result{
+            Status::ok, std::move(wires)};
+        if (outer_count != 1U ||
+            !result.ok()) {
+            return fail(Status::malformed_boundary);
+        }
+        return result;
+    } catch (const Standard_Failure&) {
+        return fail(Status::provider_failure);
+    } catch (...) {
+        return fail(Status::provider_failure);
+    }
+}
 
 std::optional<kernel::ScopedProjectionEdge>
 OcctSolidModelingKernel::bindEdgeToBody(

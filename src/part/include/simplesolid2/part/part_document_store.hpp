@@ -84,7 +84,7 @@ struct PartSaveResult final {
 
 class PartDocumentStore final {
 public:
-    static constexpr int current_schema_version = 15;
+    static constexpr int current_schema_version = 16;
 
     [[nodiscard]] static bool hasNativeExtension(
         const std::filesystem::path& path) noexcept;

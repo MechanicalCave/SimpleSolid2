@@ -312,6 +312,11 @@ struct BodyScene final {
 enum class BodyTopologyOverlayRole : std::uint8_t {
     feature_contribution_selected,
     feature_contribution_hover,
+    // PG-01D source feedback: runtime-only, stage-scoped material Edges.
+    project_geometry_supported,
+    project_geometry_unsupported,
+    // Native bounded Faces explicitly picked in manual Face Boundary.
+    project_geometry_face_selected,
 };
 
 struct BodyTopologyOverlayGroup final {
