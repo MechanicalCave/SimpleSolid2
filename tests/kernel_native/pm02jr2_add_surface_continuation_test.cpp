@@ -656,6 +656,9 @@ void verifyPartIntegration() {
         bool tested_missing_reference = false;
         bool tested_native_file_reopen = false;
         bool tested_undo_redo = false;
+        bool tested_upstream_edit = false;
+        bool tested_upstream_edit_undo_redo = false;
+        std::size_t rejected_upstream_edits = 0U;
         for (const auto& candidate : topology.edges) {
             const auto source =
                 part::authorMaterialEdgeReference(
@@ -1117,6 +1120,115 @@ void verifyPartIntegration() {
                                     CHECK(after_redo_choices.size() == 1U);
                                     tested_undo_redo = true;
                                 }
+                                if (!tested_upstream_edit) {
+                                    // Edit the immediately previous Add
+                                    // feature, without editing the Chamfer,
+                                    // then resolve ONLY the durable Curve
+                                    // and Point addresses. Every rejected
+                                    // transaction must leave the authored
+                                    // Part untouched.
+                                    auto edit_clone =
+                                        part::PartDocument::restore(
+                                            core::DocumentId::generate(),
+                                            trial.document().state());
+                                    CHECK(edit_clone.ok());
+                                    application::DocumentSession edit_session{
+                                        {}, std::move(*edit_clone.document)};
+                                    kernel_occt::OcctSolidModelingKernel
+                                        edit_kernel;
+                                    const auto before_state =
+                                        edit_session.document().state();
+                                    const auto update = edit_session.execute(
+                                        application::EditExtrudeFeatureCommand{
+                                            *boss.feature_id,
+                                            edit_session.document().revision(),
+                                            boss_profile,
+                                            part::ExtrudeOperation::add,
+                                            part::OneSidedExtrudeExtent{
+                                                core::LengthValue{11.0},
+                                                false},
+                                            "Boss enlarged (D2 study)"},
+                                        edit_kernel);
+                                    if (update.ok()) {
+                                        const auto changed = part::evaluatePart(
+                                            edit_session.document(),
+                                            edit_kernel);
+                                        if (changed.body_status ==
+                                                part::BodyEvaluationStatus::
+                                                    up_to_date &&
+                                            changed.current_topology &&
+                                            changed.current_topology->complete()) {
+                                            const auto updated_choices =
+                                                pg01dCurveEdgesIncidentToSemanticPoint(
+                                                    *changed.current_topology,
+                                                    curve_address,
+                                                    *certified_point_address);
+                                            // A valid source can survive or
+                                            // become unavailable, but cannot
+                                            // be accepted ambiguously.
+                                            CHECK(updated_choices.size() <= 1U);
+                                            const auto undo_edit =
+                                                edit_session.undo();
+                                            CHECK(undo_edit.ok());
+                                            kernel_occt::OcctSolidModelingKernel
+                                                undo_provider;
+                                            const auto restored_eval =
+                                                part::evaluatePart(
+                                                    edit_session.document(),
+                                                    undo_provider);
+                                            CHECK(restored_eval.body_status ==
+                                                part::BodyEvaluationStatus::
+                                                    up_to_date);
+                                            CHECK(restored_eval.current_topology &&
+                                                  restored_eval.current_topology
+                                                      ->complete());
+                                            const auto restored_choices =
+                                                pg01dCurveEdgesIncidentToSemanticPoint(
+                                                    *restored_eval.current_topology,
+                                                    curve_address,
+                                                    *certified_point_address);
+                                            CHECK(restored_choices.size() == 1U);
+                                            const auto redo_edit =
+                                                edit_session.redo();
+                                            CHECK(redo_edit.ok());
+                                            kernel_occt::OcctSolidModelingKernel
+                                                redo_edit_provider;
+                                            const auto redo_evaluated =
+                                                part::evaluatePart(
+                                                    edit_session.document(),
+                                                    redo_edit_provider);
+                                            CHECK(redo_evaluated.body_status ==
+                                                part::BodyEvaluationStatus::
+                                                    up_to_date);
+                                            CHECK(redo_evaluated.current_topology &&
+                                                  redo_evaluated.current_topology
+                                                      ->complete());
+                                            const auto redo_choices =
+                                                pg01dCurveEdgesIncidentToSemanticPoint(
+                                                    *redo_evaluated.current_topology,
+                                                    curve_address,
+                                                    *certified_point_address);
+                                            CHECK(redo_choices.size() <= 1U);
+                                            CHECK(redo_choices.size() ==
+                                                  updated_choices.size());
+                                            tested_upstream_edit = true;
+                                            tested_upstream_edit_undo_redo = true;
+                                            std::cout
+                                                << "PG01D_D2_UPSTREAM_EDIT_PROBE"
+                                                << " after_edit_candidates="
+                                                << updated_choices.size()
+                                                << " undo_candidates="
+                                                << restored_choices.size()
+                                                << " redo_candidates="
+                                                << redo_choices.size()
+                                                << '\n';
+                                        }
+                                    } else {
+                                        CHECK(edit_session.document().state() ==
+                                              before_state);
+                                        ++rejected_upstream_edits;
+                                    }
+                                }
                             } else {
                                 ++one_semantic_endpoint_ambiguous;
                             }
@@ -1186,6 +1298,11 @@ void verifyPartIntegration() {
             << one_semantic_endpoint_ambiguous
             << " one_endpoint_fresh_provider_unique="
             << one_semantic_endpoint_cold_unique
+            << " upstream_edited=" << tested_upstream_edit
+            << " upstream_edit_undo_redo="
+            << tested_upstream_edit_undo_redo
+            << " upstream_edit_rejected="
+            << rejected_upstream_edits
             << " private_part_committed=0"
             << '\n';
         // Research witness on the accepted immutable Point rule:
@@ -1215,6 +1332,8 @@ void verifyPartIntegration() {
         CHECK(tested_missing_reference);
         CHECK(tested_native_file_reopen);
         CHECK(tested_undo_redo);
+        CHECK(tested_upstream_edit);
+        CHECK(tested_upstream_edit_undo_redo);
     }
 
     const auto contribution =
