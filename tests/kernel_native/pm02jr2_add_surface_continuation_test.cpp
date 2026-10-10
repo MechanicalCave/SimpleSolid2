@@ -692,8 +692,6 @@ void verifyPartIntegration() {
             << " blocked_other=" << rejected_other
             << " private_part_committed=0"
             << '\n';
-        // Temporary RED for native output visibility under CTest.
-        CHECK(false && "PG01D_SYNTH_SWEEP_DIAGNOSTIC_CAPTURE");
     }
 
     const auto contribution =
