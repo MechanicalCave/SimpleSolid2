@@ -126,6 +126,42 @@ because the accepted tool behavior and persisted semantics are
 unchanged. Final documentation verification remains required.
 
 
+## 0.3 Owner FAIL — independent ambiguous bounded Edge reproduction; D2 identity STOP (2026-10-10)
+
+Further **read-only, synthetic** native Windows evidence supersedes only the older
+`0.2` statement that no controlled identity refusal had been reproduced. An
+existing Add-continuation fixture has one proven semantic Surface split across
+multiple bounded Faces. Across 78 valid one-Edge Chamfers on independent clones,
+the manual Face Boundary admission accepted 900 Faces and rejected 36 more for
+strict material Edge identity. Each rejected case had an individually present
+native Edge classified `referenceable` but `ambiguous`, one Curve candidate,
+a two-realization current semantic Curve family, two incident native Vertices,
+and **only one certified semantic Point endpoint**. None was a seam or known
+representation partition. This is a **real independent mechanism of the same
+Owner rejection class**, not a replay of the Owner's private geometry.
+
+Evidence: native [diagnostic #38069725884](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38069725884),
+followed by [endpoint classification #38069948103](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38069948103);
+both runs intentionally used a temporary failing assertion to make normally
+suppressed CTest stdout auditable. The temporary RED has been removed from the
+Draft branch; neither historical run is a candidate PASS. The resulting
+source remains **fail closed**: the existing `MaterialEdgeReference` cannot
+durably discriminate one of two Curve realizations without both proven
+`BetweenSemanticPoints`. No OCCT token, wire position, nearest match,
+unproven partition exclusion, tolerance change or per-identity partial skip
+can substitute for this accepted reference rule.
+
+**STOP / Owner D2 decision pending:** see
+`work/PROJECTION_01D_SPLIT_MATERIAL_EDGE_IDENTITY_D2_PROPOSAL.md`. It offers
+A: retain the current strict failure and explicitly acknowledge this product
+limit; B: authorize a separately gated identity-design study with provenance,
+cold persistence and compatibility proof; C: separate future non-associative
+copy direction requiring its own authorization. **None is approved by this
+investigation.** Current Owner practical PG-01D result remains FAIL; no final
+FULL, merge or PM-06 permission. Runtime diagnostics now report current
+`curveFamilyEdges` and `certifiedEndpoints` to narrow the one-click
+Owner retest. Exact-head focused verification remains necessary.
+
 ## 1. Frozen product intent
 
 One `PROJECT` tool with three **source-acquisition modes**, all delegating the resulting unique, exact material Edges to the existing `CreateProjectedSketchEdgesCommand`:
