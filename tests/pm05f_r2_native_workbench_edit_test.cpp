@@ -2095,6 +2095,48 @@ int main(int argc, char* argv[]) {
             reply = workbench.submitCadInput(
                 "PROJECT", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
+            // Same real unsupported oblique Circle projection, but
+            // through the new manual bounded-Face acquisition. One
+            // unsupported curve does NOT discard four strict Lines.
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto manual_hole_click = skew({20.0, 15.0});
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{
+                    manual_hole_click.u,
+                    manual_hole_click.v, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("PARTIAL Face Boundary")));
+            CHECK(pg_finish->isEnabled());
+            CHECK(partial_session.document().state() ==
+                  partial_original);
+            reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(partial_session.document().revision() ==
+                  partial_rev);
+            CHECK(partial_session.undoDepth() == partial_undo);
+            std::cout
+                << "PG01D_MANUAL_FACE_UNSUPPORTED_CIRCLE_PREVIEW_PASS"
+                << " supported_lines=4"
+                << " exact_geometric_circle_skipped=1"
+                << " prior_state_unchanged=1"
+                << '\n';
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
             reply = workbench.submitCadInput(
                 "FACE", workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
