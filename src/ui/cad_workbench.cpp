@@ -10003,7 +10003,7 @@ void CadWorkbench::tryStageProjectBoundarySelection() {
                     break;
                 }
                 reason += QStringLiteral(
-                    " [Edge token %1, wire %2/member %3, cause=%4, accounting=%5, reference=%6, curve=%7, candidates=%8, seam=%9, partition=%10]")
+                    " [Edge token %1, wire %2/member %3, cause=%4, accounting=%5, reference=%6, curve=%7, candidates=%8, seam=%9, partition=%10, curveFamilyEdges=%11, certifiedEndpoints=%12/%13]")
                     .arg(static_cast<qulonglong>(detail.edge.value))
                     .arg(static_cast<qulonglong>(detail.wire_index))
                     .arg(static_cast<qulonglong>(detail.edge_index))
@@ -10014,7 +10014,13 @@ void CadWorkbench::tryStageProjectBoundarySelection() {
                     .arg(static_cast<qulonglong>(
                         detail.curve_candidate_count))
                     .arg(detail.periodic_seam ? 1 : 0)
-                    .arg(detail.representation_partition ? 1 : 0);
+                    .arg(detail.representation_partition ? 1 : 0)
+                    .arg(static_cast<qulonglong>(
+                        detail.curve_family_realizations))
+                    .arg(static_cast<qulonglong>(
+                        detail.certified_semantic_endpoints))
+                    .arg(static_cast<qulonglong>(
+                        detail.incident_vertices));
             }
             break;
         }
