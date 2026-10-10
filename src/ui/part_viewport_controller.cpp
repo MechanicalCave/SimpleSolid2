@@ -4945,8 +4945,12 @@ PartViewportController::rankedBodyTopologyCandidates(
             if (!body_topology_catalog_cache_) {
                 continue;
             }
-            const auto authored =
-                part::authorMaterialEdgeReference(
+            const auto authored = project_geometry_authoring_mode_
+                ? part::authorProjectedMaterialEdgeReference(
+                    *body_topology_catalog_cache_,
+                    kernel::RuntimeEdgeToken{
+                        found->second.runtime_token_value})
+                : part::authorMaterialEdgeReference(
                     *body_topology_catalog_cache_,
                     kernel::RuntimeEdgeToken{
                         found->second.runtime_token_value});
@@ -5011,6 +5015,13 @@ void PartViewportController::setBodyTopologyFacePickOnly(
     clearBodyTopologyPreselection();
 }
 
+
+void PartViewportController::setProjectGeometryAuthoringMode(
+    bool enabled) {
+    if (project_geometry_authoring_mode_ == enabled) return;
+    project_geometry_authoring_mode_ = enabled;
+    clearBodyTopologyPreselection();
+}
 
 void PartViewportController::setBodyTopologyEdgeDraftMode(
     bool enabled) {
@@ -5226,8 +5237,12 @@ PartViewportController::selectedMaterialEdgeReferences() const {
             return std::nullopt;
         }
 
-        const auto authored =
-            part::authorMaterialEdgeReference(
+        const auto authored = project_geometry_authoring_mode_
+            ? part::authorProjectedMaterialEdgeReference(
+                *body_topology_catalog_cache_,
+                kernel::RuntimeEdgeToken{
+                    address.runtime_token_value})
+            : part::authorMaterialEdgeReference(
                 *body_topology_catalog_cache_,
                 kernel::RuntimeEdgeToken{
                     address.runtime_token_value});

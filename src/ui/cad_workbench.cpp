@@ -9574,6 +9574,7 @@ bool CadWorkbench::startProjectEdgeTool() {
 
     viewport_controller_->clearBodyTopologyToolSelection();
     viewport_controller_->setBodyTopologyEdgeDraftMode(true);
+    viewport_controller_->setProjectGeometryAuthoringMode(true);
     // Sketch Select normally routes left clicks to spatial_tool_input,
     // bypassing the Viewer's Body picker entirely. PROJECT is a strict
     // stage-scoped material Edge acquisition tool, so it temporarily
@@ -9624,6 +9625,7 @@ void CadWorkbench::clearProjectEdgeRuntimeContext() {
         static_cast<void>(
             viewport_controller_->setProjectFaceSourceFeedback({}, {}));
         viewport_controller_->setBodyTopologyFacePickOnly(false);
+        viewport_controller_->setProjectGeometryAuthoringMode(false);
         viewport_controller_->setBodyTopologyEdgeDraftMode(false);
         viewport_controller_->clearBodyTopologyToolSelection();
         // Return control to the existing Sketcher input grammar.

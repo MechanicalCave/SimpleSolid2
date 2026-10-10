@@ -472,6 +472,8 @@ public:
 
     void setBodyTopologyFacePickOnly(bool enabled);
     void setBodyTopologyEdgeDraftMode(bool enabled);
+    // Restrict v16 one-Point authoring to the active PROJECT tool.
+    void setProjectGeometryAuthoringMode(bool enabled);
     [[nodiscard]] bool setBodyTopologyToolStage(
         std::optional<part::BodyStageRef> stage);
     [[nodiscard]] std::optional<
@@ -728,6 +730,7 @@ private:
         body_topology_candidate_stack_;
     bool body_topology_face_pick_only_{false};
     bool body_topology_edge_draft_mode_{false};
+    bool project_geometry_authoring_mode_{false};
     std::optional<part::BodyStageRef>
         body_topology_tool_stage_;
     std::optional<core::DocumentRevision>
