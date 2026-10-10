@@ -29,6 +29,7 @@ struct QtOcctRuntimeDiagnostics final {
     // Runtime-only PG-01D Face feedback (no persisted/source identity).
     std::size_t project_face_supported_overlays_current{};
     std::size_t project_face_skipped_overlays_current{};
+    std::size_t project_face_selected_overlays_current{};
     std::size_t sketch_wire_style_applications{};
     std::size_t sketch_rectangle_queries{};
     std::size_t sketch_rectangle_segments{};
