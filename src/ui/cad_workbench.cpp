@@ -10401,8 +10401,13 @@ bool CadWorkbench::finishProjectEdgeTool() {
         }
         std::vector<part::MaterialEdgeReference> accepted;
         std::vector<part::MaterialEdgeReference> skipped;
-        for (const auto& wire : fresh.wires) {
-            for (const auto& member : wire.edges) {
+        std::vector<ProjectBoundarySkippedMember> skipped_detail;
+        for (std::size_t wire_index = 0U;
+             wire_index < fresh.wires.size(); ++wire_index) {
+            const auto& wire = fresh.wires[wire_index];
+            for (std::size_t edge_index = 0U;
+                 edge_index < wire.edges.size(); ++edge_index) {
+                const auto& member = wire.edges[edge_index];
                 if (member.excluded_nonmaterial) continue;
                 if (!member.material ||
                     member.material->stage !=
@@ -10425,6 +10430,10 @@ bool CadWorkbench::finishProjectEdgeTool() {
                                part::ProjectedSketchSourceStatus::
                                    degenerate_projection) {
                     skipped.push_back(*member.material);
+                    skipped_detail.push_back(
+                        ProjectBoundarySkippedMember{
+                            wire_index, edge_index,
+                            *member.material, status});
                 } else {
                     setStatusText(QStringLiteral(
                         "PROJECT Finish rejected: selected Face source geometry/identity status changed."));
@@ -10441,7 +10450,8 @@ bool CadWorkbench::finishProjectEdgeTool() {
             std::unique(skipped.begin(), skipped.end()),
             skipped.end());
         if (accepted != face.accepted ||
-            skipped != face.skipped) {
+            skipped != face.skipped ||
+            skipped_detail != face.skipped_detail) {
             setStatusText(QStringLiteral(
                 "PROJECT Finish rejected: selected Face PARTIAL membership changed."));
             return false;
