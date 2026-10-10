@@ -1477,6 +1477,134 @@ void verifyPg01dMalformedBoundaryFailClosed(
 
 } // namespace
 
+// Bounded independent native probe for the Owner's Add + Add + Chamfer
+// manual Face rejection. Reuse the already-sanitized two-Add test Part;
+// never copy the Owner's private v15 document or its authored identifiers.
+// This is classification EVIDENCE, not an assertion that every resulting
+// Chamfer boundary must have a durable MaterialEdgeReference.
+void probePg01dChamferedAddFaceAdmission(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    const auto fixture =
+        std::filesystem::path{__FILE__}.parent_path() /
+        "fixtures" / "pm05f_r2_part008_sanitized.ss2part";
+    const part::PartDocumentStore store;
+    auto loaded = store.load(fixture);
+    CHECK(loaded.ok());
+    application::DocumentSession session{
+        {}, std::move(*loaded.document)};
+    CHECK(session.document().body().features.size() == 2U);
+    const auto base = part::evaluatePart(
+        session.document(), kernel);
+    CHECK(base.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(base.current_topology);
+    CHECK(base.current_topology->complete());
+
+    const auto before_revision = session.document().revision();
+    bool chamfer_committed = false;
+    for (const auto& edge : base.current_topology->edges) {
+        const auto reference =
+            part::authorMaterialEdgeReference(
+                *base.current_topology, edge.runtime_token);
+        if (!reference.ok() || !reference.reference) continue;
+        const auto committed = session.execute(
+            application::CreateChamferFeatureCommand{
+                {*reference.reference},
+                session.document().revision(),
+                core::LengthValue{1.0},
+                "PG01D sanitized Add/Chamfer boundary probe"},
+            kernel);
+        if (committed.ok()) {
+            chamfer_committed = true;
+            break;
+        }
+        CHECK(session.document().revision() == before_revision);
+    }
+    CHECK(chamfer_committed);
+    CHECK(session.document().body().features.size() == 3U);
+    const auto evaluated = part::evaluatePart(
+        session.document(), kernel);
+    CHECK(evaluated.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluated.current_topology &&
+          evaluated.current_topology->complete());
+    CHECK(evaluated.features.size() == 3U);
+    const auto& catalog = *evaluated.current_topology;
+
+    std::size_t referenceable_faces = 0U;
+    std::size_t admitted_faces = 0U;
+    std::size_t blocked_material_faces = 0U;
+    std::size_t blocked_other_faces = 0U;
+    std::size_t shared_carrier_pairs = 0U;
+    for (std::size_t i = 0U; i < catalog.faces.size(); ++i) {
+        const auto& face = catalog.faces[i];
+        if (face.accounting_class !=
+                part::TopologyAccountingClass::referenceable) {
+            continue;
+        }
+        ++referenceable_faces;
+        for (std::size_t j = i + 1U;
+             j < catalog.faces.size(); ++j) {
+            const auto& other = catalog.faces[j];
+            for (const auto& carrier : face.surface_candidates) {
+                if (std::find(
+                        other.surface_candidates.begin(),
+                        other.surface_candidates.end(),
+                        carrier) != other.surface_candidates.end()) {
+                    ++shared_carrier_pairs;
+                }
+            }
+        }
+        const auto admission =
+            part::inspectSelectedFaceBoundary(
+                evaluated.features.back(),
+                face.runtime_token, kernel);
+        if (admission.ok()) {
+            ++admitted_faces;
+            continue;
+        }
+        if (admission.status ==
+                part::MaterialFaceBoundaryStatus::
+                    material_edge_unavailable) {
+            ++blocked_material_faces;
+            const auto* failure = admission.rejected_edge
+                ? &*admission.rejected_edge : nullptr;
+            std::cout
+                << "PG01D_ADD_CHAMFER_FACE_BLOCKED"
+                << " face=" << face.runtime_token.value
+                << " failed_edge="
+                << (failure ? failure->edge.value : 0U)
+                << " kind="
+                << (failure ? static_cast<int>(failure->kind) : -1)
+                << " accounting="
+                << (failure && failure->accounting_class
+                    ? static_cast<int>(*failure->accounting_class)
+                    : -1)
+                << " reference="
+                << (failure && failure->referenceability
+                    ? static_cast<int>(*failure->referenceability)
+                    : -1)
+                << " candidates="
+                << (failure ? failure->curve_candidate_count : 0U)
+                << " representation_partition="
+                << (failure && failure->representation_partition)
+                << '\n';
+        } else {
+            ++blocked_other_faces;
+        }
+    }
+    CHECK(referenceable_faces > 0U);
+    std::cout
+        << "PG01D_ADD_CHAMFER_BOUNDARY_PROBE_PASS"
+        << " referenceable_faces=" << referenceable_faces
+        << " admitted=" << admitted_faces
+        << " material_blocked=" << blocked_material_faces
+        << " other_blocked=" << blocked_other_faces
+        << " same_carrier_pairs=" << shared_carrier_pairs
+        << " private_document_committed=0"
+        << '\n';
+}
+
 int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
     const bool pg01c_only =
@@ -1491,6 +1619,7 @@ int main(int argc, char* argv[]) {
     kernel_occt::OcctSolidModelingKernel kernel;
     if (pg01d_negative_only) {
         verifyPg01dMalformedBoundaryFailClosed(kernel);
+        probePg01dChamferedAddFaceAdmission(kernel);
         return EXIT_SUCCESS;
     }
     if (pg01d_d0_only) {
