@@ -65,6 +65,48 @@ For every semantically resolved member, `currentMaterialEdgeProjectionStatus` de
 
 At Finish, each stored selected Face is re-bound at its original stage/generation and its **entire native wire/member ledger** must compare equal to the staged version. Every accepted/skipped status is independently rechecked, and the union of accepted sources must equal the staged one. Any identity/freshness difference rejects the entire command without mutation. If there is at least one supported unique Edge, the original `application::CreateProjectedSketchEdgesCommand` creates all supported target Line/Circle/Arc entities in **one** Part transaction/Undo, including when some selected Edges are Unsupported or an open Sketch contains no Profile. Zero supported Edges disables Finish; Cancel/Clear/Remove never commit. Only individual Edge→target EntityId links persist in native Part v15; after Save/Reopen they re-evaluate through a fresh OCCT provider without any old Face runtime token.
 
+### PG-01D diagnostic: split semantic Curve with uncertified endpoint (2026-10-10)
+
+The Owner's private two-Add/Chamfer Part exposed a **Face Boundary**
+`material_edge_unavailable` rejection despite the picked Face itself
+having a strict resolved reference. The persistent authority is per-Edge
+`MaterialEdgeReference`, not the current native Face token, current
+Edge token or same-Surface carrier identity.
+
+Independent real-OCCT synthetic Add + Add + Chamfer evidence proves
+the same *class* of strict source refusal (not an exact replay of the
+private Owner Part): 24 semantically authorable upstream Edge candidates,
+four bounded Chamfer distances, 78 successful final Body evaluations,
+900 independently admitted Faces and 36 Face refusals. Every refused
+native material member belonged to an **ambiguous Curve with two current
+bounded Edge realizations** while only **one of its two incident Vertex
+endpoints** had a uniquely resolved semantic Point. The existing
+`BetweenSemanticPoints` branch of `MaterialEdgeReference` requires
+two certified semantic endpoints to select one realization; a provider
+Edge token or nearest geometry cannot legally substitute. The other
+positive split-Face witness still admits 2/2 bounded Faces. Kernel
+RED-for-log evidence [#38069725884](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38069725884)
+and [#38069948103](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38069948103)
+were **intentional diagnostic** runs; their temporary RED assertions
+were removed from the branch.
+
+The runtime-only `SelectedFaceBoundaryRejectDetail` records rejected
+native wire/member position, precise accounting/strict-reference status,
+Curve family realization count, incident native Vertex count and
+certified semantic endpoint count. Workbench status now includes
+`curveFamilyEdges` and `certifiedEndpoints`. This read-only diagnostic
+does not loosen the entire-Face integrity refusal, does not permit
+identity errors to become skippable geometric Unsupported, and does not
+alter Part v15, the provider boundary or the accepted semantic ID
+format. Focused native tests guard classification and refusal.
+
+**Identity-architecture STOP:** an additional durable bounded-Edge
+branch or a broader Semantic Point meaning requires new explicit Owner
+D2 governance before implementation. Proposed alternatives and evidence:
+`work/PROJECTION_01D_SPLIT_MATERIAL_EDGE_IDENTITY_D2_PROPOSAL.md`.
+Owner practical PG-01D remains FAIL; final exact-head Windows FULL
+and Owner acceptance are not claimed.
+
 <!-- section-id: internal.part-edge-projection-kernel.pg01d-evidence -->
 ## PG-01D native Windows evidence and remaining gates
 
