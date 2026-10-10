@@ -29,6 +29,7 @@ Thus the independent failure is at the **strict bounded material Edge identity d
 - A native material Edge with ambiguous / unprovable semantic identity **blocks that newly selected Face**; earlier good staged selections and Part document are preserved. It is **not** eligible for the geometric Unsupported or Degenerate partial-skip route.
 - Real material Edges on different Faces are retained and deduplicated only by exact semantic `MaterialEdgeReference`, never by length, carrier, proximity or topology order.
 - The diagnostic adds only transient `SelectedFaceBoundaryRejectDetail` fields. Neither authoring, `MaterialEdgeReference`, Point/Curve semantic construction, File v15 nor provider interface is changed.
+- Windows desktop [FOCUSED #38070902017](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38070902017) **PASS 1/1** on `f4e9bf903ff43aeb288cccd02bd130e136a88b2e` rebuilt Part/UI and verified `pg01d.native_face_fail_closed` with the enriched family/endpoint diagnostics. This does not replace the separate kernel-only Add-continuation test or a final exact-head FULL.
 - A future admission fix must show a stable cross-rebuild, cross-Undo/Redo, Save/Reopen source for *each* newly admitted bounded Edge, not merely a native query that succeeds once.
 
 ## 3. Owner D2 decision requested — choose the product boundary
