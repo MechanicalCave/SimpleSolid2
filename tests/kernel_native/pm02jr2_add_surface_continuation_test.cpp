@@ -843,9 +843,18 @@ void verifyPartIntegration() {
             << missing_endpoint_not_accounted
             << " private_part_committed=0"
             << '\n';
-        // Diagnostic-only RED to preserve exact OCCT observation output
-        // in Windows CTest logs. Remove after classification is captured.
-        CHECK(false && "PG01D_D2B_POINT_RELATION_AUDIT_ONLY");
+        // Research witness on the accepted immutable Point rule:
+        // all observed rejected Edge endpoints are newly generated
+        // two-semantic-Surface vertices, NOT inherited stable Points.
+        // Never turn these into authored Points or skip these material
+        // Edges without a further accepted D2 identity contract.
+        CHECK(rejected_material > 0U);
+        CHECK(missing_endpoint_two_surfaces == rejected_material);
+        CHECK(missing_endpoint_three_surfaces == 0U);
+        CHECK(missing_endpoint_other_surfaces == 0U);
+        CHECK(missing_endpoint_inherited == 0U);
+        CHECK(missing_endpoint_new == rejected_material);
+        CHECK(missing_endpoint_not_accounted == 0U);
     }
 
     const auto contribution =
