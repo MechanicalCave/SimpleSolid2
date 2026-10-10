@@ -679,7 +679,7 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
                   << " outer_uses=" << region.outer.boundary.size()
                   << "]";
     }
-    std::cerr << '\\n';
+    std::cerr << '\n';
 
     CHECK(model.updateLine(
         top, {0.0, 40.0}, start));
