@@ -112,7 +112,7 @@ as a completed E4 suppression proof.
 | E1 — same-stage selector uniqueness | 0/1/many returns Missing/Resolved/Ambiguous; never first-wins | **PASS limited synthetic tests** 36/36 positive; negative injected two-Edge incidence and missing Point both fail closed; actual OCCT-native collision remains OPEN |
 | E2 — native provider rebuild | Same semantic selector in independent restored Part and fresh OCCT provider, without native token reuse | **PASS research** 36/36 |
 | E3 — native on-disk Save/Reopen | Actually write/read .ss2part v15, new DocumentSession and provider, compare strict stage resolutions | **PASS existing-address round-trip** real PartDocumentStore createNew/load of v15 plus new OCCT provider, 1/1; new one-Point persisted branch remains NOT IMPLEMENTED |
-| E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **PARTIAL — supported negative stages now proved in test-only resolver**: native Chamfer Undo/Redo and preceding Add extent edit/Undo/Redo 1/1; deleting or suppressing the final Chamfer invalidates the old exact Body stage and Undo restores 1/1; predecessor Add suppression makes the final source unavailable and Undo restores 1/1. Actual persisted one-Point link, upstream deletion/collapse, relocation/retarget and provenance still OPEN |
+| E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **PARTIAL — extensive test-only lifecycle matrix:** native Chamfer Undo/Redo and Add edit/Undo/Redo 1/1; deleting/suppressing source Chamfer and suppressing previous Add strictly invalidates unavailable Body/Stage, Undo restores 1/1; 12 independent major Add extent/direction changes: 6 reversed result in unavailable Body, 6 forward yield one unique stage-local candidate, no ambiguous or cached fallback. Actual persisted one-Point link, changed-fragment provenance, direct parent deletion, v16 migration and radical source equivalence still OPEN |
 | E5 — adverse native geometry | Same Curve + Point incident to multiple actual material Edge fragments, negative stage/cycle cases and equal-looking unrelated geometry | **PARTIAL** injected two-Edge incidence and missing Point fail closed. Native 78-Chamfer survey: 1332 Curve+Point pairs, 260 uniquely selected Edge hits, 0 collisions and 1072 empty. A real OCCT-native ambiguity counterexample, stage/cycles and similar geometry remain OPEN |
 | E6 — schema/migration/canonical identity | Explicit layout/version plan, v15 backwards reading, corrupt/malformed/duplicate rejection, mixed old/new link resolution and cross-branch dedup | **PARTIAL DESIGN ONLY** native evidence 224 legacy two-Point aliases, 36 one-Point-only cases, tested disjoint domain by endpoint cardinality and stage. Actual v16 serialization/migration, mixed persistence and global semantics OPEN — separate Owner D2 before mutation |
 | E7 — Owner sample + practical result | Typed failure/recovery on private Owner Face, correct manually selected boundaries, then linked cold Save/Reopen and final FULL | **OPEN — Owner FAIL** |
@@ -171,6 +171,56 @@ predecessor Feature outright, a natural native multi-incidence
 counterexample, alias handling for already persisted mixed variants,
 and future v16 on-disk link migration remain OPEN. The production
 `MaterialEdgeReference` and schema v15 have not changed.
+
+### D2 research: large upstream Add edits — current-stage uniqueness versus provenance
+
+An independent Windows OCCT matrix changes the *preceding* `Extrude
+Add` on twelve separate clones of the same Add + Add + Chamfer fixture:
+six lengths `{0.25, 1, 3, 7.5, 15, 30} mm`, in both directions. The
+source Chamfer Feature, its old `BodyStageRef`, and stable
+`FeatureCurveAddress`/`FeaturePointAddress` values are untouched.
+Every clone uses a new native evaluation; no native Edge/Vertex tokens
+are reused across variants, and the read-only test resolver refuses
+an unavailable final Body or a mismatched stage.
+
+Observed [Windows diagnostic RED #38078985460](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38078985460):
+
+- **12/12** EditExtrude commands committed in independent clones.
+- **6/12** reversed-direction Add variants caused a dependent final
+  Body to be **unavailable**. The source could not be resolved;
+  there was no last-good prefix fallback.
+- **6/12** forward-direction variants produced a complete final Body
+  with **exactly one** candidate under the stage-scoped
+  `Curve + one certified Point` test selector.
+- Zero candidates with complete final Body: 0; ambiguous candidates:
+  0. The intentionally failing end-of-test assertion was only for
+  CTest log visibility and has been **removed**; a separate exact-head
+  green check remains mandatory.
+
+**CRITICAL STOP:** the test proves *semantic cardinality* and
+fail-closed staging, not a cross-edit **bounded Edge lineage** claim.
+A single source Edge after a large upstream shape change can be
+appropriately deformed or can be an unintended new fragment that
+happens to share current Curve and Point addresses. The current
+`BodyStageTopologyCatalog` exposes current per-Edge incidence and
+semantic Curve families, not a stable persisted **per-fragment
+cross-revision** identity. `InheritedEdgeRealizationLineage` can
+certify descendants **within one OCCT evaluation sequence**, but a
+separately reconstructed post-edit history has different runtime
+tokens and cannot be paired with the pre-edit history by token,
+XYZ coordinates, topology ordinal, direction, or nearest geometry.
+
+Before approving durable `AtSingleSemanticPoint`, D2 must state the
+precise intended associativity semantics for an upstream edit:
+(a) guarantee that stable, unambiguous **semantic Curve + Point**
+addresses define the *linked source* and allow its geometry to change,
+subject to the disjoint one-Point domain; or (b) require a stronger
+provider-backed persistent bounded-fragment lineage certificate and
+refuse even unique current matches without it. These are distinct
+product contracts; the above tests cannot choose between them.
+
+Neither selection is implied by the approval of this research
+document. No v15 schema or production reference variant has changed.
 
 ## 4. Potential conflicts and mandatory decisions
 
