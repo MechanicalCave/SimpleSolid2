@@ -522,10 +522,14 @@ void verifyPartIntegration() {
                 << " tried_chamfer_sources=" << attempts
                 << " private_document_committed=0"
                 << '\n';
+            // This fixture has two certifiably authorable bounded
+            // Faces of the continued Surface even after a real Chamfer.
+            // Do not generalize this positive witness to every Chamfer
+            // corner, CurveKind or the Owner's private Part.
+            CHECK(admitted == split_after->current_faces.size());
+            CHECK(rejected_material == 0U);
+            CHECK(rejected_other == 0U);
             split_chamfer_probed = true;
-            // INTENTIONAL DIAGNOSTIC RED: preserve per-Face native
-            // classification in CTest output, then REMOVE this guard.
-            CHECK(false && "PG01D_SPLIT_CHAMFER_DIAGNOSTIC_ONLY_RED");
             break;
         }
         CHECK(split_chamfer_probed);
