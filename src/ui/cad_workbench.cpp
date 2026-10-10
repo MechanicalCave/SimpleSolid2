@@ -9731,7 +9731,7 @@ bool CadWorkbench::commitProjectBoundarySources() {
         skipped.insert(
             skipped.end(), face.skipped.begin(), face.skipped.end());
     }
-    const dedup = [](auto& edges) {
+    const auto dedup = [](auto& edges) {
         std::sort(edges.begin(), edges.end());
         edges.erase(
             std::unique(edges.begin(), edges.end()), edges.end());
