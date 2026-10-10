@@ -31,6 +31,7 @@
 #include <filesystem>
 #include <limits>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -530,6 +531,8 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
     std::size_t nonplanar_native_wires = 0U;
     std::size_t nonplanar_material_members = 0U;
     std::size_t nonplanar_nonmaterial_members = 0U;
+    std::size_t nonplanar_periodic_seam_edges = 0U;
+    std::size_t nonplanar_periodic_seam_uses = 0U;
     std::size_t native_faces_with_holes = 0U;
     std::size_t strict_faces_with_holes = 0U;
     std::size_t fully_material_strict_holed_faces = 0U;
@@ -557,6 +560,12 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
                 continue;
             }
             nonplanar_native_wires += raw.wires.size();
+            // Real OCCT cylinder's parameterization seam is not an
+            // engineering material boundary even if the native Face
+            // wire reports this Edge twice. Only the exact Part
+            // catalog's typed periodic_seam bit is authoritative.
+            std::map<std::uint64_t, std::vector<bool>>
+                native_face_seam_uses;
             for (const auto& wire : raw.wires) {
                 CHECK(wire.valid());
                 for (const auto& use : wire.edges) {
@@ -570,6 +579,13 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
                     const auto strict =
                         part::authorMaterialEdgeReference(
                             catalog, use.edge);
+                    if (catalog_member->periodic_seam) {
+                        CHECK(!strict.ok());
+                        CHECK(!catalog_member->representation_partition);
+                        native_face_seam_uses[use.edge.value].push_back(
+                            use.reversed);
+                        ++nonplanar_periodic_seam_uses;
+                    }
                     if (strict.ok()) {
                         CHECK(strict.reference);
                         ++nonplanar_material_members;
@@ -577,6 +593,15 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
                         ++nonplanar_nonmaterial_members;
                     }
                 }
+            }
+            for (const auto& [token, uses] :
+                 native_face_seam_uses) {
+                // Two opposite native wire uses of ONE exact seam Edge.
+                // Distinct token values or one use cannot certify a seam.
+                CHECK(token != 0U);
+                CHECK(uses.size() == 2U);
+                CHECK(uses.front() != uses.back());
+                ++nonplanar_periodic_seam_edges;
             }
             continue;
         }
@@ -633,6 +658,10 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
         << nonplanar_material_members
         << " nonplanar_nonmaterial_uses="
         << nonplanar_nonmaterial_members
+        << " nonplanar_seam_edges="
+        << nonplanar_periodic_seam_edges
+        << " nonplanar_seam_uses="
+        << nonplanar_periodic_seam_uses
         << " holes=" << native_faces_with_holes
         << " strict_holes=" << strict_faces_with_holes
         << " strict_holes_all_material="
@@ -643,6 +672,9 @@ void verifyPg01dNativeStrictFaceAndMaterialCatalog(
     CHECK(nonplanar_faces >= 1U);
     CHECK(nonplanar_native_wires >= 1U);
     CHECK(nonplanar_material_members >= 1U);
+    CHECK(nonplanar_periodic_seam_edges >= 1U);
+    CHECK(nonplanar_periodic_seam_uses ==
+          2U * nonplanar_periodic_seam_edges);
     CHECK(strict_faces_with_holes > 0U);
     CHECK(fully_material_strict_holed_faces > 0U);
 
