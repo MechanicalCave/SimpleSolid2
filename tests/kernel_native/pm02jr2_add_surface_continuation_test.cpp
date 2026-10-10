@@ -2509,6 +2509,156 @@ void verifyNativePlanarBranchedSurfaceContinuationsE0() {
         << '\n';
 }
 
+// E0 real OCCT annulus-cycle candidate: pierce the shared Face
+// partition of a base planar side plus its continued top boss.
+// The cut Circle is CENTERED on the native z=10 interface, not
+// inside either fragment. Exact OCCT topology must decide whether
+// the original one shared internal partition becomes TWO distinct
+// certified opposite oriented partition Edges. If so, cancelling
+// the pairs may generate a region OUTER and a region HOLE contour
+// from multiple Face outer wires rather than native inner wires.
+void verifyNativePlanarHoleAcrossPartitionE0() {
+    kernel_occt::OcctSolidModelingKernel provider;
+    const auto base = provider.extrude(add(
+        rectangle(kernel::Frame3{}, 0.0, 0.0, 40.0, 30.0,
+                  "cross-partition-base"), 10.0));
+    CHECK(base.ok());
+    const auto* base_wall =
+        newSide(base, "cross-partition-base-right");
+    CHECK(base_wall && base_wall->resolved_token);
+    CHECK(base_wall->surface_kind ==
+          kernel::SurfaceKind::plane);
+    kernel::Frame3 boss_frame;
+    boss_frame.origin = {0.0, 0.0, 10.0};
+    CHECK(boss_frame.valid());
+    const auto joined = provider.extrude(
+        add(rectangle(
+            boss_frame, 20.0, 5.0, 40.0, 25.0,
+            "cross-partition-boss"), 10.0),
+        base.solid);
+    CHECK(joined.ok());
+    const auto* continued = inheritedSurface(
+        joined, *base_wall->resolved_token);
+    CHECK(continued);
+    CHECK(continued->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(continued->current_faces.size() >= 2U);
+    const auto* created =
+        newSide(joined, "cross-partition-boss-right");
+    CHECK(created &&
+          created->continued_into == base_wall->resolved_token);
+
+    kernel::Frame3 hole_frame;
+    hole_frame.origin = {40.0, 0.0, 0.0};
+    hole_frame.u_axis = {0.0, 0.0, 1.0};
+    hole_frame.v_axis = {0.0, 1.0, 0.0};
+    hole_frame.normal = {-1.0, 0.0, 0.0};
+    CHECK(hole_frame.valid());
+    kernel::PlanarProfileInput hole;
+    hole.frame = hole_frame;
+    hole.outer.boundary = {{
+        kernel::Circle2{{10.0, 15.0}, 2.5},
+        0.0, 1.0, true, false, true,
+        kernel::BoundaryUseProvenance{
+            "cross-partition-hole", 0U, 0U, false},
+    }};
+    CHECK(hole.valid());
+    auto cut_input = add(std::move(hole), 45.0);
+    cut_input.operation = kernel::SolidBooleanOperation::cut;
+    CHECK(cut_input.valid());
+    const auto cut = provider.extrude(
+        cut_input, joined.solid);
+    CHECK(cut.ok());
+    CHECK(cut.solid_count == 1U);
+    const auto* inherited = inheritedSurface(
+        cut, *base_wall->resolved_token);
+    CHECK(inherited);
+    std::cerr
+        << "PG01D_E0_CROSS_PARTITION_HOLE_PROBE"
+        << " status="
+        << static_cast<int>(inherited->surface_status)
+        << " faces=" << inherited->current_faces.size()
+        << " strict_face_status="
+        << static_cast<int>(inherited->strict_face_status)
+        << '\n';
+    CHECK(inherited->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(inherited->surface_kind ==
+          kernel::SurfaceKind::plane);
+    CHECK(inherited->current_faces.size() >= 2U);
+
+    struct NativeUse final {
+        kernel::RuntimeFaceToken face;
+        kernel::FaceBoundaryEdgeUse use;
+        bool inner{};
+    };
+    std::map<std::uint64_t, std::vector<NativeUse>> ledger;
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        native_outer;
+    std::size_t native_inner_wires = 0U;
+    for (const auto face : inherited->current_faces) {
+        const auto scoped = provider.bindFaceToBody(
+            cut.solid, face);
+        CHECK(scoped && scoped->valid());
+        const auto native =
+            provider.queryFaceBoundaryAnySurface(
+                cut.solid, *scoped);
+        CHECK(native.ok());
+        for (const auto& wire : native.wires) {
+            CHECK(wire.valid());
+            if (wire.outer) {
+                native_outer.push_back(wire.edges);
+            } else {
+                ++native_inner_wires;
+            }
+            for (const auto& use : wire.edges) {
+                CHECK(use.start_vertex && use.end_vertex);
+                ledger[use.edge.value].push_back(
+                    NativeUse{face, use, !wire.outer});
+            }
+        }
+    }
+    std::vector<std::uint64_t> certified_partitions;
+    std::set<std::uint64_t> material_edges;
+    for (const auto& [edge, uses] : ledger) {
+        const kernel::RuntimeEdgeToken token{edge};
+        const auto observation = std::find_if(
+            cut.current_edge_semantics.begin(),
+            cut.current_edge_semantics.end(),
+            [token](const auto& item) {
+                return item.runtime_token == token;
+            });
+        CHECK(observation !=
+              cut.current_edge_semantics.end());
+        if (observation->same_surface_partition) {
+            CHECK(!observation->periodic_seam);
+            CHECK(uses.size() == 2U);
+            CHECK(uses[0].face != uses[1].face);
+            CHECK(!uses[0].inner && !uses[1].inner);
+            CHECK(uses[0].use.reversed !=
+                  uses[1].use.reversed);
+            CHECK(uses[0].use.start_vertex ==
+                  uses[1].use.end_vertex);
+            CHECK(uses[0].use.end_vertex ==
+                  uses[1].use.start_vertex);
+            certified_partitions.push_back(edge);
+        } else {
+            CHECK(!observation->periodic_seam);
+            CHECK(uses.size() == 1U);
+            material_edges.insert(edge);
+        }
+    }
+    std::cerr
+        << "PG01D_E0_CROSS_PARTITION_HOLE_LEDGER"
+        << " native_faces=" << inherited->current_faces.size()
+        << " native_outer_wires=" << native_outer.size()
+        << " native_inner_wires=" << native_inner_wires
+        << " certified_partitions=" << certified_partitions.size()
+        << " unique_material_edges=" << material_edges.size()
+        << '\n';
+    CHECK(certified_partitions.size() >= 2U);
+}
+
 // Native E0 negative control: a LOCAL side-wall notch leaves the
 // original cylinder Surface in precisely ONE current bounded Face.
 // FOCUSED #2247 deliberately rejected a two-Face assertion after
@@ -2979,6 +3129,7 @@ int main() {
     verifyNativeCylindricalCutSplitE0();
     verifyNativePartialCylinderCutContinuityProbeE0();
     verifyNativePlanarBranchedSurfaceContinuationsE0();
+    verifyNativePlanarHoleAcrossPartitionE0();
     verifyPg01dE0DirectedWireFailClosedContract();
     verifyPg01dE0CyclicPartitionTwoContours();
 
