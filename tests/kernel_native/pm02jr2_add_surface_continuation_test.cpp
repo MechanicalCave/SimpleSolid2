@@ -2779,7 +2779,7 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
             CHECK(edge != cut.current_edge_semantics.end());
             CHECK(!edge->same_surface_partition);
             CHECK(!edge->periodic_seam);
-            if (edge->curve_kind == kernel::CurveKind::circle) {
+            if (edge->provider_curve_kind == kernel::CurveKind::circle) {
                 ++contour_circles;
                 circle_tokens.insert(use.edge.value);
             }
