@@ -3,9 +3,11 @@
 #include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -650,6 +652,10 @@ void verifyPartIntegration() {
         std::size_t one_semantic_endpoint_unique = 0U;
         std::size_t one_semantic_endpoint_ambiguous = 0U;
         std::size_t one_semantic_endpoint_cold_unique = 0U;
+        bool tested_ambiguous_incidence = false;
+        bool tested_missing_reference = false;
+        bool tested_native_file_reopen = false;
+        bool tested_undo_redo = false;
         for (const auto& candidate : topology.edges) {
             const auto source =
                 part::authorMaterialEdgeReference(
@@ -963,6 +969,154 @@ void verifyPartIntegration() {
                                 if (cold_choices.size() == 1U) {
                                     ++one_semantic_endpoint_cold_unique;
                                 }
+
+                                // Test-only fabricated collision of
+                                // material incidence, never a claim about
+                                // certified native OCCT topology. Cardinality
+                                // MUST be enforced: no "first Edge wins".
+                                if (!tested_ambiguous_incidence) {
+                                    const auto curve = std::find_if(
+                                        ledger.curves.begin(),
+                                        ledger.curves.end(),
+                                        [&curve_address](const auto& item) {
+                                            return item.address ==
+                                                curve_address;
+                                        });
+                                    CHECK(curve != ledger.curves.end());
+                                    CHECK(curve->current_edges.size() == 2U);
+                                    const auto alternate =
+                                        *std::find_if(
+                                            curve->current_edges.begin(),
+                                            curve->current_edges.end(),
+                                            [token = detail->edge](
+                                                const auto& item) {
+                                                return item != token;
+                                            });
+                                    auto injected = ledger;
+                                    const auto point_record =
+                                        std::find_if(
+                                            injected.points.begin(),
+                                            injected.points.end(),
+                                            [addr = *certified_point_address](
+                                                const auto& item) {
+                                                return item.address == addr;
+                                            });
+                                    CHECK(point_record !=
+                                          injected.points.end());
+                                    CHECK(point_record->status ==
+                                          kernel::ReferenceStatus::resolved);
+                                    CHECK(point_record->current_vertices.size() ==
+                                          1U);
+                                    auto vertex_record = std::find_if(
+                                        injected.vertices.begin(),
+                                        injected.vertices.end(),
+                                        [token = point_record->
+                                            current_vertices.front()](
+                                            const auto& item) {
+                                            return item.runtime_token == token;
+                                        });
+                                    CHECK(vertex_record !=
+                                          injected.vertices.end());
+                                    CHECK(std::find(
+                                        vertex_record->
+                                            incident_material_edges.begin(),
+                                        vertex_record->
+                                            incident_material_edges.end(),
+                                        alternate) ==
+                                        vertex_record->
+                                            incident_material_edges.end());
+                                    vertex_record->incident_material_edges
+                                        .push_back(alternate);
+                                    vertex_record->incident_material_edge_count =
+                                        vertex_record->incident_material_edges
+                                            .size();
+                                    const auto ambiguous =
+                                        pg01dCurveEdgesIncidentToSemanticPoint(
+                                            injected, curve_address,
+                                            *certified_point_address);
+                                    CHECK(ambiguous.size() == 2U);
+                                    CHECK(ambiguous.front() != ambiguous.back());
+                                    tested_ambiguous_incidence = true;
+                                }
+                                if (!tested_missing_reference) {
+                                    auto missing = ledger;
+                                    missing.points.erase(
+                                        std::remove_if(
+                                            missing.points.begin(),
+                                            missing.points.end(),
+                                            [addr = *certified_point_address](
+                                                const auto& item) {
+                                                return item.address == addr;
+                                            }),
+                                        missing.points.end());
+                                    CHECK(pg01dCurveEdgesIncidentToSemanticPoint(
+                                        missing, curve_address,
+                                        *certified_point_address).empty());
+                                    tested_missing_reference = true;
+                                }
+
+                                if (!tested_native_file_reopen) {
+                                    part::PartDocumentStore store;
+                                    const auto path =
+                                        std::filesystem::temp_directory_path() /
+                                        ("ss2_pg01d_d2b_" +
+                                         std::to_string(
+                                             std::chrono::steady_clock::now()
+                                                 .time_since_epoch().count()) +
+                                         ".ss2part");
+                                    const auto save = store.createNew(
+                                        path, trial.document());
+                                    CHECK(save.ok());
+                                    const auto loaded = store.load(path);
+                                    CHECK(loaded.ok());
+                                    CHECK(loaded.document->state() ==
+                                          trial.document().state());
+                                    kernel_occt::OcctSolidModelingKernel disk_provider;
+                                    const auto disk = part::evaluatePart(
+                                        *loaded.document, disk_provider);
+                                    CHECK(disk.body_status ==
+                                          part::BodyEvaluationStatus::up_to_date);
+                                    CHECK(disk.current_topology &&
+                                          disk.current_topology->complete());
+                                    const auto disk_choices =
+                                        pg01dCurveEdgesIncidentToSemanticPoint(
+                                            *disk.current_topology,
+                                            curve_address,
+                                            *certified_point_address);
+                                    CHECK(disk_choices.size() == 1U);
+                                    std::error_code removal_error;
+                                    CHECK(std::filesystem::remove(
+                                        path, removal_error));
+                                    CHECK(!removal_error);
+                                    tested_native_file_reopen = true;
+                                }
+
+                                if (!tested_undo_redo) {
+                                    const auto undo = trial.undo();
+                                    CHECK(undo.ok());
+                                    CHECK(trial.document().body().features.size()
+                                          == 2U);
+                                    const auto redo = trial.redo();
+                                    CHECK(redo.ok());
+                                    CHECK(trial.document().body().features.size()
+                                          == 3U);
+                                    kernel_occt::OcctSolidModelingKernel
+                                        redo_provider;
+                                    const auto after_redo = part::evaluatePart(
+                                        trial.document(), redo_provider);
+                                    CHECK(after_redo.body_status ==
+                                          part::BodyEvaluationStatus::
+                                              up_to_date);
+                                    CHECK(after_redo.current_topology &&
+                                          after_redo.current_topology->complete());
+                                    const auto after_redo_choices =
+                                        pg01dCurveEdgesIncidentToSemanticPoint(
+                                            *after_redo.current_topology,
+                                            curve_address,
+                                            *certified_point_address);
+                                    CHECK(after_redo_choices.size() == 1U);
+                                    tested_undo_redo = true;
+                                }
                             } else {
                                 ++one_semantic_endpoint_ambiguous;
                             }
@@ -1057,6 +1211,10 @@ void verifyPartIntegration() {
         CHECK(one_semantic_endpoint_unique == rejected_material);
         CHECK(one_semantic_endpoint_ambiguous == 0U);
         CHECK(one_semantic_endpoint_cold_unique == rejected_material);
+        CHECK(tested_ambiguous_incidence);
+        CHECK(tested_missing_reference);
+        CHECK(tested_native_file_reopen);
+        CHECK(tested_undo_redo);
     }
 
     const auto contribution =
