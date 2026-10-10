@@ -302,6 +302,7 @@ private:
     void clearProjectEdgeSelection();
     void removeProjectFaceSelection();
     void removeProjectBoundarySelection();
+    [[nodiscard]] bool commitProjectBoundarySources();
     void tryStageProjectEdgeSelection();
     void tryStageProjectFaceSelection();
     void tryStageProjectBoundarySelection();
