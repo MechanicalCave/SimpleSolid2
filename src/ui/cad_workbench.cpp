@@ -9918,15 +9918,43 @@ void CadWorkbench::tryStageProjectBoundarySelection() {
         viewport_controller_->inspectCurrentSelectedFaceBoundary(
             *picked);
     if (!admission.ok()) {
+        QString reason;
+        switch (admission.status) {
+        case part::MaterialFaceBoundaryStatus::invalid_stage:
+            reason = QStringLiteral("invalid source stage/revision");
+            break;
+        case part::MaterialFaceBoundaryStatus::face_unavailable:
+            reason = QStringLiteral("bounded Face unavailable");
+            break;
+        case part::MaterialFaceBoundaryStatus::face_not_strict:
+            reason = QStringLiteral("uncertified bounded Face");
+            break;
+        case part::MaterialFaceBoundaryStatus::native_boundary_unavailable:
+            reason = QStringLiteral("native wire/provider integrity");
+            break;
+        case part::MaterialFaceBoundaryStatus::material_edge_unavailable:
+            reason = QStringLiteral("ambiguous/missing material Edge identity");
+            break;
+        case part::MaterialFaceBoundaryStatus::resolved:
+            reason = QStringLiteral("inconsistent admission");
+            break;
+        }
         setStatusText(QStringLiteral(
-            "PROJECT Face Boundary rejected: scoped Face, native wire or material Edge identity unavailable; existing draft retained."));
+            "PROJECT Face Boundary rejected Face token %1: %2; earlier staged sources retained.")
+            .arg(static_cast<qulonglong>(picked->runtime_token_value))
+            .arg(reason));
         return;
     }
     std::vector<part::MaterialEdgeReference> accepted;
     std::vector<part::MaterialEdgeReference> skipped;
+    std::vector<ProjectBoundarySkippedMember> skipped_detail;
     std::size_t excluded = 0U;
-    for (const auto& wire : admission.wires) {
-        for (const auto& member : wire.edges) {
+    for (std::size_t wire_index = 0U;
+         wire_index < admission.wires.size(); ++wire_index) {
+        const auto& wire = admission.wires[wire_index];
+        for (std::size_t edge_index = 0U;
+             edge_index < wire.edges.size(); ++edge_index) {
+            const auto& member = wire.edges[edge_index];
             if (member.excluded_nonmaterial) {
                 ++excluded;
                 continue;
@@ -9951,6 +9979,10 @@ void CadWorkbench::tryStageProjectBoundarySelection() {
                            part::ProjectedSketchSourceStatus::
                                degenerate_projection) {
                 skipped.push_back(*member.material);
+                skipped_detail.push_back(
+                    ProjectBoundarySkippedMember{
+                        wire_index, edge_index,
+                        *member.material, status});
             } else {
                 setStatusText(QStringLiteral(
                     "PROJECT Face Boundary rejected: material identity, provider or projection integrity failure; prior selections retained."));
@@ -9969,7 +10001,8 @@ void CadWorkbench::tryStageProjectBoundarySelection() {
     project_edge_boundary_faces_.push_back(
         ProjectBoundaryFaceDraft{
             *picked, admission,
-            std::move(accepted), std::move(skipped)});
+            std::move(accepted), std::move(skipped),
+            std::move(skipped_detail)});
     if (!commitProjectBoundarySources()) {
         project_edge_boundary_faces_.pop_back();
         static_cast<void>(commitProjectBoundarySources());
