@@ -1601,10 +1601,6 @@ void probePg01dChamferedAddFaceAdmission(
         << " same_carrier_pairs=" << shared_carrier_pairs
         << " private_document_committed=0"
         << '\n';
-    // INTENTIONAL TEMPORARY RED: the focused CI job must publish
-    // complete native diagnostic counts for engineering triage.
-    // REMOVE THIS ASSERTION immediately after preserving its evidence.
-    CHECK(false && "PG01D_DIAGNOSTIC_ONLY_RED_REMOVE_AFTER_EVIDENCE");
 }
 
 } // namespace
