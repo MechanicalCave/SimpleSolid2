@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <iostream>
 #include <map>
+#include <set>
 #include <cmath>
 #include <optional>
 #include <string>
@@ -599,8 +600,8 @@ void verifyPartIntegration() {
     // referenceable material Edge occurring once on this region's
     // perimeter. This is not yet a contour/wire reconstruction or
     // an authorization to merge other coplanar Surfaces. The
-    // surviving set is not yet a certified ordered outer/hole contour:
-    // that requires a separate per-vertex continuity proof.
+    // surviving set still needs an exact single-cycle proof below;
+    // outer/hole classification for general regions is not implied.
     std::size_t certified_internal_partitions = 0U;
     std::vector<part::MaterialEdgeReference>
         certified_perimeter_sources;
@@ -647,42 +648,95 @@ void verifyPartIntegration() {
         certified_perimeter_sources.begin(),
         certified_perimeter_sources.end()) ==
         certified_perimeter_sources.end());
-    // E0 incidence proof for THIS planar split-carrier fixture only:
-    // every retained material boundary Edge must meet exactly two
-    // current native topology Vertices, each of which has exactly two
-    // incident retained material Edges. These are exact provider
-    // incidence tokens, never coordinate proximity or authored IDs.
-    // This necessary closed-cycle condition does not yet certify
-    // oriented outer/hole ordering, curved seams or other carriers.
-    std::size_t incident_perimeter_vertices = 0U;
+    // E0 positive proof for THIS planar split-carrier fixture only:
+    // retain exact current native provider Vertex/Edge incidences; never
+    // pair coordinates or infer missing geometry. Degree two alone could
+    // allow several DISCONNECTED cycles, which is insufficient for this
+    // fixture's expected one contiguous material perimeter.
+    std::map<std::uint64_t, std::vector<std::uint64_t>>
+        perimeter_vertex_edges;
+    std::map<std::uint64_t, std::vector<std::uint64_t>>
+        perimeter_edge_vertices;
     for (const auto& vertex : topology.vertices) {
-        std::size_t perimeter_degree = 0U;
+        std::vector<std::uint64_t> incident;
         for (const auto token : certified_perimeter_tokens) {
             if (std::find(
                     vertex.incident_material_edges.begin(),
                     vertex.incident_material_edges.end(),
                     token) != vertex.incident_material_edges.end()) {
-                ++perimeter_degree;
+                incident.push_back(token.value);
             }
         }
-        if (perimeter_degree == 0U) continue;
-        CHECK(perimeter_degree == 2U);
-        ++incident_perimeter_vertices;
+        if (incident.empty()) continue;
+        CHECK(vertex.runtime_token.value != 0U);
+        CHECK(incident.size() == 2U);
+        CHECK(incident[0] != incident[1]);
+        for (const auto edge : incident) {
+            perimeter_edge_vertices[edge].push_back(
+                vertex.runtime_token.value);
+        }
+        CHECK(perimeter_vertex_edges.emplace(
+            vertex.runtime_token.value,
+            std::move(incident)).second);
     }
-    CHECK(incident_perimeter_vertices ==
+    CHECK(!perimeter_edge_vertices.empty());
+    CHECK(perimeter_edge_vertices.size() ==
           certified_perimeter_tokens.size());
-    for (const auto token : certified_perimeter_tokens) {
-        std::size_t endpoints = 0U;
-        for (const auto& vertex : topology.vertices) {
-            if (std::find(
-                    vertex.incident_material_edges.begin(),
-                    vertex.incident_material_edges.end(),
-                    token) != vertex.incident_material_edges.end()) {
-                ++endpoints;
-            }
-        }
-        CHECK(endpoints == 2U);
+    CHECK(perimeter_vertex_edges.size() ==
+          certified_perimeter_tokens.size());
+    for (const auto& [edge, endpoints] :
+         perimeter_edge_vertices) {
+        CHECK(endpoints.size() == 2U);
+        CHECK(endpoints[0] != endpoints[1]);
+        (void)edge;
     }
+
+    // Reconstruct and exhaust the SINGLE closed cycle starting from the
+    // lowest current Edge token. A disconnected second cycle would cause
+    // this walk to return to its start too early and fail closed.
+    const auto start_edge =
+        perimeter_edge_vertices.begin()->first;
+    const auto start_vertex =
+        perimeter_edge_vertices.begin()->second.front();
+    auto current_edge = start_edge;
+    auto current_vertex = start_vertex;
+    std::set<std::uint64_t> visited_edges;
+    for (std::size_t walk = 0U;
+         walk < perimeter_edge_vertices.size();
+         ++walk) {
+        CHECK(visited_edges.insert(current_edge).second);
+        const auto edge =
+            perimeter_edge_vertices.find(current_edge);
+        CHECK(edge != perimeter_edge_vertices.end());
+        const auto& endpoints = edge->second;
+        CHECK(endpoints[0] == current_vertex ||
+              endpoints[1] == current_vertex);
+        const auto next_vertex =
+            endpoints[0] == current_vertex
+                ? endpoints[1]
+                : endpoints[0];
+        const auto vertex =
+            perimeter_vertex_edges.find(next_vertex);
+        CHECK(vertex != perimeter_vertex_edges.end());
+        const auto& neighbors = vertex->second;
+        CHECK(neighbors.size() == 2U);
+        CHECK(neighbors[0] == current_edge ||
+              neighbors[1] == current_edge);
+        const auto next_edge =
+            neighbors[0] == current_edge
+                ? neighbors[1]
+                : neighbors[0];
+        if (walk + 1U == perimeter_edge_vertices.size()) {
+            CHECK(next_vertex == start_vertex);
+            CHECK(next_edge == start_edge);
+        } else {
+            CHECK(next_edge != start_edge);
+        }
+        current_vertex = next_vertex;
+        current_edge = next_edge;
+    }
+    CHECK(visited_edges.size() ==
+          certified_perimeter_tokens.size());
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_SPLIT_CARRIER_PERIMETER_PASS"
         << " same_semantic_surface=1"
@@ -691,6 +745,7 @@ void verifyPartIntegration() {
         << certified_internal_partitions
         << " distinct_material_perimeter_edges="
         << certified_perimeter_sources.size()
+        << " single_closed_component=1"
         << " source_proximity_guessing=0"
         << '\\n';
     const auto invalid_face =
