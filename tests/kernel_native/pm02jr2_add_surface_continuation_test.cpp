@@ -2328,6 +2328,33 @@ void verifyNativePlanarBranchedSurfaceContinuationsE0() {
           inherited_right->resolved_token);
     CHECK(upper->continued_into ==
           inherited_right->resolved_token);
+    // Each upper right-wall segment has its OWN current bounded
+    // native Face. Neither may be merged solely by equal coplanar
+    // geometry; both are instead explicitly certified as continuing
+    // this one inherited semantic carrier by the provider.
+    CHECK(lower->contribution_faces.size() == 1U);
+    CHECK(upper->contribution_faces.size() == 1U);
+    const auto lower_patch = lower->contribution_faces.front();
+    const auto upper_patch = upper->contribution_faces.front();
+    CHECK(lower_patch != upper_patch);
+    CHECK(std::find(
+        inherited->current_faces.begin(),
+        inherited->current_faces.end(), lower_patch) !=
+        inherited->current_faces.end());
+    CHECK(std::find(
+        inherited->current_faces.begin(),
+        inherited->current_faces.end(), upper_patch) !=
+        inherited->current_faces.end());
+    std::set<std::uint64_t> base_wall_faces;
+    for (const auto token : inherited->current_faces) {
+        if (token != lower_patch && token != upper_patch) {
+            base_wall_faces.insert(token.value);
+        }
+    }
+    // One original base Face with TWO separate attached branches.
+    CHECK(base_wall_faces.size() == 1U);
+    CHECK(inherited->current_faces.size() == 3U);
+    const auto base_wall_face = *base_wall_faces.begin();
 
     struct NativeUse final {
         kernel::RuntimeFaceToken face;
@@ -2392,8 +2419,29 @@ void verifyNativePlanarBranchedSurfaceContinuationsE0() {
             CHECK(material_tokens.insert(edge_value).second);
         }
     }
-    CHECK(partitions.size() >= 2U);
+    CHECK(partitions.size() == 2U);
     CHECK(partition_face_adj.size() == partitions.size());
+    // The exact native incidence graph is a three-node TWO-EDGE
+    // tree (not a chain): both partition Edges connect the retained
+    // base wall Face to a DIFFERENT created branch Face.
+    std::set<std::uint64_t> attached_patch_faces;
+    for (const auto& [edge, touching] : partition_face_adj) {
+        CHECK(edge != 0U);
+        CHECK(touching.size() == 2U);
+        CHECK(touching.count(base_wall_face) == 1U);
+        for (const auto face_token : touching) {
+            if (face_token != base_wall_face) {
+                CHECK(
+                    face_token == lower_patch.value ||
+                    face_token == upper_patch.value);
+                CHECK(attached_patch_faces.insert(
+                    face_token).second);
+            }
+        }
+    }
+    CHECK(attached_patch_faces.size() == 2U);
+    CHECK(attached_patch_faces.count(lower_patch.value) == 1U);
+    CHECK(attached_patch_faces.count(upper_patch.value) == 1U);
     CHECK(!material_tokens.empty());
     auto stitched = native_outer_cycles;
     const auto directed_closed = [](
@@ -2453,6 +2501,8 @@ void verifyNativePlanarBranchedSurfaceContinuationsE0() {
         << "PG01D_E0_NATIVE_BRANCHED_PLANAR_TREE_PASS"
         << " same_carrier_faces=" << inherited->current_faces.size()
         << " opposite_partitions=" << partitions.size()
+        << " exact_three_face_branch_tree=1"
+        << " upper_patch_faces=2"
         << " outer_cycles_after_cancel=1"
         << " retained_material_edges=" << material_tokens.size()
         << " geometric_stitching=0"
