@@ -23,6 +23,11 @@ public:
         kernel::RuntimeSolidHandle current_body,
         const kernel::ScopedBoundaryFace& bound_face) noexcept override;
 
+    [[nodiscard]] kernel::FaceBoundaryResult
+    queryFaceBoundaryAnySurface(
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedBoundaryFace& bound_face) noexcept override;
+
     [[nodiscard]] std::optional<kernel::ScopedProjectionEdge>
     bindEdgeToBody(
         kernel::RuntimeSolidHandle source_body,
@@ -74,6 +79,15 @@ public:
     [[nodiscard]] kernel::BodyPresentationResult
     bodyPresentation(
         kernel::RuntimeSolidHandle solid) noexcept override;
+
+private:
+    // One provider-owned strict native wire extraction implementation.
+    // The original planar-only API retains its exact preexisting policy.
+    [[nodiscard]] kernel::FaceBoundaryResult
+    queryFaceBoundaryImpl(
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedBoundaryFace& bound_face,
+        bool require_planar) noexcept;
 };
 
 } // namespace simplesolid2::kernel_occt
