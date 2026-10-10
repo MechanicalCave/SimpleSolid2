@@ -1186,6 +1186,275 @@ void verifyPartIntegration() {
         << " exact_vertex_incidence=1"
         << " proximity_healing=0"
         << '\n';
+    // E0 multi-hole continuation: perform a SECOND genuine through-Cut
+    // from a NEW Sketch supported by the current, post-first-Cut stage.
+    // The holes occupy different fragments of the same inherited planar
+    // Surface, avoiding a single bounded Face / one-hole shortcut.
+    CHECK(drilled_side->canonical_frame.has_value());
+    const part::SurfaceReference drilled_side_ref{
+        drilled_catalog.stage, drilled_side->address};
+    const auto second_support =
+        part::partSketchSupportForBodyPlanarSurface(
+            drilled_side_ref);
+    CHECK(second_support.has_value());
+    const auto second_sketch = session.execute(
+        application::CreatePartSketchOnSupportCommand{
+            *second_support,
+            session.document().revision()},
+        &provider);
+    CHECK(second_sketch.ok() && second_sketch.sketch_id);
+    const auto second_hole_uv = projectToFrame(
+        *drilled_side->canonical_frame,
+        kernel::Point3{40.0, 15.0, 15.0});
+    CHECK(session.execute(application::AddSketchCircleCommand{
+        *second_sketch.sketch_id,
+        second_hole_uv,
+        2.0,
+        sketch::EntityRole::regular}).ok());
+    const auto* second_host =
+        session.document().findSketch(*second_sketch.sketch_id);
+    CHECK(second_host);
+    const auto second_regions =
+        sketch::analyzeRegions(second_host->model);
+    CHECK(second_regions.complete());
+    CHECK(second_regions.regions.size() == 1U);
+    const auto second_intent =
+        part::makeProfileRegionIntent(
+            second_regions.regions.front());
+    CHECK(second_intent.has_value());
+    const auto second_profile = session.execute(
+        application::CreateProfileCommand{
+            *second_sketch.sketch_id,
+            session.document().revision(),
+            *second_intent});
+    CHECK(second_profile.ok() && second_profile.profile_id);
+    const auto second_cut = session.execute(
+        application::CreateExtrudeFeatureCommand{
+            *second_profile.profile_id,
+            session.document().revision(),
+            part::ExtrudeOperation::cut,
+            part::OneSidedExtrudeExtent{
+                core::LengthValue{45.0},
+                true},
+            "PG01D split-carrier upper side through-hole"},
+        provider);
+    CHECK(second_cut.ok() && second_cut.feature_id);
+
+    const auto twice_drilled =
+        part::evaluatePart(session.document(), provider);
+    CHECK(twice_drilled.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(twice_drilled.body_solid);
+    CHECK(twice_drilled.current_topology);
+    CHECK(twice_drilled.current_topology->complete());
+    const auto& two_catalog = *twice_drilled.current_topology;
+    CHECK(two_catalog.stage.feature_id &&
+          *two_catalog.stage.feature_id == *second_cut.feature_id);
+    const auto two_side = std::find_if(
+        two_catalog.surfaces.begin(),
+        two_catalog.surfaces.end(),
+        [address = continued_side->address](
+            const auto& surface) {
+            return surface.address == address;
+        });
+    CHECK(two_side != two_catalog.surfaces.end());
+    CHECK(two_side->status == kernel::ReferenceStatus::resolved);
+    CHECK(two_side->current_faces.size() >= 2U);
+
+    // Native Face-wire membership and exact Part Edge source identity.
+    // Every actual hole belongs to a DIFFERENT current Face fragment;
+    // internal same-carrier partitions have two opposite oriented uses.
+    struct TwoHoleUse final {
+        bool reversed{};
+        bool inner{};
+        kernel::RuntimeFaceToken face;
+    };
+    std::map<std::uint64_t, std::vector<TwoHoleUse>>
+        two_native_uses;
+    std::set<std::uint64_t> two_hole_face_tokens;
+    std::size_t two_native_inner_wires = 0U;
+    std::size_t two_native_outer_wires = 0U;
+    for (const auto face_token : two_side->current_faces) {
+        const auto face = std::find_if(
+            two_catalog.faces.begin(),
+            two_catalog.faces.end(),
+            [face_token](const auto& record) {
+                return record.runtime_token == face_token;
+            });
+        CHECK(face != two_catalog.faces.end());
+        CHECK(face->surface_candidates.size() == 1U);
+        CHECK(face->surface_candidates.front() ==
+              two_side->address);
+        const auto bound = provider.bindFaceToBody(
+            twice_drilled.body_solid, face_token);
+        CHECK(bound && bound->valid());
+        const auto native = provider.queryFaceBoundaryAnySurface(
+            twice_drilled.body_solid, *bound);
+        CHECK(native.ok());
+        std::size_t current_face_outer_wires = 0U;
+        for (const auto& wire : native.wires) {
+            if (wire.outer) {
+                ++current_face_outer_wires;
+                ++two_native_outer_wires;
+            } else {
+                ++two_native_inner_wires;
+                two_hole_face_tokens.insert(face_token.value);
+            }
+            for (const auto& use : wire.edges) {
+                CHECK(use.valid());
+                two_native_uses[use.edge.value].push_back(
+                    TwoHoleUse{
+                        use.reversed, !wire.outer, face_token});
+            }
+        }
+        CHECK(current_face_outer_wires == 1U);
+    }
+    CHECK(two_native_outer_wires == two_side->current_faces.size());
+    CHECK(two_native_inner_wires == 2U);
+    CHECK(two_hole_face_tokens.size() == 2U);
+
+    std::set<std::uint64_t> two_outer_tokens;
+    std::set<std::uint64_t> two_hole_tokens;
+    std::vector<part::MaterialEdgeReference> two_material_sources;
+    std::size_t two_cancelled_partitions = 0U;
+    for (const auto& [value, uses] : two_native_uses) {
+        const kernel::RuntimeEdgeToken edge_token{value};
+        const auto current_edge = std::find_if(
+            two_catalog.edges.begin(),
+            two_catalog.edges.end(),
+            [edge_token](const auto& record) {
+                return record.runtime_token == edge_token;
+            });
+        CHECK(current_edge != two_catalog.edges.end());
+        const auto source = part::authorMaterialEdgeReference(
+            two_catalog, edge_token);
+        if (current_edge->representation_partition) {
+            CHECK(current_edge->accounting_class ==
+                  part::TopologyAccountingClass::
+                      known_representation_artifact);
+            CHECK(!current_edge->periodic_seam);
+            CHECK(!source.ok());
+            CHECK(uses.size() == 2U);
+            CHECK(uses[0].face != uses[1].face);
+            CHECK(!uses[0].inner && !uses[1].inner);
+            CHECK(uses[0].reversed != uses[1].reversed);
+            ++two_cancelled_partitions;
+            continue;
+        }
+        CHECK(!current_edge->periodic_seam);
+        CHECK(source.ok() && source.reference);
+        CHECK(source.reference->stage == two_catalog.stage);
+        CHECK(uses.size() == 1U);
+        two_material_sources.push_back(*source.reference);
+        if (uses.front().inner) {
+            CHECK(current_edge->curve_kind ==
+                  kernel::CurveKind::circle);
+            CHECK(two_hole_tokens.insert(value).second);
+        } else {
+            CHECK(two_outer_tokens.insert(value).second);
+        }
+    }
+    CHECK(two_cancelled_partitions >= 1U);
+    CHECK(two_hole_tokens.size() == 2U);
+    CHECK(!two_outer_tokens.empty());
+    for (const auto edge : two_hole_tokens) {
+        CHECK(two_outer_tokens.count(edge) == 0U);
+    }
+    std::sort(two_material_sources.begin(),
+              two_material_sources.end());
+    CHECK(std::adjacent_find(
+        two_material_sources.begin(),
+        two_material_sources.end()) == two_material_sources.end());
+    CHECK(two_material_sources.size() ==
+          two_outer_tokens.size() + two_hole_tokens.size());
+
+    // Outer boundary connectivity after exactly-certified cancellation:
+    // every native catalog material Vertex has degree two with respect
+    // to retained outer Edge tokens, every Edge has two distinct
+    // endpoints, and a single closed walk exhausts the entire set.
+    std::map<std::uint64_t, std::vector<std::uint64_t>>
+        two_outer_vertex_edges;
+    std::map<std::uint64_t, std::vector<std::uint64_t>>
+        two_outer_edge_vertices;
+    for (const auto& vertex : two_catalog.vertices) {
+        std::vector<std::uint64_t> incident;
+        for (const auto edge : vertex.incident_material_edges) {
+            if (two_outer_tokens.count(edge.value)) {
+                incident.push_back(edge.value);
+            }
+        }
+        if (incident.empty()) continue;
+        CHECK(vertex.runtime_token.valid());
+        CHECK(incident.size() == 2U);
+        CHECK(incident[0] != incident[1]);
+        for (const auto edge : incident) {
+            two_outer_edge_vertices[edge].push_back(
+                vertex.runtime_token.value);
+        }
+        CHECK(two_outer_vertex_edges.emplace(
+            vertex.runtime_token.value,
+            std::move(incident)).second);
+    }
+    CHECK(two_outer_edge_vertices.size() ==
+          two_outer_tokens.size());
+    CHECK(two_outer_vertex_edges.size() ==
+          two_outer_tokens.size());
+    for (const auto& [edge, endpoints] :
+         two_outer_edge_vertices) {
+        CHECK(two_outer_tokens.count(edge) == 1U);
+        CHECK(endpoints.size() == 2U);
+        CHECK(endpoints[0] != endpoints[1]);
+    }
+    const auto first_edge = two_outer_edge_vertices.begin()->first;
+    const auto first_vertex =
+        two_outer_edge_vertices.begin()->second.front();
+    auto active_two_edge = first_edge;
+    auto active_two_vertex = first_vertex;
+    std::set<std::uint64_t> visited_two_outer;
+    for (std::size_t step = 0U;
+         step < two_outer_tokens.size(); ++step) {
+        CHECK(visited_two_outer.insert(active_two_edge).second);
+        const auto edge =
+            two_outer_edge_vertices.find(active_two_edge);
+        CHECK(edge != two_outer_edge_vertices.end());
+        const auto& ends = edge->second;
+        CHECK(ends[0] == active_two_vertex ||
+              ends[1] == active_two_vertex);
+        const auto next_vertex =
+            ends[0] == active_two_vertex ? ends[1] : ends[0];
+        const auto at_vertex =
+            two_outer_vertex_edges.find(next_vertex);
+        CHECK(at_vertex != two_outer_vertex_edges.end());
+        CHECK(at_vertex->second.size() == 2U);
+        const auto& neighbors = at_vertex->second;
+        CHECK(neighbors[0] == active_two_edge ||
+              neighbors[1] == active_two_edge);
+        const auto next_edge =
+            neighbors[0] == active_two_edge
+                ? neighbors[1] : neighbors[0];
+        if (step + 1U == two_outer_tokens.size()) {
+            CHECK(next_vertex == first_vertex);
+            CHECK(next_edge == first_edge);
+        } else {
+            CHECK(next_edge != first_edge);
+        }
+        active_two_vertex = next_vertex;
+        active_two_edge = next_edge;
+    }
+    CHECK(visited_two_outer == two_outer_tokens);
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_SPLIT_TWO_HOLES_PASS"
+        << " same_surface_fragments="
+        << two_side->current_faces.size()
+        << " native_inner_wires=" << two_native_inner_wires
+        << " holed_fragments=" << two_hole_face_tokens.size()
+        << " independently_authored_hole_edges="
+        << two_hole_tokens.size()
+        << " certified_internal_partitions="
+        << two_cancelled_partitions
+        << " exact_single_outer_cycle=1"
+        << " native_geometry_guessing=0"
+        << '\n';
     std::cout
         << "PG01D_FACE_BOUNDARY_E0_SPLIT_CARRIER_HOLE_PASS"
         << " same_semantic_surface=1"
