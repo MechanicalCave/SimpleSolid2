@@ -1094,8 +1094,8 @@ void verifyNativeCurvedSurfaceContinuationE0() {
     CHECK(source_side->surface_status ==
           kernel::ReferenceStatus::resolved);
     CHECK(source_side->resolved_token.has_value());
-    CHECK(source_side->semantic_surface_kind ==
-          kernel::FaceSurfaceKind::cylinder);
+    CHECK(source_side->surface_kind ==
+          kernel::SurfaceKind::cylinder);
 
     kernel::Frame3 top_frame;
     top_frame.origin = {0.0, 0.0, 10.0};
