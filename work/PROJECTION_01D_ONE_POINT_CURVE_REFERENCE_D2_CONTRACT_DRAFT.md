@@ -112,7 +112,7 @@ as a completed E4 suppression proof.
 | E1 — same-stage selector uniqueness | 0/1/many returns Missing/Resolved/Ambiguous; never first-wins | **PASS limited synthetic tests** 36/36 positive; negative injected two-Edge incidence and missing Point both fail closed; actual OCCT-native collision remains OPEN |
 | E2 — native provider rebuild | Same semantic selector in independent restored Part and fresh OCCT provider, without native token reuse | **PASS research** 36/36 |
 | E3 — native on-disk Save/Reopen | Actually write/read .ss2part v15, new DocumentSession and provider, compare strict stage resolutions | **PASS existing-address round-trip** real PartDocumentStore createNew/load of v15 plus new OCCT provider, 1/1; new one-Point persisted branch remains NOT IMPLEMENTED |
-| E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **PARTIAL — extensive test-only lifecycle matrix:** native Chamfer Undo/Redo and Add edit/Undo/Redo 1/1; deleting/suppressing source Chamfer and suppressing previous Add strictly invalidates unavailable Body/Stage, Undo restores 1/1; 12 independent major Add extent/direction changes: 6 reversed result in unavailable Body, 6 forward yield one unique stage-local candidate, no ambiguous or cached fallback. Actual persisted one-Point link, changed-fragment provenance, direct parent deletion, v16 migration and radical source equivalence still OPEN |
+| E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **PARTIAL — extensive test-only lifecycle matrix:** native Chamfer Undo/Redo and Add edit/Undo/Redo 1/1; deleting/suppressing source Chamfer and suppressing previous Add strictly invalidates unavailable Body/Stage, Undo restores 1/1; 12 independent major Add extent/direction changes: 6 reversed result in unavailable Body, 6 forward yield one unique stage-local candidate, no ambiguous or cached fallback. Actual persisted one-Point link and v16 cold migration, missing-producer/cycle failure, and mixed-link alias rejection remain OPEN. Cross-revision physical B-Rep fragment identity is explicitly NOT a requirement under Owner-approved semantic option A |
 | E5 — adverse native geometry | Same Curve + Point incident to multiple actual material Edge fragments, negative stage/cycle cases and equal-looking unrelated geometry | **PARTIAL** injected two-Edge incidence and missing Point fail closed. Native 78-Chamfer survey: 1332 Curve+Point pairs, 260 uniquely selected Edge hits, 0 collisions and 1072 empty. A real OCCT-native ambiguity counterexample, stage/cycles and similar geometry remain OPEN |
 | E6 — schema/migration/canonical identity | Explicit layout/version plan, v15 backwards reading, corrupt/malformed/duplicate rejection, mixed old/new link resolution and cross-branch dedup | **SEMANTICS A OWNER ACCEPTED, IMPLEMENTATION STOP**; 224 legacy two-Point aliases versus 36 one-Point-only cases resolved by strict current-stage endpoint-cardinality domain; proposed v16 JSON/migration and negative fixtures documented separately. Owner D2 approval of v16/write policy/atomic mixed-link validation remains OPEN |
 | E7 — Owner sample + practical result | Typed failure/recovery on private Owner Face, correct manually selected boundaries, then linked cold Save/Reopen and final FULL | **OPEN — Owner FAIL** |
@@ -197,8 +197,10 @@ Observed [Windows diagnostic RED #38078985460](https://github.com/MechanicalCave
   CTest log visibility and has been **removed**; a separate exact-head
   green check remains mandatory.
 
-**CRITICAL STOP:** the test proves *semantic cardinality* and
-fail-closed staging, not a cross-edit **bounded Edge lineage** claim.
+**EVIDENCE LIMIT (resolved as a product meaning by Owner choice A):**
+the test proves *semantic cardinality* and fail-closed staging,
+not cross-edit **bounded Edge lineage** — the latter is not promised
+by the accepted semantic-associativity option A.
 A single source Edge after a large upstream shape change can be
 appropriately deformed or can be an unintended new fragment that
 happens to share current Curve and Point addresses. The current
