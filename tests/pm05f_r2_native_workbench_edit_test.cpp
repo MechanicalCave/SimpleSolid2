@@ -2763,6 +2763,123 @@ int main(int argc, char* argv[]) {
                 << " additional_undo=0"
                 << '\n';
 
+            // Owner D2 mixed-acquisition contract: one native bounded
+            // Face yields four top-cap edges; one genuinely separately
+            // clicked BOTTOM material Edge survives removing the Face
+            // gesture, regardless of coincident projected coordinates.
+            auto mixed_session = makeBaseSession(kernel);
+            const auto mixed_target =
+                mixed_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+            CHECK(mixed_target.ok() && mixed_target.sketch_id);
+            CHECK(workbench.activateDocument(
+                &mixed_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* mixed_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QStringLiteral("Sketch 2")) {
+                    mixed_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(mixed_tree_item);
+            tree->clearSelection();
+            tree->setCurrentItem(mixed_tree_item);
+            mixed_tree_item->setSelected(true);
+            sketch_edit->trigger();
+            QApplication::processEvents();
+            reply = workbench.submitCadInput(
+                "PROJECT", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativePlanarFaceClick(
+                *viewport, viewer::Point3{
+                    20.0, 15.0, 20.0}));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 4")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 1U);
+            reply = workbench.submitCadInput(
+                "EDGES", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::bottom));
+            viewport->fitAll();
+            QApplication::processEvents();
+            CHECK(nativeClick(
+                *viewport, viewer::Point3{20.0, 0.0, 0.0}));
+            const auto mixed_picks =
+                controller->selectedMaterialEdgeReferences();
+            CHECK(mixed_picks && mixed_picks->size() == 5U);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 1U);
+            reply = workbench.submitCadInput(
+                "FACEBOUNDARY",
+                workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 5")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 1")));
+            reply = workbench.submitCadInput(
+                "REMOVE", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(pg_count->text().contains(
+                QStringLiteral("selected: 1")));
+            CHECK(pg_count->text().contains(
+                QStringLiteral("Faces staged: 0")));
+            CHECK(viewport->runtimeDiagnostics()
+                .project_face_selected_overlays_current == 0U);
+            CHECK(pg_finish->isEnabled());
+            const auto mixed_previous_revision =
+                mixed_session.document().revision();
+            const auto mixed_previous_undo =
+                mixed_session.undoDepth();
+            reply = workbench.submitCadInput(
+                "FINISH", workbench.cadInputContextGeneration());
+            CHECK(reply.accepted);
+            CHECK(mixed_session.document().revision() !=
+                  mixed_previous_revision);
+            CHECK(mixed_session.undoDepth() ==
+                  mixed_previous_undo + 1U);
+            const auto* mixed_saved =
+                mixed_session.document().findSketch(
+                    *mixed_target.sketch_id);
+            CHECK(mixed_saved &&
+                  mixed_saved->projection_bindings.size() == 1U);
+            CHECK(mixed_session.undo().changed);
+            CHECK(mixed_session.document().findSketch(
+                *mixed_target.sketch_id)
+                ->projection_bindings.empty());
+            CHECK(mixed_session.redo().changed);
+            CHECK(mixed_session.document().findSketch(
+                *mixed_target.sketch_id)
+                ->projection_bindings.size() == 1U);
+            std::cout
+                << "PG01D_MANUAL_FACE_INDEPENDENT_EDGE_MIX_PASS"
+                << " staged_face=1"
+                << " staged_face_material=4"
+                << " separate_bottom_edge=1"
+                << " face_removed=1"
+                << " manual_edge_survived=1"
+                << " one_undo_redo=1"
+                << '\n';
+
             result = EXIT_SUCCESS;
             workbench.close();
             app.quit();
