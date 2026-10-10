@@ -243,6 +243,71 @@ public:
     }
 };
 
+// Research-only hypothetical selector. It does NOT author a reference:
+// it asks whether a semantic Curve family and one currently resolved
+// semantic Point uniquely identify an exact material Edge in a stage.
+[[nodiscard]] std::vector<kernel::RuntimeEdgeToken>
+pg01dCurveEdgesIncidentToSemanticPoint(
+    const part::BodyStageTopologyCatalog& catalog,
+    const part::FeatureCurveAddress& curve_address,
+    const part::FeaturePointAddress& point_address) {
+    const auto curve = std::find_if(
+        catalog.curves.begin(), catalog.curves.end(),
+        [&curve_address](const auto& item) {
+            return item.address == curve_address;
+        });
+    const auto point = std::find_if(
+        catalog.points.begin(), catalog.points.end(),
+        [&point_address](const auto& item) {
+            return item.address == point_address;
+        });
+    if (curve == catalog.curves.end() ||
+        point == catalog.points.end() ||
+        point->status != kernel::ReferenceStatus::resolved ||
+        point->current_vertices.size() != 1U) {
+        return {};
+    }
+    const auto vertex = std::find_if(
+        catalog.vertices.begin(), catalog.vertices.end(),
+        [token = point->current_vertices.front()](const auto& item) {
+            return item.runtime_token == token;
+        });
+    if (vertex == catalog.vertices.end() ||
+        vertex->accounting_class !=
+            part::TopologyAccountingClass::referenceable ||
+        vertex->referenceability !=
+            kernel::ReferenceStatus::resolved ||
+        vertex->point_candidates.size() != 1U ||
+        vertex->point_candidates.front() != point_address) {
+        return {};
+    }
+    std::vector<kernel::RuntimeEdgeToken> candidates;
+    for (const auto edge_token : curve->current_edges) {
+        const auto edge = std::find_if(
+            catalog.edges.begin(), catalog.edges.end(),
+            [edge_token](const auto& item) {
+                return item.runtime_token == edge_token;
+            });
+        if (edge == catalog.edges.end() ||
+            edge->accounting_class !=
+                part::TopologyAccountingClass::referenceable ||
+            edge->periodic_seam ||
+            edge->representation_partition ||
+            edge->curve_candidates.size() != 1U ||
+            edge->curve_candidates.front() != curve_address) {
+            continue;
+        }
+        if (std::find(
+                vertex->incident_material_edges.begin(),
+                vertex->incident_material_edges.end(),
+                edge_token) !=
+            vertex->incident_material_edges.end()) {
+            candidates.push_back(edge_token);
+        }
+    }
+    return candidates;
+}
+
 void verifyPartIntegration() {
     kernel_occt::OcctSolidModelingKernel provider;
     auto document =
@@ -582,6 +647,9 @@ void verifyPartIntegration() {
         std::size_t missing_endpoint_not_accounted = 0U;
         std::size_t two_surface_pair_unique = 0U;
         std::size_t two_surface_pair_collided = 0U;
+        std::size_t one_semantic_endpoint_unique = 0U;
+        std::size_t one_semantic_endpoint_ambiguous = 0U;
+        std::size_t one_semantic_endpoint_cold_unique = 0U;
         for (const auto& candidate : topology.edges) {
             const auto source =
                 part::authorMaterialEdgeReference(
@@ -646,6 +714,8 @@ void verifyPartIntegration() {
                         std::size_t family_realizations = 0U;
                         std::size_t incident_vertices = 0U;
                         std::size_t certified_endpoints = 0U;
+                        std::optional<part::FeaturePointAddress>
+                            certified_point_address;
                         if (detail) {
                             CHECK(native.last_edge_feature);
                             CHECK(native.last_edge_feature->ok());
@@ -686,6 +756,9 @@ void verifyPartIntegration() {
                                     vertex.point_candidates.size() == 1U;
                                 if (is_certified) {
                                     ++certified_endpoints;
+                                    CHECK(!certified_point_address);
+                                    certified_point_address =
+                                        vertex.point_candidates.front();
                                 } else {
                                     // Same exact provider invocation as the
                                     // Part semantic stage, NOT a rebuilt
@@ -847,6 +920,53 @@ void verifyPartIntegration() {
                                 }
                             }
                         }
+                        if (detail &&
+                            certified_point_address &&
+                            detail->curve_candidate_count == 1U) {
+                            const auto edge = std::find_if(
+                                ledger.edges.begin(), ledger.edges.end(),
+                                [token = detail->edge](const auto& item) {
+                                    return item.runtime_token == token;
+                                });
+                            CHECK(edge != ledger.edges.end());
+                            const auto& curve_address =
+                                edge->curve_candidates.front();
+                            const auto current_choices =
+                                pg01dCurveEdgesIncidentToSemanticPoint(
+                                    ledger, curve_address,
+                                    *certified_point_address);
+                            if (current_choices.size() == 1U &&
+                                current_choices.front() == detail->edge) {
+                                ++one_semantic_endpoint_unique;
+                                // Fresh Part Document and fresh OCCT provider:
+                                // use only durable semantic Curve + Point
+                                // addresses; never compare native tokens
+                                // between independently evaluated Bodies.
+                                auto restored = part::PartDocument::restore(
+                                    core::DocumentId::generate(),
+                                    trial.document().state());
+                                CHECK(restored.ok());
+                                kernel_occt::OcctSolidModelingKernel
+                                    cold_provider;
+                                const auto cold = part::evaluatePart(
+                                    *restored.document, cold_provider);
+                                CHECK(cold.body_status ==
+                                      part::BodyEvaluationStatus::
+                                          up_to_date);
+                                CHECK(cold.current_topology &&
+                                      cold.current_topology->complete());
+                                const auto cold_choices =
+                                    pg01dCurveEdgesIncidentToSemanticPoint(
+                                        *cold.current_topology,
+                                        curve_address,
+                                        *certified_point_address);
+                                if (cold_choices.size() == 1U) {
+                                    ++one_semantic_endpoint_cold_unique;
+                                }
+                            } else {
+                                ++one_semantic_endpoint_ambiguous;
+                            }
+                        }
                         std::cout
                             << "PG01D_CHAMFER_SWEEP_REJECT"
                             << " family_realizations=" << family_realizations
@@ -906,6 +1026,12 @@ void verifyPartIntegration() {
             << two_surface_pair_unique
             << " two_surface_pair_collided="
             << two_surface_pair_collided
+            << " one_endpoint_unique="
+            << one_semantic_endpoint_unique
+            << " one_endpoint_ambiguous="
+            << one_semantic_endpoint_ambiguous
+            << " one_endpoint_fresh_provider_unique="
+            << one_semantic_endpoint_cold_unique
             << " private_part_committed=0"
             << '\n';
         // Research witness on the accepted immutable Point rule:
@@ -922,9 +1048,10 @@ void verifyPartIntegration() {
         CHECK(missing_endpoint_not_accounted == 0U);
         CHECK(two_surface_pair_unique +
                   two_surface_pair_collided == rejected_material);
-        // Intentionally RED only to surface counted collision evidence.
-        // Remove after exact-head Windows diagnostic logs.
-        CHECK(false && "PG01D_D2B_PAIR_IDENTITY_AUDIT_ONLY");
+        // Diagnostic RED: gather proof-of-concept Curve+one-semantic
+        // Point admission counts and fresh-provider re-evaluation counts.
+        // It is not a new accepted MaterialEdgeReference branch.
+        CHECK(false && "PG01D_D2B_ONE_POINT_COLD_AUDIT_ONLY");
     }
 
     const auto contribution =
