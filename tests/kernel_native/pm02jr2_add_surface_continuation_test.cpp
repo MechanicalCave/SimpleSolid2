@@ -573,6 +573,13 @@ void verifyPartIntegration() {
         std::size_t rejected_material = 0U;
         std::size_t rejected_other = 0U;
         std::size_t admitted_faces = 0U;
+        std::size_t point_audit_samples = 0U;
+        std::size_t missing_endpoint_two_surfaces = 0U;
+        std::size_t missing_endpoint_three_surfaces = 0U;
+        std::size_t missing_endpoint_other_surfaces = 0U;
+        std::size_t missing_endpoint_inherited = 0U;
+        std::size_t missing_endpoint_new = 0U;
+        std::size_t missing_endpoint_not_accounted = 0U;
         for (const auto& candidate : topology.edges) {
             const auto source =
                 part::authorMaterialEdgeReference(
@@ -638,6 +645,8 @@ void verifyPartIntegration() {
                         std::size_t incident_vertices = 0U;
                         std::size_t certified_endpoints = 0U;
                         if (detail) {
+                            CHECK(native.last_edge_feature);
+                            CHECK(native.last_edge_feature->ok());
                             const auto record = std::find_if(
                                 ledger.edges.begin(), ledger.edges.end(),
                                 [token = detail->edge](const auto& item) {
@@ -666,13 +675,114 @@ void verifyPartIntegration() {
                                     continue;
                                 }
                                 ++incident_vertices;
-                                if (vertex.accounting_class ==
+                                const bool is_certified =
+                                    vertex.accounting_class ==
                                         part::TopologyAccountingClass::
                                             referenceable &&
                                     vertex.referenceability ==
                                         kernel::ReferenceStatus::resolved &&
-                                    vertex.point_candidates.size() == 1U) {
+                                    vertex.point_candidates.size() == 1U;
+                                if (is_certified) {
                                     ++certified_endpoints;
+                                } else {
+                                    // Same exact provider invocation as the
+                                    // Part semantic stage, NOT a rebuilt
+                                    // or numerically matched OCCT Vertex.
+                                    const auto& raw =
+                                        *native.last_edge_feature;
+                                    const auto observed = std::find_if(
+                                        raw.current_vertex_semantics.begin(),
+                                        raw.current_vertex_semantics.end(),
+                                        [token = vertex.runtime_token](
+                                            const auto& item) {
+                                            return item.runtime_token == token;
+                                        });
+                                    CHECK(observed !=
+                                          raw.current_vertex_semantics.end());
+                                    std::vector<
+                                        part::FeatureSurfaceAddress>
+                                        semantic_surfaces;
+                                    bool complete_mapping = true;
+                                    for (const auto carrier :
+                                         observed->adjacent_surfaces) {
+                                        const auto resolved = std::find_if(
+                                            ledger.surfaces.begin(),
+                                            ledger.surfaces.end(),
+                                            [carrier](const auto& item) {
+                                                return item.status ==
+                                                    kernel::ReferenceStatus::
+                                                        resolved &&
+                                                    item.runtime_token &&
+                                                    *item.runtime_token ==
+                                                        carrier;
+                                            });
+                                        if (resolved ==
+                                                ledger.surfaces.end()) {
+                                            complete_mapping = false;
+                                            continue;
+                                        }
+                                        if (std::find(
+                                                semantic_surfaces.begin(),
+                                                semantic_surfaces.end(),
+                                                resolved->address) ==
+                                            semantic_surfaces.end()) {
+                                            semantic_surfaces.push_back(
+                                                resolved->address);
+                                        }
+                                    }
+                                    CHECK(complete_mapping);
+                                    if (semantic_surfaces.size() == 2U) {
+                                        ++missing_endpoint_two_surfaces;
+                                    } else if (
+                                        semantic_surfaces.size() == 3U) {
+                                        ++missing_endpoint_three_surfaces;
+                                    } else {
+                                        ++missing_endpoint_other_surfaces;
+                                    }
+                                    std::size_t current_lineage = 0U;
+                                    for (const auto& inherited :
+                                         raw.inherited_vertex_realizations) {
+                                        if (std::find(
+                                                inherited.current_vertices
+                                                    .begin(),
+                                                inherited.current_vertices
+                                                    .end(),
+                                                vertex.runtime_token) !=
+                                            inherited.current_vertices
+                                                .end()) {
+                                            ++current_lineage;
+                                        }
+                                    }
+                                    if (current_lineage == 0U) {
+                                        ++missing_endpoint_new;
+                                    } else {
+                                        ++missing_endpoint_inherited;
+                                    }
+                                    if (vertex.accounting_class !=
+                                            part::TopologyAccountingClass::
+                                                semantically_unsupported) {
+                                        ++missing_endpoint_not_accounted;
+                                    }
+                                    if (point_audit_samples++ < 8U) {
+                                        std::cout
+                                            << "PG01D_D2B_POINT_OBSERVATION"
+                                            << " semanticSurfaces="
+                                            << semantic_surfaces.size()
+                                            << " nativeSurfaces="
+                                            << observed->adjacent_surfaces
+                                                   .size()
+                                            << " pointAccounting="
+                                            << static_cast<int>(
+                                                   vertex.accounting_class)
+                                            << " pointReference="
+                                            << static_cast<int>(
+                                                   vertex.referenceability)
+                                            << " inheritedSources="
+                                            << current_lineage
+                                            << " pointCandidates="
+                                            << vertex.point_candidates.size()
+                                            << '\n';
+                                    }
                                 }
                             }
                         }
@@ -719,8 +829,23 @@ void verifyPartIntegration() {
             << " admitted_faces=" << admitted_faces
             << " blocked_material=" << rejected_material
             << " blocked_other=" << rejected_other
+            << " missing_two_semantic_surfaces="
+            << missing_endpoint_two_surfaces
+            << " missing_three_semantic_surfaces="
+            << missing_endpoint_three_surfaces
+            << " missing_other_semantic_surfaces="
+            << missing_endpoint_other_surfaces
+            << " missing_endpoints_inherited="
+            << missing_endpoint_inherited
+            << " missing_endpoints_new="
+            << missing_endpoint_new
+            << " missing_endpoints_other_accounting="
+            << missing_endpoint_not_accounted
             << " private_part_committed=0"
             << '\n';
+        // Diagnostic-only RED to preserve exact OCCT observation output
+        // in Windows CTest logs. Remove after classification is captured.
+        CHECK(false && "PG01D_D2B_POINT_RELATION_AUDIT_ONLY");
     }
 
     const auto contribution =
