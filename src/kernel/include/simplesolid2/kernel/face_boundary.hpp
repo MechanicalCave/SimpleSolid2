@@ -125,6 +125,18 @@ public:
     [[nodiscard]] virtual FaceBoundaryResult queryFaceBoundary(
         RuntimeSolidHandle current_body,
         const ScopedBoundaryFace& bound_face) noexcept = 0;
+
+    // PG-01D Face Boundary extension E0: optional *read-only* native
+    // oriented wires from an arbitrary bounded surface (plane, cylinder,
+    // etc.). This does NOT prove a continuous material surface region or
+    // authorize a link. Existing strict Planar Face calls remain unchanged.
+    // Providers without this optional capability fail typed/closed.
+    [[nodiscard]] virtual FaceBoundaryResult
+    queryFaceBoundaryAnySurface(
+        RuntimeSolidHandle,
+        const ScopedBoundaryFace&) noexcept {
+        return {FaceBoundaryStatus::unsupported_surface, {}};
+    }
 };
 
 } // namespace simplesolid2::kernel
