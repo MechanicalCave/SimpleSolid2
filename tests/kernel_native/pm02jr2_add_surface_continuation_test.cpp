@@ -1893,6 +1893,127 @@ void verifyNativeCylindricalCutSplitE0() {
         << '\n';
 }
 
+// E0 typed/portable negative matrix: malformed per-use endpoint coverage
+// or wrong native Edge direction must be rejected at FaceBoundaryResult's
+// public validation boundary, BEFORE any Part-authorable sources are used.
+// These tiny tokens are synthetic, never an Owner geometry/fixture.
+void verifyPg01dE0DirectedWireFailClosedContract() {
+    using kernel::FaceBoundaryEdgeUse;
+    using kernel::FaceBoundaryWire;
+    using kernel::FaceBoundaryResult;
+    using kernel::FaceBoundaryStatus;
+    using kernel::RuntimeEdgeToken;
+    using kernel::RuntimeVertexToken;
+
+    const FaceBoundaryWire directed_outer{
+        true,
+        {
+            FaceBoundaryEdgeUse{
+                RuntimeEdgeToken{101U}, false,
+                RuntimeVertexToken{201U},
+                RuntimeVertexToken{202U}},
+            FaceBoundaryEdgeUse{
+                RuntimeEdgeToken{102U}, false,
+                RuntimeVertexToken{202U},
+                RuntimeVertexToken{203U}},
+            FaceBoundaryEdgeUse{
+                RuntimeEdgeToken{103U}, false,
+                RuntimeVertexToken{203U},
+                RuntimeVertexToken{201U}},
+        },
+    };
+    const FaceBoundaryWire directed_circle{
+        false,
+        {
+            FaceBoundaryEdgeUse{
+                RuntimeEdgeToken{104U}, false,
+                RuntimeVertexToken{204U},
+                RuntimeVertexToken{204U}},
+        },
+    };
+    CHECK(directed_outer.valid());
+    CHECK(directed_circle.valid());
+    CHECK((FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {directed_outer, directed_circle}}).ok());
+
+    // Reversing just one oriented occurrence keeps the undirected
+    // Edge/Vertex incidence identical, but breaks directed continuity.
+    auto reverse_single_use = directed_outer;
+    std::swap(
+        reverse_single_use.edges[1].start_vertex,
+        reverse_single_use.edges[1].end_vertex);
+    CHECK(!reverse_single_use.valid());
+    CHECK(!(FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {reverse_single_use, directed_circle}}).ok());
+
+    // A pair of fully formed, valid Vertex tokens from other Edges is
+    // NOT a valid continuation without exact shared OCCT identity.
+    auto mismatched_vertex = directed_outer;
+    mismatched_vertex.edges[1].start_vertex =
+        RuntimeVertexToken{205U};
+    CHECK(!mismatched_vertex.valid());
+
+    // Half present start/end is always malformed.
+    auto incomplete_use = directed_outer;
+    incomplete_use.edges[1].end_vertex.reset();
+    CHECK(!incomplete_use.edges[1].valid());
+    CHECK(!incomplete_use.valid());
+
+    // A valid Edge-only provider is still backward compatible.
+    // But it is NOT evidence of signed topological closure.
+    auto legacy_outer = directed_outer;
+    for (auto& use : legacy_outer.edges) {
+        use.start_vertex.reset();
+        use.end_vertex.reset();
+    }
+    CHECK(legacy_outer.valid());
+    CHECK((FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {legacy_outer}}).ok());
+    CHECK(!legacy_outer.edges.front().start_vertex);
+
+    // Mixed observed/legacy uses within the SAME wire are rejected,
+    // even though each individual EdgeUse is structurally valid.
+    auto mixed_coverage = directed_outer;
+    mixed_coverage.edges[1].start_vertex.reset();
+    mixed_coverage.edges[1].end_vertex.reset();
+    CHECK(mixed_coverage.edges[1].valid());
+    CHECK(!mixed_coverage.valid());
+    CHECK(!(FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {mixed_coverage}}).ok());
+
+    // One valid outer is necessary and a malformed hole is fatal:
+    // never accept a partial collection of native boundary wires.
+    auto malformed_circle = directed_circle;
+    malformed_circle.edges.front().end_vertex =
+        RuntimeVertexToken{206U};
+    CHECK(!malformed_circle.valid());
+    CHECK(!(FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {directed_outer, malformed_circle}}).ok());
+    CHECK(!(FaceBoundaryResult{
+        FaceBoundaryStatus::ok,
+        {directed_outer, directed_outer}}).ok());
+    CHECK(!(FaceBoundaryResult{
+        FaceBoundaryStatus::malformed_boundary,
+        {directed_outer}}).ok());
+
+    std::cout
+        << "PG01D_FACE_BOUNDARY_E0_DIRECTED_WIRE_FAIL_CLOSED_PASS"
+        << " directed_outer_and_circle=1"
+        << " reversed_use_refused=1"
+        << " wrong_vertex_refused=1"
+        << " partial_use_refused=1"
+        << " mixed_wire_refused=1"
+        << " malformed_hole_refused=1"
+        << " legacy_provider_compatible=1"
+        << " no_coordinate_matching=1"
+        << '\n';
+}
+
 } // namespace
 
 int main() {
@@ -2004,6 +2125,7 @@ int main() {
     verifyPartIntegration();
     verifyNativeCurvedSurfaceContinuationE0();
     verifyNativeCylindricalCutSplitE0();
+    verifyPg01dE0DirectedWireFailClosedContract();
 
     std::cout
         << "PM02JR2_ADD_SURFACE_CONTINUATION_PASS"
