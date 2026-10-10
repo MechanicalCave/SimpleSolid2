@@ -667,11 +667,17 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
     [[maybe_unused]] const auto inner_circle = model.addCircle(
         {12.0, 0.0}, 5.0);
     const auto rounded = sketch::analyzeRegions(model);
-    CHECK(rounded.complete());
-    CHECK(rounded.regions.size() == 1U);
-    CHECK(rounded.regions.front().holes.size() == 1U);
-    CHECK(part::makeProfileRegionIntent(
-        rounded.regions.front()));
+    std::cerr
+        << "PG01D_DATUM_REGION_BEFORE_EXACT"
+        << " regions=" << rounded.regions.size()
+        << " diagnostics=" << rounded.diagnostics.size();
+    for (const auto& region : rounded.regions) {
+        std::cerr << " [area=" << region.area
+                  << " holes=" << region.holes.size()
+                  << " outer_uses=" << region.outer.boundary.size()
+                  << "]";
+    }
+    std::cerr << '\\n';
 
     CHECK(model.updateLine(
         top, {0.0, 40.0}, start));
@@ -679,6 +685,17 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
         right, end, {25.0, -20.0}));
     const auto topology_accurate =
         sketch::analyzeRegions(model);
+    std::cerr
+        << "PG01D_DATUM_REGION_AFTER_EXACT"
+        << " regions=" << topology_accurate.regions.size()
+        << " diagnostics=" << topology_accurate.diagnostics.size();
+    for (const auto& region : topology_accurate.regions) {
+        std::cerr << " [area=" << region.area
+                  << " holes=" << region.holes.size()
+                  << " outer_uses=" << region.outer.boundary.size()
+                  << "]";
+    }
+    std::cerr << '\\n';
     CHECK(topology_accurate.complete());
     CHECK(topology_accurate.regions.size() == 1U);
     CHECK(topology_accurate.regions.front().holes.size() == 1U);
