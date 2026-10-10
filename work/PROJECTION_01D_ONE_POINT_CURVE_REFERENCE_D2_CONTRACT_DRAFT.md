@@ -44,15 +44,18 @@ Proposed *read-only resolver* proof obligations before `Resolved`:
 | Gate | Required proof | Status |
 |---|---|---|
 | E0 — 3-Surface Point audit | Same consumed OCCT result, native vs semantic Surface cardinality and inherited Vertex provenance | **PASS research** 36/36 new two-Surface unsupported endpoint |
-| E1 — same-stage selector uniqueness | 0/1/many returns Missing/Resolved/Ambiguous; never first-wins | **Partial** 36/36 positive; synthetic collision and missing controls being added |
+| E1 — same-stage selector uniqueness | 0/1/many returns Missing/Resolved/Ambiguous; never first-wins | **PASS limited synthetic tests** 36/36 positive; negative injected two-Edge incidence and missing Point both fail closed; actual OCCT-native collision remains OPEN |
 | E2 — native provider rebuild | Same semantic selector in independent restored Part and fresh OCCT provider, without native token reuse | **PASS research** 36/36 |
-| E3 — native on-disk Save/Reopen | Actually write/read .ss2part v15, new DocumentSession and provider, compare strict stage resolutions | **OPEN** until Windows test PASS |
-| E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **OPEN** |
-| E5 — adverse native geometry | Same Curve + Point incident to multiple actual material Edge fragments, negative stage/cycle cases and equal-looking unrelated geometry | **OPEN**; fabricated incidence test is not proof of an actual OCCT counterexample |
+| E3 — native on-disk Save/Reopen | Actually write/read .ss2part v15, new DocumentSession and provider, compare strict stage resolutions | **PASS existing-address round-trip** real PartDocumentStore createNew/load of v15 plus new OCCT provider, 1/1; new one-Point persisted branch remains NOT IMPLEMENTED |
+| E4 — Undo/Redo and upstream geometry mutation | Author/cold recreate, undo/redo, change or suppress upstream source, verify no stale identity or accidental rebind | **PARTIAL** native Chamfer Undo/Redo checked 1/1 with unchanged semantic Curve/Point addresses; upstream geometry mutation/suppression NOT TESTED |
+| E5 — adverse native geometry | Same Curve + Point incident to multiple actual material Edge fragments, negative stage/cycle cases and equal-looking unrelated geometry | **PARTIAL** injected two-Edge incidence and missing semantic Point fail closed; actual OCCT-native ambiguity, stage/cycles and similar geometry still OPEN |
 | E6 — schema/migration/canonical identity | Explicit layout/version plan, v15 backwards reading, corrupt/malformed/duplicate rejection, mixed old/new link resolution and cross-branch dedup | **OPEN — Owner D2 required before mutation** |
 | E7 — Owner sample + practical result | Typed failure/recovery on private Owner Face, correct manually selected boundaries, then linked cold Save/Reopen and final FULL | **OPEN — Owner FAIL** |
 
 No gate may be marked PASS based on a deliberate RED used solely to surface CTest stdout. Every accepted proof needs a separate final GREEN on its exact test SHA; no exact-head FULL claimed.
+
+**Verified native lifecycle research:** Windows kernel [FOCUSED #38075613345](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38075613345) **PASS 1/1** at test SHA `a81f00fd23e991ef8320c13e5cf09ad3ce5819a8`. It rebuilt and ran `pm02jr2.add_surface_continuation`, covering the 36/36 Curve+Point witness plus a synthetic duplicate-incidence refusal, a missing-Point refusal, real on-disk v15 `PartDocumentStore::createNew/load` and fresh OCCT evaluation, and native Chamfer Undo/Redo. The collision fixture deliberately changes an in-memory ledger and is NOT evidence that OCCT produces that topology organically. The v15 file contains only existing authored model semantics; it does **not** serialize the unapproved third discriminator.
+
 
 ## 4. Potential conflicts and mandatory decisions
 
