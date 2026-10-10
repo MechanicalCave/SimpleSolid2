@@ -54,6 +54,53 @@
 
 ---
 
+
+## 0.2 Owner practical FAIL and bounded native rejection diagnostics (2026-10-10)
+
+**Owner manual result: FAIL, not final PG-01D acceptance.** A private
+native v15 Part built from two Add Extrudes, then Chamfer, contains
+Sketches supported by later Body-stage planar Surfaces. In Project
+Geometry after Feature 3, an actual pointer click on a referenceable,
+strictly resolved current bounded Face (runtime token 5 in that
+ephemeral evaluation only) was rejected in **Face Boundary** mode:
+
+`PROJECT Face Boundary rejected Face token 5: ambiguous/missing material Edge identity; earlier staged sources retained.`
+
+This confirms that pointer routing reached manual Face admission.
+It does **not** establish which Face-wire Edge failed, why material
+identity was not authorable, or that a generated Chamfer edge should
+be reclassified as an authorable Curve. The corresponding **Planar
+Face** attempt also did not project; its stricter bounded-Face gate
+must be assessed independently. Keep the Owner's private Part,
+authored geometry, IDs and image files **out of version control**.
+
+**Bounded diagnostic implementation on the Draft branch:** carry a
+transient typed rejected Edge occurrence from
+`part::inspectSelectedFaceBoundary` to Workbench status text:
+provider runtime Edge token, wire/member index, failure kind,
+catalog accounting class, strict referenceability, CurveKind,
+candidate count and seam/partition flags. A missing catalog member,
+uncertified semantic Edge, repeated native material use and invalid
+member remain distinct. A native focused regression exercises a
+known-semantic-Unsuported member and a missing catalog source; both
+must fail closed with **zero Face authoring**. No v15 schema, provider
+public interface, global tolerance, nearest-match or partial-by-
+identity behavior is changed.
+
+**Still unproven:** a sanitized independent **Add + Add + Chamfer**
+geometry fixture that actually reproduces this exact Owner
+post-Chamfer rejected Face, then targeted RED/GREEN classification
+and a bounded cause-specific correction. This diagnostic change is
+an investigation step, **not a fix or Owner retest PASS**. The new
+focused Windows run must be reviewed on its exact HEAD before any
+broader test assertion; final FULL/Owner FINAL PASS remain OPEN.
+
+Documentation Impact: internal/work diagnostic recorded; paired
+PL/EN product documentation and generated Browser are unchanged
+because the accepted tool behavior and persisted semantics are
+unchanged. Final documentation verification remains required.
+
+
 ## 1. Frozen product intent
 
 One `PROJECT` tool with three **source-acquisition modes**, all delegating the resulting unique, exact material Edges to the existing `CreateProjectedSketchEdgesCommand`:
