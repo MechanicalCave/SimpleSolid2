@@ -764,6 +764,14 @@ void verifyPartIntegration() {
         bool tested_upstream_edit = false;
         bool tested_upstream_edit_undo_redo = false;
         std::size_t rejected_upstream_edits = 0U;
+        bool tested_radical_upstream_matrix = false;
+        std::size_t radical_attempts = 0U;
+        std::size_t radical_command_rejected = 0U;
+        std::size_t radical_final_unavailable = 0U;
+        std::size_t radical_stage_missing = 0U;
+        std::size_t radical_source_missing = 0U;
+        std::size_t radical_source_unique = 0U;
+        std::size_t radical_source_ambiguous = 0U;
         std::size_t native_multipiece_curve_point_probes = 0U;
         std::size_t native_onepoint_resolved = 0U;
         std::size_t native_onepoint_ambiguous = 0U;
@@ -1473,6 +1481,96 @@ void verifyPartIntegration() {
                                         *certified_point_address).size() == 1U);
                                     tested_suppressed_final_stage = true;
                                 }
+                                if (!tested_radical_upstream_matrix) {
+                                    // Read-only D2 feasibility across
+                                    // *actual rebuilt OCCT* topology after
+                                    // substantial parent-Feature changes.
+                                    // Do not carry any runtime token from
+                                    // one variant to another, and do not
+                                    // claim a unique current match proves
+                                    // unbroken material segment provenance.
+                                    for (const bool reversed :
+                                         {false, true}) {
+                                        for (const double span :
+                                             {0.25, 1.0, 3.0, 7.5,
+                                              15.0, 30.0}) {
+                                            ++radical_attempts;
+                                            auto rebuilt =
+                                                part::PartDocument::restore(
+                                                    core::DocumentId::generate(),
+                                                    trial.document().state());
+                                            CHECK(rebuilt.ok());
+                                            application::DocumentSession
+                                                revised{
+                                                    {}, std::move(
+                                                        *rebuilt.document)};
+                                            kernel_occt::OcctSolidModelingKernel
+                                                revised_kernel;
+                                            const auto before_change =
+                                                revised.document().state();
+                                            const auto command =
+                                                revised.execute(
+                                                    application::
+                                                        EditExtrudeFeatureCommand{
+                                                            *boss.feature_id,
+                                                            revised.document()
+                                                                .revision(),
+                                                            boss_profile,
+                                                            part::ExtrudeOperation::
+                                                                add,
+                                                            part::
+                                                                OneSidedExtrudeExtent{
+                                                                    core::
+                                                                        LengthValue{
+                                                                            span},
+                                                                    reversed},
+                                                            "D2 radical Add edit"},
+                                                    revised_kernel);
+                                            if (!command.ok()) {
+                                                CHECK(revised.document().state() ==
+                                                      before_change);
+                                                ++radical_command_rejected;
+                                                continue;
+                                            }
+                                            const auto rebuild =
+                                                part::evaluatePart(
+                                                    revised.document(),
+                                                    revised_kernel);
+                                            const auto fresh =
+                                                pg01dStrictFinalStageOnePointCandidates(
+                                                    rebuild,
+                                                    ledger.stage,
+                                                    curve_address,
+                                                    *certified_point_address);
+                                            CHECK(fresh.size() <= 1U);
+                                            if (rebuild.body_status !=
+                                                    part::BodyEvaluationStatus::
+                                                        up_to_date) {
+                                                CHECK(fresh.empty());
+                                                ++radical_final_unavailable;
+                                            } else if (
+                                                !rebuild.current_topology ||
+                                                rebuild.current_topology->
+                                                        stage != ledger.stage) {
+                                                CHECK(fresh.empty());
+                                                ++radical_stage_missing;
+                                            } else if (fresh.empty()) {
+                                                ++radical_source_missing;
+                                            } else {
+                                                ++radical_source_unique;
+                                            }
+                                        }
+                                    }
+                                    CHECK(radical_attempts == 12U);
+                                    CHECK(radical_attempts ==
+                                          radical_command_rejected +
+                                          radical_final_unavailable +
+                                          radical_stage_missing +
+                                          radical_source_missing +
+                                          radical_source_unique +
+                                          radical_source_ambiguous);
+                                    tested_radical_upstream_matrix = true;
+                                }
                                 if (!tested_upstream_edit) {
                                     // Edit the immediately previous Add
                                     // feature, without editing the Chamfer,
@@ -1656,6 +1754,19 @@ void verifyPartIntegration() {
             << tested_upstream_edit_undo_redo
             << " upstream_edit_rejected="
             << rejected_upstream_edits
+            << " radical_attempts=" << radical_attempts
+            << " radical_command_rejected="
+            << radical_command_rejected
+            << " radical_final_unavailable="
+            << radical_final_unavailable
+            << " radical_stage_missing="
+            << radical_stage_missing
+            << " radical_source_missing="
+            << radical_source_missing
+            << " radical_source_unique="
+            << radical_source_unique
+            << " radical_source_ambiguous="
+            << radical_source_ambiguous
             << " native_onepoint_probes="
             << native_multipiece_curve_point_probes
             << " native_onepoint_resolved="
@@ -1713,6 +1824,8 @@ void verifyPartIntegration() {
         CHECK(tested_undo_redo);
         CHECK(tested_upstream_edit);
         CHECK(tested_upstream_edit_undo_redo);
+        CHECK(tested_radical_upstream_matrix);
+        CHECK(radical_attempts == 12U);
         CHECK(native_multipiece_curve_point_probes > 0U);
         // The independent OCCT matrix has no naturally ambiguous
         // Curve+Point pairs; this is a bounded positive observation,
@@ -1744,6 +1857,9 @@ void verifyPartIntegration() {
         CHECK(tested_predecessor_stage_suppression);
         CHECK(predecessor_stage_absent == 1U);
         CHECK(predecessor_stage_survived == 0U);
+        // Diagnostic RED only to capture actual upstream-edit outcome
+        // distribution in the self-hosted Windows CTest log.
+        CHECK(false && "PG01D_D2_RADICAL_UPSTREAM_MATRIX_LOG_ONLY");
     }
 
     const auto contribution =
