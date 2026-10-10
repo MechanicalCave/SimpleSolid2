@@ -82,18 +82,43 @@ catalog accounting class, strict referenceability, CurveKind,
 candidate count and seam/partition flags. A missing catalog member,
 uncertified semantic Edge, repeated native material use and invalid
 member remain distinct. A native focused regression exercises a
-known-semantic-Unsuported member and a missing catalog source; both
-must fail closed with **zero Face authoring**. No v15 schema, provider
+semantically Unsupported member and a missing catalog source; both
+must fail closed with **zero Face authoring**. Windows desktop
+[FOCUSED #38067978534](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38067978534)
+**PASS 1/1** on `363bd85` verifies the initial diagnostic and fail-closed guard. No v15 schema, provider
 public interface, global tolerance, nearest-match or partial-by-
 identity behavior is changed.
 
-**Still unproven:** a sanitized independent **Add + Add + Chamfer**
-geometry fixture that actually reproduces this exact Owner
-post-Chamfer rejected Face, then targeted RED/GREEN classification
-and a bounded cause-specific correction. This diagnostic change is
-an investigation step, **not a fix or Owner retest PASS**. The new
-focused Windows run must be reviewed on its exact HEAD before any
-broader test assertion; final FULL/Owner FINAL PASS remain OPEN.
+**Native control evidence, not Owner reproduction:** an existing
+sanitized two-Add Part followed by a new one-Edge Chamfer had **13
+referenceable Faces, all 13 admitted, zero material-identity refusals,
+but also zero same-Surface Face pairs**. Its native desktop
+[FOCUSED #38068316222](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38068316222)
+**PASS 1/1** on `4d0dbf6`; intentionally RED-only
+[#38068534485](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38068534485)
+captured exact counts, then the forced failure was removed.
+
+A stronger independently constructed Part regression uses the
+**real OCCT Add-continuation fixture with one proven semantic Surface
+split into at least two bounded Faces**, followed by a Chamfer chosen
+to preserve the split. Both Faces were correctly individually
+admitted: **2/2 accepted, zero material-identity refusals**, with
+split still present. Kernel
+[FOCUSED #38068860645](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38068860645)
+**PASS 1/1** on `a1b709a`; deliberately diagnostic RED
+[#38069101972](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38069101972)
+exposed 2/2 and its forced failure was removed. The enduring kernel
+test now asserts both supported bounded Faces remain admitted.
+
+**Still OPEN:** none of these controlled variants reproduces the
+specific Owner **Face token 5** rejection after the Owner's Add/Add/
+Chamfer geometry. That rejected Face's exact native Edge token and
+accounting/strict referenceability must be obtained using the new
+diagnostic on the Owner's local file or a closer independent fixture.
+Do not guess that Chamfer's material Curve is authorable, silently
+exclude it, or claim a cause-specific fix. Owner practical PG-01D
+FAIL remains blocking; final exact-head FULL and Owner FINAL PASS
+remain OPEN.
 
 Documentation Impact: internal/work diagnostic recorded; paired
 PL/EN product documentation and generated Browser are unchanged
