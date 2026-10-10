@@ -3,6 +3,8 @@
 **STATUS: PROPOSED — NOT OWNER-APPROVED FOR PRODUCTION / SCHEMA MUTATION.**
 On 2026-10-10 the Owner explicitly approved **semantic associativity option A** for a future bounded Curve segment: stable semantic Curve + one already certified semantic Point at the exact earlier Body stage, with geometrical deformation across upstream edits allowed. This is **not** an approval of a third persisted branch, the v16 version choice, migration behavior, implementation, release, or merge. The governing active Work Contract remains PG-01D and its later manual Face Boundary amendment. PR #309 stays Draft.
 
+**STATUS UPDATE — OWNER D2-V16 APPROVED 2026-10-10, WITH NO EXISTING-FILE MIGRATION.** Owner's statement in the active conversation: `Zatwierdzam - migracja plików na tym etapie produkcji nie jest konieczna.` The third persisted branch and schema v16 are now authorized **only** within the added D2-V16 section of `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT.md`, with accepted semantic associativity A and projection-only authoring. Do not build any bulk migrator, conversion job, or retroactive rewrite. Keep historical v1-v15 reads unchanged, reject new kinds under old version numbers, and permit new format on explicit Save. Existing textual labels `proposed` below preserve the proposal history; where conflicting, this status and the Work Contract's later amendment govern. **No Owner FINAL PASS or merge authorization.**
+
 ## 1. Accepted identity meaning, distinct from B-Rep lineage
 
 A *future* `AtSingleSemanticPoint` reference would mean the authored tuple:
