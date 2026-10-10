@@ -2141,6 +2141,8 @@ int main(int argc, char* argv[]) {
             CHECK(pg_count->text().contains(
                 QStringLiteral("Unsupported skipped: 1")));
             CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Face 1 Hole 1 Edge 1: SKIPPED — geometric Unsupported")));
+            CHECK(pg_face_detail->text().contains(
                 QStringLiteral("PARTIAL Face Boundary")));
             CHECK(pg_finish->isEnabled());
             CHECK(partial_session.document().state() ==
@@ -2330,6 +2332,8 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("selected: 0")));
             CHECK(pg_count->text().contains(
                 QStringLiteral("Unsupported skipped: 1")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Face 1 Outer Edge 1: SKIPPED — geometric Unsupported")));
             CHECK(pg_face_detail->text().contains(
                 QStringLiteral("PARTIAL Face Boundary")));
             CHECK(viewport->runtimeDiagnostics()
@@ -2523,6 +2527,10 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("selected: 5")));
             CHECK(pg_count->text().contains(
                 QStringLiteral("Unsupported skipped: 2")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("Face 2 Outer Edge")));
+            CHECK(pg_face_detail->text().contains(
+                QStringLiteral("SKIPPED — geometric Degenerate")));
             CHECK(pg_face_detail->text().contains(
                 QStringLiteral("PARTIAL Face Boundary")));
             CHECK(pg_finish->isEnabled());
