@@ -2876,6 +2876,276 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
         << " general_outer_hole_witness=0"
         << " coordinate_joins=0"
         << '\n';
+
+    // Repeat the REAL native cross-partition through Cut on a
+    // disjoint section of the SAME inherited planar carrier. This
+    // cannot be reduced to reading two Circle members of independent
+    // Face-inner wires: BOTH holes straddle the certified Face split.
+    // Demand two distinct current semantic generated Cut side tokens.
+    kernel::PlanarProfileInput second_hole;
+    second_hole.frame = hole_frame;
+    second_hole.outer.boundary = {{
+        kernel::Circle2{{10.0, 21.0}, 2.0},
+        0.0, 1.0, true, false, true,
+        kernel::BoundaryUseProvenance{
+            "cross-partition-second-hole", 0U, 0U, false},
+    }};
+    CHECK(second_hole.valid());
+    auto second_input = add(std::move(second_hole), 45.0);
+    second_input.operation = kernel::SolidBooleanOperation::cut;
+    CHECK(second_input.valid());
+    const auto twice_cut = provider.extrude(
+        second_input, cut.solid);
+    CHECK(twice_cut.ok());
+    CHECK(twice_cut.solid_count == 1U);
+    const auto* twice_carrier = inheritedSurface(
+        twice_cut, *base_wall->resolved_token);
+    const auto* first_cut_side_inherited = inheritedSurface(
+        twice_cut, *cut_cylinder->resolved_token);
+    const auto* second_cut_side =
+        newSide(twice_cut, "cross-partition-second-hole");
+    CHECK(twice_carrier);
+    CHECK(first_cut_side_inherited);
+    CHECK(second_cut_side);
+    CHECK(twice_carrier->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(twice_carrier->surface_kind ==
+          kernel::SurfaceKind::plane);
+    CHECK(first_cut_side_inherited->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(first_cut_side_inherited->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+    CHECK(second_cut_side->surface_status ==
+          kernel::ReferenceStatus::resolved);
+    CHECK(second_cut_side->surface_kind ==
+          kernel::SurfaceKind::cylinder);
+    CHECK(second_cut_side->resolved_token);
+    CHECK(*cut_cylinder->resolved_token !=
+          *second_cut_side->resolved_token);
+    CHECK(twice_carrier->current_faces.size() == 2U);
+
+    // Only per-Face provider-owned ORIENTED wires and precise current
+    // native Edge, Vertex, Surface identities participate in this
+    // ledger. Three same-carrier partitions are expected: one to
+    // the left, one between, and one to the right of the two holes.
+    std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+        twice_outer;
+    std::map<std::uint64_t, std::vector<NativeUse>>
+        twice_uses;
+    std::size_t twice_inner = 0U;
+    for (const auto face : twice_carrier->current_faces) {
+        const auto scoped = provider.bindFaceToBody(
+            twice_cut.solid, face);
+        CHECK(scoped && scoped->valid());
+        const auto native =
+            provider.queryFaceBoundaryAnySurface(
+                twice_cut.solid, *scoped);
+        CHECK(native.ok());
+        std::size_t face_outer = 0U;
+        for (const auto& wire : native.wires) {
+            CHECK(wire.valid());
+            if (wire.outer) {
+                ++face_outer;
+                twice_outer.push_back(wire.edges);
+            } else {
+                ++twice_inner;
+            }
+            for (const auto& use : wire.edges) {
+                CHECK(use.start_vertex && use.end_vertex);
+                twice_uses[use.edge.value].push_back(
+                    NativeUse{face, use, !wire.outer});
+            }
+        }
+        CHECK(face_outer == 1U);
+    }
+    CHECK(twice_outer.size() == 2U);
+    CHECK(twice_inner == 0U);
+
+    std::vector<std::uint64_t> twice_partitions;
+    std::set<std::uint64_t> twice_material;
+    std::set<std::uint64_t> first_hole_sources;
+    std::set<std::uint64_t> second_hole_sources;
+    for (const auto& [value, members] : twice_uses) {
+        const kernel::RuntimeEdgeToken token{value};
+        const auto record = std::find_if(
+            twice_cut.current_edge_semantics.begin(),
+            twice_cut.current_edge_semantics.end(),
+            [token](const auto& edge) {
+                return edge.runtime_token == token;
+            });
+        CHECK(record !=
+              twice_cut.current_edge_semantics.end());
+        CHECK(!record->periodic_seam);
+        const auto& sides = record->adjacent_surfaces;
+        CHECK(std::find(
+            sides.begin(), sides.end(),
+            *base_wall->resolved_token) != sides.end());
+        if (record->same_surface_partition) {
+            CHECK(members.size() == 2U);
+            CHECK(members[0].face != members[1].face);
+            CHECK(!members[0].inner && !members[1].inner);
+            CHECK(members[0].use.reversed !=
+                  members[1].use.reversed);
+            CHECK(members[0].use.start_vertex ==
+                  members[1].use.end_vertex);
+            CHECK(members[0].use.end_vertex ==
+                  members[1].use.start_vertex);
+            twice_partitions.push_back(value);
+            continue;
+        }
+        CHECK(members.size() == 1U);
+        CHECK(!members.front().inner);
+        CHECK(twice_material.insert(value).second);
+        const bool from_first = std::find(
+            sides.begin(), sides.end(),
+            *cut_cylinder->resolved_token) != sides.end();
+        const bool from_second = std::find(
+            sides.begin(), sides.end(),
+            *second_cut_side->resolved_token) != sides.end();
+        CHECK(!from_first || !from_second);
+        if (from_first) {
+            first_hole_sources.insert(value);
+        } else if (from_second) {
+            second_hole_sources.insert(value);
+        }
+    }
+    std::cerr
+        << "PG01D_E0_NATIVE_TWO_CROSS_PARTITION_CUTS_PROBE"
+        << " same_carrier_faces="
+        << twice_carrier->current_faces.size()
+        << " exact_partition_pairs=" << twice_partitions.size()
+        << " per_face_inner_wires=" << twice_inner
+        << " first_cut_source_edges=" << first_hole_sources.size()
+        << " second_cut_source_edges=" << second_hole_sources.size()
+        << '\n';
+    CHECK(twice_partitions.size() == 3U);
+    CHECK(first_hole_sources.size() >= 2U);
+    CHECK(second_hole_sources.size() >= 2U);
+
+    // Cancel the THREE exact and opposite-directed shared partition
+    // pairs. One join followed by two splits produces three distinct
+    // exact directed material cycles. The algorithm is a TEST-ONLY
+    // native incidence proof, never a production E1 region selector.
+    auto twice_cycles = twice_outer;
+    std::size_t twice_joins = 0U;
+    std::size_t twice_splits = 0U;
+    for (const auto partition : twice_partitions) {
+        std::vector<std::pair<std::size_t, std::size_t>>
+            occurrences;
+        for (std::size_t ring = 0U; ring < twice_cycles.size();
+             ++ring) {
+            for (std::size_t pos = 0U;
+                 pos < twice_cycles[ring].size(); ++pos) {
+                if (twice_cycles[ring][pos].edge.value ==
+                    partition) {
+                    occurrences.emplace_back(ring, pos);
+                }
+            }
+        }
+        CHECK(occurrences.size() == 2U);
+        const auto [ai, aj] = occurrences[0];
+        const auto [bi, bj] = occurrences[1];
+        const auto& first = twice_cycles[ai][aj];
+        const auto& other = twice_cycles[bi][bj];
+        CHECK(first.reversed != other.reversed);
+        CHECK(first.start_vertex == other.end_vertex);
+        CHECK(first.end_vertex == other.start_vertex);
+        std::vector<std::vector<kernel::FaceBoundaryEdgeUse>>
+            remaining;
+        for (std::size_t ring = 0U; ring < twice_cycles.size();
+             ++ring) {
+            if (ring != ai && ring != bi) {
+                remaining.push_back(std::move(twice_cycles[ring]));
+            }
+        }
+        if (ai != bi) {
+            std::vector<kernel::FaceBoundaryEdgeUse> joined_cycle;
+            for (std::size_t step = 1U;
+                 step < twice_cycles[ai].size(); ++step) {
+                joined_cycle.push_back(twice_cycles[ai][
+                    (aj + step) % twice_cycles[ai].size()]);
+            }
+            for (std::size_t step = 1U;
+                 step < twice_cycles[bi].size(); ++step) {
+                joined_cycle.push_back(twice_cycles[bi][
+                    (bj + step) % twice_cycles[bi].size()]);
+            }
+            CHECK(directed_closed(joined_cycle));
+            remaining.push_back(std::move(joined_cycle));
+            ++twice_joins;
+        } else {
+            CHECK(aj < bj);
+            const auto& cycle = twice_cycles[ai];
+            std::vector<kernel::FaceBoundaryEdgeUse> inside;
+            std::vector<kernel::FaceBoundaryEdgeUse> outside;
+            for (std::size_t pos = aj + 1U; pos < bj; ++pos) {
+                inside.push_back(cycle[pos]);
+            }
+            for (std::size_t step = 1U;
+                 step < cycle.size() - (bj - aj); ++step) {
+                outside.push_back(
+                    cycle[(bj + step) % cycle.size()]);
+            }
+            CHECK(directed_closed(inside));
+            CHECK(directed_closed(outside));
+            remaining.push_back(std::move(inside));
+            remaining.push_back(std::move(outside));
+            ++twice_splits;
+        }
+        twice_cycles = std::move(remaining);
+    }
+    CHECK(twice_joins == 1U);
+    CHECK(twice_splits == 2U);
+    CHECK(twice_cycles.size() == 3U);
+
+    std::set<std::uint64_t> retained_twice;
+    std::size_t first_cut_contours = 0U;
+    std::size_t second_cut_contours = 0U;
+    std::size_t outer_contours = 0U;
+    for (const auto& contour : twice_cycles) {
+        CHECK(directed_closed(contour));
+        std::size_t from_first = 0U;
+        std::size_t from_second = 0U;
+        for (const auto& occurrence : contour) {
+            CHECK(twice_material.count(
+                occurrence.edge.value) == 1U);
+            CHECK(retained_twice.insert(
+                occurrence.edge.value).second);
+            if (first_hole_sources.count(
+                occurrence.edge.value)) ++from_first;
+            if (second_hole_sources.count(
+                occurrence.edge.value)) ++from_second;
+        }
+        // Each loop is completely attributable to ONE exact
+        // generated Cut side token, or to NEITHER: any mix means
+        // ambiguous per-material-surface source identity (STOP).
+        CHECK(!(from_first && from_second));
+        if (from_first == contour.size()) {
+            ++first_cut_contours;
+        } else if (from_second == contour.size()) {
+            ++second_cut_contours;
+        } else {
+            CHECK(from_first == 0U);
+            CHECK(from_second == 0U);
+            ++outer_contours;
+        }
+    }
+    CHECK(retained_twice == twice_material);
+    CHECK(first_cut_contours == 1U);
+    CHECK(second_cut_contours == 1U);
+    CHECK(outer_contours == 1U);
+    std::cout
+        << "PG01D_E0_NATIVE_TWO_CROSS_PARTITION_HOLES_PASS"
+        << " same_carrier_faces=2"
+        << " certified_partitions=3"
+        << " cancelled_joins=" << twice_joins
+        << " cancelled_splits=" << twice_splits
+        << " exact_closed_material_contours=3"
+        << " independent_cut_side_holes=2"
+        << " unclaimed_external_contours=1"
+        << " unique_material_edge_coverage=1"
+        << " guessed_xyz_matching=0"
+        << '\n';
 }
 
 // Native E0 negative control: a LOCAL side-wall notch leaves the
