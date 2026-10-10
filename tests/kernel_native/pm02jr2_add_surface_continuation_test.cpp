@@ -454,6 +454,10 @@ void verifyPartIntegration() {
     // Faces, current-scoped real provider Edge tokens only.
     std::map<std::uint64_t, std::size_t>
         grouped_same_surface_native_edge_uses;
+    // Native per-Face oriented uses retained separately: opposite
+    // orientation is necessary before same-Surface cancellation.
+    std::map<std::uint64_t, std::vector<bool>>
+        grouped_same_surface_native_edge_orientations;
     std::size_t blocked_face_admissions = 0U;
     std::size_t accepted_face_admissions = 0U;
     for (const auto token : current_side->current_faces) {
@@ -501,6 +505,9 @@ void verifyPartIntegration() {
                 CHECK(occurrence.valid());
                 ++grouped_same_surface_native_edge_uses[
                     occurrence.edge.value];
+                grouped_same_surface_native_edge_orientations[
+                    occurrence.edge.value].push_back(
+                        occurrence.reversed);
                 const auto edge = std::find_if(
                     topology.edges.begin(),
                     topology.edges.end(),
@@ -621,6 +628,13 @@ void verifyPartIntegration() {
                   part::TopologyAccountingClass::
                       known_representation_artifact);
             CHECK(occurrences == 2U);
+            const auto oriented =
+                grouped_same_surface_native_edge_orientations.find(
+                    token.value);
+            CHECK(oriented !=
+                  grouped_same_surface_native_edge_orientations.end());
+            CHECK(oriented->second.size() == 2U);
+            CHECK(oriented->second[0] != oriented->second[1]);
             CHECK(!part::authorMaterialEdgeReference(
                 topology, token).ok());
             ++certified_internal_partitions;
@@ -635,6 +649,12 @@ void verifyPartIntegration() {
         CHECK(material.ok());
         CHECK(material.reference);
         CHECK(occurrences == 1U);
+        const auto oriented =
+            grouped_same_surface_native_edge_orientations.find(
+                token.value);
+        CHECK(oriented !=
+              grouped_same_surface_native_edge_orientations.end());
+        CHECK(oriented->second.size() == 1U);
         certified_perimeter_sources.push_back(
             *material.reference);
         certified_perimeter_tokens.push_back(token);
@@ -817,6 +837,7 @@ void verifyPartIntegration() {
         << " split_faces=" << observed_faces.size()
         << " cancelled_internal_partitions="
         << certified_internal_partitions
+        << " partition_opposite_oriented_uses=1"
         << " distinct_material_perimeter_edges="
         << certified_perimeter_sources.size()
         << " single_closed_component=1"
