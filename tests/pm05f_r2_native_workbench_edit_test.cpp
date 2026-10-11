@@ -1761,7 +1761,7 @@ int main(int argc, char* argv[]) {
                 kernel.bodyPresentation(evaluated.body_solid);
             CHECK(presented.ok());
             CHECK(!presented.body.edges.empty());
-            CHECK(!presented.body.triangles.empty());
+            CHECK(!presented.body.mesh.triangles.empty());
             const auto owner_probes =
                 authorableEdgeProbes(owner_session, kernel);
             CHECK(workbench.activateDocument(&owner_session, {}));
@@ -1826,7 +1826,7 @@ int main(int argc, char* argv[]) {
                 << " features=4"
                 << " faces=" << presented.body.faces.size()
                 << " edges=" << presented.body.edges.size()
-                << " triangles=" << presented.body.triangles.size()
+                << " triangles=" << presented.body.mesh.triangles.size()
                 << " authorable_probes=" << owner_probes.size()
                 << " visible_candidate_hits=" << edge_hit_count
                 << " query_misses_unclassified=" << edge_miss_count
