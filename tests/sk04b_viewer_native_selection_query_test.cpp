@@ -396,6 +396,20 @@ int main(int argc, char* argv[]) {
                 static_cast<int>(std::lround(edge_center->y + 15.0))});
         CHECK(clicked_material_edge == 1);
         widget.setBodyTopologyEdgePickMode(false);
+        // Camera recomputation must drop the old 16px incumbent lease.
+        // An unchanged pixel position outside fresh 12px acquisition may
+        // not reuse a once-highlighted Edge or issue a stale click.
+        CHECK(widget.setBodyTopologyPreselection(body_edge_token));
+        CHECK(widget.setCameraState(camera));
+        CHECK(!has_material_edge(at_distance(15.0)));
+        widget.setBodyTopologyEdgePickMode(true);
+        QTest::mouseClick(
+            &widget, Qt::LeftButton, Qt::NoModifier,
+            QPoint{
+                static_cast<int>(std::lround(edge_center->x)),
+                static_cast<int>(std::lround(edge_center->y + 15.0))});
+        CHECK(clicked_material_edge == 1);
+        widget.setBodyTopologyEdgePickMode(false);
         CHECK(widget.setBodyTopologyPreselection(std::nullopt));
         CHECK(!has_material_edge(at_distance(15.0)));
         // Existing hidden surface / nonmaterial Edge must not be acquired
