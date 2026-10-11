@@ -1874,14 +1874,32 @@ void verifyPartIntegration() {
                                             } else {
                                                 ++radical_source_unique;
                                             }
-                                            // Owner-approved D2-A: the stable
-                                            // semantic Curve/Point addresses
-                                            // may select deformed geometry.
-                                            // Test cold v15 restoration of
-                                            // the changed *upstream* Part;
-                                            // the future one-Point reference
-                                            // itself is NOT serialized here.
-                                            if (span == 0.25) {
+                                            // An upstream Edit may correctly
+                                            // invalidate a downstream Chamfer.
+                                            // Require warm/cold equivalence for
+                                            // that negative AND independently
+                                            // certify a genuinely resolved
+                                            // forward variant at a later span.
+                                            // Never count a blocked cold
+                                            // reconstruction as a positive.
+                                            std::cerr
+                                                << "PG01D_D2A_V2_WARM_MATRIX"
+                                                << " reversed=" << reversed
+                                                << " span=" << span
+                                                << " status="
+                                                << static_cast<int>(
+                                                       rebuild.body_status)
+                                                << " choices=" << fresh.size()
+                                                << '\n';
+                                            const bool prove_cold =
+                                                span == 0.25 ||
+                                                (!reversed &&
+                                                 radical_v15_cold_forward == 0U &&
+                                                 rebuild.body_status ==
+                                                     part::BodyEvaluationStatus::
+                                                         up_to_date &&
+                                                 fresh.size() == 1U);
+                                            if (prove_cold) {
                                                 part::PartDocumentStore store;
                                                 const auto path =
                                                     std::filesystem::
@@ -1934,6 +1952,8 @@ void verifyPartIntegration() {
                                                     << " cold_choices="
                                                     << cold_choices.size()
                                                     << '\n';
+                                                CHECK(cold.body_status ==
+                                                      rebuild.body_status);
                                                 CHECK(cold_choices.size() ==
                                                       fresh.size());
                                                 if (reversed) {
@@ -1942,13 +1962,20 @@ void verifyPartIntegration() {
                                                               up_to_date);
                                                     CHECK(cold_choices.empty());
                                                     ++radical_v15_cold_reversed;
-                                                } else {
-                                                    CHECK(cold.body_status ==
-                                                          part::BodyEvaluationStatus::
-                                                              up_to_date);
+                                                } else if (
+                                                    rebuild.body_status ==
+                                                        part::BodyEvaluationStatus::
+                                                            up_to_date) {
                                                     CHECK(cold_choices.size() ==
                                                           1U);
                                                     ++radical_v15_cold_forward;
+                                                } else {
+                                                    // Strict fail-closed:
+                                                    // the saved model is as
+                                                    // unavailable as the warm
+                                                    // one, with zero false
+                                                    // reference resolutions.
+                                                    CHECK(cold_choices.empty());
                                                 }
                                                 std::error_code ec;
                                                 CHECK(std::filesystem::remove(
