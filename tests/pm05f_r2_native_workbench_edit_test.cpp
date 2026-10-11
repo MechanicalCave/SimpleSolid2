@@ -2298,6 +2298,203 @@ int main(int argc, char* argv[]) {
                         << ".\n";
                 }
             }
+            // G5 real modeled-scene complexity: compare the existing
+            // picker on a progressively elaborated *valid OCCT Body*.
+            // These are actual source Sketch/Profile + Boolean Cut
+            // Features, not copied triangles, fabricated view tokens or
+            // a proxy for durable Part identity. Keep the original Owner
+            // witness above unchanged and restore it afterward.
+            auto complexity_session =
+                makeBaseSession(kernel, 120.0, 60.0, 20.0);
+            const auto add_complexity_cut =
+                [&kernel, &complexity_session](
+                    double x, double y, int index) {
+                const auto sketch =
+                    complexity_session.execute(
+                        application::CreatePartSketchCommand{
+                            core::BuiltinReferenceRole::xy_plane});
+                CHECK(sketch.ok() && sketch.sketch_id);
+                CHECK(complexity_session.execute(
+                    application::AddSketchCircleCommand{
+                        *sketch.sketch_id,
+                        {x, y},
+                        5.0,
+                        sketch::EntityRole::regular}).ok());
+                const auto* authored =
+                    complexity_session.document().findSketch(
+                        *sketch.sketch_id);
+                CHECK(authored != nullptr);
+                const auto regions =
+                    sketch::analyzeRegions(authored->model);
+                CHECK(regions.complete() &&
+                      regions.regions.size() == 1U);
+                const auto intent =
+                    part::makeProfileRegionIntent(
+                        regions.regions.front());
+                CHECK(intent.has_value());
+                const auto profile =
+                    complexity_session.execute(
+                        application::CreateProfileCommand{
+                            *sketch.sketch_id,
+                            complexity_session.document().revision(),
+                            *intent});
+                CHECK(profile.ok() && profile.profile_id);
+                const auto cut =
+                    complexity_session.execute(
+                        application::CreateExtrudeFeatureCommand{
+                            *profile.profile_id,
+                            complexity_session.document().revision(),
+                            part::ExtrudeOperation::cut,
+                            part::OneSidedExtrudeExtent{
+                                core::LengthValue{25.0}, false},
+                            "G5 Complexity Cut " +
+                                std::to_string(index)},
+                        kernel);
+                CHECK(cut.ok() && cut.feature_id);
+            };
+            std::size_t previous_complexity_edges = 0U;
+            std::size_t previous_complexity_triangles = 0U;
+            int cut_count = 0;
+            for (const int required_cuts : {0, 3, 8}) {
+                while (cut_count < required_cuts) {
+                    const int index = cut_count++;
+                    const double x = 20.0 +
+                        20.0 * static_cast<double>(index % 5);
+                    const double y = index < 5 ? 15.0 : 45.0;
+                    add_complexity_cut(x, y, index + 1);
+                }
+                const auto complexity_evaluated =
+                    part::evaluatePart(
+                        complexity_session.document(), kernel);
+                CHECK(complexity_evaluated.body_status ==
+                    part::BodyEvaluationStatus::up_to_date);
+                CHECK(complexity_evaluated.body_solid != nullptr);
+                CHECK(complexity_evaluated.current_topology.has_value());
+                CHECK(complexity_evaluated.current_topology->complete());
+                const auto complexity_presentation =
+                    kernel.bodyPresentation(
+                        complexity_evaluated.body_solid);
+                CHECK(complexity_presentation.ok());
+                const auto complexity_edges =
+                    complexity_presentation.body.edges.size();
+                const auto complexity_triangles =
+                    complexity_presentation.body.mesh.triangles.size();
+                CHECK(complexity_edges > previous_complexity_edges);
+                CHECK(complexity_triangles >
+                      previous_complexity_triangles);
+                previous_complexity_edges = complexity_edges;
+                previous_complexity_triangles = complexity_triangles;
+                const auto complexity_probes =
+                    authorableEdgeProbes(
+                        complexity_session, kernel);
+                CHECK(!complexity_probes.empty());
+                CHECK(workbench.activateDocument(
+                    &complexity_session, {}));
+                CHECK(viewport->setStandardView(
+                    viewer::StandardView::top_front_right));
+                viewport->fitAll();
+                QApplication::processEvents();
+
+                std::vector<double> timings_us;
+                std::size_t candidate_hits = 0U;
+                for (int sweep = 0; sweep < 3; ++sweep) {
+                    for (const auto& probe : complexity_probes) {
+                        const auto at =
+                            viewport->projectWorldPoint(probe.world);
+                        if (!at) continue;
+                        for (const double dx : {-6.0, 0.0, 6.0}) {
+                            const viewer::ViewportPoint2 cursor{
+                                at->x + dx, at->y};
+                            if (cursor.x < 0.0 || cursor.y < 0.0 ||
+                                cursor.x >= viewport->width() ||
+                                cursor.y >= viewport->height()) {
+                                continue;
+                            }
+                            const auto started =
+                                std::chrono::steady_clock::now();
+                            const auto query =
+                                viewport->queryBodyTopology(
+                                    cursor,
+                                    viewer::BodyTopologyPickFilter{
+                                        false, true, false});
+                            const double duration_us =
+                                std::chrono::duration<
+                                    double, std::micro>{
+                                        std::chrono::steady_clock::now() -
+                                        started}.count();
+                            CHECK(query.valid() && query.completed);
+                            CHECK(query.generation.valid());
+                            CHECK(std::isfinite(duration_us) &&
+                                  duration_us >= 0.0);
+                            timings_us.push_back(duration_us);
+                            if (std::any_of(
+                                    query.candidates.begin(),
+                                    query.candidates.end(),
+                                    [](const auto& candidate) {
+                                        return candidate.kind ==
+                                            viewer::
+                                                BodyTopologyPresentationKind::
+                                                    edge;
+                                    })) {
+                                ++candidate_hits;
+                            }
+                        }
+                    }
+                }
+                CHECK(timings_us.size() >= 30U);
+                CHECK(candidate_hits > 0U);
+                std::sort(timings_us.begin(), timings_us.end());
+                const double p50_us = measured(timings_us, 0.5);
+                const double p95_us = measured(timings_us, 0.95);
+                std::cerr
+                    << "EDGE_R1_G5_REAL_COMPLEXITY"
+                    << " cuts=" << required_cuts
+                    << " edges=" << complexity_edges
+                    << " triangles=" << complexity_triangles
+                    << " authorable_probes="
+                    << complexity_probes.size()
+                    << " samples=" << timings_us.size()
+                    << " candidate_hits=" << candidate_hits
+                    << " p50_us=" << p50_us
+                    << " p95_us=" << p95_us
+                    << " max_us=" << timings_us.back()
+                    << " dpr=" << measured_dpr
+                    << std::endl;
+                if (const char* location =
+                        std::getenv("GITHUB_STEP_SUMMARY")) {
+                    std::ofstream summary{location, std::ios::app};
+                    if (summary) {
+                        summary
+                            << "\n### R1 G5 real OCCT Cut complexity\n"
+                            << "Current Body after "
+                            << required_cuts
+                            << " valid separated circular through-Cuts"
+                            << " (120×60×20 mm base): "
+                            << complexity_edges
+                            << " Body Edges, "
+                            << complexity_triangles
+                            << " mesh triangles, "
+                            << complexity_probes.size()
+                            << " strict material Edge probes, "
+                            << timings_us.size()
+                            << " native queries (3 sweeps, -6/0/+6"
+                            << " logical px). Edge candidate queries "
+                            << candidate_hits << ". p50 "
+                            << p50_us << " us, p95 "
+                            << p95_us << " us, max "
+                            << timings_us.back()
+                            << " us, DPR " << measured_dpr
+                            << ". Times exclude Body construction and"
+                            << " GUI repaint; not a memory bound.\n";
+                    }
+                }
+            }
+            // Restore the same Owner session/scene for the original
+            // independently visible-mesh assertion below; it must not
+            // observe the complexity-control Body stage or tokens.
+            CHECK(workbench.activateDocument(
+                &owner_session, {}));
+            QApplication::processEvents();
             // Expected R1 RED ONLY when a truly front-visible sample on
             // the real Owner's native Part has NO Edge candidate at all.
             // Samples on tessellation gaps / blocked behind Body material
