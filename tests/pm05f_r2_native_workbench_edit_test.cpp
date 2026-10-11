@@ -323,6 +323,60 @@ authorableTrihedralCornerProbes(
     return corners;
 }
 
+// Edge Picking R1 G1: test-only front-visibility witness on the actual
+// OCCT Body presentation mesh. A camera-aligned orthographic ray is cast
+// through the EXACT world-space point, independently of the Viewer's
+// rounded projection and candidate/ranking algorithm. A sample is admitted
+// as a reliable positive control only if its nearest mesh intersection
+// coincides with that point; silhouette/tessellation gaps stay UNCLASSIFIED.
+// No ray hit, a nearer blocking Face or perspective camera => not proof.
+[[nodiscard]] bool independentOrthographicEdgeVisibility(
+    const kernel::SolidPresentationMesh& mesh,
+    const viewer::CameraState& camera,
+    viewer::Point3 world) {
+    if (camera.projection !=
+            viewer::CameraProjection::orthographic ||
+        !viewer::finite(world) || mesh.triangles.empty()) {
+        return false;
+    }
+    const auto towards_eye =
+        viewer::normalized(camera.eye - camera.target);
+    if (!towards_eye) return false;
+    constexpr double distance = 1000.0;
+    const auto origin = world + *towards_eye * distance;
+    const auto direction = *towards_eye * -1.0;
+    std::optional<double> nearest;
+    for (const auto& triangle : mesh.triangles) {
+        const auto a = viewer::Point3{
+            triangle.first.x, triangle.first.y, triangle.first.z};
+        const auto b = viewer::Point3{
+            triangle.second.x, triangle.second.y, triangle.second.z};
+        const auto c = viewer::Point3{
+            triangle.third.x, triangle.third.y, triangle.third.z};
+        const auto ab = b - a;
+        const auto ac = c - a;
+        const auto p = viewer::cross(direction, ac);
+        const double det = viewer::dot(ab, p);
+        if (std::abs(det) < 1.0e-11) continue;
+        const double inv_det = 1.0 / det;
+        const auto offset = origin - a;
+        const double u = viewer::dot(offset, p) * inv_det;
+        if (u < -1.0e-9 || u > 1.0 + 1.0e-9) continue;
+        const auto q = viewer::cross(offset, ab);
+        const double v = viewer::dot(direction, q) * inv_det;
+        if (v < -1.0e-9 || u + v > 1.0 + 1.0e-9) continue;
+        const double depth = viewer::dot(ac, q) * inv_det;
+        if (depth <= 1.0e-8 || !std::isfinite(depth)) continue;
+        if (!nearest || depth < *nearest) nearest = depth;
+    }
+    // A curve/tessellation mismatch or near-wall ambiguity is not a
+    // trustworthy positive witness. This tolerance is classification-only
+    // and NEVER changes the Viewer's depth or picking policy.
+    constexpr double mesh_match_mm = 0.02;
+    return nearest &&
+        std::abs(*nearest - distance) <= mesh_match_mm;
+}
+
 QTreeWidgetItem* featureTreeItem(
     QTreeWidget& tree, part::FeatureId feature_id) {
     constexpr int feature_id_data = Qt::UserRole + 45;
@@ -1769,6 +1823,9 @@ int main(int argc, char* argv[]) {
             std::size_t query_count = 0U;
             std::size_t edge_hit_count = 0U;
             std::size_t edge_miss_count = 0U;
+            std::size_t independently_visible_samples = 0U;
+            std::size_t visible_sample_misses = 0U;
+            std::size_t visible_sample_hits = 0U;
             for (const auto orientation : {
                      viewer::StandardView::top_front_right,
                      viewer::StandardView::top_front_left,
@@ -1812,6 +1869,92 @@ int main(int argc, char* argv[]) {
                         ++misses_for_view;
                     }
                 }
+                // Sample original OCCT authorable material Edges, not a
+                // newly fabricated scene. This is an independent geometric
+                // FRONT-VISIBLE control; the Viewer's own query has no role
+                // in classifying the mesh ray.
+                const auto camera_state = viewport->cameraState();
+                CHECK(camera_state.has_value());
+                const std::size_t max_sampled_segments = 7U;
+                std::size_t front_samples_this_view = 0U;
+                std::size_t misses_this_view = 0U;
+                for (const auto& edge : presented.body.edges) {
+                    if (edge.points.size() < 2U) continue;
+                    const auto authored =
+                        part::authorMaterialEdgeReference(
+                            *evaluated.current_topology,
+                            edge.runtime_token);
+                    if (!authored.ok()) continue;
+                    const auto segment_count = edge.points.size() - 1U;
+                    const auto stride = std::max<std::size_t>(
+                        1U, (segment_count + max_sampled_segments - 1U) /
+                                max_sampled_segments);
+                    for (std::size_t index = 0U;
+                         index < segment_count; index += stride) {
+                        const auto& a = edge.points[index];
+                        const auto& b = edge.points[index + 1U];
+                        for (const double t : {0.25, 0.5, 0.75}) {
+                            const viewer::Point3 world{
+                                a.x + (b.x - a.x) * t,
+                                a.y + (b.y - a.y) * t,
+                                a.z + (b.z - a.z) * t};
+                            if (!independentOrthographicEdgeVisibility(
+                                    presented.body.mesh,
+                                    *camera_state, world)) continue;
+                            const auto screen =
+                                viewport->projectWorldPoint(world);
+                            if (!screen || screen->x < 0.0 ||
+                                screen->y < 0.0 ||
+                                screen->x >= viewport->width() ||
+                                screen->y >= viewport->height()) continue;
+                            ++independently_visible_samples;
+                            ++front_samples_this_view;
+                            const auto query = viewport->queryBodyTopology(
+                                *screen,
+                                viewer::BodyTopologyPickFilter{
+                                    false, true, false});
+                            CHECK(query.valid() && query.completed);
+                            CHECK(query.generation.valid());
+                            const bool any_edge = std::any_of(
+                                query.candidates.begin(),
+                                query.candidates.end(),
+                                [](const auto& candidate) {
+                                    return candidate.kind ==
+                                        viewer::BodyTopologyPresentationKind::edge;
+                                });
+                            if (any_edge) {
+                                ++visible_sample_hits;
+                            } else {
+                                ++visible_sample_misses;
+                                ++misses_this_view;
+                                if (visible_sample_misses <= 20U) {
+                                    std::cerr
+                                        << "EDGE_R1_REAL_MESH_VISIBLE_MISS"
+                                        << " orientation="
+                                        << static_cast<int>(orientation)
+                                        << " runtime_edge="
+                                        << edge.runtime_token.value
+                                        << " segment=" << index
+                                        << " fraction=" << t
+                                        << " world=" << world.x << ","
+                                        << world.y << "," << world.z
+                                        << " screen=" << screen->x << ","
+                                        << screen->y
+                                        << " candidate_count="
+                                        << query.candidates.size()
+                                        << std::endl;
+                                }
+                            }
+                        }
+                    }
+                }
+                std::cerr
+                    << "EDGE_R1_REAL_MESH_VISIBILITY"
+                    << " orientation=" << static_cast<int>(orientation)
+                    << " independently_front_visible="
+                    << front_samples_this_view
+                    << " omitted_any_edge=" << misses_this_view
+                    << std::endl;
                 std::cerr
                     << "EDGE_R1_OWNER_REAL_BODY_VIEW orientation="
                     << static_cast<int>(orientation)
@@ -1830,9 +1973,19 @@ int main(int argc, char* argv[]) {
                 << " authorable_probes=" << owner_probes.size()
                 << " visible_candidate_hits=" << edge_hit_count
                 << " query_misses_unclassified=" << edge_miss_count
+                << " independently_front_visible="
+                << independently_visible_samples
+                << " visible_edge_any_hit=" << visible_sample_hits
+                << " visible_edge_any_miss=" << visible_sample_misses
                 << " camera_exact_owner_match=0"
-                << " owner_pocket_independent_visibility_red=0"
+                << " owner_target_token_mapping_pending=1"
                 << std::endl;
+            CHECK(independently_visible_samples > 0U);
+            // Expected R1 RED ONLY when a truly front-visible sample on
+            // the real Owner's native Part has NO Edge candidate at all.
+            // Samples on tessellation gaps / blocked behind Body material
+            // were excluded above; negative occlusion policy is untouched.
+            CHECK(visible_sample_misses == 0U);
             // Return the original session before the pre-existing native
             // Workbench tests. Do not carry selection or runtime tokens out.
             CHECK(workbench.activateDocument(&session, {}));
