@@ -5687,10 +5687,6 @@ int main(int argc, char* argv[]) {
         CHECK(viewport->runtimeDiagnostics().solid_preview_displayed);
         CHECK(viewport->runtimeDiagnostics().solid_preview_style_expected);
 
-        verifyUi01FeatureDraftRejectsTreeEdits(
-            workbench, session, *tree, item,
-            "edgeFeatureOperationsWidget");
-
         // This is the central R2-B acceptance boundary: real native click,
         // tool_stage Viewer's query, controller semantic selection and
         // Workbench draft state must all agree.
@@ -5720,6 +5716,12 @@ int main(int argc, char* argv[]) {
         CHECK(nativeClick(*viewport, second->world));
         CHECK(selectedCount(*label, 1));
         CHECK(finish->isEnabled());
+        // Run the Tree edit-entry matrix only AFTER the R2-B cursor
+        // sequence; changing Tree inspection selection must not alter
+        // an active Feature draft, but it can affect cursor highlighting.
+        verifyUi01FeatureDraftRejectsTreeEdits(
+            workbench, session, *tree, item,
+            "edgeFeatureOperationsWidget");
         cancel->click();
         QApplication::processEvents();
         CHECK(!viewport->runtimeDiagnostics().solid_preview_displayed);
