@@ -5603,12 +5603,50 @@ void PartViewportController::onBodyTopologyPreselectionIntent(
                 body_topology_candidate_stack_
                     ->candidates.size() - 1U);
     } else {
+        // R1 G4: when the previous current material Edge is still
+        // independently returned by the refreshed Viewer query, keep it
+        // unless another current material Edge beats it by at least 2
+        // logical px. Do not apply Edge hysteresis across the higher
+        // priority Vertex class or the Face-only Project Geometry route.
+        // The existing four-pixel same-stack cycle-preservation rule
+        // above takes precedence for deliberate user cycling.
+        std::size_t next_index = 0U;
+        if (body_topology_candidate_stack_ &&
+            body_topology_candidate_stack_->valid() &&
+            body_topology_candidate_stack_->generation ==
+                query.generation &&
+            candidates.front().kind ==
+                viewer::BodyTopologyPresentationKind::edge) {
+            const auto& incumbent =
+                body_topology_candidate_stack_->candidates[
+                    body_topology_candidate_stack_->active_index];
+            if (incumbent.kind ==
+                    viewer::BodyTopologyPresentationKind::edge) {
+                const auto found = std::find_if(
+                    candidates.begin(), candidates.end(),
+                    [&incumbent](const auto& candidate) {
+                        return candidate.token == incumbent.token &&
+                               candidate.kind == incumbent.kind;
+                    });
+                constexpr double retain_logical_px = 16.0;
+                constexpr double switch_advantage_px = 2.0;
+                if (found != candidates.end() &&
+                    found->screen_distance <= retain_logical_px &&
+                    (found == candidates.begin() ||
+                     candidates.front().screen_distance +
+                         switch_advantage_px >
+                         found->screen_distance)) {
+                    next_index = static_cast<std::size_t>(
+                        std::distance(candidates.begin(), found));
+                }
+            }
+        }
         body_topology_candidate_stack_ =
             BodyTopologyCandidateStack{
                 query.generation,
                 point,
                 std::move(candidates),
-                0U};
+                next_index};
     }
 
     applyBodyTopologyPreselection();
