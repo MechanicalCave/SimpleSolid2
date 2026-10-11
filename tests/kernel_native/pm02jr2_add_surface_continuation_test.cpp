@@ -225,7 +225,12 @@ part::ProfileId createRectangleProfile(
 class Pg01dObservedOcctKernel final
     : public kernel::ISolidModelingKernel {
 public:
-    kernel_occt::OcctSolidModelingKernel occt;
+    // Historical D2 topology-provenance evidence deliberately evaluates
+    // every stage without Refine. The production default is tested
+    // separately on the two original-Owner-based v2 fixtures.
+    kernel_occt::OcctSolidModelingKernel occt{
+        kernel_occt::OcctSolidModelingKernel::
+            AddRefinementExperiment::disabled};
     std::optional<kernel::SolidModelingResult>
         last_edge_feature;
 
