@@ -5978,8 +5978,19 @@ void verifyPg01dRefineRevolveNonMergeControl() {
 
         const auto* inherited = inheritedSurface(
             result, *original_side->resolved_token);
-        const auto* created = newSide(
-            result, "pg01d-refine-control-revolve-right");
+        const auto created_it = std::find_if(
+            result.new_surfaces.begin(), result.new_surfaces.end(),
+            [](const kernel::NewSurfaceLineage& surface) {
+                return surface.role.kind ==
+                           kernel::GeneratedFaceRoleKind::revolve_side &&
+                       surface.role.side_provenance &&
+                       surface.role.side_provenance->source_entity ==
+                           "pg01d-refine-control-revolve-right";
+            });
+        const kernel::NewSurfaceLineage* created =
+            created_it == result.new_surfaces.end()
+                ? nullptr
+                : &*created_it;
         CHECK(inherited && created);
         CHECK(inherited->surface_kind ==
               kernel::SurfaceKind::cylinder);
