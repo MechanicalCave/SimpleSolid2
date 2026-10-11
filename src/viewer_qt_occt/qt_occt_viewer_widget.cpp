@@ -4726,106 +4726,189 @@ public:
         }
 
         if (filter.edges) {
-            const double aperture =
-                8.0 * dpr;
-            const double aperture_squared =
-                aperture * aperture;
+            const double aperture = 8.0 * dpr;
+            const double aperture_squared = aperture * aperture;
+            // R1 G3: screen-cull each segment before any costly ray. Both
+            // per-Edge and per-query budgets bound ray/triangle work. An
+            // exhausted budget fails closed; it never admits hidden edges.
+            constexpr std::size_t per_edge_ray_budget = 24U;
+            constexpr std::size_t total_ray_budget = 192U;
+            std::size_t remaining_ray_budget = total_ray_budget;
+            const auto camera = view_->Camera();
+            if (camera.IsNull()) return {};
+            const bool is_orthographic = camera->IsOrthographic();
 
-            for (const auto& edge :
-                 body_scene_.edges) {
-                if (!edge.material ||
-                    !edge.ordinary_pickable) {
+            // For perspective, screen-space linear fractions along a 3D
+            // segment are NOT world-space linear fractions. Recover the
+            // correct world parameter by a bounded monotonic bisection,
+            // then project the actual world sample for the visibility ray.
+            const auto sampledWorld =
+                [this, is_orthographic](
+                    const viewer::Point3& a,
+                    const viewer::Point3& b,
+                    ScreenPoint start,
+                    ScreenPoint end,
+                    double screen_fraction)
+                    -> std::optional<viewer::Point3> {
+                if (!std::isfinite(screen_fraction) ||
+                    screen_fraction < 0.0 ||
+                    screen_fraction > 1.0) {
+                    return std::nullopt;
+                }
+                const auto delta = b - a;
+                if (is_orthographic ||
+                    screen_fraction == 0.0 ||
+                    screen_fraction == 1.0) {
+                    return a + delta * screen_fraction;
+                }
+                const double dx = end.x - start.x;
+                const double dy = end.y - start.y;
+                const double length_squared = dx * dx + dy * dy;
+                if (!std::isfinite(length_squared) ||
+                    length_squared <= 1.0e-12) {
+                    return std::nullopt;
+                }
+                double low = 0.0;
+                double high = 1.0;
+                for (int step = 0; step < 18; ++step) {
+                    const double mid = (low + high) * 0.5;
+                    const auto screen =
+                        projectToScreen(a + delta * mid);
+                    if (!screen) return std::nullopt;
+                    const double projected_fraction =
+                        ((screen->x - start.x) * dx +
+                         (screen->y - start.y) * dy) /
+                        length_squared;
+                    if (!std::isfinite(projected_fraction)) {
+                        return std::nullopt;
+                    }
+                    if (projected_fraction < screen_fraction) {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                const auto world = a + delta * ((low + high) * 0.5);
+                const auto screen = projectToScreen(world);
+                if (!screen) return std::nullopt;
+                const double projected_fraction =
+                    ((screen->x - start.x) * dx +
+                     (screen->y - start.y) * dy) /
+                    length_squared;
+                // Reject non-monotonic or behind-camera segments rather
+                // than manufacturing a false visible-picking candidate.
+                return std::abs(projected_fraction - screen_fraction) <=
+                               1.0e-3
+                    ? std::optional<viewer::Point3>{world}
+                    : std::nullopt;
+            };
+
+            for (const auto& edge : body_scene_.edges) {
+                if (!edge.material || !edge.ordinary_pickable) {
                     continue;
                 }
-
-                double best_distance_squared =
-                    aperture_squared;
-                std::optional<viewer::Point3>
-                    best_world;
-                std::optional<ScreenPoint>
-                    best_screen;
+                double best_distance_squared = aperture_squared;
+                std::optional<double> best_depth;
+                std::size_t edge_rays = 0U;
 
                 for (std::size_t index = 1U;
-                     index < edge.points.size();
-                     ++index) {
-                    const auto start =
-                        projectToScreen(
-                            edge.points[
-                                index - 1U]);
-                    const auto end =
-                        projectToScreen(
-                            edge.points[index]);
-                    if (!start || !end) {
-                        continue;
-                    }
-
+                     index < edge.points.size(); ++index) {
+                    if (edge_rays >= per_edge_ray_budget ||
+                        remaining_ray_budget == 0U) break;
+                    const auto& a = edge.points[index - 1U];
+                    const auto& b = edge.points[index];
+                    const auto start = projectToScreen(a);
+                    const auto end = projectToScreen(b);
+                    if (!start || !end) continue;
                     const auto closest =
-                        closestSegmentPoint(
-                            query,
-                            *start,
-                            *end);
-                    if (closest.distance_squared >
-                            best_distance_squared ||
-                        (best_world &&
-                         closest.distance_squared ==
-                             best_distance_squared)) {
+                        closestSegmentPoint(query, *start, *end);
+                    if (closest.distance_squared > aperture_squared ||
+                        !std::isfinite(closest.distance_squared)) {
                         continue;
                     }
-
-                    const auto& a =
-                        edge.points[index - 1U];
-                    const auto& b =
-                        edge.points[index];
-                    const auto delta =
-                        b - a;
-                    best_world =
-                        a +
-                        delta *
-                            closest.parameter;
-                    best_screen =
-                        ScreenPoint{
-                            start->x +
-                                (end->x - start->x) *
-                                    closest.parameter,
-                            start->y +
-                                (end->y - start->y) *
-                                    closest.parameter};
-                    best_distance_squared =
-                        closest.distance_squared;
+                    const double dx = end->x - start->x;
+                    const double dy = end->y - start->y;
+                    const double screen_length_squared = dx * dx + dy * dy;
+                    if (!std::isfinite(screen_length_squared)) continue;
+                    const double half_range =
+                        screen_length_squared > 1.0e-12
+                            ? std::sqrt(std::max(0.0,
+                                  aperture_squared -
+                                      closest.distance_squared) /
+                                  screen_length_squared)
+                            : 0.0;
+                    const double low = std::clamp(
+                        closest.parameter - half_range, 0.0, 1.0);
+                    const double high = std::clamp(
+                        closest.parameter + half_range, 0.0, 1.0);
+                    // The closest point is tried first, then progressively
+                    // farther samples on BOTH sides inside the aperture.
+                    // A hidden closest point does not reject the full Edge.
+                    for (int step = 0; step <= 6; ++step) {
+                        if (edge_rays >= per_edge_ray_budget ||
+                            remaining_ray_budget == 0U) break;
+                        const double fraction =
+                            static_cast<double>(step) / 6.0;
+                        for (int side = 0;
+                             side < (step == 0 ? 1 : 2); ++side) {
+                            if (edge_rays >= per_edge_ray_budget ||
+                                remaining_ray_budget == 0U) break;
+                            const double parameter =
+                                step == 0
+                                    ? closest.parameter
+                                    : side == 0
+                                          ? closest.parameter +
+                                                (low - closest.parameter) *
+                                                    fraction
+                                          : closest.parameter +
+                                                (high - closest.parameter) *
+                                                    fraction;
+                            const auto world = sampledWorld(
+                                a, b, *start, *end, parameter);
+                            if (!world) continue;
+                            const auto screen = projectToScreen(*world);
+                            if (!screen) continue;
+                            const double from_cursor_x =
+                                screen->x - query.x;
+                            const double from_cursor_y =
+                                screen->y - query.y;
+                            const double distance_squared =
+                                from_cursor_x * from_cursor_x +
+                                from_cursor_y * from_cursor_y;
+                            if (!std::isfinite(distance_squared) ||
+                                distance_squared > aperture_squared ||
+                                distance_squared >= best_distance_squared) {
+                                continue;
+                            }
+                            --remaining_ray_budget;
+                            ++edge_rays;
+                            if (!bodyPointFrontVisible(
+                                    *world, *screen)) {
+                                continue;
+                            }
+                            const auto ray = bodyPickRayAtPhysical(
+                                screen->x, screen->y);
+                            const auto depth = ray
+                                ? bodyPointDepth(*ray, *world)
+                                : std::nullopt;
+                            if (!depth) continue;
+                            best_distance_squared = distance_squared;
+                            best_depth = *depth;
+                            // First front-visible sample found by growing
+                            // screen-distance steps; no need to walk farther
+                            // on this particular segment after a hit.
+                            break;
+                        }
+                        if (best_depth) break;
+                    }
                 }
-
-                if (!best_world ||
-                    !best_screen ||
-                    !bodyPointFrontVisible(
-                        *best_world,
-                        *best_screen)) {
-                    continue;
-                }
-
-                const auto ray =
-                    bodyPickRayAtPhysical(
-                        best_screen->x,
-                        best_screen->y);
-                const auto depth =
-                    ray
-                        ? bodyPointDepth(
-                              *ray,
-                              *best_world)
-                        : std::nullopt;
-                if (!depth) {
-                    continue;
-                }
-
-                result.candidates.push_back(
-                    {
-                        edge.token,
-                        viewer::BodyTopologyPresentationKind::
-                            edge,
-                        std::sqrt(
-                            best_distance_squared) /
-                            dpr,
-                        *depth,
-                    });
+                if (!best_depth) continue;
+                result.candidates.push_back({
+                    edge.token,
+                    viewer::BodyTopologyPresentationKind::edge,
+                    std::sqrt(best_distance_squared) / dpr,
+                    *best_depth,
+                });
             }
         }
 
