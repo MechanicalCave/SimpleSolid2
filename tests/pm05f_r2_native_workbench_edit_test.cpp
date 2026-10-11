@@ -27,6 +27,7 @@
 #include <atomic>
 #include <array>
 #include <cmath>
+#include <chrono>
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
@@ -40,11 +41,50 @@
 #include <utility>
 #include <vector>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <psapi.h>
+#endif
+
 using namespace simplesolid2;
 
 namespace {
 
 std::atomic<std::uint32_t> owner_edge_outline_warnings{0U};
+
+// Real Windows private committed bytes, not an inferred Body/mesh size.
+// Load the stock system psapi.dll at runtime so the existing native test
+// target and build/link machinery remain unchanged. Unsupported platforms
+// report unavailable instead of manufacturing parity.
+[[nodiscard]] std::optional<std::uint64_t>
+currentProcessPrivateBytes() {
+#if defined(_WIN32)
+    using QueryProcessMemory =
+        BOOL (WINAPI*)(HANDLE, PPROCESS_MEMORY_COUNTERS, DWORD);
+    const HMODULE module = LoadLibraryW(L"psapi.dll");
+    if (module == nullptr) return std::nullopt;
+    const auto query = reinterpret_cast<QueryProcessMemory>(
+        GetProcAddress(module, "GetProcessMemoryInfo"));
+    std::optional<std::uint64_t> result;
+    if (query != nullptr) {
+        PROCESS_MEMORY_COUNTERS_EX metrics{};
+        metrics.cb = sizeof(metrics);
+        if (query(GetCurrentProcess(),
+                  reinterpret_cast<PPROCESS_MEMORY_COUNTERS>(&metrics),
+                  metrics.cb)) {
+            result = static_cast<std::uint64_t>(
+                metrics.PrivateUsage);
+        }
+    }
+    FreeLibrary(module);
+    return result;
+#else
+    return std::nullopt;
+#endif
+}
 
 void captureOwnerEdgeOutlineWarning(
     QtMsgType type,
@@ -321,6 +361,60 @@ authorableTrihedralCornerProbes(
     }
     CHECK(corners.size() == 8U);
     return corners;
+}
+
+// Edge Picking R1 G1: test-only front-visibility witness on the actual
+// OCCT Body presentation mesh. A camera-aligned orthographic ray is cast
+// through the EXACT world-space point, independently of the Viewer's
+// rounded projection and candidate/ranking algorithm. A sample is admitted
+// as a reliable positive control only if its nearest mesh intersection
+// coincides with that point; silhouette/tessellation gaps stay UNCLASSIFIED.
+// No ray hit, a nearer blocking Face or perspective camera => not proof.
+[[nodiscard]] bool independentOrthographicEdgeVisibility(
+    const kernel::SolidPresentationMesh& mesh,
+    const viewer::CameraState& camera,
+    viewer::Point3 world) {
+    if (camera.projection !=
+            viewer::CameraProjection::orthographic ||
+        !viewer::finite(world) || mesh.triangles.empty()) {
+        return false;
+    }
+    const auto towards_eye =
+        viewer::normalized(camera.eye - camera.target);
+    if (!towards_eye) return false;
+    constexpr double distance = 1000.0;
+    const auto origin = world + *towards_eye * distance;
+    const auto direction = *towards_eye * -1.0;
+    std::optional<double> nearest;
+    for (const auto& triangle : mesh.triangles) {
+        const auto a = viewer::Point3{
+            triangle.first.x, triangle.first.y, triangle.first.z};
+        const auto b = viewer::Point3{
+            triangle.second.x, triangle.second.y, triangle.second.z};
+        const auto c = viewer::Point3{
+            triangle.third.x, triangle.third.y, triangle.third.z};
+        const auto ab = b - a;
+        const auto ac = c - a;
+        const auto p = viewer::cross(direction, ac);
+        const double det = viewer::dot(ab, p);
+        if (std::abs(det) < 1.0e-11) continue;
+        const double inv_det = 1.0 / det;
+        const auto offset = origin - a;
+        const double u = viewer::dot(offset, p) * inv_det;
+        if (u < -1.0e-9 || u > 1.0 + 1.0e-9) continue;
+        const auto q = viewer::cross(offset, ab);
+        const double v = viewer::dot(direction, q) * inv_det;
+        if (v < -1.0e-9 || u + v > 1.0 + 1.0e-9) continue;
+        const double depth = viewer::dot(ac, q) * inv_det;
+        if (depth <= 1.0e-8 || !std::isfinite(depth)) continue;
+        if (!nearest || depth < *nearest) nearest = depth;
+    }
+    // A curve/tessellation mismatch or near-wall ambiguity is not a
+    // trustworthy positive witness. This tolerance is classification-only
+    // and NEVER changes the Viewer's depth or picking policy.
+    constexpr double mesh_match_mm = 0.02;
+    return nearest &&
+        std::abs(*nearest - distance) <= mesh_match_mm;
 }
 
 QTreeWidgetItem* featureTreeItem(
@@ -1725,6 +1819,752 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+        if (!pg01d_ui_only && !pg01c_only) {
+            // Edge Picking R1 G1 — exactly the untouched Owner native v16/v2
+            // Part, unlike the auxiliary synthetic viewer visibility RED.
+            // This baseline proves real Part/OCCT evaluation and logs Body
+            // query coverage across camera rotations. A visible-on-screen
+            // query miss by itself is NOT yet proof of a front-visible Edge.
+            const auto fixture =
+                std::filesystem::path{__FILE__}.parent_path() /
+                "fixtures" /
+                "edge_picking_r1_select_edge_test_01.ss2part";
+            const part::PartDocumentStore store;
+            auto loaded = store.load(fixture);
+            if (!loaded.ok()) {
+                std::cerr << "EDGE_R1_OWNER_PART_LOAD_FAILURE code="
+                          << static_cast<int>(loaded.diagnostic.code)
+                          << " message=" << loaded.diagnostic.message
+                          << std::endl;
+            }
+            CHECK(loaded.ok());
+            CHECK(loaded.document->modelingSemanticsVersion() ==
+                  part::current_modeling_semantics_version);
+            application::DocumentSession owner_session{
+                {}, std::move(*loaded.document)};
+            CHECK(owner_session.document().state().body.features.size() ==
+                  4U);
+            const auto evaluated =
+                part::evaluatePart(owner_session.document(), kernel);
+            CHECK(evaluated.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(evaluated.body_solid != nullptr);
+            CHECK(evaluated.current_topology.has_value());
+            CHECK(evaluated.current_topology->complete());
+            const auto presented =
+                kernel.bodyPresentation(evaluated.body_solid);
+            CHECK(presented.ok());
+            CHECK(!presented.body.edges.empty());
+            CHECK(!presented.body.mesh.triangles.empty());
+            const auto owner_probes =
+                authorableEdgeProbes(owner_session, kernel);
+            CHECK(workbench.activateDocument(&owner_session, {}));
+            QApplication::processEvents();
+            std::vector<double> owner_pick_microseconds;
+            std::size_t query_count = 0U;
+            std::size_t edge_hit_count = 0U;
+            std::size_t edge_miss_count = 0U;
+            std::size_t independently_visible_samples = 0U;
+            std::size_t visible_sample_misses = 0U;
+            std::size_t visible_sample_hits = 0U;
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::bottom_front_right,
+                     viewer::StandardView::bottom_back_left}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                std::size_t hits_for_view = 0U;
+                std::size_t misses_for_view = 0U;
+                for (const auto& probe : owner_probes) {
+                    const auto screen =
+                        viewport->projectWorldPoint(probe.world);
+                    if (!screen ||
+                        screen->x < 0.0 || screen->y < 0.0 ||
+                        screen->x >= viewport->width() ||
+                        screen->y >= viewport->height()) {
+                        continue;
+                    }
+                    const auto started =
+                        std::chrono::steady_clock::now();
+                    const auto query = viewport->queryBodyTopology(
+                        *screen,
+                        viewer::BodyTopologyPickFilter{
+                            false, true, false});
+                    const double microseconds =
+                        std::chrono::duration<double, std::micro>{
+                            std::chrono::steady_clock::now() - started}
+                            .count();
+                    CHECK(std::isfinite(microseconds) &&
+                          microseconds >= 0.0);
+                    owner_pick_microseconds.push_back(microseconds);
+                    CHECK(query.valid());
+                    CHECK(query.completed);
+                    CHECK(query.generation.valid());
+                    ++query_count;
+                    const bool detected = std::any_of(
+                        query.candidates.begin(),
+                        query.candidates.end(),
+                        [](const auto& candidate) {
+                            return candidate.kind ==
+                                viewer::BodyTopologyPresentationKind::edge;
+                        });
+                    if (detected) {
+                        ++edge_hit_count;
+                        ++hits_for_view;
+                    } else {
+                        ++edge_miss_count;
+                        ++misses_for_view;
+                    }
+                }
+                // Sample original OCCT authorable material Edges, not a
+                // newly fabricated scene. This is an independent geometric
+                // FRONT-VISIBLE control; the Viewer's own query has no role
+                // in classifying the mesh ray.
+                const auto camera_state = viewport->cameraState();
+                CHECK(camera_state.has_value());
+                const std::size_t max_sampled_segments = 7U;
+                std::size_t front_samples_this_view = 0U;
+                std::size_t misses_this_view = 0U;
+                for (const auto& edge : presented.body.edges) {
+                    if (edge.points.size() < 2U) continue;
+                    const auto authored =
+                        part::authorMaterialEdgeReference(
+                            *evaluated.current_topology,
+                            edge.runtime_token);
+                    if (!authored.ok()) continue;
+                    const auto segment_count = edge.points.size() - 1U;
+                    const auto stride = std::max<std::size_t>(
+                        1U, (segment_count + max_sampled_segments - 1U) /
+                                max_sampled_segments);
+                    for (std::size_t index = 0U;
+                         index < segment_count; index += stride) {
+                        const auto& a = edge.points[index];
+                        const auto& b = edge.points[index + 1U];
+                        for (const double t : {0.25, 0.5, 0.75}) {
+                            const viewer::Point3 world{
+                                a.x + (b.x - a.x) * t,
+                                a.y + (b.y - a.y) * t,
+                                a.z + (b.z - a.z) * t};
+                            if (!independentOrthographicEdgeVisibility(
+                                    presented.body.mesh,
+                                    *camera_state, world)) continue;
+                            const auto screen =
+                                viewport->projectWorldPoint(world);
+                            if (!screen || screen->x < 0.0 ||
+                                screen->y < 0.0 ||
+                                screen->x >= viewport->width() ||
+                                screen->y >= viewport->height()) continue;
+                            ++independently_visible_samples;
+                            ++front_samples_this_view;
+                            const auto query = viewport->queryBodyTopology(
+                                *screen,
+                                viewer::BodyTopologyPickFilter{
+                                    false, true, false});
+                            CHECK(query.valid() && query.completed);
+                            CHECK(query.generation.valid());
+                            const bool any_edge = std::any_of(
+                                query.candidates.begin(),
+                                query.candidates.end(),
+                                [](const auto& candidate) {
+                                    return candidate.kind ==
+                                        viewer::BodyTopologyPresentationKind::edge;
+                                });
+                            if (any_edge) {
+                                ++visible_sample_hits;
+                            } else {
+                                ++visible_sample_misses;
+                                ++misses_this_view;
+                                if (visible_sample_misses <= 20U) {
+                                    std::cerr
+                                        << "EDGE_R1_REAL_MESH_VISIBLE_MISS"
+                                        << " orientation="
+                                        << static_cast<int>(orientation)
+                                        << " runtime_edge="
+                                        << edge.runtime_token.value
+                                        << " segment=" << index
+                                        << " fraction=" << t
+                                        << " world=" << world.x << ","
+                                        << world.y << "," << world.z
+                                        << " screen=" << screen->x << ","
+                                        << screen->y
+                                        << " candidate_count="
+                                        << query.candidates.size()
+                                        << std::endl;
+                                }
+                            }
+                        }
+                    }
+                }
+                std::cerr
+                    << "EDGE_R1_REAL_MESH_VISIBILITY"
+                    << " orientation=" << static_cast<int>(orientation)
+                    << " independently_front_visible="
+                    << front_samples_this_view
+                    << " omitted_any_edge=" << misses_this_view
+                    << std::endl;
+                std::cerr
+                    << "EDGE_R1_OWNER_REAL_BODY_VIEW orientation="
+                    << static_cast<int>(orientation)
+                    << " hits=" << hits_for_view
+                    << " misses=" << misses_for_view
+                    << std::endl;
+            }
+            CHECK(query_count > 0U);
+            CHECK(edge_hit_count > 0U);
+            std::cerr
+                << "EDGE_R1_OWNER_REAL_BODY_BASELINE"
+                << " features=4"
+                << " faces=" << presented.body.faces.size()
+                << " edges=" << presented.body.edges.size()
+                << " triangles=" << presented.body.mesh.triangles.size()
+                << " authorable_probes=" << owner_probes.size()
+                << " visible_candidate_hits=" << edge_hit_count
+                << " query_misses_unclassified=" << edge_miss_count
+                << " independently_front_visible="
+                << independently_visible_samples
+                << " visible_edge_any_hit=" << visible_sample_hits
+                << " visible_edge_any_miss=" << visible_sample_misses
+                << " camera_exact_owner_match=0"
+                << " owner_target_token_mapping_pending=1"
+                << std::endl;
+            CHECK(independently_visible_samples > 0U);
+            CHECK(!owner_pick_microseconds.empty());
+            std::sort(
+                owner_pick_microseconds.begin(),
+                owner_pick_microseconds.end());
+            const auto measured = [](const auto& samples, double p) {
+                const auto index = static_cast<std::size_t>(
+                    std::floor((samples.size() - 1U) * p));
+                return samples[index];
+            };
+            const double p50_microseconds =
+                measured(owner_pick_microseconds, 0.5);
+            const double p95_microseconds =
+                measured(owner_pick_microseconds, 0.95);
+            std::cerr << "EDGE_R1_G5_REAL_BODY_QUERY"
+                      << " samples=" << owner_pick_microseconds.size()
+                      << " p50_us=" << p50_microseconds
+                      << " p95_us=" << p95_microseconds
+                      << " triangles="
+                      << presented.body.mesh.triangles.size()
+                      << " edges=" << presented.body.edges.size()
+                      << " orientations=5"
+                      << " camera_zoom=fitted"
+                      << std::endl;
+            // G5 local/native probe contract: this is a fitted-view
+            // preliminary timing distribution only, with five rotations.
+            // Never treat it as a Release performance budget, a baseline
+            // comparison, or proof of three-zoom / DPR parity.
+            // GitHub's ordinary passing CTest hides test stdout. Publish
+            // ONLY this bounded, test-derived measurement to the normal
+            // Actions step summary without modifying workflows or product
+            // source. No performance budget or before/after claim implied.
+            if (const char* location =
+                    std::getenv("GITHUB_STEP_SUMMARY")) {
+                std::ofstream summary{location, std::ios::app};
+                if (summary) {
+                    summary
+                        << "\n### Edge Picking R1 — G5 native query samples\n"
+                        << "Real Owner v16/v2 Part, five fitted orthographic"
+                        << " orientations, "
+                        << owner_pick_microseconds.size()
+                        << " material Edge-only queries, "
+                        << presented.body.edges.size()
+                        << " Edges, "
+                        << presented.body.mesh.triangles.size()
+                        << " triangles.\n\n"
+                        << "| Metric | G4 candidate |\n"
+                        << "|---|---:|\n"
+                        << "| p50 (microseconds) | "
+                        << p50_microseconds << " |\n"
+                        << "| p95 (microseconds) | "
+                        << p95_microseconds << " |\n\n"
+                        << "One-run diagnostic; before-R1 comparison and "
+                        << "multi-zoom timings still pending.\n";
+                }
+            }
+            // G5 extended same-machine characterization. Fixed authored
+            // material-Edge probe coordinates and deterministic +-6 logical
+            // px cursor traces; measuring actual current Body queries, not
+            // just projection math or a fabricated test scene. This does not
+            // claim equivalent pre-R1 measurement or new latency budgets.
+            struct G5ViewTiming final {
+                viewer::StandardView orientation;
+                viewer::CameraProjection projection;
+                double scale_factor{};
+                std::size_t samples{};
+                double p50_us{};
+                double p95_us{};
+                double max_us{};
+            };
+            std::vector<G5ViewTiming> g5_views;
+            const auto incoming_camera = viewport->cameraState();
+            CHECK(incoming_camera.has_value());
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::bottom_front_right}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                const auto fitted = viewport->cameraState();
+                CHECK(fitted.has_value());
+                for (const auto projection : {
+                         viewer::CameraProjection::orthographic,
+                         viewer::CameraProjection::perspective}) {
+                    CHECK(viewport->setCameraState(*fitted));
+                    CHECK(viewport->setProjection(projection));
+                    const auto projected = viewport->cameraState();
+                    CHECK(projected.has_value());
+                    CHECK(projected->projection == projection);
+                    for (const double scale_factor :
+                         {0.67, 1.0, 1.5}) {
+                        auto camera = *projected;
+                        camera.scale *= scale_factor;
+                        CHECK(viewport->setCameraState(camera));
+                        QApplication::processEvents();
+                        std::vector<double> durations_us;
+                        for (const auto& probe : owner_probes) {
+                            const auto point =
+                                viewport->projectWorldPoint(probe.world);
+                            if (!point) continue;
+                            for (const double dx : {-6.0, 0.0, 6.0}) {
+                                const viewer::ViewportPoint2 cursor{
+                                    point->x + dx, point->y};
+                                if (cursor.x < 0.0 || cursor.y < 0.0 ||
+                                    cursor.x >= viewport->width() ||
+                                    cursor.y >= viewport->height()) {
+                                    continue;
+                                }
+                                const auto started =
+                                    std::chrono::steady_clock::now();
+                                const auto query =
+                                    viewport->queryBodyTopology(
+                                        cursor,
+                                        viewer::BodyTopologyPickFilter{
+                                            false, true, false});
+                                const double duration_us =
+                                    std::chrono::duration<
+                                        double, std::micro>{
+                                        std::chrono::steady_clock::now() -
+                                        started}.count();
+                                CHECK(query.valid() && query.completed);
+                                CHECK(query.generation.valid());
+                                CHECK(std::isfinite(duration_us) &&
+                                      duration_us >= 0.0);
+                                durations_us.push_back(duration_us);
+                            }
+                        }
+                        CHECK(!durations_us.empty());
+                        std::sort(durations_us.begin(),
+                                  durations_us.end());
+                        g5_views.push_back(G5ViewTiming{
+                            orientation,
+                            projection,
+                            scale_factor,
+                            durations_us.size(),
+                            measured(durations_us, 0.5),
+                            measured(durations_us, 0.95),
+                            durations_us.back()});
+                    }
+                }
+            }
+            CHECK(g5_views.size() == 12U);
+            // Emit exact comparable cohorts to CTest failure/diagnostics
+            // instead of relying only on GitHub's UI Step Summary.
+            // Pre-fix evidence PR #315 uses identical cursor sampling.
+            for (const auto& row : g5_views) {
+                std::cerr << "EDGE_R1_G5_R1_COHORT"
+                          << " view=" << static_cast<int>(row.orientation)
+                          << " projection="
+                          << static_cast<int>(row.projection)
+                          << " factor=" << row.scale_factor
+                          << " queries=" << row.samples
+                          << " p50_us=" << row.p50_us
+                          << " p95_us=" << row.p95_us
+                          << " max_us=" << row.max_us << std::endl;
+            }
+            // Restore the exact preceding orthographic test camera before
+            // running the existing Fillet/Chamfer Workbench selection suite.
+            // A G5 measurement must not leak perspective/zoom state into
+            // unrelated native click and lifecycle regressions.
+            CHECK(viewport->setCameraState(*incoming_camera));
+            QApplication::processEvents();
+            const double measured_dpr =
+                viewport->devicePixelRatioF();
+            CHECK(std::isfinite(measured_dpr) && measured_dpr > 0.0);
+            // Only the DPI actually provided by the Windows runner is
+            // evidenced. Never report simulated 1.5x/2x as native coverage.
+            std::cerr << "EDGE_R1_G5_VIEW_MATRIX"
+                      << " cohorts=" << g5_views.size()
+                      << " measured_dpr=" << measured_dpr
+                      << " edges=" << presented.body.edges.size()
+                      << " triangles="
+                      << presented.body.mesh.triangles.size()
+                      << std::endl;
+            if (const char* location =
+                    std::getenv("GITHUB_STEP_SUMMARY")) {
+                std::ofstream summary{location, std::ios::app};
+                if (summary) {
+                    summary
+                        << "\n### Edge Picking R1 — G5 extended view matrix\n"
+                        << "Real Owner v16/v2 Part; native Windows Qt/OCCT;"
+                        << " Body material Edge-only cursor traces"
+                        << " (−6/0/+6 logical px from fixed projected probes)."
+                        << " Steady-clock query duration only, no rendering/"
+                        << "evaluation in timed region. Measured device"
+                        << " pixel ratio: " << measured_dpr << ".\n\n"
+                        << "| View | Projection | Camera scale factor"
+                        << " | Queries | p50 us | p95 us | max us |\n"
+                        << "|---|---|---:|---:|---:|---:|---:|\n";
+                    for (const auto& row : g5_views) {
+                        summary
+                            << "| " << static_cast<int>(row.orientation)
+                            << " | "
+                            << (row.projection ==
+                                    viewer::CameraProjection::orthographic
+                                    ? "ortho" : "perspective")
+                            << " | " << row.scale_factor
+                            << " | " << row.samples
+                            << " | " << row.p50_us
+                            << " | " << row.p95_us
+                            << " | " << row.max_us << " |\n";
+                    }
+                    summary
+                        << "\nDiagnostic sampling only; measured DPR"
+                        << " does not prove unavailable modes."
+                        << " Equivalent pre-R1 run, bounded worst-case"
+                        << " work and Owner W01-A–G remain open.\n";
+                }
+            }
+            // G5 repeated native query stress: exercise the production
+            // Body/QtOCCT picker for a sustained deterministic pointer
+            // trace on the unchanged evaluated Owner's Part. This is
+            // application-level CPU timing, NOT the event-loop frame rate,
+            // an accepted SLA, a memory bound, or an alternate selection
+            // identity source. Preserve the subsequent historic UI tests.
+            CHECK(viewport->setCameraState(*incoming_camera));
+            QApplication::processEvents();
+            const auto private_bytes_before =
+                currentProcessPrivateBytes();
+            std::vector<double> g5_trace_microseconds;
+            g5_trace_microseconds.reserve(
+                24U * owner_probes.size() * 3U);
+            std::size_t g5_trace_edge_hits = 0U;
+            for (int sweep = 0; sweep < 24; ++sweep) {
+                for (const auto& probe : owner_probes) {
+                    const auto at =
+                        viewport->projectWorldPoint(probe.world);
+                    if (!at) continue;
+                    for (const double dx : {-6.0, 0.0, 6.0}) {
+                        const viewer::ViewportPoint2 cursor{
+                            at->x + dx, at->y};
+                        if (cursor.x < 0.0 || cursor.y < 0.0 ||
+                            cursor.x >= viewport->width() ||
+                            cursor.y >= viewport->height()) {
+                            continue;
+                        }
+                        const auto started =
+                            std::chrono::steady_clock::now();
+                        const auto query =
+                            viewport->queryBodyTopology(
+                                cursor,
+                                viewer::BodyTopologyPickFilter{
+                                    false, true, false});
+                        const double duration_us =
+                            std::chrono::duration<double, std::micro>{
+                                std::chrono::steady_clock::now() - started}
+                                .count();
+                        CHECK(query.valid() && query.completed);
+                        CHECK(query.generation.valid());
+                        CHECK(std::isfinite(duration_us) &&
+                              duration_us >= 0.0);
+                        g5_trace_microseconds.push_back(duration_us);
+                        if (std::any_of(
+                                query.candidates.begin(),
+                                query.candidates.end(),
+                                [](const auto& candidate) {
+                                    return candidate.kind ==
+                                        viewer::BodyTopologyPresentationKind::
+                                            edge;
+                                })) {
+                            ++g5_trace_edge_hits;
+                        }
+                    }
+                }
+            }
+            CHECK(g5_trace_microseconds.size() >= 1000U);
+            CHECK(g5_trace_edge_hits > 0U);
+            const auto private_bytes_after =
+                currentProcessPrivateBytes();
+            std::sort(g5_trace_microseconds.begin(),
+                      g5_trace_microseconds.end());
+            const double trace_p50_us =
+                measured(g5_trace_microseconds, 0.5);
+            const double trace_p95_us =
+                measured(g5_trace_microseconds, 0.95);
+            std::cerr
+                << "EDGE_R1_G5_REPEATED_QUERY_TRACE"
+                << " samples=" << g5_trace_microseconds.size()
+                << " sweeps=24"
+                << " edge_candidate_queries=" << g5_trace_edge_hits
+                << " p50_us=" << trace_p50_us
+                << " p95_us=" << trace_p95_us
+                << " max_us=" << g5_trace_microseconds.back()
+                << " dpr=" << measured_dpr
+                << " triangles="
+                << presented.body.mesh.triangles.size()
+                << " edges=" << presented.body.edges.size()
+                << " private_bytes_before="
+                << (private_bytes_before
+                        ? std::to_string(*private_bytes_before)
+                        : "unavailable")
+                << " private_bytes_after="
+                << (private_bytes_after
+                        ? std::to_string(*private_bytes_after)
+                        : "unavailable")
+                << std::endl;
+            if (const char* location =
+                    std::getenv("GITHUB_STEP_SUMMARY")) {
+                std::ofstream summary{location, std::ios::app};
+                if (summary) {
+                    summary
+                        << "\n### R1 G5 sustained same-camera query trace\n"
+                        << "Unchanged real Owner Part. 24 deterministic"
+                        << " sweeps through projected 33 Edge probes at"
+                        << " -6/0/+6 logical px; no GUI events in timed"
+                        << " block; not a frame rate or memory test. "
+                        << g5_trace_microseconds.size()
+                        << " queries, "
+                        << g5_trace_edge_hits
+                        << " with Edge candidate. p50 "
+                        << trace_p50_us
+                        << " us, p95 "
+                        << trace_p95_us
+                        << " us, max "
+                        << g5_trace_microseconds.back()
+                        << " us; native DPR " << measured_dpr
+                        << "; process private committed bytes before "
+                        << (private_bytes_before
+                                ? std::to_string(*private_bytes_before)
+                                : "unavailable")
+                        << ", after "
+                        << (private_bytes_after
+                                ? std::to_string(*private_bytes_after)
+                                : "unavailable")
+                        << ". This is a two-point sample, not proof of"
+                        << " no leak or an accepted memory SLA.\n";
+                }
+            }
+            // G5 real modeled-scene complexity: compare the existing
+            // picker on a progressively elaborated *valid OCCT Body*.
+            // These are actual source Sketch/Profile + Boolean Cut
+            // Features, not copied triangles, fabricated view tokens or
+            // a proxy for durable Part identity. Keep the original Owner
+            // witness above unchanged and restore it afterward.
+            auto complexity_session =
+                makeBaseSession(kernel, 120.0, 60.0, 20.0);
+            const auto add_complexity_cut =
+                [&kernel, &complexity_session](
+                    double x, double y, int index) {
+                const auto sketch =
+                    complexity_session.execute(
+                        application::CreatePartSketchCommand{
+                            core::BuiltinReferenceRole::xy_plane});
+                CHECK(sketch.ok() && sketch.sketch_id);
+                CHECK(complexity_session.execute(
+                    application::AddSketchCircleCommand{
+                        *sketch.sketch_id,
+                        {x, y},
+                        5.0,
+                        sketch::EntityRole::regular}).ok());
+                const auto* authored =
+                    complexity_session.document().findSketch(
+                        *sketch.sketch_id);
+                CHECK(authored != nullptr);
+                const auto regions =
+                    sketch::analyzeRegions(authored->model);
+                CHECK(regions.complete() &&
+                      regions.regions.size() == 1U);
+                const auto intent =
+                    part::makeProfileRegionIntent(
+                        regions.regions.front());
+                CHECK(intent.has_value());
+                const auto profile =
+                    complexity_session.execute(
+                        application::CreateProfileCommand{
+                            *sketch.sketch_id,
+                            complexity_session.document().revision(),
+                            *intent});
+                CHECK(profile.ok() && profile.profile_id);
+                const auto cut =
+                    complexity_session.execute(
+                        application::CreateExtrudeFeatureCommand{
+                            *profile.profile_id,
+                            complexity_session.document().revision(),
+                            part::ExtrudeOperation::cut,
+                            part::OneSidedExtrudeExtent{
+                                core::LengthValue{25.0}, false},
+                            "G5 Complexity Cut " +
+                                std::to_string(index)},
+                        kernel);
+                CHECK(cut.ok() && cut.feature_id);
+            };
+            std::size_t previous_complexity_edges = 0U;
+            std::size_t previous_complexity_triangles = 0U;
+            int cut_count = 0;
+            for (const int required_cuts : {0, 3, 8}) {
+                while (cut_count < required_cuts) {
+                    const int index = cut_count++;
+                    const double x = 20.0 +
+                        20.0 * static_cast<double>(index % 5);
+                    const double y = index < 5 ? 15.0 : 45.0;
+                    add_complexity_cut(x, y, index + 1);
+                }
+                const auto complexity_evaluated =
+                    part::evaluatePart(
+                        complexity_session.document(), kernel);
+                CHECK(complexity_evaluated.body_status ==
+                    part::BodyEvaluationStatus::up_to_date);
+                CHECK(complexity_evaluated.body_solid != nullptr);
+                CHECK(complexity_evaluated.current_topology.has_value());
+                CHECK(complexity_evaluated.current_topology->complete());
+                const auto complexity_presentation =
+                    kernel.bodyPresentation(
+                        complexity_evaluated.body_solid);
+                CHECK(complexity_presentation.ok());
+                const auto complexity_edges =
+                    complexity_presentation.body.edges.size();
+                const auto complexity_triangles =
+                    complexity_presentation.body.mesh.triangles.size();
+                CHECK(complexity_edges > previous_complexity_edges);
+                CHECK(complexity_triangles >
+                      previous_complexity_triangles);
+                previous_complexity_edges = complexity_edges;
+                previous_complexity_triangles = complexity_triangles;
+                const auto complexity_probes =
+                    authorableEdgeProbes(
+                        complexity_session, kernel);
+                CHECK(!complexity_probes.empty());
+                CHECK(workbench.activateDocument(
+                    &complexity_session, {}));
+                CHECK(viewport->setStandardView(
+                    viewer::StandardView::top_front_right));
+                viewport->fitAll();
+                QApplication::processEvents();
+
+                std::vector<double> timings_us;
+                std::size_t candidate_hits = 0U;
+                for (int sweep = 0; sweep < 3; ++sweep) {
+                    for (const auto& probe : complexity_probes) {
+                        const auto at =
+                            viewport->projectWorldPoint(probe.world);
+                        if (!at) continue;
+                        for (const double dx : {-6.0, 0.0, 6.0}) {
+                            const viewer::ViewportPoint2 cursor{
+                                at->x + dx, at->y};
+                            if (cursor.x < 0.0 || cursor.y < 0.0 ||
+                                cursor.x >= viewport->width() ||
+                                cursor.y >= viewport->height()) {
+                                continue;
+                            }
+                            const auto started =
+                                std::chrono::steady_clock::now();
+                            const auto query =
+                                viewport->queryBodyTopology(
+                                    cursor,
+                                    viewer::BodyTopologyPickFilter{
+                                        false, true, false});
+                            const double duration_us =
+                                std::chrono::duration<
+                                    double, std::micro>{
+                                        std::chrono::steady_clock::now() -
+                                        started}.count();
+                            CHECK(query.valid() && query.completed);
+                            CHECK(query.generation.valid());
+                            CHECK(std::isfinite(duration_us) &&
+                                  duration_us >= 0.0);
+                            timings_us.push_back(duration_us);
+                            if (std::any_of(
+                                    query.candidates.begin(),
+                                    query.candidates.end(),
+                                    [](const auto& candidate) {
+                                        return candidate.kind ==
+                                            viewer::
+                                                BodyTopologyPresentationKind::
+                                                    edge;
+                                    })) {
+                                ++candidate_hits;
+                            }
+                        }
+                    }
+                }
+                CHECK(timings_us.size() >= 30U);
+                CHECK(candidate_hits > 0U);
+                std::sort(timings_us.begin(), timings_us.end());
+                const double p50_us = measured(timings_us, 0.5);
+                const double p95_us = measured(timings_us, 0.95);
+                std::cerr
+                    << "EDGE_R1_G5_REAL_COMPLEXITY"
+                    << " cuts=" << required_cuts
+                    << " edges=" << complexity_edges
+                    << " triangles=" << complexity_triangles
+                    << " authorable_probes="
+                    << complexity_probes.size()
+                    << " samples=" << timings_us.size()
+                    << " candidate_hits=" << candidate_hits
+                    << " p50_us=" << p50_us
+                    << " p95_us=" << p95_us
+                    << " max_us=" << timings_us.back()
+                    << " dpr=" << measured_dpr
+                    << std::endl;
+                if (const char* location =
+                        std::getenv("GITHUB_STEP_SUMMARY")) {
+                    std::ofstream summary{location, std::ios::app};
+                    if (summary) {
+                        summary
+                            << "\n### R1 G5 real OCCT Cut complexity\n"
+                            << "Current Body after "
+                            << required_cuts
+                            << " valid separated circular through-Cuts"
+                            << " (120×60×20 mm base): "
+                            << complexity_edges
+                            << " Body Edges, "
+                            << complexity_triangles
+                            << " mesh triangles, "
+                            << complexity_probes.size()
+                            << " strict material Edge probes, "
+                            << timings_us.size()
+                            << " native queries (3 sweeps, -6/0/+6"
+                            << " logical px). Edge candidate queries "
+                            << candidate_hits << ". p50 "
+                            << p50_us << " us, p95 "
+                            << p95_us << " us, max "
+                            << timings_us.back()
+                            << " us, DPR " << measured_dpr
+                            << ". Times exclude Body construction and"
+                            << " GUI repaint; not a memory bound.\n";
+                    }
+                }
+            }
+            // Restore the same Owner session/scene for the original
+            // independently visible-mesh assertion below; it must not
+            // observe the complexity-control Body stage or tokens.
+            CHECK(workbench.activateDocument(
+                &owner_session, {}));
+            QApplication::processEvents();
+            // Expected R1 RED ONLY when a truly front-visible sample on
+            // the real Owner's native Part has NO Edge candidate at all.
+            // Samples on tessellation gaps / blocked behind Body material
+            // were excluded above; negative occlusion policy is untouched.
+            CHECK(visible_sample_misses == 0U);
+            // Return the original session before the pre-existing native
+            // Workbench tests. Do not carry selection or runtime tokens out.
+            CHECK(workbench.activateDocument(&session, {}));
+            QApplication::processEvents();
+        }
         if (pg01d_ui_only) {
             // Real Qt/OCCT Face cursor admission, never a fabricated
             // Viewer token or a provider ordinal. The target is a
