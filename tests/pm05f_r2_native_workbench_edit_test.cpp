@@ -6,6 +6,8 @@
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/persistence/native_document_container.hpp>
+#include <nlohmann/json.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
@@ -29,6 +31,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <iostream>
 #include <map>
@@ -69,6 +72,51 @@ void check(bool ok, const char* expression, int line) {
     std::exit(EXIT_FAILURE);
 }
 #define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
+
+// D2-R2/R3: the original sanitized Owner regression files are immutable v1
+// modeling-policy inputs. The production loader must reject them, while a
+// temporary TEST-ONLY v2 repackage exercises their original authored
+// geometry and feature history under the new production kernel policy.
+[[nodiscard]] part::PartLoadResult
+loadOwnerFixtureV2ForTest(
+    const part::PartDocumentStore& store,
+    const std::filesystem::path& source) {
+    const auto rejected = store.load(source);
+    CHECK(!rejected.ok());
+    CHECK(rejected.diagnostic.code ==
+          part::PartStoreErrorCode::unsupported_modeling_semantics);
+    const auto native =
+        persistence::readNativeDocumentContainer(source);
+    CHECK(native.ok());
+    auto authored =
+        nlohmann::json::parse(native.package->authored_json);
+    CHECK(authored.at("modeling_semantics_version") == 1);
+    authored["modeling_semantics_version"] =
+        part::current_modeling_semantics_version.value;
+    const auto built =
+        persistence::buildNativeDocumentContainer(
+            native.package->descriptor, authored.dump(2));
+    CHECK(built.ok());
+    QTemporaryDir scratch;
+    CHECK(scratch.isValid());
+    const auto temp_path =
+        std::filesystem::path{scratch.path().toStdWString()} /
+        source.filename();
+    {
+        std::ofstream output{
+            temp_path, std::ios::binary | std::ios::trunc};
+        CHECK(static_cast<bool>(output));
+        output.write(
+            built.bytes->data(),
+            static_cast<std::streamsize>(built.bytes->size()));
+        CHECK(static_cast<bool>(output));
+    }
+    auto loaded = store.load(temp_path);
+    CHECK(loaded.ok());
+    CHECK(loaded.document->modelingSemanticsVersion() ==
+          part::current_modeling_semantics_version);
+    return loaded;
+}
 
 application::DocumentSession makeBaseSession(
     kernel_occt::OcctSolidModelingKernel& kernel,
@@ -1496,7 +1544,7 @@ void probePg01dChamferedAddFaceAdmission(
         std::filesystem::path{__FILE__}.parent_path() /
         "fixtures" / "pm05f_r2_part008_sanitized.ss2part";
     const part::PartDocumentStore store;
-    auto loaded = store.load(fixture);
+    auto loaded = loadOwnerFixtureV2ForTest(store, fixture);
     CHECK(loaded.ok());
     application::DocumentSession session{
         {}, std::move(*loaded.document)};
@@ -5064,7 +5112,7 @@ int main(int argc, char* argv[]) {
             "fixtures" /
             "pm05f_r2_part013_sanitized.ss2part";
         const part::PartDocumentStore owner_store;
-        auto owner_loaded = owner_store.load(owner_fixture);
+        auto owner_loaded = loadOwnerFixtureV2ForTest(owner_store, owner_fixture);
         CHECK(owner_loaded.ok());
         application::DocumentSession owner_exact_session{
             {}, std::move(*owner_loaded.document)};
@@ -5181,7 +5229,7 @@ int main(int argc, char* argv[]) {
             "fixtures" /
             "pm05f_r2_part008_sanitized.ss2part";
         const part::PartDocumentStore crash_store;
-        auto crash_loaded = crash_store.load(crash_fixture);
+        auto crash_loaded = loadOwnerFixtureV2ForTest(crash_store, crash_fixture);
         if (!crash_loaded.ok()) {
             std::cerr
                 << "PM05F_R2_PART008_LOAD_FAILED"
@@ -5674,7 +5722,7 @@ int main(int argc, char* argv[]) {
         // on the *same original two-Extrude* Body stage. Using a fresh
         // session prevents the new Chamfer from accidentally consuming
         // the committed Fillet stage above.
-        auto chamfer_loaded = crash_store.load(crash_fixture);
+        auto chamfer_loaded = loadOwnerFixtureV2ForTest(crash_store, crash_fixture);
         CHECK(chamfer_loaded.ok());
         application::DocumentSession chamfer_session{
             {}, std::move(*chamfer_loaded.document)};
@@ -5792,7 +5840,7 @@ int main(int argc, char* argv[]) {
         CHECK(*third_owner_edge != *screenshot_edge);
         CHECK(*third_owner_edge != isolated_secondary.reference);
 
-        auto triple_loaded = crash_store.load(crash_fixture);
+        auto triple_loaded = loadOwnerFixtureV2ForTest(crash_store, crash_fixture);
         CHECK(triple_loaded.ok());
         application::DocumentSession triple_session{
             {}, std::move(*triple_loaded.document)};
@@ -6074,7 +6122,7 @@ int main(int argc, char* argv[]) {
             std::filesystem::path{
                 lifecycle_dir.path().toStdWString()} /
             "part008_d2b_three_edge_chamfer.ss2part";
-        auto lifecycle_source = crash_store.load(crash_fixture);
+        auto lifecycle_source = loadOwnerFixtureV2ForTest(crash_store, crash_fixture);
         CHECK(lifecycle_source.ok());
         const auto initial_file = crash_store.createNew(
             lifecycle_path, *lifecycle_source.document);
