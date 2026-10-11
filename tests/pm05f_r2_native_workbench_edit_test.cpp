@@ -2047,6 +2047,137 @@ int main(int argc, char* argv[]) {
                         << "multi-zoom timings still pending.\n";
                 }
             }
+            // G5 extended same-machine characterization. Fixed authored
+            // material-Edge probe coordinates and deterministic +-6 logical
+            // px cursor traces; measuring actual current Body queries, not
+            // just projection math or a fabricated test scene. This does not
+            // claim equivalent pre-R1 measurement or new latency budgets.
+            struct G5ViewTiming final {
+                viewer::StandardView orientation;
+                viewer::CameraProjection projection;
+                double scale_factor{};
+                std::size_t samples{};
+                double p50_us{};
+                double p95_us{};
+                double max_us{};
+            };
+            std::vector<G5ViewTiming> g5_views;
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::bottom_front_right}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                const auto fitted = viewport->cameraState();
+                CHECK(fitted.has_value());
+                for (const auto projection : {
+                         viewer::CameraProjection::orthographic,
+                         viewer::CameraProjection::perspective}) {
+                    CHECK(viewport->setCameraState(*fitted));
+                    CHECK(viewport->setProjection(projection));
+                    const auto projected = viewport->cameraState();
+                    CHECK(projected.has_value());
+                    CHECK(projected->projection == projection);
+                    for (const double scale_factor :
+                         {0.67, 1.0, 1.5}) {
+                        auto camera = *projected;
+                        camera.scale *= scale_factor;
+                        CHECK(viewport->setCameraState(camera));
+                        QApplication::processEvents();
+                        std::vector<double> durations_us;
+                        for (const auto& probe : owner_probes) {
+                            const auto point =
+                                viewport->projectWorldPoint(probe.world);
+                            if (!point) continue;
+                            for (const double dx : {-6.0, 0.0, 6.0}) {
+                                const viewer::ViewportPoint2 cursor{
+                                    point->x + dx, point->y};
+                                if (cursor.x < 0.0 || cursor.y < 0.0 ||
+                                    cursor.x >= viewport->width() ||
+                                    cursor.y >= viewport->height()) {
+                                    continue;
+                                }
+                                const auto started =
+                                    std::chrono::steady_clock::now();
+                                const auto query =
+                                    viewport->queryBodyTopology(
+                                        cursor,
+                                        viewer::BodyTopologyPickFilter{
+                                            false, true, false});
+                                const double duration_us =
+                                    std::chrono::duration<
+                                        double, std::micro>{
+                                        std::chrono::steady_clock::now() -
+                                        started}.count();
+                                CHECK(query.valid() && query.completed);
+                                CHECK(query.generation.valid());
+                                CHECK(std::isfinite(duration_us) &&
+                                      duration_us >= 0.0);
+                                durations_us.push_back(duration_us);
+                            }
+                        }
+                        CHECK(!durations_us.empty());
+                        std::sort(durations_us.begin(),
+                                  durations_us.end());
+                        g5_views.push_back(G5ViewTiming{
+                            orientation,
+                            projection,
+                            scale_factor,
+                            durations_us.size(),
+                            measured(durations_us, 0.5),
+                            measured(durations_us, 0.95),
+                            durations_us.back()});
+                    }
+                }
+            }
+            CHECK(g5_views.size() == 12U);
+            const double measured_dpr =
+                viewport->devicePixelRatioF();
+            CHECK(std::isfinite(measured_dpr) && measured_dpr > 0.0);
+            // Only the DPI actually provided by the Windows runner is
+            // evidenced. Never report simulated 1.5x/2x as native coverage.
+            std::cerr << "EDGE_R1_G5_VIEW_MATRIX"
+                      << " cohorts=" << g5_views.size()
+                      << " measured_dpr=" << measured_dpr
+                      << " edges=" << presented.body.edges.size()
+                      << " triangles="
+                      << presented.body.mesh.triangles.size()
+                      << std::endl;
+            if (const char* location =
+                    std::getenv("GITHUB_STEP_SUMMARY")) {
+                std::ofstream summary{location, std::ios::app};
+                if (summary) {
+                    summary
+                        << "\n### Edge Picking R1 — G5 extended view matrix\n"
+                        << "Real Owner v16/v2 Part; native Windows Qt/OCCT;"
+                        << " Body material Edge-only cursor traces"
+                        << " (−6/0/+6 logical px from fixed projected probes)."
+                        << " Steady-clock query duration only, no rendering/"
+                        << "evaluation in timed region. Measured device"
+                        << " pixel ratio: " << measured_dpr << ".\n\n"
+                        << "| View | Projection | Camera scale factor"
+                        << " | Queries | p50 us | p95 us | max us |\n"
+                        << "|---|---|---:|---:|---:|---:|---:|\n";
+                    for (const auto& row : g5_views) {
+                        summary
+                            << "| " << static_cast<int>(row.orientation)
+                            << " | "
+                            << (row.projection ==
+                                    viewer::CameraProjection::orthographic
+                                    ? "ortho" : "perspective")
+                            << " | " << row.scale_factor
+                            << " | " << row.samples
+                            << " | " << row.p50_us
+                            << " | " << row.p95_us
+                            << " | " << row.max_us << " |\n";
+                    }
+                    summary
+                        << "\nDiagnostic sampling only; measured DPR"
+                        << " does not prove unavailable modes."
+                        << " Equivalent pre-R1 run, bounded worst-case"
+                        << " work and Owner W01-A–G remain open.\n";
+                }
+            }
             // Expected R1 RED ONLY when a truly front-visible sample on
             // the real Owner's native Part has NO Edge candidate at all.
             // Samples on tessellation gaps / blocked behind Body material
