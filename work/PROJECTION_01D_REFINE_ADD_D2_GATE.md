@@ -55,3 +55,8 @@ A subsequent test-only change further asserts (1) **one upper Face after fresh i
 **Current permission:** Owner has expressly approved the narrow R1–R4 production implementation and strict v2; production code changes inside the accepted bounded exception may proceed on PR #309. **Do not merge** without new exact-head full evidence and separate Owner FINAL PASS.
 
 **Next gate:** implement the accepted default + strict v2, test-only source fixture reconstructions and typed rejection; obtain rebuilt FOCUSED, FAST as needed, exact-head Windows FULL, Owner practical tests and final PASS.  If a source cannot be uniquely certified under Refine, preserve fail-closed rather than relaxing identity to make the acceptance numbers green.
+
+## Implementation checkpoints (2026-10-11)
+
+- `5b60f596cc29f29c450c5fd9aea7f72e0955ed4b`: R1 default Add Refine in ordinary OCCT provider; R2 persistent semantics v2 and typed reject of existing v1; R3 explicit temporary test-only v2 repackages of the two original v1 Owner fixtures; no file migration, no Cut/Fillet/Chamfer change. **Not yet GREEN.**
+- Windows [#2426](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38134403973) **RED before any test**: mixed Desktop FOCUSED targets included `pm02jr2_add_surface_continuation_test` (native kernel-only target absent from Desktop CMake build tree), `MSB1009`; neither semantic code nor native test executed. Repeat with `SS2-Focus-Mode: kernel`, kernel-native target/test only, then run FULL for PartStore/Desktop. Do not label #2426 a behavioral failure or modify independent CI configuration.
