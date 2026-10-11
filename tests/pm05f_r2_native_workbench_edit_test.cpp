@@ -439,6 +439,78 @@ QTreeWidgetItem* featureTreeItem(
     return nullptr;
 }
 
+// UI-01 P0 matrix: exercise the real Tree actions against an already
+// active Feature Edit draft; selection for Properties is allowed to move,
+// but Operations/draft identity and authored Part state must not.
+void verifyUi01FeatureDraftRejectsTreeEdits(
+    ui::CadWorkbench& workbench,
+    application::DocumentSession& session,
+    QTreeWidget& tree,
+    QTreeWidgetItem* feature_item,
+    const char* operation_widget_name) {
+    auto* sketch_action = workbench.findChild<QAction*>(
+        QStringLiteral("editSketchAction"));
+    auto* profile_action = workbench.findChild<QAction*>(
+        QStringLiteral("editProfileAction"));
+    auto* sketch_finish = workbench.findChild<QPushButton*>(
+        QStringLiteral("finishSketchButton"));
+    auto* status = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchStatus"));
+    auto* active_operations = workbench.findChild<QWidget*>(
+        QString::fromLatin1(operation_widget_name));
+    CHECK(sketch_action && profile_action && sketch_finish &&
+          status && active_operations && feature_item);
+    CHECK(sketch_finish->isHidden());
+    CHECK(!active_operations->isHidden());
+    CHECK(!session.document().sketches().empty());
+
+    const auto original_state = session.document().state();
+    const auto original_revision = session.document().revision();
+    const auto original_undo = session.undoDepth();
+    const bool original_dirty = session.needsSave();
+    const auto sketch_key = QString::fromStdString(
+        std::string{session.document().sketches().front().id.value()});
+    QTreeWidgetItem* sketch_item = nullptr;
+    QTreeWidgetItem* profile_item = nullptr;
+    for (QTreeWidgetItemIterator it(&tree); *it; ++it) {
+        if ((*it)->data(0, Qt::UserRole + 42).toString() ==
+            sketch_key) {
+            sketch_item = *it;
+        }
+        if (!(*it)->data(0, Qt::UserRole + 43)
+                 .toString().isEmpty()) {
+            profile_item = *it;
+        }
+    }
+    CHECK(sketch_item && profile_item);
+    const auto attempt = [&](QTreeWidgetItem* target,
+                             QAction* action) {
+        tree.clearSelection();
+        tree.setCurrentItem(target);
+        target->setSelected(true);
+        QApplication::processEvents();
+        action->trigger();
+        QApplication::processEvents();
+        CHECK(sketch_finish->isHidden());
+        CHECK(!active_operations->isHidden());
+        CHECK(status->text().contains(
+            QStringLiteral(
+                "Finish or cancel the active Feature draft")));
+        CHECK(session.document().state() == original_state);
+        CHECK(session.document().revision() == original_revision);
+        CHECK(session.undoDepth() == original_undo);
+        CHECK(session.needsSave() == original_dirty);
+    };
+    attempt(sketch_item, sketch_action);
+    attempt(profile_item, profile_action);
+    tree.clearSelection();
+    tree.setCurrentItem(feature_item);
+    feature_item->setSelected(true);
+    QApplication::processEvents();
+    CHECK(!active_operations->isHidden());
+    CHECK(sketch_finish->isHidden());
+}
+
 bool nativeClick(
     viewer_qt_occt::QtOcctViewerWidget& viewport,
     viewer::Point3 world) {
