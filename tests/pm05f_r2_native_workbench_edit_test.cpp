@@ -1977,8 +1977,8 @@ int main(int argc, char* argv[]) {
             QApplication::processEvents();
             edit_sketch->trigger();
             QApplication::processEvents();
-            // Currently expected RED: requestEditSketch() enters Sketch
-            // despite the active Extrude edit draft, exposing both modes.
+            // Historic G0 RED at 8948176: requestEditSketch() entered
+            // Sketch despite a live Extrude draft. G1 now must refuse it.
             CHECK(sketch_finish->isHidden());
             CHECK(!extrude_operations->isHidden());
             CHECK(session.document().state() == baseline_state);
@@ -2002,6 +2002,40 @@ int main(int argc, char* argv[]) {
             extrude_cancel->click();
             QApplication::processEvents();
             CHECK(extrude_operations->isHidden());
+            CHECK(sketch_finish->isHidden());
+            CHECK(session.document().state() == baseline_state);
+            CHECK(session.document().revision() == baseline_revision);
+            CHECK(session.undoDepth() == baseline_undo);
+            CHECK(session.needsSave() == baseline_dirty);
+
+            // Legal negative control: once the Feature draft is explicitly
+            // cancelled, Sketch Edit is allowed and an Axis draft can be
+            // opened INSIDE that Sketch. Neither the new P0 gate nor the
+            // test is allowed to prohibit this supported workflow.
+            tree->clearSelection();
+            tree->setCurrentItem(sketch_item);
+            sketch_item->setSelected(true);
+            QApplication::processEvents();
+            edit_sketch->trigger();
+            QApplication::processEvents();
+            CHECK(!sketch_finish->isHidden());
+            auto* axis_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("axisOperationsWidget"));
+            CHECK(axis_operations);
+            auto axis_reply = workbench.submitCadInput(
+                "AXIS", workbench.cadInputContextGeneration());
+            CHECK(axis_reply.accepted);
+            QApplication::processEvents();
+            CHECK(!axis_operations->isHidden());
+            CHECK(!sketch_finish->isHidden());
+            axis_reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(axis_reply.accepted);
+            QApplication::processEvents();
+            CHECK(axis_operations->isHidden());
+            CHECK(!sketch_finish->isHidden());
+            sketch_finish->click();
+            QApplication::processEvents();
             CHECK(sketch_finish->isHidden());
             CHECK(session.document().state() == baseline_state);
             CHECK(session.document().revision() == baseline_revision);
