@@ -568,6 +568,8 @@ View Style jest tymczasowym stanem prezentacji. Nie dirty'uje Parta, nie tworzy 
 
 Przy zwykłym wyborze wszystkich typów widoczne kandydaty używają screen-space priority **Vertex → Edge → Face**. Gdy kilka kandydatów nakłada się pod kursorem, **Tab** i **Shift+Tab** przełączają runtime candidate stack przed kliknięciem. Widoczny preselection, który klikniesz, jest celem acquisition; kolejność zwrócona przez providera nie staje się CAD identity.
 
+Dla bieżących widocznych material Edges obszar pierwszego wskazania ma obecnie promień **12 pikseli logicznych**. Już podświetlona Edge może utrzymać wskazanie do **16 pikseli logicznych** tylko po ponownym sprawdzeniu tej samej Edge, jej aktualnej generacji, projekcji oraz widoczności; sąsiednie krawędzie nie dostają w ten sposób większego obszaru wyboru. Automatyczne przejście na inną Edge tego samego typu wymaga przewagi co najmniej **2 pikseli logicznych**, chyba że dotychczasowy cel przestał być poprawny. Kliknięcie sprawdza ponownie bieżący cel, również po ruchu kamery lub zmianie trybu. Selekcja szuka widocznego fragmentu krawędzi, ale nie działa przez przesłaniający materiał; bardzo krótkie widoczne fragmenty mogą pozostać poza ograniczonym próbkowaniem. Promienie i histereza dotyczą Edge, nie zmieniają priorytetu Vertex → Edge → Face ani reguł semantycznego authoring.
+
 Zaznaczenie bieżącej topologii aktualizuje Properties bez dodawania wierszy Face/Edge/Vertex do Document Tree:
 
 - Face pokazuje semantyczny Surface, klasę powierzchni, producer/stage/provenance, referenceability i możliwość standardowego Sketch support;
