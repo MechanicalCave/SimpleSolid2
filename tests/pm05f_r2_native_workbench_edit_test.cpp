@@ -2015,6 +2015,10 @@ int main(int argc, char* argv[]) {
                       << " orientations=5"
                       << " camera_zoom=fitted"
                       << std::endl;
+            // G5 local/native probe contract: this is a fitted-view
+            // preliminary timing distribution only, with five rotations.
+            // Never treat it as a Release performance budget, a baseline
+            // comparison, or proof of three-zoom / DPR parity.
             // GitHub's ordinary passing CTest hides test stdout. Publish
             // ONLY this bounded, test-derived measurement to the normal
             // Actions step summary without modifying workflows or product
