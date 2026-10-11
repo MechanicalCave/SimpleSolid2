@@ -5936,7 +5936,7 @@ void verifyPg01dOwnerSameDomainFixtures() {
     for (const auto& fixture : fixtures) {
         const auto loaded = store.load(directory / fixture.filename);
         CHECK(loaded.ok());
-        CHECK(loaded.document != nullptr);
+        CHECK(loaded.document.has_value());
         CHECK(loaded.document->body().features.size() ==
               fixture.feature_count);
 
