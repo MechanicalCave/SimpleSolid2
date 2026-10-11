@@ -1919,6 +1919,21 @@ void verifyPartIntegration() {
                                                         ledger.stage,
                                                         curve_address,
                                                         *certified_point_address);
+                                                std::cerr
+                                                    << "PG01D_D2A_V2_COLD_DIAGNOSTIC"
+                                                    << " reversed=" << reversed
+                                                    << " span=" << span
+                                                    << " warm_status="
+                                                    << static_cast<int>(
+                                                           rebuild.body_status)
+                                                    << " cold_status="
+                                                    << static_cast<int>(
+                                                           cold.body_status)
+                                                    << " warm_choices="
+                                                    << fresh.size()
+                                                    << " cold_choices="
+                                                    << cold_choices.size()
+                                                    << '\n';
                                                 CHECK(cold_choices.size() ==
                                                       fresh.size());
                                                 if (reversed) {
