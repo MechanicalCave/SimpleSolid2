@@ -1,6 +1,6 @@
 # UI-01 — Responsive Workbench wireframes / interaction matrix — OWNER D2 REVIEW
 
-**Status:** DETAILED MOCKUP PROPOSAL ONLY, **NOT YET OWNER-ACCEPTED**; no UI runtime authority, Work Contract, ACTIVE activation or merge permission.
+**Status:** **Owner accepted the COMPACT Sketch Edit concept and the VERY-SHORT-HEIGHT Feature Edit concept** individually (2026-10-11); normal-height design elements, including the initial 40/60 Properties/Operations split, also have recorded Owner acceptance. **Final consolidated visual/behavioral D2 signoff is STILL PENDING.** These are design wireframes, not pixel-accurate native Qt screenshots; no UI runtime authority, Work Contract, ACTIVE activation or merge permission.
 **Basis:** Owner's recorded UI-01 D2 decisions in `UI-01_RIGHT_PANELS_AND_TOP_TOOLBAR_DESIGN_REVIEW_OPTIONS.md`; v1.30 accepted roadmap and `main` remain unchanged.
 **Important:** Text wireframes depict conceptual states and component hierarchy, **not pixel-accurate Qt screenshots, exact icons, fixed breakpoints or new CAD features**. The 3 scenarios are defined by actual space available at current DPI/font metrics; named example sizes do NOT become hardcoded width/height thresholds.
 
@@ -87,6 +87,7 @@
 - Switch the right-hand resizable split to **Properties / Operations tabs only if measured usable height cannot hold both panes plus the active Operations footer**; prefer Operations on entering edit. Properties remains one click away, without cancelling or finishing the draft.
 - Returning to sufficient height restores both panels and the **same per-open-Document splitter ratio** as before the temporary tab fallback, until the application session ends. Do not persist splitter ratio to CAD files or across app restarts.
 - In the Properties tab the hidden Operations footer is NOT duplicated, but switching back to Operations always reveals valid Finish/Cancel. Define a reachable path back even when tab titles are truncated.
+- **Owner approval for this VERY SHORT-height concept (2026-10-11):** the Owner accepted this exact scenario with Operations initially selected during Feature Edit, Properties accessible without ending the draft, and the existing context-appropriate Finish/Cancel pinned at the bottom of visible Operations. This is a specific layout/behavior acceptance; actual Qt pane geometry, footer min-height/accessibility and final consolidated visual approval remain OPEN.
 - `More > [named group] > [actual command]` is the final overflow level for complete groups that do not fit. Command identity/disabled state/focus is preserved. Pinned status remains passive outside Customize mode.
 
 ## 4. Group customization (all three layouts)
