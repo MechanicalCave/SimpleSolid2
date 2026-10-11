@@ -6346,13 +6346,10 @@ void verifyPg01dOwnerSameDomainFixtures() {
             CHECK(editing.document().state() == changed_state);
             assertRebuiltEquivalent("redo");
         }
-        // In the simple two-Extrude document, changing the terminal
-        // Extrude distance cannot be blocked by downstream Features.
-        // The Revolve document is allowed an explicitly atomic reject
-        // rather than an invalid auto-retarget.
-        if (fixture.feature_count == 2U) {
-            CHECK(edited.ok());
-        }
+        // Require a real parametric Edit/Undo/Redo for BOTH of the
+        // Owner's supplied documents. A silent atomic reject cannot
+        // count as successful Revolve-dependent lifecycle evidence.
+        CHECK(edited.ok());
     }
 }
 
