@@ -323,6 +323,8 @@ private:
     void startSketchResupport(
         const sketch::SketchId& sketch_id);
     void cancelSketchTool();
+    // P0: one fail-closed entry gate for Tree Sketch/Profile requests.
+    [[nodiscard]] bool rejectSketchProfileEntryDuringFeatureDraft();
     void requestEditSketch(
         const sketch::SketchId& sketch_id);
     void requestEditProfile(
