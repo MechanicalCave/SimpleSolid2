@@ -2200,6 +2200,104 @@ int main(int argc, char* argv[]) {
                         << " work and Owner W01-A–G remain open.\n";
                 }
             }
+            // G5 repeated native query stress: exercise the production
+            // Body/QtOCCT picker for a sustained deterministic pointer
+            // trace on the unchanged evaluated Owner's Part. This is
+            // application-level CPU timing, NOT the event-loop frame rate,
+            // an accepted SLA, a memory bound, or an alternate selection
+            // identity source. Preserve the subsequent historic UI tests.
+            CHECK(viewport->setCameraState(*incoming_camera));
+            QApplication::processEvents();
+            std::vector<double> g5_trace_microseconds;
+            g5_trace_microseconds.reserve(
+                24U * owner_probes.size() * 3U);
+            std::size_t g5_trace_edge_hits = 0U;
+            for (int sweep = 0; sweep < 24; ++sweep) {
+                for (const auto& probe : owner_probes) {
+                    const auto at =
+                        viewport->projectWorldPoint(probe.world);
+                    if (!at) continue;
+                    for (const double dx : {-6.0, 0.0, 6.0}) {
+                        const viewer::ViewportPoint2 cursor{
+                            at->x + dx, at->y};
+                        if (cursor.x < 0.0 || cursor.y < 0.0 ||
+                            cursor.x >= viewport->width() ||
+                            cursor.y >= viewport->height()) {
+                            continue;
+                        }
+                        const auto started =
+                            std::chrono::steady_clock::now();
+                        const auto query =
+                            viewport->queryBodyTopology(
+                                cursor,
+                                viewer::BodyTopologyPickFilter{
+                                    false, true, false});
+                        const double duration_us =
+                            std::chrono::duration<double, std::micro>{
+                                std::chrono::steady_clock::now() - started}
+                                .count();
+                        CHECK(query.valid() && query.completed);
+                        CHECK(query.generation.valid());
+                        CHECK(std::isfinite(duration_us) &&
+                              duration_us >= 0.0);
+                        g5_trace_microseconds.push_back(duration_us);
+                        if (std::any_of(
+                                query.candidates.begin(),
+                                query.candidates.end(),
+                                [](const auto& candidate) {
+                                    return candidate.kind ==
+                                        viewer::BodyTopologyPresentationKind::
+                                            edge;
+                                })) {
+                            ++g5_trace_edge_hits;
+                        }
+                    }
+                }
+            }
+            CHECK(g5_trace_microseconds.size() >= 1000U);
+            CHECK(g5_trace_edge_hits > 0U);
+            std::sort(g5_trace_microseconds.begin(),
+                      g5_trace_microseconds.end());
+            const double trace_p50_us =
+                measured(g5_trace_microseconds, 0.5);
+            const double trace_p95_us =
+                measured(g5_trace_microseconds, 0.95);
+            std::cerr
+                << "EDGE_R1_G5_REPEATED_QUERY_TRACE"
+                << " samples=" << g5_trace_microseconds.size()
+                << " sweeps=24"
+                << " edge_candidate_queries=" << g5_trace_edge_hits
+                << " p50_us=" << trace_p50_us
+                << " p95_us=" << trace_p95_us
+                << " max_us=" << g5_trace_microseconds.back()
+                << " dpr=" << measured_dpr
+                << " triangles="
+                << presented.body.mesh.triangles.size()
+                << " edges=" << presented.body.edges.size()
+                << std::endl;
+            if (const char* location =
+                    std::getenv("GITHUB_STEP_SUMMARY")) {
+                std::ofstream summary{location, std::ios::app};
+                if (summary) {
+                    summary
+                        << "\n### R1 G5 sustained same-camera query trace\n"
+                        << "Unchanged real Owner Part. 24 deterministic"
+                        << " sweeps through projected 33 Edge probes at"
+                        << " -6/0/+6 logical px; no GUI events in timed"
+                        << " block; not a frame rate or memory test. "
+                        << g5_trace_microseconds.size()
+                        << " queries, "
+                        << g5_trace_edge_hits
+                        << " with Edge candidate. p50 "
+                        << trace_p50_us
+                        << " us, p95 "
+                        << trace_p95_us
+                        << " us, max "
+                        << g5_trace_microseconds.back()
+                        << " us; native DPR " << measured_dpr
+                        << ".\n";
+                }
+            }
             // Expected R1 RED ONLY when a truly front-visible sample on
             // the real Owner's native Part has NO Edge candidate at all.
             // Samples on tessellation gaps / blocked behind Body material
