@@ -5963,6 +5963,7 @@ void verifyPg01dRefinePlanarStepNonMergeControl() {
         CHECK(old_top && old_top->current_faces.size() == 1U);
         CHECK(old_top->surface_kind == kernel::SurfaceKind::plane);
         CHECK(raised_top && raised_top->resolved_token);
+        CHECK(raised_top->current_faces.size() == 1U);
         CHECK(raised_top->surface_kind == kernel::SurfaceKind::plane);
 
         Outcome result;
@@ -5991,7 +5992,7 @@ void verifyPg01dRefinePlanarStepNonMergeControl() {
               result.lower_outer_wires,
               result.lower_hole_wires);
         std::size_t raised_holes = 0U;
-        tally(*raised_top->resolved_token,
+        tally(raised_top->current_faces.front(),
               result.higher_outer_wires, raised_holes);
         CHECK(result.lower_outer_wires == 1U);
         CHECK(result.lower_hole_wires == 1U);
