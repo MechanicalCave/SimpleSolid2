@@ -5916,6 +5916,118 @@ void verifyPg01dE0DirectedWireFailClosedContract() {
 }
 
 
+// Negative planar control: a smaller Extrude Add creates an actual
+// rectangular step in the Body. The lower top Face has an inner wire
+// around the raised boss. Neither the step Edge nor the separate
+// higher top Face may be removed by same-domain refinement.
+void verifyPg01dRefinePlanarStepNonMergeControl() {
+    struct Outcome {
+        kernel::RuntimeSolidHandle body;
+        std::size_t faces{};
+        std::size_t edges{};
+        std::size_t lower_outer_wires{};
+        std::size_t lower_hole_wires{};
+        std::size_t higher_outer_wires{};
+    };
+    const auto evaluate = [](bool simplify) -> Outcome {
+        kernel_occt::OcctSolidModelingKernel provider{
+            simplify
+                ? kernel_occt::OcctSolidModelingKernel::
+                      AddRefinementExperiment::simplify_same_domain
+                : kernel_occt::OcctSolidModelingKernel::
+                      AddRefinementExperiment::disabled};
+        const auto base = provider.extrude(
+            add(rectangle(kernel::Frame3{},
+                          0.0, 0.0, 40.0, 30.0,
+                          "pg01d-planar-step-base"), 10.0));
+        CHECK(base.ok());
+        const auto* base_top =
+            newCap(base, kernel::ExtrudeCapRole::extent_cap);
+        CHECK(base_top && base_top->resolved_token);
+
+        kernel::Frame3 top;
+        top.origin = {0.0, 0.0, 10.0};
+        CHECK(top.valid());
+        const auto raised = provider.extrude(
+            add(rectangle(top,
+                          10.0, 8.0, 30.0, 22.0,
+                          "pg01d-planar-step-raised"), 5.0),
+            base.solid);
+        CHECK(raised.ok());
+        CHECK(raised.brep_valid && raised.solid_count == 1U);
+
+        const auto* old_top =
+            inheritedSurface(raised, *base_top->resolved_token);
+        const auto* raised_top =
+            newCap(raised, kernel::ExtrudeCapRole::extent_cap);
+        CHECK(old_top && old_top->current_faces.size() == 1U);
+        CHECK(old_top->surface_kind == kernel::SurfaceKind::plane);
+        CHECK(raised_top && raised_top->resolved_token);
+        CHECK(raised_top->surface_kind == kernel::SurfaceKind::plane);
+
+        Outcome result;
+        result.body = raised.solid;
+        result.faces = raised.face_count;
+        result.edges = raised.edge_count;
+        const auto tally = [&](kernel::RuntimeFaceToken token,
+                               std::size_t& outer,
+                               std::size_t& inner) {
+            const auto bound = provider.bindFaceToBody(raised.solid, token);
+            CHECK(bound && bound->valid());
+            const auto native =
+                provider.queryFaceBoundaryAnySurface(
+                    raised.solid, *bound);
+            CHECK(native.ok());
+            for (const auto& wire : native.wires) {
+                CHECK(wire.valid());
+                if (wire.outer) ++outer;
+                else ++inner;
+                for (const auto& use : wire.edges) {
+                    CHECK(use.valid());
+                }
+            }
+        };
+        tally(old_top->current_faces.front(),
+              result.lower_outer_wires,
+              result.lower_hole_wires);
+        std::size_t raised_holes = 0U;
+        tally(*raised_top->resolved_token,
+              result.higher_outer_wires, raised_holes);
+        CHECK(result.lower_outer_wires == 1U);
+        CHECK(result.lower_hole_wires == 1U);
+        CHECK(result.higher_outer_wires == 1U);
+        CHECK(raised_holes == 0U);
+
+        std::cerr << "PG01D_REFINE_PLANAR_STEP"
+                  << " refined=" << simplify
+                  << " faces=" << result.faces
+                  << " edges=" << result.edges
+                  << " base_top_inner_wires="
+                  << result.lower_hole_wires
+                  << " boss_top_outer_wires="
+                  << result.higher_outer_wires
+                  << '\n';
+        return result;
+    };
+    const auto raw = evaluate(false);
+    const auto refined = evaluate(true);
+    CHECK(refined.faces == raw.faces);
+    CHECK(refined.edges == raw.edges);
+    CHECK(refined.lower_hole_wires == raw.lower_hole_wires);
+    CHECK(refined.higher_outer_wires == raw.higher_outer_wires);
+    kernel_occt::OcctSolidModelingKernel comparator;
+    const auto delta = comparator.materialDifferencePreview(
+        raw.body, refined.body);
+    CHECK(delta.status ==
+          kernel::SolidPresentationStatus::unsupported);
+    CHECK(!delta.added && !delta.removed);
+
+    std::cout << "PG01D_REFINE_PLANAR_STEP_NONMERGE_PASS"
+              << " real_inner_step_boundary=1"
+              << " separated_top_levels=1"
+              << " exact_material_delta=0\n";
+}
+
 // Same-domain Refine must NOT erase a real cylindrical/planar
 // intersection, merge cylinders of different radii, or turn a periodic
 // B-Rep seam into a material Edge. Deliberately use a full Revolve Add
@@ -6640,6 +6752,7 @@ int main() {
     verifyPartIntegration();
     verifyPg01dOwnerSameDomainFixtures();
     verifyPg01dRefineRevolveNonMergeControl();
+    verifyPg01dRefinePlanarStepNonMergeControl();
     verifyNativeCurvedSurfaceContinuationE0();
     verifyNativeCylindricalCutSplitE0();
     verifyNativePartialCylinderCutContinuityProbeE0();
