@@ -46,7 +46,7 @@ Properties and Operations each have header and expand/collapse affordance; openi
 
 ### Recommended trial: R-A with a short-height fallback subject to Owner choice
 
-Prototype R-A at normal/compact; when height is insufficient for two meaningful panes, **either** R-B tabs temporarily **or** stacked collapsible headers with direct navigation. This fallback is **NOT authorized yet**. The breakpoint must come from measured effective DPI/font minimum content heights, not a single hard-coded desktop pixel number. Test 1440×900, 1280×720, 1024×768 and actual Owner-supported display/DPI where available. Keep left Tree and central Viewport widths governed by SR-03; do not enlarge app minimum width due to right forms.
+**Owner-approved direction:** show R-A vertical split at normal height; when too short for both panels and the Operations footer, temporarily show Properties / Operations tabs instead of a compressed split. With active edit, initially show Operations; Properties stays one click away. Returning to adequate height restores the split. Never change editing state, form width or availability of Finish/Cancel merely due to reflow. The breakpoint must come from measured effective DPI/font minimum content heights, not a single hard-coded desktop pixel number. Test 1440×900, 1280×720, 1024×768 and actual Owner-supported display/DPI where available. Keep left Tree and central Viewport widths governed by SR-03; do not enlarge app minimum width due to right forms.
 
 **Detailed Owner decisions needed:**
 - R1: simultaneous stacked panels with draggable divider, or tabbed panel only?
