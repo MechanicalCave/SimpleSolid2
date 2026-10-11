@@ -5687,6 +5687,10 @@ int main(int argc, char* argv[]) {
         CHECK(viewport->runtimeDiagnostics().solid_preview_displayed);
         CHECK(viewport->runtimeDiagnostics().solid_preview_style_expected);
 
+        verifyUi01FeatureDraftRejectsTreeEdits(
+            workbench, session, *tree, item,
+            "edgeFeatureOperationsWidget");
+
         // This is the central R2-B acceptance boundary: real native click,
         // tool_stage Viewer's query, controller semantic selection and
         // Workbench draft state must all agree.
@@ -5780,6 +5784,30 @@ int main(int argc, char* argv[]) {
             CHECK(workbench.activateDocument(
                 &revolve_session, {}));
             QApplication::processEvents();
+            // UI-01 P0 Revolve Edit: Tree Sketch/Profile attempts must
+            // reject without touching this particular Revolve draft.
+            auto* revolve_item = featureTreeItem(
+                *tree, revolve_session.document()
+                    .body().features.front().id);
+            auto* revolve_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("revolveCancelButton"));
+            auto* revolve_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("revolveOperationsWidget"));
+            CHECK(revolve_item && revolve_cancel && revolve_operations);
+            tree->clearSelection();
+            tree->setCurrentItem(revolve_item);
+            revolve_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(edit->isEnabled());
+            edit->click();
+            QApplication::processEvents();
+            CHECK(!revolve_operations->isHidden());
+            verifyUi01FeatureDraftRejectsTreeEdits(
+                workbench, revolve_session, *tree, revolve_item,
+                "revolveOperationsWidget");
+            revolve_cancel->click();
+            QApplication::processEvents();
+            CHECK(revolve_operations->isHidden());
             CHECK(viewport->setStandardView(
                 viewer::StandardView::top_front_right));
             viewport->fitAll();
