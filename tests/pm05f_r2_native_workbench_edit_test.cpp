@@ -41,11 +41,50 @@
 #include <utility>
 #include <vector>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <psapi.h>
+#endif
+
 using namespace simplesolid2;
 
 namespace {
 
 std::atomic<std::uint32_t> owner_edge_outline_warnings{0U};
+
+// Real Windows private committed bytes, not an inferred Body/mesh size.
+// Load the stock system psapi.dll at runtime so the existing native test
+// target and build/link machinery remain unchanged. Unsupported platforms
+// report unavailable instead of manufacturing parity.
+[[nodiscard]] std::optional<std::uint64_t>
+currentProcessPrivateBytes() {
+#if defined(_WIN32)
+    using QueryProcessMemory =
+        BOOL (WINAPI*)(HANDLE, PPROCESS_MEMORY_COUNTERS, DWORD);
+    const HMODULE module = LoadLibraryW(L"psapi.dll");
+    if (module == nullptr) return std::nullopt;
+    const auto query = reinterpret_cast<QueryProcessMemory>(
+        GetProcAddress(module, "GetProcessMemoryInfo"));
+    std::optional<std::uint64_t> result;
+    if (query != nullptr) {
+        PROCESS_MEMORY_COUNTERS_EX metrics{};
+        metrics.cb = sizeof(metrics);
+        if (query(GetCurrentProcess(),
+                  reinterpret_cast<PPROCESS_MEMORY_COUNTERS>(&metrics),
+                  metrics.cb)) {
+            result = static_cast<std::uint64_t>(
+                metrics.PrivateUsage);
+        }
+    }
+    FreeLibrary(module);
+    return result;
+#else
+    return std::nullopt;
+#endif
+}
 
 void captureOwnerEdgeOutlineWarning(
     QtMsgType type,
@@ -2208,6 +2247,8 @@ int main(int argc, char* argv[]) {
             // identity source. Preserve the subsequent historic UI tests.
             CHECK(viewport->setCameraState(*incoming_camera));
             QApplication::processEvents();
+            const auto private_bytes_before =
+                currentProcessPrivateBytes();
             std::vector<double> g5_trace_microseconds;
             g5_trace_microseconds.reserve(
                 24U * owner_probes.size() * 3U);
@@ -2256,6 +2297,8 @@ int main(int argc, char* argv[]) {
             }
             CHECK(g5_trace_microseconds.size() >= 1000U);
             CHECK(g5_trace_edge_hits > 0U);
+            const auto private_bytes_after =
+                currentProcessPrivateBytes();
             std::sort(g5_trace_microseconds.begin(),
                       g5_trace_microseconds.end());
             const double trace_p50_us =
@@ -2274,6 +2317,14 @@ int main(int argc, char* argv[]) {
                 << " triangles="
                 << presented.body.mesh.triangles.size()
                 << " edges=" << presented.body.edges.size()
+                << " private_bytes_before="
+                << (private_bytes_before
+                        ? std::to_string(*private_bytes_before)
+                        : "unavailable")
+                << " private_bytes_after="
+                << (private_bytes_after
+                        ? std::to_string(*private_bytes_after)
+                        : "unavailable")
                 << std::endl;
             if (const char* location =
                     std::getenv("GITHUB_STEP_SUMMARY")) {
@@ -2295,7 +2346,16 @@ int main(int argc, char* argv[]) {
                         << " us, max "
                         << g5_trace_microseconds.back()
                         << " us; native DPR " << measured_dpr
-                        << ".\n";
+                        << "; process private committed bytes before "
+                        << (private_bytes_before
+                                ? std::to_string(*private_bytes_before)
+                                : "unavailable")
+                        << ", after "
+                        << (private_bytes_after
+                                ? std::to_string(*private_bytes_after)
+                                : "unavailable")
+                        << ". This is a two-point sample, not proof of"
+                        << " no leak or an accepted memory SLA.\n";
                 }
             }
             // G5 real modeled-scene complexity: compare the existing
@@ -2495,10 +2555,9 @@ int main(int argc, char* argv[]) {
             CHECK(workbench.activateDocument(
                 &owner_session, {}));
             QApplication::processEvents();
-            // DIAGNOSTIC ONLY, NO MERGE: print native measured p50/p95
-            // from the three real complexity levels through CTest's
-            // --output-on-failure. Production #314 has NO such exit.
-            std::cerr << "EDGE_R1_G5_COMPLEXITY_EVIDENCE_END"
+            // NO-MERGE evidence-only CTest print of 0/3/8 real Body
+            // complexity and 24-sweep actual process memory snapshots.
+            std::cerr << "EDGE_R1_G5_COMPLEXITY_MEMORY_EVIDENCE_END"
                       << std::endl;
             std::exit(EXIT_FAILURE);
             // Expected R1 RED ONLY when a truly front-visible sample on
