@@ -50,7 +50,7 @@ Prototype R-A at normal/compact; when height is insufficient for two meaningful 
 
 **Detailed Owner decisions needed:**
 - R1: simultaneous stacked panels with draggable divider, or tabbed panel only?
-- R2: if stacked, prefer fallback tabs vs collapsible accordion when window is short?
+- R2: **OWNER APPROVED 2026-10-11** — on insufficient vertical height, temporarily use Properties / Operations tabs (Operations selected on entering active edit, Properties one click away), revert to two-panel resizable vertical split when height is adequate. Preserve draft, revision, undo and non-scrolling Operations action footer; no sudden change in form width. Exact responsive thresholds and visual design need later native Qt proof.
 - R3: **OWNER-ACCEPTED 2026-10-11** — active-operation Finish/Cancel remain in a fixed, non-scrolling footer at the **bottom of Operations**, separate from the independently scrolling tool form. Distinct but restrained visual hierarchy; details of size, typography and exact existing context-dependent button availability remain for mockup review.
 - R4: remember splitter proportion **per open Document for this session**, or reset to layout default on each Document? Neither creates CAD authored state; choose explicitly.
 - R5: whether top Properties follows Tree selection during a running Feature draft or locks onto editing Feature (with inspect-other command). Must define to avoid accidental draft displacement.
