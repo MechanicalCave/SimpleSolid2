@@ -122,6 +122,10 @@
 | Switch between Part and Sketch | Only applicable real tool groups/actions shown; distinct persisted group arrangement, no simultaneous edit modes. |
 | Customize or Reset | Changes GUI preferences only; Undo/redo, DocumentRevision, authored geometry and dirty flag untouched. |
 
+## 5A. Consolidated static SVG visual mockups — ready for Owner's final D2 review
+
+The three detailed visual renditions were prepared together under [`UI-01_VISUAL_GALLERY_D2_OWNER_REVIEW.md`](UI-01_VISUAL_GALLERY_D2_OWNER_REVIEW.md), including (1) normal-height Part Feature Edit with 40/60 panels, (2) width-compact Sketch Edit with two stacked right panels, and (3) height-short Part Feature Edit with Operations-selected tabs. **Each scenario's design behavior has individual Owner acceptance; the final combined visual appearance, actual icon assets, exact Windows/Qt geometry and interactive QA do not.** SVGs are intentionally static proposals, not screenshots of executable Qt software, so an additional explicit final visual/behavioral approval is required.
+
 ## 6. Remaining visual decisions — NOT APPROVED by this wireframe
 
 1. Inspect normal/compact/narrow **native Windows screenshots at real DPI/font scaling** with representative long Operations content and the original Owner witnesses; tune actual containment thresholds from minimum effective widget geometry and hysteresis.
