@@ -1725,6 +1725,119 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+        if (!pg01d_ui_only && !pg01c_only) {
+            // Edge Picking R1 G1 — exactly the untouched Owner native v16/v2
+            // Part, unlike the auxiliary synthetic viewer visibility RED.
+            // This baseline proves real Part/OCCT evaluation and logs Body
+            // query coverage across camera rotations. A visible-on-screen
+            // query miss by itself is NOT yet proof of a front-visible Edge.
+            const auto fixture =
+                std::filesystem::path{__FILE__}.parent_path() /
+                "fixtures" /
+                "edge_picking_r1_select_edge_test_01.ss2part";
+            const part::PartDocumentStore store;
+            auto loaded = store.load(fixture);
+            if (!loaded.ok()) {
+                std::cerr << "EDGE_R1_OWNER_PART_LOAD_FAILURE code="
+                          << static_cast<int>(loaded.diagnostic.code)
+                          << " message=" << loaded.diagnostic.message
+                          << std::endl;
+            }
+            CHECK(loaded.ok());
+            CHECK(loaded.document->modelingSemanticsVersion() ==
+                  part::current_modeling_semantics_version);
+            application::DocumentSession owner_session{
+                {}, std::move(*loaded.document)};
+            CHECK(owner_session.document().state().body.features.size() ==
+                  4U);
+            const auto evaluated =
+                part::evaluatePart(owner_session.document(), kernel);
+            CHECK(evaluated.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(evaluated.body_solid != nullptr);
+            CHECK(evaluated.current_topology.has_value());
+            CHECK(evaluated.current_topology->complete());
+            const auto presented =
+                kernel.bodyPresentation(evaluated.body_solid);
+            CHECK(presented.ok());
+            CHECK(!presented.body.edges.empty());
+            CHECK(!presented.body.triangles.empty());
+            const auto owner_probes =
+                authorableEdgeProbes(owner_session, kernel);
+            CHECK(workbench.activateDocument(&owner_session, {}));
+            QApplication::processEvents();
+            std::size_t query_count = 0U;
+            std::size_t edge_hit_count = 0U;
+            std::size_t edge_miss_count = 0U;
+            for (const auto orientation : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::bottom_front_right,
+                     viewer::StandardView::bottom_back_left}) {
+                CHECK(viewport->setStandardView(orientation));
+                viewport->fitAll();
+                QApplication::processEvents();
+                std::size_t hits_for_view = 0U;
+                std::size_t misses_for_view = 0U;
+                for (const auto& probe : owner_probes) {
+                    const auto screen =
+                        viewport->projectWorldPoint(probe.world);
+                    if (!screen ||
+                        screen->x < 0.0 || screen->y < 0.0 ||
+                        screen->x >= viewport->width() ||
+                        screen->y >= viewport->height()) {
+                        continue;
+                    }
+                    const auto query = viewport->queryBodyTopology(
+                        *screen,
+                        viewer::BodyTopologyPickFilter{
+                            false, true, false});
+                    CHECK(query.valid());
+                    CHECK(query.completed);
+                    CHECK(query.generation.valid());
+                    ++query_count;
+                    const bool detected = std::any_of(
+                        query.candidates.begin(),
+                        query.candidates.end(),
+                        [](const auto& candidate) {
+                            return candidate.kind ==
+                                viewer::BodyTopologyPresentationKind::edge;
+                        });
+                    if (detected) {
+                        ++edge_hit_count;
+                        ++hits_for_view;
+                    } else {
+                        ++edge_miss_count;
+                        ++misses_for_view;
+                    }
+                }
+                std::cerr
+                    << "EDGE_R1_OWNER_REAL_BODY_VIEW orientation="
+                    << static_cast<int>(orientation)
+                    << " hits=" << hits_for_view
+                    << " misses=" << misses_for_view
+                    << std::endl;
+            }
+            CHECK(query_count > 0U);
+            CHECK(edge_hit_count > 0U);
+            std::cerr
+                << "EDGE_R1_OWNER_REAL_BODY_BASELINE"
+                << " features=4"
+                << " faces=" << presented.body.faces.size()
+                << " edges=" << presented.body.edges.size()
+                << " triangles=" << presented.body.triangles.size()
+                << " authorable_probes=" << owner_probes.size()
+                << " visible_candidate_hits=" << edge_hit_count
+                << " query_misses_unclassified=" << edge_miss_count
+                << " camera_exact_owner_match=0"
+                << " owner_pocket_independent_visibility_red=0"
+                << std::endl;
+            // Return the original session before the pre-existing native
+            // Workbench tests. Do not carry selection or runtime tokens out.
+            CHECK(workbench.activateDocument(&session, {}));
+            QApplication::processEvents();
+        }
         if (pg01d_ui_only) {
             // Real Qt/OCCT Face cursor admission, never a fabricated
             // Viewer token or a provider ordinal. The target is a
