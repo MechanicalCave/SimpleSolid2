@@ -118,6 +118,12 @@ Owner prefers **R-A: Properties and Operations simultaneously visible, user-adju
 
 **Owner detailed customization interaction acceptance (2026-10-11):** Owner answered `akceptuję` to the explicit proposed controls: separate `Customize toolbar` mode, whole-group drag handle for reordering, pin/unpin, keyboard-accessible Move Left/Move Right and Reset to Defaults. Configuration must be inert during ordinary CAD command use. Avoid accidental model mutation and keep shortcut/focus ownership. Per Part/Sketch preferences across sessions already accepted. This acceptance is **not** a final pixel mockup, implementation contract, or approval of individual-tool reordering.
 
+**Owner-approved initial toolbar group taxonomy (2026-10-11):**
+
+- **Part:** `Sketch` group -> `Sketch 2D` entry (the currently implemented Sketch command; final display label subject to visual/localization review); `Work Features` -> `Datum Plane`; `Create` -> `Extrude`, `Revolve`; `Modify` -> `Fillet`, `Chamfer`. The four separate groups are Owner's explicit correction of the previous two-group Part proposal. Do not treat future work features as implemented.
+- **Sketch Edit:** Owner stated the previous proposal was OK: `Create` -> `Line`, `Circle`, `Arc`, `Rectangle`; `Profile` -> `Profile`; `References` -> `Project Geometry`; `Modify` -> `Trim`, `Extend`, `Extend Both`; `Transform` -> `Move`, `Copy`, `Rotate`, `Scale`, `Mirror`; `Inspect` -> `Measure`. `Select` is a directly accessible base action, not hidden by default in an invented group.
+- This is an accepted **group-content D2 direction**, not final acceptance of order, default pinned groups, precise iconography, labels/translations or breakpoint mockups. Separate Part/Sketch customization and native visibility still apply; there is no change to commands, runtime action callbacks, Document storage or feature scope.
+
 **Remaining OPEN for detailed Owner discussion:** exact typography/accent strength, normal/short-height mockups, available action semantics by context, and top-toolbar group/overflow composition, default group taxonomy, precise labels/icons, visual customization design and final size thresholds (collapse order now approved). Detailed visual and behavioral Owner signoff must precede the UI-01 Work Contract and activation. No source code, ACTIVE.yaml or accepted roadmap version change is authorized by this direction.
 
 ## 4. Non-negotiable boundaries and acceptance plan
