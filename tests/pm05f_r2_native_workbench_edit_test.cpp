@@ -7,7 +7,6 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
-#include <nlohmann/json.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
@@ -88,14 +87,23 @@ loadOwnerFixtureV2ForTest(
     const auto native =
         persistence::readNativeDocumentContainer(source);
     CHECK(native.ok());
-    auto authored =
-        nlohmann::json::parse(native.package->authored_json);
-    CHECK(authored.at("modeling_semantics_version") == 1);
-    authored["modeling_semantics_version"] =
-        part::current_modeling_semantics_version.value;
+    auto authored = native.package->authored_json;
+    // PartDocumentStore's canonical pretty JSON contains this one
+    // exact persisted modeling-policy field. Test-only replacement is
+    // deliberately bounded: no private UUID/history/reference rewrite
+    // and no production migration or extra CMake JSON dependency.
+    const auto needle = std::string{
+        "\"modeling_semantics_version\": 1"};
+    const auto at = authored.find(needle);
+    CHECK(at != std::string::npos);
+    CHECK(authored.find(needle, at + needle.size()) ==
+          std::string::npos);
+    authored.replace(
+        at, needle.size(),
+        "\"modeling_semantics_version\": 2");
     const auto built =
         persistence::buildNativeDocumentContainer(
-            native.package->descriptor, authored.dump(2));
+            native.package->descriptor, authored);
     CHECK(built.ok());
     QTemporaryDir scratch;
     CHECK(scratch.isValid());
