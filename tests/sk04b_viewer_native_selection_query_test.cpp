@@ -509,6 +509,53 @@ int main(int argc, char* argv[]) {
             }));
     }
 
+    // Edge Picking R1 G4: ranking must use the NEAREST visible segment
+    // of a multi-segment material Edge, rather than the first visible one
+    // in tessellation order. Otherwise candidate distance is too large,
+    // making the 2px competing-Edge hysteresis unstable on curved edges.
+    {
+        viewer_qt_occt::QtOcctViewerWidget polyline_widget;
+        polyline_widget.resize(801, 601);
+        polyline_widget.show();
+        QApplication::processEvents();
+        CHECK(polyline_widget.setCameraState(camera));
+        const viewer::PresentationToken polyline_edge_token{0x9021U};
+        viewer::BodyScene polyline_scene;
+        polyline_scene.generation = {902U};
+        polyline_scene.purpose =
+            viewer::BodyScenePurpose::current_body;
+        polyline_scene.triangles = {
+            {{-10.0, -10.0, 0.0}, {10.0, -10.0, 0.0},
+             {10.0, 10.0, 0.0},
+             {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0},
+             {0.0, 0.0, 1.0}},
+            {{-10.0, -10.0, 0.0}, {10.0, 10.0, 0.0},
+             {-10.0, 10.0, 0.0},
+             {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0},
+             {0.0, 0.0, 1.0}},
+        };
+        polyline_scene.faces = {{viewer::PresentationToken{0x9022U},
+                                 0U, 2U}};
+        polyline_scene.edges = {
+            {polyline_edge_token,
+             {{-2.0, 2.0, 0.0}, {2.0, 2.0, 0.0},
+              {2.0, 0.0, 0.0}, {-2.0, 0.0, 0.0}},
+             true, true},
+        };
+        CHECK(polyline_scene.valid());
+        CHECK(polyline_widget.setBodyScene(polyline_scene));
+        const auto cursor =
+            polyline_widget.projectWorldPoint({0.0, 0.0, 0.0});
+        CHECK(cursor.has_value());
+        const auto query = polyline_widget.queryBodyTopology(
+            *cursor, viewer::BodyTopologyPickFilter{
+                false, true, false});
+        CHECK(query.valid() && query.completed);
+        CHECK(query.candidates.size() == 1U);
+        CHECK(query.candidates.front().token == polyline_edge_token);
+        CHECK(query.candidates.front().screen_distance < 0.75);
+    }
+
     // PM-02D3: hover emits the neutral Body query; provider does not rank
     // semantic priority. A controller-like callback may project the chosen
     // PresentationToken back as preselection.
