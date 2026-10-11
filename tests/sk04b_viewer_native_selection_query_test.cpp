@@ -342,6 +342,74 @@ int main(int argc, char* argv[]) {
         edge_only.candidates.front().token ==
         body_edge_token);
 
+    // Edge Picking R1 G4 — calibrated acquisition versus retention.
+    // No full-scene 16px magnet: only a current, previously highlighted
+    // material Edge can use 16px, and click must requery that SAME token.
+    // Query coordinate / radius is in logical pixels even at native DPR.
+    {
+        const auto edge_center =
+            widget.projectWorldPoint({8.0, 0.0, 0.0});
+        CHECK(edge_center.has_value());
+        const viewer::BodyTopologyPickFilter edges{
+            false, true, false};
+        const auto at_distance = [&edge_center](double away) {
+            return viewer::ViewportPoint2{
+                edge_center->x,
+                edge_center->y + away};
+        };
+        const auto has_material_edge =
+            [edges, &widget, body_edge_token](
+                viewer::ViewportPoint2 probe) {
+                const auto result =
+                    widget.queryBodyTopology(probe, edges);
+                CHECK(result.valid() && result.completed);
+                return std::any_of(
+                    result.candidates.begin(), result.candidates.end(),
+                    [body_edge_token](const auto& candidate) {
+                        return candidate.token == body_edge_token;
+                    });
+            };
+        CHECK(has_material_edge(at_distance(11.0)));
+        CHECK(!has_material_edge(at_distance(13.0)));
+        CHECK(widget.setBodyTopologyPreselection(body_edge_token));
+        CHECK(has_material_edge(at_distance(15.0)));
+        CHECK(!has_material_edge(at_distance(17.0)));
+
+        int clicked_material_edge = 0;
+        widget.setBodyTopologyEdgePickMode(true);
+        widget.setBodyTopologySelectionIntentHandler(
+            [&clicked_material_edge, body_edge_token](
+                const viewer::BodyTopologyPickQueryResult& result,
+                viewer::SelectionIntentMode) {
+                CHECK(result.valid() && result.completed);
+                CHECK(std::any_of(
+                    result.candidates.begin(), result.candidates.end(),
+                    [body_edge_token](const auto& candidate) {
+                        return candidate.token == body_edge_token;
+                    }));
+                ++clicked_material_edge;
+            });
+        QTest::mouseClick(
+            &widget, Qt::LeftButton, Qt::NoModifier,
+            QPoint{
+                static_cast<int>(std::lround(edge_center->x)),
+                static_cast<int>(std::lround(edge_center->y + 15.0))});
+        CHECK(clicked_material_edge == 1);
+        widget.setBodyTopologyEdgePickMode(false);
+        CHECK(widget.setBodyTopologyPreselection(std::nullopt));
+        CHECK(!has_material_edge(at_distance(15.0)));
+        // Existing hidden surface / nonmaterial Edge must not be acquired
+        // even after a recently active visible incumbent is released.
+        const auto beyond = widget.queryBodyTopology(
+            at_distance(15.0), edges);
+        CHECK(std::none_of(
+            beyond.candidates.begin(), beyond.candidates.end(),
+            [hidden_edge_token, seam_token](const auto& candidate) {
+                return candidate.token == hidden_edge_token ||
+                       candidate.token == seam_token;
+            }));
+    }
+
     const auto vertex_only =
         widget.queryBodyTopology(
             body_center,
