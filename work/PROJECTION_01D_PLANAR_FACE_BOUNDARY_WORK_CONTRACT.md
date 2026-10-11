@@ -23,6 +23,12 @@
 
 **Separate acceptance gates remain:** exact-head FOCUSED and FAST/FULL Windows, Product PL/EN/internal docs, actual Owner private-model repro and **PG-01D FINAL PASS / explicit merge approval**. Neither this D2 approval nor a green FAST alone permits merge. If old/new semantic aliasing cannot be proved absent, **STOP and return to Owner D2**. This amendment is bounded by `work/PROJECTION_01D_D2_A_V16_PERSISTENCE_MIGRATION_PROPOSAL.md`, whose initial proposal label is superseded by this decision; exploratory proofs are not falsely called production tests.
 
+## Owner D2 compatibility decision — Refine Add research (2026-10-11)
+
+**Owner expressly accepted:** existing native Part files may become incompatible, or their previously persisted Face/Edge/Sketch source links may become Broken, as a consequence of a correct future production Add Refine policy. Exact backward-compatibility preservation is **not** a product acceptance veto. Correct material geometry, preservation of real boundaries, stable/strict semantic provenance for new/current documents, and typed **fail-closed** on ambiguous old links remain mandatory. No silent retargeting or file migration is permitted.
+
+**Architecture boundary:** this decision **does not** authorize production `BRepAlgoAPI_Fuse::SimplifyResult` by default or override the no-Boolean-modification / no-modeling-semantics-version-change STOP in §3. ADR-0014 still requires a separately accepted bounded operation policy and explicit modeling-semantics version decision. Evidence, conditions and next Owner gate: `work/PROJECTION_01D_REFINE_ADD_D2_GATE.md`. PR #309 remains draft; PG-01D FINAL PASS/merge is separate.
+
 ## 1. Goal and measurable result
 
 Extend the **already accepted** Project Geometry tool in an editable Part Sketch to stage **one current, strictly identifiable planar bounded Face** from an earlier legal Body stage. Capture exactly its current outer/hole **material Edge occurrences**, project each representable exact Line/Circle/Arc to current Sketch support, visibly skip only independently proven geometric Unsupported members, and use the **existing** atomic `CreateProjectedSketchEdgesCommand` to save all admitted unique `MaterialEdgeReference` links with chosen Regular/Construction role.
