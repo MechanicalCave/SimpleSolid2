@@ -1821,8 +1821,9 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
-        // UI-01 G0 native RED: an existing Feature Edit draft must refuse
-        // Tree Sketch and Profile Edit, without mutating authored CAD.
+        // UI-01 G0 native RED (full-only registered native Qt/OCCT target):
+        // an existing Feature Edit draft must refuse Tree Sketch and
+        // Profile Edit, without mutating authored CAD.
         // Run in the ordinary native suite AND via --ui01-p0 for focused
         // characterization. No UI-01 product fix is included in this RED.
         if (ui01_p0_only ||
