@@ -3843,7 +3843,11 @@ void verifyPartIntegration() {
 // A current bounded Face or same radius must never authorize a merged
 // curved Face Boundary without an explicit same-carrier certificate.
 void verifyNativeCurvedSurfaceContinuationE0() {
-    kernel_occt::OcctSolidModelingKernel provider;
+    // Historical native E0 representation/identity probe: explicitly
+    // unrefined. Separate Refine v2 controls preserve real boundaries.
+    kernel_occt::OcctSolidModelingKernel provider{
+        kernel_occt::OcctSolidModelingKernel::
+            AddRefinementExperiment::disabled};
     kernel::PlanarProfileInput round_base;
     round_base.outer.boundary = {{
         kernel::Circle2{{0.0, 0.0}, 10.0},
@@ -3952,7 +3956,11 @@ void verifyNativeCurvedSurfaceContinuationE0() {
 // single CONTIGUOUS material Face Boundary region. Exact native Edge
 // and Vertex incidence, not radius/proximity, establishes the stop.
 void verifyNativeCylindricalCutSplitE0() {
-    kernel_occt::OcctSolidModelingKernel provider;
+    // Historical native E0 representation/identity probe: explicitly
+    // unrefined. Separate Refine v2 controls preserve real boundaries.
+    kernel_occt::OcctSolidModelingKernel provider{
+        kernel_occt::OcctSolidModelingKernel::
+            AddRefinementExperiment::disabled};
     kernel::PlanarProfileInput cylinder;
     cylinder.outer.boundary = {{
         kernel::Circle2{{0.0, 0.0}, 10.0},
@@ -4157,7 +4165,11 @@ void verifyNativeCylindricalCutSplitE0() {
 // outer boundary, and no hole. Nothing may be grouped by XY or normals
 // alone: only provider continuation claims authorize same-carrier uses.
 void verifyNativePlanarBranchedSurfaceContinuationsE0() {
-    kernel_occt::OcctSolidModelingKernel provider;
+    // Historical native E0 representation/identity probe: explicitly
+    // unrefined. Separate Refine v2 controls preserve real boundaries.
+    kernel_occt::OcctSolidModelingKernel provider{
+        kernel_occt::OcctSolidModelingKernel::
+            AddRefinementExperiment::disabled};
     const auto base = provider.extrude(add(
         rectangle(kernel::Frame3{}, 0.0, 0.0, 40.0, 30.0,
                   "branch-base"), 10.0));
@@ -4599,7 +4611,11 @@ void verifyNativePlanarBranchedSurfaceContinuationsE0() {
 // the pairs may generate a region OUTER and a region HOLE contour
 // from multiple Face outer wires rather than native inner wires.
 void verifyNativePlanarHoleAcrossPartitionE0() {
-    kernel_occt::OcctSolidModelingKernel provider;
+    // Historical native E0 representation/identity probe: explicitly
+    // unrefined. Separate Refine v2 controls preserve real boundaries.
+    kernel_occt::OcctSolidModelingKernel provider{
+        kernel_occt::OcctSolidModelingKernel::
+            AddRefinementExperiment::disabled};
     const auto base = provider.extrude(add(
         rectangle(kernel::Frame3{}, 0.0, 0.0, 40.0, 30.0,
                   "cross-partition-base"), 10.0));
@@ -5620,7 +5636,11 @@ void verifyNativePlanarHoleAcrossPartitionE0() {
 // continuity in 3D does not itself certify a multi-Face group.
 // No new semantic association may be guessed from coaxial geometry.
 void verifyNativePartialCylinderCutContinuityProbeE0() {
-    kernel_occt::OcctSolidModelingKernel provider;
+    // Historical native E0 representation/identity probe: explicitly
+    // unrefined. Separate Refine v2 controls preserve real boundaries.
+    kernel_occt::OcctSolidModelingKernel provider{
+        kernel_occt::OcctSolidModelingKernel::
+            AddRefinementExperiment::disabled};
     kernel::PlanarProfileInput cylinder;
     cylinder.outer.boundary = {{
         kernel::Circle2{{0.0, 0.0}, 10.0},
@@ -6287,10 +6307,10 @@ void verifyPg01dRefineRevolveNonMergeControl() {
               << " same_occupied_solid=1\n";
 }
 
-// PG-01D: owner-supplied native v16 Extrude/Revolve Add counterexamples.
-// Baseline asserts the current, UNWANTED same-domain face splits. The
-// eventual Refine implementation must replace those expectations with
-// topology/semantic regression gates, not make this probe disappear.
+// PG-01D: original Owner v16 Extrude/Revolve Add counterexamples.
+// The explicitly UNREFINED historical baseline records unwanted splits;
+// normal production Refine v2 must eliminate them while preserving strict
+// current semantic provenance and exact material at each Feature stage.
 void verifyPg01dOwnerSameDomainFixtures() {
     struct Fixture final {
         const char* filename;
@@ -6465,7 +6485,7 @@ void verifyPg01dOwnerSameDomainFixtures() {
                   << " fixture=" << fixture.filename
                   << " unwanted_upper_face_count="
                   << fixture.expected_top_faces
-                  << " geometry_refinement_not_implemented=1\n";
+                  << " legacy_unrefined_baseline=1\n";
         // Compare the very same authored native Part with an explicitly
         // experimental, history-aware Boolean simplifier. This must not
         // change the ordinary provider or bypass Part's semantic rules.
