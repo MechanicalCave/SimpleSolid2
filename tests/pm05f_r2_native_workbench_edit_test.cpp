@@ -2495,6 +2495,12 @@ int main(int argc, char* argv[]) {
             CHECK(workbench.activateDocument(
                 &owner_session, {}));
             QApplication::processEvents();
+            // DIAGNOSTIC ONLY, NO MERGE: print native measured p50/p95
+            // from the three real complexity levels through CTest's
+            // --output-on-failure. Production #314 has NO such exit.
+            std::cerr << "EDGE_R1_G5_COMPLEXITY_EVIDENCE_END"
+                      << std::endl;
+            std::exit(EXIT_FAILURE);
             // Expected R1 RED ONLY when a truly front-visible sample on
             // the real Owner's native Part has NO Edge candidate at all.
             // Samples on tessellation gaps / blocked behind Body material
