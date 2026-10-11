@@ -22,7 +22,9 @@ struct ModelingSemanticsVersion final {
                            const ModelingSemanticsVersion&) = default;
 };
 
-inline constexpr ModelingSemanticsVersion current_modeling_semantics_version{1U};
+// Owner D2-R2: Add refinement is a new persisted modeling policy.
+// This is independent of the native Part schema v16.
+inline constexpr ModelingSemanticsVersion current_modeling_semantics_version{2U};
 
 enum class ExtrudeOperation : std::uint8_t {
     add,

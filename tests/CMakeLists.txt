@@ -1033,6 +1033,46 @@ set_tests_properties(pg01c.native_project_edge_command PROPERTIES
     LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel;native"
 )
 
+# PG-01D D0/D1: isolate native strict planar Face outer/hole wire + material
+# Edge identity from cursor-sensitive PG-01C GUI interactions. Reuse the
+# *same* already compiled Qt/OCCT executable with headless test branch.
+# Registration is full-only: no FAST registry change or CI #302 workaround.
+add_test(
+    NAME pg01d.native_face_boundary_d0
+    COMMAND pm05f_r2_native_workbench_edit_test --pg01d-d0
+)
+set_tests_properties(pg01d.native_face_boundary_d0 PROPERTIES
+    TIMEOUT 90
+    LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-kernel;native"
+)
+
+# PG-01D D2: isolated real Viewer planar Face click + one existing
+# Project Geometry tool Finish. This is deliberately full-only and reuses
+# the same native executable; #302 FAST registry remains unchanged.
+add_test(
+    NAME pg01d.native_face_ui
+    COMMAND pm05f_r2_native_workbench_edit_test --pg01d-ui
+)
+set_tests_properties(pg01d.native_face_ui PROPERTIES
+    TIMEOUT 90
+    LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer;subsystem-kernel;native"
+)
+
+# PG-01D D3 strict fail-closed read seam: separate native current-Body
+# fixture drives a deliberately malformed provider answer through the
+# real Part Face admission adapter (invalid Face, unavailable provider,
+# outer-wire accounting, bogus/repeated material source).
+# A distinct full-only registration ensures native negative cases are
+# always exercised in FULL; no FAST registry or CI issue #302 changes.
+add_test(
+    NAME pg01d.native_face_fail_closed
+    COMMAND pm05f_r2_native_workbench_edit_test --pg01d-negative
+)
+set_tests_properties(pg01d.native_face_fail_closed PROPERTIES
+    TIMEOUT 90
+    LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-kernel;native"
+)
+
 add_executable(pm05c1_edge_semantic_kernel_test
     pm05c1_edge_semantic_kernel_test.cpp
 )
@@ -2578,7 +2618,13 @@ function(ss2_resolve_test_build_target test_name out_var)
         set(${out_var} "simplesolid2" PARENT_SCOPE)
         return()
     endif()
-    if(test_name STREQUAL "pg01c.native_project_edge_command")
+    # PG-01C cursor UX and PG-01D native Face-wire proof share one
+    # already-built executable but execute independent argument modes.
+    # This is an explicit CI-04 build mapping, not a new CI policy.
+    if(test_name STREQUAL "pg01c.native_project_edge_command" OR
+       test_name STREQUAL "pg01d.native_face_boundary_d0" OR
+       test_name STREQUAL "pg01d.native_face_ui" OR
+       test_name STREQUAL "pg01d.native_face_fail_closed")
         set(${out_var} "pm05f_r2_native_workbench_edit_test" PARENT_SCOPE)
         return()
     endif()

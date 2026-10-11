@@ -180,6 +180,51 @@ int main() {
             "evaluation") ==
         std::string::npos);
 
+    // Explicit D2-R2 negative: older and future modeling policies are
+    // rejected at load with typed unsupported_modeling_semantics, while
+    // the original valid v2 file stays readable and unchanged.
+    {
+        const auto package_before =
+            persistence::readNativeDocumentContainer(path);
+        CHECK(package_before.ok());
+        const auto& authored = package_before.package->authored_json;
+        const auto marker = std::string{
+            "\"modeling_semantics_version\": 2"};
+        const auto at = authored.find(marker);
+        CHECK(at != std::string::npos);
+        CHECK(authored.find(marker, at + marker.size()) ==
+              std::string::npos);
+        for (const auto version : {1, 3}) {
+            auto unsupported = authored;
+            unsupported.replace(
+                at, marker.size(),
+                std::string{
+                    "\"modeling_semantics_version\": "} +
+                    std::to_string(version));
+            const auto rejected_path =
+                temp.path /
+                ("ModelingSemantics" + std::to_string(version) +
+                 ".ss2part");
+            writeBytes(
+                rejected_path,
+                buildPartPackage(
+                    std::string{id.value()},
+                    part::PartDocumentStore::current_schema_version,
+                    unsupported));
+            const auto rejected = store.load(rejected_path);
+            CHECK(!rejected.ok());
+            CHECK(rejected.diagnostic.code ==
+                  part::PartStoreErrorCode::
+                      unsupported_modeling_semantics);
+            CHECK(rejected.diagnostic.message ==
+                  "Native Part contains unsupported modeling semantics version");
+        }
+        const auto after =
+            persistence::readNativeDocumentContainer(path);
+        CHECK(after.ok());
+        CHECK(after.package->authored_json ==
+              package_before.package->authored_json);
+    }
     auto loaded = store.load(path);
     CHECK(loaded.ok());
     CHECK(

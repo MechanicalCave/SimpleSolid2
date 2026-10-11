@@ -465,7 +465,7 @@ Fixture makeFixture() {
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        15);
+        16);
 
     const auto fixture =
         makeFixture();
@@ -487,7 +487,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 15);
+            .domain_schema_version == 16);
 
     auto authored =
         nlohmann::json::parse(
@@ -542,7 +542,7 @@ int main() {
         fixture.document.state());
 
     // Both body-planar Sketch support and Datum Plane source keep the full
-    // generated-Surface provenance through current schema-v15 persistence.
+    // generated-Surface provenance through current schema-v16 persistence.
     CHECK(
         loaded.document->sketches().size() ==
         fixture.document.sketches().size());

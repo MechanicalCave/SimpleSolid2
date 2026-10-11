@@ -4,11 +4,13 @@
 #include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <utility>
 #include <variant>
@@ -630,10 +632,106 @@ void verifyExactRegionEndpointBoundary() {
         << " proximity_healing=0\\n";
 }
 
+// PG-01D Face Boundary follow-up, wholly synthetic Datum-plane analogue.
+// The projected analytic Arc's Cartesian endpoints differ slightly from
+// visually coincident Line endpoints due to double trigonometric roundoff.
+// Unlike a genuine 1-ULP Line-Line endpoint gap, valid Line-Arc analytic
+// intersection can still yield a sound closed region. This control avoids
+// misdiagnosing arbitrary tiny Arc endpoint differences as the Owner's
+// reported linked-Profile failure or relaxing global endpoint rules.
+void verifyProjectedArcDatumProfileEndpointEvidence() {
+    sketch::SketchModel model;
+    const double pi = std::numbers::pi_v<double>;
+    const sketch::Point2 arc_center{25.0, 40.0};
+    const double arc_radius = 10.0;
+    const sketch::Point2 start{
+        arc_center.u + arc_radius * std::cos(pi),
+        arc_center.v + arc_radius * std::sin(pi)};
+    const sketch::Point2 end{
+        arc_center.u +
+            arc_radius * std::cos(pi + pi / 2.0),
+        arc_center.v +
+            arc_radius * std::sin(pi + pi / 2.0)};
+    CHECK(start.u == 15.0);
+    CHECK(end.v == 30.0);
+    CHECK(start.v != 40.0 || end.u != 25.0);
+    [[maybe_unused]] const auto left = model.addLine(
+        {0.0, -20.0}, {0.0, 40.0});
+    const auto top = model.addLine(
+        {0.0, 40.0}, {15.0, 40.0});
+    [[maybe_unused]] const auto arc = model.addArc(
+        arc_center, arc_radius, pi, pi / 2.0);
+    const auto right = model.addLine(
+        {25.0, 30.0}, {25.0, -20.0});
+    [[maybe_unused]] const auto bottom = model.addLine(
+        {25.0, -20.0}, {0.0, -20.0});
+    [[maybe_unused]] const auto inner_circle = model.addCircle(
+        {12.0, 0.0}, 5.0);
+    const auto rounded = sketch::analyzeRegions(model);
+    std::cerr
+        << "PG01D_DATUM_REGION_BEFORE_EXACT"
+        << " regions=" << rounded.regions.size()
+        << " diagnostics=" << rounded.diagnostics.size();
+    for (const auto& region : rounded.regions) {
+        std::cerr << " [area=" << region.area
+                  << " holes=" << region.holes.size()
+                  << " outer_uses=" << region.outer.boundary.size()
+                  << "]";
+    }
+    std::cerr << '\\n';
+
+    CHECK(model.updateLine(
+        top, {0.0, 40.0}, start));
+    CHECK(model.updateLine(
+        right, end, {25.0, -20.0}));
+    const auto topology_accurate =
+        sketch::analyzeRegions(model);
+    std::cerr
+        << "PG01D_DATUM_REGION_AFTER_EXACT"
+        << " regions=" << topology_accurate.regions.size()
+        << " diagnostics=" << topology_accurate.diagnostics.size();
+    for (const auto& region : topology_accurate.regions) {
+        std::cerr << " [area=" << region.area
+                  << " holes=" << region.holes.size()
+                  << " outer_uses=" << region.outer.boundary.size()
+                  << "]";
+    }
+    std::cerr << '\\n';
+    CHECK(rounded.complete());
+    CHECK(topology_accurate.complete());
+    // The arrangement deliberately exposes both selectable material
+    // cells: the outer region with one circular hole, AND the circular
+    // interior as its own region. Counting only one would incorrectly
+    // discard a legitimate independent Profile candidate.
+    CHECK(rounded.regions.size() == 2U);
+    CHECK(topology_accurate.regions.size() == 2U);
+    const auto verify_outer_with_hole = [](
+        const sketch::RegionAnalysis2D& regions) {
+        const auto found = std::find_if(
+            regions.regions.begin(), regions.regions.end(),
+            [](const auto& region) {
+                return region.holes.size() == 1U &&
+                    region.outer.boundary.size() == 5U;
+            });
+        CHECK(found != regions.regions.end());
+        CHECK(part::makeProfileRegionIntent(*found));
+    };
+    verify_outer_with_hole(rounded);
+    verify_outer_with_hole(topology_accurate);
+    std::cout
+        << "PG01D_DATUM_PROJECTED_ARC_REGION_EVIDENCE_PASS"
+        << " outer_region_with_circle_hole=1"
+        << " interior_circle_own_region=1"
+        << " roundoff_not_root_cause=1"
+        << " line_line_ulp_gap_still_rejected=1"
+        << " global_tolerance_unchanged=1\\n";
+}
+
 } // namespace
 
 int main() {
     verifyExactRegionEndpointBoundary();
+    verifyProjectedArcDatumProfileEndpointEvidence();
     auto fixture = makeFixture();
     StageKernel kernel;
 

@@ -98,13 +98,18 @@ struct SemanticProvenanceBounds final {
     const auto* endpoints =
         std::get_if<BetweenSemanticPoints>(
             &edge.branch);
-    return endpoints == nullptr ||
-           (semanticPointHistoryValid(
-                endpoints->first,
-                edge_bounds) &&
-            semanticPointHistoryValid(
-                endpoints->second,
-                edge_bounds));
+    if (endpoints != nullptr) {
+        return semanticPointHistoryValid(
+                   endpoints->first, edge_bounds) &&
+               semanticPointHistoryValid(
+                   endpoints->second, edge_bounds);
+    }
+    const auto* single =
+        std::get_if<AtSingleSemanticPoint>(
+            &edge.branch);
+    return single == nullptr ||
+           semanticPointHistoryValid(
+               single->point, edge_bounds);
 }
 
 [[nodiscard]] bool semanticPointHistoryValid(
@@ -825,7 +830,11 @@ bool PartDocument::validAuthoredState(
 
             for (const auto& edge :
                  *material_edges) {
-                if (edge.stage !=
+                // PG-01D v16 authoring is projection-only. Do not widen
+                // existing Fillet/Chamfer direct input semantics.
+                if (std::holds_alternative<AtSingleSemanticPoint>(
+                        edge.branch) ||
+                    edge.stage !=
                         material_edges->front().stage ||
                     !semanticEdgeHistoryValid(
                         edge,

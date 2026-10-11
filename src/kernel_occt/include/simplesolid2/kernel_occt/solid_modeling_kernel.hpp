@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/kernel/edge_projection.hpp>
+#include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 
 namespace simplesolid2::kernel_occt {
@@ -9,8 +10,24 @@ namespace simplesolid2::kernel_occt {
 // contract. No OCCT handle/type crosses this public header.
 class OcctSolidModelingKernel final
     : public kernel::ISolidModelingKernel,
-      public kernel::IEdgeProjectionQuery {
+      public kernel::IEdgeProjectionQuery,
+      public kernel::IFaceBoundaryQuery {
 public:
+    [[nodiscard]] std::optional<kernel::ScopedBoundaryFace>
+    bindFaceToBody(
+        kernel::RuntimeSolidHandle source_body,
+        kernel::RuntimeFaceToken current_face) noexcept override;
+
+    [[nodiscard]] kernel::FaceBoundaryResult
+    queryFaceBoundary(
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedBoundaryFace& bound_face) noexcept override;
+
+    [[nodiscard]] kernel::FaceBoundaryResult
+    queryFaceBoundaryAnySurface(
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedBoundaryFace& bound_face) noexcept override;
+
     [[nodiscard]] std::optional<kernel::ScopedProjectionEdge>
     bindEdgeToBody(
         kernel::RuntimeSolidHandle source_body,
@@ -22,7 +39,18 @@ public:
         const kernel::ScopedProjectionEdge& bound_edge,
         const kernel::Frame3& target_frame) noexcept override;
 
+    // D2-R1 production default: history-aware Boolean same-domain Refine
+    // for Extrude/Revolve Add. Explicit disabled is for native legacy
+    // comparison/negative tests only, never an implicit user setting.
+    enum class AddRefinementExperiment {
+        disabled,
+        simplify_same_domain,
+    };
+
     OcctSolidModelingKernel() = default;
+    explicit OcctSolidModelingKernel(
+        AddRefinementExperiment mode) noexcept
+        : refinement_experiment_(mode) {}
     ~OcctSolidModelingKernel() override = default;
 
     [[nodiscard]] kernel::SolidModelingResult
@@ -62,6 +90,18 @@ public:
     [[nodiscard]] kernel::BodyPresentationResult
     bodyPresentation(
         kernel::RuntimeSolidHandle solid) noexcept override;
+
+private:
+    AddRefinementExperiment refinement_experiment_{
+        AddRefinementExperiment::simplify_same_domain};
+
+    // One provider-owned strict native wire extraction implementation.
+    // The original planar-only API retains its exact preexisting policy.
+    [[nodiscard]] kernel::FaceBoundaryResult
+    queryFaceBoundaryImpl(
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedBoundaryFace& bound_face,
+        bool require_planar) noexcept;
 };
 
 } // namespace simplesolid2::kernel_occt

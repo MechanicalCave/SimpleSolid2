@@ -8,6 +8,7 @@
 #include <simplesolid2/viewer/camera_state.hpp>
 
 #include "viewport_surface.hpp"
+#include "part_viewport_controller.hpp"
 
 #include <QWidget>
 
@@ -299,7 +300,14 @@ private:
     void cancelProjectEdgeTool();
     void clearProjectEdgeRuntimeContext();
     void clearProjectEdgeSelection();
+    void removeProjectFaceSelection();
+    void removeProjectBoundarySelection();
+    [[nodiscard]] bool commitProjectBoundarySources();
     void tryStageProjectEdgeSelection();
+    void tryStageProjectFaceSelection();
+    void tryStageProjectBoundarySelection();
+    void setProjectEdgeFaceMode(bool enabled);
+    void setProjectEdgeBoundaryMode();
     void refreshProjectEdgePreview();
     [[nodiscard]] bool finishProjectEdgeTool();
     void syncProjectEdgeUi();
@@ -767,6 +775,9 @@ private:
     QLabel* project_edge_stage_label_{};
     QLabel* project_edge_selection_label_{};
     QLabel* project_edge_result_label_{};
+    QPushButton* project_edge_edges_button_{};
+    QPushButton* project_edge_face_button_{};
+    QPushButton* project_edge_boundary_button_{};
     QPushButton* project_edge_regular_button_{};
     QPushButton* project_edge_construction_button_{};
     QPushButton* project_edge_remove_button_{};
@@ -775,6 +786,43 @@ private:
     QPushButton* project_edge_cancel_button_{};
     bool project_edge_active_{false};
     bool project_edge_preview_valid_{false};
+    bool project_edge_face_mode_{false};
+    bool project_edge_boundary_mode_{false};
+    bool project_edge_switching_mode_{false};
+    std::optional<BodyTopologySelectionAddress>
+        project_edge_face_pick_;
+    std::optional<part::MaterialFaceBoundaryAdmission>
+        project_edge_face_membership_;
+    std::vector<part::MaterialEdgeReference>
+        project_edge_face_sources_;
+    std::vector<part::MaterialEdgeReference>
+        project_edge_face_skipped_;
+    // Location/status is a transient exact geometric result for a
+    // specific native directed Face-wire member; not persisted.
+    struct ProjectBoundarySkippedMember final {
+        std::size_t wire_index{};
+        std::size_t edge_index{};
+        part::MaterialEdgeReference reference;
+        part::ProjectedSketchSourceStatus reason{
+            part::ProjectedSketchSourceStatus::unsupported_projection};
+
+        friend bool operator==(
+            const ProjectBoundarySkippedMember&,
+            const ProjectBoundarySkippedMember&) = default;
+    };
+    // Each clicked bounded Face owns a transient, generation-bound
+    // native wire/source ledger. It is NEVER persisted as CAD identity.
+    struct ProjectBoundaryFaceDraft final {
+        BodyTopologySelectionAddress picked;
+        part::SelectedFaceBoundaryAdmission membership;
+        std::vector<part::MaterialEdgeReference> accepted;
+        std::vector<part::MaterialEdgeReference> skipped;
+        std::vector<ProjectBoundarySkippedMember> skipped_detail;
+    };
+    std::vector<ProjectBoundaryFaceDraft>
+        project_edge_boundary_faces_;
+    std::vector<part::MaterialEdgeReference>
+        project_edge_manual_sources_;
     std::optional<core::DocumentRevision> project_edge_revision_;
     std::optional<part::BodyStageRef> project_edge_stage_;
     std::vector<part::MaterialEdgeReference> project_edge_sources_;

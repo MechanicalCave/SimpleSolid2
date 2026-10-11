@@ -371,7 +371,7 @@ int main() {
     CHECK(current_package.ok());
     CHECK(
         current_package.package->descriptor
-            .domain_schema_version == 15);
+            .domain_schema_version == 16);
     CHECK(
         current_package.package->authored_json.find(
             "\"placement\"") ==
@@ -487,7 +487,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 15);
+            .domain_schema_version == 16);
     CHECK(
         rewritten.package->authored_json.find(
             "\"placement\"") ==
@@ -602,7 +602,7 @@ int main() {
     CHECK(body_package.ok());
     CHECK(
         body_package.package->descriptor
-            .domain_schema_version == 15);
+            .domain_schema_version == 16);
     CHECK(
         body_package.package->authored_json.find(
             "\"body_planar_surface\"") !=

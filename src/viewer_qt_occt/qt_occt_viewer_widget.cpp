@@ -714,6 +714,39 @@ public:
         auto result = runtime_diagnostics_;
         result.sketch_native_objects_current =
             sketch_objects_.size();
+        std::size_t pg_supported = 0U;
+        std::size_t pg_skipped = 0U;
+        std::size_t pg_selected_faces = 0U;
+        std::size_t expected_overlay_objects = 0U;
+        for (const auto& group : body_topology_overlay_scene_.groups) {
+            expected_overlay_objects += group.tokens.size();
+            if (group.role ==
+                    viewer::BodyTopologyOverlayRole::
+                        project_geometry_supported) {
+                pg_supported = group.tokens.size();
+            } else if (group.role ==
+                           viewer::BodyTopologyOverlayRole::
+                               project_geometry_unsupported) {
+                pg_skipped = group.tokens.size();
+            } else if (group.role ==
+                           viewer::BodyTopologyOverlayRole::
+                               project_geometry_face_selected) {
+                pg_selected_faces = group.tokens.size();
+            }
+        }
+        // Each successfully displayed native Body topology overlay
+        // produces one AIS object. Never report an unrendered request
+        // as a highlighted source.
+        if (!context_.IsNull() &&
+            body_topology_overlay_objects_.size() ==
+                expected_overlay_objects) {
+            result.project_face_supported_overlays_current =
+                pg_supported;
+            result.project_face_skipped_overlays_current =
+                pg_skipped;
+            result.project_face_selected_overlays_current =
+                pg_selected_faces;
+        }
         result.solid_committed_displayed =
             !context_.IsNull() &&
             !solid_object_.IsNull() &&
@@ -5606,24 +5639,54 @@ public:
 
         for (const auto& group :
              body_topology_overlay_scene_.groups) {
+            // Every Project Geometry highlight belongs to the same
+            // generation-scoped overlay seam as feature contribution,
+            // but has a distinct, unmistakable supported/skip tone.
             const bool selected =
                 group.role ==
                 viewer::BodyTopologyOverlayRole::
                     feature_contribution_selected;
+            const bool supported =
+                group.role ==
+                viewer::BodyTopologyOverlayRole::
+                    project_geometry_supported;
+            const bool unsupported =
+                group.role ==
+                viewer::BodyTopologyOverlayRole::
+                    project_geometry_unsupported;
+            const bool selected_face =
+                group.role ==
+                viewer::BodyTopologyOverlayRole::
+                    project_geometry_face_selected;
             const Quantity_Color color =
-                selected
+                selected_face
                     ? Quantity_Color{
-                          0.24, 0.88, 0.38,
-                          Quantity_TOC_RGB}
-                    : Quantity_Color{
-                          0.42, 0.96, 0.54,
-                          Quantity_TOC_RGB};
+                          0.19, 0.65, 0.96, Quantity_TOC_RGB}
+                    : unsupported
+                    ? Quantity_Color{
+                          1.0, 0.30, 0.23, Quantity_TOC_RGB}
+                    : supported
+                        ? Quantity_Color{
+                              0.16, 0.80, 0.98, Quantity_TOC_RGB}
+                        : selected
+                            ? Quantity_Color{
+                                  0.24, 0.88, 0.38,
+                                  Quantity_TOC_RGB}
+                            : Quantity_Color{
+                                  0.42, 0.96, 0.54,
+                                  Quantity_TOC_RGB};
             const double transparency =
-                selected ? 0.34 : 0.52;
+                selected_face ? 0.62
+                : unsupported || supported
+                    ? 0.16 : (selected ? 0.34 : 0.52);
             const double edge_width =
-                selected ? 3.4 : 2.4;
+                unsupported ? 5.2
+                    : supported ? 3.8
+                    : selected ? 3.4 : 2.4;
             const double point_size =
-                selected ? 10.0 : 8.0;
+                unsupported ? 12.0
+                    : supported ? 10.0
+                    : selected ? 10.0 : 8.0;
 
             for (const auto token :
                  group.tokens) {
@@ -6036,7 +6099,7 @@ public:
                                   Quantity_TOC_RGB}
                             : entry.linked
                                 ? Quantity_Color{
-                                      0.58, 0.72, 1.0,
+                                      0.18, 0.62, 1.0,
                                       Quantity_TOC_RGB}
                                 : Quantity_Color{
                                       0.92, 0.92, 0.94,
@@ -6048,7 +6111,9 @@ public:
                            ? 3.0
                            : (measure_highlighted
                                   ? 3.2
-                                  : (hovered ? 3.0 : 2.0)));
+                                  : (hovered
+                                         ? 3.0
+                                         : (entry.linked ? 3.8 : 2.0))));
 
             const auto line_type =
                 entry.construction

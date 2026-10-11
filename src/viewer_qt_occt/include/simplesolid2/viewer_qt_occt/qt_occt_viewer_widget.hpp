@@ -25,6 +25,11 @@ struct QtOcctRuntimeDiagnostics final {
     std::size_t update_current_viewer_calls{};
     std::size_t redraw_calls{};
     std::size_t sketch_native_objects_current{};
+    // Native AIS objects, not merely a staged request or text label.
+    // Runtime-only PG-01D Face feedback (no persisted/source identity).
+    std::size_t project_face_supported_overlays_current{};
+    std::size_t project_face_skipped_overlays_current{};
+    std::size_t project_face_selected_overlays_current{};
     std::size_t sketch_wire_style_applications{};
     std::size_t sketch_rectangle_queries{};
     std::size_t sketch_rectangle_segments{};

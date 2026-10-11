@@ -24,6 +24,7 @@ enum class PartStoreErrorCode {
     malformed_document,
     missing_field,
     unsupported_schema,
+    unsupported_modeling_semantics,
     wrong_document_kind,
     invalid_document_id,
     container_failure,
@@ -84,7 +85,7 @@ struct PartSaveResult final {
 
 class PartDocumentStore final {
 public:
-    static constexpr int current_schema_version = 15;
+    static constexpr int current_schema_version = 16;
 
     [[nodiscard]] static bool hasNativeExtension(
         const std::filesystem::path& path) noexcept;
