@@ -7486,7 +7486,10 @@ int main(int argc, char* argv[]) {
             "edgeFeatureOperationsWidget");
         cancel->click();
         QApplication::processEvents();
-        CHECK(cancel->isHidden());
+        // The parent Operations widget hides after Cancel; the child
+        // QPushButton itself need not have QWidget::isHidden() set.
+        CHECK(workbench.findChild<QWidget*>(
+            QStringLiteral("edgeFeatureOperationsWidget"))->isHidden());
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
