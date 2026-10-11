@@ -4175,7 +4175,21 @@ OcctSolidModelingKernel::extrude(
                 upstream_occt->solid,
                 tool_shape};
             fuse.SetFuzzyValue(0.0);
+            if (refinement_experiment_ ==
+                    AddRefinementExperiment::simplify_same_domain) {
+                // Preserve the preceding Body stage while the test
+                // experiments with OCCT's integrated Boolean history.
+                fuse.SetNonDestructive(true);
+            }
             fuse.Build();
+            if (fuse.IsDone() &&
+                refinement_experiment_ ==
+                    AddRefinementExperiment::simplify_same_domain) {
+                // OCCT merges the simplifier's modifications into its
+                // own Modified/Generated/Deleted Boolean history.
+                // finishBoolean still certifies the resulting topology.
+                fuse.SimplifyResult(true, true);
+            }
             return finishBoolean(
                 fuse,
                 *upstream_occt,
@@ -4395,7 +4409,21 @@ OcctSolidModelingKernel::revolve(
                 upstream_occt->solid,
                 tool_shape};
             fuse.SetFuzzyValue(0.0);
+            if (refinement_experiment_ ==
+                    AddRefinementExperiment::simplify_same_domain) {
+                // Preserve the preceding Body stage while the test
+                // experiments with OCCT's integrated Boolean history.
+                fuse.SetNonDestructive(true);
+            }
             fuse.Build();
+            if (fuse.IsDone() &&
+                refinement_experiment_ ==
+                    AddRefinementExperiment::simplify_same_domain) {
+                // OCCT merges the simplifier's modifications into its
+                // own Modified/Generated/Deleted Boolean history.
+                // finishBoolean still certifies the resulting topology.
+                fuse.SimplifyResult(true, true);
+            }
             return finishBoolean(
                 fuse,
                 *upstream_occt,

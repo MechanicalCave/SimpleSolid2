@@ -39,7 +39,19 @@ public:
         const kernel::ScopedProjectionEdge& bound_edge,
         const kernel::Frame3& target_frame) noexcept override;
 
+    // Test-only opt-in experiment: evaluate the exact same native Part
+    // through OCCT's history-aware Boolean SimplifyResult path. The
+    // production default remains unchanged pending provenance/lifecycle
+    // validation and Owner approval.
+    enum class AddRefinementExperiment {
+        disabled,
+        simplify_same_domain,
+    };
+
     OcctSolidModelingKernel() = default;
+    explicit OcctSolidModelingKernel(
+        AddRefinementExperiment mode) noexcept
+        : refinement_experiment_(mode) {}
     ~OcctSolidModelingKernel() override = default;
 
     [[nodiscard]] kernel::SolidModelingResult
@@ -81,6 +93,9 @@ public:
         kernel::RuntimeSolidHandle solid) noexcept override;
 
 private:
+    AddRefinementExperiment refinement_experiment_{
+        AddRefinementExperiment::disabled};
+
     // One provider-owned strict native wire extraction implementation.
     // The original planar-only API retains its exact preexisting policy.
     [[nodiscard]] kernel::FaceBoundaryResult

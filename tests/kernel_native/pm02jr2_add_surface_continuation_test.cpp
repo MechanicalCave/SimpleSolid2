@@ -6050,6 +6050,79 @@ void verifyPg01dOwnerSameDomainFixtures() {
                   << " unwanted_upper_face_count="
                   << fixture.expected_top_faces
                   << " geometry_refinement_not_implemented=1\n";
+        // Compare the very same authored native Part with an explicitly
+        // experimental, history-aware Boolean simplifier. This must not
+        // change the ordinary provider or bypass Part's semantic rules.
+        kernel_occt::OcctSolidModelingKernel refined_provider{
+            kernel_occt::OcctSolidModelingKernel::
+                AddRefinementExperiment::simplify_same_domain};
+        const auto refined =
+            part::evaluatePart(*loaded.document, refined_provider);
+        if (refined.body_status !=
+                part::BodyEvaluationStatus::up_to_date) {
+            std::cerr << "PG01D_REFINE_EXPERIMENT_BLOCKED"
+                      << " fixture=" << fixture.filename
+                      << " body_status="
+                      << static_cast<int>(refined.body_status)
+                      << '\n';
+            for (const auto& feature : refined.features) {
+                std::cerr << "PG01D_REFINE_FEATURE"
+                          << " status="
+                          << static_cast<int>(feature.status)
+                          << " diagnostic="
+                          << static_cast<int>(feature.diagnostic)
+                          << '\n';
+            }
+        }
+        CHECK(refined.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(refined.current_topology &&
+              refined.current_topology->complete());
+        CHECK(refined.features.size() == fixture.feature_count);
+
+        std::set<std::uint64_t> refined_upper_faces;
+        const auto& final_catalog = *refined.current_topology;
+        for (const auto& surface : final_catalog.surfaces) {
+            if (surface.surface_kind !=
+                    kernel::SurfaceKind::plane ||
+                surface.status !=
+                    kernel::ReferenceStatus::resolved ||
+                !surface.canonical_frame ||
+                std::abs(surface.canonical_frame->normal.z) <
+                    0.999999 ||
+                std::abs(surface.canonical_frame->origin.z -
+                         *upper_z) > 0.000001) {
+                continue;
+            }
+            for (const auto face : surface.current_faces) {
+                refined_upper_faces.insert(face.value);
+            }
+        }
+
+        // A successful comparison means the source Part still evaluates
+        // with complete semantic topology and the unwanted split is
+        // reduced. It is NOT final approval of stable Surface/Curve/Point
+        // identity through edits, Undo/Redo or cold Save/Reopen.
+        std::cerr << "PG01D_REFINE_EXPERIMENT"
+                  << " fixture=" << fixture.filename
+                  << " raw_upper_faces="
+                  << fixture.expected_top_faces
+                  << " refined_upper_faces="
+                  << refined_upper_faces.size()
+                  << " raw_bounded_faces="
+                  << result.current_topology->faces.size()
+                  << " refined_bounded_faces="
+                  << final_catalog.faces.size()
+                  << " raw_bounded_edges="
+                  << result.current_topology->edges.size()
+                  << " refined_bounded_edges="
+                  << final_catalog.edges.size()
+                  << '\n';
+        CHECK(!refined_upper_faces.empty());
+        CHECK(refined_upper_faces.size() <
+              fixture.expected_top_faces);
+        CHECK(final_catalog.faces.size() <=
+              result.current_topology->faces.size());
     }
 }
 
