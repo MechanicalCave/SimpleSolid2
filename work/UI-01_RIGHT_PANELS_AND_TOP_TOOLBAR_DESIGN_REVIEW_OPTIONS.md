@@ -91,6 +91,15 @@ Expose a few primary actions and a discoverable `Commands` dropdown/search for t
 - T4: is `More ▾` acceptable for overflow, or prefer named group menus (`Create ▾`, `Modify ▾`) at compact size?
 - T5: active Feature/Sketch indicator in toolbar vs right Operations header (or both non-duplicated cues)?
 
+## Owner follow-up — selected design direction, details still open (2026-10-11)
+
+Owner prefers **R-A: Properties and Operations simultaneously visible, user-adjustable vertical height split and independent vertical scrolling**. Owner explicitly requires two additional properties:
+
+- **No width jumping with scrollbars.** Each pane reserves a stable vertical scrollbar gutter, whether or not its content currently overflows. The thumb is visually subtler/slimmer than the current top-toolbar scrollbar. An illustrative width is 8–10 logical pixels for the painted thumb, with a separately adequate input hit region; actual DPI/accessibility dimensions remain to be measured and Owner-reviewed. Scroll appearance cannot shift form widths, control positions or the Workbench window geometry.
+- **At-a-glance editing mode.** Entering Sketch Edit or editing a Body Feature must visibly change the mode presentation. Propose a persistent, textual context cue near the viewport or document command region (e.g., "Part · Select", "Sketch Edit · Sketch 2", "Feature Edit · Extrude002"), a restrained matching Operations-header accent and a clearly separated Finish/Cancel action area. Do not depend on color alone. Use only actually available actions and preserve existing Finish/Cancel semantics. A denied edit-context switch must never change the mode cue.
+
+**Design review, not implementation approval:** exact mode-cue placement, short-height tab/accordion fallback, whether Finish/Cancel remains fixed while content scrolls, splitter position retention, Properties selection behavior during Feature Edit and all top-toolbar group/overflow choices are still OPEN. Detailed visual and behavioral Owner review must precede the UI-01 Work Contract and activation. No source code, ACTIVE.yaml or accepted roadmap version change is authorized by this direction.
+
 ## 4. Non-negotiable boundaries and acceptance plan
 
 - **P0 FIRST:** no concurrent incompatible Feature Draft and Sketch/Profile edit. Fail closed with precise message. No auto-Finish, auto-Cancel, draft replacement, model mutation, new Undo/Redo item or state leak on denied entry. Existing valid Axis-in-Sketch workflows must remain available with explicit compatibility evidence.
