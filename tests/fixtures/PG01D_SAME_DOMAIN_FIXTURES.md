@@ -39,6 +39,12 @@ The files are regression inputs, not a claim that current SS2 passes these
 new geometric expectations. PR #309 remains Draft; the earlier exact-head
 FULL CI result does not replace Owner practical FINAL PASS.
 
+## Refine experiment and accepted compatibility boundary (2026-10-11)
+
+The Owner accepted **possible incompatibility with existing Part files and their historical links** if a future approved Refine policy requires it. This does not relax exact occupied material geometry, true-edge preservation or strict **fail-closed** semantic identity for new/current documents. The experiment remains **opt-in and nonproduction** pending a separate ADR-0014 modeling-semantics policy/version decision. See `work/PROJECTION_01D_REFINE_ADD_D2_GATE.md`.
+
+The native `pm02jr2.add_surface_continuation` test now also checks after **fresh-provider explicit Save/Reopen** that each fixture has exactly **one** bounded upper planar Face (not just matching global Face/Edge counts), and that **each** reconstructed Feature stage has zero exact added/removed material compared with its original unsimplified counterpart. The reproducible same-domain and real-boundary controls remain intact. These assertions need a **new exact-head Windows FOCUSED PASS** before acceptance; prior #2420 PASS at `d942eeb` predates them.
+
 ## Provenance
 
 Originally supplied as `Test_face_extrude_01.ss2part` and
