@@ -27,6 +27,7 @@
 #include <atomic>
 #include <array>
 #include <cmath>
+#include <chrono>
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
@@ -1820,6 +1821,7 @@ int main(int argc, char* argv[]) {
                 authorableEdgeProbes(owner_session, kernel);
             CHECK(workbench.activateDocument(&owner_session, {}));
             QApplication::processEvents();
+            std::vector<double> owner_pick_microseconds;
             std::size_t query_count = 0U;
             std::size_t edge_hit_count = 0U;
             std::size_t edge_miss_count = 0U;
@@ -1846,10 +1848,19 @@ int main(int argc, char* argv[]) {
                         screen->y >= viewport->height()) {
                         continue;
                     }
+                    const auto started =
+                        std::chrono::steady_clock::now();
                     const auto query = viewport->queryBodyTopology(
                         *screen,
                         viewer::BodyTopologyPickFilter{
                             false, true, false});
+                    const double microseconds =
+                        std::chrono::duration<double, std::micro>{
+                            std::chrono::steady_clock::now() - started}
+                            .count();
+                    CHECK(std::isfinite(microseconds) &&
+                          microseconds >= 0.0);
+                    owner_pick_microseconds.push_back(microseconds);
                     CHECK(query.valid());
                     CHECK(query.completed);
                     CHECK(query.generation.valid());
@@ -1981,6 +1992,57 @@ int main(int argc, char* argv[]) {
                 << " owner_target_token_mapping_pending=1"
                 << std::endl;
             CHECK(independently_visible_samples > 0U);
+            CHECK(!owner_pick_microseconds.empty());
+            std::sort(
+                owner_pick_microseconds.begin(),
+                owner_pick_microseconds.end());
+            const auto measured = [](const auto& samples, double p) {
+                const auto index = static_cast<std::size_t>(
+                    std::floor((samples.size() - 1U) * p));
+                return samples[index];
+            };
+            const double p50_microseconds =
+                measured(owner_pick_microseconds, 0.5);
+            const double p95_microseconds =
+                measured(owner_pick_microseconds, 0.95);
+            std::cerr << "EDGE_R1_G5_REAL_BODY_QUERY"
+                      << " samples=" << owner_pick_microseconds.size()
+                      << " p50_us=" << p50_microseconds
+                      << " p95_us=" << p95_microseconds
+                      << " triangles="
+                      << presented.body.mesh.triangles.size()
+                      << " edges=" << presented.body.edges.size()
+                      << " orientations=5"
+                      << " camera_zoom=fitted"
+                      << std::endl;
+            // GitHub's ordinary passing CTest hides test stdout. Publish
+            // ONLY this bounded, test-derived measurement to the normal
+            // Actions step summary without modifying workflows or product
+            // source. No performance budget or before/after claim implied.
+            if (const char* location =
+                    std::getenv("GITHUB_STEP_SUMMARY")) {
+                std::ofstream summary{location, std::ios::app};
+                if (summary) {
+                    summary
+                        << "\n### Edge Picking R1 — G5 native query samples\n"
+                        << "Real Owner v16/v2 Part, five fitted orthographic"
+                        << " orientations, "
+                        << owner_pick_microseconds.size()
+                        << " material Edge-only queries, "
+                        << presented.body.edges.size()
+                        << " Edges, "
+                        << presented.body.mesh.triangles.size()
+                        << " triangles.\n\n"
+                        << "| Metric | G4 candidate |\n"
+                        << "|---|---:|\n"
+                        << "| p50 (microseconds) | "
+                        << p50_microseconds << " |\n"
+                        << "| p95 (microseconds) | "
+                        << p95_microseconds << " |\n\n"
+                        << "One-run diagnostic; before-R1 comparison and "
+                        << "multi-zoom timings still pending.\n";
+                }
+            }
             // Expected R1 RED ONLY when a truly front-visible sample on
             // the real Owner's native Part has NO Edge candidate at all.
             // Samples on tessellation gaps / blocked behind Body material
