@@ -1,6 +1,6 @@
 # PG-01D — Planar Face Boundary Project Geometry — Accepted Bounded Work Contract
 
-**Status: OWNER D2-F1–F6 AND WORK CONTRACT ACCEPTED 2026-10-09 — NOT ACTIVE UNTIL DISTINCT GOVERNANCE ACTIVATION.**  
+**Status: COMPLETED — OWNER PRACTICAL FINAL PASS 2026-10-11; PR #309 SQUASH MERGED `5adc94f1463ad1c5b0785b3027dc5d93f830a112` TO `main`.**  
 **Owner design approval:** D2-F1–F6 expressly accepted 2026-10-09, `akceptuje - kontynuuj`; authority: `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_D2_PROPOSAL.md`.  
 **Contract approval:** Owner expressly approved this bounded PG-01D Work Contract on 2026-10-09: `Zatwierdzam Work Contract PG-01D — kontynuuj`. The separate activation gate remains mandatory.  
 **Baseline:** `main` `d928e8a5d1f5893b73de3e4fcd399d7e0483af83` — PG-01C Owner FINAL PASS + guarded squash [PR #304](https://github.com/MechanicalCave/SimpleSolid2/pull/304), original head `95731b9` Windows FULL #2102 **196/196 PASS**.  
@@ -8,6 +8,9 @@
 **Authority:** Constitution / Foundation v1.0 §7.2/7.5 / Architecture / ADR-0014/0016/0017 / completed Projection 00A and PG-01A/B/C.  
 **Activation:** a **dedicated governance commit** must change `work/ACTIVE.yaml -> active_work` to **`work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT.md`**, pass governance checks and be merged on `main`; only **then** open a new production feature branch from activated `main`. The document-approval PR #305 is **not** the activation branch.  
 **Out of scope:** PG-01E, PM-06, CI issue #302 and any unapproved schema/architecture change.
+
+**Post-merge closure supersession (2026-10-11):** the original activation and implementation STOP/gate statements below are historical pre-release records. Their activation procedure was completed before implementation; the active implementation subsequently passed Windows FULL [#2440](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38136149906) **199/199 at feature HEAD `45e097af752b748888050dc51f866d3053431fd9`**, Owner's explicit practical PASS and separately authorized squash merge of [PR #309](https://github.com/MechanicalCave/SimpleSolid2/pull/309). Accepted exceptions D2-V16, manual Face Boundary, D2-R1–R4 and strict modeling-semantics v2 are part of the **completed** PG-01D. The completed contract remains referenced by `work/ACTIVE.yaml` for traceability, **not new production permission**. See `work/PROJECTION_01D_FINAL_ACCEPTANCE_AND_MERGE.md`. Subsequent PG-01E/PM-06 and independent issue #302 remain gated.
+
 
 ## Owner D2-V16 bounded schema / one-Point identity amendment — ACCEPTED 2026-10-10
 
