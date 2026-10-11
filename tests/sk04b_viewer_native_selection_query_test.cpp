@@ -356,6 +356,91 @@ int main(int argc, char* argv[]) {
         vertex_only.candidates.front().token ==
         body_vertex_token);
 
+    // Edge Picking R1 G1 — auxiliary native Qt/OCCT RED witness, not the
+    // Owner's real modeled pocket: one visible part of the same material
+    // Edge is within the existing 8-logical-pixel aperture, but the single
+    // globally closest point is hidden behind a small foreground Face.
+    // The nearer wall and the Edge are intentionally independent scene
+    // triangulation/curve inputs to isolate the per-Edge reject algorithm.
+    // A true OCCT Cut-pocket/Part replay remains required separately by
+    // the R1 Work Contract; this synthetic scene alone is NOT G1 completion.
+    {
+        viewer_qt_occt::QtOcctViewerWidget partial_widget;
+        partial_widget.resize(801, 601);
+        partial_widget.show();
+        QApplication::processEvents();
+        CHECK(partial_widget.setCameraState(camera));
+
+        viewer::BodyScene partial_scene;
+        partial_scene.generation = {901U};
+        partial_scene.purpose =
+            viewer::BodyScenePurpose::current_body;
+        const viewer::PresentationToken wall_face_token{0x9011U};
+        const viewer::PresentationToken partial_edge_token{0x9012U};
+        const viewer::PresentationToken fully_hidden_token{0x9013U};
+        // Center ray intersects the nearer, thin, horizontal screen strip.
+        // x=1 mm on the material Edge is visibly outside that foreground
+        // strip, yet still within 8 logical px of the center query.
+        partial_scene.triangles = {
+            {{-0.4, -6.0, 5.0}, {0.4, -6.0, 5.0},
+             {0.4, 6.0, 5.0},
+             {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0},
+             {0.0, 0.0, 1.0}},
+            {{-0.4, -6.0, 5.0}, {0.4, 6.0, 5.0},
+             {-0.4, 6.0, 5.0},
+             {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0},
+             {0.0, 0.0, 1.0}},
+        };
+        partial_scene.faces = {{wall_face_token, 0U, 2U}};
+        partial_scene.edges = {
+            {partial_edge_token,
+             {{-10.0, 0.0, 0.0}, {10.0, 0.0, 0.0}},
+             true, true},
+            {fully_hidden_token,
+             {{-0.2, 0.0, -1.0}, {0.2, 0.0, -1.0}},
+             true, true},
+        };
+        CHECK(partial_scene.valid());
+        CHECK(partial_widget.setBodyScene(partial_scene));
+        const auto center_screen =
+            partial_widget.projectWorldPoint({0.0, 0.0, 0.0});
+        const auto visible_screen =
+            partial_widget.projectWorldPoint({1.0, 0.0, 0.0});
+        CHECK(center_screen.has_value());
+        CHECK(visible_screen.has_value());
+        CHECK(std::hypot(
+            visible_screen->x - center_screen->x,
+            visible_screen->y - center_screen->y) < 8.0);
+        const viewer::BodyTopologyPickFilter only_edges{
+            false, true, false};
+        const auto exposed = partial_widget.queryBodyTopology(
+            *visible_screen, only_edges);
+        CHECK(exposed.valid());
+        CHECK(exposed.completed);
+        CHECK(std::any_of(
+            exposed.candidates.begin(), exposed.candidates.end(),
+            [partial_edge_token](const auto& candidate) {
+                return candidate.token == partial_edge_token;
+            }));
+        const auto central = partial_widget.queryBodyTopology(
+            *center_screen, only_edges);
+        CHECK(central.valid());
+        CHECK(central.completed);
+        CHECK(std::none_of(
+            central.candidates.begin(), central.candidates.end(),
+            [fully_hidden_token](const auto& candidate) {
+                return candidate.token == fully_hidden_token;
+            }));
+        // Expected RED with legacy nearest-point-first Body picking:
+        // the center point is occluded, but the existing material Edge has
+        // a separately proven visible subportion inside the same aperture.
+        CHECK(std::any_of(
+            central.candidates.begin(), central.candidates.end(),
+            [partial_edge_token](const auto& candidate) {
+                return candidate.token == partial_edge_token;
+            }));
+    }
+
     // PM-02D3: hover emits the neutral Body query; provider does not rank
     // semantic priority. A controller-like callback may project the chosen
     // PresentationToken back as preselection.
