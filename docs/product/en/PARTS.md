@@ -568,6 +568,8 @@ View Style is temporary presentation state. It does not dirty the Part, create U
 
 For ordinary all-kind picking, visible candidates use the screen-space priority **Vertex → Edge → Face**. When several candidates overlap under the pointer, **Tab** and **Shift+Tab** cycle the runtime candidate stack before click. The visible preselection you click is the acquisition target; provider return order does not become CAD identity.
 
+For current front-visible material Edges, the initial acquisition radius is presently **12 logical pixels**. An already highlighted Edge may remain preselected up to **16 logical pixels** only after revalidating that same Edge, its current generation, projection and visibility; this does not extend the acquisition radius for competing Edges. Automatic switching to another Edge of the same class requires at least a **2-logical-pixel** distance advantage unless the incumbent is no longer valid. Click revalidates the current target, including after camera or tool changes. Selection searches for a visible portion of an Edge but never picks through occluding material; extremely short exposed portions may still fall below bounded sampling resolution. Edge reach/hysteresis does not change Vertex → Edge → Face priority or semantic authoring rules.
+
 Selecting current topology updates Properties without adding Face/Edge/Vertex rows to Document Tree:
 
 - Face shows its semantic Surface, surface class, producer/stage/provenance, referenceability and standard Sketch-support capability;
