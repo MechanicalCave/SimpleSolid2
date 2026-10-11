@@ -1,6 +1,6 @@
 # UI-01 — Responsive Workbench wireframes / interaction matrix — OWNER D2 REVIEW
 
-**Status:** **Owner accepted the COMPACT Sketch Edit concept and the VERY-SHORT-HEIGHT Feature Edit concept** individually (2026-10-11); normal-height design elements, including the initial 40/60 Properties/Operations split, also have recorded Owner acceptance. **Final consolidated visual/behavioral D2 signoff is STILL PENDING.** These are design wireframes, not pixel-accurate native Qt screenshots; no UI runtime authority, Work Contract, ACTIVE activation or merge permission.
+**Status:** **OWNER-ACCEPTED CONSOLIDATED CONCEPTUAL D2 VISUAL DESIGN (2026-10-11)** — Owner reviewed all three coordinated SVGs and explicitly replied `akceptuję zestaw`. Prior individual approvals of compact Sketch, very-short-height Feature Edit and normal 40/60 right-panel layout remain valid. These are design wireframes and static mockups, not pixel-accurate native Qt screenshots; real DPI/focus/menu/resize/accessibility acceptance and Windows UI-01 FINAL PASS remain mandatory AFTER implementation. No UI runtime authority, Work Contract acceptance, ACTIVE activation or merge permission.
 **Basis:** Owner's recorded UI-01 D2 decisions in `UI-01_RIGHT_PANELS_AND_TOP_TOOLBAR_DESIGN_REVIEW_OPTIONS.md`; v1.30 accepted roadmap and `main` remain unchanged.
 **Important:** Text wireframes depict conceptual states and component hierarchy, **not pixel-accurate Qt screenshots, exact icons, fixed breakpoints or new CAD features**. The 3 scenarios are defined by actual space available at current DPI/font metrics; named example sizes do NOT become hardcoded width/height thresholds.
 
@@ -124,14 +124,14 @@
 
 ## 5A. Consolidated static SVG visual mockups — ready for Owner's final D2 review
 
-The three detailed visual renditions were prepared together under [`UI-01_VISUAL_GALLERY_D2_OWNER_REVIEW.md`](UI-01_VISUAL_GALLERY_D2_OWNER_REVIEW.md), including (1) normal-height Part Feature Edit with 40/60 panels, (2) width-compact Sketch Edit with two stacked right panels, and (3) height-short Part Feature Edit with Operations-selected tabs. **Each scenario's design behavior has individual Owner acceptance; the final combined visual appearance, actual icon assets, exact Windows/Qt geometry and interactive QA do not.** SVGs are intentionally static proposals, not screenshots of executable Qt software, so an additional explicit final visual/behavioral approval is required.
+The three visual renditions were prepared together under [`UI-01_VISUAL_GALLERY_D2_OWNER_REVIEW.md`](UI-01_VISUAL_GALLERY_D2_OWNER_REVIEW.md), including (1) normal-height Part Feature Edit with 40/60 panels, (2) width-compact Sketch Edit with two stacked right panels, and (3) height-short Part Feature Edit with Operations-selected tabs. **Owner accepted the final combined SVG set at D2 on 2026-10-11 (`akceptuję zestaw`)**, in addition to individual behavior decisions. Exact icons, Windows/Qt pixel geometry, actual functionality and interactive QA remain future implementation gates: static SVGs are not screenshots of Qt software. Separate Work Contract review/approval and governance activation are still required.
 
-## 6. Remaining visual decisions — NOT APPROVED by this wireframe
+## 6. Owner-accepted D2 static set — remaining native implementation verification (NOT YET PASSED)
 
 1. Inspect normal/compact/narrow **native Windows screenshots at real DPI/font scaling** with representative long Operations content and the original Owner witnesses; tune actual containment thresholds from minimum effective widget geometry and hysteresis.
 2. Final visual samples for button icon silhouettes, label abbreviations and tooltip wording; hover vs engaged vs focus vs disabled and pinned indicator emphasis in both light and dark themes where applicable.
 3. **Default group order now Owner-accepted**; still review visual spacing of independent fixed Document commands, and popup style/focus behavior for named group and two-level More menus.
 4. Operations header and fixed footer size / form-field focus at short height; check viewport cue collision with ViewCube and minimum viewport.
-5. After Owner **explicit visual/behavioral signoff**, draft separately bounded UI-01 Work Contract, seek independent Owner acceptance and main governance activation. Only then can staged P0 -> P1 product implementation begin with exact-SHA Windows test gates and separate Owner final pass/merge approval.
+5. **Consolidated static D2 signoff now recorded** (`akceptuję zestaw`). Draft a separate bounded UI-01 Work Contract, then seek independent Owner approval and main governance activation. Only then can staged P0 -> P1 product implementation begin with exact-SHA Windows test gates and **separate Owner native UI-01 FINAL PASS plus distinct merge approval**.
 
 **Scope guard:** PR #320 remains governance/D2 design-only. PG-01E PR #311 remains unaccepted; no PM-06 or future feature scope is activated by these wireframes.
