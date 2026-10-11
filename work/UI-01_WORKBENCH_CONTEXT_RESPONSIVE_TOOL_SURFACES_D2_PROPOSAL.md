@@ -1,9 +1,9 @@
 # UI-01 — Workbench context safety, adaptive right panels and universal document command surface — D2 PROPOSAL
 
 **Status:** OWNER PROBLEM/PRIORITY REPORTED 2026-10-11; **PROPOSED D2 ONLY — NOT ACCEPTED, NOT ACTIVE, NO PRODUCT MUTATION AUTHORITY**.  
-**Baseline:** \`main\` \`2a91d0e1252255e943a367ab8a79bcd7cae5e258\`, after Edge Picking R1 production PR #314 and acceptance closeout PR #319 merged.  
+**Baseline:** `main` `2a91d0e1252255e943a367ab8a79bcd7cae5e258`, after Edge Picking R1 production PR #314 and acceptance closeout PR #319 merged.  
 **Proposed sequence:** UI-01 P0/P1 stabilization **before** resuming/scoping PG-01E product-wide closeout and **before** PM-06. Revisit incomplete Project Geometry functional scope separately; do not claim PG-01E FINAL PASS merely from a favorable manual smoke test.  
-**Governance:** Foundation 1.0 and accepted ADR-0006, ADR-0003, ADR-0010, ADR-0011, accepted SR-03 responsive-shell and SK-01A contextual-operations contracts; Part Modeling v1 roadmap 1.30 currently accepted. \`work/ACTIVE.yaml\` retains completed Edge Picking R1 only for history and authorizes **no new UI implementation**.
+**Governance:** Foundation 1.0 and accepted ADR-0006, ADR-0003, ADR-0010, ADR-0011, accepted SR-03 responsive-shell and SK-01A contextual-operations contracts; Part Modeling v1 roadmap 1.30 currently accepted. `work/ACTIVE.yaml` retains completed Edge Picking R1 only for history and authorizes **no new UI implementation**.
 
 ## 1. Owner's current native Windows witnesses
 
@@ -19,9 +19,9 @@ The Owner also stated: current Project Geometry smoke testing reveals no major d
 
 **Static source observations, not a completed native RED test:**
 
-1. \`src/ui/cad_workbench.cpp::requestEditSketch()\` rejects an already-active *different* Sketch but does **not** check \`extrude_draft_\`, \`revolve_draft_\`, \`fillet_draft_\` or \`chamfer_draft_\`. \`requestEditProfile()\` can enter Sketch edit through that function. Conversely \`startExtrudeEdit()\` and \`startRevolveEdit()\` already reject \`active_sketch_id_\`. This **asymmetry is a grounded P0 hypothesis** to reproduce with real Feature draft + Tree double-click/Edit Sketch/Edit Profile/commands before changing it. Also inspect ALL Feature edit entry paths, not only Extrude.
-2. \`src/ui/cad_workbench_shell.cpp\` creates \`documentToolsScroll\` as a \`QScrollArea\` with \`Qt::ScrollBarAsNeeded\` horizontally and \`QSizePolicy::Preferred\` vertically. \`cad_workbench.cpp\` inserts many individual pushbuttons and headings by positions. This matches the reported scrollbar rather than providing adaptive grouping/overflow.
-3. \`src/ui/cad_workbench_shell.cpp\` puts \`Properties\` and \`Operations\` into one right \`QVBoxLayout\` with stretch factors **0 and 1**, \`right_panel_\` size policy \`Ignored\`, and no independent vertical scrollers at the shell layer. Large content can be compressed; source audit cannot yet prove every clipping mechanism or all DPI variants.
+1. `src/ui/cad_workbench.cpp::requestEditSketch()` rejects an already-active *different* Sketch but does **not** check `extrude_draft_`, `revolve_draft_`, `fillet_draft_` or `chamfer_draft_`. `requestEditProfile()` can enter Sketch edit through that function. Conversely `startExtrudeEdit()` and `startRevolveEdit()` already reject `active_sketch_id_`. This **asymmetry is a grounded P0 hypothesis** to reproduce with real Feature draft + Tree double-click/Edit Sketch/Edit Profile/commands before changing it. Also inspect ALL Feature edit entry paths, not only Extrude.
+2. `src/ui/cad_workbench_shell.cpp` creates `documentToolsScroll` as a `QScrollArea` with `Qt::ScrollBarAsNeeded` horizontally and `QSizePolicy::Preferred` vertically. `cad_workbench.cpp` inserts many individual pushbuttons and headings by positions. This matches the reported scrollbar rather than providing adaptive grouping/overflow.
+3. `src/ui/cad_workbench_shell.cpp` puts `Properties` and `Operations` into one right `QVBoxLayout` with stretch factors **0 and 1**, `right_panel_` size policy `Ignored`, and no independent vertical scrollers at the shell layer. Large content can be compressed; source audit cannot yet prove every clipping mechanism or all DPI variants.
 4. **SR-03 is already accepted and completed.** Its responsive normal/compact/narrow Workbench template, center viewport priority, and future DocumentKind surface ownership must be **reused and restored**, not silently replaced with a contradictory global toolbar architecture. **ADR-0006** keeps domain launchers in the Document tool zone, contextual parameters in Operations, and Workspace/document actions in their respective owners.
 
 ## 3. D2 proposals for Owner decision
@@ -35,7 +35,7 @@ The Owner also stated: current Project Geometry smoke testing reveals no major d
 
 ### D2-U2 — usable independently resizable Properties/Operations (P1)
 
-- Replace implicit right-side \`QVBoxLayout\` height competition with a bounded, **user-adjustable vertical split** or equivalently explicit independent collapsible panels; give Properties and Operations **independent vertical scrolling**, stable non-zero effective minimum usability, and no horizontal form clipping at the accepted panel widths.
+- Replace implicit right-side `QVBoxLayout` height competition with a bounded, **user-adjustable vertical split** or equivalently explicit independent collapsible panels; give Properties and Operations **independent vertical scrolling**, stable non-zero effective minimum usability, and no horizontal form clipping at the accepted panel widths.
 - **Finish/Cancel and blocking diagnostic text must remain reachable** even with long contents, potentially via a compact fixed action footer inside the owning Operations panel (not duplicate buttons with separate callbacks). User must be able to allocate more height to Operations without making Properties inaccessible, and vice versa.
 - Retain existing right-panel width behavior and SR-03 narrow panel recovery, prioritize Viewport, preserve widget focus/local text input and currently active tool across resize, scrolling and document switches. No unrequested persistence of arbitrary splitter dimensions; decide if optional UI preference state needs an explicit follow-on contract.
 - Verify high-content Feature, Profile, Project Geometry and deep Properties pages. Test vertical normal/compact/narrow windows including maximized, **1440x900, 1280x720, 1024x768 and a narrower supported size**; use DPI-aware layout invariants rather than hardcoded geometry. DPR 1.0/1.5/2.0 **only where actually available**.
@@ -62,11 +62,11 @@ The Owner also stated: current Project Geometry smoke testing reveals no major d
 | UI1 | P0 single-place edit entry guard + session-invariant regression | No conflicting Feature + Sketch/Profile modes, no silent authored mutation; native Windows FOCUSED |
 | UI2 | P1 right panel vertical allocation + independently scrollable content | All contextual controls reachable with normal/compact/narrow layouts, stable focus/Viewport; native Qt layout tests |
 | UI3 | P1 toolbar action grouping and adaptive overflow, shell-first reusable presentation only | No horizontal scrollbar, all available commands accessible, document actions fixed; focus/shortcut tests |
-| UI4 | Existing docs/internal + PL/EN as-built updates; regenerate offline Browser via \`.\ss2.ps1 docs\`; FOCUSED/FAST when appropriate and **one immutable Windows FULL Core/Kernel/Desktop/docs + aggregate** | All tests green, no disabled tests; Owner screenshot/cross-context practical FINAL PASS and distinct merge permission |
+| UI4 | Existing docs/internal + PL/EN as-built updates; regenerate offline Browser via `.\ss2.ps1 docs`; FOCUSED/FAST when appropriate and **one immutable Windows FULL Core/Kernel/Desktop/docs + aggregate** | All tests green, no disabled tests; Owner screenshot/cross-context practical FINAL PASS and distinct merge permission |
 
 ## 5. Required regressions and ownership
 
-**Primary likely modules (read/validate against the later Work Contract):** \`src/ui/cad_workbench.cpp/.hpp\` (Part edit guards and command contribution), \`src/ui/cad_workbench_shell.cpp/.hpp\` (pure Qt layout and overflow), existing Part Tree adapter for alternate entry routes only if a defect requires it; existing \`tests/sk01_workbench_sketch_host_test.cpp\`, \`tests/pm05f_r2_native_workbench_edit_test.cpp\`, shell resize/Document lifecycle tests and Qt-native UI integration tests. New targets/CMake machinery are not preauthorized.
+**Primary likely modules (read/validate against the later Work Contract):** `src/ui/cad_workbench.cpp/.hpp` (Part edit guards and command contribution), `src/ui/cad_workbench_shell.cpp/.hpp` (pure Qt layout and overflow), existing Part Tree adapter for alternate entry routes only if a defect requires it; existing `tests/sk01_workbench_sketch_host_test.cpp`, `tests/pm05f_r2_native_workbench_edit_test.cpp`, shell resize/Document lifecycle tests and Qt-native UI integration tests. New targets/CMake machinery are not preauthorized.
 
 **Preserve:** Project/Document ownership, Section 2 accepted SR-03 responsive states; native Viewer/provider boundary; stage-aware Part/Sketch/Project Geometry identity, transactional Finish/CANCEL, active draft lifetime; ModelingSemanticsVersion 2, Part schema v16, unrelated Engine/Kernel topology and B-Rep, existing R1 Edge Picking and CI issue #302.
 
@@ -76,11 +76,11 @@ The Owner also stated: current Project Geometry smoke testing reveals no major d
 
 **Current accepted roadmap v1.30 remains in force on main.** This proposal seeks Owner approval for a *limited sequencing amendment* rather than unfreezing completed Feature contracts:
 
-\`PG-01A–D + Edge Picking R1 completed\` → **UI-01 (P0 first, P1 after)** → \`PG-01E re-scoped capability gap audit and product closeout\` → \`PM-06 Part v1 completion\`.
+`PG-01A–D + Edge Picking R1 completed` → **UI-01 (P0 first, P1 after)** → `PG-01E re-scoped capability gap audit and product closeout` → `PM-06 Part v1 completion`.
 
 The current [PG-01E D2 proposal PR #311](https://github.com/MechanicalCave/SimpleSolid2/pull/311) stays **UNACCEPTED** until reviewed/updated; do not label it complete or automatically merge it. The Owner's unspecified missing Project Geometry capabilities must be **listed and categorized after UI stability**: required to close PG-01E under an amended accepted contract versus explicitly deferred next feature package. A positive existing smoke test is not PG-01E final signoff. PM-06 remains blocked.
 
-**Formal order:** Owner reviews/approves this D2 design and roadmap sequence → separate bounded UI-01 Work Contract specifying permitted files and all regressions → Owner approves Work Contract → dedicated governance activation PR setting \`work/ACTIVE.yaml\` to UI-01 on \`main\` with appropriate gate → only then a new UI-01 production branch and native RED work. Complete native FULL, Owner UI-01 FINAL PASS and a **distinct merge approval** before declaring UI-01 completed. PG-01E then gets its own re-reviewed D2/Work Contract and activation.
+**Formal order:** Owner reviews/approves this D2 design and roadmap sequence → separate bounded UI-01 Work Contract specifying permitted files and all regressions → Owner approves Work Contract → dedicated governance activation PR setting `work/ACTIVE.yaml` to UI-01 on `main` with appropriate gate → only then a new UI-01 production branch and native RED work. Complete native FULL, Owner UI-01 FINAL PASS and a **distinct merge approval** before declaring UI-01 completed. PG-01E then gets its own re-reviewed D2/Work Contract and activation.
 
 ## 7. Owner decisions requested
 
