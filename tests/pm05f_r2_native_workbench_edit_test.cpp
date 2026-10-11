@@ -1860,7 +1860,7 @@ int main(int argc, char* argv[]) {
             const auto baseline_undo = session.undoDepth();
             const auto baseline_dirty = session.needsSave();
             const auto sketch_key = QString::fromStdString(
-                session.document().sketches().front().id.serialized());
+                std::string{session.document().sketches().front().id.value()});
             QTreeWidgetItem* sketch_item = nullptr;
             QTreeWidgetItem* profile_item = nullptr;
             for (QTreeWidgetItemIterator it(tree); *it; ++it) {
