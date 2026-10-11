@@ -87,7 +87,7 @@ Expose a few primary actions and a discoverable `Commands` dropdown/search for t
 **Detailed Owner decisions needed:**
 - T1: **OWNER APPROVED 2026-10-11 as the initial design direction — T-A**, a one-row adaptive group/overflow toolbar, with no horizontal scrollbar; evaluate against actual Owner Windows workflows before contemplating a more elaborate ribbon/category system. If T-A fails manual usability review, **STOP for a separate Owner D2 revision**; do not automatically implement T-B.
 - T2: full text for frequent actions versus icon+tooltip at compact sizes?
-- T3: which commands are pinned *per context*, which eligible for overflow, and should user customization be deferred?
+- T3: OWNER-APPROVED D2 DIRECTION (2026-10-11) — show as many individual tools as available width permits; allow explicit user reordering and pin/unpin of complete tool GROUPS. Pinned groups receive higher expansion priority as the window shrinks. Save group order/pinning as non-CAD UI preferences across restarts, separately for Part and Sketch; provide a reset-to-defaults path. Reordering individual buttons and Ribbon are deferred, not authorized. The detailed customization controls and adaptive widths still need Owner visual/behavioral signoff.
 - T4: is `More ▾` acceptable for overflow, or prefer named group menus (`Create ▾`, `Modify ▾`) at compact size?
 - T5: active Feature/Sketch indicator in toolbar vs right Operations header (or both non-duplicated cues)?
 
