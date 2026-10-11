@@ -6080,6 +6080,34 @@ void verifyPg01dOwnerSameDomainFixtures() {
               refined.current_topology->complete());
         CHECK(refined.features.size() == fixture.feature_count);
 
+        // Compare the occupied material in each exact Body stage, not
+        // only the Face/Edge counts or a view tessellation. The existing
+        // OCCT preview query computes both exact B-Rep Boolean
+        // differences with fuzzy=0. When both differences have zero
+        // positive volume it reports UNSUPPORTED (no nonempty delta
+        // mesh to display), as opposed to OK (material has changed) or
+        // provider_failure (inconclusive). No such query is used for
+        // authored topology identity.
+        for (std::size_t i = 0U; i < fixture.feature_count; ++i) {
+            CHECK(result.features[i].result_solid != nullptr);
+            CHECK(refined.features[i].result_solid != nullptr);
+            const auto difference =
+                refined_provider.materialDifferencePreview(
+                    result.features[i].result_solid,
+                    refined.features[i].result_solid);
+            std::cerr << "PG01D_REFINE_EXACT_BREP_DELTA"
+                      << " fixture=" << fixture.filename
+                      << " stage=" << (i + 1U)
+                      << " delta_status="
+                      << static_cast<int>(difference.status)
+                      << " removed=" << difference.removed.has_value()
+                      << " added=" << difference.added.has_value()
+                      << '\n';
+            CHECK(difference.status ==
+                  kernel::SolidPresentationStatus::unsupported);
+            CHECK(!difference.removed && !difference.added);
+        }
+
         std::set<std::uint64_t> refined_upper_faces;
         const auto& final_catalog = *refined.current_topology;
         for (const auto& surface : final_catalog.surfaces) {
