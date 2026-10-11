@@ -4533,55 +4533,47 @@ public:
             : std::nullopt;
     }
 
-    [[nodiscard]] bool bodyPointFrontVisible(
+    // R1 G5: A point is front-visible iff it is not behind ANY Body
+    // triangle at the same camera ray, under the existing sub-pixel depth
+    // tolerance. The old full nearest-hit scan was equivalent because
+    // depth + max(absolute_tolerance, depth * 1e-7) is monotonic for
+    // nonnegative triangle depths. Reject on the first *certain*
+    // occluder; preserve boundary/ray-miss semantics and return the same
+    // point depth so callers need not reconstruct an identical camera ray.
+    [[nodiscard]] std::optional<double> bodyPointFrontVisibleDepth(
         const viewer::Point3& point,
         ScreenPoint screen) const {
         const auto ray =
-            bodyPickRayAtPhysical(
-                screen.x,
-                screen.y);
-        if (!ray) {
-            return false;
-        }
-        const auto point_depth =
-            bodyPointDepth(*ray, point);
-        if (!point_depth) {
-            return false;
-        }
-        const auto nearest =
-            nearestBodyTriangleHit(*ray);
-        if (!nearest) {
-            // A sampled material boundary can lie exactly on a tessellated
-            // silhouette where the ray falls through both adjacent
-            // triangles. With no closer Body triangle, it is front-visible.
-            return true;
-        }
+            bodyPickRayAtPhysical(screen.x, screen.y);
+        if (!ray) return std::nullopt;
+        const auto point_depth = bodyPointDepth(*ray, point);
+        if (!point_depth) return std::nullopt;
 
-        double tolerance =
-            std::max(
-                1.0e-7,
-                std::abs(nearest->depth) *
-                    1.0e-7);
-
-        // Edge/Vertex samples lie exactly on tessellated Face boundaries.
-        // Projection/ray round-tripping can put the sampled boundary a tiny
-        // amount behind the nearest triangle, especially on side views and
-        // high-DPI displays. Use a small sub-pixel world-space allowance
-        // rather than treating that numerical delta as occlusion.
+        double absolute_tolerance = 1.0e-7;
         if (!view_.IsNull()) {
             const double one_pixel_world =
                 std::abs(view_->Convert(1));
             if (std::isfinite(one_pixel_world) &&
                 one_pixel_world > 0.0) {
-                tolerance =
-                    std::max(
-                        tolerance,
-                        one_pixel_world * 0.05);
+                absolute_tolerance =
+                    std::max(absolute_tolerance,
+                             one_pixel_world * 0.05);
             }
         }
-
-        return *point_depth <=
-               nearest->depth + tolerance;
+        for (const auto& triangle : body_scene_.triangles) {
+            const auto triangle_depth =
+                rayTriangleDepth(*ray, triangle);
+            if (!triangle_depth) continue;
+            const double tolerance = std::max(
+                absolute_tolerance,
+                std::abs(*triangle_depth) * 1.0e-7);
+            if (*point_depth > *triangle_depth + tolerance) {
+                return std::nullopt;
+            }
+        }
+        // No blocking triangle (including tessellated silhouettes with
+        // no ray intersection): keep the same front-visible policy.
+        return point_depth;
     }
 
     [[nodiscard]] viewer::BodyTopologyPickQueryResult
@@ -4694,21 +4686,8 @@ public:
                     aperture_squared) {
                     continue;
                 }
-                if (!bodyPointFrontVisible(
-                        vertex.point,
-                        *screen)) {
-                    continue;
-                }
-                const auto ray =
-                    bodyPickRayAtPhysical(
-                        screen->x,
-                        screen->y);
                 const auto depth =
-                    ray
-                        ? bodyPointDepth(
-                              *ray,
-                              vertex.point)
-                        : std::nullopt;
+                    bodyPointFrontVisibleDepth(vertex.point, *screen);
                 if (!depth) {
                     continue;
                 }
@@ -4897,15 +4876,8 @@ public:
                             }
                             --remaining_ray_budget;
                             ++edge_rays;
-                            if (!bodyPointFrontVisible(
-                                    *world, *screen)) {
-                                continue;
-                            }
-                            const auto ray = bodyPickRayAtPhysical(
-                                screen->x, screen->y);
-                            const auto depth = ray
-                                ? bodyPointDepth(*ray, *world)
-                                : std::nullopt;
+                            const auto depth =
+                                bodyPointFrontVisibleDepth(*world, *screen);
                             if (!depth) continue;
                             best_distance_squared = distance_squared;
                             best_depth = *depth;
