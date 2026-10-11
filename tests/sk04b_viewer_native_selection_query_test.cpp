@@ -554,6 +554,23 @@ int main(int argc, char* argv[]) {
         CHECK(query.candidates.size() == 1U);
         CHECK(query.candidates.front().token == polyline_edge_token);
         CHECK(query.candidates.front().screen_distance < 0.75);
+        auto perspective_camera = camera;
+        perspective_camera.projection =
+            viewer::CameraProjection::perspective;
+        CHECK(polyline_widget.setCameraState(perspective_camera));
+        const auto perspective_cursor =
+            polyline_widget.projectWorldPoint({0.0, 0.0, 0.0});
+        CHECK(perspective_cursor.has_value());
+        const auto perspective_query =
+            polyline_widget.queryBodyTopology(
+                *perspective_cursor,
+                viewer::BodyTopologyPickFilter{false, true, false});
+        CHECK(perspective_query.valid() &&
+              perspective_query.completed);
+        CHECK(perspective_query.candidates.size() == 1U);
+        CHECK(perspective_query.candidates.front().token ==
+              polyline_edge_token);
+        CHECK(perspective_query.candidates.front().screen_distance < 0.75);
     }
 
     // PM-02D3: hover emits the neutral Body query; provider does not rank
