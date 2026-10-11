@@ -5915,6 +5915,144 @@ void verifyPg01dE0DirectedWireFailClosedContract() {
         << '\n';
 }
 
+
+// PG-01D: owner-supplied native v16 Extrude/Revolve Add counterexamples.
+// Baseline asserts the current, UNWANTED same-domain face splits. The
+// eventual Refine implementation must replace those expectations with
+// topology/semantic regression gates, not make this probe disappear.
+void verifyPg01dOwnerSameDomainFixtures() {
+    struct Fixture final {
+        const char* filename;
+        std::size_t feature_count;
+        std::size_t expected_top_faces;
+    };
+    const std::vector<Fixture> fixtures{
+        {"pg01d_same_domain_extrude_add_v16.ss2part", 2U, 2U},
+        {"pg01d_same_domain_extrude_revolve_add_v16.ss2part", 3U, 4U},
+    };
+    const auto directory = std::filesystem::path{__FILE__}
+        .parent_path().parent_path() / "fixtures";
+    const part::PartDocumentStore store;
+    for (const auto& fixture : fixtures) {
+        const auto loaded = store.load(directory / fixture.filename);
+        CHECK(loaded.ok());
+        CHECK(loaded.document != nullptr);
+        CHECK(loaded.document->body().features.size() ==
+              fixture.feature_count);
+
+        kernel_occt::OcctSolidModelingKernel cold_provider;
+        const auto result =
+            part::evaluatePart(*loaded.document, cold_provider);
+        CHECK(result.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(result.features.size() == fixture.feature_count);
+        CHECK(result.current_topology &&
+              result.current_topology->complete());
+
+        // Observe the upper horizontal plane after Extrude002 and
+        // retain that same level when inspecting Revolve003. A later
+        // Revolve cap at another height must not change the target.
+        const auto& after_extrude = result.features[1];
+        CHECK(after_extrude.status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(after_extrude.result_topology &&
+              after_extrude.result_topology->complete());
+        std::optional<double> upper_z;
+        for (const auto& surface :
+             after_extrude.result_topology->surfaces) {
+            if (surface.surface_kind !=
+                    kernel::SurfaceKind::plane ||
+                surface.status !=
+                    kernel::ReferenceStatus::resolved ||
+                !surface.canonical_frame ||
+                surface.current_faces.empty() ||
+                std::abs(surface.canonical_frame->normal.z) <
+                    0.999999) {
+                continue;
+            }
+            const auto z = surface.canonical_frame->origin.z;
+            if (!upper_z || z > *upper_z) {
+                upper_z = z;
+            }
+        }
+        CHECK(upper_z.has_value());
+
+        for (std::size_t i = 0U; i < result.features.size(); ++i) {
+            const auto& feature = result.features[i];
+            CHECK(feature.status ==
+                  part::FeatureEvaluationStatus::up_to_date);
+            CHECK(feature.result_topology &&
+                  feature.result_topology->complete());
+            const auto& catalog = *feature.result_topology;
+            std::set<std::uint64_t> upper_face_tokens;
+            std::size_t split_planar_carriers = 0U;
+            std::size_t two_curve_edges = 0U;
+            std::size_t partition_edges = 0U;
+            std::size_t multi_surface_faces = 0U;
+            for (const auto& surface : catalog.surfaces) {
+                if (surface.surface_kind !=
+                        kernel::SurfaceKind::plane ||
+                    surface.status !=
+                        kernel::ReferenceStatus::resolved ||
+                    !surface.canonical_frame ||
+                    std::abs(surface.canonical_frame->normal.z) <
+                        0.999999 ||
+                    std::abs(surface.canonical_frame->origin.z -
+                             *upper_z) > 0.000001) {
+                    continue;
+                }
+                if (surface.current_faces.size() > 1U) {
+                    ++split_planar_carriers;
+                }
+                for (const auto face : surface.current_faces) {
+                    upper_face_tokens.insert(face.value);
+                }
+            }
+            for (const auto& edge : catalog.edges) {
+                if (edge.curve_candidates.size() > 1U) {
+                    ++two_curve_edges;
+                }
+                if (edge.representation_partition) {
+                    ++partition_edges;
+                }
+            }
+            for (const auto& face : catalog.faces) {
+                if (face.surface_candidates.size() > 1U) {
+                    ++multi_surface_faces;
+                }
+            }
+            std::cout << "PG01D_SAME_DOMAIN_NATIVE_STAGE"
+                      << " fixture=" << fixture.filename
+                      << " stage=" << (i + 1U)
+                      << " bounded_faces=" << catalog.faces.size()
+                      << " bounded_edges=" << catalog.edges.size()
+                      << " upper_plane_faces="
+                      << upper_face_tokens.size()
+                      << " split_planar_carriers="
+                      << split_planar_carriers
+                      << " multi_curve_candidate_edges="
+                      << two_curve_edges
+                      << " partition_edges=" << partition_edges
+                      << " multi_surface_candidate_faces="
+                      << multi_surface_faces
+                      << '\n';
+
+            if (i + 1U == fixture.feature_count) {
+                // This is a reproduction gate, NOT a desired result.
+                // A mismatch means the native OCCT reconstruction and
+                // the reported GUI selection must be investigated.
+                CHECK(upper_face_tokens.size() ==
+                      fixture.expected_top_faces);
+            }
+        }
+        std::cout << "PG01D_SAME_DOMAIN_FIXTURE_BASELINE_PASS"
+                  << " fixture=" << fixture.filename
+                  << " unwanted_upper_face_count="
+                  << fixture.expected_top_faces
+                  << " geometry_refinement_not_implemented=1\n";
+    }
+}
+
 } // namespace
 
 int main() {
@@ -6024,6 +6162,7 @@ int main() {
     CHECK(partition_edges >= 1U);
 
     verifyPartIntegration();
+    verifyPg01dOwnerSameDomainFixtures();
     verifyNativeCurvedSurfaceContinuationE0();
     verifyNativeCylindricalCutSplitE0();
     verifyNativePartialCylinderCutContinuityProbeE0();
