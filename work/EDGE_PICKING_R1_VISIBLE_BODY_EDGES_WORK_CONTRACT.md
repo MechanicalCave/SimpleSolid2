@@ -1,11 +1,11 @@
-# Edge Picking R1 — visible Body material Edge hover/selection — DRAFT Work Contract
+# Edge Picking R1 — visible Body material Edge hover/selection — Accepted Bounded Work Contract
 
-**Status:** DRAFT WORK CONTRACT — **NOT OWNER-APPROVED AS A CONTRACT; NOT ACTIVATED; NO PRODUCTION CODE MUTATION AUTHORIZED**.  
-**Owner sequencing/scope decision:** 2026-10-11, in conversation: `akceptuję - kontynuuj`, answering the explicit proposal to make **Edge Picking R1 a mandatory standalone gate BEFORE PG-01E** and follow RED reproduction → projection/occlusion consistency → visible Edge fragments → 12/16 px and spatial hysteresis → native/FULL → Owner PASS. This acceptance approves **priority and investigation direction**, not an unreviewed algorithm or this detailed Work Contract.  
+**Status:** **OWNER WORK CONTRACT ACCEPTED 2026-10-11** — governance activation **NOT YET MERGED**; no R1 production code mutation authorized until a separately verified activation PR is merged onto `main`.  
+**Owner sequencing/scope decision:** 2026-10-11, in conversation: `akceptuję - kontynuuj`, answering the explicit proposal to make **Edge Picking R1 a mandatory standalone gate BEFORE PG-01E** and follow RED reproduction → projection/occlusion consistency → visible Edge fragments → 12/16 px and spatial hysteresis → native/FULL → Owner PASS. The later Owner statement `akceptuje - kontynuuj` **expressly accepts this exact bounded Work Contract as reviewed in PR #312**, including R0–R1-D, P01–P14 and G0–G7. Neither approval substitutes for the dedicated `ACTIVE.yaml` activation and native RED evidence.  
 **Prepared:** 2026-10-11. **Base:** `main` `5bec84370dbfdba44c5cdda677aaaaf028456ed2`; PG-01D production [#309](https://github.com/MechanicalCave/SimpleSolid2/pull/309) and historical closure [#310](https://github.com/MechanicalCave/SimpleSolid2/pull/310) MERGED.  
 **Relation:** planned PG-01E product-wide closeout design [proposal #311](https://github.com/MechanicalCave/SimpleSolid2/pull/311), not yet authorized. Edge Picking R1 MUST close with separate exact-head technical and Owner PASS BEFORE final PG-01E compound Fillet/Chamfer evaluation. PM-06 remains gated.  
 **Authority:** `AGENTS.md`, FROZEN Constitution/Foundation v1.0, Architecture, ADR-0003/0010/0011/0014/0016/0017 as applicable, accepted Part-v1 roadmap v1.30 and prior PM-02J-R4/PM-05F and PG-01C/D picking contracts; `governance/DOCUMENTATION.md`.  
-**Activation prerequisite:** first obtain Owner's **explicit acceptance of this exact Work Contract**. Then merge a distinct governance activation PR setting `work/ACTIVE.yaml -> active_work` to the accepted R1 contract on `main`. Open a fresh R1 production branch **from the activated main**, not from this draft branch. The currently referenced PG-01D contract is COMPLETED and grants no R1 production authority.
+**Activation prerequisite:** Owner's express Work Contract acceptance is recorded above. Merge this contract proposal PR, then a **separate** governance activation PR setting `work/ACTIVE.yaml -> active_work` to the accepted R1 contract on `main`. Open a fresh R1 production branch **from the activated main**, not from the proposal branch. The currently referenced PG-01D contract is COMPLETED and grants no R1 production authority.
 
 ## 1. Owner problem, evidence, and hypothesis boundary
 
@@ -125,10 +125,10 @@ Allowed production files are **not** activated by appearing in this draft; publi
 **Internal docs: required** — actual selected-edge detection, front-occlusion correctness, hover–click revalidation and candidate state are meaningful current-as-built behavior; update the relevant existing `docs/internal/**` after implementation.  
 **User/Product docs: required** — usable material-Edge selection and UI hover/click behavior are user-facing; update *existing* relevant `docs/product/pl/**` AND `docs/product/en/**` with concise supported behavior/limitations; do not add an unsupported guarantee to select through occlusion.  
 **Generated Browser: required** — regenerate deterministically via `.\ss2.ps1 docs` from canonical Markdown; verify PL/EN IDs and order and offline Browser freshness.  
-**This DRAFT alone:** no implementation or changed user behavior; no current-as-built/product docs update, Browser generation, or model migration authorized.
+**This accepted-but-inactive Work Contract alone:** no implementation or changed user behavior; no current-as-built/product docs update, Browser generation, or model migration authorized.
 
-## 9. Owner decisions still OPEN
+## 9. Owner decisions and remaining gates
 
-1. **Approve this exact Work Contract** (scope/allowed files, G0–G7, hard STOP, tests, documentation impact), not merely the already accepted R1 precedence and study plan.
-2. On acceptance: submit and merge **separate R1 governance activation** of `work/ACTIVE.yaml` on `main` before production mutation.
+1. **COMPLETED — Owner approved this exact Work Contract** (scope/allowed files, G0–G7, hard STOP, tests, documentation impact): `akceptuje - kontynuuj` (2026-10-11), following the earlier approval of R1 precedence and study plan.
+2. **NEXT — submit and merge separate R1 governance activation** of `work/ACTIVE.yaml` on `main` before production mutation, only after this accepted-contract PR is merged and exact-head governance verification passes.
 3. Distinct later gates remain: Owner R1 manual FINAL PASS; R1 merge; subsequent review/acceptance and governance activation for PG-01E; separate PM-06 Work Contract.
