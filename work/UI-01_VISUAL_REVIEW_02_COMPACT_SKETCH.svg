@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1390" height="855" viewBox="0 0 1390 855" role="img" aria-label="02 — KOMPAKTOWY SKETCH / EDYCJA SZKICU">
+<rect x="0" y="0" width="1390" height="855" rx="0" fill="#e7ebf0" stroke="none" stroke-width="1"/>
+<text x="42" y="34" fill="#3e718f" font-size="15" font-weight="700" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">UI-01 / MAKIETA D2 • DO OCENY</text>
+<text x="42" y="57" fill="#243746" font-size="22" font-weight="700" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">02 — KOMPAKTOWY SKETCH / EDYCJA SZKICU</text>
+<text x="1346" y="38" fill="#627687" font-size="13" font-weight="500" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">Ograniczona szerokość · zachowana wysokość dwóch paneli</text>
+<rect x="38" y="84" width="1320" height="716" rx="10" fill="#d2d9df" stroke="none" stroke-width="1"/>
+<rect x="35" y="78" width="1320" height="716" rx="10" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<rect x="36" y="79" width="1318" height="48" rx="9" fill="#f4f6f8" stroke="none" stroke-width="1"/>
+<path d="M 35 126 L 1355 126" fill="none" stroke="#ced8e0" stroke-width="1" />
+<circle cx="57" cy="102" r="7" fill="#3e718f"/>
+<text x="74" y="107" fill="#304758" font-size="15" font-weight="650" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">SimpleSolid2  ·  Sketch  ·  Dokument</text>
+<text x="1330" y="106" fill="#8495a3" font-size="17" font-weight="500" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">—   □   ×</text>
+<rect x="36" y="127" width="1318" height="57" rx="0" fill="#f6f8fa" stroke="none" stroke-width="1"/>
+<path d="M 35 184 L 1355 184" fill="none" stroke="#ced8e0" stroke-width="1" />
+<rect x="56" y="140" width="71" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="91.5" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Select</text>
+<g stroke="#3e718f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M 142 148 l 8 8 M 143 147 l 6 0 l 3 6 l -3 2 l -6 -3 z" fill="#e4f0f7"/><path d="M 145 157 l -6 6"/></g>
+<text x="158" y="162" fill="#243746" font-size="13" font-weight="650" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Create</text>
+<rect x="212" y="140" width="68" height="33" rx="6" fill="#e4f0f7" stroke="#3e718f" stroke-width="1.6"/>
+<text x="246" y="162" fill="#243746" font-size="13" font-weight="650" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Line</text>
+<rect x="286" y="140" width="74" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="323" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Circle</text>
+<rect x="366" y="140" width="60" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="396" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Arc</text>
+<rect x="432" y="140" width="95" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="479.5" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Rectangle</text>
+<path d="M 538 140 L 538 174" fill="none" stroke="#ced8e0" stroke-width="1" />
+<rect x="549" y="140" width="91" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="594.5" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Profile ▾</text>
+<g stroke="#3e718f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M 654 148 l 8 8 M 655 147 l 6 0 l 3 6 l -3 2 l -6 -3 z" fill="#e4f0f7"/><path d="M 657 157 l -6 6"/></g>
+<text x="670" y="162" fill="#243746" font-size="13" font-weight="650" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">References</text>
+<rect x="753" y="140" width="153" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="829.5" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Project Geometry</text>
+<rect x="912" y="140" width="90" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="957" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Modify ▾</text>
+<rect x="1008" y="140" width="85" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="1050.5" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Więcej ▾</text>
+<path d="M 1099 141 L 1099 179" fill="none" stroke="#ced8e0" stroke-width="2" />
+<rect x="1114" y="140" width="48" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="1138" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">↶</text>
+<rect x="1167" y="140" width="48" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="1191" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">↷</text>
+<rect x="1220" y="140" width="58" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="1249" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Save</text>
+<rect x="1283" y="140" width="62" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<text x="1314" y="162" fill="#243746" font-size="13" font-weight="500" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Close</text>
+<rect x="49" y="190" width="210" height="572" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<rect x="49" y="190" width="210" height="45" rx="0" fill="#f4f6f8" stroke="none" stroke-width="1"/>
+<text x="65" y="212" fill="#243746" font-size="14" font-weight="700" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">MODEL TREE</text>
+<path d="M 49 235 L 259 235" fill="none" stroke="#ced8e0" stroke-width="1" />
+<text x="67" y="263" fill="#627687" font-size="13" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Dokument</text>
+<rect x="76" y="288" width="15" height="15" rx="3" fill="#edf2f5" stroke="#ced8e0" stroke-width="1"/>
+<polygon points="79,295 83,290 88,295 83,300" fill="#e4f0f7" stroke="#3e718f" stroke-width="1" stroke-linejoin="round"/>
+<text x="103" y="303" fill="#243746" font-size="14" font-weight="550" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Body</text>
+<rect x="61" y="323" width="186" height="37" rx="5" fill="#e4f0f7" stroke="none" stroke-width="1"/>
+<rect x="76" y="338" width="15" height="15" rx="3" fill="#edf2f5" stroke="#ced8e0" stroke-width="1"/>
+<path d="M 79 348 L 88 340" fill="none" stroke="#3e718f" stroke-width="1.8" />
+<text x="103" y="353" fill="#3e718f" font-size="14" font-weight="650" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Sketch 2</text>
+<text x="66" y="402" fill="#627687" font-size="13" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Edycja szkicu</text>
+<rect x="270" y="190" width="750" height="572" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<rect x="290" y="206" width="255" height="33" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<circle cx="303" cy="222" r="4" fill="#3e718f"/>
+<text x="316" y="228" fill="#243746" font-size="14" font-weight="650" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Edycja szkicu · Sketch 2</text>
+<rect x="282" y="254" width="726" height="494" rx="0" fill="#ffffff" stroke="none" stroke-width="1"/>
+<path d="M 314 254 L 314 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 346 254 L 346 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 378 254 L 378 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 410 254 L 410 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 442 254 L 442 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 474 254 L 474 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 506 254 L 506 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 538 254 L 538 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 570 254 L 570 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 602 254 L 602 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 634 254 L 634 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 666 254 L 666 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 698 254 L 698 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 730 254 L 730 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 762 254 L 762 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 794 254 L 794 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 826 254 L 826 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 858 254 L 858 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 890 254 L 890 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 922 254 L 922 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 954 254 L 954 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 986 254 L 986 748" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 286 L 1008 286" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 318 L 1008 318" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 350 L 1008 350" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 382 L 1008 382" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 414 L 1008 414" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 446 L 1008 446" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 478 L 1008 478" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 510 L 1008 510" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 542 L 1008 542" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 574 L 1008 574" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 606 L 1008 606" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 638 L 1008 638" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 670 L 1008 670" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 702 L 1008 702" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<path d="M 282 734 L 1008 734" fill="none" stroke="#eaf0f4" stroke-width="0.8" />
+<g stroke="#3e718f" fill="none" stroke-width="2.4"><rect x="475" y="406" width="205" height="170"/><circle cx="770" cy="475" r="78"/><path d="M 517 589 L 775 625" stroke-width="3.5"/></g>
+<circle cx="517" cy="589" r="5" fill="#3e718f"/><circle cx="775" cy="625" r="5" fill="#3e718f"/>
+<rect x="294" y="682" width="206" height="28" rx="5" fill="#e4f0f7" stroke="none" stroke-width="1"/>
+<text x="307" y="701" fill="#3e718f" font-size="13" font-weight="650" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Aktywne narzędzie: Line</text>
+<rect x="1030" y="190" width="310" height="572" rx="6" fill="#ffffff" stroke="#ced8e0" stroke-width="1"/>
+<rect x="1030" y="190" width="310" height="45" rx="0" fill="#f4f6f8" stroke="none" stroke-width="1"/>
+<text x="1046" y="212" fill="#243746" font-size="14" font-weight="700" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">PROPERTIES</text>
+<text x="1046" y="229" fill="#627687" font-size="11" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Wybrany element szkicu</text>
+<path d="M 1030 235 L 1340 235" fill="none" stroke="#ced8e0" stroke-width="1" />
+<text x="1045" y="272" fill="#627687" font-size="13" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Element</text>
+<text x="1164" y="272" fill="#243746" font-size="14" font-weight="600" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Line 3</text>
+<text x="1045" y="305" fill="#627687" font-size="13" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Długość</text>
+<text x="1164" y="305" fill="#243746" font-size="14" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">32,40 mm</text>
+<text x="1045" y="339" fill="#627687" font-size="13" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Konstrukcyjna</text>
+<text x="1164" y="339" fill="#243746" font-size="14" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Nie</text>
+<text x="1045" y="375" fill="#627687" font-size="13" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Powiązania</text>
+<text x="1164" y="375" fill="#243746" font-size="14" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">—</text>
+<rect x="1325" y="240" width="8" height="174" rx="4" fill="#edf1f4" stroke="none" stroke-width="1"/>
+<rect x="1326" y="279" width="6" height="49" rx="4" fill="#b1c0cb" stroke="none" stroke-width="1"/>
+<rect x="1030" y="418" width="310" height="9" rx="0" fill="#e8edf1" stroke="none" stroke-width="1"/>
+<rect x="1149" y="420" width="65" height="5" rx="3" fill="#97acba" stroke="none" stroke-width="1"/>
+<rect x="1030" y="427" width="310" height="45" rx="0" fill="#f4f6f8" stroke="none" stroke-width="1"/>
+<text x="1046" y="449" fill="#243746" font-size="14" font-weight="700" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">OPERATIONS</text>
+<text x="1046" y="466" fill="#627687" font-size="11" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Sketch Edit · Sketch 2</text>
+<path d="M 1030 472 L 1340 472" fill="none" stroke="#ced8e0" stroke-width="1" />
+<text x="1046" y="503" fill="#627687" font-size="12" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Aktualne narzędzie</text>
+<text x="1046" y="528" fill="#3e718f" font-size="15" font-weight="650" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Line</text>
+<path d="M 1045 543 L 1320 543" fill="none" stroke="#dde4e9" stroke-width="1" />
+<text x="1046" y="574" fill="#243746" font-size="13" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Dostępne sterowanie szkicem</text>
+<text x="1046" y="603" fill="#627687" font-size="12" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">• Zaznacz lub rysuj geometrię</text>
+<text x="1046" y="627" fill="#627687" font-size="12" font-weight="400" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">• Użyj Project Geometry</text>
+<rect x="1325" y="477" width="8" height="212" rx="4" fill="#edf1f4" stroke="none" stroke-width="1"/>
+<rect x="1326" y="531" width="6" height="59" rx="4" fill="#b1c0cb" stroke="none" stroke-width="1"/>
+<rect x="1030" y="698" width="310" height="63" rx="0" fill="#f4f6f8" stroke="none" stroke-width="1"/>
+<path d="M 1030 698 L 1340 698" fill="none" stroke="#ced8e0" stroke-width="1" />
+<rect x="1048" y="712" width="274" height="33" rx="6" fill="#e4f0f7" stroke="#3e718f" stroke-width="1.6"/>
+<text x="1185" y="734" fill="#243746" font-size="13" font-weight="650" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif">Finish Sketch</text>
+<text x="44" y="827" fill="#304758" font-size="14" font-weight="600" text-anchor="start" font-family="Segoe UI,Arial,sans-serif">Szerokość kompresuje pasek, nie wymusza zakładek po prawej. Line to rzeczywiście aktywne narzędzie.</text>
+<text x="1346" y="827" fill="#627687" font-size="12" font-weight="400" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">Makieta koncepcyjna · NIE zrzut Qt</text>
+</svg>
