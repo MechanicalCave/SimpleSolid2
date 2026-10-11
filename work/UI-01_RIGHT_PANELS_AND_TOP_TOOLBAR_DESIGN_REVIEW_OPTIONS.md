@@ -85,7 +85,7 @@ Top categories like `Part | Sketch | Inspect`, each opening a second surface wit
 Expose a few primary actions and a discoverable `Commands` dropdown/search for the rest. Pros: highly scalable; cons: hides commonly-used CAD commands behind multiple clicks. Search and shortcut persistence are new features requiring explicit design. A search palette is not authorized simply by designing T-A overflow.
 
 **Detailed Owner decisions needed:**
-- T1: prefer one-row adaptive groups (T-A) or ribbon-style categories (T-B)?
+- T1: **OWNER APPROVED 2026-10-11 as the initial design direction — T-A**, a one-row adaptive group/overflow toolbar, with no horizontal scrollbar; evaluate against actual Owner Windows workflows before contemplating a more elaborate ribbon/category system. If T-A fails manual usability review, **STOP for a separate Owner D2 revision**; do not automatically implement T-B.
 - T2: full text for frequent actions versus icon+tooltip at compact sizes?
 - T3: which commands are pinned *per context*, which eligible for overflow, and should user customization be deferred?
 - T4: is `More ▾` acceptable for overflow, or prefer named group menus (`Create ▾`, `Modify ▾`) at compact size?
@@ -108,7 +108,9 @@ Owner prefers **R-A: Properties and Operations simultaneously visible, user-adju
 
 **Owner decision — Properties selection during Feature Edit (2026-10-11):** Owner explicitly accepted **Variant A**. Properties tracks current semantic selection (including Tree or Viewport inspection) while the Operations header, controls, mode cue and Finish/Cancel stay bound to the active Feature draft until its deliberate Finish/Cancel. Selecting a different object must not start its edit mode, swap draft identity, dirty the Document, mutate authored Feature/Sketch state or create an Undo entry. If another edit entry is attempted, P0 exclusivity refuses it while maintaining both the draft and correct mode cue. Validate across Extrude/Revolve/Fillet/Chamfer and normal/short-height responsive variants, selected-object deletion/staleness, and tab switches. This approves a behavior requirement, not code mutation.
 
-**Remaining OPEN for detailed Owner discussion:** exact typography/accent strength, normal/short-height mockups, available action semantics by context, and every top-toolbar group/overflow choice. Detailed visual and behavioral Owner signoff must precede the UI-01 Work Contract and activation. No source code, ACTIVE.yaml or accepted roadmap version change is authorized by this direction.
+**Owner T-A direction (2026-10-11):** Owner selected **variant A for the first implementation design**, explicitly preferring to try the simpler one-row adaptive group/overflow surface before considering a more complex system if it proves insufficient. This approves the **information-architecture direction only**; exact command grouping, pinned actions, labels/icons, compact menu layout, keyboard accessibility and visual mockups still require detailed review. It does not permit code work, pre-authorize conversion to Ribbon, or imply acceptance of future separate D2 redesign.
+
+**Remaining OPEN for detailed Owner discussion:** exact typography/accent strength, normal/short-height mockups, available action semantics by context, and top-toolbar group/overflow composition, pinning, labels/icons and action priority. Detailed visual and behavioral Owner signoff must precede the UI-01 Work Contract and activation. No source code, ACTIVE.yaml or accepted roadmap version change is authorized by this direction.
 
 ## 4. Non-negotiable boundaries and acceptance plan
 
