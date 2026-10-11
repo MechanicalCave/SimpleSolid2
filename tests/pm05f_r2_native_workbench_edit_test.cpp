@@ -7465,6 +7465,27 @@ int main(int argc, char* argv[]) {
             << "PM05F_R2_PART008_CHAMFER_FINISH_PASS"
             << std::endl;
 
+        // UI-01 P0 Chamfer Edit: the real committed 2-Edge Chamfer
+        // opens an edit draft that must remain exclusive to Operations.
+        auto* chamfer_item = featureTreeItem(
+            *tree, chamfer_session.document()
+                .body().features.back().id);
+        CHECK(chamfer_item);
+        tree->clearSelection();
+        tree->setCurrentItem(chamfer_item);
+        chamfer_item->setSelected(true);
+        QApplication::processEvents();
+        CHECK(edit->isEnabled());
+        edit->click();
+        QApplication::processEvents();
+        CHECK(!cancel->isHidden());
+        verifyUi01FeatureDraftRejectsTreeEdits(
+            workbench, chamfer_session, *tree, chamfer_item,
+            "edgeFeatureOperationsWidget");
+        cancel->click();
+        QApplication::processEvents();
+        CHECK(cancel->isHidden());
+
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
         CHECK(workbench.activateDocument(&session, {}));
