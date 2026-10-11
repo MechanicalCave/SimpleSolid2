@@ -1,8 +1,21 @@
 # PG-01D follow-up — OCCT Boolean Add Refine production decision gate
 
-**Status:** D2 PRODUCTION POLICY PROPOSAL, NOT YET ACTIVATED. Owner accepted the **legacy-file compatibility tradeoff** on 2026-10-11; that acceptance is recorded here, not treated as a blanket approval to change unrelated kernel behavior. Work remains on draft PR #309; no PG-01D FINAL PASS, merge approval, PG-01E or PM-06 activation.
+**Status:** Owner D2-R1–R4 ACCEPTED 2026-10-11; production implementation authorized, acceptance/merge pending. Owner accepted the **legacy-file compatibility tradeoff** on 2026-10-11; that acceptance is recorded here, not treated as a blanket approval to change unrelated kernel behavior. Work remains on draft PR #309; no PG-01D FINAL PASS, merge approval, PG-01E or PM-06 activation.
 
 **Parent active Work Contract:** `work/PROJECTION_01D_PLANAR_FACE_BOUNDARY_WORK_CONTRACT.md` (program milestone 9B, roadmap v1.30). The active contract §3 currently authorizes a *read-only* Face-boundary kernel query and expressly excludes production B-Rep Boolean/refine policy changes. This proposal **does not override §3**. A separate bounded Owner D2 amendment/contract and modeling-semantics version decision are necessary before enabling the new behavior by default, consistent with ADR-0014 §7.
+
+## Owner D2-R1–R4 — ACCEPTED 2026-10-11 (supersedes proposal-only STOP)
+
+**Owner decision:** `zatwierdzam - kontynuuj` after reviewing the explicit D2-R1 through D2-R4 gate, including **strict modeling-semantics v2 rejecting existing v1 Part files**. This authorizes the following **bounded production implementation on active PR #309**, without authorizing final PG-01D PASS, default-branch merge, global healing, file migration or any later package.
+
+- **R1:** the default production `OcctSolidModelingKernel` must apply OCCT history-integrated, nondestructive, zero-fuzzy `SimplifyResult(true,true)` **only after successful Extrude Add / Revolve Add Fuse**, retaining `finishBoolean` material and semantic validation. Cut and edge features retain their current policy.
+- **R2:** `part::current_modeling_semantics_version` advances **1 → 2**, independently of native Part schema **v16**. Reader must **reject** modeled v1 files with a distinct typed unsupported-semantics error (not reinterpret v1 as v2). No automatic migration or silent re-save. Existing old files need not open. A Part created under v2 writes and cold-opens v2.
+- **R3:** keep both original Owner v1 `.ss2part` fixtures byte-for-byte unchanged. In **tests only**, create separate explicitly marked v2 semantic reconstructions by repackaging their authored document JSON with `modeling_semantics_version: 2`; never call that production migration or claim that original v1 opens. Preserve source IDs/history and verify strict v1 rejection, positive 2→1 and 4→1, zero occupied-material delta per Feature stage, semantic references, Undo/Redo/Save/Reopen.
+- **R4:** allow the narrowly required edits to provider Fuse, Part semantics-version declaration, Part authored-state validation/reader diagnostics and suitable existing tests; current docs PL/EN/internal and generated Browser must reflect **actual** implementation. No global OCCT change, Cut/Fillet/Chamfer switch, project schema bump, arbitrary identity rebind, or CI issue #302 edits.
+
+**Regression obligations:** no test may be disabled to obtain green; historical unrefined control tests may request an explicit test-only legacy provider. Prove that ordinary default production evaluation is refined; negative cases preserve real geometry. Native FOCUSED and a **new exact-head Windows FULL** must pass before Owner manual retest. Owner PG-01D FINAL PASS and merge permission remain distinct.
+
+**Pre-implementation immutable experimental gate:** Windows FULL [#2424](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38132815185) on `961567092da82661e9e0a761b352e96c30acb175` passed **199/199** (Core 25, native Kernel 57, Desktop 117), including native Refine cold-reopen geometry and UI/docs bootstrap. **This is not yet production-default v2 evidence**.
 
 ## 1. Owner decision already accepted — compatibility is not a veto
 
@@ -39,6 +52,6 @@ A subsequent test-only change further asserts (1) **one upper Face after fresh i
 
 ## 4. Explicit STOP / next handoff
 
-**Current permission:** bounded experiments, negative/positive kernel tests, evidence and this compatibility decision record **only** under PG-01D. The production default must remain unchanged until the Owner accepts the bounded operation policy **and** the modeling-semantics-version choice. Do not merge PR #309 on experiment-only FOCUSED evidence.
+**Current permission:** Owner has expressly approved the narrow R1–R4 production implementation and strict v2; production code changes inside the accepted bounded exception may proceed on PR #309. **Do not merge** without new exact-head full evidence and separate Owner FINAL PASS.
 
-**Next gate:** obtain the new exact-head Windows FOCUSED result for the expanded cold-reopen checks; then complete a separate precise D2 production amendment/version proposal for Owner acceptance before switching default Refine. If a source cannot be uniquely certified under Refine, preserve fail-closed rather than relaxing identity to make the acceptance numbers green.
+**Next gate:** implement the accepted default + strict v2, test-only source fixture reconstructions and typed rejection; obtain rebuilt FOCUSED, FAST as needed, exact-head Windows FULL, Owner practical tests and final PASS.  If a source cannot be uniquely certified under Refine, preserve fail-closed rather than relaxing identity to make the acceptance numbers green.

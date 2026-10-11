@@ -29,6 +29,14 @@
 
 **Architecture boundary:** this decision **does not** authorize production `BRepAlgoAPI_Fuse::SimplifyResult` by default or override the no-Boolean-modification / no-modeling-semantics-version-change STOP in §3. ADR-0014 still requires a separately accepted bounded operation policy and explicit modeling-semantics version decision. Evidence, conditions and next Owner gate: `work/PROJECTION_01D_REFINE_ADD_D2_GATE.md`. PR #309 remains draft; PG-01D FINAL PASS/merge is separate.
 
+## Owner D2-R1–R4 production Add Refine activation — ACCEPTED 2026-10-11
+
+Owner explicitly approved `D2-R1–R4` (strict `ModelingSemanticsVersion=2` rejecting existing v1 Part files) in the active conversation: `zatwierdzam - kontynuuj`. This **supersedes the older §3 STOP** narrowly for **production OCCT history-integrated nondestructive Refine after Extrude Add / Revolve Add, strict version 2 default and reader diagnostics, and tests/documentation**. It does **not** authorize automatic old-file migration, general Cut/Fillet/Chamfer changes, healing/tolerance changes, loose material identity or unapproved public provider contracts. Legacy files may be rejected; never silently rebind. Original Owner fixture bytes remain untouched and test-only v2 repackages are explicitly labeled nonproduction and tested.
+
+**Allowed implementation exception to §3:** `src/kernel_occt/include/simplesolid2/kernel_occt/solid_modeling_kernel.hpp`, `src/kernel_occt/solid_modeling_kernel.cpp`, `src/part/include/simplesolid2/part/feature.hpp`, `src/part/include/simplesolid2/part/part_document_store.hpp`, `src/part/part_document.cpp`, `src/part/part_document_store.cpp`, fitting `tests/**`, `docs/internal/**`, `docs/product/pl/**`, `docs/product/en/**`, generated `docs/browser/index.html` and `work/**`. Keep native Part schema v16. Test-only access to an explicit unrefined provider is allowed only for historical/negative comparisons; user-facing defaults must use Refine.
+
+**Evidence gate:** experimental Windows FULL #2424 **199/199** at `961567092da82661e9e0a761b352e96c30acb175` predates production v2 change. New immutable exact-head FULL, manual Owner reproduction and separate PG-01D FINAL PASS + merge authorization mandatory. Full rationale: `work/PROJECTION_01D_REFINE_ADD_D2_GATE.md`.
+
 ## 1. Goal and measurable result
 
 Extend the **already accepted** Project Geometry tool in an editable Part Sketch to stage **one current, strictly identifiable planar bounded Face** from an earlier legal Body stage. Capture exactly its current outer/hole **material Edge occurrences**, project each representable exact Line/Circle/Arc to current Sketch support, visibly skip only independently proven geometric Unsupported members, and use the **existing** atomic `CreateProjectedSketchEdgesCommand` to save all admitted unique `MaterialEdgeReference` links with chosen Regular/Construction role.
