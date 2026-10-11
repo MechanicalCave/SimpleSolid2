@@ -2147,6 +2147,14 @@ int main(int argc, char* argv[]) {
                           << " p95_us=" << row.p95_us
                           << " max_us=" << row.max_us << std::endl;
             }
+            // Diagnostic-only evidence branch: make CTest emit the entire
+            // matched R1 12-cohort output on the same Windows runner as the
+            // historical pre-fix RED. NEVER MERGE this deliberate RED:
+            // product PR #314 retains its unmodified passing assertions.
+            std::cerr
+                << "EDGE_R1_G5_DIAGNOSTIC_EXPECTED_RED_ONLY"
+                << std::endl;
+            std::exit(EXIT_FAILURE);
             // Restore the exact preceding orthographic test camera before
             // running the existing Fillet/Chamfer Workbench selection suite.
             // A G5 measurement must not leak perspective/zoom state into
