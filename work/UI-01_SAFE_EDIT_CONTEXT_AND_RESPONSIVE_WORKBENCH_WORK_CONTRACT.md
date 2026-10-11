@@ -100,7 +100,7 @@ Candidate existing modules, **subject to native source audit at gate G0**:
 
 ## Documentation impact
 
-Internal docs: **required** for P0 edit-context authority, panel/tool-surface ownership, transient preferences and runtime lifecycle.
-User/Product docs: **required** in canonical PL/EN Markdown for changed UI workflows, fail-closed messaging, responsive panels and toolbar customization/overflow.
+Internal docs: required
+User/Product docs: required
 Generated Browser: **required** via deterministic offline `.\ss2.ps1 docs` and `ss2 verify` before product completion.
-Reason: P0 changes user-visible edit entry behavior and error feedback; P1 changes Workbench layout and command discovery. **This governance-only contract approval PR requires no as-built doc changes yet.**
+Reason: P0 changes user-visible edit entry behavior and error feedback; P1 changes Workbench layout and command discovery. The required internal as-built docs cover edit-context authority, panel/tool-surface ownership, transient preferences and lifecycle. Required PL/EN canonical product docs cover updated workflows, rejection feedback, panels and toolbar customization/overflow. **This governance-only activation candidate requires no as-built doc changes yet; implementation must complete them before Owner product FINAL PASS.**

@@ -1,9 +1,9 @@
 version: 1
 status: active
-active_work: "work/EDGE_PICKING_R1_VISIBLE_BODY_EDGES_WORK_CONTRACT.md"
+active_work: "work/UI-01_SAFE_EDIT_CONTEXT_AND_RESPONSIVE_WORKBENCH_WORK_CONTRACT.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.30"
+program_roadmap_version: "1.31"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
