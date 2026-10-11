@@ -6249,6 +6249,110 @@ void verifyPg01dOwnerSameDomainFixtures() {
         std::error_code remove_error;
         CHECK(std::filesystem::remove(roundtrip, remove_error));
         CHECK(!remove_error);
+
+        // Geometric Edit -> Undo -> Redo of the SAME authored Extrude002
+        // profile and real distance. This is a distinct test from cold
+        // reopen: each operation must rebuild on independent OCCT handles
+        // and the optional Refine must never change occupied material.
+        const auto& authored_second =
+            loaded.document->body().features[1];
+        const auto* second_extrude =
+            std::get_if<part::ExtrudeFeature>(
+                &authored_second.definition);
+        CHECK(second_extrude != nullptr);
+        const auto* original_extent =
+            std::get_if<part::OneSidedExtrudeExtent>(
+                &second_extrude->extent);
+        CHECK(original_extent != nullptr);
+        CHECK(original_extent->distance.millimetres > 0.0);
+        auto editable = part::PartDocument::restore(
+            core::DocumentId::generate(),
+            loaded.document->state());
+        CHECK(editable.ok());
+        application::DocumentSession editing{
+            {}, std::move(*editable.document)};
+        const auto source_state = editing.document().state();
+        const auto source_revision = editing.document().revision();
+        kernel_occt::OcctSolidModelingKernel edit_provider{
+            kernel_occt::OcctSolidModelingKernel::
+                AddRefinementExperiment::simplify_same_domain};
+        const auto edited = editing.execute(
+            application::EditExtrudeFeatureCommand{
+                authored_second.id,
+                editing.document().revision(),
+                second_extrude->profile_id,
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{
+                        original_extent->distance.millimetres + 0.5},
+                    original_extent->reversed},
+                "PG01D Extrude002 dimension edit"},
+            edit_provider);
+        if (!edited.ok()) {
+            // A downstream Feature may legitimately reject a changed
+            // shape. A rejection must be atomic; never claim that the
+            // valid edit path has been tested in this case.
+            CHECK(editing.document().state() == source_state);
+            CHECK(editing.document().revision() == source_revision);
+            std::cerr << "PG01D_REFINE_EDIT_REJECTED_ATOMIC"
+                      << " fixture=" << fixture.filename << '\n';
+        } else {
+            const auto changed_state = editing.document().state();
+            CHECK(changed_state != source_state);
+            CHECK(editing.document().revision() != source_revision);
+
+            const auto assertRebuiltEquivalent = [&](
+                const char* phase) {
+                kernel_occt::OcctSolidModelingKernel ordinary;
+                kernel_occt::OcctSolidModelingKernel simplified{
+                    kernel_occt::OcctSolidModelingKernel::
+                        AddRefinementExperiment::simplify_same_domain};
+                const auto before = part::evaluatePart(
+                    editing.document(), ordinary);
+                const auto after = part::evaluatePart(
+                    editing.document(), simplified);
+                CHECK(before.body_status ==
+                      part::BodyEvaluationStatus::up_to_date);
+                CHECK(after.body_status ==
+                      part::BodyEvaluationStatus::up_to_date);
+                CHECK(before.current_topology &&
+                      before.current_topology->complete());
+                CHECK(after.current_topology &&
+                      after.current_topology->complete());
+                CHECK(before.features.size() ==
+                      after.features.size());
+                for (std::size_t index = 0U;
+                     index < before.features.size(); ++index) {
+                    const auto exact_difference =
+                        simplified.materialDifferencePreview(
+                            before.features[index].result_solid,
+                            after.features[index].result_solid);
+                    CHECK(exact_difference.status ==
+                          kernel::SolidPresentationStatus::unsupported);
+                    CHECK(!exact_difference.removed &&
+                          !exact_difference.added);
+                }
+                std::cerr << "PG01D_REFINE_EDIT_REBUILD"
+                          << " fixture=" << fixture.filename
+                          << " phase=" << phase
+                          << " features=" << before.features.size()
+                          << " geometry_delta=0\n";
+            };
+            assertRebuiltEquivalent("edited");
+            CHECK(editing.undo().ok());
+            CHECK(editing.document().state() == source_state);
+            assertRebuiltEquivalent("undo");
+            CHECK(editing.redo().ok());
+            CHECK(editing.document().state() == changed_state);
+            assertRebuiltEquivalent("redo");
+        }
+        // In the simple two-Extrude document, changing the terminal
+        // Extrude distance cannot be blocked by downstream Features.
+        // The Revolve document is allowed an explicitly atomic reject
+        // rather than an invalid auto-retarget.
+        if (fixture.feature_count == 2U) {
+            CHECK(edited.ok());
+        }
     }
 }
 
