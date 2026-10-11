@@ -2062,6 +2062,8 @@ int main(int argc, char* argv[]) {
                 double max_us{};
             };
             std::vector<G5ViewTiming> g5_views;
+            const auto incoming_camera = viewport->cameraState();
+            CHECK(incoming_camera.has_value());
             for (const auto orientation : {
                      viewer::StandardView::top_front_right,
                      viewer::StandardView::bottom_front_right}) {
@@ -2131,6 +2133,12 @@ int main(int argc, char* argv[]) {
                 }
             }
             CHECK(g5_views.size() == 12U);
+            // Restore the exact preceding orthographic test camera before
+            // running the existing Fillet/Chamfer Workbench selection suite.
+            // A G5 measurement must not leak perspective/zoom state into
+            // unrelated native click and lifecycle regressions.
+            CHECK(viewport->setCameraState(*incoming_camera));
+            QApplication::processEvents();
             const double measured_dpr =
                 viewport->devicePixelRatioF();
             CHECK(std::isfinite(measured_dpr) && measured_dpr > 0.0);
