@@ -1246,7 +1246,9 @@ void verifyPartIntegration() {
                                     trial.document().state());
                                 CHECK(restored.ok());
                                 kernel_occt::OcctSolidModelingKernel
-                                    cold_provider;
+                                    cold_provider{
+                                        kernel_occt::OcctSolidModelingKernel::
+                                            AddRefinementExperiment::disabled};
                                 const auto cold = part::evaluatePart(
                                     *restored.document, cold_provider);
                                 CHECK(cold.body_status ==
@@ -1481,7 +1483,9 @@ void verifyPartIntegration() {
                                     CHECK(cold_sketch->projection_bindings.front()
                                               .source ==
                                           *production.reference);
-                                    kernel_occt::OcctSolidModelingKernel disk_provider;
+                                    kernel_occt::OcctSolidModelingKernel disk_provider{
+    kernel_occt::OcctSolidModelingKernel::
+        AddRefinementExperiment::disabled};
                                     const auto disk = part::evaluatePart(
                                         *loaded.document, disk_provider);
                                     CHECK(disk.body_status ==
@@ -1597,7 +1601,9 @@ void verifyPartIntegration() {
                                     CHECK(trial.document().body().features.size()
                                           == 3U);
                                     kernel_occt::OcctSolidModelingKernel
-                                        redo_provider;
+                                        redo_provider{
+                                            kernel_occt::OcctSolidModelingKernel::
+                                                AddRefinementExperiment::disabled};
                                     const auto after_redo = part::evaluatePart(
                                         trial.document(), redo_provider);
                                     CHECK(after_redo.body_status ==
@@ -1632,7 +1638,9 @@ void verifyPartIntegration() {
                                     if (suppress.ok()) {
                                         predecessor_suppression_committed = true;
                                         kernel_occt::OcctSolidModelingKernel
-                                            suppress_provider;
+                                            suppress_provider{
+                                                kernel_occt::OcctSolidModelingKernel::
+                                                    AddRefinementExperiment::disabled};
                                         const auto suppressed_result =
                                             part::evaluatePart(
                                                 suppress_session.document(),
@@ -1665,7 +1673,9 @@ void verifyPartIntegration() {
                                             suppress_session.undo();
                                         CHECK(rollback.ok());
                                         kernel_occt::OcctSolidModelingKernel
-                                            unsuppressed_provider;
+                                            unsuppressed_provider{
+                                                kernel_occt::OcctSolidModelingKernel::
+                                                    AddRefinementExperiment::disabled};
                                         const auto restored_eval =
                                             part::evaluatePart(
                                                 suppress_session.document(),
@@ -1715,7 +1725,9 @@ void verifyPartIntegration() {
                                     CHECK(delete_session.document()
                                           .body().features.size() == 2U);
                                     kernel_occt::OcctSolidModelingKernel
-                                        deleted_provider;
+                                        deleted_provider{
+                                            kernel_occt::OcctSolidModelingKernel::
+                                                AddRefinementExperiment::disabled};
                                     const auto deleted_eval = part::evaluatePart(
                                         delete_session.document(),
                                         deleted_provider);
@@ -1726,7 +1738,9 @@ void verifyPartIntegration() {
                                     const auto restore = delete_session.undo();
                                     CHECK(restore.ok());
                                     kernel_occt::OcctSolidModelingKernel
-                                        restored_provider;
+                                        restored_provider{
+                                            kernel_occt::OcctSolidModelingKernel::
+                                                AddRefinementExperiment::disabled};
                                     const auto restored_eval =
                                         part::evaluatePart(
                                             delete_session.document(),
@@ -1754,7 +1768,9 @@ void verifyPartIntegration() {
                                             true});
                                     CHECK(disable.ok());
                                     kernel_occt::OcctSolidModelingKernel
-                                        disabled_provider;
+                                        disabled_provider{
+                                            kernel_occt::OcctSolidModelingKernel::
+                                                AddRefinementExperiment::disabled};
                                     const auto disabled_eval =
                                         part::evaluatePart(
                                             disable_session.document(),
@@ -1765,7 +1781,9 @@ void verifyPartIntegration() {
                                         *certified_point_address).empty());
                                     CHECK(disable_session.undo().ok());
                                     kernel_occt::OcctSolidModelingKernel
-                                        reenabled_provider;
+                                        reenabled_provider{
+                                            kernel_occt::OcctSolidModelingKernel::
+                                                AddRefinementExperiment::disabled};
                                     const auto reenabled =
                                         part::evaluatePart(
                                             disable_session.document(),
@@ -1800,7 +1818,9 @@ void verifyPartIntegration() {
                                                     {}, std::move(
                                                         *rebuilt.document)};
                                             kernel_occt::OcctSolidModelingKernel
-                                                revised_kernel;
+                                                revised_kernel{
+                                                    kernel_occt::OcctSolidModelingKernel::
+                                                        AddRefinementExperiment::disabled};
                                             const auto before_change =
                                                 revised.document().state();
                                             const auto command =
@@ -1886,7 +1906,9 @@ void verifyPartIntegration() {
                                                       revised.document().state());
                                                 kernel_occt::
                                                     OcctSolidModelingKernel
-                                                        cold_provider;
+                                                        cold_provider{
+                                                            kernel_occt::OcctSolidModelingKernel::
+                                                                AddRefinementExperiment::disabled};
                                                 const auto cold =
                                                     part::evaluatePart(
                                                         *reopen.document,
@@ -1945,7 +1967,9 @@ void verifyPartIntegration() {
                                     application::DocumentSession edit_session{
                                         {}, std::move(*edit_clone.document)};
                                     kernel_occt::OcctSolidModelingKernel
-                                        edit_kernel;
+                                        edit_kernel{
+                                            kernel_occt::OcctSolidModelingKernel::
+                                                AddRefinementExperiment::disabled};
                                     const auto before_state =
                                         edit_session.document().state();
                                     const auto update = edit_session.execute(
@@ -1981,7 +2005,9 @@ void verifyPartIntegration() {
                                                 edit_session.undo();
                                             CHECK(undo_edit.ok());
                                             kernel_occt::OcctSolidModelingKernel
-                                                undo_provider;
+                                                undo_provider{
+                                                    kernel_occt::OcctSolidModelingKernel::
+                                                        AddRefinementExperiment::disabled};
                                             const auto restored_eval =
                                                 part::evaluatePart(
                                                     edit_session.document(),
@@ -2002,7 +2028,9 @@ void verifyPartIntegration() {
                                                 edit_session.redo();
                                             CHECK(redo_edit.ok());
                                             kernel_occt::OcctSolidModelingKernel
-                                                redo_edit_provider;
+                                                redo_edit_provider{
+                                                    kernel_occt::OcctSolidModelingKernel::
+                                                        AddRefinementExperiment::disabled};
                                             const auto redo_evaluated =
                                                 part::evaluatePart(
                                                     edit_session.document(),
