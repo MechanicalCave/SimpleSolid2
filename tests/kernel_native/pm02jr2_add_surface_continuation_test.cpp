@@ -6124,6 +6124,103 @@ void verifyPg01dOwnerSameDomainFixtures() {
         CHECK(refined_upper_faces.size() == 1U);
         CHECK(final_catalog.faces.size() <=
               result.current_topology->faces.size());
+
+        // Validate pre-existing stable Sketch references stage-by-stage.
+        // Refine may merge bounded Faces, but must not silently rebind an
+        // already-resolved material Edge or planar Sketch support.
+        const auto stage = [](const auto& evaluation,
+                              part::FeatureId id)
+            -> const part::BodyStageTopologyCatalog* {
+            for (const auto& feature : evaluation.features) {
+                if (feature.feature_id == id &&
+                    feature.result_topology &&
+                    feature.result_topology->complete()) {
+                    return &*feature.result_topology;
+                }
+            }
+            return nullptr;
+        };
+        const auto requireExistingLinks = [&](const auto& revised) {
+            std::size_t checked_edges = 0U;
+            std::size_t checked_supports = 0U;
+            for (const auto& sketch : loaded.document->sketches()) {
+                for (const auto& binding : sketch.projection_bindings) {
+                    CHECK(binding.valid());
+                    CHECK(binding.source.stage.feature_id);
+                    const auto* old_catalog = stage(
+                        result, *binding.source.stage.feature_id);
+                    const auto* new_catalog = stage(
+                        revised, *binding.source.stage.feature_id);
+                    CHECK(old_catalog && new_catalog);
+                    const auto was = part::resolveMaterialEdgeReference(
+                        binding.source, *old_catalog);
+                    const auto now = part::resolveMaterialEdgeReference(
+                        binding.source, *new_catalog);
+                    CHECK(was && now);
+                    if (was->resolved()) {
+                        CHECK(now->resolved());
+                    }
+                    ++checked_edges;
+                }
+                const auto* body_support =
+                    part::bodyPlanarSurfaceReference(sketch.support);
+                if (!body_support) continue;
+                CHECK(body_support->stage.feature_id);
+                const auto* old_catalog = stage(
+                    result, *body_support->stage.feature_id);
+                const auto* new_catalog = stage(
+                    revised, *body_support->stage.feature_id);
+                CHECK(old_catalog && new_catalog);
+                const auto was = part::resolveSketchSupport(
+                    sketch.support, old_catalog);
+                const auto now = part::resolveSketchSupport(
+                    sketch.support, new_catalog);
+                if (was.status ==
+                        part::SketchSupportResolutionStatus::resolved) {
+                    CHECK(now.status ==
+                          part::SketchSupportResolutionStatus::resolved);
+                }
+                ++checked_supports;
+            }
+            CHECK(checked_edges > 0U);
+            CHECK(checked_supports > 0U);
+            std::cerr << "PG01D_REFINE_LINKS"
+                      << " fixture=" << fixture.filename
+                      << " edges=" << checked_edges
+                      << " planar_supports=" << checked_supports
+                      << " preserved=1\n";
+        };
+        requireExistingLinks(refined);
+
+        // An explicit Save of the native Part must preserve every
+        // authored binding and reconstruct the same simplified result
+        // from a completely new OCCT provider generation.
+        const auto roundtrip = std::filesystem::temp_directory_path() /
+            (std::string{"ss2_pg01d_refine_"} +
+             std::to_string(std::chrono::steady_clock::now()
+                                .time_since_epoch().count()) +
+             "_" + fixture.filename);
+        CHECK(store.createNew(roundtrip, *loaded.document).ok());
+        const auto reopened = store.load(roundtrip);
+        CHECK(reopened.ok());
+        CHECK(reopened.document->state() == loaded.document->state());
+        kernel_occt::OcctSolidModelingKernel fresh_provider{
+            kernel_occt::OcctSolidModelingKernel::
+                AddRefinementExperiment::simplify_same_domain};
+        const auto cold =
+            part::evaluatePart(*reopened.document, fresh_provider);
+        CHECK(cold.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(cold.current_topology &&
+              cold.current_topology->complete());
+        CHECK(cold.current_topology->faces.size() ==
+              final_catalog.faces.size());
+        CHECK(cold.current_topology->edges.size() ==
+              final_catalog.edges.size());
+        requireExistingLinks(cold);
+        std::error_code remove_error;
+        CHECK(std::filesystem::remove(roundtrip, remove_error));
+        CHECK(!remove_error);
     }
 }
 
