@@ -89,7 +89,7 @@ Candidate existing modules, **subject to native source audit at gate G0**:
 - PM-06 remains blocked. Future Assembly/Drawing are outside this Contract; reusable UI shell must not synthesize a toolbar full of unimplemented commands.
 - Independent CI issue [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302) cannot be fixed, bypassed or used to waive tests under UI-01.
 - No feature addition, Ribbon redesign, individual tool-button drag customization, new search palette, persisted CAD preferences, source-level domain/kernel changes or unapproved native implementation dependencies.
-- The roadmap re-sequencing and D2 proposal in PR #320 must be reconciled with accepted roadmap v1.30 **before a formal activation**; this Owner-accepted Work Contract is not itself a roadmap amendment.
+- The Owner explicitly approved sequencing v1.31 on 2026-10-11 (`zatwierdzam`). Its separate [roadmap-only Draft PR #322](https://github.com/MechanicalCave/SimpleSolid2/pull/322) supersedes the old proposed-roadmap hunk in D2 PR #320, which has now been removed from #320. **Before formal activation**, obtain separate merge approval and merge for the accepted v1.31 roadmap (alongside necessary D2/contract governance) and synchronize `work/ACTIVE.yaml -> program_roadmap_version` in the dedicated later activation PR. Roadmap v1.30 remains authoritative on main until then; this accepted Work Contract is not itself a roadmap amendment.
 
 ## 8. Separate Owner acceptance and activation gates
 
