@@ -6021,7 +6021,7 @@ void verifyPg01dRefineRevolveNonMergeControl() {
             }
         }
 
-        const inspectCylinderFaces = [&](const auto& faces) {
+        const auto inspectCylinderFaces = [&](const auto& faces) {
             for (const auto face : faces) {
                 const auto scoped =
                     provider.bindFaceToBody(result.solid, face);
