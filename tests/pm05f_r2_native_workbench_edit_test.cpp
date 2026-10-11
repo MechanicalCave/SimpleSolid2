@@ -503,6 +503,31 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
     };
     attempt(sketch_item, sketch_action);
     attempt(profile_item, profile_action);
+
+    // Double-click is a second real Tree entry route via the controller's
+    // QEvent::MouseButtonDblClick filter, not an alias for QAction::trigger.
+    for (auto* target : {sketch_item, profile_item}) {
+        tree.scrollToItem(target);
+        tree.clearSelection();
+        tree.setCurrentItem(target);
+        target->setSelected(true);
+        QApplication::processEvents();
+        const auto at = tree.visualItemRect(target).center();
+        CHECK(tree.itemAt(at) == target);
+        QTest::mouseDClick(
+            tree.viewport(), Qt::LeftButton, Qt::NoModifier, at);
+        QApplication::processEvents();
+        CHECK(sketch_finish->isHidden());
+        CHECK(!active_operations->isHidden());
+        CHECK(status->text().contains(
+            QStringLiteral(
+                "Finish or cancel the active Feature draft")));
+        CHECK(session.document().state() == original_state);
+        CHECK(session.document().revision() == original_revision);
+        CHECK(session.undoDepth() == original_undo);
+        CHECK(session.needsSave() == original_dirty);
+    }
+
     tree.clearSelection();
     tree.setCurrentItem(feature_item);
     feature_item->setSelected(true);
