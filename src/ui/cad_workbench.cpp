@@ -11253,11 +11253,30 @@ void CadWorkbench::cancelSketchTool() {
     syncActionState();
 }
 
+bool CadWorkbench::rejectSketchProfileEntryDuringFeatureDraft() {
+    // Reuse this gate for both Tree Sketch and Profile entry. The
+    // legitimate Axis-in-Sketch draft intentionally remains legal.
+    if (!extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !revolve_draft_ &&
+        !fillet_draft_ &&
+        !chamfer_draft_) {
+        return false;
+    }
+    setStatusText(
+        QStringLiteral(
+            "Finish or cancel the active Feature draft before editing a Sketch or Profile."));
+    return true;
+}
+
 void CadWorkbench::requestEditSketch(
     const sketch::SketchId& sketch_id) {
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+    if (rejectSketchProfileEntryDuringFeatureDraft()) {
         return;
     }
 
@@ -11298,6 +11317,9 @@ void CadWorkbench::requestEditProfile(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+    if (rejectSketchProfileEntryDuringFeatureDraft()) {
         return;
     }
 
