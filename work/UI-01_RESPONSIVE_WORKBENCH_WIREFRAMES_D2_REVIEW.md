@@ -95,6 +95,12 @@
   - Sketch: `Select` directly; `Create: Line/Circle/Arc/Rectangle`, `Profile: Profile`, `References: Project Geometry`, `Modify: Trim/Extend/Extend Both`, `Transform: Move/Copy/Rotate/Scale/Mirror`, `Inspect: Measure`.
 - **Owner-accepted default order (2026-10-11):** Part: `Sketch → Work Features → Create → Modify`. Sketch Edit: `Select → Create → Profile → References → Modify → Transform → Inspect`, where `Select` is a direct base command, not a reorderable group. Reset to Defaults restores both those orders and previously approved default pins. Users may reorder whole groups per context thereafter; independent non-CAD preferences persist between app launches. Actual icon artwork, exact naming/localization, fine spacing, and popup behavior remain to review. No permission to reorder individual buttons or implement future Assembly/Drawing commands.
 
+## 4A. Owner-approved compact-density reference for visual mockups (2026-10-11)
+
+- Owner accepted the **compact desktop CAD** baseline over oversized/spacious toolbar buttons: approximately **18–20 logical px icons** and **32–36 logical px button heights at 100% Windows scaling**, small but legible in-group gaps, and a single-row inline title + direct-button arrangement. Preserve the accepted group taxonomy, priority, customization and no horizontal scrollbar.
+- These are **approximate drawing proportions only**, not implementation constants: final sizes, DPI-safe hit regions, tooltip/focus affordances and text legibility require Windows screenshot/Qt testing at 100%, 150%, 200% scaling and current font metrics. Do not interpret this acceptance as final pixel-by-pixel UI approval.
+- Tool buttons show neutral technical pictograms with labels while space allows; on compact width first collapse unpinned groups, then show pinned actions as icon+tooltip, finally collapse pinned groups to named menus; `Więcej -> group -> tool` is last-resort overflow.
+
 ## 5. Behavioral state checklist / proposed native test witnesses
 
 | Witness | Expected observation |
