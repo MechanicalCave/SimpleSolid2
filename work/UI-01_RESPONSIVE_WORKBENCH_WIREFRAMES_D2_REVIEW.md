@@ -93,7 +93,7 @@
 - Accepted group content:
   - Part: `Sketch: Sketch 2D`, `Work Features: Datum Plane`, `Create: Extrude/Revolve`, `Modify: Fillet/Chamfer`.
   - Sketch: `Select` directly; `Create: Line/Circle/Arc/Rectangle`, `Profile: Profile`, `References: Project Geometry`, `Modify: Trim/Extend/Extend Both`, `Transform: Move/Copy/Rotate/Scale/Mirror`, `Inspect: Measure`.
-- Default ordering beyond already chosen group sets, actual icon artwork, full naming/localization and fine control placement still need review. There is no approval to reorder individual buttons or implement future Assembly/Drawing commands.
+- **Owner-accepted default order (2026-10-11):** Part: `Sketch → Work Features → Create → Modify`. Sketch Edit: `Select → Create → Profile → References → Modify → Transform → Inspect`, where `Select` is a direct base command, not a reorderable group. Reset to Defaults restores both those orders and previously approved default pins. Users may reorder whole groups per context thereafter; independent non-CAD preferences persist between app launches. Actual icon artwork, exact naming/localization, fine spacing, and popup behavior remain to review. No permission to reorder individual buttons or implement future Assembly/Drawing commands.
 
 ## 5. Behavioral state checklist / proposed native test witnesses
 
@@ -116,7 +116,7 @@
 
 1. Inspect normal/compact/narrow **native Windows screenshots at real DPI/font scaling** with representative long Operations content and the original Owner witnesses; tune actual containment thresholds from minimum effective widget geometry and hysteresis.
 2. Final visual samples for button icon silhouettes, label abbreviations and tooltip wording; hover vs engaged vs focus vs disabled and pinned indicator emphasis in both light and dark themes where applicable.
-3. Default ordering of groups, visual spacing of independent fixed Document commands, and popup style/focus behavior for named group and two-level More menus.
+3. **Default group order now Owner-accepted**; still review visual spacing of independent fixed Document commands, and popup style/focus behavior for named group and two-level More menus.
 4. Operations header and fixed footer size / form-field focus at short height; check viewport cue collision with ViewCube and minimum viewport.
 5. After Owner **explicit visual/behavioral signoff**, draft separately bounded UI-01 Work Contract, seek independent Owner acceptance and main governance activation. Only then can staged P0 -> P1 product implementation begin with exact-SHA Windows test gates and separate Owner final pass/merge approval.
 
