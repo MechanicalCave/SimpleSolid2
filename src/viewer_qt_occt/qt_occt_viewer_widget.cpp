@@ -4726,8 +4726,13 @@ public:
         }
 
         if (filter.edges) {
-            const double aperture = 8.0 * dpr;
-            const double aperture_squared = aperture * aperture;
+            // R1 G4: only an already highlighted CURRENT material Edge
+            // gets the 16-logical-px retention band. Every other Edge
+            // stays inside the 12-logical-px acquisition aperture.
+            // A retained Edge must still pass a NEW ray/occlusion check;
+            // no stale token is introduced or cached as a hit.
+            constexpr double acquire_logical_px = 12.0;
+            constexpr double retain_logical_px = 16.0;
             // R1 G3: screen-cull each segment before any costly ray. Both
             // per-Edge and per-query budgets bound ray/triangle work. An
             // exhausted budget fails closed; it never admits hidden edges.
@@ -4807,6 +4812,13 @@ public:
                 if (!edge.material || !edge.ordinary_pickable) {
                     continue;
                 }
+                const bool retained =
+                    body_preselection_token_ &&
+                    *body_preselection_token_ == edge.token;
+                const double aperture =
+                    (retained ? retain_logical_px : acquire_logical_px) *
+                    dpr;
+                const double aperture_squared = aperture * aperture;
                 double best_distance_squared = aperture_squared;
                 std::optional<double> best_depth;
                 std::size_t edge_rays = 0U;
