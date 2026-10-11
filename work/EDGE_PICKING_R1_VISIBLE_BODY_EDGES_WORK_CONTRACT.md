@@ -1,6 +1,6 @@
 # Edge Picking R1 — visible Body material Edge hover/selection — Accepted Bounded Work Contract
 
-**Status:** **OWNER WORK CONTRACT ACCEPTED 2026-10-11** — governance activation **NOT YET MERGED**; no R1 production code mutation authorized until a separately verified activation PR is merged onto `main`.  
+**Status:** **OWNER WORK CONTRACT ACCEPTED 2026-10-11 — ACTIVATION CANDIDATE**. The separate governance PR must first pass exact-head closure and merge onto `main`; only then is bounded R1 native RED characterization/implementation authorized on a fresh branch. No changes to accepted R1 scope.  
 **Owner sequencing/scope decision:** 2026-10-11, in conversation: `akceptuję - kontynuuj`, answering the explicit proposal to make **Edge Picking R1 a mandatory standalone gate BEFORE PG-01E** and follow RED reproduction → projection/occlusion consistency → visible Edge fragments → 12/16 px and spatial hysteresis → native/FULL → Owner PASS. The later Owner statement `akceptuje - kontynuuj` **expressly accepts this exact bounded Work Contract as reviewed in PR #312**, including R0–R1-D, P01–P14 and G0–G7. Neither approval substitutes for the dedicated `ACTIVE.yaml` activation and native RED evidence.  
 **Prepared:** 2026-10-11. **Base:** `main` `5bec84370dbfdba44c5cdda677aaaaf028456ed2`; PG-01D production [#309](https://github.com/MechanicalCave/SimpleSolid2/pull/309) and historical closure [#310](https://github.com/MechanicalCave/SimpleSolid2/pull/310) MERGED.  
 **Relation:** planned PG-01E product-wide closeout design [proposal #311](https://github.com/MechanicalCave/SimpleSolid2/pull/311), not yet authorized. Edge Picking R1 MUST close with separate exact-head technical and Owner PASS BEFORE final PG-01E compound Fillet/Chamfer evaluation. PM-06 remains gated.  
@@ -132,3 +132,9 @@ Allowed production files are **not** activated by appearing in this draft; publi
 1. **COMPLETED — Owner approved this exact Work Contract** (scope/allowed files, G0–G7, hard STOP, tests, documentation impact): `akceptuje - kontynuuj` (2026-10-11), following the earlier approval of R1 precedence and study plan.
 2. **NEXT — submit and merge separate R1 governance activation** of `work/ACTIVE.yaml` on `main` before production mutation, only after this accepted-contract PR is merged and exact-head governance verification passes.
 3. Distinct later gates remain: Owner R1 manual FINAL PASS; R1 merge; subsequent review/acceptance and governance activation for PG-01E; separate PM-06 Work Contract.
+
+## Documentation impact
+
+Internal docs: required
+User/Product docs: required
+Reason: R1 will change observable Body Edge hover/selection, front-occlusion filtering, hover-click revalidation and supported Windows interaction; update the relevant current-state internal docs, bilingual product docs and generated offline Browser during the implementation phase before R1 completion. This activation changes no product behavior or documents by itself.
