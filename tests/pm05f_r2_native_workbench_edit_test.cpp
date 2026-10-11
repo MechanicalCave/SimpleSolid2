@@ -2133,6 +2133,20 @@ int main(int argc, char* argv[]) {
                 }
             }
             CHECK(g5_views.size() == 12U);
+            // Emit exact comparable cohorts to CTest failure/diagnostics
+            // instead of relying only on GitHub's UI Step Summary.
+            // Pre-fix evidence PR #315 uses identical cursor sampling.
+            for (const auto& row : g5_views) {
+                std::cerr << "EDGE_R1_G5_R1_COHORT"
+                          << " view=" << static_cast<int>(row.orientation)
+                          << " projection="
+                          << static_cast<int>(row.projection)
+                          << " factor=" << row.scale_factor
+                          << " queries=" << row.samples
+                          << " p50_us=" << row.p50_us
+                          << " p95_us=" << row.p95_us
+                          << " max_us=" << row.max_us << std::endl;
+            }
             // Restore the exact preceding orthographic test camera before
             // running the existing Fillet/Chamfer Workbench selection suite.
             // A G5 measurement must not leak perspective/zoom state into
