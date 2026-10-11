@@ -33,7 +33,10 @@
 - The top-left mode cue is **above**, not obstructing the 3D viewport. It and Operations header have the same true live Feature Draft identity.
 - Changing Tree/viewport inspection selection changes **Properties only**; Operations continues to edit Extrude002. Attempting incompatible Sketch Edit is refused fail-closed, leaving draft and cues untouched.
 - `Extrude` is a **creation** action. Its button is NOT automatically lit just because Extrude002 is under **editing**. Hover and keyboard focus have their own distinct visual states.
-- Vertical scrollbar gutter is permanently reserved for each Properties and Operations pane, regardless of overflow, to avoid form-width jumps. Scrollbar thumb discreet but accessible. Only Operations' form scrolls; action footer stays visible while its pane is displayed.
+- **Owner-approved first-use right-column split: 40% Properties / 60% Operations** of usable splitter height at normal window heights, not an enforced ratio during dragging. On resizing, keep meaningful pane minimums and reserve the non-scrolling Operations footer; when height does not suffice, use the accepted tabs fallback. Per-open-Document user adjustments survive tab fallback and document switching during the session, not app relaunch. Resizing does not change authored CAD state.
+- Vertical scrollbar gutter is permanently reserved for each Properties and Operations pane, regardless of overflow, to avoid form-width jumps. Scrollbar thumb discreet but accessible. Each form scrolls independently; the contextually valid Operations action footer stays visible while Operations is displayed.
+
+**Normal-height default:** 40/60 Properties/Operations is the Owner-approved initial proportion. Exact Qt separator position derives from effective splitter content geometry and must not obscure headers or Finish/Cancel at supported DPI/font sizes.
 
 ## 2. Compact width, still sufficient height — Sketch Edit
 
