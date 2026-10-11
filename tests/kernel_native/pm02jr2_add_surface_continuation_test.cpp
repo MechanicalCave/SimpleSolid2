@@ -5996,10 +5996,9 @@ void verifyPg01dRefineRevolveNonMergeControl() {
               kernel::SurfaceKind::cylinder);
         CHECK(created->surface_kind ==
               kernel::SurfaceKind::cylinder);
-        CHECK(inherited->resolved_token);
+        CHECK(inherited->token.valid());
         CHECK(created->resolved_token);
-        CHECK(*inherited->resolved_token !=
-              *created->resolved_token);
+        CHECK(inherited->token != *created->resolved_token);
         CHECK(!inherited->current_faces.empty());
         CHECK(!created->current_faces.empty());
 
@@ -6022,8 +6021,8 @@ void verifyPg01dRefineRevolveNonMergeControl() {
             }
         }
 
-        for (const auto* cylinder : {inherited, created}) {
-            for (const auto face : cylinder->current_faces) {
+        const inspectCylinderFaces = [&](const auto& faces) {
+            for (const auto face : faces) {
                 const auto scoped =
                     provider.bindFaceToBody(result.solid, face);
                 CHECK(scoped && scoped->valid());
@@ -6041,7 +6040,9 @@ void verifyPg01dRefineRevolveNonMergeControl() {
                     }
                 }
             }
-        }
+        };
+        inspectCylinderFaces(inherited->current_faces);
+        inspectCylinderFaces(created->current_faces);
         CHECK(actual_circle_edges.size() >= 2U);
         CHECK(!native_seams.empty());
         CHECK(!seam_uses.empty());
