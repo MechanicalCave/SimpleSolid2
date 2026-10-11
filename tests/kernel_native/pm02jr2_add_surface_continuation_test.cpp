@@ -419,7 +419,12 @@ pg01dStrictFinalStageOnePointCandidates(
 }
 
 void verifyPartIntegration() {
-    kernel_occt::OcctSolidModelingKernel provider;
+    // This historical same-carrier partition proof intentionally uses
+    // the pre-v2 representation. v2 production default is independently
+    // asserted with the two Owner fixtures in this same test binary.
+    kernel_occt::OcctSolidModelingKernel provider{
+        kernel_occt::OcctSolidModelingKernel::
+            AddRefinementExperiment::disabled};
     auto document =
         part::PartDocument::create(
             core::DocumentId::generate());
@@ -641,7 +646,9 @@ void verifyPartIntegration() {
             CHECK(clone.ok());
             application::DocumentSession chamfer_session{
                 {}, std::move(*clone.document)};
-            kernel_occt::OcctSolidModelingKernel chamfer_kernel;
+            kernel_occt::OcctSolidModelingKernel chamfer_kernel{
+                kernel_occt::OcctSolidModelingKernel::
+                    AddRefinementExperiment::disabled};
             const auto added_chamfer = chamfer_session.execute(
                 application::CreateChamferFeatureCommand{
                     {*source.reference},
