@@ -4853,9 +4853,12 @@ public:
                         closest.parameter - half_range, 0.0, 1.0);
                     const double high = std::clamp(
                         closest.parameter + half_range, 0.0, 1.0);
-                    // The closest point is tried first, then progressively
-                    // farther samples on BOTH sides inside the aperture.
-                    // A hidden closest point does not reject the full Edge.
+                    // Try nearer samples within this segment first, but
+                    // still inspect LATER segments: a curved/polyline Edge
+                    // can have a closer visible portion after the first
+                    // visible hit. Preserve global min distance for stable
+                    // hover ranking and 2px incumbent hysteresis.
+                    bool visible_on_this_segment = false;
                     for (int step = 0; step <= 6; ++step) {
                         if (edge_rays >= per_edge_ray_budget ||
                             remaining_ray_budget == 0U) break;
@@ -4906,12 +4909,12 @@ public:
                             if (!depth) continue;
                             best_distance_squared = distance_squared;
                             best_depth = *depth;
-                            // First front-visible sample found by growing
-                            // screen-distance steps; no need to walk farther
-                            // on this particular segment after a hit.
+                            visible_on_this_segment = true;
+                            // Later polyline segments remain eligible
+                            // inside the finite per-Edge/per-query budget.
                             break;
                         }
-                        if (best_depth) break;
+                        if (visible_on_this_segment) break;
                     }
                 }
                 if (!best_depth) continue;
