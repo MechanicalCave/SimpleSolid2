@@ -1,6 +1,5 @@
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
-#include <nlohmann/json.hpp>
 
 #include <cstdlib>
 #include <filesystem>
@@ -188,12 +187,20 @@ int main() {
         const auto package_before =
             persistence::readNativeDocumentContainer(path);
         CHECK(package_before.ok());
-        const auto authored =
-            nlohmann::json::parse(package_before.package->authored_json);
-        CHECK(authored["modeling_semantics_version"] == 2);
+        const auto& authored = package_before.package->authored_json;
+        const auto marker = std::string{
+            "\"modeling_semantics_version\": 2"};
+        const auto at = authored.find(marker);
+        CHECK(at != std::string::npos);
+        CHECK(authored.find(marker, at + marker.size()) ==
+              std::string::npos);
         for (const auto version : {1, 3}) {
             auto unsupported = authored;
-            unsupported["modeling_semantics_version"] = version;
+            unsupported.replace(
+                at, marker.size(),
+                std::string{
+                    "\"modeling_semantics_version\": "} +
+                    std::to_string(version));
             const auto rejected_path =
                 temp.path /
                 ("ModelingSemantics" + std::to_string(version) +
@@ -203,7 +210,7 @@ int main() {
                 buildPartPackage(
                     std::string{id.value()},
                     part::PartDocumentStore::current_schema_version,
-                    unsupported.dump(2)));
+                    unsupported));
             const auto rejected = store.load(rejected_path);
             CHECK(!rejected.ok());
             CHECK(rejected.diagnostic.code ==
