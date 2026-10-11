@@ -5916,6 +5916,170 @@ void verifyPg01dE0DirectedWireFailClosedContract() {
 }
 
 
+// Same-domain Refine must NOT erase a real cylindrical/planar
+// intersection, merge cylinders of different radii, or turn a periodic
+// B-Rep seam into a material Edge. Deliberately use a full Revolve Add
+// for a smaller axial boss on a larger Extrude cylinder.
+void verifyPg01dRefineRevolveNonMergeControl() {
+    struct Outcome final {
+        kernel::RuntimeSolidHandle solid;
+        std::size_t bounded_faces{};
+        std::size_t bounded_edges{};
+        std::size_t real_circle_edges{};
+        std::size_t seam_edges{};
+    };
+
+    const auto run = [](bool enable_refine) -> Outcome {
+        kernel_occt::OcctSolidModelingKernel provider{
+            enable_refine
+                ? kernel_occt::OcctSolidModelingKernel::
+                      AddRefinementExperiment::simplify_same_domain
+                : kernel_occt::OcctSolidModelingKernel::
+                      AddRefinementExperiment::disabled};
+
+        kernel::PlanarProfileInput base_profile;
+        base_profile.outer.boundary = {{
+            kernel::Circle2{{0.0, 0.0}, 10.0},
+            0.0, 1.0, true, false, true,
+            kernel::BoundaryUseProvenance{
+                "pg01d-refine-control-base-radius10",
+                0U, 0U, false},
+        }};
+        CHECK(base_profile.valid());
+        const auto base = provider.extrude(add(base_profile, 10.0));
+        CHECK(base.ok());
+        const auto* original_side = newSide(
+            base, "pg01d-refine-control-base-radius10");
+        CHECK(original_side && original_side->resolved_token);
+        CHECK(original_side->surface_kind ==
+              kernel::SurfaceKind::cylinder);
+
+        kernel::Frame3 section;
+        section.u_axis = {1.0, 0.0, 0.0};
+        section.v_axis = {0.0, 0.0, 1.0};
+        section.normal = {0.0, -1.0, 0.0};
+        CHECK(section.valid());
+
+        kernel::AngularRevolveInput turn;
+        turn.profile = rectangle(
+            section, 0.0, 10.0, 4.0, 15.0,
+            "pg01d-refine-control-revolve");
+        turn.axis.origin = {0.0, 0.0, 0.0};
+        turn.axis.direction = {0.0, 0.0, 1.0};
+        turn.start_angle_radians = 0.0;
+        turn.end_angle_radians = 2.0 * std::acos(-1.0);
+        turn.operation = kernel::SolidBooleanOperation::add;
+        CHECK(turn.valid());
+
+        const auto result = provider.revolve(turn, base.solid);
+        CHECK(result.ok());
+        CHECK(result.solid_count == 1U);
+        CHECK(result.brep_valid);
+
+        const auto* inherited = inheritedSurface(
+            result, *original_side->resolved_token);
+        const auto* created = newSide(
+            result, "pg01d-refine-control-revolve-right");
+        CHECK(inherited && created);
+        CHECK(inherited->surface_kind ==
+              kernel::SurfaceKind::cylinder);
+        CHECK(created->surface_kind ==
+              kernel::SurfaceKind::cylinder);
+        CHECK(inherited->resolved_token);
+        CHECK(created->resolved_token);
+        CHECK(*inherited->resolved_token !=
+              *created->resolved_token);
+        CHECK(!inherited->current_faces.empty());
+        CHECK(!created->current_faces.empty());
+
+        std::set<std::uint64_t> actual_circle_edges;
+        std::set<std::uint64_t> native_seams;
+        std::map<std::uint64_t,
+                 std::vector<kernel::FaceBoundaryEdgeUse>> seam_uses;
+        // Full inventory is used here: a circular Edge separating
+        // different material Surface carriers is NOT a partition.
+        for (const auto& edge : result.current_edge_semantics) {
+            if (edge.periodic_seam) {
+                CHECK(!edge.same_surface_partition);
+                native_seams.insert(edge.runtime_token.value);
+            }
+            if (edge.provider_curve_kind == kernel::CurveKind::circle &&
+                !edge.periodic_seam &&
+                !edge.same_surface_partition &&
+                edge.adjacent_surfaces.size() >= 2U) {
+                actual_circle_edges.insert(edge.runtime_token.value);
+            }
+        }
+
+        for (const auto* cylinder : {inherited, created}) {
+            for (const auto face : cylinder->current_faces) {
+                const auto scoped =
+                    provider.bindFaceToBody(result.solid, face);
+                CHECK(scoped && scoped->valid());
+                const auto boundary =
+                    provider.queryFaceBoundaryAnySurface(
+                        result.solid, *scoped);
+                CHECK(boundary.ok());
+                for (const auto& wire : boundary.wires) {
+                    CHECK(wire.valid());
+                    for (const auto& use : wire.edges) {
+                        CHECK(use.valid());
+                        if (native_seams.count(use.edge.value)) {
+                            seam_uses[use.edge.value].push_back(use);
+                        }
+                    }
+                }
+            }
+        }
+        CHECK(actual_circle_edges.size() >= 2U);
+        CHECK(!native_seams.empty());
+        CHECK(!seam_uses.empty());
+        for (const auto& [token, uses] : seam_uses) {
+            CHECK(native_seams.count(token) == 1U);
+            CHECK(uses.size() == 2U);
+            CHECK(uses.front().reversed != uses.back().reversed);
+            CHECK(uses.front().start_vertex == uses.back().end_vertex);
+            CHECK(uses.front().end_vertex == uses.back().start_vertex);
+        }
+
+        std::cerr << "PG01D_REFINE_REVOLVE_NONMERGE"
+                  << " refined=" << enable_refine
+                  << " faces=" << result.face_count
+                  << " edges=" << result.edge_count
+                  << " real_circle_edges=" << actual_circle_edges.size()
+                  << " native_periodic_seams=" << native_seams.size()
+                  << " directed_seams=" << seam_uses.size()
+                  << '\n';
+        return Outcome{
+            result.solid, result.face_count, result.edge_count,
+            actual_circle_edges.size(), seam_uses.size()};
+    };
+
+    const auto untreated = run(false);
+    const auto simplified = run(true);
+    // There is no redundant same-domain partition in this case:
+    // real radius-10 / radius-4 cylinders and their step boundary
+    // must survive unchanged.
+    CHECK(simplified.bounded_faces == untreated.bounded_faces);
+    CHECK(simplified.bounded_edges == untreated.bounded_edges);
+    CHECK(simplified.real_circle_edges ==
+          untreated.real_circle_edges);
+    CHECK(simplified.seam_edges == untreated.seam_edges);
+
+    kernel_occt::OcctSolidModelingKernel material_query;
+    const auto difference = material_query.materialDifferencePreview(
+        untreated.solid, simplified.solid);
+    CHECK(difference.status ==
+          kernel::SolidPresentationStatus::unsupported);
+    CHECK(!difference.added && !difference.removed);
+
+    std::cout << "PG01D_REFINE_REVOLVE_NONMERGE_PASS"
+              << " true_circular_boundary_retained=1"
+              << " different_radii_unmerged=1"
+              << " signed_seams_preserved=1"
+              << " same_occupied_solid=1\n";
+}
+
 // PG-01D: owner-supplied native v16 Extrude/Revolve Add counterexamples.
 // Baseline asserts the current, UNWANTED same-domain face splits. The
 // eventual Refine implementation must replace those expectations with
@@ -6463,6 +6627,7 @@ int main() {
 
     verifyPartIntegration();
     verifyPg01dOwnerSameDomainFixtures();
+    verifyPg01dRefineRevolveNonMergeControl();
     verifyNativeCurvedSurfaceContinuationE0();
     verifyNativeCylindricalCutSplitE0();
     verifyNativePartialCylinderCutContinuityProbeE0();
