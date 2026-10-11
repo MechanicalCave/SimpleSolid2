@@ -65,7 +65,7 @@
 - Text sketch uses **Line engaged** as an interaction example, not a requirement to add a new Sketch mode. `Line` appears active only while it actually owns the currently running tool.
 - `Finish Sketch` is shown, but **no fictitious `Cancel Sketch` command** is introduced. Display only contextually real existing actions in the fixed Operations action zone.
 - Responsive priority: first collapse **unpinned** groups to named drop-downs; next switch buttons within **pinned** groups to accessible icon-only tool buttons; only then collapse pinned groups to named menus. No horizontal scrollbar, extra toolbar row, spontaneous group reorder, or permission to enlarge application minimum dimensions.
-- Two right panels remain stacked if height suffices, **even if the window is narrow**. Tabs fallback depends on **insufficient vertical space**, not on width alone.
+- **Owner accepted this compact-width Sketch Edit arrangement (2026-10-11)** as the intended D2 behavior: Tree, a usable Sketch viewport with persistent true edit-mode cue, and independently scrolling Properties (above) + Operations (below) remain visible side by side. Right-column initial ratio is 40/60 subject to pane minimums. Adapt the contextual tool strip first, preserving the one-row layout and separate Document actions. Width alone does NOT justify Properties/Operations tabs; only insufficient height can trigger them. No fake Cancel Sketch command. Exact native Windows sizing, labels, focus and overall mockup signoff remain pending.
 
 ## 3. Very short available height (regardless of width) — active Feature Edit
 
