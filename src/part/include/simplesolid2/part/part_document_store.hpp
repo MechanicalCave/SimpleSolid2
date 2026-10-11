@@ -24,6 +24,7 @@ enum class PartStoreErrorCode {
     malformed_document,
     missing_field,
     unsupported_schema,
+    unsupported_modeling_semantics,
     wrong_document_kind,
     invalid_document_id,
     container_failure,

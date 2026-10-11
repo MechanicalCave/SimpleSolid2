@@ -3843,8 +3843,13 @@ PartLoadResult PartDocumentStore::load(
             descriptor.domain_schema_version,
             parse_error);
     if (!state) {
+        // Reject old/new unsupported modeling policies distinctly from
+        // malformed document data; never silently reinterpret legacy v1.
         return loadFailure(
-            PartStoreErrorCode::malformed_document,
+            parse_error ==
+                    "Native Part contains unsupported modeling semantics version"
+                ? PartStoreErrorCode::unsupported_modeling_semantics
+                : PartStoreErrorCode::malformed_document,
             std::move(parse_error),
             path);
     }

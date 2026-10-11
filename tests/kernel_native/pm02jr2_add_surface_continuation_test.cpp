@@ -6223,13 +6223,58 @@ void verifyPg01dOwnerSameDomainFixtures() {
         .parent_path().parent_path() / "fixtures";
     const part::PartDocumentStore store;
     for (const auto& fixture : fixtures) {
-        const auto loaded = store.load(directory / fixture.filename);
+        const auto original_path = directory / fixture.filename;
+        // Strict v2 rejects the original Owner v1 Part even though its
+        // native file schema is v16. A TEST-ONLY copied v2 payload
+        // exercises the exact authored history without product migration.
+        const auto original = store.load(original_path);
+        CHECK(!original.ok());
+        CHECK(original.diagnostic.code ==
+              part::PartStoreErrorCode::
+                  unsupported_modeling_semantics);
+        const auto native =
+            persistence::readNativeDocumentContainer(original_path);
+        CHECK(native.ok());
+        CHECK(native.package->descriptor.domain_schema_version == 16);
+        auto authored =
+            nlohmann::json::parse(native.package->authored_json);
+        CHECK(authored["modeling_semantics_version"] == 1);
+        authored["modeling_semantics_version"] =
+            part::current_modeling_semantics_version.value;
+        const auto test_copy =
+            persistence::buildNativeDocumentContainer(
+                native.package->descriptor, authored.dump(2));
+        CHECK(test_copy.ok());
+        const auto test_path =
+            std::filesystem::temp_directory_path() /
+            (std::string{"ss2_pg01d_test_only_v2_"} +
+             std::to_string(std::chrono::steady_clock::now()
+                                .time_since_epoch().count()) +
+             "_" + fixture.filename);
+        {
+            std::ofstream out{
+                test_path, std::ios::binary | std::ios::trunc};
+            CHECK(static_cast<bool>(out));
+            out.write(
+                test_copy.bytes->data(),
+                static_cast<std::streamsize>(
+                    test_copy.bytes->size()));
+            CHECK(static_cast<bool>(out));
+        }
+        const auto loaded = store.load(test_path);
         CHECK(loaded.ok());
+        CHECK(loaded.document->modelingSemanticsVersion() ==
+              part::current_modeling_semantics_version);
+        std::error_code copy_remove_error;
+        CHECK(std::filesystem::remove(test_path, copy_remove_error));
+        CHECK(!copy_remove_error);
         CHECK(loaded.document.has_value());
         CHECK(loaded.document->body().features.size() ==
               fixture.feature_count);
 
-        kernel_occt::OcctSolidModelingKernel cold_provider;
+        kernel_occt::OcctSolidModelingKernel cold_provider{
+            kernel_occt::OcctSolidModelingKernel::
+                AddRefinementExperiment::disabled};
         const auto result =
             part::evaluatePart(*loaded.document, cold_provider);
         CHECK(result.body_status ==
@@ -6342,9 +6387,8 @@ void verifyPg01dOwnerSameDomainFixtures() {
         // Compare the very same authored native Part with an explicitly
         // experimental, history-aware Boolean simplifier. This must not
         // change the ordinary provider or bypass Part's semantic rules.
-        kernel_occt::OcctSolidModelingKernel refined_provider{
-            kernel_occt::OcctSolidModelingKernel::
-                AddRefinementExperiment::simplify_same_domain};
+        // R1: default provider, not an experimental opt-in.
+        kernel_occt::OcctSolidModelingKernel refined_provider;
         const auto refined =
             part::evaluatePart(*loaded.document, refined_provider);
         if (refined.body_status !=
@@ -6521,9 +6565,7 @@ void verifyPg01dOwnerSameDomainFixtures() {
         const auto reopened = store.load(roundtrip);
         CHECK(reopened.ok());
         CHECK(reopened.document->state() == loaded.document->state());
-        kernel_occt::OcctSolidModelingKernel fresh_provider{
-            kernel_occt::OcctSolidModelingKernel::
-                AddRefinementExperiment::simplify_same_domain};
+        kernel_occt::OcctSolidModelingKernel fresh_provider;
         const auto cold =
             part::evaluatePart(*reopened.document, fresh_provider);
         CHECK(cold.body_status ==
@@ -6603,9 +6645,7 @@ void verifyPg01dOwnerSameDomainFixtures() {
             {}, std::move(*editable.document)};
         const auto source_state = editing.document().state();
         const auto source_revision = editing.document().revision();
-        kernel_occt::OcctSolidModelingKernel edit_provider{
-            kernel_occt::OcctSolidModelingKernel::
-                AddRefinementExperiment::simplify_same_domain};
+        kernel_occt::OcctSolidModelingKernel edit_provider;
         const auto edited = editing.execute(
             application::EditExtrudeFeatureCommand{
                 authored_second.id,
@@ -6633,10 +6673,10 @@ void verifyPg01dOwnerSameDomainFixtures() {
 
             const auto assertRebuiltEquivalent = [&](
                 const char* phase) {
-                kernel_occt::OcctSolidModelingKernel ordinary;
-                kernel_occt::OcctSolidModelingKernel simplified{
+                kernel_occt::OcctSolidModelingKernel ordinary{
                     kernel_occt::OcctSolidModelingKernel::
-                        AddRefinementExperiment::simplify_same_domain};
+                        AddRefinementExperiment::disabled};
+                kernel_occt::OcctSolidModelingKernel simplified;
                 const auto before = part::evaluatePart(
                     editing.document(), ordinary);
                 const auto after = part::evaluatePart(
@@ -6686,7 +6726,11 @@ void verifyPg01dOwnerSameDomainFixtures() {
 } // namespace
 
 int main() {
-    kernel_occt::OcctSolidModelingKernel provider;
+    // Historical raw topology remains an explicit negative baseline;
+    // the Owner's v2 fixtures above verify the refined production default.
+    kernel_occt::OcctSolidModelingKernel provider{
+        kernel_occt::OcctSolidModelingKernel::
+            AddRefinementExperiment::disabled};
 
     kernel::Frame3 xy;
     const auto base =

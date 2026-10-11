@@ -1,5 +1,6 @@
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
+#include <nlohmann/json.hpp>
 
 #include <cstdlib>
 #include <filesystem>
@@ -180,6 +181,43 @@ int main() {
             "evaluation") ==
         std::string::npos);
 
+    // Explicit D2-R2 negative: older and future modeling policies are
+    // rejected at load with typed unsupported_modeling_semantics, while
+    // the original valid v2 file stays readable and unchanged.
+    {
+        const auto package_before =
+            persistence::readNativeDocumentContainer(path);
+        CHECK(package_before.ok());
+        const auto authored =
+            nlohmann::json::parse(package_before.package->authored_json);
+        CHECK(authored["modeling_semantics_version"] == 2);
+        for (const auto version : {1, 3}) {
+            auto unsupported = authored;
+            unsupported["modeling_semantics_version"] = version;
+            const auto rejected_path =
+                temp.path /
+                ("ModelingSemantics" + std::to_string(version) +
+                 ".ss2part");
+            writeBytes(
+                rejected_path,
+                buildPartPackage(
+                    std::string{id.value()},
+                    part::PartDocumentStore::current_schema_version,
+                    unsupported.dump(2)));
+            const auto rejected = store.load(rejected_path);
+            CHECK(!rejected.ok());
+            CHECK(rejected.diagnostic.code ==
+                  part::PartStoreErrorCode::
+                      unsupported_modeling_semantics);
+            CHECK(rejected.diagnostic.message ==
+                  "Native Part contains unsupported modeling semantics version");
+        }
+        const auto after =
+            persistence::readNativeDocumentContainer(path);
+        CHECK(after.ok());
+        CHECK(after.package->authored_json ==
+              package_before.package->authored_json);
+    }
     auto loaded = store.load(path);
     CHECK(loaded.ok());
     CHECK(

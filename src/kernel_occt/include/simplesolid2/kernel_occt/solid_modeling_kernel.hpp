@@ -39,10 +39,9 @@ public:
         const kernel::ScopedProjectionEdge& bound_edge,
         const kernel::Frame3& target_frame) noexcept override;
 
-    // Test-only opt-in experiment: evaluate the exact same native Part
-    // through OCCT's history-aware Boolean SimplifyResult path. The
-    // production default remains unchanged pending provenance/lifecycle
-    // validation and Owner approval.
+    // D2-R1 production default: history-aware Boolean same-domain Refine
+    // for Extrude/Revolve Add. Explicit disabled is for native legacy
+    // comparison/negative tests only, never an implicit user setting.
     enum class AddRefinementExperiment {
         disabled,
         simplify_same_domain,
@@ -94,7 +93,7 @@ public:
 
 private:
     AddRefinementExperiment refinement_experiment_{
-        AddRefinementExperiment::disabled};
+        AddRefinementExperiment::simplify_same_domain};
 
     // One provider-owned strict native wire extraction implementation.
     // The original planar-only API retains its exact preexisting policy.
