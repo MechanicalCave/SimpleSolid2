@@ -6118,9 +6118,10 @@ void verifyPg01dOwnerSameDomainFixtures() {
                   << " refined_bounded_edges="
                   << final_catalog.edges.size()
                   << '\n';
-        CHECK(!refined_upper_faces.empty());
-        CHECK(refined_upper_faces.size() <
-              fixture.expected_top_faces);
+        // Both supplied upper planes are geometrically connected
+        // same-domain regions. A partial reduction (e.g. 4 -> 2)
+        // would still leave the exact user problem unresolved.
+        CHECK(refined_upper_faces.size() == 1U);
         CHECK(final_catalog.faces.size() <=
               result.current_topology->faces.size());
     }
