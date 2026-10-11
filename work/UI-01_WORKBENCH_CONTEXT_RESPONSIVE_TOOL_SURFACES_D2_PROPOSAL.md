@@ -1,8 +1,8 @@
 # UI-01 — Workbench context safety, adaptive right panels and universal document command surface — D2 PROPOSAL
 
-**Status:** **OWNER ACCEPTED CONSOLIDATED D2 STATIC-VISUAL WORKBENCH DESIGN (2026-10-11, `akceptuję zestaw`)**, as refined in the decision register and [three-SVG visual gallery](UI-01_VISUAL_GALLERY_D2_OWNER_REVIEW.md). This original proposal's **roadmap re-sequencing is still ONLY PROPOSED** until separate accepted governance amendment; overall PR #320 remains **Draft, unmerged and not an implementation authority**. The [separate bounded UI-01 Work Contract DRAFT PR #321](https://github.com/MechanicalCave/SimpleSolid2/pull/321) has been prepared **for independent Owner review, NOT accepted or active**.  
+**Status:** **OWNER ACCEPTED CONSOLIDATED D2 STATIC-VISUAL WORKBENCH DESIGN (2026-10-11, `akceptuję zestaw`)**, as refined in the decision register and [three-SVG visual gallery](UI-01_VISUAL_GALLERY_D2_OWNER_REVIEW.md). The Owner **explicitly accepted v1.31 UI-01-first roadmap sequencing** (`zatwierdzam`, 2026-10-11); it is prepared in dedicated [roadmap Draft PR #322](https://github.com/MechanicalCave/SimpleSolid2/pull/322), **not yet merged**. The [bounded UI-01 Work Contract in Draft PR #321](https://github.com/MechanicalCave/SimpleSolid2/pull/321) was **separately Owner-accepted** (`akceptuje -kontynuuj`, 2026-10-11) but is **NOT active**. D2 PR #320 remains **Draft, unmerged and not an implementation authority**. This PR no longer changes the roadmap file; only #322 owns the proposed v1.31 file diff.  
 **Baseline:** `main` `2a91d0e1252255e943a367ab8a79bcd7cae5e258`, after Edge Picking R1 production PR #314 and acceptance closeout PR #319 merged.  
-**Proposed sequence:** UI-01 P0/P1 stabilization **before** resuming/scoping PG-01E product-wide closeout and **before** PM-06. Revisit incomplete Project Geometry functional scope separately; do not claim PG-01E FINAL PASS merely from a favorable manual smoke test.  
+**Owner-approved sequencing v1.31 (not merged):** UI-01 P0/P1 stabilization **before** resuming/scoping PG-01E product-wide closeout and **before** PM-06. Revisit incomplete Project Geometry functional scope separately; do not claim PG-01E FINAL PASS merely from a favorable manual smoke test.  
 **Governance:** Foundation 1.0 and accepted ADR-0006, ADR-0003, ADR-0010, ADR-0011, accepted SR-03 responsive-shell and SK-01A contextual-operations contracts; Part Modeling v1 roadmap 1.30 currently accepted. `work/ACTIVE.yaml` retains completed Edge Picking R1 only for history and authorizes **no new UI implementation**.
 
 ## 1. Owner's current native Windows witnesses
@@ -72,17 +72,19 @@ The Owner also stated: current Project Geometry smoke testing reveals no major d
 
 **No code fixes in this D2 proposal.** Any edit-context authority change exceeding bounded UI orchestration, global CAD-input overhaul, persistence of splitter layout, Viewer/public provider API or different DocumentKind implementation is a separate explicit D2 STOP.
 
-## 6. Re-sequencing proposed, NOT yet accepted
+## 6. Re-sequencing APPROVED by Owner; awaiting separate roadmap PR merge
 
-**Current accepted roadmap v1.30 remains in force on main.** This proposal seeks Owner approval for a *limited sequencing amendment* rather than unfreezing completed Feature contracts:
+**Current roadmap on main remains v1.30**, while Owner explicitly approved v1.31 on 2026-10-11 (`zatwierdzam`). The formal **roadmap-only v1.31 amendment lives in [Draft PR #322](https://github.com/MechanicalCave/SimpleSolid2/pull/322)**, not in this D2 PR. Until a distinct merge approval and merge, v1.30 on main remains authoritative. The approved change is sequencing only and does not unfreeze completed Feature contracts:
 
 `PG-01A–D + Edge Picking R1 completed` → **UI-01 (P0 first, P1 after)** → `PG-01E re-scoped capability gap audit and product closeout` → `PM-06 Part v1 completion`.
 
 The current [PG-01E D2 proposal PR #311](https://github.com/MechanicalCave/SimpleSolid2/pull/311) stays **UNACCEPTED** until reviewed/updated; do not label it complete or automatically merge it. The Owner's unspecified missing Project Geometry capabilities must be **listed and categorized after UI stability**: required to close PG-01E under an amended accepted contract versus explicitly deferred next feature package. A positive existing smoke test is not PG-01E final signoff. PM-06 remains blocked.
 
-**Formal order:** Owner reviews/approves this D2 design and roadmap sequence → separate bounded UI-01 Work Contract specifying permitted files and all regressions → Owner approves Work Contract → dedicated governance activation PR setting `work/ACTIVE.yaml` to UI-01 on `main` with appropriate gate → only then a new UI-01 production branch and native RED work. Complete native FULL, Owner UI-01 FINAL PASS and a **distinct merge approval** before declaring UI-01 completed. PG-01E then gets its own re-reviewed D2/Work Contract and activation.
+**Formal order:** Owner accepted the consolidated D2 concept and roadmap v1.31 sequence; Owner separately accepted the bounded UI-01 Work Contract (PR #321). **Still required:** independent approval to merge governance/design PR #320, accepted-contract PR #321 and roadmap-only PR #322; coordinate dependency order without silent roadmap version downgrade; after accepted governance lands on main, a separate UI-01 `ACTIVE.yaml` activation PR, exact-head Windows checks and distinct Owner merge consent; only then open a fresh UI-01 production branch and begin native RED work. Complete native FULL, Owner UI-01 FINAL PASS and a **distinct merge approval** before declaring UI-01 completed. PG-01E then gets its own re-reviewed D2/Work Contract and activation.
 
-## 7. Owner decisions requested
+## 7. Owner D2 decisions — individually resolved in accepted SVG set and roadmap v1.31
+
+The original questions are preserved for historical review; **the D2 visual concept and v1.31 execution order have now been expressly approved by Owner**, with separate accepted bounded Work Contract in PR #321. Remaining gates are governance merges, activation and native product verification, not repeated D2 design approval.
 
 1. Approve **UI-01 before PG-01E and PM-06**, with **P0 edit-context conflict first**?
 2. Approve **reject Feature Draft → Sketch/Profile edit until Finish/Cancel**, while preserving specifically documented valid Axis-in-Sketch contexts, rather than automatic nested edit or draft termination?
