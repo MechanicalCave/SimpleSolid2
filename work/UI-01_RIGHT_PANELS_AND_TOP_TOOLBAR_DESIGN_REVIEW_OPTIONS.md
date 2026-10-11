@@ -138,6 +138,8 @@ Owner prefers **R-A: Properties and Operations simultaneously visible, user-adju
 
 **Remaining OPEN for detailed Owner discussion:** exact typography/accent strength, full normal/short-height mockups and final Owner visual signoff, available action semantics by context, top-toolbar default group **order** (pin priorities accepted), exact icon artwork, detailed state paint/layout, pin sizing, popup keyboard/hover navigation and final responsive thresholds (collapse order accepted). Detailed visual and behavioral Owner signoff must precede the UI-01 Work Contract and activation. No source code, ACTIVE.yaml or accepted roadmap version change is authorized by this direction.
 
+**Consolidated detailed wireframes for Owner visual review:** [`UI-01_RESPONSIVE_WORKBENCH_WIREFRAMES_D2_REVIEW.md`](UI-01_RESPONSIVE_WORKBENCH_WIREFRAMES_D2_REVIEW.md) — normal Part Feature Edit, compact Sketch Edit and very short-height Feature Edit with Properties/Operations tabs, plus accepted action-state semantics and regression witness matrix. **Mockups proposed, NOT YET OWNER-ACCEPTED.**
+
 ## 4. Non-negotiable boundaries and acceptance plan
 
 - **P0 FIRST:** no concurrent incompatible Feature Draft and Sketch/Profile edit. Fail closed with precise message. No auto-Finish, auto-Cancel, draft replacement, model mutation, new Undo/Redo item or state leak on denied entry. Existing valid Axis-in-Sketch workflows must remain available with explicit compatibility evidence.
