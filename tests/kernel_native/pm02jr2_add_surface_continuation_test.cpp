@@ -6534,6 +6534,47 @@ void verifyPg01dOwnerSameDomainFixtures() {
               final_catalog.faces.size());
         CHECK(cold.current_topology->edges.size() ==
               final_catalog.edges.size());
+
+        // A global Face/Edge count alone can hide a newly split upper
+        // Face compensated by an unrelated merge elsewhere. Verify the
+        // exact Owner-reported top plane after a fresh native reopen.
+        std::set<std::uint64_t> cold_upper_faces;
+        for (const auto& surface : cold.current_topology->surfaces) {
+            if (surface.surface_kind !=
+                    kernel::SurfaceKind::plane ||
+                surface.status !=
+                    kernel::ReferenceStatus::resolved ||
+                !surface.canonical_frame ||
+                std::abs(surface.canonical_frame->normal.z) <
+                    0.999999 ||
+                std::abs(surface.canonical_frame->origin.z -
+                         *upper_z) > 0.000001) {
+                continue;
+            }
+            for (const auto face : surface.current_faces) {
+                cold_upper_faces.insert(face.value);
+            }
+        }
+        CHECK(cold_upper_faces.size() == 1U);
+
+        // The persisted document, re-evaluated with independent OCCT
+        // handles, must retain exactly the original occupied material
+        // at EVERY stage, not only an equivalent topology count.
+        CHECK(cold.features.size() == fixture.feature_count);
+        for (std::size_t i = 0U; i < fixture.feature_count; ++i) {
+            CHECK(cold.features[i].result_solid != nullptr);
+            const auto delta = fresh_provider.materialDifferencePreview(
+                result.features[i].result_solid,
+                cold.features[i].result_solid);
+            CHECK(delta.status ==
+                  kernel::SolidPresentationStatus::unsupported);
+            CHECK(!delta.removed && !delta.added);
+        }
+        std::cerr << "PG01D_REFINE_COLD_GEOMETRY"
+                  << " fixture=" << fixture.filename
+                  << " stages=" << fixture.feature_count
+                  << " upper_faces=" << cold_upper_faces.size()
+                  << " exact_material_delta=0\n";
         requireExistingLinks(cold);
         std::error_code remove_error;
         CHECK(std::filesystem::remove(roundtrip, remove_error));
