@@ -4402,26 +4402,35 @@ public:
         orbitByScreenAngles({horizontal, vertical, 0.0});
     }
 
+    // R1 G2: both conversions use the same OCCT camera projection and
+    // physical window dimensions, without rounding candidate positions to
+    // integer pixels. Qt logical-space conversion remains at the query edge.
     [[nodiscard]] std::optional<ScreenPoint>
     projectToScreen(
         const viewer::Point3& point) const {
-        if (view_.IsNull() ||
-            !viewer::finite(point)) {
+        if (view_.IsNull() || !viewer::finite(point)) {
             return std::nullopt;
         }
-
-        int pixel_x{};
-        int pixel_y{};
-        view_->Convert(
-            point.x,
-            point.y,
-            point.z,
-            pixel_x,
-            pixel_y);
-
-        return ScreenPoint{
-            static_cast<double>(pixel_x),
-            static_cast<double>(pixel_y)};
+        const auto camera = view_->Camera();
+        const auto window = view_->Window();
+        if (camera.IsNull() || window.IsNull()) {
+            return std::nullopt;
+        }
+        int width{};
+        int height{};
+        window->Size(width, height);
+        if (width <= 0 || height <= 0) {
+            return std::nullopt;
+        }
+        const auto mapped = camera->Project(
+            gp_Pnt{point.x, point.y, point.z});
+        const ScreenPoint projected{
+            (mapped.X() + 1.0) * 0.5 * width,
+            (1.0 - mapped.Y()) * 0.5 * height};
+        return std::isfinite(projected.x) &&
+                       std::isfinite(projected.y)
+            ? std::optional<ScreenPoint>{projected}
+            : std::nullopt;
     }
 
     [[nodiscard]] std::optional<viewer::Ray3>
@@ -4433,39 +4442,42 @@ public:
             !std::isfinite(physical_y)) {
             return std::nullopt;
         }
-
-        double world_x{};
-        double world_y{};
-        double world_z{};
-        double direction_x{};
-        double direction_y{};
-        double direction_z{};
-
-        view_->ConvertWithProj(
-            static_cast<int>(
-                std::lround(physical_x)),
-            static_cast<int>(
-                std::lround(physical_y)),
-            world_x,
-            world_y,
-            world_z,
-            direction_x,
-            direction_y,
-            direction_z);
-
-        const auto direction =
-            viewer::normalized(
-                viewer::Vec3{
-                    direction_x,
-                    direction_y,
-                    direction_z});
+        const auto camera = view_->Camera();
+        const auto window = view_->Window();
+        if (camera.IsNull() || window.IsNull()) {
+            return std::nullopt;
+        }
+        int width{};
+        int height{};
+        window->Size(width, height);
+        if (width <= 0 || height <= 0) {
+            return std::nullopt;
+        }
+        const double ndc_x =
+            physical_x * 2.0 / width - 1.0;
+        const double ndc_y =
+            1.0 - physical_y * 2.0 / height;
+        const double near_z =
+            camera->IsZeroToOneDepth() ? 0.0 : -1.0;
+        const auto near_point = camera->UnProject(
+            gp_Pnt{ndc_x, ndc_y, near_z});
+        const auto far_point = camera->UnProject(
+            gp_Pnt{ndc_x, ndc_y, 1.0});
+        const auto ray_origin =
+            camera->IsOrthographic()
+                ? near_point
+                : camera->Eye();
+        const viewer::Point3 origin{
+            ray_origin.X(), ray_origin.Y(), ray_origin.Z()};
+        const auto direction = viewer::normalized(
+            viewer::Vec3{
+                far_point.X() - origin.x,
+                far_point.Y() - origin.y,
+                far_point.Z() - origin.z});
         if (!direction) {
             return std::nullopt;
         }
-
-        viewer::Ray3 ray{
-            {world_x, world_y, world_z},
-            *direction};
+        const viewer::Ray3 ray{origin, *direction};
         return ray.valid()
             ? std::optional<viewer::Ray3>{ray}
             : std::nullopt;
