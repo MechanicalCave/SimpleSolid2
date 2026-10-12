@@ -207,6 +207,23 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
             [this] { rebuildToolbarMoreMenu(); });
     document_top_layout->addWidget(toolbar_more_, 0);
 
+    toolbar_customize_ = new QToolButton(document_top_row);
+    toolbar_customize_->setObjectName(
+        QStringLiteral("workbenchToolbarCustomizeButton"));
+    toolbar_customize_->setText(
+        QStringLiteral("Dostosuj pasek"));
+    toolbar_customize_->setToolTip(
+        QStringLiteral("Customize the contextual toolbar groups"));
+    toolbar_customize_->setAccessibleName(
+        QStringLiteral("Customize CAD toolbar groups"));
+    toolbar_customize_->setCheckable(true);
+    toolbar_customize_->setChecked(false);
+    connect(toolbar_customize_, &QToolButton::toggled, this,
+            [this](bool active) {
+                setToolbarCustomizeActive(active);
+            });
+    document_top_layout->addWidget(toolbar_customize_, 0);
+
     tree_recovery_button_ =
         new QToolButton(document_top_row);
     tree_recovery_button_->setObjectName(
@@ -699,6 +716,12 @@ void CadWorkbenchShell::setToolbarContext(bool sketch_context) {
     refreshToolbarOverflow();
 }
 
+void CadWorkbenchShell::setToolbarCustomizeActive(bool active) {
+    if (toolbar_customize_active_ == active) return;
+    toolbar_customize_active_ = active;
+    refreshToolbarOverflow();
+}
+
 QString CadWorkbenchShell::toolbarActionLabel(
     const QPushButton* button) const {
     if (button == nullptr) return {};
@@ -748,7 +771,18 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     }
     QScopedValueRollback<bool> reentry_guard(
         refreshing_toolbar_, true);
-    const auto groups = toolbarGroups(toolbar_sketch_context_);
+    auto groups = toolbarGroups(toolbar_sketch_context_);
+    const QString current_context =
+        toolbar_sketch_context_
+            ? QStringLiteral("Sketch") : QStringLiteral("Part");
+    for (auto& group : groups) {
+        const QString key = current_context + QStringLiteral("_") +
+            QString::fromLatin1(group.name);
+        const auto pin = toolbar_pin_overrides_.constFind(key);
+        if (pin != toolbar_pin_overrides_.cend()) {
+            group.pinned = pin.value();
+        }
+    }
     // Undo only UI presentation compaction, including when the Part /
     // Sketch mode changes. A draft that updates a label while compacted
     // is never inferred from the Tree inspection selection.
@@ -761,6 +795,64 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     toolbar_icon_compacted_.clear();
     const QString context_name = toolbar_sketch_context_
         ? QStringLiteral("Sketch") : QStringLiteral("Part");
+
+    // Explicit Customize mode: one marker per WHOLE contextual group.
+    // The marker is a passive hidden affordance outside this mode and
+    // is never part of the CAD command routing/Undo/Part authored data.
+    for (auto it = toolbar_pin_markers_.begin();
+         it != toolbar_pin_markers_.end(); ++it) {
+        if (it.value()) it.value()->hide();
+    }
+    for (const auto& group : groups) {
+        const QString key = current_context + QStringLiteral("_") +
+            QString::fromLatin1(group.name);
+        auto* pin = toolbar_pin_markers_.value(key, nullptr);
+        if (pin == nullptr) {
+            pin = new QToolButton(contextual_tools_scroll_->widget());
+            pin->setObjectName(
+                QStringLiteral("workbenchToolbarPin_") + key);
+            pin->setAccessibleName(
+                QStringLiteral("Pin toolbar group ") +
+                QString::fromLatin1(group.name));
+            pin->setToolTip(
+                QStringLiteral("Pin or unpin the complete ") +
+                QString::fromLatin1(group.name) +
+                QStringLiteral(" group"));
+            const auto set_group_pin = [this, key] {
+                if (!toolbar_customize_active_) return;
+                const bool currently_pinned =
+                    toolbar_pin_markers_.value(key)
+                        ->property("pinned").toBool();
+                toolbar_pin_overrides_.insert(
+                    key, !currently_pinned);
+                refreshToolbarOverflow();
+            };
+            connect(pin, &QToolButton::clicked,
+                    this, set_group_pin);
+            QWidget* group_first = nullptr;
+            if (*group.label_object_name != '\0') {
+                group_first = findChild<QWidget*>(
+                    QString::fromLatin1(group.label_object_name));
+            }
+            if (group_first == nullptr &&
+                !group.tool_object_names.empty()) {
+                group_first = findChild<QWidget*>(
+                    QString::fromLatin1(
+                        group.tool_object_names.front()));
+            }
+            const int index = group_first == nullptr
+                ? -1 : editor_tools_layout_->indexOf(group_first);
+            editor_tools_layout_->insertWidget(
+                index >= 0 ? index :
+                    std::max(0, editor_tools_layout_->count() - 1),
+                pin);
+            toolbar_pin_markers_.insert(key, pin);
+        }
+        pin->setProperty("pinned", group.pinned);
+        pin->setText(group.pinned
+            ? QStringLiteral("●") : QStringLiteral("○"));
+        pin->setVisible(toolbar_customize_active_);
+    }
 
     // Install real-command dropdowns next to each existing unpinned
     // group, not as an unconditional clone row. Their menus delegate to
