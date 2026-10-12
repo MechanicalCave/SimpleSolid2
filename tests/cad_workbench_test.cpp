@@ -498,6 +498,31 @@ int main(int argc, char* argv[]) {
     std::cout << "UI01_G3_DIRECT_GROUP_BEFORE_MORE_PASS"
               << std::endl;
 
+    // G3 tier 2 RED: pinned real Extrude stays directly reachable in
+    // compact icon-only mode, with a non-empty CAD icon, tooltip and
+    // accessible name, BEFORE the last-resort two-level More menu.
+    bool pinned_icon_before_more = false;
+    for (int candidate_width = 1380;
+         candidate_width >= 700; candidate_width -= 20) {
+        workbench.resize(candidate_width, 800);
+        QApplication::processEvents();
+        if (!pinned_extrude->isHidden() &&
+            pinned_extrude->text().isEmpty() &&
+            !pinned_extrude->icon().isNull() &&
+            !pinned_extrude->toolTip().isEmpty() &&
+            !pinned_extrude->accessibleName().isEmpty() &&
+            toolbar_more->isHidden()) {
+            pinned_icon_before_more = true;
+            break;
+        }
+    }
+    CHECK(pinned_icon_before_more);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(pinned_extrude->text() == QStringLiteral("Extrude"));
+    std::cout << "UI01_G3_PINNED_ICON_BEFORE_MORE_PASS"
+              << std::endl;
+
     const auto sketch_top =
         sketch_tool->mapTo(
             document_top_row,
