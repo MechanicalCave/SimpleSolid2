@@ -8,6 +8,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QItemSelectionModel>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -528,6 +529,63 @@ int main(int argc, char* argv[]) {
     CHECK(!pin_create->isHidden());
     CHECK(!pin_create->isEnabled());
     std::cout << "UI01_G3_CUSTOMIZE_PASSIVE_PIN_NATIVE_PASS"
+              << std::endl;
+
+    // G3 keyboard alternative for WHOLE-group ordering, durable only in
+    // app preferences. Reset Defaults must restore canonical Part order
+    // and default pins; no command handlers are replaced or invoked.
+    auto* group_create_handle =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarHandle_Part_Create"));
+    CHECK(group_create_handle != nullptr);
+    CHECK(group_create_handle->isHidden());
+    CHECK(group_create_handle->menu() != nullptr);
+    auto* group_tools_host = workbench.findChild<QWidget*>(
+        QStringLiteral("documentToolsHost"));
+    CHECK(group_tools_host != nullptr);
+    auto* group_layout =
+        qobject_cast<QHBoxLayout*>(group_tools_host->layout());
+    CHECK(group_layout != nullptr);
+    auto* datum_tool = workbench.findChild<QPushButton*>(
+        QStringLiteral("datumPlaneToolButton"));
+    auto* extrude_for_order = workbench.findChild<QPushButton*>(
+        QStringLiteral("extrudeToolButton"));
+    CHECK(datum_tool && extrude_for_order);
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(!group_create_handle->isHidden());
+    QAction* group_left = nullptr;
+    QAction* group_reset = nullptr;
+    for (auto* action : group_create_handle->menu()->actions()) {
+        if (action == nullptr) continue;
+        if (action->text() == QStringLiteral("Przesuń w lewo"))
+            group_left = action;
+        if (action->text() ==
+            QStringLiteral("Przywróć domyślne"))
+            group_reset = action;
+    }
+    CHECK(group_left && group_reset);
+    group_left->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(extrude_for_order) <
+          group_layout->indexOf(datum_tool));
+    persisted_toolbar_prefs.sync();
+    const auto changed_part_order = persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/order"))
+            .toStringList();
+    CHECK(changed_part_order.indexOf(QStringLiteral("Create")) <
+          changed_part_order.indexOf(QStringLiteral("Work Features")));
+    group_reset->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    CHECK(pin_create->property("pinned").toBool());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(group_create_handle->isHidden());
+    std::cout << "UI01_G3_GROUP_KEYBOARD_ORDER_RESET_PASS"
               << std::endl;
 
     // UI-01 G3 native RED: the contextual tool surface must not rely on
