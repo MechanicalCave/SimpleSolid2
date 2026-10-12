@@ -11,6 +11,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QStackedWidget>
@@ -473,6 +474,40 @@ int main(int argc, char* argv[]) {
         static_cast<double>(panel_heights[0] + panel_heights[1]);
     CHECK(std::abs(initial_properties_fraction - 0.4) < 0.12);
     std::cout << "UI01_G2_RIGHT_PANELS_NATIVE_LAYOUT_PASS" << std::endl;
+
+    // G2 independent vertical scroll under controlled long-form pressure:
+    // grow the real existing form hosts (test-only UI sizing), never author
+    // Part properties, edit a Feature, or synthesize a CAD command.
+    auto* properties_form = properties_scroll->widget();
+    auto* operations_form = operations_scroll->widget();
+    CHECK(properties_form && operations_form);
+    auto* properties_bar = properties_scroll->verticalScrollBar();
+    auto* operations_bar = operations_scroll->verticalScrollBar();
+    CHECK(properties_bar && operations_bar);
+    const int original_properties_min = properties_form->minimumHeight();
+    const int original_operations_min = operations_form->minimumHeight();
+    properties_form->setMinimumHeight(
+        properties_scroll->viewport()->height() + 500);
+    operations_form->setMinimumHeight(
+        operations_scroll->viewport()->height() + 500);
+    QApplication::processEvents();
+    CHECK(properties_bar->maximum() > 0);
+    CHECK(operations_bar->maximum() > 0);
+    properties_bar->setValue(0);
+    operations_bar->setValue(0);
+    properties_bar->setValue(properties_bar->maximum());
+    CHECK(properties_bar->value() == properties_bar->maximum());
+    CHECK(operations_bar->value() == 0);
+    operations_bar->setValue(operations_bar->maximum());
+    CHECK(operations_bar->value() == operations_bar->maximum());
+    CHECK(properties_bar->value() == properties_bar->maximum());
+    properties_form->setMinimumHeight(original_properties_min);
+    operations_form->setMinimumHeight(original_operations_min);
+    properties_bar->setValue(0);
+    operations_bar->setValue(0);
+    QApplication::processEvents();
+    std::cout << "UI01_G2_INDEPENDENT_SCROLL_NATIVE_PASS" << std::endl;
+
     // G2 second characterization: width alone is never permission to
     // collapse Properties/Operations; insufficient *height* is.
     auto* short_tabs = workbench.findChild<QTabWidget*>(
@@ -480,6 +515,17 @@ int main(int argc, char* argv[]) {
     CHECK(short_tabs != nullptr);
     CHECK(short_tabs->isHidden());
     CHECK(!right_vertical_splitter->isHidden());
+    // User-adjusted ratio must survive switching to short-height tabs and
+    // back; even repeated viewport-only reflow must not reset it to 40/60.
+    right_vertical_splitter->setSizes({600, 400});
+    QApplication::processEvents();
+    const auto adjusted_heights = right_vertical_splitter->sizes();
+    CHECK(adjusted_heights.size() == 2);
+    const double adjusted_fraction =
+        static_cast<double>(adjusted_heights[0]) /
+        static_cast<double>(
+            adjusted_heights[0] + adjusted_heights[1]);
+    CHECK(adjusted_fraction > 0.5);
     workbench.resize(1400, 440);
     QApplication::processEvents();
     CHECK(!short_tabs->isHidden());
@@ -494,6 +540,16 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(short_tabs->isHidden());
     CHECK(!right_vertical_splitter->isHidden());
+    const auto restored_tab_heights = right_vertical_splitter->sizes();
+    CHECK(restored_tab_heights.size() == 2);
+    CHECK(std::abs(
+        static_cast<double>(restored_tab_heights[0]) /
+            static_cast<double>(
+                restored_tab_heights[0] + restored_tab_heights[1]) -
+            adjusted_fraction) < 0.1);
+    right_vertical_splitter->setSizes({400, 600});
+    QApplication::processEvents();
+    std::cout << "UI01_G2_TAB_RATIO_RESTORATION_PASS" << std::endl;
 
     // G2 completion actions must remain anchored below the Operations
     // scroll viewport. Test actual existing button identity, not a copy
