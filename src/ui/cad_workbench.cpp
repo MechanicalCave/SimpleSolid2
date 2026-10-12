@@ -4092,6 +4092,36 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         finish_sketch_button_);
 
+    // Rehome the original connected controls, never action proxies.
+    // The shell owns presentation; each handler still owns its CAD draft.
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("sketch"), finish_sketch_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("sketchcreate"), cancel_sketch_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("sketchline"),
+        finish_line_button_, cancel_line_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("axis"),
+        axis_finish_button_, axis_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("datum"),
+        datum_plane_finish_button_, datum_plane_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("extrude"),
+        extrude_finish_button_, extrude_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("revolve"),
+        revolve_finish_button_, revolve_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("edge"),
+        edge_feature_finish_button_, edge_feature_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("project"),
+        project_edge_finish_button_, project_edge_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("profile"),
+        profile_finish_button_, profile_cancel_button_);
     shell_->setOperationsContent(operations_content);
 
     QObject::connect(
@@ -16172,6 +16202,51 @@ void CadWorkbench::syncActionState() {
             revolve_draft_.has_value() ||
             edge_feature_active ||
             project_edge_active_));
+
+    // The footer and cue follow the sole live edit draft, not the latest
+    // inspected Tree item. No new Finish/Cancel behaviors are introduced.
+    QString footer_mode;
+    QString mode_cue;
+    if (axis_draft_) {
+        footer_mode = QStringLiteral("axis");
+        mode_cue = QStringLiteral("Axis operation");
+    } else if (datum_plane_draft_) {
+        footer_mode = QStringLiteral("datum");
+        mode_cue = QStringLiteral("Datum Plane operation");
+    } else if (extrude_draft_) {
+        footer_mode = QStringLiteral("extrude");
+        mode_cue = QStringLiteral("Extrude operation");
+    } else if (revolve_draft_) {
+        footer_mode = QStringLiteral("revolve");
+        mode_cue = QStringLiteral("Revolve operation");
+    } else if (fillet_draft_ || chamfer_draft_) {
+        footer_mode = QStringLiteral("edge");
+        mode_cue = fillet_draft_
+            ? QStringLiteral("Fillet operation")
+            : QStringLiteral("Chamfer operation");
+    } else if (project_edge_active_) {
+        footer_mode = QStringLiteral("project");
+        mode_cue = QStringLiteral("Project Geometry operation");
+    } else if (sketch_support_pick_active_) {
+        footer_mode = QStringLiteral("sketchcreate");
+        mode_cue = QStringLiteral("Choose Sketch support");
+    } else if (extrude_profile_pick_active_) {
+        mode_cue = QStringLiteral("Choose Extrude Profile");
+    } else if (editing_sketch &&
+               sketch_interaction_controller_ &&
+               sketch_interaction_controller_->profileToolActive()) {
+        footer_mode = QStringLiteral("profile");
+        mode_cue = QStringLiteral("Profile operation in Sketch");
+    } else if (editing_sketch &&
+               !cancel_line_button_->isHidden()) {
+        footer_mode = QStringLiteral("sketchline");
+        mode_cue = QStringLiteral("Sketch tool operation");
+    } else if (editing_sketch) {
+        footer_mode = QStringLiteral("sketch");
+        mode_cue = QStringLiteral("Sketch edit");
+    }
+    shell_->showOperationsFooterRow(footer_mode);
+    shell_->setModeCue(mode_cue);
 
     sketch_button_->setText(
         QStringLiteral("Sketch"));
