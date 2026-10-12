@@ -589,8 +589,11 @@ int main(int argc, char* argv[]) {
                 auto* native_view = new TestViewportWidget{parent};
                 return ui::ViewportSurface{native_view, native_view};
             }};
+        // The constructor restores actual tool-layout positions.
+        // Do not show a second top-level Windows window: that would
+        // steal activation/focus from the original Workbench's later
+        // native focus-retention regression and mask the real target.
         restarted.resize(1400, 800);
-        restarted.show();
         QApplication::processEvents();
         auto* restarted_host = restarted.findChild<QWidget*>(
             QStringLiteral("documentToolsHost"));
