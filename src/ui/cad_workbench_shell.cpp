@@ -344,8 +344,16 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     viewport_mode_cue_ = new QLabel(editor_host);
     viewport_mode_cue_->setObjectName(
         QStringLiteral("workbenchViewportModeCue"));
-    viewport_mode_cue_->setWordWrap(true);
-    viewport_mode_cue_->setVisible(false);
+    // UI-01 G2: reserve one stable mode/status rail above the 3D scene.
+    // Hiding this QLabel for an empty message used to push the viewport
+    // down when starting a Feature Edit; wrapping long names also grew
+    // the rail and could change the editor's minimum width.
+    viewport_mode_cue_->setWordWrap(false);
+    viewport_mode_cue_->setSizePolicy(
+        QSizePolicy::Ignored, QSizePolicy::Fixed);
+    viewport_mode_cue_->setFixedHeight(std::max(
+        20, viewport_mode_cue_->fontMetrics().lineSpacing() + 4));
+    viewport_mode_cue_->setVisible(true);
     editor_host_layout_->addWidget(viewport_mode_cue_, 0);
 
     splitter->addWidget(editor_host);
@@ -665,11 +673,12 @@ void CadWorkbenchShell::showOperationsFooterRow(
 }
 
 void CadWorkbenchShell::setModeCue(const QString& mode) {
+    // The viewport cue always occupies its reserved fixed-height rail:
+    // text changes must not change 3D size or projected pick positions.
     viewport_mode_cue_->setText(mode);
+    viewport_mode_cue_->setToolTip(mode);
     operations_mode_cue_->setText(mode);
-    const bool present = !mode.isEmpty();
-    viewport_mode_cue_->setVisible(present);
-    operations_mode_cue_->setVisible(present);
+    operations_mode_cue_->setVisible(!mode.isEmpty());
 }
 
 void CadWorkbenchShell::applyRightPanelRatio() {
