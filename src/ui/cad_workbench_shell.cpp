@@ -19,6 +19,7 @@
 #include <QScrollArea>
 #include <QScopedValueRollback>
 #include <QSettings>
+#include <QSet>
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStackedWidget>
@@ -1078,6 +1079,22 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             }
         }
     }
+    // A taller contextual row must not make fixed Document actions
+    // appear lower than Sketch/Extrude. Their identity, zone and
+    // functional roles stay fixed; only the baseline height matches.
+    if (document_actions_ != nullptr) {
+        for (int i = 0; i < document_actions_->count(); ++i) {
+            auto* item = document_actions_->itemAt(i);
+            auto* button = item == nullptr ? nullptr :
+                qobject_cast<QPushButton*>(item->widget());
+            if (button == nullptr) continue;
+            const int height = std::max(
+                32, button->fontMetrics().height() + 12);
+            if (button->minimumHeight() != height) {
+                button->setMinimumHeight(height);
+            }
+        }
+    }
     const QString current_context =
         toolbar_sketch_context_
             ? QStringLiteral("Sketch") : QStringLiteral("Part");
@@ -1582,9 +1599,7 @@ void CadWorkbenchShell::updateToolbarGroupFrames() {
     if (contextual_tools_scroll_ == nullptr) return;
     auto* host = contextual_tools_scroll_->widget();
     if (host == nullptr) return;
-    for (auto* frame : toolbar_group_frames_) {
-        if (frame != nullptr) frame->hide();
-    }
+    QSet<QString> visible_frames;
     const QString context = toolbar_sketch_context_
         ? QStringLiteral("Sketch") : QStringLiteral("Part");
     for (const auto& group : toolbarGroups(toolbar_sketch_context_)) {
@@ -1634,10 +1649,23 @@ void CadWorkbenchShell::updateToolbarGroupFrames() {
         if (!any) continue;
         // Paint behind the existing widgets: neither the single-row
         // layout's measured width nor native command identity changes.
-        frame->setGeometry(
-            bounds.adjusted(-3, -3, 3, 3).intersected(host->rect()));
-        frame->show();
+        const QRect border_rect =
+            bounds.adjusted(-3, -3, 3, 3).intersected(host->rect());
+        if (frame->geometry() != border_rect) {
+            frame->setGeometry(border_rect);
+        }
+        if (frame->isHidden()) frame->show();
         frame->lower();
+        visible_frames.insert(key);
+    }
+    // Avoid hide/show on every resize callback: that can trigger
+    // needless LayoutRequest feedback in the QScrollArea host.
+    for (auto it = toolbar_group_frames_.begin();
+         it != toolbar_group_frames_.end(); ++it) {
+        if (it.value() && !visible_frames.contains(it.key()) &&
+            !it.value()->isHidden()) {
+            it.value()->hide();
+        }
     }
 }
 
