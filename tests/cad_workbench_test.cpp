@@ -460,6 +460,25 @@ int main(int argc, char* argv[]) {
             action->text() == QStringLiteral("Chamfer");
     }
     CHECK(fillet_in_group_menu && chamfer_in_group_menu);
+    // UI-01 G3 tier 3 RED: when icon-only Create is still too wide,
+    // the same pinned command group must have a directly accessible,
+    // named dropdown before last-resort More, with both real actions.
+    auto* pinned_create_dropdown =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarGroupDropdown_Part_Create"));
+    CHECK(pinned_create_dropdown != nullptr);
+    CHECK(pinned_create_dropdown->menu() != nullptr);
+    bool extrude_in_create = false;
+    bool revolve_in_create = false;
+    for (const auto* action :
+         pinned_create_dropdown->menu()->actions()) {
+        if (action == nullptr) continue;
+        extrude_in_create |=
+            action->text() == QStringLiteral("Extrude");
+        revolve_in_create |=
+            action->text() == QStringLiteral("Revolve");
+    }
+    CHECK(extrude_in_create && revolve_in_create);
     // At an intermediate width, unpinned Modify should be a DIRECT
     // named dropdown. More is reserved for widths where that still
     // cannot represent the contextual tools. The pinned Create command
