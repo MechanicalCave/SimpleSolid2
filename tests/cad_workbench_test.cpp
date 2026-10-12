@@ -652,6 +652,45 @@ int main(int argc, char* argv[]) {
     const bool responsive_dirty =
         responsive_session->needsSave();
 
+    // G2: a real active operation in a short-height window must bring
+    // Operations forward in one step. The existing Cancel Sketch support
+    // button remains in the fixed footer; cancelling is non-authoring.
+    auto* sketch_support_cancel =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("cancelSketchButton"));
+    CHECK(sketch_support_cancel != nullptr);
+    CHECK(operations_footer->isAncestorOf(sketch_support_cancel));
+    workbench.resize(1400, 440);
+    QApplication::processEvents();
+    CHECK(!short_tabs->isHidden());
+    CHECK(short_tabs->currentIndex() == 0);
+    CHECK(sketch_tool->isEnabled());
+    sketch_tool->click();
+    QApplication::processEvents();
+    CHECK(short_tabs->currentIndex() == 1);
+    CHECK(operations_footer->isVisible());
+    CHECK(sketch_support_cancel->isVisible());
+    auto* viewport_mode_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchViewportModeCue"));
+    auto* operations_mode_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchOperationsModeCue"));
+    CHECK(viewport_mode_cue && operations_mode_cue);
+    CHECK(!viewport_mode_cue->text().isEmpty());
+    CHECK(operations_mode_cue->text() == viewport_mode_cue->text());
+    sketch_support_cancel->click();
+    QApplication::processEvents();
+    CHECK(operations_footer->isHidden());
+    CHECK(responsive_session->document().revision() ==
+          responsive_revision);
+    CHECK(responsive_session->undoDepth() == responsive_undo);
+    CHECK(responsive_session->needsSave() == responsive_dirty);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(short_tabs->isHidden());
+    CHECK(!right_vertical_splitter->isHidden());
+    std::cout << "UI01_G2_SHORT_HEIGHT_ACTIVE_OPERATIONS_PASS"
+              << std::endl;
+
     // A focused editor retains keyboard ownership when narrow reflow occurs;
     // the owning right panel remains recovered instead of disappearing.
     title->setFocus(Qt::OtherFocusReason);
