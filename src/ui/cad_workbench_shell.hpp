@@ -5,6 +5,7 @@
 class QHBoxLayout;
 class QLabel;
 class QResizeEvent;
+class QScrollArea;
 class QSplitter;
 class QToolButton;
 class QTreeWidget;
@@ -46,6 +47,10 @@ private:
         QVBoxLayout& layout,
         QWidget*& current,
         QWidget* replacement);
+    static void replaceScrollContent(
+        QScrollArea& scroll,
+        QWidget*& current,
+        QWidget* replacement);
 
     QHBoxLayout* document_actions_{};
     QTreeWidget* document_tree_{};
@@ -55,6 +60,9 @@ private:
     QVBoxLayout* operations_host_layout_{};
     QLabel* status_{};
     QSplitter* splitter_{};
+    QSplitter* right_vertical_splitter_{};
+    QScrollArea* properties_scroll_{};
+    QScrollArea* operations_scroll_{};
     QWidget* tree_panel_{};
     QWidget* editor_host_{};
     QWidget* right_panel_{};
