@@ -66,6 +66,7 @@ private:
     void updateRightPanelHeightMode();
     void refreshToolbarOverflow();
     void updateToolbarGroupFrames();
+    void scheduleToolbarGroupFrameUpdate();
     void rebuildToolbarMoreMenu();
     void setToolbarCustomizeActive(bool active);
     void moveToolbarGroup(
@@ -118,6 +119,9 @@ private:
     // Passive, mouse-transparent visual chrome behind original tools.
     // It never participates in QHBoxLayout ordering or CAD input.
     QHash<QString, QFrame*> toolbar_group_frames_;
+    // Multiple layout/resize events in a single CAD commit share ONE
+    // queued non-interactive frame geometry update.
+    bool toolbar_group_frame_update_queued_{};
     QHash<QString, QToolButton*> toolbar_group_handles_;
     QHash<QString, QStringList> toolbar_group_order_;
     QHash<QString, bool> toolbar_pin_overrides_;
