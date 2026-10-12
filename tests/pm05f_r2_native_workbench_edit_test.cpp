@@ -1966,93 +1966,55 @@ int main(int argc, char* argv[]) {
             std::cout << "UI01_G0_P0_NATIVE_ENTRY_GUARD_PASS"
                       << std::endl;
 
-            // The same Tree entry must fail closed for Revolve Edit,
-            // not only the original screenshot's Extrude Edit.
-            auto revolve_session = makeRevolveSession(90.0);
-            CHECK(workbench.activateDocument(&revolve_session, {}));
+            // Native creation-draft coverage for the other three solid
+            // Feature families. Using the same valid OCCT-backed Part
+            // avoids fabricating an invalid persisted Revolve fixture.
+            CHECK(workbench.activateDocument(&session, {}));
             QApplication::processEvents();
-            CHECK(revolve_session.document().body().features.size() == 1U);
-            auto* revolve_item = featureTreeItem(
-                *tree,
-                revolve_session.document().body().features.front().id);
             auto* revolve_operations = workbench.findChild<QWidget*>(
                 QStringLiteral("revolveOperationsWidget"));
             auto* revolve_cancel = workbench.findChild<QPushButton*>(
                 QStringLiteral("revolveCancelButton"));
-            CHECK(revolve_item && revolve_operations && revolve_cancel);
-            tree->clearSelection();
-            tree->setCurrentItem(revolve_item);
-            revolve_item->setSelected(true);
-            QApplication::processEvents();
-            CHECK(edit->isEnabled());
-            edit->click();
-            QApplication::processEvents();
-            CHECK(!revolve_operations->isHidden());
-            const auto revolve_revision =
-                revolve_session.document().revision();
-            const auto revolve_state =
-                revolve_session.document().state();
-            const auto revolve_undo =
-                revolve_session.undoDepth();
-            const auto revolve_sketch_items = tree->findItems(
-                QStringLiteral("Sketch 1"),
-                Qt::MatchExactly | Qt::MatchRecursive);
-            CHECK(revolve_sketch_items.size() == 1);
-            tree->clearSelection();
-            tree->setCurrentItem(revolve_sketch_items.front());
-            revolve_sketch_items.front()->setSelected(true);
-            edit_sketch->trigger();
-            QApplication::processEvents();
-            CHECK(finish_sketch->isHidden());
-            CHECK(!revolve_operations->isHidden());
-            CHECK(status->text().contains(
-                QStringLiteral("Finish or cancel")));
-            CHECK(revolve_session.document().revision() ==
-                  revolve_revision);
-            CHECK(revolve_session.document().state() == revolve_state);
-            CHECK(revolve_session.undoDepth() == revolve_undo);
-            revolve_cancel->click();
-            QApplication::processEvents();
-            CHECK(revolve_operations->isHidden());
-            std::cout << "UI01_P0_REVOLVE_EDIT_GUARD_PASS"
-                      << std::endl;
-
-            // Fillet and Chamfer creation drafts are also solid
-            // Features; opening Sketch must not replace either draft.
-            CHECK(workbench.activateDocument(&session, {}));
-            QApplication::processEvents();
             auto* edge_operations = workbench.findChild<QWidget*>(
                 QStringLiteral("edgeFeatureOperationsWidget"));
-            CHECK(edge_operations);
-            for (const auto* command : {"FILLET", "CHAMFER"}) {
+            CHECK(revolve_operations && revolve_cancel &&
+                  edge_operations);
+            for (const auto* command :
+                 {"REVOLVE", "FILLET", "CHAMFER"}) {
+                const bool revolve =
+                    std::string_view{command} == "REVOLVE";
+                auto* operations =
+                    revolve ? revolve_operations : edge_operations;
+                auto* cancel_draft =
+                    revolve ? revolve_cancel : cancel;
                 const auto reply = workbench.submitCadInput(
                     command, workbench.cadInputContextGeneration());
                 CHECK(reply.accepted);
                 QApplication::processEvents();
-                CHECK(!edge_operations->isHidden());
-                const auto edge_revision =
+                CHECK(!operations->isHidden());
+                const auto draft_revision =
                     session.document().revision();
-                const auto edge_state = session.document().state();
-                const auto edge_undo = session.undoDepth();
-                const auto edge_sketch_items = tree->findItems(
+                const auto draft_state = session.document().state();
+                const auto draft_undo = session.undoDepth();
+                const auto sketch_rows = tree->findItems(
                     QStringLiteral("Sketch 1"),
                     Qt::MatchExactly | Qt::MatchRecursive);
-                CHECK(edge_sketch_items.size() == 1);
+                CHECK(sketch_rows.size() == 1);
                 tree->clearSelection();
-                tree->setCurrentItem(edge_sketch_items.front());
-                edge_sketch_items.front()->setSelected(true);
+                tree->setCurrentItem(sketch_rows.front());
+                sketch_rows.front()->setSelected(true);
                 edit_sketch->trigger();
                 QApplication::processEvents();
                 CHECK(finish_sketch->isHidden());
-                CHECK(!edge_operations->isHidden());
+                CHECK(!operations->isHidden());
                 CHECK(status->text().contains(
                     QStringLiteral("Finish or cancel")));
-                CHECK(session.document().revision() == edge_revision);
-                CHECK(session.document().state() == edge_state);
-                CHECK(session.undoDepth() == edge_undo);
-                cancel->click();
+                CHECK(session.document().revision() == draft_revision);
+                CHECK(session.document().state() == draft_state);
+                CHECK(session.undoDepth() == draft_undo);
+                cancel_draft->click();
                 QApplication::processEvents();
-                CHECK(edge_operations->isHidden());
+                CHECK(operations->isHidden());
                 std::cout << "UI01_P0_" << command
                           << "_DRAFT_GUARD_PASS" << std::endl;
             }
