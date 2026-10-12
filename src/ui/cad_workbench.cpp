@@ -16245,6 +16245,33 @@ void CadWorkbench::syncActionState() {
         footer_mode = QStringLiteral("sketch");
         mode_cue = QStringLiteral("Sketch edit");
     }
+    // UI-01 G2: an Edit cue refers to the immutable Feature draft
+    // target, never to the mutable Tree/Viewport inspection selection.
+    // Creation drafts intentionally have no authored target to display.
+    std::optional<part::FeatureId> edited_feature_id;
+    if (extrude_draft_) {
+        edited_feature_id = extrude_draft_->featureId();
+    } else if (revolve_draft_) {
+        edited_feature_id = revolve_draft_->featureId();
+    } else if (fillet_draft_) {
+        edited_feature_id = fillet_draft_->featureId();
+    } else if (chamfer_draft_) {
+        edited_feature_id = chamfer_draft_->featureId();
+    }
+    if (edited_feature_id && document_session != nullptr) {
+        const auto* edited_feature =
+            document_session->document().findFeature(
+                *edited_feature_id);
+        if (edited_feature != nullptr) {
+            mode_cue +=
+                QStringLiteral(" — Edit %1 (Feature %2)")
+                    .arg(fromUtf8(edited_feature->name),
+                         fromUtf8(edited_feature_id->serialized()));
+        } else {
+            mode_cue +=
+                QStringLiteral(" — unavailable edit target");
+        }
+    }
     shell_->showOperationsFooterRow(footer_mode);
     shell_->setModeCue(mode_cue);
 
