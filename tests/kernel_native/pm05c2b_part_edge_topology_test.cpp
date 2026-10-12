@@ -879,6 +879,11 @@ int main() {
             g0_cut_stage,
             "V03-interior-cut");
     CHECK(g0_cut.native > g0_base.native);
+    CHECK(g0_cut.native == 16U);
+    CHECK(g0_cut.resolved == 16U);
+    CHECK(g0_cut.ambiguous == 0U);
+    CHECK(g0_cut.missing == 0U);
+    CHECK(g0_cut.unsupported == 0U);
     std::size_t inherited_points = 0U;
     std::size_t new_points = 0U;
     for (const auto& vertex : g0_cut_stage.vertices) {
@@ -906,8 +911,8 @@ int main() {
             ++new_points;
         }
     }
-    CHECK(inherited_points >= 8U);
-    CHECK(new_points > 0U);
+    CHECK(inherited_points == 8U);
+    CHECK(new_points == 8U);
     // G0/V07: remove a full-height corner with an overlapping Cut. A
     // three-Surface point carried by the removed corner must be Missing
     // in the final stage; it must never rebind by similar XYZ geometry.
@@ -932,6 +937,11 @@ int main() {
         characterizeNativeVertices(
             removed_stage, "V07-removed-corner");
     CHECK(removed_stage.stage != original_stage.stage);
+    CHECK(removed_counts.native == 12U);
+    CHECK(removed_counts.resolved == 12U);
+    CHECK(removed_counts.unsupported == 0U);
+    CHECK(removed_counts.ambiguous == 0U);
+    CHECK(removed_counts.missing == 0U);
     std::size_t disappeared_addresses = 0U;
     std::size_t retained_addresses = 0U;
     for (const auto& old_point : original_stage.points) {
@@ -958,8 +968,8 @@ int main() {
             ++retained_addresses;
         }
     }
-    CHECK(disappeared_addresses > 0U);
-    CHECK(retained_addresses > 0U);
+    CHECK(disappeared_addresses == 2U);
+    CHECK(retained_addresses == 6U);
     CHECK(
         disappeared_addresses + retained_addresses ==
         original_stage.points.size());
@@ -1046,9 +1056,14 @@ int main() {
         << " stage_scoping=1"
         << " persisted_datum_source=NOT_IMPLEMENTED\\n";
     // G0.2 characterization only: no guessed expected cardinality.
-    (void)characterizeNativeVertices(
+    const auto g0_chamfer = characterizeNativeVertices(
         *chamfer_feature.result_topology,
         "V06-chamfer");
+    CHECK(g0_chamfer.native == 13U);
+    CHECK(g0_chamfer.resolved == 10U);
+    CHECK(g0_chamfer.unsupported == 3U);
+    CHECK(g0_chamfer.ambiguous == 0U);
+    CHECK(g0_chamfer.missing == 0U);
     CHECK(
         countRole(
             chamfer_feature,
@@ -1137,9 +1152,14 @@ int main() {
     CHECK(fillet.result_topology);
     CHECK(fillet.result_topology->complete());
     // G0.2 characterization only: record any unsupported transitions.
-    (void)characterizeNativeVertices(
+    const auto g0_fillet = characterizeNativeVertices(
         *fillet.result_topology,
         "V05-fillet");
+    CHECK(g0_fillet.native == 13U);
+    CHECK(g0_fillet.resolved == 10U);
+    CHECK(g0_fillet.unsupported == 3U);
+    CHECK(g0_fillet.ambiguous == 0U);
+    CHECK(g0_fillet.missing == 0U);
     CHECK(
         countRole(
             fillet,
@@ -1314,9 +1334,5 @@ int main() {
         << " chain_attempts=" << chain_attempts
         << " chain_successes=" << chain_successes
         << " xyz_identity=0\n";
-    // TEMPORARY G0 measurement: force CTest to publish all preceding
-    // successful native fixture counters. This is an INTENTIONAL RED,
-    // to be removed and replaced with value-backed assertions.
-    std::cerr << "G0_MEASURE_ONLY_PM05C2B: expected diagnostic-only RED" << '\n';
-    return EXIT_FAILURE;
+    return EXIT_SUCCESS;
 }
