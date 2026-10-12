@@ -3,6 +3,7 @@
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QGroupBox>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QResizeEvent>
@@ -302,6 +303,8 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     status_->setWordWrap(true);
     root->addWidget(status_);
 
+    initial_font_line_height_ =
+        std::max(1, fontMetrics().lineSpacing());
     updateResponsiveLayout(true);
 }
 
@@ -476,10 +479,33 @@ void CadWorkbenchShell::updateRightPanelHeightMode() {
         !isVisible()) {
         return;
     }
-    // Measured available panel height with separate enter/exit thresholds.
-    // Never depend on width; do not modify a draft or the Tree selection.
-    constexpr int enter_short_height = 470;
-    constexpr int leave_short_height = 550;
+    // Responsive threshold in the same measured logical coordinates as
+    // the available panel height. Preserve the established 470/550
+    // reference hysteresis, but scale it with live Qt font metrics so
+    // larger accessibility fonts do not clip two unusable short panes.
+    // Reserve space for the real, non-scrolling Operations footer.
+    // Window WIDTH never triggers short-height tabs.
+    const int current_line_height = std::max({
+        fontMetrics().lineSpacing(),
+        properties_group_->fontMetrics().lineSpacing(),
+        operations_group_->fontMetrics().lineSpacing()});
+    const int reference_line_height =
+        std::max(1, initial_font_line_height_);
+    const int responsive_line_height =
+        std::max(reference_line_height, current_line_height);
+    const int footer_extra = operations_footer_ != nullptr
+        ? std::max(0, operations_footer_->sizeHint().height() - 48)
+        : 0;
+    const int enter_short_height =
+        (470 * responsive_line_height +
+            reference_line_height - 1) /
+            reference_line_height +
+        footer_extra;
+    const int leave_short_height =
+        (550 * responsive_line_height +
+            reference_line_height - 1) /
+            reference_line_height +
+        footer_extra;
     const int available_height = right_panel_->height();
     const bool short_required = short_right_panel_mode_
         ? available_height < leave_short_height
