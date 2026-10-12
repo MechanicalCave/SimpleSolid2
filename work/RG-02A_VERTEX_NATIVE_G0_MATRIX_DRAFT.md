@@ -2,10 +2,10 @@
 
 **Status:** DRAFT — evidence plan only; no native test executions claimed  
 **Date:** 2026-10-12  
-**Baseline:** `main` `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c`  
+**Audited source baseline:** `main` `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c`; roadmap v1.32 subsequently merged to `main` as `108420705aaee9182ca649401e73f1ca23309de2` (revalidate at G0 activation).  
 **Design authority:** `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md`  
 **Audit:** `work/RG-02A_REFERENCE_FOUNDATION_AUDIT_DRAFT.md`  
-**Authorization:** no production/test mutations until bounded RG-02 Work Contract is separately Owner-accepted and formally activated. No RG-02 UI changes before separate Owner UX consultation and approval.
+**Authorization:** bounded RG-02A/G0 evidence-only Work Contract scope was Owner-accepted 2026-10-12, and roadmap v1.32 sequencing was separately approved and merged in PR #330. The contract remains **unmerged and unactivated**: no G0 test mutation may start before its governance merge and an independent `ACTIVE.yaml` activation PR. No RG-02 UI changes before separate Owner UX consultation and explicit approval.
 
 ## 1. Hard evidence found in current implementation
 
