@@ -3,9 +3,11 @@
 #include <QWidget>
 #include <QHash>
 #include <QString>
+#include <vector>
 
 class QGroupBox;
 class QHBoxLayout;
+class QMenu;
 class QLabel;
 class QResizeEvent;
 class QScrollArea;
@@ -41,6 +43,7 @@ public:
         QWidget* secondary = nullptr);
     void showOperationsFooterRow(const QString& mode);
     void setModeCue(const QString& mode);
+    void setToolbarContext(bool sketch_context);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -54,6 +57,8 @@ private:
 
     void updateResponsiveLayout(bool force = false);
     void updateRightPanelHeightMode();
+    void refreshToolbarOverflow();
+    void rebuildToolbarMoreMenu();
     void applyRightPanelRatio();
     void setNarrowPanel(QWidget* panel);
     [[nodiscard]] bool panelContainsFocus(
@@ -89,6 +94,12 @@ private:
     int initial_font_line_height_{1};
     bool short_right_panel_mode_{};
     bool operations_active_{};
+    QScrollArea* contextual_tools_scroll_{};
+    QToolButton* toolbar_more_{};
+    QMenu* toolbar_more_menu_{};
+    std::vector<QWidget*> toolbar_overflow_hidden_;
+    bool toolbar_sketch_context_{};
+    bool refreshing_toolbar_{};
     QScrollArea* properties_scroll_{};
     QScrollArea* operations_scroll_{};
     QWidget* tree_panel_{};
