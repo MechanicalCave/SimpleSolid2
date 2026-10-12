@@ -442,6 +442,24 @@ int main(int argc, char* argv[]) {
             QStringLiteral("workbenchToolbarMoreButton"));
     CHECK(toolbar_more != nullptr);
     CHECK(toolbar_more->menu() != nullptr);
+    // G3 priority tier 1: unpinned Part Modify must be directly
+    // reachable via a named group dropdown BEFORE using last-resort
+    // More. Assert real Fillet/Chamfer entries, not decorative labels.
+    auto* modify_dropdown =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarGroupDropdown_Part_Modify"));
+    CHECK(modify_dropdown != nullptr);
+    CHECK(modify_dropdown->menu() != nullptr);
+    bool fillet_in_group_menu = false;
+    bool chamfer_in_group_menu = false;
+    for (auto* action : modify_dropdown->menu()->actions()) {
+        if (action == nullptr) continue;
+        fillet_in_group_menu |=
+            action->text() == QStringLiteral("Fillet");
+        chamfer_in_group_menu |=
+            action->text() == QStringLiteral("Chamfer");
+    }
+    CHECK(fillet_in_group_menu && chamfer_in_group_menu);
 
     const auto sketch_top =
         sketch_tool->mapTo(
