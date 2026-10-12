@@ -10,7 +10,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSplitter>
+#include <QTabWidget>
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -440,6 +442,37 @@ int main(int argc, char* argv[]) {
     CHECK(right_panel->width() <= 340);
     CHECK(editor_host->width() > tree_panel->width());
     CHECK(editor_host->width() > right_panel->width());
+
+    // UI-01 G2 native baseline characterization (expected RED until the
+    // accepted Properties / Operations right-hand layout is implemented).
+    // Must be two independently vertically scrollable panes with a
+    // user-adjustable vertical splitter, not one giant clipped GroupBox.
+    auto* right_vertical_splitter =
+        workbench.findChild<QSplitter*>(
+            QStringLiteral("workbenchRightVerticalSplitter"));
+    CHECK(right_vertical_splitter != nullptr);
+    CHECK(right_vertical_splitter->orientation() == Qt::Vertical);
+    auto* properties_scroll =
+        workbench.findChild<QScrollArea*>(
+            QStringLiteral("workbenchPropertiesScroll"));
+    auto* operations_scroll =
+        workbench.findChild<QScrollArea*>(
+            QStringLiteral("workbenchOperationsScroll"));
+    CHECK(properties_scroll != nullptr);
+    CHECK(operations_scroll != nullptr);
+    CHECK(properties_scroll != operations_scroll);
+    CHECK(properties_scroll->verticalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOn);
+    CHECK(operations_scroll->verticalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOn);
+    const auto panel_heights = right_vertical_splitter->sizes();
+    CHECK(panel_heights.size() == 2);
+    CHECK(panel_heights[0] > 0 && panel_heights[1] > 0);
+    const double initial_properties_fraction =
+        static_cast<double>(panel_heights[0]) /
+        static_cast<double>(panel_heights[0] + panel_heights[1]);
+    CHECK(std::abs(initial_properties_fraction - 0.4) < 0.12);
+    std::cout << "UI01_G2_RIGHT_PANELS_NATIVE_LAYOUT_PASS" << std::endl;
 
     const auto initial_side_widths = splitter->sizes();
     CHECK(initial_side_widths.size() == 3);
