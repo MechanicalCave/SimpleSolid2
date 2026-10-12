@@ -103,7 +103,10 @@ part::PartDocument makeBasePart() {
 // G0/V03: a real Part-owned Add followed by a native Cut. Each Profile has
 // its own Sketch; never infer new topological identity from coordinates.
 part::PartDocument withInteriorCut(
-    const part::PartDocument& base) {
+    const part::PartDocument& base,
+    sketch::Point2 first_corner = {10.0, 5.0},
+    sketch::Point2 opposite_corner = {30.0, 25.0},
+    double cut_depth = 10.0) {
     auto restored =
         part::PartDocument::restore(
             base.documentId(),
@@ -127,8 +130,8 @@ part::PartDocument withInteriorCut(
             application::AddSketchRectangleCommand{
                 *sketch_created.sketch_id,
                 session.document().revision(),
-                {10.0, 5.0},
-                {30.0, 25.0},
+                first_corner,
+                opposite_corner,
                 sketch::EntityRole::regular,
                 false});
     CHECK(cut_rectangle.ok());
@@ -166,7 +169,7 @@ part::PartDocument withInteriorCut(
                 *cut_profile.profile_id,
                 part::ExtrudeOperation::cut,
                 part::OneSidedExtrudeExtent{
-                    core::LengthValue{10.0},
+                    core::LengthValue{cut_depth},
                     false}}});
     auto cut_document =
         part::PartDocument::restore(
@@ -771,6 +774,67 @@ int main() {
     }
     CHECK(inherited_points >= 8U);
     CHECK(new_points > 0U);
+    // G0/V07: remove a full-height corner with an overlapping Cut. A
+    // three-Surface point carried by the removed corner must be Missing
+    // in the final stage; it must never rebind by similar XYZ geometry.
+    const auto removed_corner_document =
+        withInteriorCut(
+            base_document,
+            {-5.0, -5.0},
+            {15.0, 15.0},
+            20.0);
+    const auto removed_corner_eval =
+        part::evaluatePart(
+            removed_corner_document, kernel);
+    CHECK(
+        removed_corner_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(removed_corner_eval.features.size() == 2U);
+    CHECK(removed_corner_eval.features[0].result_topology);
+    CHECK(removed_corner_eval.features[1].result_topology);
+    const auto& removed_stage =
+        *removed_corner_eval.features[1].result_topology;
+    const auto removed_counts =
+        characterizeNativeVertices(
+            removed_stage, "V07-removed-corner");
+    CHECK(removed_stage.stage != original_stage.stage);
+    std::size_t disappeared_addresses = 0U;
+    std::size_t retained_addresses = 0U;
+    for (const auto& old_point : original_stage.points) {
+        CHECK(
+            old_point.status ==
+            kernel::ReferenceStatus::resolved);
+        const auto current = std::find_if(
+            removed_stage.points.begin(),
+            removed_stage.points.end(),
+            [&old_point](const auto& candidate) {
+                return candidate.address == old_point.address;
+            });
+        CHECK(current != removed_stage.points.end());
+        if (current->status ==
+                kernel::ReferenceStatus::missing) {
+            CHECK(current->candidate_vertex_count == 0U);
+            CHECK(current->current_vertices.empty());
+            ++disappeared_addresses;
+        } else {
+            CHECK(
+                current->status ==
+                kernel::ReferenceStatus::resolved);
+            CHECK(current->current_vertices.size() == 1U);
+            ++retained_addresses;
+        }
+    }
+    CHECK(disappeared_addresses > 0U);
+    CHECK(retained_addresses > 0U);
+    CHECK(
+        disappeared_addresses + retained_addresses ==
+        original_stage.points.size());
+    std::cout
+        << "RG02A_G0_V07"
+        << " disappeared_addresses=" << disappeared_addresses
+        << " retained_addresses=" << retained_addresses
+        << " current_native_vertices=" << removed_counts.native
+        << " nearest_xyz_rebind=0\\n";
     std::cout
         << "RG02A_G0_V03"
         << " inherited_resolved=" << inherited_points
