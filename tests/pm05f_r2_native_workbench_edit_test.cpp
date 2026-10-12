@@ -1819,6 +1819,101 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+
+        // UI-01 G0: deterministic real-Qt/OCCT RED. The existing Base
+        // Extrude Feature is in a live edit draft when the user double-
+        // clicks the source Sketch (then Profile) in the actual Tree.
+        // Neither click may start a second, incompatible edit context.
+        // Test first: intentionally NO production fix in this commit.
+        if (!pg01d_ui_only && !pg01c_only) {
+            auto* extrude_operations =
+                workbench.findChild<QWidget*>(
+                    QStringLiteral("extrudeOperationsWidget"));
+            auto* extrude_cancel =
+                workbench.findChild<QPushButton*>(
+                    QStringLiteral("extrudeCancelButton"));
+            auto* finish_sketch =
+                workbench.findChild<QPushButton*>(
+                    QStringLiteral("finishSketchButton"));
+            CHECK(extrude_operations &&
+                  extrude_cancel && finish_sketch);
+            CHECK(!session.document().body().features.empty());
+            auto* feature_item = featureTreeItem(
+                *tree, session.document().body().features.front().id);
+            CHECK(feature_item != nullptr);
+            tree->clearSelection();
+            tree->setCurrentItem(feature_item);
+            feature_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(edit->isEnabled());
+            edit->click();
+            QApplication::processEvents();
+            CHECK(!extrude_operations->isHidden());
+            CHECK(finish_sketch->isHidden());
+
+            const auto state_before = session.document().state();
+            const auto revision_before =
+                session.document().revision();
+            const auto undo_before = session.undoDepth();
+            const bool dirty_before = session.needsSave();
+
+            auto doubleClickTreeEntry = [&](const QString& title) {
+                QTreeWidgetItem* target = nullptr;
+                for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                    if ((*it)->text(0) == title) {
+                        target = *it;
+                        break;
+                    }
+                }
+                CHECK(target != nullptr);
+                for (auto* parent = target->parent(); parent != nullptr;
+                     parent = parent->parent()) {
+                    tree->expandItem(parent);
+                }
+                tree->scrollToItem(target);
+                QApplication::processEvents();
+                const auto rect = tree->visualItemRect(target);
+                CHECK(rect.isValid());
+                CHECK(tree->viewport()->rect().contains(rect.center()));
+                QTest::mouseDClick(tree->viewport(), Qt::LeftButton,
+                                  Qt::NoModifier, rect.center());
+                QApplication::processEvents();
+            };
+
+            doubleClickTreeEntry(QStringLiteral("Sketch 1"));
+            std::cerr << "UI01_G0_NATIVE_SKETCH_ENTRY"
+                      << " sketch_finish_visible="
+                      << (!finish_sketch->isHidden())
+                      << " feature_draft_panel_visible="
+                      << (!extrude_operations->isHidden()) << '\n';
+            // Known initial RED: current requestEditSketch() does not
+            // reject an existing Extrude Feature draft.
+            CHECK(finish_sketch->isHidden());
+            CHECK(!extrude_operations->isHidden());
+            CHECK(session.document().state() == state_before);
+            CHECK(session.document().revision() == revision_before);
+            CHECK(session.undoDepth() == undo_before);
+            CHECK(session.needsSave() == dirty_before);
+
+            doubleClickTreeEntry(QStringLiteral("Profile 1"));
+            CHECK(finish_sketch->isHidden());
+            CHECK(!extrude_operations->isHidden());
+            CHECK(session.document().state() == state_before);
+            CHECK(session.document().revision() == revision_before);
+            CHECK(session.undoDepth() == undo_before);
+            CHECK(session.needsSave() == dirty_before);
+
+            extrude_cancel->click();
+            QApplication::processEvents();
+            CHECK(extrude_operations->isHidden());
+            CHECK(session.document().state() == state_before);
+            CHECK(session.document().revision() == revision_before);
+            CHECK(session.undoDepth() == undo_before);
+            CHECK(session.needsSave() == dirty_before);
+            std::cout << "UI01_G0_EDIT_CONFLICT_GUARD_PASS"
+                      << " sketch=1 profile=1"
+                      << " draft_preserved=1 no_authored_mutation=1\n";
+        }
         if (!pg01d_ui_only && !pg01c_only) {
             // Edge Picking R1 G1 — exactly the untouched Owner native v16/v2
             // Part, unlike the auxiliary synthetic viewer visibility RED.
