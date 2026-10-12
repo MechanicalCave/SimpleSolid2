@@ -4133,10 +4133,13 @@ void CadWorkbench::buildUi() {
 
     // Rehome the original connected controls, never action proxies.
     // The shell owns presentation; each handler still owns its CAD draft.
+    // One physical footer row owns both ORIGINAL Sketch controls.
+    // Support picking exposes Create Sketch + Cancel; after authoring,
+    // ordinary Sketch Edit exposes Finish Sketch while Cancel is hidden.
+    // A QPushButton cannot live in two QStackedWidget pages at once.
     shell_->registerOperationsFooterRow(
-        QStringLiteral("sketch"), finish_sketch_button_);
-    shell_->registerOperationsFooterRow(
-        QStringLiteral("sketchcreate"), cancel_sketch_button_);
+        QStringLiteral("sketch"),
+        finish_sketch_button_, cancel_sketch_button_);
     shell_->registerOperationsFooterRow(
         QStringLiteral("sketchline"),
         finish_line_button_, cancel_line_button_);
@@ -16328,7 +16331,7 @@ void CadWorkbench::syncActionState() {
         footer_mode = QStringLiteral("project");
         mode_cue = QStringLiteral("Project Geometry operation");
     } else if (sketch_support_pick_active_) {
-        footer_mode = QStringLiteral("sketchcreate");
+        footer_mode = QStringLiteral("sketch");
         mode_cue = QStringLiteral("Choose Sketch support");
     } else if (extrude_profile_pick_active_) {
         mode_cue = QStringLiteral("Choose Extrude Profile");
