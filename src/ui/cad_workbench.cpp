@@ -2043,7 +2043,11 @@ void CadWorkbench::buildUi() {
                 selected_axis_id_.reset();
                 selected_datum_id_.reset();
             }
-            if (viewport_controller_) {
+            // A Feature draft uses a tool-stage Body selection. Tree
+            // inspection must not reconfigure that Viewer overlay and
+            // discard the exact selected material Edge inputs.
+            if (viewport_controller_ &&
+                !fillet_draft_ && !chamfer_draft_) {
                 viewport_controller_->
                     setFeatureContributionSelection(
                         semantic);
