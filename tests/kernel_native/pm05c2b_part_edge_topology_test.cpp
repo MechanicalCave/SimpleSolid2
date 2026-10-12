@@ -1314,5 +1314,9 @@ int main() {
         << " chain_attempts=" << chain_attempts
         << " chain_successes=" << chain_successes
         << " xyz_identity=0\n";
-    return EXIT_SUCCESS;
+    // TEMPORARY G0 measurement: force CTest to publish all preceding
+    // successful native fixture counters. This is an INTENTIONAL RED,
+    // to be removed and replaced with value-backed assertions.
+    std::cerr << "G0_MEASURE_ONLY_PM05C2B: expected diagnostic-only RED" << '\n';
+    return EXIT_FAILURE;
 }
