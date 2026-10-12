@@ -86,6 +86,7 @@ private:
     QLabel* operations_mode_cue_{};
     QHash<QString, QWidget*> operations_footer_rows_;
     double right_panel_ratio_{0.4};
+    int initial_font_line_height_{1};
     bool short_right_panel_mode_{};
     bool operations_active_{};
     QScrollArea* properties_scroll_{};
