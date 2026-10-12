@@ -3956,6 +3956,9 @@ void CadWorkbench::buildUi() {
         new QLabel(project_edge_operations_widget_);
     project_edge_selection_label_->setObjectName(
         QStringLiteral("projectEdgeSelectionLabel"));
+    // Source Edge/Face counts may be much longer than the right panel.
+    // Keep the entire diagnostic readable in the vertical flow.
+    project_edge_selection_label_->setWordWrap(true);
     project_layout->addWidget(project_edge_selection_label_);
 
     auto* role_row = new QWidget(project_edge_operations_widget_);
