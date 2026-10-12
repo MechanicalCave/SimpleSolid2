@@ -904,10 +904,18 @@ int main(int argc, char* argv[]) {
         }
     }
     CHECK(sketch_submenu != nullptr);
+    // In icon-only mode QPushButton::text() is intentionally empty,
+    // while the stable accessible command name and More label must not
+    // disappear. Do not lower the original-command invocation assertion.
+    const QString sketch_command_label =
+        sketch_tool->text().isEmpty()
+            ? sketch_tool->accessibleName()
+            : sketch_tool->text();
+    CHECK(!sketch_command_label.isEmpty());
     QAction* sketch_overflow_action = nullptr;
     for (auto* action : sketch_submenu->actions()) {
         if (action != nullptr &&
-            action->text() == sketch_tool->text()) {
+            action->text() == sketch_command_label) {
             sketch_overflow_action = action;
             break;
         }
