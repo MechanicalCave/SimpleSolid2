@@ -439,6 +439,85 @@ QTreeWidgetItem* featureTreeItem(
     return nullptr;
 }
 
+// UI-01 G1: real Tree double-click across every existing solid-Feature
+// edit family. Identity is semantic, not label-dependent; no edit entry
+// can Finish/Cancel/change a live draft or mutate the owning Document.
+void verifyUi01SolidFeatureEntryGuard(
+    ui::CadWorkbench& workbench,
+    QTreeWidget& tree,
+    application::DocumentSession& session,
+    QWidget& active_operations,
+    const char* feature_kind) {
+    auto* finish_sketch =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("finishSketchButton"));
+    CHECK(finish_sketch);
+    CHECK(!active_operations.isHidden());
+    CHECK(finish_sketch->isHidden());
+    CHECK(!session.document().sketches().empty());
+    CHECK(!session.document().profiles().empty());
+
+    const auto original_item = tree.currentItem();
+    const auto state_before = session.document().state();
+    const auto revision_before = session.document().revision();
+    const auto undo_before = session.undoDepth();
+    const bool dirty_before = session.needsSave();
+
+    const auto attemptTreeEntry = [&](int identity_role,
+                                       const QString& semantic_id) {
+        QTreeWidgetItem* target = nullptr;
+        for (QTreeWidgetItemIterator it(&tree); *it; ++it) {
+            if ((*it)->data(0, identity_role).toString() ==
+                semantic_id) {
+                target = *it;
+                break;
+            }
+        }
+        CHECK(target);
+        for (auto* parent = target->parent(); parent;
+             parent = parent->parent()) {
+            tree.expandItem(parent);
+        }
+        tree.scrollToItem(target);
+        QApplication::processEvents();
+        const auto rect = tree.visualItemRect(target);
+        CHECK(rect.isValid());
+        CHECK(tree.viewport()->rect().contains(rect.center()));
+        QTest::mouseDClick(tree.viewport(), Qt::LeftButton,
+                          Qt::NoModifier, rect.center());
+        QApplication::processEvents();
+        CHECK(finish_sketch->isHidden());
+        CHECK(!active_operations.isHidden());
+        CHECK(session.document().state() == state_before);
+        CHECK(session.document().revision() == revision_before);
+        CHECK(session.undoDepth() == undo_before);
+        CHECK(session.needsSave() == dirty_before);
+    };
+
+    attemptTreeEntry(
+        Qt::UserRole + 42,
+        QString::fromStdString(std::string{
+            session.document().sketches().front().id.value()}));
+    attemptTreeEntry(
+        Qt::UserRole + 43,
+        QString::fromStdString(
+            session.document().profiles().front().id.serialized()));
+
+    tree.clearSelection();
+    if (original_item != nullptr) {
+        tree.setCurrentItem(original_item);
+        original_item->setSelected(true);
+    } else {
+        tree.setCurrentItem(nullptr);
+    }
+    QApplication::processEvents();
+    CHECK(!active_operations.isHidden());
+    std::cout << "UI01_G1_SOLID_FEATURE_ENTRY_GUARD_PASS"
+              << " feature=" << feature_kind
+              << " sketch=1 profile=1"
+              << " draft_preserved=1 authored_unchanged=1\n";
+}
+
 bool nativeClick(
     viewer_qt_occt::QtOcctViewerWidget& viewport,
     viewer::Point3 world) {
