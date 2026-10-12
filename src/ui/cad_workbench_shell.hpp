@@ -115,6 +115,7 @@ private:
     QHash<QString, QStringList> toolbar_group_order_;
     QHash<QString, bool> toolbar_pin_overrides_;
     bool toolbar_customize_active_{};
+    bool toolbar_order_initialized_{};
     QMenu* toolbar_more_menu_{};
     QHash<QString, QToolButton*> toolbar_group_dropdowns_;
     QHash<QPushButton*, QString> toolbar_icon_compacted_;
