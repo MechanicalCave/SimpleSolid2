@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QWidget>
+#include <QHash>
+#include <QString>
 
 class QGroupBox;
 class QHBoxLayout;
@@ -8,6 +10,7 @@ class QLabel;
 class QResizeEvent;
 class QScrollArea;
 class QSplitter;
+class QStackedWidget;
 class QTabWidget;
 class QToolButton;
 class QTreeWidget;
@@ -32,6 +35,12 @@ public:
     [[nodiscard]] double rightPanelRatio() const;
     void setRightPanelRatio(double ratio);
     void setOperationsActive(bool active);
+    void registerOperationsFooterRow(
+        const QString& mode,
+        QWidget* primary,
+        QWidget* secondary = nullptr);
+    void showOperationsFooterRow(const QString& mode);
+    void setModeCue(const QString& mode);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -71,6 +80,11 @@ private:
     QGroupBox* properties_group_{};
     QGroupBox* operations_group_{};
     QTabWidget* right_short_tabs_{};
+    QStackedWidget* operations_footer_stack_{};
+    QWidget* operations_footer_{};
+    QLabel* viewport_mode_cue_{};
+    QLabel* operations_mode_cue_{};
+    QHash<QString, QWidget*> operations_footer_rows_;
     double right_panel_ratio_{0.4};
     bool short_right_panel_mode_{};
     bool operations_active_{};
