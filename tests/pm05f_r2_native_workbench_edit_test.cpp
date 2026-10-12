@@ -1900,6 +1900,8 @@ int main(int argc, char* argv[]) {
             // the as-built baseline: requestEditSketch has no active
             // solid-Feature draft guard. Keep the witnessed RED.
             CHECK(!sketch_opened);
+            CHECK(status->text().contains(
+                QStringLiteral("Finish or cancel")));
             CHECK(draft_preserved);
             CHECK(session.document().revision() ==
                   feature_draft_revision);
@@ -1926,6 +1928,8 @@ int main(int argc, char* argv[]) {
             CHECK(edit_profile->isEnabled());
             edit_profile->trigger();
             QApplication::processEvents();
+            CHECK(status->text().contains(
+                QStringLiteral("Finish or cancel")));
             CHECK(finish_sketch->isHidden());
             CHECK(!extrude_operations->isHidden());
             CHECK(session.document().revision() ==
