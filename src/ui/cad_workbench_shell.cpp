@@ -767,9 +767,7 @@ bool CadWorkbenchShell::eventFilter(
         watched == contextual_tools_scroll_->widget() &&
         (event->type() == QEvent::Resize ||
          event->type() == QEvent::LayoutRequest)) {
-        QTimer::singleShot(0, this, [this] {
-            updateToolbarGroupFrames();
-        });
+        scheduleToolbarGroupFrameUpdate();
     }
     if (contextual_tools_scroll_ != nullptr &&
         watched == contextual_tools_scroll_->viewport() &&
@@ -845,17 +843,23 @@ void CadWorkbenchShell::setToolbarContext(bool sketch_context) {
         toolbar_sketch_context_ != sketch_context;
     toolbar_sketch_context_ = sketch_context;
     toolbar_order_initialized_ = true;
-    if (context_changed) {
-        const QString context = sketch_context
-            ? QStringLiteral("Sketch") : QStringLiteral("Part");
-        // The previous context can have reordered its real tool widgets
-        // within this shared QHBoxLayout. Even DEFAULT order must be
-        // re-applied when switching back; otherwise groups from the
-        // previous context occupy the available inline width and hide
-        // reachable commands before the named dropdown/More tiers.
-        // This moves only presentation widgets, never CAD actions/state.
-        applyToolbarGroupOrder(context);
+    if (!context_changed) {
+        // Called by syncActionState after EVERY Sketch point and Tree
+        // selection. Rebuilding a complete contextual toolbar when the
+        // mode/order/width is unchanged creates avoidable layout and
+        // paint storms in the same GUI-thread event cycle as a Line
+        // commit. The original buttons already carry enabled/checked
+        // state. Keep the closed More menu's action snapshot current
+        // only when it is part of the visible narrow presentation.
+        if (toolbar_more_ != nullptr && !toolbar_more_->isHidden()) {
+            rebuildToolbarMoreMenu();
+        }
+        return;
     }
+    const QString context = sketch_context
+        ? QStringLiteral("Sketch") : QStringLiteral("Part");
+    // Preserve whole-group order when genuinely switching Part/Sketch.
+    applyToolbarGroupOrder(context);
     refreshToolbarOverflow();
 }
 
@@ -1059,11 +1063,9 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     }
     QScopedValueRollback<bool> reentry_guard(
         refreshing_toolbar_, true);
-    // Refresh may return at any compaction tier; every tier must update
-    // the outline after the final inline/dropdown geometry has settled.
-    QTimer::singleShot(0, this, [this] {
-        updateToolbarGroupFrames();
-    });
+    // A CAD action can emit several geometry/layout signals.
+    // Coalesce their frame updates rather than enqueueing one timer each.
+    scheduleToolbarGroupFrameUpdate();
     auto groups = toolbarGroups(toolbar_sketch_context_);
     // Every native button follows the same baseline height, while
     // larger font/DPI metrics can grow the minimum instead of clipping.
@@ -1595,6 +1597,15 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     rebuildToolbarMoreMenu();
 }
 
+void CadWorkbenchShell::scheduleToolbarGroupFrameUpdate() {
+    if (toolbar_group_frame_update_queued_) return;
+    toolbar_group_frame_update_queued_ = true;
+    QTimer::singleShot(0, this, [this] {
+        toolbar_group_frame_update_queued_ = false;
+        updateToolbarGroupFrames();
+    });
+}
+
 void CadWorkbenchShell::updateToolbarGroupFrames() {
     if (contextual_tools_scroll_ == nullptr) return;
     auto* host = contextual_tools_scroll_->widget();
@@ -1610,7 +1621,8 @@ void CadWorkbenchShell::updateToolbarGroupFrames() {
         }
         const QString key = context + QStringLiteral("_") + name;
         auto* frame = toolbar_group_frames_.value(key, nullptr);
-        if (frame == nullptr) {
+        const bool first_frame = frame == nullptr;
+        if (first_frame) {
             frame = new QFrame(host);
             frame->setObjectName(
                 QStringLiteral("workbenchToolbarGroupFrame_") + key);
@@ -1655,7 +1667,9 @@ void CadWorkbenchShell::updateToolbarGroupFrames() {
             frame->setGeometry(border_rect);
         }
         if (frame->isHidden()) frame->show();
-        frame->lower();
+        // Lower only once at construction. Repeated lower() repaints
+        // the full group area even if its geometry is unchanged.
+        if (first_frame) frame->lower();
         visible_frames.insert(key);
     }
     // Avoid hide/show on every resize callback: that can trigger
