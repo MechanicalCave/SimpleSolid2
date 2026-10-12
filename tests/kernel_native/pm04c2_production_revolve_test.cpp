@@ -888,6 +888,39 @@ int main() {
               part::BodyEvaluationStatus::up_to_date);
         CHECK(evaluated.current_topology.has_value());
         CHECK(evaluated.current_topology->complete());
+        // RG-02A/G0 V10: real OCCT cylinder seam Vertices. Ordinary
+        // Viewport pick eligibility only excludes integrity failure and
+        // representation artifacts; it does not certify a durable Point.
+        const auto g0_cylinder = observeRevolvePartVertices(
+            *evaluated.current_topology,
+            "V10-cylinder-extrude");
+        CHECK(g0_cylinder.native > 0U);
+        CHECK(g0_cylinder.unsupported > 0U);
+        std::size_t ordinary_policy_eligible_unsupported = 0U;
+        for (const auto& vertex :
+             evaluated.current_topology->vertices) {
+            if (vertex.referenceability !=
+                    kernel::ReferenceStatus::unsupported) {
+                continue;
+            }
+            CHECK(vertex.accounting_class ==
+                  part::TopologyAccountingClass::
+                      semantically_unsupported);
+            CHECK(vertex.point_candidates.empty());
+            CHECK(vertex.runtime_token.valid());
+            // This corresponds to the existing ordinary Viewer
+            // accounting-class filter; this test does not execute UI.
+            ++ordinary_policy_eligible_unsupported;
+        }
+        CHECK(ordinary_policy_eligible_unsupported > 0U);
+        CHECK(ordinary_policy_eligible_unsupported ==
+              g0_cylinder.unsupported);
+        std::cout
+            << "RG02A_G0_V10"
+            << " unsupported_native_eligible_by_policy="
+            << ordinary_policy_eligible_unsupported
+            << " ui_interaction=NOT_TESTED"
+            << " durable_point=UNSUPPORTED\\n";
         const auto circle =
             firstAuthorableCircle(
                 *evaluated.current_topology);
