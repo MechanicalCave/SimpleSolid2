@@ -2046,6 +2046,90 @@ int main(int argc, char* argv[]) {
                       << " sketch_refused=1 profile_refused=1"
                       << " dirty_revision_undo_unchanged=1"
                       << std::endl;
+            // UI-01 G1: creation drafts are also exclusive. Exercise the
+            // actual Workbench command dispatcher rather than fabricating
+            // Feature-state fixtures. This complements the four committed
+            // Feature Edit / Tree double-click cases later in this suite.
+            CHECK(workbench.activateDocument(&session, {}));
+            QApplication::processEvents();
+            auto* revolve_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("revolveOperationsWidget"));
+            auto* revolve_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("revolveCancelButton"));
+            auto* edge_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("edgeFeatureOperationsWidget"));
+            CHECK(revolve_operations && revolve_cancel && edge_operations);
+            const auto profile_key = QString::fromStdString(
+                session.document().profiles().front().id.serialized());
+            for (const char* command : {"REVOLVE", "FILLET", "CHAMFER"}) {
+                const bool revolve =
+                    std::string_view{command} == "REVOLVE";
+                auto* operations =
+                    revolve ? revolve_operations : edge_operations;
+                auto* cancel_draft =
+                    revolve ? revolve_cancel : cancel;
+                const auto reply = workbench.submitCadInput(
+                    command, workbench.cadInputContextGeneration());
+                CHECK(reply.accepted);
+                QApplication::processEvents();
+                CHECK(!operations->isHidden());
+                CHECK(sketch_finish->isHidden());
+                const auto draft_state = session.document().state();
+                const auto draft_revision = session.document().revision();
+                const auto draft_undo = session.undoDepth();
+                const bool draft_dirty = session.needsSave();
+
+                QTreeWidgetItem* draft_sketch_item = nullptr;
+                QTreeWidgetItem* draft_profile_item = nullptr;
+                for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                    if ((*it)->data(0, Qt::UserRole + 42)
+                            .toString() == sketch_key) {
+                        draft_sketch_item = *it;
+                    }
+                    if ((*it)->data(0, Qt::UserRole + 43)
+                            .toString() == profile_key) {
+                        draft_profile_item = *it;
+                    }
+                }
+                CHECK(draft_sketch_item && draft_profile_item);
+                // A rejected entry is repeatable, does not clear the draft,
+                // and never creates an extra Undo step or dirty checkpoint.
+                for (int repeat = 0; repeat < 2; ++repeat) {
+                    for (auto* target : {draft_sketch_item,
+                                         draft_profile_item}) {
+                        tree->clearSelection();
+                        tree->setCurrentItem(target);
+                        target->setSelected(true);
+                        QApplication::processEvents();
+                        if (target == draft_sketch_item) {
+                            edit_sketch->trigger();
+                        } else {
+                            edit_profile->trigger();
+                        }
+                        QApplication::processEvents();
+                        CHECK(sketch_finish->isHidden());
+                        CHECK(!operations->isHidden());
+                        CHECK(status->text().contains(
+                            QStringLiteral(
+                                "Finish or cancel the active Feature draft")));
+                        CHECK(session.document().state() == draft_state);
+                        CHECK(session.document().revision() == draft_revision);
+                        CHECK(session.undoDepth() == draft_undo);
+                        CHECK(session.needsSave() == draft_dirty);
+                    }
+                }
+                cancel_draft->click();
+                QApplication::processEvents();
+                CHECK(operations->isHidden());
+                CHECK(session.document().state() == draft_state);
+                CHECK(session.document().revision() == draft_revision);
+                CHECK(session.undoDepth() == draft_undo);
+                CHECK(session.needsSave() == draft_dirty);
+                std::cout << "UI01_P0_CREATION_DRAFT_GUARD_PASS"
+                          << " feature=" << command
+                          << " repeated_denials=4"
+                          << " authored_state_unchanged=1" << std::endl;
+            }
             if (ui01_p0_only) {
                 result = EXIT_SUCCESS;
                 workbench.close();
