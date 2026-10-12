@@ -526,6 +526,10 @@ int main(int argc, char* argv[]) {
         CHECK(frame->testAttribute(Qt::WA_TransparentForMouseEvents));
     }
 
+    // Deliberately expand all groups to direct buttons; this is a
+    // geometry/layout test, not a RED for legitimate narrow overflow.
+    workbench.resize(2100, 800);
+    QApplication::processEvents();
     // UI-01 G3 Owner-accepted compact sectors: the semantic heading
     // and the passive pin belong ABOVE the original command buttons,
     // inside the SAME tight frame, not inline as an extra wide button row.
@@ -573,6 +577,9 @@ int main(int argc, char* argv[]) {
           compact_fillet_bounds.top());
     std::cout << "UI01_G3_COMPACT_SECTOR_HEADER_NATIVE_PASS"
               << std::endl;
+
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
 
     // Owner screenshot G2 RED: Project Geometry Source/Role/Remove
     // widgets must adapt to the measured Operations viewport width
