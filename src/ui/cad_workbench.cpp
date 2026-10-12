@@ -11253,11 +11253,28 @@ void CadWorkbench::cancelSketchTool() {
     syncActionState();
 }
 
+bool CadWorkbench::hasActiveSolidFeatureContext() const noexcept {
+    return extrude_profile_pick_active_ ||
+           extrude_draft_.has_value() ||
+           revolve_draft_.has_value() ||
+           fillet_draft_.has_value() ||
+           chamfer_draft_.has_value();
+}
+
 void CadWorkbench::requestEditSketch(
     const sketch::SketchId& sketch_id) {
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+
+    // UI-01 P0: fail closed before any Sketch enter/cancel/reflow.
+    // Feature draft, its active selection and Undo/dirty state remain
+    // untouched. Tree, properties-action and profile entry share this gate.
+    if (hasActiveSolidFeatureContext()) {
+        setStatusText(QStringLiteral(
+            "Finish or cancel the active solid Feature before editing a Sketch or Profile."));
         return;
     }
 
@@ -11298,6 +11315,14 @@ void CadWorkbench::requestEditProfile(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+
+    // Do not bypass the single Sketch-entry authority when a Sketch
+    // context happens to exist. Keep the solid Feature draft intact.
+    if (hasActiveSolidFeatureContext()) {
+        setStatusText(QStringLiteral(
+            "Finish or cancel the active solid Feature before editing a Sketch or Profile."));
         return;
     }
 
