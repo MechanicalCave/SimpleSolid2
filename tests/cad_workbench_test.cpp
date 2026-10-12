@@ -672,7 +672,9 @@ int main(int argc, char* argv[]) {
     // Exercise this on the existing visible Workbench so a second native
     // top-level window cannot steal foreground focus from later tests.
     auto* shell_for_sketch_order =
-        workbench.findChild<ui::CadWorkbenchShell*>();
+        static_cast<ui::CadWorkbenchShell*>(
+            workbench.findChild<QWidget*>(
+                QStringLiteral("cadWorkbenchShell")));
     CHECK(shell_for_sketch_order != nullptr);
     shell_for_sketch_order->setToolbarContext(true);
     QApplication::processEvents();
@@ -734,7 +736,9 @@ int main(int argc, char* argv[]) {
                 return ui::ViewportSurface{native_view, native_view};
             }};
         auto* cold_shell =
-            cold_sketch.findChild<ui::CadWorkbenchShell*>();
+            static_cast<ui::CadWorkbenchShell*>(
+                cold_sketch.findChild<QWidget*>(
+                    QStringLiteral("cadWorkbenchShell")));
         auto* cold_host = cold_sketch.findChild<QWidget*>(
             QStringLiteral("documentToolsHost"));
         auto* cold_select = cold_sketch.findChild<QPushButton*>(
