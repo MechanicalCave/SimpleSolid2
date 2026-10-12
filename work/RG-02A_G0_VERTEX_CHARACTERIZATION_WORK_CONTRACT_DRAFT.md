@@ -69,7 +69,9 @@ The case names below are from the parent VERTEX matrix; a test should derive eac
 
 ## Documentation impact
 
-Internal docs: **not required** for this evidence-only stage (no production behavior/API changed).  
-User/Product docs: **not required** for this evidence-only stage (no new user-visible behavior).  
+Internal docs: not required
+
+User/Product docs: not required
+
 Generated Browser: **not required** for G0 only.  
 Reason: G0 is a native semantic-topology characterization; its authoritative result is the detailed `work/` evidence report. Any later implementation of durable references or user-facing construction tools requires separate internal docs, PL/EN product docs and Browser update.
