@@ -1,14 +1,15 @@
-# RG-02A/G0 — Part-v1 sequencing amendment v1.32 (D2 PROPOSAL)
+# RG-02A/G0 — Part-v1 sequencing amendment v1.32 (OWNER-ACCEPTED D2)
 
-**Status:** PROPOSED / NOT YET OWNER-ACCEPTED AS ROADMAP AMENDMENT  
+**Status:** OWNER-ACCEPTED D2 SEQUENCING — roadmap patch NOT MERGED; no activation or implementation authority  
+**Owner acceptance:** 2026-10-12 — explicit `zatwierdzam - kontynuuj` in response to the decision whether to insert RG-02A/G0 before PG-01E in roadmap v1.31 → v1.32. This acceptance is **not** permission to merge this PR, the roadmap patch, the G0 contract or the activation PR.  
 **Date:** 2026-10-12  
 **Target roadmap:** `work/PART_MODELING_V1_ROADMAP.md` v1.31 on `main` `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c`  
 **Bounded Work Contract:** `work/RG-02A_G0_VERTEX_CHARACTERIZATION_WORK_CONTRACT_DRAFT.md` in Draft [PR #328](https://github.com/MechanicalCave/SimpleSolid2/pull/328) — its **bounded evidence-only scope** was explicitly Owner-accepted on 2026-10-12 (`akcepyuje - kontynuuj`), **not yet merged or activated**.  
-**Decision class:** D2 Owner program sequencing; not a production implementation contract or merge approval.
+**Decision class:** Owner-approved D2 program sequencing; not a production implementation contract or merge approval.
 
-## 1. Specific Owner decision proposed
+## 1. Specific Owner decision accepted
 
-Amend only the **next Part-v1 program gate order** from accepted roadmap v1.31 to proposed **v1.32**:
+Amend only the **next Part-v1 program gate order** from accepted roadmap v1.31 to Owner-approved **v1.32**, to take effect as repository authority only after the separately approved roadmap PR merges:
 
 ```text
 UI-01                           COMPLETED — Owner FINAL PASS, merged PR #324
@@ -42,9 +43,9 @@ Observations that need production code/schemas cannot be "fixed" under RG-02A/G0
 - No changes to `work/ACTIVE.yaml` or its `program_roadmap_version` before a separately approved activation change after a genuinely accepted roadmap v1.32 lands on main.
 - The owner-mandated **separate RG-02 UI/UX design consultation and explicit approval BEFORE any UI implementation** remains a hard gate, including MID/CENTER markers, vertex hover/picking changes, Tree/Operations and Command Line UX. G0 includes **no UI work**.
 
-## 4. Required governance steps after Owner accepts sequencing
+## 4. Required governance steps after Owner-accepted sequencing
 
-1. Owner **separately accepts the exact v1.31 → v1.32 sequencing proposal** (this document). Approval of the limited RG-02A/G0 Work Contract text alone did not amend v1.31.
+1. **COMPLETE:** Owner separately accepted exact v1.31 → v1.32 sequencing on 2026-10-12 (`zatwierdzam - kontynuuj`). Bounded G0 contract acceptance remains a distinct prior decision.
 2. Prepare a **roadmap-only implementation PR** changing `work/PART_MODELING_V1_ROADMAP.md` to v1.32. In Section 6 insert `RG-02A/G0` immediately after UI-01; reconcile section 20 amendment authority, dates/status and add an explicit v1.32 section, while leaving historic v1.31 material legible. Avoid unrelated cleanup of historical snapshots.
 3. Separately obtain Owner explicit merge permission for that roadmap-only PR after required exact-head governance checks. No auto-merge.
 4. Independently obtain Owner explicit merge approval for the already Owner-accepted bounded G0 contract in Draft PR #328, after its exact-head governance review.
@@ -60,7 +61,7 @@ If a gate, PR or merge cannot be completed, leave the current accepted Part-v1 p
 | --- | --- | --- | --- |
 | 9D (new, before PG-01E) | **RG-02A/G0 — Body VERTEX semantic-reference evidence gate** | OCCT native Vertex classification across Extrude/Cut/Revolve/Fillet/Chamfer; stage-scoped resolved/unsupported/ambiguous/missing referenceability, pickability distinction, upstream-change and lifecycle characterization; **evidence report only, no CAD/UX implementation** | **G0 bounded Work Contract Owner-accepted 2026-10-12; NOT merged / NOT ACTIVATED; pending roadmap D2/merge/ACTIVE gates** |
 
-The existing PG-01E should follow this new row without dropping its current acceptance obligations; PM-06 remains after PG-01E. The exact numbering scheme can be made internally consistent in the roadmap-only PR. This is a sequencing proposal, not a frozen version-number change yet.
+The existing PG-01E should follow this new row without dropping its current acceptance obligations; PM-06 remains after PG-01E. The exact numbering scheme can be made internally consistent in the roadmap-only PR. Owner has approved sequencing, but v1.32 does not become authoritative on `main` until separate reviewed merge approval and merge.
 
 ## Documentation impact
 
