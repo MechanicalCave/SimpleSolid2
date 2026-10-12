@@ -469,8 +469,11 @@ int main(int argc, char* argv[]) {
         workbench.findChild<QPushButton*>(
             QStringLiteral("extrudeToolButton"));
     CHECK(pinned_extrude != nullptr);
-    for (int candidate_width :
-         {1020, 980, 940, 900, 860, 820, 780, 740, 700}) {
+    // Search the actual 1400-to-narrow transition, not only sizes
+    // <=1020 where the measured Windows Document zone can already
+    // force pinned tools into final overflow.
+    for (int candidate_width = 1380;
+         candidate_width >= 700; candidate_width -= 20) {
         workbench.resize(candidate_width, 800);
         QApplication::processEvents();
         std::cout << "UI01_G3_GROUP_PRESSURE"
