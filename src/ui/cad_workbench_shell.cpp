@@ -832,10 +832,13 @@ void CadWorkbenchShell::setToolbarContext(bool sketch_context) {
     if (context_changed) {
         const QString context = sketch_context
             ? QStringLiteral("Sketch") : QStringLiteral("Part");
-        if (toolbar_group_order_.value(context) !=
-            defaultToolbarGroupOrder(sketch_context)) {
-            applyToolbarGroupOrder(context);
-        }
+        // The previous context can have reordered its real tool widgets
+        // within this shared QHBoxLayout. Even DEFAULT order must be
+        // re-applied when switching back; otherwise groups from the
+        // previous context occupy the available inline width and hide
+        // reachable commands before the named dropdown/More tiers.
+        // This moves only presentation widgets, never CAD actions/state.
+        applyToolbarGroupOrder(context);
     }
     refreshToolbarOverflow();
 }
