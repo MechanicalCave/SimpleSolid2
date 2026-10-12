@@ -504,6 +504,9 @@ void verifyUi01SolidFeatureEntryGuard(
         }
         tree.scrollToItem(target);
         QApplication::processEvents();
+        traceSelection(identity_role == Qt::UserRole + 42
+                           ? "before_sketch_double_click"
+                           : "before_profile_double_click");
         const auto rect = tree.visualItemRect(target);
         CHECK(rect.isValid());
         CHECK(tree.viewport()->rect().contains(rect.center()));
