@@ -2,6 +2,8 @@
 
 #include <QWidget>
 #include <QHash>
+#include <QPoint>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <vector>
@@ -116,6 +118,8 @@ private:
     QHash<QString, bool> toolbar_pin_overrides_;
     bool toolbar_customize_active_{};
     bool toolbar_order_initialized_{};
+    QPointer<QToolButton> toolbar_drag_handle_;
+    QPoint toolbar_drag_press_global_;
     QMenu* toolbar_more_menu_{};
     QHash<QString, QToolButton*> toolbar_group_dropdowns_;
     QHash<QPushButton*, QString> toolbar_icon_compacted_;
