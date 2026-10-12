@@ -462,6 +462,24 @@ void verifyUi01SolidFeatureEntryGuard(
     const auto revision_before = session.document().revision();
     const auto undo_before = session.undoDepth();
     const bool dirty_before = session.needsSave();
+    auto* edge_label = workbench.findChild<QLabel*>(
+        QStringLiteral("edgeFeatureSelectionLabel"));
+    auto* viewport_controller =
+        workbench.findChild<ui::PartViewportController*>();
+    const auto traceSelection = [&](const char* phase) {
+        const auto edge_refs =
+            viewport_controller != nullptr
+                ? viewport_controller->selectedMaterialEdgeReferences()
+                : std::nullopt;
+        std::cerr << "UI01_G1_SELECTION_TRACE feature=" << feature_kind
+                  << " phase=" << phase
+                  << " edge_label="
+                  << (edge_label ? edge_label->text().toStdString() : "n/a")
+                  << " viewport_refs="
+                  << (edge_refs ? static_cast<int>(edge_refs->size()) : -1)
+                  << std::endl;
+    };
+    traceSelection("start");
 
     const auto attemptTreeEntry = [&](int identity_role,
                                        const QString& semantic_id) {
@@ -498,10 +516,12 @@ void verifyUi01SolidFeatureEntryGuard(
         Qt::UserRole + 42,
         QString::fromStdString(std::string{
             session.document().sketches().front().id.value()}));
+    traceSelection("after_sketch");
     attemptTreeEntry(
         Qt::UserRole + 43,
         QString::fromStdString(
             session.document().profiles().front().id.serialized()));
+    traceSelection("after_profile");
 
     tree.clearSelection();
     if (original_item != nullptr) {
@@ -511,6 +531,7 @@ void verifyUi01SolidFeatureEntryGuard(
         tree.setCurrentItem(nullptr);
     }
     QApplication::processEvents();
+    traceSelection("after_restore");
     CHECK(!active_operations.isHidden());
     std::cout << "UI01_G1_SOLID_FEATURE_ENTRY_GUARD_PASS"
               << " feature=" << feature_kind
