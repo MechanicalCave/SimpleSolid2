@@ -5,9 +5,12 @@
 #include <QGroupBox>
 #include <QFontMetrics>
 #include <QHBoxLayout>
+#include <QMenu>
+#include <QPushButton>
 #include <QLabel>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QScopedValueRollback>
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStackedWidget>
@@ -17,8 +20,54 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <array>
+#include <vector>
 
 namespace simplesolid2::ui {
+
+namespace {
+
+struct ToolbarGroupSpec final {
+    const char* name;
+    const char* label_object_name;
+    std::vector<const char*> tool_object_names;
+    bool pinned{};
+};
+
+// Existing real command buttons only. This is transient presentation
+// metadata; no QAction replacement, new CAD command or persisted Part data.
+std::vector<ToolbarGroupSpec> toolbarGroups(bool sketch) {
+    if (!sketch) {
+        return {
+            {"Sketch", "", {"sketchToolButton"}, true},
+            {"Work Features", "", {"datumPlaneToolButton"}, false},
+            {"Create", "partCreateToolsLabel",
+                {"extrudeToolButton", "revolveToolButton"}, true},
+            {"Modify", "partModifyToolsLabel",
+                {"filletToolButton", "chamferToolButton"}, false},
+        };
+    }
+    return {
+        {"Select", "", {"selectSketchToolButton"}, true},
+        {"Create", "sketchCreateToolsLabel",
+            {"lineSketchToolButton", "circleSketchToolButton",
+             "arcSketchToolButton", "rectangleSketchToolButton"}, true},
+        {"Profile", "sketchProfileToolsLabel",
+            {"profileSketchToolButton"}, false},
+        {"References", "", {"projectEdgeToolButton"}, true},
+        {"Modify", "sketchModifyToolsLabel",
+            {"trimSketchToolButton", "extendSketchToolButton",
+             "extendBothSketchToolButton"}, false},
+        {"Transform", "",
+            {"moveSketchToolButton", "copySketchToolButton",
+             "rotateSketchToolButton", "scaleSketchToolButton",
+             "mirrorSketchToolButton"}, false},
+        {"Inspect", "sketchInspectToolsLabel",
+            {"measureSketchToolButton"}, false},
+    };
+}
+
+} // namespace
 
 CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     : QWidget{parent} {
@@ -34,8 +83,9 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     document_top_layout->setContentsMargins(0, 0, 0, 0);
     document_top_layout->setSpacing(6);
 
-    auto* document_tools_scroll =
+    contextual_tools_scroll_ =
         new QScrollArea(document_top_row);
+    auto* document_tools_scroll = contextual_tools_scroll_;
     document_tools_scroll->setObjectName(
         QStringLiteral("documentToolsScroll"));
     document_tools_scroll->setFrameShape(
@@ -44,7 +94,7 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     document_tools_scroll->setVerticalScrollBarPolicy(
         Qt::ScrollBarAlwaysOff);
     document_tools_scroll->setHorizontalScrollBarPolicy(
-        Qt::ScrollBarAsNeeded);
+        Qt::ScrollBarAlwaysOff);
     document_tools_scroll->setSizePolicy(
         QSizePolicy::Expanding,
         QSizePolicy::Preferred);
@@ -68,6 +118,22 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     document_top_layout->addWidget(
         document_tools_scroll,
         1);
+
+    toolbar_more_ = new QToolButton(document_top_row);
+    toolbar_more_->setObjectName(
+        QStringLiteral("workbenchToolbarMoreButton"));
+    toolbar_more_->setText(QStringLiteral("Więcej"));
+    toolbar_more_->setAccessibleName(
+        QStringLiteral("More contextual CAD tools"));
+    toolbar_more_->setToolTip(
+        QStringLiteral("More CAD tools, grouped by function"));
+    toolbar_more_->setPopupMode(QToolButton::InstantPopup);
+    toolbar_more_menu_ = new QMenu(toolbar_more_);
+    toolbar_more_->setMenu(toolbar_more_menu_);
+    toolbar_more_->hide();
+    connect(toolbar_more_menu_, &QMenu::aboutToShow, this,
+            [this] { rebuildToolbarMoreMenu(); });
+    document_top_layout->addWidget(toolbar_more_, 0);
 
     tree_recovery_button_ =
         new QToolButton(document_top_row);
@@ -540,6 +606,146 @@ void CadWorkbenchShell::updateRightPanelHeightMode() {
 void CadWorkbenchShell::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     updateResponsiveLayout();
+    refreshToolbarOverflow();
+}
+
+
+void CadWorkbenchShell::setToolbarContext(bool sketch_context) {
+    toolbar_sketch_context_ = sketch_context;
+    refreshToolbarOverflow();
+}
+
+void CadWorkbenchShell::rebuildToolbarMoreMenu() {
+    if (toolbar_more_menu_ == nullptr) return;
+    toolbar_more_menu_->clear();
+    const auto groups = toolbarGroups(toolbar_sketch_context_);
+    for (const auto& group : groups) {
+        QMenu* subgroup = nullptr;
+        for (const char* name : group.tool_object_names) {
+            auto* original = findChild<QPushButton*>(
+                QString::fromLatin1(name));
+            if (original == nullptr) continue;
+            if (subgroup == nullptr) {
+                subgroup = toolbar_more_menu_->addMenu(
+                    QString::fromLatin1(group.name));
+            }
+            auto* action =
+                subgroup->addAction(original->text());
+            action->setEnabled(original->isEnabled());
+            action->setCheckable(original->isCheckable());
+            action->setChecked(original->isChecked());
+            action->setToolTip(original->toolTip());
+            QObject::connect(
+                action, &QAction::triggered, original,
+                [original] {
+                    if (original->isEnabled()) {
+                        original->click();
+                    }
+                });
+        }
+    }
+}
+
+void CadWorkbenchShell::refreshToolbarOverflow() {
+    if (refreshing_toolbar_ ||
+        contextual_tools_scroll_ == nullptr ||
+        toolbar_more_ == nullptr ||
+        editor_tools_layout_ == nullptr) {
+        return;
+    }
+    QScopedValueRollback<bool> reentry_guard(
+        refreshing_toolbar_, true);
+    const auto groups = toolbarGroups(toolbar_sketch_context_);
+    const auto belongs_to_context = [&](QWidget* widget) {
+        if (widget == nullptr) return false;
+        for (const auto& group : groups) {
+            if (*group.label_object_name != '\0' &&
+                widget->objectName() ==
+                    QString::fromLatin1(group.label_object_name)) {
+                return true;
+            }
+            for (const char* id : group.tool_object_names) {
+                if (widget->objectName() ==
+                    QString::fromLatin1(id)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    // Restore only controls hidden by the previous responsive pass and
+    // belonging to the CURRENT context. A Sketch/Part context switch
+    // must not resurrect production-hidden controls from another mode.
+    for (QWidget* widget : toolbar_overflow_hidden_) {
+        if (belongs_to_context(widget)) widget->show();
+    }
+    toolbar_overflow_hidden_.clear();
+
+    const int gap = std::max(0, editor_tools_layout_->spacing());
+    const auto group_width = [&](const ToolbarGroupSpec& group) {
+        int width = 0;
+        const auto count = [&](QWidget* widget) {
+            return widget != nullptr && !widget->isHidden()
+                ? widget->sizeHint().width() + gap
+                : 0;
+        };
+        if (*group.label_object_name != '\0') {
+            width += count(findChild<QWidget*>(
+                QString::fromLatin1(group.label_object_name)));
+        }
+        for (const char* id : group.tool_object_names) {
+            width += count(findChild<QPushButton*>(
+                QString::fromLatin1(id)));
+        }
+        return width;
+    };
+    int required = 0;
+    for (const auto& group : groups) {
+        required += group_width(group);
+    }
+    // Preserve the fixed Document-control zone. Reserve room for the
+    // named two-level More menu before collapsing whole tool groups.
+    const int available = std::max(
+        0, contextual_tools_scroll_->viewport()->width() -
+           toolbar_more_->sizeHint().width() - 16);
+    if (required <= available) {
+        toolbar_more_->hide();
+        return;
+    }
+    toolbar_more_->show();
+    const auto collapse_group = [&](const ToolbarGroupSpec& group) {
+        const auto hide_one = [&](QWidget* widget) {
+            if (widget == nullptr || widget->isHidden()) return;
+            required -= widget->sizeHint().width() + gap;
+            widget->hide();
+            toolbar_overflow_hidden_.push_back(widget);
+        };
+        if (*group.label_object_name != '\0') {
+            hide_one(findChild<QWidget*>(
+                QString::fromLatin1(group.label_object_name)));
+        }
+        for (const char* id : group.tool_object_names) {
+            hide_one(findChild<QPushButton*>(
+                QString::fromLatin1(id)));
+        }
+    };
+    // Unpinned complete groups collapse before pinned groups. The
+    // named More -> group -> real action is always available; direct
+    // named dropdowns, icon-only pinned states and personalization
+    // remain the next bounded G3 work, not an asserted acceptance.
+    if (!toolbar_sketch_context_) {
+        for (int i : {3, 1, 2, 0}) {
+            if (required <= available) break;
+            collapse_group(groups[static_cast<std::size_t>(i)]);
+        }
+    } else {
+        for (int i : {6, 5, 4, 2, 3, 1, 0}) {
+            if (required <= available) break;
+            collapse_group(groups[static_cast<std::size_t>(i)]);
+        }
+    }
+    rebuildToolbarMoreMenu();
 }
 
 bool CadWorkbenchShell::panelContainsFocus(
