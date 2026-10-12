@@ -495,6 +495,25 @@ int main(int argc, char* argv[]) {
     CHECK(short_tabs->isHidden());
     CHECK(!right_vertical_splitter->isHidden());
 
+    // G2 completion actions must remain anchored below the Operations
+    // scroll viewport. Test actual existing button identity, not a copy
+    // that might silently invoke different domain behavior.
+    auto* operations_footer =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("workbenchOperationsFooter"));
+    CHECK(operations_footer != nullptr);
+    auto* extrude_finish =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeFinishButton"));
+    auto* extrude_cancel =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeCancelButton"));
+    CHECK(extrude_finish && extrude_cancel);
+    CHECK(operations_footer->isAncestorOf(extrude_finish));
+    CHECK(operations_footer->isAncestorOf(extrude_cancel));
+    CHECK(!operations_scroll->isAncestorOf(extrude_finish));
+    CHECK(!operations_scroll->isAncestorOf(extrude_cancel));
+
     const auto initial_side_widths = splitter->sizes();
     CHECK(initial_side_widths.size() == 3);
     workbench.resize(1800, 800);
