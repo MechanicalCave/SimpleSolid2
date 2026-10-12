@@ -985,6 +985,47 @@ int main(int argc, char* argv[]) {
     CHECK(cancel_button->isHidden());
     CHECK(!sketch_button->isEnabled());
 
+    // UI-01 G3 Owner's actual Sketch Modify sector: a compact
+    // frame encloses one caption/pin rail ABOVE the SAME real
+    // Trim / Extend / Extend Both buttons in one command row.
+    // Force sufficient width: this test must not mistake a legal
+    // named overflow group for a missing direct Sketch command.
+    const QSize before_compact_sector = workspace_shell.size();
+    workspace_shell.resize(2100, 900);
+    QApplication::processEvents();
+    auto* compact_modify_host = workbench.findChild<QWidget*>(
+        QStringLiteral("documentToolsHost"));
+    auto* compact_modify_frame = workbench.findChild<QFrame*>(
+        QStringLiteral("workbenchToolbarGroupFrame_Sketch_Modify"));
+    CHECK(compact_modify_host && compact_modify_frame);
+    CHECK(modify_tools_label->isVisible());
+    CHECK(trim_button->isVisible());
+    CHECK(extend_button->isVisible());
+    CHECK(extend_both_button->isVisible());
+    const QRect title_bounds{
+        modify_tools_label->mapTo(compact_modify_host, QPoint{0, 0}),
+        modify_tools_label->size()};
+    const QRect trim_bounds{
+        trim_button->mapTo(compact_modify_host, QPoint{0, 0}),
+        trim_button->size()};
+    const QRect extend_bounds{
+        extend_button->mapTo(compact_modify_host, QPoint{0, 0}),
+        extend_button->size()};
+    const QRect extend_both_bounds{
+        extend_both_button->mapTo(compact_modify_host, QPoint{0, 0}),
+        extend_both_button->size()};
+    CHECK(title_bounds.bottom() < trim_bounds.top());
+    CHECK(compact_modify_frame->geometry().contains(title_bounds));
+    CHECK(compact_modify_frame->geometry().contains(trim_bounds));
+    CHECK(compact_modify_frame->geometry().contains(extend_bounds));
+    CHECK(compact_modify_frame->geometry().contains(extend_both_bounds));
+    CHECK(std::abs(trim_bounds.top() - extend_bounds.top()) <= 4);
+    CHECK(std::abs(trim_bounds.top() - extend_both_bounds.top()) <= 4);
+    workspace_shell.resize(before_compact_sector);
+    QApplication::processEvents();
+    std::cout << "UI01_G3_SKETCH_MODIFY_COMPACT_FRAME_NATIVE_PASS"
+              << std::endl;
+
     const auto sketch_id =
         session->document().sketches().front().id;
     CHECK(
