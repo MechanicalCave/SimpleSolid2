@@ -5799,6 +5799,37 @@ int main(int argc, char* argv[]) {
             CHECK(workbench.activateDocument(
                 &revolve_session, {}));
             QApplication::processEvents();
+            if (variant == 0) {
+                auto* revolve_operations =
+                    workbench.findChild<QWidget*>(
+                        QStringLiteral("revolveOperationsWidget"));
+                auto* revolve_cancel =
+                    workbench.findChild<QPushButton*>(
+                        QStringLiteral("revolveCancelButton"));
+                CHECK(revolve_operations && revolve_cancel);
+                CHECK(!revolve_session.document().body().features.empty());
+                auto* revolve_item = featureTreeItem(
+                    *tree,
+                    revolve_session.document().body().features.front().id);
+                CHECK(revolve_item);
+                tree->clearSelection();
+                tree->setCurrentItem(revolve_item);
+                revolve_item->setSelected(true);
+                QApplication::processEvents();
+                CHECK(edit->isEnabled());
+                edit->click();
+                QApplication::processEvents();
+                CHECK(!revolve_operations->isHidden());
+                verifyUi01SolidFeatureEntryGuard(
+                    workbench, *tree, revolve_session,
+                    *revolve_operations, "Revolve");
+                revolve_cancel->click();
+                QApplication::processEvents();
+                CHECK(revolve_operations->isHidden());
+                tree->clearSelection();
+                tree->setCurrentItem(nullptr);
+                QApplication::processEvents();
+            }
             CHECK(viewport->setStandardView(
                 viewer::StandardView::top_front_right));
             viewport->fitAll();
