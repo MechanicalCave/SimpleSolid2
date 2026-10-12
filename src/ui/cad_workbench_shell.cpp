@@ -675,6 +675,74 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     QScopedValueRollback<bool> reentry_guard(
         refreshing_toolbar_, true);
     const auto groups = toolbarGroups(toolbar_sketch_context_);
+    const QString context_name = toolbar_sketch_context_
+        ? QStringLiteral("Sketch") : QStringLiteral("Part");
+
+    // Install real-command dropdowns next to each existing unpinned
+    // group, not as an unconditional clone row. Their menus delegate to
+    // the original connected QPushButton and never author Part state.
+    for (auto it = toolbar_group_dropdowns_.begin();
+         it != toolbar_group_dropdowns_.end(); ++it) {
+        if (it.value()) it.value()->hide();
+    }
+    for (const auto& group : groups) {
+        if (group.pinned) continue;
+        const QString name = QString::fromLatin1(group.name);
+        const QString key = context_name + QStringLiteral("_") +
+            name;
+        if (toolbar_group_dropdowns_.contains(key)) continue;
+        auto* dropdown = new QToolButton(
+            contextual_tools_scroll_->widget());
+        dropdown->setObjectName(
+            QStringLiteral("workbenchToolbarGroupDropdown_") + key);
+        dropdown->setText(name);
+        dropdown->setAccessibleName(name + QStringLiteral(" tools"));
+        dropdown->setToolTip(name + QStringLiteral(" tools"));
+        dropdown->setPopupMode(QToolButton::InstantPopup);
+        auto* menu = new QMenu(dropdown);
+        dropdown->setMenu(menu);
+        const auto populate = [this, menu, group] {
+            menu->clear();
+            for (const char* id : group.tool_object_names) {
+                auto* original = findChild<QPushButton*>(
+                    QString::fromLatin1(id));
+                if (original == nullptr) continue;
+                auto* action = menu->addAction(original->text());
+                action->setEnabled(original->isEnabled());
+                action->setCheckable(original->isCheckable());
+                action->setChecked(original->isChecked());
+                action->setToolTip(original->toolTip());
+                QObject::connect(
+                    action, &QAction::triggered, original,
+                    [original] {
+                        if (original->isEnabled()) {
+                            original->click();
+                        }
+                    });
+            }
+        };
+        connect(menu, &QMenu::aboutToShow, this, populate);
+        populate();
+        QWidget* group_first = nullptr;
+        if (*group.label_object_name != '\0') {
+            group_first = findChild<QWidget*>(
+                QString::fromLatin1(group.label_object_name));
+        }
+        if (group_first == nullptr &&
+            !group.tool_object_names.empty()) {
+            group_first = findChild<QWidget*>(
+                QString::fromLatin1(
+                    group.tool_object_names.front()));
+        }
+        const int insert_at = group_first != nullptr
+            ? editor_tools_layout_->indexOf(group_first) : -1;
+        editor_tools_layout_->insertWidget(
+            insert_at >= 0 ? insert_at :
+                std::max(0, editor_tools_layout_->count() - 1),
+            dropdown);
+        dropdown->hide();
+        toolbar_group_dropdowns_.insert(key, dropdown);
+    }
     const auto belongs_to_context = [&](QWidget* widget) {
         if (widget == nullptr) return false;
         for (const auto& group : groups) {
@@ -748,7 +816,6 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         toolbar_more_->hide();
         return;
     }
-    toolbar_more_->show();
     const auto collapse_group = [&](const ToolbarGroupSpec& group) {
         const auto hide_one = [&](QWidget* widget) {
             if (widget == nullptr || widget->isHidden()) return;
@@ -765,19 +832,59 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
                 QString::fromLatin1(id)));
         }
     };
-    // Unpinned complete groups collapse before pinned groups. The
-    // named More -> group -> real action is always available; direct
-    // named dropdowns, icon-only pinned states and personalization
-    // remain the next bounded G3 work, not an asserted acceptance.
+    // Tier 1: collapse unpinned whole groups into named, direct menus.
+    // Place each dropdown where its group used to be. They can be reached
+    // without the last-resort two-level More menu at moderate widths.
+    std::vector<QToolButton*> direct_dropdowns;
+    const auto try_named_group = [&](const ToolbarGroupSpec& group) {
+        if (group.pinned || required <= available) return;
+        const auto key = context_name + QStringLiteral("_") +
+            QString::fromLatin1(group.name);
+        auto* dropdown = toolbar_group_dropdowns_.value(
+            key, nullptr);
+        if (dropdown == nullptr) return;
+        const int before = group_width(group);
+        const int named_width = dropdown->sizeHint().width() + gap;
+        if (before <= named_width) return;
+        collapse_group(group);
+        dropdown->show();
+        required += named_width;
+        direct_dropdowns.push_back(dropdown);
+    };
     if (!toolbar_sketch_context_) {
-        for (int i : {3, 1, 2, 0}) {
+        for (int i : {3, 1}) {
+            try_named_group(groups[static_cast<std::size_t>(i)]);
+        }
+    } else {
+        for (int i : {6, 5, 4, 2}) {
+            try_named_group(groups[static_cast<std::size_t>(i)]);
+        }
+    }
+    if (required <= available) {
+        toolbar_more_->hide();
+        return;
+    }
+
+    // Conservative G3 fallback while pinned compact/icon phases remain
+    // open: no command is discarded, every button remains accessible in
+    // More -> named group -> original tool. Never hide Document controls.
+    toolbar_more_->show();
+    if (!toolbar_sketch_context_) {
+        for (int i : {2, 0}) {
             if (required <= available) break;
             collapse_group(groups[static_cast<std::size_t>(i)]);
         }
     } else {
-        for (int i : {6, 5, 4, 2, 3, 1, 0}) {
+        for (int i : {3, 1, 0}) {
             if (required <= available) break;
             collapse_group(groups[static_cast<std::size_t>(i)]);
+        }
+    }
+    if (required > available) {
+        for (auto* dropdown : direct_dropdowns) {
+            if (required <= available) break;
+            required -= dropdown->sizeHint().width() + gap;
+            dropdown->hide();
         }
     }
     rebuildToolbarMoreMenu();
