@@ -473,6 +473,15 @@ int main(int argc, char* argv[]) {
          {1020, 980, 940, 900, 860, 820, 780, 740, 700}) {
         workbench.resize(candidate_width, 800);
         QApplication::processEvents();
+        std::cout << "UI01_G3_GROUP_PRESSURE"
+                  << " requested_width=" << candidate_width
+                  << " top_width=" << document_top_row->width()
+                  << " tools_viewport_width="
+                  << contextual_tools_scroll->viewport()->width()
+                  << " modify_hidden=" << modify_dropdown->isHidden()
+                  << " more_hidden=" << toolbar_more->isHidden()
+                  << " extrude_hidden=" << pinned_extrude->isHidden()
+                  << std::endl;
         if (!modify_dropdown->isHidden() &&
             toolbar_more->isHidden() &&
             !pinned_extrude->isHidden()) {
