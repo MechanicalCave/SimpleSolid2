@@ -1,9 +1,9 @@
 version: 1
 status: active
-active_work: "work/UI-01_SAFE_EDIT_CONTEXT_AND_RESPONSIVE_WORKBENCH_WORK_CONTRACT.md"
+active_work: "work/RG-02A_G0_VERTEX_CHARACTERIZATION_WORK_CONTRACT_DRAFT.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.31"
+program_roadmap_version: "1.32"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
