@@ -210,12 +210,15 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     toolbar_customize_ = new QToolButton(document_top_row);
     toolbar_customize_->setObjectName(
         QStringLiteral("workbenchToolbarCustomizeButton"));
-    toolbar_customize_->setText(
-        QStringLiteral("Dostosuj pasek"));
+    // The entry remains explicit by tooltip/accessible name, but must
+    // never enlarge the fixed Document zone or prevent native 750 px
+    // narrow Workbench mode. It is not a second toolbar row.
+    toolbar_customize_->setText(QStringLiteral("⚙"));
+    toolbar_customize_->setFixedWidth(32);
     toolbar_customize_->setToolTip(
-        QStringLiteral("Customize the contextual toolbar groups"));
+        QStringLiteral("Dostosuj pasek — customize toolbar groups"));
     toolbar_customize_->setAccessibleName(
-        QStringLiteral("Customize CAD toolbar groups"));
+        QStringLiteral("Dostosuj pasek"));
     toolbar_customize_->setCheckable(true);
     toolbar_customize_->setChecked(false);
     connect(toolbar_customize_, &QToolButton::toggled, this,
