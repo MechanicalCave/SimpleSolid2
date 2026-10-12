@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QHash>
 #include <QString>
+#include <QStringList>
 #include <vector>
 
 class QEvent;
@@ -63,6 +64,12 @@ private:
     void refreshToolbarOverflow();
     void rebuildToolbarMoreMenu();
     void setToolbarCustomizeActive(bool active);
+    void moveToolbarGroup(
+        const QString& context,
+        const QString& group,
+        int direction);
+    void resetToolbarGroups(const QString& context);
+    void applyToolbarGroupOrder(const QString& context);
     [[nodiscard]] QString toolbarActionLabel(
         const QPushButton* button) const;
     void applyRightPanelRatio();
@@ -104,6 +111,8 @@ private:
     QToolButton* toolbar_more_{};
     QToolButton* toolbar_customize_{};
     QHash<QString, QToolButton*> toolbar_pin_markers_;
+    QHash<QString, QToolButton*> toolbar_group_handles_;
+    QHash<QString, QStringList> toolbar_group_order_;
     QHash<QString, bool> toolbar_pin_overrides_;
     bool toolbar_customize_active_{};
     QMenu* toolbar_more_menu_{};
