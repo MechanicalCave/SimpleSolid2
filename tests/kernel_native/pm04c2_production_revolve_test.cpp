@@ -341,6 +341,73 @@ part::PartDocument makeExtrudeCylinder() {
     return std::move(*restored.document);
 }
 
+// G0/V08: a real analytic cylinder clipped by one planar Boolean
+// Cut through its axis. Two distinct native rim Vertices can share the
+// same THREE semantic Surface sources (cap, cylinder, cut wall).
+part::PartDocument withCylinderHalfCut(
+    const part::PartDocument& source) {
+    auto restored = part::PartDocument::restore(
+        source.documentId(),
+        source.state(),
+        source.revision());
+    CHECK(restored.ok());
+    application::DocumentSession session{
+        {},
+        std::move(*restored.document)};
+    const auto sketch_created = session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
+    const auto rectangle = session.execute(
+        application::AddSketchRectangleCommand{
+            *sketch_created.sketch_id,
+            session.document().revision(),
+            {-15.0, -15.0},
+            {0.0, 15.0},
+            sketch::EntityRole::regular,
+            false});
+    CHECK(rectangle.ok());
+    const auto* sketch = session.document().findSketch(
+        *sketch_created.sketch_id);
+    CHECK(sketch != nullptr);
+    const auto analysis = sketch::analyzeRegions(
+        sketch->model);
+    CHECK(analysis.complete());
+    CHECK(analysis.regions.size() == 1U);
+    const auto intent = part::makeProfileRegionIntent(
+        analysis.regions.front());
+    CHECK(intent.has_value());
+    const auto profile = session.execute(
+        application::CreateProfileCommand{
+            *sketch_created.sketch_id,
+            session.document().revision(),
+            *intent});
+    CHECK(profile.ok() && profile.profile_id);
+    auto state = session.document().state();
+    const auto feature_id =
+        state.body.next_feature_id.allocate();
+    CHECK(feature_id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *feature_id,
+            "G0HalfCylinderCut",
+            false,
+            part::ExtrudeFeature{
+                *profile.profile_id,
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{12.0},
+                    false}}});
+    auto rebuilt = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(state),
+        session.document().revision());
+    CHECK(rebuilt.ok());
+    return std::move(*rebuilt.document);
+}
+
 std::optional<part::MaterialEdgeReference>
 firstAuthorableCircle(
     const part::BodyStageTopologyCatalog& catalog) {
@@ -915,6 +982,45 @@ int main() {
         CHECK(ordinary_policy_eligible_unsupported > 0U);
         CHECK(ordinary_policy_eligible_unsupported ==
               g0_cylinder.unsupported);
+        // G0/V08: check a real two-point intersection of one analytic
+        // cylinder, a cap plane and a planar Boolean Cut wall. If
+        // multiple native Vertices claim one semantic 3-Surface Point,
+        // Part must mark Ambiguous and never choose one by XYZ.
+        const auto half_document =
+            withCylinderHalfCut(extrude);
+        const auto half_evaluation =
+            part::evaluatePart(half_document, kernel);
+        CHECK(
+            half_evaluation.body_status ==
+            part::BodyEvaluationStatus::up_to_date);
+        CHECK(half_evaluation.features.size() == 2U);
+        CHECK(
+            half_evaluation.features[1].result_topology);
+        const auto& half_catalog =
+            *half_evaluation.features[1].result_topology;
+        const auto half_counts = observeRevolvePartVertices(
+            half_catalog, "V08-half-cylinder-cut");
+        std::size_t branched_points = 0U;
+        for (const auto& point : half_catalog.points) {
+            if (point.status !=
+                    kernel::ReferenceStatus::ambiguous) {
+                continue;
+            }
+            CHECK(point.candidate_vertex_count > 1U);
+            CHECK(point.current_vertices.size() > 1U);
+            CHECK(point.address.valid());
+            CHECK(point.address.adjacent_surfaces.size() == 3U);
+            ++branched_points;
+        }
+        CHECK(branched_points > 0U);
+        CHECK(half_counts.ambiguous > 0U);
+        std::cout
+            << "RG02A_G0_V08"
+            << " ambiguous_three_surface_point_groups="
+            << branched_points
+            << " ambiguous_native_vertices="
+            << half_counts.ambiguous
+            << " nearest_vertex_chosen=0\\n";
         std::cout
             << "RG02A_G0_V10"
             << " unsupported_native_eligible_by_policy="
