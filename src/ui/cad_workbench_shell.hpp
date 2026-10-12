@@ -99,6 +99,7 @@ private:
     QScrollArea* contextual_tools_scroll_{};
     QToolButton* toolbar_more_{};
     QMenu* toolbar_more_menu_{};
+    QHash<QString, QToolButton*> toolbar_group_dropdowns_;
     std::vector<QWidget*> toolbar_overflow_hidden_;
     bool toolbar_sketch_context_{};
     bool refreshing_toolbar_{};
