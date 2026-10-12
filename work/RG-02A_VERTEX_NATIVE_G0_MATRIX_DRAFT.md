@@ -1,11 +1,11 @@
 # RG-02A — VERTEX native G0 evidence matrix (DRAFT)
 
-**Status:** DRAFT — evidence plan only; no native test executions claimed  
+**Status:** OWNER-ACCEPTED AND ACTIVATED G0 EVIDENCE PLAN — PARTIALLY EXECUTED; source-native tests have run; final evidence matrix / FULL / Owner D2 synthesis are NOT CLOSED  
 **Date:** 2026-10-12  
 **Audited source baseline:** `main` `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c`; roadmap v1.32 subsequently merged to `main` as `108420705aaee9182ca649401e73f1ca23309de2` (revalidate at G0 activation).  
 **Design authority:** `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md`  
 **Audit:** `work/RG-02A_REFERENCE_FOUNDATION_AUDIT_DRAFT.md`  
-**Authorization:** bounded RG-02A/G0 evidence-only Work Contract scope was Owner-accepted 2026-10-12, and roadmap v1.32 sequencing was separately approved and merged in PR #330. The contract remains **unmerged and unactivated**: no G0 test mutation may start before its governance merge and an independent `ACTIVE.yaml` activation PR. No RG-02 UI changes before separate Owner UX consultation and explicit approval.
+**Authorization:** Owner accepted bounded RG-02A/G0 evidence-only Work Contract scope on 2026-10-12, roadmap v1.32 was merged through PR #330, the contract was merged through PR #328, and the dedicated activation [PR #331](https://github.com/MechanicalCave/SimpleSolid2/pull/331) was Owner-approved and merged to `main` at `351840b95b58bdbe7b17085f67b3ddd2cc2cf8c7`. The sole active authority is the bounded test/evidence contract, **not** broader RG-02 production/UI work. No RG-02 UI changes before separate Owner UX consultation and explicit approval.
 
 ## 1. Hard evidence found in current implementation
 
@@ -38,6 +38,27 @@ For each case, record ALL of: Feature sequence, selected source Body stage, curr
 | V12 | Remove/recreate same-looking Vertex at same XYZ but with unrelated semantic producer | Does prior source remain Missing? | Must never geometry-rebind |
 
 **Important:** G0 is a *characterization* gate, not a directive to make all cases GREEN by modifying identity logic. Observed native outcomes determine the next D2 architecture choice. Mark status `UNRUN` until native execution; do not assert current runtime failures without evidence.
+
+## 2A. Observed native G0 run status — 2026-10-12 (NOT FINAL)
+
+The initial V01–V12 table above remains a *test design*; results and precise per-case limits live in [`work/RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md`](RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md) on [Draft PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332). No numerical status histogram can be inferred from the default passing CTest transcript; any stated counts/bounds are proved by explicit passing native assertions at the linked SHA.
+
+| Case | Verified status | Observation / missing work |
+| --- | --- | --- |
+| V01 | PASS, bounded native prism | 8 of 8 Vertex Point addresses uniquely Resolved through three semantic Surfaces |
+| V02 | PASS, bounded edit | All 8 addresses survive Extrude height 20 → 35; 4 Z moves +15, 4 stationary; no coordinate matching |
+| V03 | PARTIAL, assertions PASS | Native Add→Cut retains ≥8 inherited Point addresses and creates ≥1 new; exact statuses and adjacency histogram not captured |
+| V04 | PARTIAL, invariants PASS | 90° and 360° native Revolve provider/Part catalogs valid and all Resolved witnesses unique; missing exact 2/3/other distribution |
+| V05 | PARTIAL, invariants PASS | Fillet real native catalog accounts all vertices; exact classified distribution missing |
+| V06 | PARTIAL, invariants PASS | Chamfer real native catalog accounts all vertices; exact classified distribution missing |
+| V07 | PASS, bounded removed corner | At least one old semantic Point becomes Missing with zero current native candidates |
+| V08 | PASS, genuine ambiguous geometry | Half-cylinder Cut yields ≥1 three-Surface semantic Point with multiple current native Vertices, correctly Ambiguous |
+| V09 | PASS, bounded stage identity | Pre-Chamfer stage retains all 8 original semantic Point addresses; later-stage identity is distinct |
+| V10 | PASS for native and policy, not UI interaction | Real extruded cylinder exposes ≥1 native `semantically_unsupported` Vertex with no `FeaturePointAddress` but acceptable under existing ordinary accounting-class pick filter |
+| V11 | PARTIAL, semantic cold in-memory rebuild PASS | Independent OCCT kernel rebuild reconstructs all 8 semantic addresses; stale UI selection generation and future RG-02 file persistence are NOT proved |
+| V12 | PASS, bounded provenance replacement | All 8 same-XYZ regenerated Vertices have different semantic producer; old addresses not reused |
+
+**Exact Windows focused evidence:** V01 [#38304772610](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38304772610), V03 [#38306302187](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306302187), V04 [#38306630003](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306630003), V02/V09 [#38307244650](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307244650), V07 [#38307452459](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307452459), V12 [#38307830593](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307830593), V10 [#38308507132](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308507132), V11 [#38308647893](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308647893), V08 [#38308817803](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308817803). These are individually verified FOCUSED checks for different source SHAs, **not** an exact-head FULL gate. Full G0 closeout and follow-on persistence/UI/D2 design decisions remain separately gated.
 
 ## 3. Separate edge-derived point matrix after VERTEX boundary is known
 
