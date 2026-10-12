@@ -213,6 +213,18 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     document_actions_->setContentsMargins(0, 0, 0, 0);
     document_actions_->setSpacing(4);
 
+    // Original Document actions, More, Customize and recovery controls
+    // share the lower command baseline of the contextual tools. Only
+    // the contextual groups add a compact caption above that baseline.
+    auto* fixed_toolbar_zone = new QWidget(document_top_row);
+    fixed_toolbar_zone->setObjectName(
+        QStringLiteral("workbenchFixedToolbarZone"));
+    auto* fixed_toolbar_layout =
+        new QHBoxLayout(fixed_toolbar_zone);
+    fixed_toolbar_layout->setContentsMargins(
+        0, std::max(0, toolbar_caption_height - 2), 0, 0);
+    fixed_toolbar_layout->setSpacing(6);
+
     document_top_layout->addWidget(
         document_tools_scroll,
         1);
@@ -231,7 +243,7 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     toolbar_more_->hide();
     connect(toolbar_more_menu_, &QMenu::aboutToShow, this,
             [this] { rebuildToolbarMoreMenu(); });
-    document_top_layout->addWidget(toolbar_more_, 0);
+    fixed_toolbar_layout->addWidget(toolbar_more_, 0);
 
     toolbar_customize_ = new QToolButton(document_top_row);
     toolbar_customize_->setObjectName(
@@ -251,7 +263,7 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
             [this](bool active) {
                 setToolbarCustomizeActive(active);
             });
-    document_top_layout->addWidget(toolbar_customize_, 0);
+    fixed_toolbar_layout->addWidget(toolbar_customize_, 0);
 
     tree_recovery_button_ =
         new QToolButton(document_top_row);
@@ -302,15 +314,16 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
                 checked ? right_panel_ : nullptr);
         });
 
-    document_top_layout->addWidget(
+    fixed_toolbar_layout->addWidget(
         tree_recovery_button_,
         0);
-    document_top_layout->addWidget(
+    fixed_toolbar_layout->addWidget(
         right_recovery_button_,
         0);
-    document_top_layout->addLayout(
+    fixed_toolbar_layout->addLayout(
         document_actions_,
         0);
+    document_top_layout->addWidget(fixed_toolbar_zone, 0);
     root->addWidget(document_top_row, 0);
 
     splitter_ = new QSplitter(Qt::Horizontal, this);
