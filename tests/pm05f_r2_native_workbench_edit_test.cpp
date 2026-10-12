@@ -506,6 +506,19 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
         workbench.findChild<QPushButton*>(
             QStringLiteral("revolveToolButton"));
     CHECK(original_extrude && original_revolve);
+    auto* original_fillet = workbench.findChild<QPushButton*>(
+        QStringLiteral("filletToolButton"));
+    auto* original_chamfer = workbench.findChild<QPushButton*>(
+        QStringLiteral("chamferToolButton"));
+    CHECK(original_fillet && original_chamfer);
+    // UI-01 G3 native RED: an existing Feature Edit owns Operations
+    // and the viewport cue, NOT the corresponding Create toolbar
+    // command. None of the original create buttons may advertise
+    // "engaged" merely because an Edit draft exists.
+    CHECK(!original_extrude->isChecked());
+    CHECK(!original_revolve->isChecked());
+    CHECK(!original_fillet->isChecked());
+    CHECK(!original_chamfer->isChecked());
     bool native_extrude_menu = false;
     bool native_revolve_menu = false;
     for (const auto* action : native_create_dropdown->menu()->actions()) {
