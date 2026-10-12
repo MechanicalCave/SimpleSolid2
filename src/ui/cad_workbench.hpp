@@ -309,6 +309,7 @@ private:
     void setProjectEdgeFaceMode(bool enabled);
     void setProjectEdgeBoundaryMode();
     void refreshProjectEdgePreview();
+    void updateProjectGeometryResponsiveRows(int viewport_width);
     [[nodiscard]] bool finishProjectEdgeTool();
     void syncProjectEdgeUi();
     [[nodiscard]] application::CadInputSubmitResult
@@ -781,6 +782,8 @@ private:
     bool syncing_edge_feature_selection_{};
 
     QWidget* project_edge_operations_widget_{};
+    // Shell-owned viewport; only observed for measured UI reflow.
+    QWidget* project_edge_operations_viewport_{};
     QLabel* project_edge_stage_label_{};
     QLabel* project_edge_selection_label_{};
     QLabel* project_edge_result_label_{};
