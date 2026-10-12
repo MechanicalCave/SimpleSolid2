@@ -551,6 +551,34 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     std::cout << "UI01_G2_TAB_RATIO_RESTORATION_PASS" << std::endl;
 
+    // G2 font/DPI pressure: effective pane capacity depends on actual
+    // QFontMetrics, not only a fixed number of physical window pixels.
+    // This exercises 200%-sized Qt fonts, NOT a claim of Windows monitor
+    // DPI parity. Reflow must not use viewport width as a proxy.
+    auto* shell_surface = workbench.findChild<QWidget*>(
+        QStringLiteral("cadWorkbenchShell"));
+    CHECK(shell_surface != nullptr);
+    workbench.resize(1400, 620);
+    QApplication::processEvents();
+    CHECK(short_tabs->isHidden());
+    const QFont base_font = shell_surface->font();
+    QFont large_font = base_font;
+    const double original_point_size =
+        base_font.pointSizeF() > 0.0
+            ? base_font.pointSizeF() : 10.0;
+    large_font.setPointSizeF(original_point_size * 2.0);
+    shell_surface->setFont(large_font);
+    workbench.resize(1400, 619);
+    QApplication::processEvents();
+    CHECK(!short_tabs->isHidden());
+    CHECK(right_vertical_splitter->isHidden());
+    shell_surface->setFont(base_font);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(short_tabs->isHidden());
+    CHECK(!right_vertical_splitter->isHidden());
+    std::cout << "UI01_G2_FONT_AWARE_SHORT_HEIGHT_PASS" << std::endl;
+
     // G2 completion actions must remain anchored below the Operations
     // scroll viewport. Test actual existing button identity, not a copy
     // that might silently invoke different domain behavior.
