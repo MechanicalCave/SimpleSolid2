@@ -812,7 +812,12 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     const int available = std::max(
         0, (top_row == nullptr ? 0 : top_row->width()) -
            non_contextual_width - fixed_row_gutters);
-    if (required <= available) {
+    // A direct group dropdown does not need the More button's width.
+    // Reserve that width only for the final fallback, otherwise direct
+    // grouped tools and pinned Create collapse too early on Windows.
+    const int direct_available =
+        available + toolbar_more_->sizeHint().width();
+    if (required <= direct_available) {
         toolbar_more_->hide();
         return;
     }
@@ -837,7 +842,7 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     // without the last-resort two-level More menu at moderate widths.
     std::vector<QToolButton*> direct_dropdowns;
     const auto try_named_group = [&](const ToolbarGroupSpec& group) {
-        if (group.pinned || required <= available) return;
+        if (group.pinned || required <= direct_available) return;
         const auto key = context_name + QStringLiteral("_") +
             QString::fromLatin1(group.name);
         auto* dropdown = toolbar_group_dropdowns_.value(
@@ -860,7 +865,7 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             try_named_group(groups[static_cast<std::size_t>(i)]);
         }
     }
-    if (required <= available) {
+    if (required <= direct_available) {
         toolbar_more_->hide();
         return;
     }
