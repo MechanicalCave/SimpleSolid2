@@ -842,6 +842,7 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
                 QStringLiteral("Pin or unpin the complete ") +
                 QString::fromLatin1(group.name) +
                 QStringLiteral(" group"));
+            pin->setFixedWidth(16);
             const QString preference_key =
                 QStringLiteral("ui/workbench/toolbar/v1/") +
                 current_context + QStringLiteral("/pins/") +
@@ -885,7 +886,13 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         pin->setProperty("pinned", group.pinned);
         pin->setText(group.pinned
             ? QStringLiteral("●") : QStringLiteral("○"));
-        pin->setVisible(toolbar_customize_active_);
+        // Contract: a small pinned marker is visible but NOT editable in
+        // normal CAD use; Customize reveals and enables all group pins.
+        pin->setEnabled(toolbar_customize_active_);
+        pin->setFocusPolicy(
+            toolbar_customize_active_
+                ? Qt::StrongFocus : Qt::NoFocus);
+        pin->setVisible(toolbar_customize_active_ || group.pinned);
     }
 
     // Install real-command dropdowns next to each existing unpinned
@@ -999,6 +1006,10 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             width += count(findChild<QPushButton*>(
                 QString::fromLatin1(id)));
         }
+        width += count(toolbar_pin_markers_.value(
+            context_name + QStringLiteral("_") +
+                QString::fromLatin1(group.name),
+            nullptr));
         return width;
     };
     int required = 0;
@@ -1050,6 +1061,10 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             hide_one(findChild<QPushButton*>(
                 QString::fromLatin1(id)));
         }
+        hide_one(toolbar_pin_markers_.value(
+            context_name + QStringLiteral("_") +
+                QString::fromLatin1(group.name),
+            nullptr));
     };
     // Tier 1: collapse unpinned whole groups into named, direct menus.
     // Place each dropdown where its group used to be. They can be reached
