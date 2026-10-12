@@ -447,12 +447,18 @@ int main(int argc, char* argv[]) {
     auto* pin_create = workbench.findChild<QToolButton*>(
         QStringLiteral("workbenchToolbarPin_Part_Create"));
     CHECK(pin_create != nullptr);
-    CHECK(pin_create->isHidden());
+    // The approved D2 spec requires a visible but PASSIVE marker for
+    // pinned groups in normal CAD operation. Only Customize enables it.
+    CHECK(!pin_create->isHidden());
+    CHECK(!pin_create->isEnabled());
+    CHECK(pin_create->property("pinned").toBool());
+    pin_create->click();
     CHECK(pin_create->property("pinned").toBool());
     customize_toolbar->click();
     QApplication::processEvents();
     CHECK(customize_toolbar->isChecked());
     CHECK(!pin_create->isHidden());
+    CHECK(pin_create->isEnabled());
     pin_create->click();
     QApplication::processEvents();
     CHECK(!pin_create->property("pinned").toBool());
@@ -519,7 +525,8 @@ int main(int argc, char* argv[]) {
     customize_toolbar->click();
     QApplication::processEvents();
     CHECK(!customize_toolbar->isChecked());
-    CHECK(pin_create->isHidden());
+    CHECK(!pin_create->isHidden());
+    CHECK(!pin_create->isEnabled());
     std::cout << "UI01_G3_CUSTOMIZE_PASSIVE_PIN_NATIVE_PASS"
               << std::endl;
 
