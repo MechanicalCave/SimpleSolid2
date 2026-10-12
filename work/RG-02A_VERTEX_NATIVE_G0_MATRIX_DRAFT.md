@@ -41,24 +41,28 @@ For each case, record ALL of: Feature sequence, selected source Body stage, curr
 
 ## 2A. Observed native G0 run status — 2026-10-12 (NOT FINAL)
 
-The initial V01–V12 table above remains a *test design*; results and precise per-case limits live in [`work/RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md`](RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md) on [Draft PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332). No numerical status histogram can be inferred from the default passing CTest transcript; any stated counts/bounds are proved by explicit passing native assertions at the linked SHA.
+The initial V01–V12 table above remains a *test design*; results and precise per-case limits live in [`work/RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md`](RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md) on [Draft PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332). A **controlled, intentional diagnostic RED** in [run #38309695097](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38309695097) captured hidden real OCCT Vertex histograms; all temporary fail returns were removed and **exact numeric assertions GREEN** in [run #38310021876](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38310021876), source SHA `98107ed3bada2c121ea2055bf8d090830dbf48af`, FOCUSED 2/2 PASS and `windows-msvc` PASS. The default passing CTest transcript alone does not expose those counters.
 
 | Case | Verified status | Observation / missing work |
 | --- | --- | --- |
 | V01 | PASS, bounded native prism | 8 of 8 Vertex Point addresses uniquely Resolved through three semantic Surfaces |
 | V02 | PASS, bounded edit | All 8 addresses survive Extrude height 20 → 35; 4 Z moves +15, 4 stationary; no coordinate matching |
-| V03 | PARTIAL, assertions PASS | Native Add→Cut retains ≥8 inherited Point addresses and creates ≥1 new; exact statuses and adjacency histogram not captured |
-| V04 | PARTIAL, invariants PASS | 90° and 360° native Revolve provider/Part catalogs valid and all Resolved witnesses unique; missing exact 2/3/other distribution |
-| V05 | PARTIAL, invariants PASS | Fillet real native catalog accounts all vertices; exact classified distribution missing |
-| V06 | PARTIAL, invariants PASS | Chamfer real native catalog accounts all vertices; exact classified distribution missing |
+| V03 | PASS Part histogram, provider detail open | Real interior Cut 16 native = 16 Resolved; exactly 8 inherited + 8 newly authored Point meanings; separate raw Surface incidence outstanding |
+| V04 | PASS numeric provider+Part histograms | 90° provider 8 all 3-Surface vs Part 6 Resolved; 360° provider 4 all 2-Surface vs Part 2 Unsupported; seam/pick UX not asserted |
+| V05 | PASS Part histogram, raw adjacency open | Fillet 13 current = 10 Resolved + 3 Unsupported; exact raw/semantic adjacency of unsupported corners not measured |
+| V06 | PASS Part histogram, raw adjacency open | Chamfer 13 current = 10 Resolved + 3 Unsupported; exact raw/semantic adjacency of unsupported corners not measured |
 | V07 | PASS, bounded removed corner | At least one old semantic Point becomes Missing with zero current native candidates |
-| V08 | PASS, genuine ambiguous geometry | Half-cylinder Cut yields ≥1 three-Surface semantic Point with multiple current native Vertices, correctly Ambiguous |
+| V08 | PASS genuine counted ambiguity | Half-cylinder Cut 6 = 4 Ambiguous + 2 Unsupported; exactly 2 three-Surface Point groups have 2+ native realizations each |
 | V09 | PASS, bounded stage identity | Pre-Chamfer stage retains all 8 original semantic Point addresses; later-stage identity is distinct |
-| V10 | PASS for native and policy, not UI interaction | Real extruded cylinder exposes ≥1 native `semantically_unsupported` Vertex with no `FeaturePointAddress` but acceptable under existing ordinary accounting-class pick filter |
+| V10 | PASS numeric native/policy, not UI | Cylinder Extrude 2 native Unsupported, zero current Point candidates; ordinary Viewport policy eligibility proven from source logic, actual hit interaction untested |
 | V11 | PARTIAL, semantic cold in-memory rebuild PASS | Independent OCCT kernel rebuild reconstructs all 8 semantic addresses; stale UI selection generation and future RG-02 file persistence are NOT proved |
 | V12 | PASS, bounded provenance replacement | All 8 same-XYZ regenerated Vertices have different semantic producer; old addresses not reused |
 
-**Exact Windows focused evidence:** V01 [#38304772610](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38304772610), V03 [#38306302187](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306302187), V04 [#38306630003](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306630003), V02/V09 [#38307244650](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307244650), V07 [#38307452459](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307452459), V12 [#38307830593](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307830593), V10 [#38308507132](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308507132), V11 [#38308647893](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308647893), V08 [#38308817803](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308817803). These are individually verified FOCUSED checks for different source SHAs, **not** an exact-head FULL gate. Full G0 closeout and follow-on persistence/UI/D2 design decisions remain separately gated.
+**Exact Windows focused evidence (earlier cases):** V01 [#38304772610](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38304772610), V03 [#38306302187](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306302187), V04 [#38306630003](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306630003), V02/V09 [#38307244650](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307244650), V07 [#38307452459](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307452459), V12 [#38307830593](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307830593), V10 [#38308507132](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308507132), V11 [#38308647893](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308647893), V08 [#38308817803](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308817803). The measured histograms derive from [diagnostic RED #38309695097](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38309695097) and numeric-assertion [GREEN #38310021876](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38310021876), and are recorded per fixture in the linked native report. Each test result applies only to its verified source SHA. **No exact-head FULL, Owner G0 acceptance, D2 schema approval or UX approval** is claimed.
+
+### Native accounting note
+
+The observed status counts are **current Part-stage native Vertex records**, distinct from historical lineage Point entries. In a full-height corner Cut, **12 current Vertices are Resolved**, yet **2 of 8 inherited semantic Point addresses are Missing** and only **6** survive: old missing references are not themselves current native Vertex records. On a half-cylinder Cut, **2 ambiguous three-Surface semantic Point groups produce 4 ambiguous native Vertices**. Provider raw Revolve Surface adjacency uses a different source inventory (partial 8×3, full 4×2), which is not interchangeable with Part-stage point counts (partial 6 Resolved, full 2 Unsupported).
 
 ## 3. Separate edge-derived point matrix after VERTEX boundary is known
 
@@ -75,7 +79,7 @@ The initial V01–V12 table above remains a *test design*; results and precise p
 
 E01–E08 are accepted future product expectations, **not** already passing tests or permission to implement.
 
-## 4. Proposed minimal G0 execution scope — pending contract activation
+## 4. Owner-activated G0 execution scope and remaining bounded evidence
 
 **Read-only baseline characterization first:** choose real native OCCT fixture generation in the existing C++ testing architecture; reuse existing tests/fixtures where feasible (`tests/pm05b2_strict_edge_resolver_test.cpp`, `tests/pm05c1_edge_semantic_kernel_test.cpp`, `tests/pm02p_e_core_lifecycle_test.cpp`, `tests/pm03b_datum_evaluation_test.cpp`) but do not claim those tests already prove the new VERTEX matrix. Fixture additions/target registration need an explicitly accepted allowed-path and test matrix. Do not edit existing tests outside an active bounded contract.
 
