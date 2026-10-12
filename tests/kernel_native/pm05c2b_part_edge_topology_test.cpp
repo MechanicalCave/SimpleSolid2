@@ -680,6 +680,58 @@ int main() {
     CHECK(g0_base.point_witnesses == 8U);
     CHECK(g0_base.ambiguous == 0U);
     CHECK(g0_base.unsupported == 0U);
+    // G0/V11: reconstruct authored Part intent and reevaluate with an
+    // independent OCCT provider instance. Only FeaturePointAddress
+    // survives semantically; transient runtime tokens are neither
+    // serialized nor compared as identities.
+    auto reopened_document = part::PartDocument::restore(
+        base_document.documentId(),
+        base_document.state(),
+        base_document.revision());
+    CHECK(reopened_document.ok());
+    kernel_occt::OcctSolidModelingKernel separate_kernel;
+    const auto fresh_evaluation = part::evaluatePart(
+        *reopened_document.document, separate_kernel);
+    CHECK(
+        fresh_evaluation.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(fresh_evaluation.features.size() == 1U);
+    CHECK(fresh_evaluation.features[0].result_topology);
+    const auto& rebuilt_topology =
+        *fresh_evaluation.features[0].result_topology;
+    const auto reconstructed_counts =
+        characterizeNativeVertices(
+            rebuilt_topology, "V11-new-provider");
+    CHECK(reconstructed_counts.native == 8U);
+    CHECK(reconstructed_counts.resolved == 8U);
+    CHECK(
+        rebuilt_topology.stage ==
+        base_evaluation.features[0].result_topology->stage);
+    std::size_t reconstructed_addresses = 0U;
+    for (const auto& address_resolution :
+         base_evaluation.features[0].result_topology->points) {
+        CHECK(address_resolution.status ==
+              kernel::ReferenceStatus::resolved);
+        const auto found = std::find_if(
+            rebuilt_topology.points.begin(),
+            rebuilt_topology.points.end(),
+            [&address_resolution](const auto& current) {
+                return current.address ==
+                       address_resolution.address;
+            });
+        CHECK(found != rebuilt_topology.points.end());
+        CHECK(found->status ==
+              kernel::ReferenceStatus::resolved);
+        CHECK(found->current_vertices.size() == 1U);
+        ++reconstructed_addresses;
+    }
+    CHECK(reconstructed_addresses == 8U);
+    std::cout
+        << "RG02A_G0_V11"
+        << " reconstructed_semantic_addresses=8"
+        << " independent_kernel=1"
+        << " runtime_token_equality=NOT_AUTHORITY"
+        << " persisted_rg02_point_source=NOT_IMPLEMENTED\\n";
     // G0/V02: changing the earlier Feature geometry must recompute
     // points without changing their authored FeaturePointAddress meaning.
     // XYZ is checked only AFTER semantic identity was matched.
