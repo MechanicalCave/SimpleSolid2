@@ -490,6 +490,32 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
             action->text() == QStringLiteral("Chamfer");
     }
     CHECK(native_fillet_menu && native_chamfer_menu);
+    // Tier 2/3 presentation uses the SAME Extrude/Revolve commands.
+    // The pinned Create named dropdown must not disappear under a
+    // concurrent real OCCT Feature Edit, even if layout hides it.
+    auto* native_create_dropdown =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral(
+                "workbenchToolbarGroupDropdown_Part_Create"));
+    CHECK(native_create_dropdown != nullptr);
+    CHECK(native_create_dropdown->menu() != nullptr);
+    auto* original_extrude =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeToolButton"));
+    auto* original_revolve =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("revolveToolButton"));
+    CHECK(original_extrude && original_revolve);
+    bool native_extrude_menu = false;
+    bool native_revolve_menu = false;
+    for (const auto* action : native_create_dropdown->menu()->actions()) {
+        if (action == nullptr) continue;
+        native_extrude_menu |=
+            action->text() == QStringLiteral("Extrude");
+        native_revolve_menu |=
+            action->text() == QStringLiteral("Revolve");
+    }
+    CHECK(native_extrude_menu && native_revolve_menu);
     CHECK(sketch_finish->isHidden());
     CHECK(!active_operations->isHidden());
     CHECK(!session.document().sketches().empty());
