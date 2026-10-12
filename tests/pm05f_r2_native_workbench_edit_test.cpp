@@ -5701,8 +5701,14 @@ int main(int argc, char* argv[]) {
         auto* fillet_operations = workbench.findChild<QWidget*>(
             QStringLiteral("edgeFeatureOperationsWidget"));
         CHECK(fillet_operations);
+        const auto fillet_selection_before = label->text();
         verifyUi01SolidFeatureEntryGuard(
             workbench, *tree, session, *fillet_operations, "Fillet");
+        std::cerr << "UI01_G1_FILLET_DRAFT_SELECTION_AFTER_TREE"
+                  << " before=" << fillet_selection_before.toStdString()
+                  << " after=" << label->text().toStdString()
+                  << " panel_visible=" << !fillet_operations->isHidden()
+                  << std::endl;
         CHECK(selectedCount(*label, 1));
         CHECK(viewport->runtimeDiagnostics().solid_preview_displayed);
 
