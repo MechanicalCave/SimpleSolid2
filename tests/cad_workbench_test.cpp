@@ -666,6 +666,114 @@ int main(int argc, char* argv[]) {
     std::cout << "UI01_G3_GROUP_KEYBOARD_ORDER_RESET_PASS"
               << std::endl;
 
+    // G3 Sketch group ordering is a separate preference domain. Select
+    // must stay the fixed base action while References moves as a WHOLE
+    // group, with its original Project Geometry command widget intact.
+    // Exercise this on the existing visible Workbench so a second native
+    // top-level window cannot steal foreground focus from later tests.
+    auto* shell_for_sketch_order =
+        workbench.findChild<ui::CadWorkbenchShell*>();
+    CHECK(shell_for_sketch_order != nullptr);
+    shell_for_sketch_order->setToolbarContext(true);
+    QApplication::processEvents();
+    auto* sketch_select_for_order =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("selectSketchToolButton"));
+    auto* sketch_profile_for_order =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileSketchToolButton"));
+    auto* sketch_project_for_order =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeToolButton"));
+    auto* sketch_references_handle =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarHandle_Sketch_References"));
+    CHECK(sketch_select_for_order && sketch_profile_for_order &&
+          sketch_project_for_order && sketch_references_handle);
+    CHECK(group_layout->indexOf(sketch_select_for_order) <
+          group_layout->indexOf(sketch_profile_for_order));
+    CHECK(group_layout->indexOf(sketch_profile_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(customize_toolbar->isChecked());
+    CHECK(!sketch_references_handle->isHidden());
+    QAction* sketch_move_left = nullptr;
+    QAction* sketch_reset = nullptr;
+    for (auto* action : sketch_references_handle->menu()->actions()) {
+        if (action == nullptr) continue;
+        if (action->text() == QStringLiteral("Przesuń w lewo"))
+            sketch_move_left = action;
+        if (action->text() ==
+            QStringLiteral("Przywróć domyślne"))
+            sketch_reset = action;
+    }
+    CHECK(sketch_move_left && sketch_reset);
+    sketch_move_left->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(sketch_select_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    CHECK(group_layout->indexOf(sketch_project_for_order) <
+          group_layout->indexOf(sketch_profile_for_order));
+    persisted_toolbar_prefs.sync();
+    const auto sketch_reordered = persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Sketch/order"))
+            .toStringList();
+    CHECK(sketch_reordered.indexOf(QStringLiteral("References")) <
+          sketch_reordered.indexOf(QStringLiteral("Profile")));
+    CHECK(!sketch_reordered.contains(QStringLiteral("Select")));
+    CHECK(!persisted_toolbar_prefs.contains(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/order")));
+
+    // Cold construct a complete Workbench with original command widgets,
+    // but do NOT show it as a second native window.
+    {
+        ui::CadWorkbench cold_sketch{
+            [](QWidget* parent) {
+                auto* native_view = new TestViewportWidget{parent};
+                return ui::ViewportSurface{native_view, native_view};
+            }};
+        auto* cold_shell =
+            cold_sketch.findChild<ui::CadWorkbenchShell*>();
+        auto* cold_host = cold_sketch.findChild<QWidget*>(
+            QStringLiteral("documentToolsHost"));
+        auto* cold_select = cold_sketch.findChild<QPushButton*>(
+            QStringLiteral("selectSketchToolButton"));
+        auto* cold_profile = cold_sketch.findChild<QPushButton*>(
+            QStringLiteral("profileSketchToolButton"));
+        auto* cold_project = cold_sketch.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeToolButton"));
+        CHECK(cold_shell && cold_host && cold_select &&
+              cold_profile && cold_project);
+        cold_shell->setToolbarContext(true);
+        QApplication::processEvents();
+        auto* cold_layout =
+            qobject_cast<QHBoxLayout*>(cold_host->layout());
+        CHECK(cold_layout != nullptr);
+        CHECK(cold_layout->indexOf(cold_select) <
+              cold_layout->indexOf(cold_project));
+        CHECK(cold_layout->indexOf(cold_project) <
+              cold_layout->indexOf(cold_profile));
+    }
+
+    sketch_reset->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(sketch_profile_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    CHECK(group_layout->indexOf(sketch_select_for_order) <
+          group_layout->indexOf(sketch_profile_for_order));
+    persisted_toolbar_prefs.sync();
+    CHECK(!persisted_toolbar_prefs.contains(
+        QStringLiteral("ui/workbench/toolbar/v1/Sketch/order")));
+    customize_toolbar->click();
+    shell_for_sketch_order->setToolbarContext(false);
+    QApplication::processEvents();
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    std::cout << "UI01_G3_SKETCH_ORDER_COLD_ISOLATION_PASS"
+              << std::endl;
+
     // UI-01 G3 native RED: the contextual tool surface must not rely on
     // a horizontal scrollbar, must stay in one row with fixed Document
     // actions, and must expose a last-resort named two-level More menu.
