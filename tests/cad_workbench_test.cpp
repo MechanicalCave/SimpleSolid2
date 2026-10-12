@@ -469,6 +469,29 @@ int main(int argc, char* argv[]) {
         CHECK(mode_cue->isVisible());
         CHECK(ui01_operations_mode_cue->text() == message);
     }
+    // A short/narrow Workbench also keeps the 3D scene stationary
+    // when a long active-operation name appears or disappears.
+    for (const int width : {1024, 720}) {
+        workbench.resize(width, 700);
+        QApplication::processEvents();
+        const QRect before_editor = editor->geometry();
+        const QRect before_viewport = viewport->geometry();
+        shell_for_mode_cue->setModeCue(QStringLiteral(
+            "Extrude operation — Edit Extrude001 (Feature 1)"));
+        QApplication::processEvents();
+        CHECK(editor->geometry() == before_editor);
+        CHECK(viewport->geometry() == before_viewport);
+        CHECK(mode_cue->height() == idle_mode_cue_height);
+        CHECK(mode_cue->toolTip() ==
+              QStringLiteral(
+                  "Extrude operation — Edit Extrude001 (Feature 1)"));
+        shell_for_mode_cue->setModeCue({});
+        QApplication::processEvents();
+        CHECK(editor->geometry() == before_editor);
+        CHECK(viewport->geometry() == before_viewport);
+    }
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
     std::cout << "UI01_MODE_CUE_STABLE_VIEWPORT_NATIVE_PASS"
               << std::endl;
 
