@@ -1,12 +1,13 @@
-# RG-02A/G0 — Native VERTEX Boundary Characterization Work Contract (DRAFT)
+# RG-02A/G0 — Native VERTEX Boundary Characterization Work Contract (OWNER-ACCEPTED; PENDING ACTIVATION)
 
-**Status:** DRAFT — **NOT ACCEPTED AS EXECUTABLE CONTRACT; NOT ACTIVE**  
+**Status:** **OWNER-ACCEPTED BOUNDED G0 SCOPE — NOT MERGED / NOT ACTIVATED.** No test or product mutation is authorized until formal governance activation.  
+**Owner acceptance:** 2026-10-12 — explicit `akcepyuje - kontynuuj` in answer to the question approving precisely this limited RG-02A/G0 stage for formal activation. The approval covers the G0 evidence-only scope, not a roadmap revision, governance merges, tests, implementation of RG-02 features, or UI design.  
 **Date:** 2026-10-12  
 **Baseline:** `main` `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c` (revalidate immediately before actual activation)  
 **Design input:** `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md`  
 **Evidence plan:** `work/RG-02A_VERTEX_NATIVE_G0_MATRIX_DRAFT.md`  
 **Governing authority:** `AGENTS.md`, `governance/CONSTITUTION.md`, `governance/FOUNDATION.md`, `governance/ARCHITECTURE.md`, accepted ADRs, `work/ACTIVE.yaml`, `work/PART_MODELING_V1_ROADMAP.md` v1.31, `governance/DOCUMENTATION.md`.  
-**Decision class:** prospective D2 evidence gate; no D2/D3 architecture or CAD product change authorized.
+**Decision class:** Owner-accepted bounded D2 evidence Work Contract text, pending formal activation; no further D2/D3 architecture or CAD product change authorized.
 
 ## 1. Goal and why G0 precedes implementation
 
@@ -22,7 +23,7 @@ Test-only modifications, limited to the following **already registered** native 
 2. **Secondary if needed for Revolve:** `tests/kernel_native/pm04c2_production_revolve_test.cpp` — real OCCT Revolve geometry; only add bounded Vertex meaning observations where the actual Part-stage catalog is available through existing test APIs.
 3. **Secondary if needed for isolated analytic/kernel evidence:** `tests/kernel_native/pm02c_production_edge_curve_vertex_point_test.cpp` — provider exact current topology/adjacent Surface observations from native Extrude/Cut; distinguish this runtime evidence from Part's semantic Point resolution.
 
-**Documentation/evidence:** this proposed contract when accepted, `work/RG-02A_VERTEX_NATIVE_G0_MATRIX_DRAFT.md` for case status, and a new dedicated `work/RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md` as the **actual executed report** (must contain exact tested SHA and CI links or remain explicitly `UNRUN`). Any governance activation/roadmap edits occur in a separate specifically authorized governance change, not implicitly under the test-only implementation package.
+**Documentation/evidence:** this Owner-accepted G0 contract after governance merge/activation, `work/RG-02A_VERTEX_NATIVE_G0_MATRIX_DRAFT.md` for case status, and a new dedicated `work/RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md` as the **actual executed report** (must contain exact tested SHA and CI links or remain explicitly `UNRUN`). Any governance activation/roadmap edits occur in a separate specifically authorized governance change, not implicitly under the test-only implementation package.
 
 **Never edit under G0:** `src/**`, `tests/CMakeLists.txt`, `tests/kernel_native/CMakeLists.txt`, CI/workflows, `adr/**`, `docs/internal/**`, `docs/product/**`, `docs/browser/**`, persistence schemas, serializations, core/kernel/Part APIs, application Commands, Viewer/UI, or current production Work Contracts. An attempted fourth test-source path is a **STOP for Owner amendment**, not an automatic allowed file.
 
@@ -50,7 +51,7 @@ The case names below are from the parent VERTEX matrix; a test should derive eac
 ## 4. Execution sequence and exact tests
 
 1. **G0 baseline read-only:** confirm current `main`, active roadmap/contract state, matching native test registration, and historical accepted PM-02P/PM-02C/PM-05C2b tests. Do not copy code from old `PM-02P` **evidence-only** models and mistake it for production behavior.
-2. **G0 native RED/measurement:** on a fresh evidence implementation branch from formally activated main, extend only the named existing test sources; capture actual bounded native cases, with counters and typed statuses. If a case cannot be prepared using allowed files/fixtures without production changes, mark `BLOCKED` and STOP for scope amendment rather than writing hidden scaffolding.
+2. **G0 native RED/measurement:** on a fresh evidence implementation branch from formally activated main (never from an unmerged draft), extend only the named existing test sources; capture actual bounded native cases, with counters and typed statuses. If a case cannot be prepared using allowed files/fixtures without production changes, mark `BLOCKED` and STOP for scope amendment rather than writing hidden scaffolding.
 3. **FOCUSED:** use exact registered target/test pairs, e.g. `pm05c2b_part_edge_topology_test` / `pm05c2b.part_edge_topology`, `pm04c2_production_revolve_test` / `pm04c2.production_revolve`, `pm02c_production_edge_curve_vertex_point_test` / `pm02c.production_edge_curve_vertex_point`, with `SS2-Focus-Mode: kernel`. Focus each changed target; re-check current CI focused-commit trailer rules before execution. Do not rewrite CMake or fake PASS results.
 4. **Broader verification:** native Windows FOCUSED for altered tests, FAST as required by current CI policy, and final exact-head Windows FULL including docs/aggregate before proposing a production evidence merge. Preserve and report every RED with exact tested SHA and logs.
 5. **Evidence report:** publish a source-linked observed matrix showing `RESOLVED`, `MISSING`, `AMBIGUOUS`, `UNSUPPORTED`, `BLOCKED`, or `UNRUN` for each relevant case, and independently whether ordinary viewport picking would admit each class. No unexecuted statement may be labeled `PASS`.
@@ -63,7 +64,7 @@ The case names below are from the parent VERTEX matrix; a test should derive eac
 - No new `FeaturePointAddress` variant, no broad `VertexId`, no inferred edge-endpoint references, no persistent XYZ, no schema bump, no "best candidate" heuristics.
 - No new `MID/CENTER` exact kernel API under G0: the E01–E08 matrix is a **later** technical stage after G0.
 - No Geometry/Datum/Axis/Mirror features; no application draft/CommandLine, selection/hover, stage dropdown, snap markers, Tree UI or Viewer behavior.
-- Existing `work/ACTIVE.yaml` still points to completed UI-01. G0 cannot start production/test mutations unless a separately Owner-accepted bounded Work Contract is merged and a dedicated activation on main has been approved and merged. Existing roadmap v1.31 excludes RG-02 sequencing; any required amendment is a separate Owner D2 decision.
+- Existing `work/ACTIVE.yaml` still points to completed UI-01. The bounded G0 Work Contract text is now Owner-accepted, but G0 cannot start test mutations until that contract is merged under separate authorization and a dedicated activation on main has been approved and merged. Existing roadmap v1.31 excludes RG-02 sequencing; any required amendment is a separate Owner D2 decision, not implied by this G0 Work Contract acceptance.
 - **Independent RG-02 UI design gate:** before **any** future UI/UX or 3D marker/pick changes, provide Owner-reviewable interface design and obtain a **separate explicit Owner approval**, as mandated by section 3 of `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md`. G0 acceptance is not UI approval.
 
 ## Documentation impact
