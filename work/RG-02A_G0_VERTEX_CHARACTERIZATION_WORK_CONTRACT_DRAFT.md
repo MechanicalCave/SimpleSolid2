@@ -3,10 +3,10 @@
 **Status:** **OWNER-ACCEPTED BOUNDED G0 SCOPE — NOT MERGED / NOT ACTIVATED.** No test or product mutation is authorized until formal governance activation.  
 **Owner acceptance:** 2026-10-12 — explicit `akcepyuje - kontynuuj` in answer to the question approving precisely this limited RG-02A/G0 stage for formal activation. The approval covers the G0 evidence-only scope, not a roadmap revision, governance merges, tests, implementation of RG-02 features, or UI design.  
 **Date:** 2026-10-12  
-**Baseline:** `main` `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c` (revalidate immediately before actual activation)  
+**Audited source baseline:** `main` `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c`; latest accepted governance baseline `main` `108420705aaee9182ca649401e73f1ca23309de2` (roadmap v1.32 merged via PR #330). Revalidate exact `main` immediately before formal activation and any tests.  
 **Design input:** `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md`  
 **Evidence plan:** `work/RG-02A_VERTEX_NATIVE_G0_MATRIX_DRAFT.md`  
-**Governing authority:** `AGENTS.md`, `governance/CONSTITUTION.md`, `governance/FOUNDATION.md`, `governance/ARCHITECTURE.md`, accepted ADRs, `work/ACTIVE.yaml`, `work/PART_MODELING_V1_ROADMAP.md` v1.31, `governance/DOCUMENTATION.md`.  
+**Governing authority:** `AGENTS.md`, `governance/CONSTITUTION.md`, `governance/FOUNDATION.md`, `governance/ARCHITECTURE.md`, accepted ADRs, `work/ACTIVE.yaml`, `work/PART_MODELING_V1_ROADMAP.md` v1.32, `governance/DOCUMENTATION.md`.  
 **Decision class:** Owner-accepted bounded D2 evidence Work Contract text, pending formal activation; no further D2/D3 architecture or CAD product change authorized.
 
 ## 1. Goal and why G0 precedes implementation
@@ -64,7 +64,7 @@ The case names below are from the parent VERTEX matrix; a test should derive eac
 - No new `FeaturePointAddress` variant, no broad `VertexId`, no inferred edge-endpoint references, no persistent XYZ, no schema bump, no "best candidate" heuristics.
 - No new `MID/CENTER` exact kernel API under G0: the E01–E08 matrix is a **later** technical stage after G0.
 - No Geometry/Datum/Axis/Mirror features; no application draft/CommandLine, selection/hover, stage dropdown, snap markers, Tree UI or Viewer behavior.
-- Existing `work/ACTIVE.yaml` still points to completed UI-01. The bounded G0 Work Contract text is now Owner-accepted, but G0 cannot start test mutations until that contract is merged under separate authorization and a dedicated activation on main has been approved and merged. Existing roadmap v1.31 excludes RG-02 sequencing; any required amendment is a separate Owner D2 decision, not implied by this G0 Work Contract acceptance.
+- Existing `work/ACTIVE.yaml` still points to completed UI-01. The bounded G0 Work Contract text is now Owner-accepted, but G0 cannot start test mutations until that contract is merged under separate authorization and a dedicated activation on main has been approved and merged. Roadmap **v1.32** already includes the **RG-02A/G0 evidence-only gate before PG-01E**, by separate Owner D2 approval and roadmap-only PR #330 merge. This does **not** activate G0 or introduce broader RG-02 Datum/Axis product scope; future milestones/implementation require separate Owner decisions.
 - **Independent RG-02 UI design gate:** before **any** future UI/UX or 3D marker/pick changes, provide Owner-reviewable interface design and obtain a **separate explicit Owner approval**, as mandated by section 3 of `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md`. G0 acceptance is not UI approval.
 
 ## Documentation impact
