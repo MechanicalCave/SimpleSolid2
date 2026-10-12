@@ -1858,6 +1858,7 @@ int main(int argc, char* argv[]) {
             edit->click();
             QApplication::processEvents();
             CHECK(!extrude_operations->isHidden());
+            CHECK(!extrude_cancel->isHidden());
             CHECK(finish_sketch->isHidden());
 
             const auto feature_draft_revision =
