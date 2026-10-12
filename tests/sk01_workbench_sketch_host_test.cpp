@@ -14,6 +14,7 @@
 #include <QMenu>
 #include <QLocale>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QWidget>
@@ -941,10 +942,28 @@ int main(int argc, char* argv[]) {
     CHECK(
         finish_button->text() ==
         QStringLiteral("Create Sketch"));
-    // UI-01 Owner-reported RED: isHidden() alone misses a button
-    // in a non-current QStackedWidget footer. After selecting a
-    // real support plane, Create Sketch and Cancel must BOTH
-    // actually be visible and clickable in the ACTIVE footer.
+    // UI-01 Owner-reported RED: test actual visibility through every
+    // ancestor and the active QStackedWidget page; a hidden page may
+    // contain a button whose isHidden() returns false.
+    auto* sketch_footer = workbench.findChild<QWidget*>(
+        QStringLiteral("workbenchOperationsFooter"));
+    auto* sketch_footer_stack = workbench.findChild<QStackedWidget*>(
+        QStringLiteral("workbenchOperationsFooterStack"));
+    CHECK(sketch_footer && sketch_footer_stack);
+    std::cout << "UI01_SUPPORT_FOOTER_NATIVE"
+              << " footer_visible=" << sketch_footer->isVisible()
+              << " current_page="
+              << (sketch_footer_stack->currentWidget()
+                  ? sketch_footer_stack->currentWidget()->objectName()
+                       .toStdString() : "null")
+              << " finish_visible=" << finish_button->isVisible()
+              << " finish_hidden=" << finish_button->isHidden()
+              << " cancel_visible=" << cancel_button->isVisible()
+              << " cancel_hidden=" << cancel_button->isHidden()
+              << " operations_group_visible="
+              << (sketch_footer->parentWidget()
+                  ? sketch_footer->parentWidget()->isVisible() : false)
+              << std::endl;
     CHECK(finish_button->isVisible());
     CHECK(cancel_button->isVisible());
     CHECK(!cancel_button->isHidden());
