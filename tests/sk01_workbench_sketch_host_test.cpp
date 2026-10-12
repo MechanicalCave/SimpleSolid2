@@ -11,8 +11,10 @@
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QLocale>
 #include <QPushButton>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QWidget>
 #include <QTest>
@@ -937,11 +939,53 @@ int main(int argc, char* argv[]) {
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
 
-    // PG-01C C1: the single Sketch Project Geometry launcher is visible,
-    // but an unavailable exact modeling provider must prevent entering a
-    // fake authoring state through either toolbar or Command Line.
-    CHECK(!project_edge_button->isHidden());
+    // PG-01C C1 + UI-01 G3: the ORIGINAL Sketch Project Geometry
+    // command must be reachable in its current presentation, either
+    // inline, in the named References dropdown, or via the last-resort
+    // More -> References -> Project Geometry path. At responsive widths
+    // the original QPushButton is intentionally hidden by a named menu;
+    // hiding it is not the same as losing the command.
+    // A missing modeling provider disables *every* reachable entry.
     CHECK(!project_edge_button->isEnabled());
+    if (project_edge_button->isHidden()) {
+        auto* references_dropdown =
+            workbench.findChild<QToolButton*>(
+                QStringLiteral(
+                    "workbenchToolbarGroupDropdown_Sketch_References"));
+        auto* toolbar_more =
+            workbench.findChild<QToolButton*>(
+                QStringLiteral("workbenchToolbarMoreButton"));
+        CHECK(references_dropdown && toolbar_more);
+        QMenu* references_menu = nullptr;
+        if (!references_dropdown->isHidden()) {
+            references_menu = references_dropdown->menu();
+        } else if (!toolbar_more->isHidden()) {
+            CHECK(toolbar_more->menu() != nullptr);
+            for (auto* group : toolbar_more->menu()->actions()) {
+                if (group != nullptr &&
+                    group->text() == QStringLiteral("References")) {
+                    references_menu = group->menu();
+                    break;
+                }
+            }
+        }
+        CHECK(references_menu != nullptr);
+        QAction* project_action = nullptr;
+        for (auto* action : references_menu->actions()) {
+            if (action != nullptr &&
+                action->text() ==
+                    QStringLiteral("Project Geometry")) {
+                project_action = action;
+                break;
+            }
+        }
+        CHECK(project_action != nullptr);
+        CHECK(!project_action->isEnabled());
+        CHECK(project_action->isCheckable() ==
+              project_edge_button->isCheckable());
+        CHECK(project_action->isChecked() ==
+              project_edge_button->isChecked());
+    }
     CHECK(project_edge_operations->isHidden());
     const auto project_guard_state = session->document().state();
     const auto project_guard_revision = session->document().revision();
