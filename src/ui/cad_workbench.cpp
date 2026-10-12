@@ -16513,6 +16513,10 @@ void CadWorkbench::syncActionState() {
     syncExtrudeUi();
     syncRevolveUi();
     syncEdgeFeatureUi();
+    // UI-01 G3 responds only to the live Part/Sketch mode after every
+    // native QAction/QPushButton state has been synchronized. Collapsing
+    // presentation groups never registers a second CAD command.
+    shell_->setToolbarContext(editing_sketch);
 }
 
 void CadWorkbench::notifyCadInputContextChanged() {
