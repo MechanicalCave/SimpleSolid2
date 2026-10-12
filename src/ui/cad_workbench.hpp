@@ -323,6 +323,7 @@ private:
     void startSketchResupport(
         const sketch::SketchId& sketch_id);
     void cancelSketchTool();
+    [[nodiscard]] bool hasActiveSolidFeatureDraft() const noexcept;
     void requestEditSketch(
         const sketch::SketchId& sketch_id);
     void requestEditProfile(
