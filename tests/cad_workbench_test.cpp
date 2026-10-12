@@ -443,11 +443,11 @@ int main(int argc, char* argv[]) {
     // a reserved, fixed-height rail even when its text is empty.
     auto* mode_cue = workbench.findChild<QLabel*>(
         QStringLiteral("workbenchViewportModeCue"));
-    auto* operations_mode_cue = workbench.findChild<QLabel*>(
+    auto* ui01_operations_mode_cue = workbench.findChild<QLabel*>(
         QStringLiteral("workbenchOperationsModeCue"));
     auto* shell_for_mode_cue = dynamic_cast<ui::CadWorkbenchShell*>(
         splitter->parentWidget());
-    CHECK(mode_cue && operations_mode_cue && shell_for_mode_cue);
+    CHECK(mode_cue && ui01_operations_mode_cue && shell_for_mode_cue);
     CHECK(mode_cue->isVisible());
     CHECK(!mode_cue->wordWrap());
     const QRect idle_editor_bounds = editor->geometry();
@@ -467,7 +467,7 @@ int main(int argc, char* argv[]) {
         CHECK(viewport->geometry() == idle_viewport_bounds);
         CHECK(mode_cue->height() == idle_mode_cue_height);
         CHECK(mode_cue->isVisible());
-        CHECK(operations_mode_cue->text() == message);
+        CHECK(ui01_operations_mode_cue->text() == message);
     }
     std::cout << "UI01_MODE_CUE_STABLE_VIEWPORT_NATIVE_PASS"
               << std::endl;
