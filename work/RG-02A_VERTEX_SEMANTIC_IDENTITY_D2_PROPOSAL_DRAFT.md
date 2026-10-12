@@ -1,7 +1,7 @@
 # RG-02A — Semantic Body VERTEX identity after native G0: D2 proposal (OWNER REVIEW DRAFT)
 
 **Date:** 2026-10-12  
-**Status:** **UNACCEPTED ARCHITECTURE PROPOSAL / NO IMPLEMENTATION AUTHORITY**. Prepared for Owner consultation only. The Owner has **not yet explicitly accepted** the bounded G0 findings with their limits, approved any new Vertex identity design, authorized G0 PR #332 merge, or approved RG-02 interface UX. A request to "continue" was interpreted as authority to prepare review material, **not** as any of those approvals.  
+**Status:** **OWNER-ACCEPTED BOUNDED G0 EVIDENCE (WITH TWO EXPLICIT GAPS); UNACCEPTED D2 ARCHITECTURE PROPOSAL / NO IMPLEMENTATION AUTHORITY**. In response to the exact question whether to accept G0 findings and both gaps as closure of the evidence-only phase, Owner said **`akceptuję - kontynuuj` on 2026-10-12**. This accepts the measured G0 characterization *as bounded evidence*, **not** a universal durable Vertex identity, approval to merge evidence PR #332, adoption of D2 Option B, a G1 contract/activation, production/schema code or RG-02 UI/UX. A prior generic "kontynuuj" had authorized preparation of review material only.  
 **Source of measured claims:** [G0 evidence PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332), source HEAD `da195b486f385bf9c260a542e4624c1923d55b7a`. Its report is [`work/RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md`](https://github.com/MechanicalCave/SimpleSolid2/blob/da195b486f385bf9c260a542e4624c1923d55b7a/work/RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md) and detailed executed matrix is [`work/RG-02A_VERTEX_NATIVE_G0_MATRIX_DRAFT.md`](https://github.com/MechanicalCave/SimpleSolid2/blob/da195b486f385bf9c260a542e4624c1923d55b7a/work/RG-02A_VERTEX_NATIVE_G0_MATRIX_DRAFT.md). This evidence is **on an unmerged PR**, not yet as-built mainline authority.  
 **Windows verification:** exact HEAD FAST [#38310478851](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38310478851) 93/93 PASS; exact HEAD FULL [#38310694444](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38310694444) PASS (core-only 25/25, kernel-native 57/57, desktop 117/117; 199/199); docs / aggregate PASS. Measurement diagnostic RED [#38309695097](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38309695097), numerical native GREEN [#38310021876](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38310021876) 2/2 PASS. No new execution is claimed in this D2 document.  
 **Governing boundaries:** `governance/CONSTITUTION.md`, `work/ACTIVE.yaml` (still **RG-02A/G0 evidence ONLY**), roadmap v1.32; parent `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md`, `work/RG-02A_REFERENCE_FOUNDATION_AUDIT_DRAFT.md`; accepted stage-aware Part semantics.
@@ -66,7 +66,7 @@ The previously accepted RG-02 product expectations remain: `VERTEX` from real ce
 
 ## 4. Proposed next, separately gated evidence contract (NOT active)
 
-Before any production design commitment, draft a **separate** bounded G1 Work Contract only after Owner G0 findings acceptance and D2 investigation authorization. It would define exact allowed paths, real OCCT fixtures and independent case-wise status assertions to test:
+Before any production design commitment, draft a **separate** bounded G1 Work Contract only after the now-recorded Owner G0 findings acceptance **and still-pending** D2 investigation authorization. It would define exact allowed paths, real OCCT fixtures and independent case-wise status assertions to test:
 
 1. For each Unsupported Fillet/Chamfer native Vertex: resolved semantic Surface address cardinality, native/raw incidence, producing Feature/corner/edge provenance and actual bounded incident Edge relations; distinguish no carrier vs >3 vs unresolved/aliased carrier, without inference from `unsupported` status alone.
 2. For two three-Surface Ambiguous groups in the analytic half-cylinder: test whether any independently resolvable semantic Edge/curve/branch witness splits the group **across upstream dimension edits, reversed model traversal and cold rebuild**, without provider order or XYZ.
@@ -80,14 +80,14 @@ If a G1 fixture requires `src/**`, new CMake targets, schema, UI or files outsid
 
 | Gate | Owner decision | Current status |
 | --- | --- | --- |
-| G0 findings | Accept **measured G0 evidence with explicitly documented gaps** (raw Fillet/Chamfer incidence and untested UI token/new point-source persistence), or require further narrow G0 proof | **PENDING** — user said "kontynuuj", not explicit acceptance |
+| G0 findings | Accept measured G0 evidence with two explicitly documented limits: (1) raw/semantic Fillet/Chamfer Unsupported Vertex Surface-incidence/provenance; (2) V11 stale Viewer selection and future saved RG-02 source lifecycle not proved by the in-memory cold rebuild | **OWNER-ACCEPTED 2026-10-12** (`akceptuję - kontynuuj`) as bounded G0 evidence closure; those limitations remain open for future separately scoped work |
 | G0 evidence PR #332 | Separate approval to merge exact-HEAD FULL-tested evidence PR after findings accepted | **PENDING**, do not merge |
 | D2 direction | Approve an **evidence-first investigation of Option B, preserving A fail-closed**, or instruct another direction; **not** approval of a concrete schema or implementation | **PENDING** |
 | G1 bounded Work Contract | Inspect/accept specific allowed code/test files and next proof matrix; separate activation on main | **NOT PROPOSED / NOT ACTIVE** |
 | Future product identity/schema | Explicitly accept an evidence-backed semantic selector, version and migration/failure policy | **NOT DESIGNED / NOT ACCEPTED** |
 | RG-02 UI/UX | Reviewable complete UX design presented and consulted on; **explicit separate approval before any UI code including 3D VERTEX/MID/CENTER snap markers** | **HARD STOP — PENDING** |
 
-**Mandatory order:** Owner acceptance of measured G0 findings → distinct approval to merge evidence PR #332 → separately chosen D2 investigation direction and bounded G1 contract → approval/activation if authorized → later production semantic source D2 and contract → **independent UX approval before any UI mutation**. Preparing or merging this *D2 draft* must never short-circuit a prerequisite.
+**Mandatory order:** Owner acceptance of measured G0 findings **[DONE, WITH GAPS]** → distinct approval to merge evidence PR #332 **[PENDING]** → separately chosen D2 investigation direction and bounded G1 contract **[PENDING]** → approval/activation if authorized → later production semantic source D2 and contract → **independent UX approval before any UI mutation**. Preparing or merging this *D2 draft* must never short-circuit a prerequisite.
 
 ## Documentation impact
 
