@@ -562,7 +562,14 @@ G0RevolveVertexCounts observeRevolvePartVertices(
     return counts;
 }
 
-void observeRevolveProviderVertices(
+struct G0ProviderAdjacencyCounts final {
+    std::size_t native{};
+    std::size_t two_surfaces{};
+    std::size_t three_surfaces{};
+    std::size_t other_surfaces{};
+};
+
+G0ProviderAdjacencyCounts observeRevolveProviderVertices(
     const kernel::SolidModelingResult& result,
     const char* fixture) {
     verifyCompleteRuntimeInventory(result);
@@ -592,6 +599,11 @@ void observeRevolveProviderVertices(
         << " three_surfaces=" << three_surfaces
         << " other_surfaces=" << other_surfaces
         << " semantic_identity=NOT_INFERRED\\n";
+    return {
+        result.current_vertices.size(),
+        two_surfaces,
+        three_surfaces,
+        other_surfaces};
 }
 
 } // namespace
@@ -608,8 +620,13 @@ int main() {
                     0.0,
                     pi / 2.0));
         verifyCompleteRuntimeInventory(result);
-        observeRevolveProviderVertices(
-            result, "V04-partial-90-provider");
+        const auto g0_partial_provider =
+            observeRevolveProviderVertices(
+                result, "V04-partial-90-provider");
+        CHECK(g0_partial_provider.native == 8U);
+        CHECK(g0_partial_provider.two_surfaces == 0U);
+        CHECK(g0_partial_provider.three_surfaces == 8U);
+        CHECK(g0_partial_provider.other_surfaces == 0U);
         CHECK(result.new_surfaces.size() == 6U);
 
         const auto* start =
@@ -704,8 +721,13 @@ int main() {
                     0.0,
                     full_turn));
         verifyCompleteRuntimeInventory(result);
-        observeRevolveProviderVertices(
-            result, "V04-full-360-provider");
+        const auto g0_full_provider =
+            observeRevolveProviderVertices(
+                result, "V04-full-360-provider");
+        CHECK(g0_full_provider.native == 4U);
+        CHECK(g0_full_provider.two_surfaces == 4U);
+        CHECK(g0_full_provider.three_surfaces == 0U);
+        CHECK(g0_full_provider.other_surfaces == 0U);
         CHECK(result.new_surfaces.size() == 4U);
         CHECK(
             surfaceByRole(
@@ -856,9 +878,14 @@ int main() {
                 up_to_date);
         CHECK(feature.result_topology.has_value());
         CHECK(feature.result_topology->complete());
-        (void)observeRevolvePartVertices(
+        const auto g0_full_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-full-360-part");
+        CHECK(g0_full_part.native == 2U);
+        CHECK(g0_full_part.resolved == 0U);
+        CHECK(g0_full_part.ambiguous == 0U);
+        CHECK(g0_full_part.missing == 0U);
+        CHECK(g0_full_part.unsupported == 2U);
         CHECK(
             countSurfaceRole(
                 feature,
@@ -961,8 +988,11 @@ int main() {
         const auto g0_cylinder = observeRevolvePartVertices(
             *evaluated.current_topology,
             "V10-cylinder-extrude");
-        CHECK(g0_cylinder.native > 0U);
-        CHECK(g0_cylinder.unsupported > 0U);
+        CHECK(g0_cylinder.native == 2U);
+        CHECK(g0_cylinder.resolved == 0U);
+        CHECK(g0_cylinder.missing == 0U);
+        CHECK(g0_cylinder.ambiguous == 0U);
+        CHECK(g0_cylinder.unsupported == 2U);
         std::size_t ordinary_policy_eligible_unsupported = 0U;
         for (const auto& vertex :
              evaluated.current_topology->vertices) {
@@ -979,7 +1009,7 @@ int main() {
             // accounting-class filter; this test does not execute UI.
             ++ordinary_policy_eligible_unsupported;
         }
-        CHECK(ordinary_policy_eligible_unsupported > 0U);
+        CHECK(ordinary_policy_eligible_unsupported == 2U);
         CHECK(ordinary_policy_eligible_unsupported ==
               g0_cylinder.unsupported);
         // G0/V08: check a real two-point intersection of one analytic
@@ -1000,6 +1030,11 @@ int main() {
             *half_evaluation.features[1].result_topology;
         const auto half_counts = observeRevolvePartVertices(
             half_catalog, "V08-half-cylinder-cut");
+        CHECK(half_counts.native == 6U);
+        CHECK(half_counts.resolved == 0U);
+        CHECK(half_counts.missing == 0U);
+        CHECK(half_counts.ambiguous == 4U);
+        CHECK(half_counts.unsupported == 2U);
         std::size_t branched_points = 0U;
         for (const auto& point : half_catalog.points) {
             if (point.status !=
@@ -1012,8 +1047,8 @@ int main() {
             CHECK(point.address.adjacent_surfaces.size() == 3U);
             ++branched_points;
         }
-        CHECK(branched_points > 0U);
-        CHECK(half_counts.ambiguous > 0U);
+        CHECK(branched_points == 2U);
+        CHECK(half_counts.ambiguous == 4U);
         std::cout
             << "RG02A_G0_V08"
             << " ambiguous_three_surface_point_groups="
@@ -1061,9 +1096,14 @@ int main() {
         const auto& feature = evaluated.features.front();
         CHECK(feature.result_topology.has_value());
         CHECK(feature.result_topology->complete());
-        (void)observeRevolvePartVertices(
+        const auto g0_partial_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-partial-90-part");
+        CHECK(g0_partial_part.native == 6U);
+        CHECK(g0_partial_part.resolved == 6U);
+        CHECK(g0_partial_part.ambiguous == 0U);
+        CHECK(g0_partial_part.missing == 0U);
+        CHECK(g0_partial_part.unsupported == 0U);
 
         std::size_t authorable_edges = 0U;
         std::size_t authorable_lines = 0U;
@@ -1117,9 +1157,5 @@ int main() {
 
     std::cout
         << "PM-04C2 production OCCT Revolve tests passed\n";
-    // TEMPORARY G0 measurement: force CTest to publish all preceding
-    // successful native fixture counters. This is an INTENTIONAL RED,
-    // to be removed and replaced with value-backed assertions.
-    std::cerr << "G0_MEASURE_ONLY_PM04C2: expected diagnostic-only RED" << '\n';
-    return EXIT_FAILURE;
+    return EXIT_SUCCESS;
 }
