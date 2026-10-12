@@ -2058,7 +2058,10 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("revolveCancelButton"));
             auto* edge_operations = workbench.findChild<QWidget*>(
                 QStringLiteral("edgeFeatureOperationsWidget"));
-            CHECK(revolve_operations && revolve_cancel && edge_operations);
+            auto* creation_status = workbench.findChild<QLabel*>(
+                QStringLiteral("workbenchStatus"));
+            CHECK(revolve_operations && revolve_cancel &&
+                  edge_operations && creation_status);
             const auto profile_key = QString::fromStdString(
                 session.document().profiles().front().id.serialized());
             for (const char* command : {"REVOLVE", "FILLET", "CHAMFER"}) {
@@ -2109,7 +2112,7 @@ int main(int argc, char* argv[]) {
                         QApplication::processEvents();
                         CHECK(sketch_finish->isHidden());
                         CHECK(!operations->isHidden());
-                        CHECK(status->text().contains(
+                        CHECK(creation_status->text().contains(
                             QStringLiteral(
                                 "Finish or cancel the active Feature draft")));
                         CHECK(session.document().state() == draft_state);
