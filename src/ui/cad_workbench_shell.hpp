@@ -2,11 +2,13 @@
 
 #include <QWidget>
 
+class QGroupBox;
 class QHBoxLayout;
 class QLabel;
 class QResizeEvent;
 class QScrollArea;
 class QSplitter;
+class QTabWidget;
 class QToolButton;
 class QTreeWidget;
 class QVBoxLayout;
@@ -27,6 +29,9 @@ public:
     void setCommandLineContent(QWidget* widget);
     void setPropertiesContent(QWidget* widget);
     void setOperationsContent(QWidget* widget);
+    [[nodiscard]] double rightPanelRatio() const;
+    void setRightPanelRatio(double ratio);
+    void setOperationsActive(bool active);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -39,6 +44,8 @@ private:
     };
 
     void updateResponsiveLayout(bool force = false);
+    void updateRightPanelHeightMode();
+    void applyRightPanelRatio();
     void setNarrowPanel(QWidget* panel);
     [[nodiscard]] bool panelContainsFocus(
         const QWidget* panel) const;
@@ -61,6 +68,12 @@ private:
     QLabel* status_{};
     QSplitter* splitter_{};
     QSplitter* right_vertical_splitter_{};
+    QGroupBox* properties_group_{};
+    QGroupBox* operations_group_{};
+    QTabWidget* right_short_tabs_{};
+    double right_panel_ratio_{0.4};
+    bool short_right_panel_mode_{};
+    bool operations_active_{};
     QScrollArea* properties_scroll_{};
     QScrollArea* operations_scroll_{};
     QWidget* tree_panel_{};
