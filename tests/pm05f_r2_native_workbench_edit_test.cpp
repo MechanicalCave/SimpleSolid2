@@ -15,7 +15,10 @@
 #include <QApplication>
 #include <QDebug>
 #include <QLabel>
+#include <QMenu>
 #include <QPushButton>
+#include <QToolButton>
+#include <QScrollArea>
 #include <QTest>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -437,6 +440,274 @@ QTreeWidgetItem* featureTreeItem(
         }
     }
     return nullptr;
+}
+
+// UI-01 P0 matrix: exercise the real Tree actions against an already
+// active Feature Edit draft; selection for Properties is allowed to move,
+// but Operations/draft identity and authored Part state must not.
+void verifyUi01FeatureDraftRejectsTreeEdits(
+    ui::CadWorkbench& workbench,
+    application::DocumentSession& session,
+    QTreeWidget& tree,
+    QTreeWidgetItem* feature_item,
+    const char* operation_widget_name) {
+    auto* sketch_action = workbench.findChild<QAction*>(
+        QStringLiteral("editSketchAction"));
+    auto* profile_action = workbench.findChild<QAction*>(
+        QStringLiteral("editProfileAction"));
+    auto* sketch_finish = workbench.findChild<QPushButton*>(
+        QStringLiteral("finishSketchButton"));
+    auto* status = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchStatus"));
+    auto* active_operations = workbench.findChild<QWidget*>(
+        QString::fromLatin1(operation_widget_name));
+    CHECK(sketch_action && profile_action && sketch_finish &&
+          status && active_operations && feature_item);
+    // G3 regression at the actual OCCT Feature Edit boundary: grouped
+    // toolbar presentation must not interfere with the sole live draft,
+    // original Tree command entry or fixed Document controls.
+    auto* contextual_scroll = workbench.findChild<QScrollArea*>(
+        QStringLiteral("documentToolsScroll"));
+    auto* more_tools = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarMoreButton"));
+    CHECK(contextual_scroll && more_tools);
+    CHECK(contextual_scroll->horizontalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOff);
+    CHECK(more_tools->menu() != nullptr);
+    auto* native_modify_dropdown =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral(
+                "workbenchToolbarGroupDropdown_Part_Modify"));
+    CHECK(native_modify_dropdown != nullptr);
+    CHECK(native_modify_dropdown->menu() != nullptr);
+    bool native_fillet_menu = false;
+    bool native_chamfer_menu = false;
+    for (const auto* action : native_modify_dropdown->menu()->actions()) {
+        if (action == nullptr) continue;
+        native_fillet_menu |=
+            action->text() == QStringLiteral("Fillet");
+        native_chamfer_menu |=
+            action->text() == QStringLiteral("Chamfer");
+    }
+    CHECK(native_fillet_menu && native_chamfer_menu);
+    // Tier 2/3 presentation uses the SAME Extrude/Revolve commands.
+    // The pinned Create named dropdown must not disappear under a
+    // concurrent real OCCT Feature Edit, even if layout hides it.
+    auto* native_create_dropdown =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral(
+                "workbenchToolbarGroupDropdown_Part_Create"));
+    CHECK(native_create_dropdown != nullptr);
+    CHECK(native_create_dropdown->menu() != nullptr);
+    auto* original_extrude =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeToolButton"));
+    auto* original_revolve =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("revolveToolButton"));
+    CHECK(original_extrude && original_revolve);
+    auto* original_fillet = workbench.findChild<QPushButton*>(
+        QStringLiteral("filletToolButton"));
+    auto* original_chamfer = workbench.findChild<QPushButton*>(
+        QStringLiteral("chamferToolButton"));
+    CHECK(original_fillet && original_chamfer);
+    // UI-01 G3 native RED: an existing Feature Edit owns Operations
+    // and the viewport cue, NOT the corresponding Create toolbar
+    // command. None of the original create buttons may advertise
+    // "engaged" merely because an Edit draft exists.
+    CHECK(!original_extrude->isChecked());
+    CHECK(!original_revolve->isChecked());
+    CHECK(!original_fillet->isChecked());
+    CHECK(!original_chamfer->isChecked());
+    bool native_extrude_menu = false;
+    bool native_revolve_menu = false;
+    for (const auto* action : native_create_dropdown->menu()->actions()) {
+        if (action == nullptr) continue;
+        native_extrude_menu |=
+            action->text() == QStringLiteral("Extrude");
+        native_revolve_menu |=
+            action->text() == QStringLiteral("Revolve");
+    }
+    CHECK(native_extrude_menu && native_revolve_menu);
+    CHECK(sketch_finish->isHidden());
+    CHECK(!active_operations->isHidden());
+    CHECK(!session.document().sketches().empty());
+
+    // G2: the same native Finish/Cancel widgets stay in the fixed footer
+    // while inspecting other Tree entities; the cue follows the live
+    // Feature draft and must not be rebound to the inspected selection.
+    auto* footer = workbench.findChild<QWidget*>(
+        QStringLiteral("workbenchOperationsFooter"));
+    auto* operations_scroll = workbench.findChild<QScrollArea*>(
+        QStringLiteral("workbenchOperationsScroll"));
+    auto* operations_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchOperationsModeCue"));
+    auto* viewport_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchViewportModeCue"));
+    CHECK(footer && operations_scroll && operations_cue && viewport_cue);
+    CHECK(footer->isVisible());
+    const auto context_cue = operations_cue->text();
+    CHECK(!context_cue.isEmpty());
+    CHECK(viewport_cue->text() == context_cue);
+    // The cue must identify the actual immutable Feature target, not
+    // merely the tool category or an unrelated Tree inspection row.
+    const auto selected_feature_key =
+        feature_item->data(0, Qt::UserRole + 45).toString();
+    QString draft_target_name;
+    for (const auto& feature : session.document().body().features) {
+        if (QString::fromStdString(feature.id.serialized()) ==
+                selected_feature_key) {
+            draft_target_name = QString::fromStdString(feature.name);
+            break;
+        }
+    }
+    CHECK(!draft_target_name.isEmpty());
+    CHECK(context_cue.contains(draft_target_name));
+    const auto finish_name =
+        std::string_view{operation_widget_name} ==
+            "revolveOperationsWidget"
+            ? QStringLiteral("revolveFinishButton")
+            : std::string_view{operation_widget_name} ==
+                  "extrudeOperationsWidget"
+                ? QStringLiteral("extrudeFinishButton")
+                : QStringLiteral("edgeFeatureFinishButton");
+    const auto cancel_name =
+        std::string_view{operation_widget_name} ==
+            "revolveOperationsWidget"
+            ? QStringLiteral("revolveCancelButton")
+            : std::string_view{operation_widget_name} ==
+                  "extrudeOperationsWidget"
+                ? QStringLiteral("extrudeCancelButton")
+                : QStringLiteral("edgeFeatureCancelButton");
+    auto* original_finish =
+        workbench.findChild<QPushButton*>(finish_name);
+    auto* original_cancel =
+        workbench.findChild<QPushButton*>(cancel_name);
+    CHECK(original_finish && original_cancel);
+    CHECK(footer->isAncestorOf(original_finish));
+    CHECK(footer->isAncestorOf(original_cancel));
+    CHECK(!operations_scroll->isAncestorOf(original_finish));
+    CHECK(!operations_scroll->isAncestorOf(original_cancel));
+    CHECK(original_finish->isVisible());
+    CHECK(original_cancel->isVisible());
+
+    const auto original_state = session.document().state();
+    const auto original_revision = session.document().revision();
+    const auto original_undo = session.undoDepth();
+    const bool original_dirty = session.needsSave();
+
+    // Native Qt/OCCT P0 guard: entering and leaving toolbar Customize
+    // while a real Feature Edit draft is live changes neither draft
+    // ownership/cue nor the authored Part/revision/Undo/dirty state.
+    auto* customize_toolbar =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarCustomizeButton"));
+    auto* create_group_handle =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarHandle_Part_Create"));
+    CHECK(customize_toolbar && create_group_handle);
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(create_group_handle->isHidden());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(customize_toolbar->isChecked());
+    CHECK(create_group_handle->menu() != nullptr);
+    CHECK(create_group_handle->popupMode() ==
+          QToolButton::MenuButtonPopup);
+    CHECK(!create_group_handle->isHidden());
+    CHECK(create_group_handle->toolTip().contains(
+        QStringLiteral("Przeciągnij")));
+    // This is the same real Feature Edit that rejected Sketch/Profile
+    // conflicts. The drag affordance itself may exist, but merely
+    // entering Customize cannot create a CAD command or ghost draft.
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(create_group_handle->isHidden());
+    CHECK(active_operations->isVisible());
+    CHECK(operations_cue->text() == context_cue);
+    CHECK(viewport_cue->text() == context_cue);
+    CHECK(session.document().state() == original_state);
+    CHECK(session.document().revision() == original_revision);
+    CHECK(session.undoDepth() == original_undo);
+    CHECK(session.needsSave() == original_dirty);
+
+    const auto sketch_key = QString::fromStdString(
+        std::string{session.document().sketches().front().id.value()});
+    QTreeWidgetItem* sketch_item = nullptr;
+    QTreeWidgetItem* profile_item = nullptr;
+    for (QTreeWidgetItemIterator it(&tree); *it; ++it) {
+        if ((*it)->data(0, Qt::UserRole + 42).toString() ==
+            sketch_key) {
+            sketch_item = *it;
+        }
+        if (!(*it)->data(0, Qt::UserRole + 43)
+                 .toString().isEmpty()) {
+            profile_item = *it;
+        }
+    }
+    CHECK(sketch_item && profile_item);
+    const auto attempt = [&](QTreeWidgetItem* target,
+                             QAction* action) {
+        tree.clearSelection();
+        tree.setCurrentItem(target);
+        target->setSelected(true);
+        QApplication::processEvents();
+        action->trigger();
+        QApplication::processEvents();
+        CHECK(sketch_finish->isHidden());
+        CHECK(!active_operations->isHidden());
+        CHECK(footer->isVisible());
+        CHECK(operations_cue->text() == context_cue);
+        CHECK(viewport_cue->text() == context_cue);
+        CHECK(original_finish->isVisible());
+        CHECK(original_cancel->isVisible());
+        CHECK(status->text().contains(
+            QStringLiteral(
+                "Finish or cancel the active Feature draft")));
+        CHECK(session.document().state() == original_state);
+        CHECK(session.document().revision() == original_revision);
+        CHECK(session.undoDepth() == original_undo);
+        CHECK(session.needsSave() == original_dirty);
+    };
+    attempt(sketch_item, sketch_action);
+    attempt(profile_item, profile_action);
+
+    // Double-click is a second real Tree entry route via the controller's
+    // QEvent::MouseButtonDblClick filter, not an alias for QAction::trigger.
+    for (auto* target : {sketch_item, profile_item}) {
+        tree.scrollToItem(target);
+        tree.clearSelection();
+        tree.setCurrentItem(target);
+        target->setSelected(true);
+        QApplication::processEvents();
+        const auto at = tree.visualItemRect(target).center();
+        CHECK(tree.itemAt(at) == target);
+        QTest::mouseDClick(
+            tree.viewport(), Qt::LeftButton, Qt::NoModifier, at);
+        QApplication::processEvents();
+        CHECK(sketch_finish->isHidden());
+        CHECK(!active_operations->isHidden());
+        CHECK(footer->isVisible());
+        CHECK(operations_cue->text() == context_cue);
+        CHECK(viewport_cue->text() == context_cue);
+        CHECK(original_finish->isVisible());
+        CHECK(original_cancel->isVisible());
+        CHECK(status->text().contains(
+            QStringLiteral(
+                "Finish or cancel the active Feature draft")));
+        CHECK(session.document().state() == original_state);
+        CHECK(session.document().revision() == original_revision);
+        CHECK(session.undoDepth() == original_undo);
+        CHECK(session.needsSave() == original_dirty);
+    }
+
+    tree.clearSelection();
+    tree.setCurrentItem(feature_item);
+    feature_item->setSelected(true);
+    QApplication::processEvents();
+    CHECK(!active_operations->isHidden());
+    CHECK(sketch_finish->isHidden());
 }
 
 bool nativeClick(
@@ -1769,6 +2040,8 @@ int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
     const bool pg01c_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01c";
+    const bool ui01_p0_only =
+        argc == 2 && std::string_view{argv[1]} == "--ui01-p0";
     const bool pg01d_ui_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01d-ui";
     const bool pg01d_d0_only =
@@ -1819,6 +2092,228 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+        // UI-01 G0 native RED (full-only registered native Qt/OCCT target):
+        // an existing Feature Edit draft must refuse Tree Sketch and
+        // Profile Edit, without mutating authored CAD.
+        // Run in the ordinary native suite AND via --ui01-p0 for focused
+        // characterization. No UI-01 product fix is included in this RED.
+        if (ui01_p0_only ||
+            (!pg01d_ui_only && !pg01c_only)) {
+            auto* edit_sketch = workbench.findChild<QAction*>(
+                QStringLiteral("editSketchAction"));
+            auto* edit_profile = workbench.findChild<QAction*>(
+                QStringLiteral("editProfileAction"));
+            auto* extrude_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("extrudeOperationsWidget"));
+            auto* extrude_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("extrudeCancelButton"));
+            auto* sketch_finish = workbench.findChild<QPushButton*>(
+                QStringLiteral("finishSketchButton"));
+            CHECK(edit_sketch && edit_profile && extrude_operations &&
+                  extrude_cancel && sketch_finish);
+            CHECK(session.document().body().features.size() == 1U);
+            auto* feature_item = featureTreeItem(
+                *tree, session.document().body().features.front().id);
+            CHECK(feature_item);
+            tree->clearSelection();
+            tree->setCurrentItem(feature_item);
+            feature_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(edit->isEnabled());
+            edit->click();
+            QApplication::processEvents();
+            CHECK(!extrude_operations->isHidden());
+            CHECK(sketch_finish->isHidden());
+
+            const auto baseline_state = session.document().state();
+            const auto baseline_revision =
+                session.document().revision();
+            const auto baseline_undo = session.undoDepth();
+            const auto baseline_dirty = session.needsSave();
+            const auto sketch_key = QString::fromStdString(
+                std::string{session.document().sketches().front().id.value()});
+            QTreeWidgetItem* sketch_item = nullptr;
+            QTreeWidgetItem* profile_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->data(0, Qt::UserRole + 42).toString() ==
+                    sketch_key) {
+                    sketch_item = *it;
+                }
+                if (!(*it)->data(0, Qt::UserRole + 43)
+                         .toString().isEmpty()) {
+                    profile_item = *it;
+                }
+            }
+            CHECK(sketch_item && profile_item);
+            tree->clearSelection();
+            tree->setCurrentItem(sketch_item);
+            sketch_item->setSelected(true);
+            QApplication::processEvents();
+            edit_sketch->trigger();
+            QApplication::processEvents();
+            // Historic G0 RED at 8948176: requestEditSketch() entered
+            // Sketch despite a live Extrude draft. G1 now must refuse it.
+            CHECK(sketch_finish->isHidden());
+            CHECK(!extrude_operations->isHidden());
+            CHECK(session.document().state() == baseline_state);
+            CHECK(session.document().revision() == baseline_revision);
+            CHECK(session.undoDepth() == baseline_undo);
+            CHECK(session.needsSave() == baseline_dirty);
+
+            tree->clearSelection();
+            tree->setCurrentItem(profile_item);
+            profile_item->setSelected(true);
+            QApplication::processEvents();
+            edit_profile->trigger();
+            QApplication::processEvents();
+            CHECK(sketch_finish->isHidden());
+            CHECK(!extrude_operations->isHidden());
+            CHECK(session.document().state() == baseline_state);
+            CHECK(session.document().revision() == baseline_revision);
+            CHECK(session.undoDepth() == baseline_undo);
+            CHECK(session.needsSave() == baseline_dirty);
+
+            extrude_cancel->click();
+            QApplication::processEvents();
+            CHECK(extrude_operations->isHidden());
+            CHECK(sketch_finish->isHidden());
+            CHECK(session.document().state() == baseline_state);
+            CHECK(session.document().revision() == baseline_revision);
+            CHECK(session.undoDepth() == baseline_undo);
+            CHECK(session.needsSave() == baseline_dirty);
+
+            // Legal negative control: once the Feature draft is explicitly
+            // cancelled, Sketch Edit is allowed and an Axis draft can be
+            // opened INSIDE that Sketch. Neither the new P0 gate nor the
+            // test is allowed to prohibit this supported workflow.
+            tree->clearSelection();
+            tree->setCurrentItem(sketch_item);
+            sketch_item->setSelected(true);
+            QApplication::processEvents();
+            edit_sketch->trigger();
+            QApplication::processEvents();
+            CHECK(!sketch_finish->isHidden());
+            auto* axis_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("axisOperationsWidget"));
+            CHECK(axis_operations);
+            auto axis_reply = workbench.submitCadInput(
+                "AXIS", workbench.cadInputContextGeneration());
+            CHECK(axis_reply.accepted);
+            QApplication::processEvents();
+            CHECK(!axis_operations->isHidden());
+            CHECK(!sketch_finish->isHidden());
+            axis_reply = workbench.submitCadInput(
+                "CANCEL", workbench.cadInputContextGeneration());
+            CHECK(axis_reply.accepted);
+            QApplication::processEvents();
+            CHECK(axis_operations->isHidden());
+            CHECK(!sketch_finish->isHidden());
+            sketch_finish->click();
+            QApplication::processEvents();
+            CHECK(sketch_finish->isHidden());
+            CHECK(session.document().state() == baseline_state);
+            CHECK(session.document().revision() == baseline_revision);
+            CHECK(session.undoDepth() == baseline_undo);
+            CHECK(session.needsSave() == baseline_dirty);
+            std::cout << "UI01_P0_NATIVE_EDIT_EXCLUSIVITY_PASS"
+                      << " feature=Extrude"
+                      << " sketch_refused=1 profile_refused=1"
+                      << " dirty_revision_undo_unchanged=1"
+                      << std::endl;
+            // UI-01 G1: creation drafts are also exclusive. Exercise the
+            // actual Workbench command dispatcher rather than fabricating
+            // Feature-state fixtures. This complements the four committed
+            // Feature Edit / Tree double-click cases later in this suite.
+            CHECK(workbench.activateDocument(&session, {}));
+            QApplication::processEvents();
+            auto* revolve_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("revolveOperationsWidget"));
+            auto* revolve_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("revolveCancelButton"));
+            auto* edge_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("edgeFeatureOperationsWidget"));
+            auto* creation_status = workbench.findChild<QLabel*>(
+                QStringLiteral("workbenchStatus"));
+            CHECK(revolve_operations && revolve_cancel &&
+                  edge_operations && creation_status);
+            const auto profile_key = QString::fromStdString(
+                session.document().profiles().front().id.serialized());
+            for (const char* command : {"REVOLVE", "FILLET", "CHAMFER"}) {
+                const bool revolve =
+                    std::string_view{command} == "REVOLVE";
+                auto* operations =
+                    revolve ? revolve_operations : edge_operations;
+                auto* cancel_draft =
+                    revolve ? revolve_cancel : cancel;
+                const auto reply = workbench.submitCadInput(
+                    command, workbench.cadInputContextGeneration());
+                CHECK(reply.accepted);
+                QApplication::processEvents();
+                CHECK(!operations->isHidden());
+                CHECK(sketch_finish->isHidden());
+                const auto draft_state = session.document().state();
+                const auto draft_revision = session.document().revision();
+                const auto draft_undo = session.undoDepth();
+                const bool draft_dirty = session.needsSave();
+
+                QTreeWidgetItem* draft_sketch_item = nullptr;
+                QTreeWidgetItem* draft_profile_item = nullptr;
+                for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                    if ((*it)->data(0, Qt::UserRole + 42)
+                            .toString() == sketch_key) {
+                        draft_sketch_item = *it;
+                    }
+                    if ((*it)->data(0, Qt::UserRole + 43)
+                            .toString() == profile_key) {
+                        draft_profile_item = *it;
+                    }
+                }
+                CHECK(draft_sketch_item && draft_profile_item);
+                // A rejected entry is repeatable, does not clear the draft,
+                // and never creates an extra Undo step or dirty checkpoint.
+                for (int repeat = 0; repeat < 2; ++repeat) {
+                    for (auto* target : {draft_sketch_item,
+                                         draft_profile_item}) {
+                        tree->clearSelection();
+                        tree->setCurrentItem(target);
+                        target->setSelected(true);
+                        QApplication::processEvents();
+                        if (target == draft_sketch_item) {
+                            edit_sketch->trigger();
+                        } else {
+                            edit_profile->trigger();
+                        }
+                        QApplication::processEvents();
+                        CHECK(sketch_finish->isHidden());
+                        CHECK(!operations->isHidden());
+                        CHECK(creation_status->text().contains(
+                            QStringLiteral(
+                                "Finish or cancel the active Feature draft")));
+                        CHECK(session.document().state() == draft_state);
+                        CHECK(session.document().revision() == draft_revision);
+                        CHECK(session.undoDepth() == draft_undo);
+                        CHECK(session.needsSave() == draft_dirty);
+                    }
+                }
+                cancel_draft->click();
+                QApplication::processEvents();
+                CHECK(operations->isHidden());
+                CHECK(session.document().state() == draft_state);
+                CHECK(session.document().revision() == draft_revision);
+                CHECK(session.undoDepth() == draft_undo);
+                CHECK(session.needsSave() == draft_dirty);
+                std::cout << "UI01_P0_CREATION_DRAFT_GUARD_PASS"
+                          << " feature=" << command
+                          << " repeated_denials=4"
+                          << " authored_state_unchanged=1" << std::endl;
+            }
+            if (ui01_p0_only) {
+                result = EXIT_SUCCESS;
+                workbench.close();
+                app.quit();
+                return;
+            }
+        }
         if (!pg01d_ui_only && !pg01c_only) {
             // Edge Picking R1 G1 — exactly the untouched Owner native v16/v2
             // Part, unlike the auxiliary synthetic viewer visibility RED.
@@ -5451,11 +5946,26 @@ int main(int argc, char* argv[]) {
         QApplication::processEvents();
         const auto probes = authorableEdgeProbes(session, kernel);
 
+        // UI-01 G3 positive control for newly created Features:
+        // while Create owns the native draft, its ORIGINAL toolbar
+        // button is engaged; an authored Feature Edit is not.
+        auto* create_fillet_button =
+            workbench.findChild<QPushButton*>(
+                QStringLiteral("filletToolButton"));
+        auto* create_chamfer_button =
+            workbench.findChild<QPushButton*>(
+                QStringLiteral("chamferToolButton"));
+        CHECK(create_fillet_button && create_chamfer_button);
+        CHECK(!create_fillet_button->isChecked());
+        CHECK(!create_chamfer_button->isChecked());
         // Create the original Fillet through actual native cursor input,
         // not a fabricated provider-neutral PresentationToken intent.
         auto reply = workbench.submitCadInput(
             "FILLET", workbench.cadInputContextGeneration());
         CHECK(reply.accepted);
+        QApplication::processEvents();
+        CHECK(create_fillet_button->isChecked());
+        CHECK(!create_chamfer_button->isChecked());
         reply = workbench.lockCadDynamicInputField(
             0U, "1", workbench.cadInputContextGeneration());
         CHECK(reply.accepted);
@@ -5485,6 +5995,8 @@ int main(int argc, char* argv[]) {
         CHECK(creating_preview.solid_shading_styles_isolated);
         finish->click();
         QApplication::processEvents();
+        CHECK(!create_fillet_button->isChecked());
+        CHECK(!create_chamfer_button->isChecked());
         CHECK(session.document().body().features.size() == 2U);
         CHECK(!viewport->runtimeDiagnostics().solid_preview_displayed);
         const auto feature_id =
@@ -5541,6 +6053,12 @@ int main(int argc, char* argv[]) {
         CHECK(nativeClick(*viewport, second->world));
         CHECK(selectedCount(*label, 1));
         CHECK(finish->isEnabled());
+        // Run the Tree edit-entry matrix only AFTER the R2-B cursor
+        // sequence; changing Tree inspection selection must not alter
+        // an active Feature draft, but it can affect cursor highlighting.
+        verifyUi01FeatureDraftRejectsTreeEdits(
+            workbench, session, *tree, item,
+            "edgeFeatureOperationsWidget");
         cancel->click();
         QApplication::processEvents();
         CHECK(!viewport->runtimeDiagnostics().solid_preview_displayed);
@@ -5605,6 +6123,30 @@ int main(int argc, char* argv[]) {
             CHECK(workbench.activateDocument(
                 &revolve_session, {}));
             QApplication::processEvents();
+            // UI-01 P0 Revolve Edit: Tree Sketch/Profile attempts must
+            // reject without touching this particular Revolve draft.
+            auto* revolve_item = featureTreeItem(
+                *tree, revolve_session.document()
+                    .body().features.front().id);
+            auto* revolve_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("revolveCancelButton"));
+            auto* revolve_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("revolveOperationsWidget"));
+            CHECK(revolve_item && revolve_cancel && revolve_operations);
+            tree->clearSelection();
+            tree->setCurrentItem(revolve_item);
+            revolve_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(edit->isEnabled());
+            edit->click();
+            QApplication::processEvents();
+            CHECK(!revolve_operations->isHidden());
+            verifyUi01FeatureDraftRejectsTreeEdits(
+                workbench, revolve_session, *tree, revolve_item,
+                "revolveOperationsWidget");
+            revolve_cancel->click();
+            QApplication::processEvents();
+            CHECK(revolve_operations->isHidden());
             CHECK(viewport->setStandardView(
                 viewer::StandardView::top_front_right));
             viewport->fitAll();
@@ -5614,6 +6156,11 @@ int main(int argc, char* argv[]) {
                 command,
                 workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
+            QApplication::processEvents();
+            CHECK(create_fillet_button->isChecked() ==
+                  (variant == 0));
+            CHECK(create_chamfer_button->isChecked() ==
+                  (variant == 1));
             reply = workbench.lockCadDynamicInputField(
                 0U, "0.75",
                 workbench.cadInputContextGeneration());
@@ -5624,6 +6171,8 @@ int main(int argc, char* argv[]) {
             CHECK(finish->isEnabled());
             finish->click();
             QApplication::processEvents();
+            CHECK(!create_fillet_button->isChecked());
+            CHECK(!create_chamfer_button->isChecked());
             CHECK(
                 revolve_session.document().body()
                     .features.size() == 2U);
@@ -7261,6 +7810,30 @@ int main(int argc, char* argv[]) {
         std::cerr
             << "PM05F_R2_PART008_CHAMFER_FINISH_PASS"
             << std::endl;
+
+        // UI-01 P0 Chamfer Edit: the real committed 2-Edge Chamfer
+        // opens an edit draft that must remain exclusive to Operations.
+        auto* chamfer_item = featureTreeItem(
+            *tree, chamfer_session.document()
+                .body().features.back().id);
+        CHECK(chamfer_item);
+        tree->clearSelection();
+        tree->setCurrentItem(chamfer_item);
+        chamfer_item->setSelected(true);
+        QApplication::processEvents();
+        CHECK(edit->isEnabled());
+        edit->click();
+        QApplication::processEvents();
+        CHECK(!cancel->isHidden());
+        verifyUi01FeatureDraftRejectsTreeEdits(
+            workbench, chamfer_session, *tree, chamfer_item,
+            "edgeFeatureOperationsWidget");
+        cancel->click();
+        QApplication::processEvents();
+        // The parent Operations widget hides after Cancel; the child
+        // QPushButton itself need not have QWidget::isHidden() set.
+        CHECK(workbench.findChild<QWidget*>(
+            QStringLiteral("edgeFeatureOperationsWidget"))->isHidden());
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.

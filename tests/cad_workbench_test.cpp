@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "cad_workbench_shell.hpp"
 
 #include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
@@ -6,11 +7,21 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QBoxLayout>
 #include <QItemSelectionModel>
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
+#include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QSettings>
 #include <QSplitter>
+#include <QTabWidget>
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -254,6 +265,12 @@ int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
 
     TempDirectory temp;
+    // App preferences belong to an isolated native-test directory,
+    // never to the Windows CI runner's real user profile.
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(
+        QSettings::IniFormat, QSettings::UserScope,
+        QString::fromStdString((temp.path / "prefs").string()));
     const auto workspace = temp.path / "Project";
     std::filesystem::create_directories(workspace);
 
@@ -421,8 +438,781 @@ int main(int argc, char* argv[]) {
     workbench.show();
     QApplication::processEvents();
 
+    // UI-01 Owner RED: changing the active Feature/Sketch mode cue must
+    // NEVER push the 3D editor down or shrink it. A mode cue occupies
+    // a reserved, fixed-height rail even when its text is empty.
+    auto* mode_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchViewportModeCue"));
+    auto* ui01_operations_mode_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchOperationsModeCue"));
+    auto* shell_for_mode_cue = dynamic_cast<ui::CadWorkbenchShell*>(
+        splitter->parentWidget());
+    CHECK(mode_cue && ui01_operations_mode_cue && shell_for_mode_cue);
+    CHECK(mode_cue->isVisible());
+    CHECK(!mode_cue->wordWrap());
+    const QRect idle_editor_bounds = editor->geometry();
+    const QRect idle_viewport_bounds = viewport->geometry();
+    const int idle_mode_cue_height = mode_cue->height();
+    CHECK(idle_mode_cue_height > 0);
+    for (const QString& message : {
+             QStringLiteral("Extrude operation — Edit Extrude001 (Feature 1)"),
+             QStringLiteral("Sketch edit"),
+             QStringLiteral(
+                 "Extrude operation — Edit unusually-long-feature-name "
+                 "(Feature 123456789)"),
+             QString{}}) {
+        shell_for_mode_cue->setModeCue(message);
+        QApplication::processEvents();
+        CHECK(editor->geometry() == idle_editor_bounds);
+        CHECK(viewport->geometry() == idle_viewport_bounds);
+        CHECK(mode_cue->height() == idle_mode_cue_height);
+        CHECK(mode_cue->isVisible());
+        CHECK(ui01_operations_mode_cue->text() == message);
+    }
+    // A short/narrow Workbench also keeps the 3D scene stationary
+    // when a long active-operation name appears or disappears.
+    for (const int width : {1024, 720}) {
+        workbench.resize(width, 700);
+        QApplication::processEvents();
+        const QRect before_editor = editor->geometry();
+        const QRect before_viewport = viewport->geometry();
+        shell_for_mode_cue->setModeCue(QStringLiteral(
+            "Extrude operation — Edit Extrude001 (Feature 1)"));
+        QApplication::processEvents();
+        CHECK(editor->geometry() == before_editor);
+        CHECK(viewport->geometry() == before_viewport);
+        CHECK(mode_cue->height() == idle_mode_cue_height);
+        CHECK(mode_cue->toolTip() ==
+              QStringLiteral(
+                  "Extrude operation — Edit Extrude001 (Feature 1)"));
+        shell_for_mode_cue->setModeCue({});
+        QApplication::processEvents();
+        CHECK(editor->geometry() == before_editor);
+        CHECK(viewport->geometry() == before_viewport);
+    }
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    std::cout << "UI01_MODE_CUE_STABLE_VIEWPORT_NATIVE_PASS"
+              << std::endl;
+
     CHECK(document_top_row->isAncestorOf(sketch_tool));
     CHECK(document_top_row->isAncestorOf(undo));
+
+    // Owner screenshot G3 D1 RED: group titles are real inline controls,
+    // including singleton Sketch/Work Features, not implied by a pin
+    // or by the command's own label.
+    for (const auto& pair : {
+             std::pair{"partSketchToolsLabel", "Sketch:"},
+             std::pair{"partWorkFeaturesToolsLabel", "Work Features:"},
+             std::pair{"partCreateToolsLabel", "Create:"},
+             std::pair{"partModifyToolsLabel", "Modify:"}}) {
+        auto* heading = workbench.findChild<QLabel*>(
+            QString::fromLatin1(pair.first));
+        CHECK(heading != nullptr);
+        CHECK(heading->text() == QString::fromLatin1(pair.second));
+    }
+
+    // Owner-approved UI-01 Variant A: the entire visible group, from
+    // its title/pin through the actual connected buttons, must have one
+    // passive, palette-aware frame. An unrelated floating pin is not
+    // an acceptable group representation.
+    for (const char* name : {"Sketch", "Work Features", "Create",
+                             "Modify"}) {
+        auto* frame = workbench.findChild<QFrame*>(
+            QStringLiteral("workbenchToolbarGroupFrame_Part_") +
+            QString::fromLatin1(name));
+        CHECK(frame != nullptr);
+        CHECK(frame->focusPolicy() == Qt::NoFocus);
+        CHECK(frame->testAttribute(Qt::WA_TransparentForMouseEvents));
+    }
+
+    // Deliberately expand all groups to direct buttons; this is a
+    // geometry/layout test, not a RED for legitimate narrow overflow.
+    workbench.resize(2100, 800);
+    QApplication::processEvents();
+    // UI-01 G3 Owner-accepted compact sectors: the semantic heading
+    // and the passive pin belong ABOVE the original command buttons,
+    // inside the SAME tight frame, not inline as an extra wide button row.
+    // Keep this geometry check native and independent of screenshot DPI.
+    auto* compact_host = workbench.findChild<QWidget*>(
+        QStringLiteral("documentToolsHost"));
+    auto* compact_modify_heading = workbench.findChild<QLabel*>(
+        QStringLiteral("partModifyToolsLabel"));
+    auto* compact_modify_frame = workbench.findChild<QFrame*>(
+        QStringLiteral("workbenchToolbarGroupFrame_Part_Modify"));
+    auto* compact_fillet = workbench.findChild<QPushButton*>(
+        QStringLiteral("filletToolButton"));
+    auto* compact_create_heading = workbench.findChild<QLabel*>(
+        QStringLiteral("partCreateToolsLabel"));
+    auto* compact_create_pin = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarPin_Part_Create"));
+    CHECK(compact_host && compact_modify_heading &&
+          compact_modify_frame && compact_fillet &&
+          compact_create_heading && compact_create_pin);
+    CHECK(compact_modify_heading->isVisible());
+    CHECK(compact_fillet->isVisible());
+    const QRect compact_modify_heading_bounds{
+        compact_modify_heading->mapTo(compact_host, QPoint{0, 0}),
+        compact_modify_heading->size()};
+    const QRect compact_fillet_bounds{
+        compact_fillet->mapTo(compact_host, QPoint{0, 0}),
+        compact_fillet->size()};
+    CHECK(compact_modify_heading_bounds.bottom() <
+          compact_fillet_bounds.top());
+    CHECK(compact_modify_frame->geometry().contains(
+        compact_modify_heading_bounds));
+    CHECK(compact_modify_frame->geometry().contains(
+        compact_fillet_bounds));
+    const QRect compact_create_heading_bounds{
+        compact_create_heading->mapTo(compact_host, QPoint{0, 0}),
+        compact_create_heading->size()};
+    const QRect compact_create_pin_bounds{
+        compact_create_pin->mapTo(compact_host, QPoint{0, 0}),
+        compact_create_pin->size()};
+    CHECK(compact_create_pin_bounds.center().y() >=
+          compact_create_heading_bounds.top());
+    CHECK(compact_create_pin_bounds.center().y() <=
+          compact_create_heading_bounds.bottom());
+    CHECK(compact_create_heading_bounds.bottom() <
+          compact_fillet_bounds.top());
+    std::cout << "UI01_G3_COMPACT_SECTOR_HEADER_NATIVE_PASS"
+              << std::endl;
+
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+
+    // Owner screenshot G2 RED: Project Geometry Source/Role/Remove
+    // widgets must adapt to the measured Operations viewport width
+    // rather than exposing clipped second/third source buttons.
+    auto* project_source_row = workbench.findChild<QWidget*>(
+        QStringLiteral("projectEdgeSourceRow"));
+    auto* project_role_row = workbench.findChild<QWidget*>(
+        QStringLiteral("projectEdgeRoleRow"));
+    auto* project_pick_row = workbench.findChild<QWidget*>(
+        QStringLiteral("projectEdgePickRow"));
+    auto* project_ops_scroll = workbench.findChild<QScrollArea*>(
+        QStringLiteral("workbenchOperationsScroll"));
+    CHECK(project_source_row && project_role_row && project_pick_row);
+    CHECK(project_ops_scroll != nullptr);
+    auto* source_layout =
+        qobject_cast<QBoxLayout*>(project_source_row->layout());
+    auto* role_layout =
+        qobject_cast<QBoxLayout*>(project_role_row->layout());
+    auto* pick_layout =
+        qobject_cast<QBoxLayout*>(project_pick_row->layout());
+    CHECK(source_layout && role_layout && pick_layout);
+    const auto original_panel_sizes = splitter->sizes();
+    workbench.resize(850, 800);
+    splitter->setSizes({145, 500, 200});
+    QApplication::processEvents();
+    CHECK(project_ops_scroll->viewport()->width() < 260);
+    CHECK(source_layout->direction() == QBoxLayout::TopToBottom);
+    auto* project_source_face = workbench.findChild<QPushButton*>(
+        QStringLiteral("projectEdgeSourceFaceButton"));
+    auto* project_source_boundary = workbench.findChild<QPushButton*>(
+        QStringLiteral("projectEdgeSourceBoundaryButton"));
+    CHECK(project_source_face && project_source_boundary);
+    auto* project_selection_label = workbench.findChild<QLabel*>(
+        QStringLiteral("projectEdgeSelectionLabel"));
+    CHECK(project_selection_label != nullptr);
+    // Full material-Edge/Face counts must wrap within narrow
+    // Operations instead of forcing a horizontal content minimum.
+    CHECK(project_selection_label->wordWrap());
+    CHECK(project_source_face->text() ==
+          QStringLiteral("Planar Face"));
+    CHECK(project_source_boundary->text() ==
+          QStringLiteral("Face Boundary"));
+    // The two-button rows should stack only when their current
+    // measured button widths really exceed the usable viewport.
+    const auto check_row_reflow = [&](QBoxLayout* layout) {
+        int inline_width = 0;
+        int controls = 0;
+        for (int i = 0; i < layout->count(); ++i) {
+            auto* item = layout->itemAt(i);
+            auto* button = item == nullptr ? nullptr :
+                item->widget();
+            if (!button) continue;
+            inline_width += button->sizeHint().width();
+            ++controls;
+        }
+        inline_width += std::max(0, controls - 1) *
+            std::max(0, layout->spacing());
+        const auto expected =
+            inline_width > project_ops_scroll->viewport()->width() - 12
+                ? QBoxLayout::TopToBottom
+                : QBoxLayout::LeftToRight;
+        CHECK(layout->direction() == expected);
+    };
+    check_row_reflow(source_layout);
+    check_row_reflow(role_layout);
+    check_row_reflow(pick_layout);
+    // Re-expansion is just as important as narrow stacking: the
+    // original three-button Source row must return inline when the
+    // actual Operations viewport can comfortably accommodate it.
+    workbench.resize(1800, 800);
+    splitter->setSizes({150, 800, 800});
+    QApplication::processEvents();
+    int source_inline_minimum = 0;
+    for (int i = 0; i < source_layout->count(); ++i) {
+        auto* item = source_layout->itemAt(i);
+        CHECK(item != nullptr && item->widget() != nullptr);
+        source_inline_minimum += item->widget()->sizeHint().width();
+    }
+    source_inline_minimum += std::max(0, source_layout->count() - 1) *
+        std::max(0, source_layout->spacing());
+    std::cout << "UI01_PROJECT_GEOMETRY_WIDE_BUDGET"
+              << " viewport=" << project_ops_scroll->viewport()->width()
+              << " source_inline_minimum=" << source_inline_minimum
+              << " source_direction=" << source_layout->direction()
+              << std::endl;
+    CHECK(project_ops_scroll->viewport()->width() - 12 >=
+          source_inline_minimum);
+    check_row_reflow(source_layout);
+    check_row_reflow(role_layout);
+    check_row_reflow(pick_layout);
+    CHECK(source_layout->direction() == QBoxLayout::LeftToRight);
+    CHECK(role_layout->direction() == QBoxLayout::LeftToRight);
+    CHECK(pick_layout->direction() == QBoxLayout::LeftToRight);
+    workbench.resize(850, 800);
+    splitter->setSizes({145, 500, 200});
+    QApplication::processEvents();
+    CHECK(source_layout->direction() == QBoxLayout::TopToBottom);
+    workbench.resize(1400, 800);
+    splitter->setSizes(original_panel_sizes);
+    QApplication::processEvents();
+    std::cout << "UI01_PROJECT_GEOMETRY_SOURCE_REFLOW_BOTH_WAYS_PASS"
+              << std::endl;
+
+    // G3 customization RED: pin affordances are passive outside the
+    // explicit editable toolbar mode. Clicking a pin affects only
+    // UI presentation state, never the Part authored transaction.
+    auto* customize_toolbar = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarCustomizeButton"));
+    CHECK(customize_toolbar != nullptr);
+    CHECK(customize_toolbar->isCheckable());
+    CHECK(!customize_toolbar->isChecked());
+    auto* pin_create = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarPin_Part_Create"));
+    CHECK(pin_create != nullptr);
+    // The approved D2 spec requires a visible but PASSIVE marker for
+    // pinned groups in normal CAD operation. Only Customize enables it.
+    CHECK(!pin_create->isHidden());
+    CHECK(!pin_create->isEnabled());
+    CHECK(pin_create->property("pinned").toBool());
+    pin_create->click();
+    CHECK(pin_create->property("pinned").toBool());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(customize_toolbar->isChecked());
+    CHECK(!pin_create->isHidden());
+    CHECK(pin_create->isEnabled());
+    pin_create->click();
+    QApplication::processEvents();
+    CHECK(!pin_create->property("pinned").toBool());
+    QSettings persisted_toolbar_prefs{
+        QStringLiteral("MechanicalCave"),
+        QStringLiteral("SimpleSolid2")};
+    persisted_toolbar_prefs.sync();
+    CHECK(!persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/pins/Create"),
+        true).toBool());
+
+    // A fresh shell must restore the Part override while Sketch has a
+    // genuinely independent user-scope preference. All INI storage is
+    // redirected to the test's private TempDirectory above.
+    {
+        ui::CadWorkbenchShell new_sketch_shell;
+        new_sketch_shell.setToolbarContext(true);
+        auto* customize_sketch =
+            new_sketch_shell.findChild<QToolButton*>(
+                QStringLiteral("workbenchToolbarCustomizeButton"));
+        auto* pin_references =
+            new_sketch_shell.findChild<QToolButton*>(
+                QStringLiteral(
+                    "workbenchToolbarPin_Sketch_References"));
+        CHECK(customize_sketch && pin_references);
+        CHECK(pin_references->property("pinned").toBool());
+        customize_sketch->click();
+        pin_references->click();
+        QApplication::processEvents();
+        CHECK(!pin_references->property("pinned").toBool());
+        persisted_toolbar_prefs.sync();
+        CHECK(!persisted_toolbar_prefs.value(
+            QStringLiteral(
+                "ui/workbench/toolbar/v1/Sketch/pins/References"),
+            true).toBool());
+
+        ui::CadWorkbenchShell fresh_shell;
+        fresh_shell.setToolbarContext(false);
+        auto* cold_part_pin =
+            fresh_shell.findChild<QToolButton*>(
+                QStringLiteral("workbenchToolbarPin_Part_Create"));
+        CHECK(cold_part_pin != nullptr);
+        CHECK(!cold_part_pin->property("pinned").toBool());
+        fresh_shell.setToolbarContext(true);
+        auto* cold_sketch_pin =
+            fresh_shell.findChild<QToolButton*>(
+                QStringLiteral(
+                    "workbenchToolbarPin_Sketch_References"));
+        CHECK(cold_sketch_pin != nullptr);
+        CHECK(!cold_sketch_pin->property("pinned").toBool());
+
+        // Restore defaults for the remainder of the CAD test suite.
+        pin_references->click();
+        QApplication::processEvents();
+        CHECK(pin_references->property("pinned").toBool());
+    }
+    pin_create->click();
+    QApplication::processEvents();
+    CHECK(pin_create->property("pinned").toBool());
+    persisted_toolbar_prefs.sync();
+    CHECK(persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/pins/Create"),
+        false).toBool());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(!pin_create->isHidden());
+    CHECK(!pin_create->isEnabled());
+    std::cout << "UI01_G3_CUSTOMIZE_PASSIVE_PIN_NATIVE_PASS"
+              << std::endl;
+
+    // G3 keyboard alternative for WHOLE-group ordering, durable only in
+    // app preferences. Reset Defaults must restore canonical Part order
+    // and default pins; no command handlers are replaced or invoked.
+    auto* group_create_handle =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarHandle_Part_Create"));
+    CHECK(group_create_handle != nullptr);
+    CHECK(group_create_handle->isHidden());
+    CHECK(group_create_handle->menu() != nullptr);
+    auto* group_tools_host = workbench.findChild<QWidget*>(
+        QStringLiteral("documentToolsHost"));
+    CHECK(group_tools_host != nullptr);
+    auto* group_layout =
+        qobject_cast<QHBoxLayout*>(group_tools_host->layout());
+    CHECK(group_layout != nullptr);
+    auto* datum_tool = workbench.findChild<QPushButton*>(
+        QStringLiteral("datumPlaneToolButton"));
+    auto* extrude_for_order = workbench.findChild<QPushButton*>(
+        QStringLiteral("extrudeToolButton"));
+    CHECK(datum_tool && extrude_for_order);
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(!group_create_handle->isHidden());
+    QAction* group_left = nullptr;
+    QAction* group_reset = nullptr;
+    for (auto* action : group_create_handle->menu()->actions()) {
+        if (action == nullptr) continue;
+        if (action->text() == QStringLiteral("Przesuń w lewo"))
+            group_left = action;
+        if (action->text() ==
+            QStringLiteral("Przywróć domyślne"))
+            group_reset = action;
+    }
+    CHECK(group_left && group_reset);
+    group_left->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(extrude_for_order) <
+          group_layout->indexOf(datum_tool));
+    persisted_toolbar_prefs.sync();
+    const auto changed_part_order = persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/order"))
+            .toStringList();
+    CHECK(changed_part_order.indexOf(QStringLiteral("Create")) <
+          changed_part_order.indexOf(QStringLiteral("Work Features")));
+    // Persistence means a completely new Workbench with original
+    // command widgets must restore the real layout, not just read
+    // the saved INI key. Sketch ordering remains independent.
+    CHECK(persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Sketch/order"))
+              .toStringList().isEmpty());
+    {
+        ui::CadWorkbench restarted{
+            [](QWidget* parent) {
+                auto* native_view = new TestViewportWidget{parent};
+                return ui::ViewportSurface{native_view, native_view};
+            }};
+        // The constructor restores actual tool-layout positions.
+        // Do not show a second top-level Windows window: that would
+        // steal activation/focus from the original Workbench's later
+        // native focus-retention regression and mask the real target.
+        restarted.resize(1400, 800);
+        QApplication::processEvents();
+        auto* restarted_host = restarted.findChild<QWidget*>(
+            QStringLiteral("documentToolsHost"));
+        auto* restarted_datum = restarted.findChild<QPushButton*>(
+            QStringLiteral("datumPlaneToolButton"));
+        auto* restarted_extrude = restarted.findChild<QPushButton*>(
+            QStringLiteral("extrudeToolButton"));
+        CHECK(restarted_host && restarted_datum &&
+              restarted_extrude);
+        auto* restarted_layout =
+            qobject_cast<QHBoxLayout*>(restarted_host->layout());
+        CHECK(restarted_layout != nullptr);
+        CHECK(restarted_layout->indexOf(restarted_extrude) <
+              restarted_layout->indexOf(restarted_datum));
+    }
+    group_reset->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    CHECK(pin_create->property("pinned").toBool());
+
+    // G3 mouse RED: use the SAME original whole-group handle; dragging
+    // it to the left moves Create exactly one group, leaving every
+    // QPushButton/QAction identity intact. Keyboard move remains available
+    // in the adjacent arrow menu; the gesture cannot open that menu.
+    CHECK(group_create_handle->popupMode() ==
+          QToolButton::MenuButtonPopup);
+    const QPoint drag_begin{
+        4, group_create_handle->height() / 2};
+    const QPoint drag_end = drag_begin + QPoint{-68, 0};
+    const QPointF drag_begin_global =
+        group_create_handle->mapToGlobal(drag_begin);
+    const QPointF drag_end_global =
+        group_create_handle->mapToGlobal(drag_end);
+    QMouseEvent drag_press{
+        QEvent::MouseButtonPress, QPointF{drag_begin},
+        drag_begin_global, Qt::LeftButton,
+        Qt::LeftButton, Qt::NoModifier};
+    QApplication::sendEvent(group_create_handle, &drag_press);
+    QMouseEvent drag_move{
+        QEvent::MouseMove, QPointF{drag_end},
+        drag_end_global, Qt::NoButton,
+        Qt::LeftButton, Qt::NoModifier};
+    QApplication::sendEvent(group_create_handle, &drag_move);
+    QMouseEvent drag_release{
+        QEvent::MouseButtonRelease, QPointF{drag_end},
+        drag_end_global, Qt::LeftButton,
+        Qt::NoButton, Qt::NoModifier};
+    QApplication::sendEvent(group_create_handle, &drag_release);
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(extrude_for_order) <
+          group_layout->indexOf(datum_tool));
+    persisted_toolbar_prefs.sync();
+    const auto dragged_part_order = persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/order"))
+            .toStringList();
+    CHECK(dragged_part_order.indexOf(QStringLiteral("Create")) <
+          dragged_part_order.indexOf(QStringLiteral("Work Features")));
+    group_reset->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    std::cout << "UI01_G3_WHOLE_GROUP_MOUSE_DRAG_PASS"
+              << std::endl;
+
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(group_create_handle->isHidden());
+    std::cout << "UI01_G3_GROUP_KEYBOARD_ORDER_RESET_PASS"
+              << std::endl;
+
+    // G3 Sketch ordering is independent of Part and survives cold rebuild. Select
+    // must stay the fixed base action while References moves as a WHOLE
+    // group, with its original Project Geometry command widget intact.
+    // Exercise this on the existing visible Workbench so a second native
+    // top-level window cannot steal foreground focus from later tests.
+    auto* shell_for_sketch_order =
+        static_cast<ui::CadWorkbenchShell*>(
+            workbench.findChild<QWidget*>(
+                QStringLiteral("cadWorkbenchShell")));
+    CHECK(shell_for_sketch_order != nullptr);
+    shell_for_sketch_order->setToolbarContext(true);
+    QApplication::processEvents();
+    for (const char* name : {"Create", "Profile", "References",
+                             "Modify", "Transform", "Inspect"}) {
+        auto* frame = workbench.findChild<QFrame*>(
+            QStringLiteral("workbenchToolbarGroupFrame_Sketch_") +
+            QString::fromLatin1(name));
+        CHECK(frame != nullptr);
+        CHECK(frame->testAttribute(Qt::WA_TransparentForMouseEvents));
+    }
+    CHECK(workbench.findChild<QFrame*>(
+        QStringLiteral("workbenchToolbarGroupFrame_Sketch_Select")) ==
+        nullptr);
+    // Select is a fixed direct command, never a customisable group;
+    // a pin for Select appears as a stray orphan dot after Inspect.
+    CHECK(workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarPin_Sketch_Select")) == nullptr);
+    for (const auto& pair : {
+             std::pair{"sketchReferencesToolsLabel", "References:"},
+             std::pair{"sketchTransformToolsLabel", "Transform:"}}) {
+        auto* heading = workbench.findChild<QLabel*>(
+            QString::fromLatin1(pair.first));
+        CHECK(heading != nullptr);
+        CHECK(heading->text() == QString::fromLatin1(pair.second));
+    }
+    auto* sketch_select_for_order =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("selectSketchToolButton"));
+    auto* sketch_profile_for_order =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileSketchToolButton"));
+    auto* sketch_project_for_order =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeToolButton"));
+    auto* sketch_references_handle =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarHandle_Sketch_References"));
+    CHECK(sketch_select_for_order && sketch_profile_for_order &&
+          sketch_project_for_order && sketch_references_handle);
+    CHECK(group_layout->indexOf(sketch_select_for_order) <
+          group_layout->indexOf(sketch_profile_for_order));
+    CHECK(group_layout->indexOf(sketch_profile_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(customize_toolbar->isChecked());
+    CHECK(!sketch_references_handle->isHidden());
+    QAction* sketch_move_left = nullptr;
+    QAction* sketch_reset = nullptr;
+    for (auto* action : sketch_references_handle->menu()->actions()) {
+        if (action == nullptr) continue;
+        if (action->text() == QStringLiteral("Przesuń w lewo"))
+            sketch_move_left = action;
+        if (action->text() ==
+            QStringLiteral("Przywróć domyślne"))
+            sketch_reset = action;
+    }
+    CHECK(sketch_move_left && sketch_reset);
+    sketch_move_left->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(sketch_select_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    CHECK(group_layout->indexOf(sketch_project_for_order) <
+          group_layout->indexOf(sketch_profile_for_order));
+    persisted_toolbar_prefs.sync();
+    const auto sketch_reordered = persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Sketch/order"))
+            .toStringList();
+    CHECK(sketch_reordered.indexOf(QStringLiteral("References")) <
+          sketch_reordered.indexOf(QStringLiteral("Profile")));
+    CHECK(!sketch_reordered.contains(QStringLiteral("Select")));
+    CHECK(!persisted_toolbar_prefs.contains(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/order")));
+
+    // Cold construct a complete Workbench with original command widgets,
+    // but do NOT show it as a second native window.
+    {
+        ui::CadWorkbench cold_sketch{
+            [](QWidget* parent) {
+                auto* native_view = new TestViewportWidget{parent};
+                return ui::ViewportSurface{native_view, native_view};
+            }};
+        auto* cold_shell =
+            static_cast<ui::CadWorkbenchShell*>(
+                cold_sketch.findChild<QWidget*>(
+                    QStringLiteral("cadWorkbenchShell")));
+        auto* cold_host = cold_sketch.findChild<QWidget*>(
+            QStringLiteral("documentToolsHost"));
+        auto* cold_select = cold_sketch.findChild<QPushButton*>(
+            QStringLiteral("selectSketchToolButton"));
+        auto* cold_profile = cold_sketch.findChild<QPushButton*>(
+            QStringLiteral("profileSketchToolButton"));
+        auto* cold_project = cold_sketch.findChild<QPushButton*>(
+            QStringLiteral("projectEdgeToolButton"));
+        CHECK(cold_shell && cold_host && cold_select &&
+              cold_profile && cold_project);
+        cold_shell->setToolbarContext(true);
+        QApplication::processEvents();
+        auto* cold_layout =
+            qobject_cast<QHBoxLayout*>(cold_host->layout());
+        CHECK(cold_layout != nullptr);
+        CHECK(cold_layout->indexOf(cold_select) <
+              cold_layout->indexOf(cold_project));
+        CHECK(cold_layout->indexOf(cold_project) <
+              cold_layout->indexOf(cold_profile));
+    }
+
+    // G3 native Sketch mouse gesture uses the SAME whole-group handle
+    // and Move Left/Right operation as the keyboard menu. Starting
+    // after keyboard move, a second move left crosses the Create group.
+    // Never drag Select or replace the original Project Geometry button.
+    auto* sketch_line_for_order =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("lineSketchToolButton"));
+    CHECK(sketch_line_for_order != nullptr);
+    CHECK(group_layout->indexOf(sketch_line_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    CHECK(sketch_references_handle->popupMode() ==
+          QToolButton::MenuButtonPopup);
+    const QPoint sketch_drag_begin{
+        4, sketch_references_handle->height() / 2};
+    const QPoint sketch_drag_end =
+        sketch_drag_begin + QPoint{-68, 0};
+    const QPointF sketch_drag_global_begin =
+        sketch_references_handle->mapToGlobal(sketch_drag_begin);
+    const QPointF sketch_drag_global_end =
+        sketch_references_handle->mapToGlobal(sketch_drag_end);
+    QMouseEvent sketch_drag_press{
+        QEvent::MouseButtonPress, QPointF{sketch_drag_begin},
+        sketch_drag_global_begin, Qt::LeftButton,
+        Qt::LeftButton, Qt::NoModifier};
+    QApplication::sendEvent(sketch_references_handle,
+                            &sketch_drag_press);
+    QMouseEvent sketch_drag_move{
+        QEvent::MouseMove, QPointF{sketch_drag_end},
+        sketch_drag_global_end, Qt::NoButton,
+        Qt::LeftButton, Qt::NoModifier};
+    QApplication::sendEvent(sketch_references_handle,
+                            &sketch_drag_move);
+    QMouseEvent sketch_drag_release{
+        QEvent::MouseButtonRelease, QPointF{sketch_drag_end},
+        sketch_drag_global_end, Qt::LeftButton,
+        Qt::NoButton, Qt::NoModifier};
+    QApplication::sendEvent(sketch_references_handle,
+                            &sketch_drag_release);
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(sketch_select_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    CHECK(group_layout->indexOf(sketch_project_for_order) <
+          group_layout->indexOf(sketch_line_for_order));
+    persisted_toolbar_prefs.sync();
+    const auto sketch_dragged = persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Sketch/order"))
+            .toStringList();
+    CHECK(sketch_dragged.indexOf(QStringLiteral("References")) <
+          sketch_dragged.indexOf(QStringLiteral("Create")));
+    CHECK(!persisted_toolbar_prefs.contains(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/order")));
+    std::cout << "UI01_G3_SKETCH_WHOLE_GROUP_DRAG_PASS"
+              << std::endl;
+
+    sketch_reset->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(sketch_profile_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    CHECK(group_layout->indexOf(sketch_select_for_order) <
+          group_layout->indexOf(sketch_profile_for_order));
+    persisted_toolbar_prefs.sync();
+    CHECK(!persisted_toolbar_prefs.contains(
+        QStringLiteral("ui/workbench/toolbar/v1/Sketch/order")));
+    customize_toolbar->click();
+    shell_for_sketch_order->setToolbarContext(false);
+    QApplication::processEvents();
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    std::cout << "UI01_G3_SKETCH_ORDER_COLD_ISOLATION_PASS"
+              << std::endl;
+
+    // UI-01 G3 native RED: the contextual tool surface must not rely on
+    // a horizontal scrollbar, must stay in one row with fixed Document
+    // actions, and must expose a last-resort named two-level More menu.
+    auto* contextual_tools_scroll =
+        workbench.findChild<QScrollArea*>(
+            QStringLiteral("documentToolsScroll"));
+    CHECK(contextual_tools_scroll != nullptr);
+    CHECK(contextual_tools_scroll->horizontalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOff);
+    auto* toolbar_more =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarMoreButton"));
+    CHECK(toolbar_more != nullptr);
+    CHECK(toolbar_more->menu() != nullptr);
+    // G3 priority tier 1: unpinned Part Modify must be directly
+    // reachable via a named group dropdown BEFORE using last-resort
+    // More. Assert real Fillet/Chamfer entries, not decorative labels.
+    auto* modify_dropdown =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarGroupDropdown_Part_Modify"));
+    CHECK(modify_dropdown != nullptr);
+    CHECK(modify_dropdown->menu() != nullptr);
+    bool fillet_in_group_menu = false;
+    bool chamfer_in_group_menu = false;
+    for (auto* action : modify_dropdown->menu()->actions()) {
+        if (action == nullptr) continue;
+        fillet_in_group_menu |=
+            action->text() == QStringLiteral("Fillet");
+        chamfer_in_group_menu |=
+            action->text() == QStringLiteral("Chamfer");
+    }
+    CHECK(fillet_in_group_menu && chamfer_in_group_menu);
+    // UI-01 G3 tier 3 RED: when icon-only Create is still too wide,
+    // the same pinned command group must have a directly accessible,
+    // named dropdown before last-resort More, with both real actions.
+    auto* pinned_create_dropdown =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarGroupDropdown_Part_Create"));
+    CHECK(pinned_create_dropdown != nullptr);
+    CHECK(pinned_create_dropdown->menu() != nullptr);
+    bool extrude_in_create = false;
+    bool revolve_in_create = false;
+    for (const auto* action :
+         pinned_create_dropdown->menu()->actions()) {
+        if (action == nullptr) continue;
+        extrude_in_create |=
+            action->text() == QStringLiteral("Extrude");
+        revolve_in_create |=
+            action->text() == QStringLiteral("Revolve");
+    }
+    CHECK(extrude_in_create && revolve_in_create);
+    // At an intermediate width, unpinned Modify should be a DIRECT
+    // named dropdown. More is reserved for widths where that still
+    // cannot represent the contextual tools. The pinned Create command
+    // remains directly accessible at this intermediate stage.
+    bool direct_modify_reached = false;
+    auto* pinned_extrude =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeToolButton"));
+    CHECK(pinned_extrude != nullptr);
+    // Search the actual 1400-to-narrow transition, not only sizes
+    // <=1020 where the measured Windows Document zone can already
+    // force pinned tools into final overflow.
+    for (int candidate_width = 1380;
+         candidate_width >= 700; candidate_width -= 20) {
+        workbench.resize(candidate_width, 800);
+        QApplication::processEvents();
+        std::cout << "UI01_G3_GROUP_PRESSURE"
+                  << " requested_width=" << candidate_width
+                  << " top_width=" << document_top_row->width()
+                  << " tools_viewport_width="
+                  << contextual_tools_scroll->viewport()->width()
+                  << " modify_hidden=" << modify_dropdown->isHidden()
+                  << " more_hidden=" << toolbar_more->isHidden()
+                  << " extrude_hidden=" << pinned_extrude->isHidden()
+                  << std::endl;
+        if (!modify_dropdown->isHidden() &&
+            toolbar_more->isHidden() &&
+            !pinned_extrude->isHidden()) {
+            direct_modify_reached = true;
+            break;
+        }
+    }
+    CHECK(direct_modify_reached);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    std::cout << "UI01_G3_DIRECT_GROUP_BEFORE_MORE_PASS"
+              << std::endl;
+
+    // G3 tier 2 RED: pinned real Extrude stays directly reachable in
+    // compact icon-only mode, with a non-empty CAD icon, tooltip and
+    // accessible name, BEFORE the last-resort two-level More menu.
+    bool pinned_icon_before_more = false;
+    for (int candidate_width = 1380;
+         candidate_width >= 700; candidate_width -= 20) {
+        workbench.resize(candidate_width, 800);
+        QApplication::processEvents();
+        if (!pinned_extrude->isHidden() &&
+            pinned_extrude->text().isEmpty() &&
+            !pinned_extrude->icon().isNull() &&
+            !pinned_extrude->toolTip().isEmpty() &&
+            !pinned_extrude->accessibleName().isEmpty() &&
+            toolbar_more->isHidden()) {
+            pinned_icon_before_more = true;
+            break;
+        }
+    }
+    CHECK(pinned_icon_before_more);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(pinned_extrude->text() == QStringLiteral("Extrude"));
+    std::cout << "UI01_G3_PINNED_ICON_BEFORE_MORE_PASS"
+              << std::endl;
 
     const auto sketch_top =
         sketch_tool->mapTo(
@@ -432,7 +1222,63 @@ int main(int argc, char* argv[]) {
         undo->mapTo(
             document_top_row,
             QPoint{0, 0}).y();
+    std::cout << "UI01_G3_TOP_ROW_GEOMETRY"
+              << " sketch_y=" << sketch_top
+              << " undo_y=" << undo_top
+              << " tools_y="
+              << contextual_tools_scroll->mapTo(
+                     document_top_row, QPoint{0, 0}).y()
+              << " tools_height=" << contextual_tools_scroll->height()
+              << " sketch_height=" << sketch_tool->height()
+              << " undo_height=" << undo->height()
+              << " more_hidden=" << toolbar_more->isHidden()
+              << std::endl;
     CHECK(std::abs(sketch_top - undo_top) <= 4);
+
+    // G3 narrow native reachability: More -> named group -> the SAME
+    // existing tool command; the fixed Document zone remains outside
+    // responsive tool collapse, without a second row or scrollbars.
+    workbench.resize(560, 800);
+    QApplication::processEvents();
+    CHECK(!toolbar_more->isHidden());
+    CHECK(toolbar_more->menu() != nullptr);
+    QMenu* create_submenu = nullptr;
+    for (auto* action : toolbar_more->menu()->actions()) {
+        if (action != nullptr &&
+            action->text() == QStringLiteral("Create")) {
+            create_submenu = action->menu();
+            break;
+        }
+    }
+    CHECK(create_submenu != nullptr);
+    QAction* menu_extrude_action = nullptr;
+    for (auto* action : create_submenu->actions()) {
+        if (action != nullptr &&
+            action->text() == QStringLiteral("Extrude")) {
+            menu_extrude_action = action;
+            break;
+        }
+    }
+    CHECK(menu_extrude_action != nullptr);
+    auto* real_extrude_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeToolButton"));
+    CHECK(real_extrude_button != nullptr);
+    CHECK(menu_extrude_action->isEnabled() ==
+          real_extrude_button->isEnabled());
+    CHECK(contextual_tools_scroll->horizontalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOff);
+    CHECK(document_top_row->isAncestorOf(undo));
+    CHECK(document_top_row->isAncestorOf(save));
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    // More is last-resort only: normal Part width retains all labelled
+    // native creation buttons and does not waste a permanent overflow slot.
+    CHECK(toolbar_more->isHidden());
+    CHECK(!sketch_tool->isHidden());
+    CHECK(!real_extrude_button->isHidden());
+    std::cout << "UI01_G3_NARROW_MORE_GROUP_REACHABILITY_PASS"
+              << std::endl;
 
     CHECK(tree_panel->width() >= 110);
     CHECK(tree_panel->width() <= 210);
@@ -440,6 +1286,160 @@ int main(int argc, char* argv[]) {
     CHECK(right_panel->width() <= 340);
     CHECK(editor_host->width() > tree_panel->width());
     CHECK(editor_host->width() > right_panel->width());
+
+    // UI-01 G2 native baseline characterization (expected RED until the
+    // accepted Properties / Operations right-hand layout is implemented).
+    // Must be two independently vertically scrollable panes with a
+    // user-adjustable vertical splitter, not one giant clipped GroupBox.
+    auto* right_vertical_splitter =
+        workbench.findChild<QSplitter*>(
+            QStringLiteral("workbenchRightVerticalSplitter"));
+    CHECK(right_vertical_splitter != nullptr);
+    CHECK(right_vertical_splitter->orientation() == Qt::Vertical);
+    auto* properties_scroll =
+        workbench.findChild<QScrollArea*>(
+            QStringLiteral("workbenchPropertiesScroll"));
+    auto* operations_scroll =
+        workbench.findChild<QScrollArea*>(
+            QStringLiteral("workbenchOperationsScroll"));
+    CHECK(properties_scroll != nullptr);
+    CHECK(operations_scroll != nullptr);
+    CHECK(properties_scroll != operations_scroll);
+    CHECK(properties_scroll->verticalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOn);
+    CHECK(operations_scroll->verticalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOn);
+    const auto panel_heights = right_vertical_splitter->sizes();
+    CHECK(panel_heights.size() == 2);
+    CHECK(panel_heights[0] > 0 && panel_heights[1] > 0);
+    const double initial_properties_fraction =
+        static_cast<double>(panel_heights[0]) /
+        static_cast<double>(panel_heights[0] + panel_heights[1]);
+    CHECK(std::abs(initial_properties_fraction - 0.4) < 0.12);
+    std::cout << "UI01_G2_RIGHT_PANELS_NATIVE_LAYOUT_PASS" << std::endl;
+
+    // G2 independent vertical scroll under controlled long-form pressure:
+    // grow the real existing form hosts (test-only UI sizing), never author
+    // Part properties, edit a Feature, or synthesize a CAD command.
+    auto* properties_form = properties_scroll->widget();
+    auto* operations_form = operations_scroll->widget();
+    CHECK(properties_form && operations_form);
+    auto* properties_bar = properties_scroll->verticalScrollBar();
+    auto* operations_bar = operations_scroll->verticalScrollBar();
+    CHECK(properties_bar && operations_bar);
+    const int original_properties_min = properties_form->minimumHeight();
+    const int original_operations_min = operations_form->minimumHeight();
+    properties_form->setMinimumHeight(
+        properties_scroll->viewport()->height() + 500);
+    operations_form->setMinimumHeight(
+        operations_scroll->viewport()->height() + 500);
+    QApplication::processEvents();
+    CHECK(properties_bar->maximum() > 0);
+    CHECK(operations_bar->maximum() > 0);
+    properties_bar->setValue(0);
+    operations_bar->setValue(0);
+    properties_bar->setValue(properties_bar->maximum());
+    CHECK(properties_bar->value() == properties_bar->maximum());
+    CHECK(operations_bar->value() == 0);
+    operations_bar->setValue(operations_bar->maximum());
+    CHECK(operations_bar->value() == operations_bar->maximum());
+    CHECK(properties_bar->value() == properties_bar->maximum());
+    properties_form->setMinimumHeight(original_properties_min);
+    operations_form->setMinimumHeight(original_operations_min);
+    properties_bar->setValue(0);
+    operations_bar->setValue(0);
+    QApplication::processEvents();
+    std::cout << "UI01_G2_INDEPENDENT_SCROLL_NATIVE_PASS" << std::endl;
+
+    // G2 second characterization: width alone is never permission to
+    // collapse Properties/Operations; insufficient *height* is.
+    auto* short_tabs = workbench.findChild<QTabWidget*>(
+        QStringLiteral("workbenchRightShortTabs"));
+    CHECK(short_tabs != nullptr);
+    CHECK(short_tabs->isHidden());
+    CHECK(!right_vertical_splitter->isHidden());
+    // User-adjusted ratio must survive switching to short-height tabs and
+    // back; even repeated viewport-only reflow must not reset it to 40/60.
+    right_vertical_splitter->setSizes({600, 400});
+    QApplication::processEvents();
+    const auto adjusted_heights = right_vertical_splitter->sizes();
+    CHECK(adjusted_heights.size() == 2);
+    const double adjusted_fraction =
+        static_cast<double>(adjusted_heights[0]) /
+        static_cast<double>(
+            adjusted_heights[0] + adjusted_heights[1]);
+    CHECK(adjusted_fraction > 0.5);
+    workbench.resize(1400, 440);
+    QApplication::processEvents();
+    CHECK(!short_tabs->isHidden());
+    CHECK(right_vertical_splitter->isHidden());
+    CHECK(short_tabs->count() == 2);
+    CHECK(short_tabs->tabText(0) == QStringLiteral("Properties"));
+    CHECK(short_tabs->tabText(1) == QStringLiteral("Operations"));
+    short_tabs->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(short_tabs->currentIndex() == 1);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(short_tabs->isHidden());
+    CHECK(!right_vertical_splitter->isHidden());
+    const auto restored_tab_heights = right_vertical_splitter->sizes();
+    CHECK(restored_tab_heights.size() == 2);
+    CHECK(std::abs(
+        static_cast<double>(restored_tab_heights[0]) /
+            static_cast<double>(
+                restored_tab_heights[0] + restored_tab_heights[1]) -
+            adjusted_fraction) < 0.1);
+    right_vertical_splitter->setSizes({400, 600});
+    QApplication::processEvents();
+    std::cout << "UI01_G2_TAB_RATIO_RESTORATION_PASS" << std::endl;
+
+    // G2 font/DPI pressure: effective pane capacity depends on actual
+    // QFontMetrics, not only a fixed number of physical window pixels.
+    // This exercises 200%-sized Qt fonts, NOT a claim of Windows monitor
+    // DPI parity. Reflow must not use viewport width as a proxy.
+    auto* shell_surface = workbench.findChild<QWidget*>(
+        QStringLiteral("cadWorkbenchShell"));
+    CHECK(shell_surface != nullptr);
+    workbench.resize(1400, 620);
+    QApplication::processEvents();
+    CHECK(short_tabs->isHidden());
+    const QFont base_font = shell_surface->font();
+    QFont large_font = base_font;
+    const double original_point_size =
+        base_font.pointSizeF() > 0.0
+            ? base_font.pointSizeF() : 10.0;
+    large_font.setPointSizeF(original_point_size * 2.0);
+    shell_surface->setFont(large_font);
+    workbench.resize(1400, 619);
+    QApplication::processEvents();
+    CHECK(!short_tabs->isHidden());
+    CHECK(right_vertical_splitter->isHidden());
+    shell_surface->setFont(base_font);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(short_tabs->isHidden());
+    CHECK(!right_vertical_splitter->isHidden());
+    std::cout << "UI01_G2_FONT_AWARE_SHORT_HEIGHT_PASS" << std::endl;
+
+    // G2 completion actions must remain anchored below the Operations
+    // scroll viewport. Test actual existing button identity, not a copy
+    // that might silently invoke different domain behavior.
+    auto* operations_footer =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("workbenchOperationsFooter"));
+    CHECK(operations_footer != nullptr);
+    auto* extrude_finish =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeFinishButton"));
+    auto* extrude_cancel =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeCancelButton"));
+    CHECK(extrude_finish && extrude_cancel);
+    CHECK(operations_footer->isAncestorOf(extrude_finish));
+    CHECK(operations_footer->isAncestorOf(extrude_cancel));
+    CHECK(!operations_scroll->isAncestorOf(extrude_finish));
+    CHECK(!operations_scroll->isAncestorOf(extrude_cancel));
 
     const auto initial_side_widths = splitter->sizes();
     CHECK(initial_side_widths.size() == 3);
@@ -579,6 +1579,191 @@ int main(int argc, char* argv[]) {
     const bool responsive_dirty =
         responsive_session->needsSave();
 
+    // G3 focus and keyboard ownership: whole-group toolbar reflow is
+    // presentation-only. A focused Properties QLineEdit retains its
+    // local Ctrl+Z / Ctrl+Y history while Customize/Move/Reset execute.
+    // This does not substitute for the separate Workspace input-router
+    // native shortcut regression; it proves the Workbench shell boundary.
+    title->setFocus(Qt::OtherFocusReason);
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    const QString focus_original_text = title->text();
+    title->setCursorPosition(focus_original_text.size());
+    title->insert(QStringLiteral("X"));
+    CHECK(title->text() == focus_original_text +
+          QStringLiteral("X"));
+    CHECK(title->hasFocus());
+
+    CHECK(!customize_toolbar->isChecked());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    CHECK(customize_toolbar->isChecked());
+    group_left->trigger();
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    CHECK(group_layout->indexOf(extrude_for_order) <
+          group_layout->indexOf(datum_tool));
+    group_reset->trigger();
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(title->hasFocus());
+
+    QKeyEvent local_undo{
+        QEvent::KeyPress, Qt::Key_Z,
+        Qt::ControlModifier, QStringLiteral("z")};
+    QApplication::sendEvent(title, &local_undo);
+    QApplication::processEvents();
+    CHECK(title->text() == focus_original_text);
+    QKeyEvent local_redo{
+        QEvent::KeyPress, Qt::Key_Y,
+        Qt::ControlModifier, QStringLiteral("y")};
+    QApplication::sendEvent(title, &local_redo);
+    QApplication::processEvents();
+    CHECK(title->text() == focus_original_text +
+          QStringLiteral("X"));
+    QApplication::sendEvent(title, &local_undo);
+    QApplication::processEvents();
+    CHECK(title->text() == focus_original_text);
+    CHECK(responsive_session->document().revision() ==
+          responsive_revision);
+    CHECK(responsive_session->undoDepth() == responsive_undo);
+    CHECK(responsive_session->needsSave() == responsive_dirty);
+    std::cout << "UI01_G3_CUSTOMIZE_TEXT_FOCUS_SHORTCUT_ISOLATION_PASS"
+              << std::endl;
+
+    // G3: the overflow menu must invoke the ORIGINAL connected
+    // QPushButton, not a second command or an authoring proxy.
+    // A sketch-support draft is cancelable and must leave the Part clean.
+    workbench.resize(560, 800);
+    QApplication::processEvents();
+    CHECK(!toolbar_more->isHidden());
+    CHECK(sketch_tool->isEnabled());
+    QMenu* sketch_submenu = nullptr;
+    for (auto* action : toolbar_more->menu()->actions()) {
+        if (action != nullptr &&
+            action->text() == QStringLiteral("Sketch")) {
+            sketch_submenu = action->menu();
+            break;
+        }
+    }
+    CHECK(sketch_submenu != nullptr);
+    // In icon-only mode QPushButton::text() is intentionally empty,
+    // while the stable accessible command name and More label must not
+    // disappear. Do not lower the original-command invocation assertion.
+    const QString sketch_command_label =
+        sketch_tool->text().isEmpty()
+            ? sketch_tool->accessibleName()
+            : sketch_tool->text();
+    CHECK(!sketch_command_label.isEmpty());
+    QAction* sketch_overflow_action = nullptr;
+    for (auto* action : sketch_submenu->actions()) {
+        if (action != nullptr &&
+            action->text() == sketch_command_label) {
+            sketch_overflow_action = action;
+            break;
+        }
+    }
+    CHECK(sketch_overflow_action != nullptr);
+    CHECK(sketch_overflow_action->isEnabled());
+    int real_sketch_button_invocations = 0;
+    const auto sketch_click_connection = QObject::connect(
+        sketch_tool, &QPushButton::clicked, &workbench,
+        [&real_sketch_button_invocations] {
+            ++real_sketch_button_invocations;
+        });
+    sketch_overflow_action->trigger();
+    QApplication::processEvents();
+    CHECK(real_sketch_button_invocations == 1);
+    // While the original Sketch support-pick draft owns the context,
+    // the launch button is disabled. The More menu must reflect that
+    // LIVE state, not keep a stale enabled proxy that can start a
+    // conflicting command or dispatch the old slot twice.
+    CHECK(!sketch_tool->isEnabled());
+    CHECK(!toolbar_more->isHidden());
+    QMenu* draft_sketch_menu = nullptr;
+    for (auto* action : toolbar_more->menu()->actions()) {
+        if (action != nullptr &&
+            action->text() == QStringLiteral("Sketch")) {
+            draft_sketch_menu = action->menu();
+            break;
+        }
+    }
+    CHECK(draft_sketch_menu != nullptr);
+    QAction* disabled_sketch_entry = nullptr;
+    for (auto* action : draft_sketch_menu->actions()) {
+        if (action != nullptr &&
+            action->text() == sketch_command_label) {
+            disabled_sketch_entry = action;
+            break;
+        }
+    }
+    CHECK(disabled_sketch_entry != nullptr);
+    CHECK(!disabled_sketch_entry->isEnabled());
+    disabled_sketch_entry->trigger();
+    QApplication::processEvents();
+    CHECK(real_sketch_button_invocations == 1);
+    CHECK(!sketch_tool->isEnabled());
+    QObject::disconnect(sketch_click_connection);
+    auto* overflow_sketch_cancel =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("cancelSketchButton"));
+    CHECK(overflow_sketch_cancel != nullptr);
+    overflow_sketch_cancel->click();
+    QApplication::processEvents();
+    CHECK(responsive_session->document().revision() ==
+          responsive_revision);
+    CHECK(responsive_session->undoDepth() == responsive_undo);
+    CHECK(responsive_session->needsSave() == responsive_dirty);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    std::cout << "UI01_G3_OVERFLOW_ORIGINAL_COMMAND_PASS"
+              << std::endl;
+
+    // G2: a real active operation in a short-height window must bring
+    // Operations forward in one step. The existing Cancel Sketch support
+    // button remains in the fixed footer; cancelling is non-authoring.
+    auto* sketch_support_cancel =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("cancelSketchButton"));
+    CHECK(sketch_support_cancel != nullptr);
+    CHECK(operations_footer->isAncestorOf(sketch_support_cancel));
+    workbench.resize(1400, 440);
+    QApplication::processEvents();
+    CHECK(!short_tabs->isHidden());
+    CHECK(short_tabs->currentIndex() == 0);
+    CHECK(sketch_tool->isEnabled());
+    sketch_tool->click();
+    QApplication::processEvents();
+    CHECK(short_tabs->currentIndex() == 1);
+    CHECK(operations_footer->isVisible());
+    CHECK(sketch_support_cancel->isVisible());
+    auto* viewport_mode_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchViewportModeCue"));
+    auto* operations_mode_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchOperationsModeCue"));
+    CHECK(viewport_mode_cue && operations_mode_cue);
+    CHECK(!viewport_mode_cue->text().isEmpty());
+    CHECK(operations_mode_cue->text() == viewport_mode_cue->text());
+    sketch_support_cancel->click();
+    QApplication::processEvents();
+    CHECK(operations_footer->isHidden());
+    CHECK(responsive_session->document().revision() ==
+          responsive_revision);
+    CHECK(responsive_session->undoDepth() == responsive_undo);
+    CHECK(responsive_session->needsSave() == responsive_dirty);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(short_tabs->isHidden());
+    CHECK(!right_vertical_splitter->isHidden());
+    std::cout << "UI01_G2_SHORT_HEIGHT_ACTIVE_OPERATIONS_PASS"
+              << std::endl;
+
     // A focused editor retains keyboard ownership when narrow reflow occurs;
     // the owning right panel remains recovered instead of disappearing.
     title->setFocus(Qt::OtherFocusReason);
@@ -651,6 +1836,56 @@ int main(int argc, char* argv[]) {
         workspace));
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == first_camera);
+
+    // G2 per-Document proportion is runtime-only and independent of the
+    // camera/geometry state already tested above. A user-adjusted split
+    // belongs to the active Document for this application session.
+    right_vertical_splitter->setSizes({160, 500});
+    QApplication::processEvents();
+    const auto first_ui_sizes = right_vertical_splitter->sizes();
+    CHECK(first_ui_sizes.size() == 2);
+    CHECK(first_ui_sizes[0] > 0 && first_ui_sizes[1] > 0);
+    const double first_ui_fraction =
+        static_cast<double>(first_ui_sizes[0]) /
+        static_cast<double>(
+            first_ui_sizes[0] + first_ui_sizes[1]);
+    CHECK(first_ui_fraction < 0.35);
+    const auto first_ui_revision =
+        opened.session->documentSession(first_id)
+            ->document().revision();
+    const auto first_ui_undo =
+        opened.session->documentSession(first_id)->undoDepth();
+    const auto first_ui_dirty =
+        opened.session->documentSession(first_id)->needsSave();
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id), workspace));
+    QApplication::processEvents();
+    const auto second_ui_sizes = right_vertical_splitter->sizes();
+    CHECK(second_ui_sizes.size() == 2);
+    CHECK(second_ui_sizes[0] > 0 && second_ui_sizes[1] > 0);
+    const double second_ui_fraction =
+        static_cast<double>(second_ui_sizes[0]) /
+        static_cast<double>(
+            second_ui_sizes[0] + second_ui_sizes[1]);
+    CHECK(std::abs(second_ui_fraction - 0.4) < 0.1);
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id), workspace));
+    QApplication::processEvents();
+    const auto restored_ui_sizes = right_vertical_splitter->sizes();
+    CHECK(restored_ui_sizes.size() == 2);
+    CHECK(restored_ui_sizes[0] > 0 && restored_ui_sizes[1] > 0);
+    const double restored_ui_fraction =
+        static_cast<double>(restored_ui_sizes[0]) /
+        static_cast<double>(
+            restored_ui_sizes[0] + restored_ui_sizes[1]);
+    CHECK(std::abs(restored_ui_fraction - first_ui_fraction) < 0.1);
+    CHECK(opened.session->documentSession(first_id)
+              ->document().revision() == first_ui_revision);
+    CHECK(opened.session->documentSession(first_id)->undoDepth() ==
+          first_ui_undo);
+    CHECK(opened.session->documentSession(first_id)->needsSave() ==
+          first_ui_dirty);
+    std::cout << "UI01_G2_PER_DOCUMENT_RATIO_NATIVE_PASS" << std::endl;
 
     auto* first_session_for_view =
         opened.session->documentSession(first_id);

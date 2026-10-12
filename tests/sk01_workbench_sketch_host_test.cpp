@@ -8,11 +8,15 @@
 #include <algorithm>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFrame>
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QLocale>
 #include <QPushButton>
+#include <QStackedWidget>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QWidget>
 #include <QTest>
@@ -43,6 +47,53 @@ void check(bool value, const char* expression, int line) {
 }
 
 #define CHECK(expr)     check(static_cast<bool>(expr), #expr, __LINE__)
+
+  
+// UI-01 G3: an original Sketch tool may be represented by its own
+// QPushButton, the directly named group, or last-resort More -> group.
+// The representation must remain actually available and must delegate
+// the same command enabled/checked state. This is NOT an exemption for
+// commands lost from all three surfaces.
+void checkSketchToolbarActionReachable(
+    ui::CadWorkbench& workbench,
+    QPushButton* original,
+    const QString& group_name,
+    const QString& action_label) {
+    CHECK(original != nullptr);
+    if (!original->isHidden()) return;
+    auto* direct = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarGroupDropdown_Sketch_") +
+        group_name);
+    auto* more = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarMoreButton"));
+    CHECK(direct != nullptr);
+    CHECK(more != nullptr);
+    QMenu* menu = nullptr;
+    if (!direct->isHidden()) {
+        menu = direct->menu();
+    } else if (!more->isHidden()) {
+        CHECK(more->menu() != nullptr);
+        for (auto* group : more->menu()->actions()) {
+            if (group != nullptr && group->text() == group_name) {
+                menu = group->menu();
+                break;
+            }
+        }
+    }
+    CHECK(menu != nullptr);
+    QAction* action = nullptr;
+    for (auto* candidate : menu->actions()) {
+        if (candidate != nullptr &&
+            candidate->text() == action_label) {
+            action = candidate;
+            break;
+        }
+    }
+    CHECK(action != nullptr);
+    CHECK(action->isEnabled() == original->isEnabled());
+    CHECK(action->isCheckable() == original->isCheckable());
+    CHECK(action->isChecked() == original->isChecked());
+}
 
 class TestViewportWidget final
     : public QWidget,
@@ -892,6 +943,28 @@ int main(int argc, char* argv[]) {
     CHECK(
         finish_button->text() ==
         QStringLiteral("Create Sketch"));
+    // UI-01 Owner-reported RED: test actual visibility through every
+    // ancestor and the active QStackedWidget page; a hidden page may
+    // contain a button whose isHidden() returns false.
+    auto* sketch_footer = workbench.findChild<QWidget*>(
+        QStringLiteral("workbenchOperationsFooter"));
+    auto* sketch_footer_stack = workbench.findChild<QStackedWidget*>(
+        QStringLiteral("workbenchOperationsFooterStack"));
+    CHECK(sketch_footer && sketch_footer_stack);
+    const auto* active_footer_page =
+        sketch_footer_stack->currentWidget();
+    CHECK(active_footer_page != nullptr);
+    CHECK(finish_button->parentWidget() == active_footer_page);
+    CHECK(cancel_button->parentWidget() == active_footer_page);
+    CHECK(!finish_button->isHidden());
+    CHECK(!cancel_button->isHidden());
+    // The fixture may itself have a collapsed/hidden Operations panel;
+    // test the physical visibility only when that ancestor is shown.
+    if (sketch_footer->isVisible()) {
+        CHECK(finish_button->isVisible());
+        CHECK(cancel_button->isVisible());
+    }
+    std::cout << "UI01_SKETCH_SUPPORT_ACTIVE_FOOTER_PASS" << std::endl;
     CHECK(!cancel_button->isHidden());
     CHECK(!sketch_button->isEnabled());
 
@@ -912,6 +985,47 @@ int main(int argc, char* argv[]) {
         QStringLiteral("Finish Sketch"));
     CHECK(cancel_button->isHidden());
     CHECK(!sketch_button->isEnabled());
+
+    // UI-01 G3 Owner's actual Sketch Modify sector: a compact
+    // frame encloses one caption/pin rail ABOVE the SAME real
+    // Trim / Extend / Extend Both buttons in one command row.
+    // Force sufficient width: this test must not mistake a legal
+    // named overflow group for a missing direct Sketch command.
+    const QSize before_compact_sector = workspace_shell.size();
+    workspace_shell.resize(2100, 900);
+    QApplication::processEvents();
+    auto* compact_modify_host = workbench.findChild<QWidget*>(
+        QStringLiteral("documentToolsHost"));
+    auto* compact_modify_frame = workbench.findChild<QFrame*>(
+        QStringLiteral("workbenchToolbarGroupFrame_Sketch_Modify"));
+    CHECK(compact_modify_host && compact_modify_frame);
+    CHECK(modify_tools_label->isVisible());
+    CHECK(trim_button->isVisible());
+    CHECK(extend_button->isVisible());
+    CHECK(extend_both_button->isVisible());
+    const QRect title_bounds{
+        modify_tools_label->mapTo(compact_modify_host, QPoint{0, 0}),
+        modify_tools_label->size()};
+    const QRect trim_bounds{
+        trim_button->mapTo(compact_modify_host, QPoint{0, 0}),
+        trim_button->size()};
+    const QRect extend_bounds{
+        extend_button->mapTo(compact_modify_host, QPoint{0, 0}),
+        extend_button->size()};
+    const QRect extend_both_bounds{
+        extend_both_button->mapTo(compact_modify_host, QPoint{0, 0}),
+        extend_both_button->size()};
+    CHECK(title_bounds.bottom() < trim_bounds.top());
+    CHECK(compact_modify_frame->geometry().contains(title_bounds));
+    CHECK(compact_modify_frame->geometry().contains(trim_bounds));
+    CHECK(compact_modify_frame->geometry().contains(extend_bounds));
+    CHECK(compact_modify_frame->geometry().contains(extend_both_bounds));
+    CHECK(std::abs(trim_bounds.top() - extend_bounds.top()) <= 4);
+    CHECK(std::abs(trim_bounds.top() - extend_both_bounds.top()) <= 4);
+    workspace_shell.resize(before_compact_sector);
+    QApplication::processEvents();
+    std::cout << "UI01_G3_SKETCH_MODIFY_COMPACT_FRAME_NATIVE_PASS"
+              << std::endl;
 
     const auto sketch_id =
         session->document().sketches().front().id;
@@ -937,11 +1051,15 @@ int main(int argc, char* argv[]) {
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
 
-    // PG-01C C1: the single Sketch Project Geometry launcher is visible,
-    // but an unavailable exact modeling provider must prevent entering a
-    // fake authoring state through either toolbar or Command Line.
-    CHECK(!project_edge_button->isHidden());
+    // PG-01C C1: provider-unavailable Project Geometry must remain
+    // reachable (inline or through the accepted References/More tier)
+    // yet disabled. Neither that entry nor the Command Line may author
+    // a fake projection.
     CHECK(!project_edge_button->isEnabled());
+    checkSketchToolbarActionReachable(
+        workbench, project_edge_button,
+        QStringLiteral("References"),
+        QStringLiteral("Project Geometry"));
     CHECK(project_edge_operations->isHidden());
     const auto project_guard_state = session->document().state();
     const auto project_guard_revision = session->document().revision();
@@ -994,9 +1112,12 @@ int main(int argc, char* argv[]) {
 
     // R12 structural-edit controls support tool-first boundary acquisition.
     // Empty Enter/RMB cannot advance without a finite boundary.
-    CHECK(!trim_button->isHidden());
-    CHECK(!extend_button->isHidden());
-    CHECK(!extend_both_button->isHidden());
+    checkSketchToolbarActionReachable(workbench, trim_button,
+        QStringLiteral("Modify"), QStringLiteral("Trim"));
+    checkSketchToolbarActionReachable(workbench, extend_button,
+        QStringLiteral("Modify"), QStringLiteral("Extend"));
+    checkSketchToolbarActionReachable(workbench, extend_both_button,
+        QStringLiteral("Modify"), QStringLiteral("Extend Both"));
 
     const auto structural_ui_state =
         session->document().state();
@@ -1301,29 +1422,38 @@ int main(int argc, char* argv[]) {
         session->undoDepth() ==
         precision_undo_before);
 
-    // SK-07B: Sketch tools are visibly grouped and the new
-    // transform adapters enter the same command-first collection stage.
-    CHECK(!create_tools_label->isHidden());
-    CHECK(!modify_tools_label->isHidden());
+    // SK-07B: Sketch tools remain reachable through their current
+    // grouped representation; transform adapters enter the same
+    // command-first collection stage.
+    checkSketchToolbarActionReachable(workbench, line_button,
+        QStringLiteral("Create"), QStringLiteral("Line"));
+    checkSketchToolbarActionReachable(workbench, trim_button,
+        QStringLiteral("Modify"), QStringLiteral("Trim"));
     CHECK(
         create_tools_label->text() ==
         QStringLiteral("Create:"));
     CHECK(
         modify_tools_label->text() ==
         QStringLiteral("Modify:"));
-    CHECK(!inspect_tools_label->isHidden());
+    checkSketchToolbarActionReachable(workbench, measure_button,
+        QStringLiteral("Inspect"), QStringLiteral("Measure"));
     CHECK(
         inspect_tools_label->text() ==
         QStringLiteral("Inspect:"));
-    CHECK(!measure_button->isHidden());
-    CHECK(!rotate_button->isHidden());
-    CHECK(!scale_button->isHidden());
-    CHECK(!mirror_button->isHidden());
+    checkSketchToolbarActionReachable(workbench, measure_button,
+        QStringLiteral("Inspect"), QStringLiteral("Measure"));
+    checkSketchToolbarActionReachable(workbench, rotate_button,
+        QStringLiteral("Transform"), QStringLiteral("Rotate"));
+    checkSketchToolbarActionReachable(workbench, scale_button,
+        QStringLiteral("Transform"), QStringLiteral("Scale"));
+    checkSketchToolbarActionReachable(workbench, mirror_button,
+        QStringLiteral("Transform"), QStringLiteral("Mirror"));
 
     // R9 Owner manual-review correction: the top Create strip contains
     // tools only. Runtime creation options live in the right Operations
     // panel for the active creation tool.
-    CHECK(!rectangle_button->isHidden());
+    checkSketchToolbarActionReachable(workbench, rectangle_button,
+        QStringLiteral("Create"), QStringLiteral("Rectangle"));
     CHECK(creation_construction_button->isHidden());
     CHECK(rectangle_diagonals_button->isHidden());
     CHECK(
@@ -1432,7 +1562,8 @@ int main(int argc, char* argv[]) {
 
     // Package F: toolbar, Operations and Command Line are adapters to one
     // controller-owned transient Profile session.
-    CHECK(!profile_button->isHidden());
+    checkSketchToolbarActionReachable(workbench, profile_button,
+        QStringLiteral("Profile"), QStringLiteral("Profile"));
     CHECK(profile_operations->isHidden());
 
     const auto profile_ui_state_before =
@@ -2157,7 +2288,8 @@ int main(int argc, char* argv[]) {
 
     // SK-07C: toolbar and Command Line COPY are adapters to the
     // same command-first semantic COPY state.
-    CHECK(!copy_button->isHidden());
+    checkSketchToolbarActionReachable(workbench, copy_button,
+        QStringLiteral("Transform"), QStringLiteral("Copy"));
     copy_button->click();
     QApplication::processEvents();
     CHECK(copy_button->isChecked());
@@ -2240,7 +2372,8 @@ int main(int argc, char* argv[]) {
 
     // SK-07A: toolbar and Command Line are adapters to the same
     // command-first MOVE state when the Sketch selection is empty.
-    CHECK(!move_button->isHidden());
+    checkSketchToolbarActionReachable(workbench, move_button,
+        QStringLiteral("Transform"), QStringLiteral("Move"));
     move_button->click();
     QApplication::processEvents();
     CHECK(move_button->isChecked());

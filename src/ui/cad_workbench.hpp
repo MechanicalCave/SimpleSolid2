@@ -309,6 +309,7 @@ private:
     void setProjectEdgeFaceMode(bool enabled);
     void setProjectEdgeBoundaryMode();
     void refreshProjectEdgePreview();
+    void updateProjectGeometryResponsiveRows(int viewport_width);
     [[nodiscard]] bool finishProjectEdgeTool();
     void syncProjectEdgeUi();
     [[nodiscard]] application::CadInputSubmitResult
@@ -323,6 +324,8 @@ private:
     void startSketchResupport(
         const sketch::SketchId& sketch_id);
     void cancelSketchTool();
+    // P0: one fail-closed entry gate for Tree Sketch/Profile requests.
+    [[nodiscard]] bool rejectSketchProfileEntryDuringFeatureDraft();
     void requestEditSketch(
         const sketch::SketchId& sketch_id);
     void requestEditProfile(
@@ -446,6 +449,9 @@ private:
         std::string,
         viewer::CameraState>
         document_view_states_;
+    // UI-01 G2 UI-only session state, keyed by DocumentId, never authored.
+    std::unordered_map<std::string, double>
+        document_right_panel_ratios_;
 
     bool sketch_support_pick_active_{};
     std::optional<sketch::SketchId>
@@ -636,12 +642,16 @@ private:
     QPushButton* datum_plane_button_{};
     QPushButton* extrude_button_{};
     QPushButton* revolve_button_{};
+    QLabel* part_sketch_tools_label_{};
+    QLabel* part_work_features_tools_label_{};
     QLabel* part_create_tools_label_{};
     QLabel* part_modify_tools_label_{};
     QPushButton* fillet_button_{};
     QPushButton* chamfer_button_{};
     QPushButton* project_edge_button_{};
     QPushButton* select_sketch_button_{};
+    QLabel* sketch_references_tools_label_{};
+    QLabel* sketch_transform_tools_label_{};
     QLabel* create_tools_label_{};
     QPushButton* line_sketch_button_{};
     QPushButton* circle_sketch_button_{};
@@ -772,6 +782,8 @@ private:
     bool syncing_edge_feature_selection_{};
 
     QWidget* project_edge_operations_widget_{};
+    // Shell-owned viewport; only observed for measured UI reflow.
+    QWidget* project_edge_operations_viewport_{};
     QLabel* project_edge_stage_label_{};
     QLabel* project_edge_selection_label_{};
     QLabel* project_edge_result_label_{};

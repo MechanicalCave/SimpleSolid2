@@ -7,6 +7,7 @@
 #include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/precision_input.hpp>
 
+#include <QBoxLayout>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QEvent>
@@ -22,6 +23,7 @@
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStringList>
@@ -1505,6 +1507,13 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         1,
         sketch_button_);
+    part_sketch_tools_label_ =
+        new QLabel(QStringLiteral("Sketch:"), shell_);
+    part_sketch_tools_label_->setObjectName(
+        QStringLiteral("partSketchToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(sketch_button_),
+        part_sketch_tools_label_);
 
     datum_plane_button_ =
         new QPushButton(
@@ -1516,6 +1525,13 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         2,
         datum_plane_button_);
+    part_work_features_tools_label_ =
+        new QLabel(QStringLiteral("Work Features:"), shell_);
+    part_work_features_tools_label_->setObjectName(
+        QStringLiteral("partWorkFeaturesToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(datum_plane_button_),
+        part_work_features_tools_label_);
 
     extrude_button_ =
         new QPushButton(
@@ -1743,6 +1759,13 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         16,
         mirror_sketch_button_);
+    sketch_transform_tools_label_ =
+        new QLabel(QStringLiteral("Transform:"), shell_);
+    sketch_transform_tools_label_->setObjectName(
+        QStringLiteral("sketchTransformToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(move_sketch_button_),
+        sketch_transform_tools_label_);
 
     inspect_tools_label_ =
         new QLabel(
@@ -1786,6 +1809,13 @@ void CadWorkbench::buildUi() {
     // Same Sketch Modify group as Trim/Extend, not a Part-level dialog.
     shell_->editorToolsLayout().insertWidget(
         10, project_edge_button_);
+    sketch_references_tools_label_ =
+        new QLabel(QStringLiteral("References:"), shell_);
+    sketch_references_tools_label_->setObjectName(
+        QStringLiteral("sketchReferencesToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(project_edge_button_),
+        sketch_references_tools_label_);
 
     viewport_controller_ =
         new PartViewportController(
@@ -3898,6 +3928,8 @@ void CadWorkbench::buildUi() {
     project_layout->addWidget(project_edge_stage_label_);
 
     auto* source_row = new QWidget(project_edge_operations_widget_);
+    source_row->setObjectName(
+        QStringLiteral("projectEdgeSourceRow"));
     auto* source_layout = new QHBoxLayout(source_row);
     source_layout->setContentsMargins(0, 0, 0, 0);
     project_edge_edges_button_ =
@@ -3924,9 +3956,14 @@ void CadWorkbench::buildUi() {
         new QLabel(project_edge_operations_widget_);
     project_edge_selection_label_->setObjectName(
         QStringLiteral("projectEdgeSelectionLabel"));
+    // Source Edge/Face counts may be much longer than the right panel.
+    // Keep the entire diagnostic readable in the vertical flow.
+    project_edge_selection_label_->setWordWrap(true);
     project_layout->addWidget(project_edge_selection_label_);
 
     auto* role_row = new QWidget(project_edge_operations_widget_);
+    role_row->setObjectName(
+        QStringLiteral("projectEdgeRoleRow"));
     auto* role_layout = new QHBoxLayout(role_row);
     role_layout->setContentsMargins(0, 0, 0, 0);
     project_edge_regular_button_ =
@@ -3944,6 +3981,8 @@ void CadWorkbench::buildUi() {
     project_layout->addWidget(role_row);
 
     auto* pick_row = new QWidget(project_edge_operations_widget_);
+    pick_row->setObjectName(
+        QStringLiteral("projectEdgePickRow"));
     auto* pick_layout = new QHBoxLayout(pick_row);
     pick_layout->setContentsMargins(0, 0, 0, 0);
     project_edge_remove_button_ =
@@ -4092,7 +4131,51 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         finish_sketch_button_);
 
+    // Rehome the original connected controls, never action proxies.
+    // The shell owns presentation; each handler still owns its CAD draft.
+    // One physical footer row owns both ORIGINAL Sketch controls.
+    // Support picking exposes Create Sketch + Cancel; after authoring,
+    // ordinary Sketch Edit exposes Finish Sketch while Cancel is hidden.
+    // A QPushButton cannot live in two QStackedWidget pages at once.
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("sketch"),
+        finish_sketch_button_, cancel_sketch_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("sketchline"),
+        finish_line_button_, cancel_line_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("axis"),
+        axis_finish_button_, axis_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("datum"),
+        datum_plane_finish_button_, datum_plane_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("extrude"),
+        extrude_finish_button_, extrude_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("revolve"),
+        revolve_finish_button_, revolve_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("edge"),
+        edge_feature_finish_button_, edge_feature_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("project"),
+        project_edge_finish_button_, project_edge_cancel_button_);
+    shell_->registerOperationsFooterRow(
+        QStringLiteral("profile"),
+        profile_finish_button_, profile_cancel_button_);
     shell_->setOperationsContent(operations_content);
+    // Use the real usable Operations scroll viewport, not the main
+    // Workbench/window width. Changing orientation affects only layout.
+    auto* operations_scroll = shell_->findChild<QScrollArea*>(
+        QStringLiteral("workbenchOperationsScroll"));
+    if (operations_scroll != nullptr) {
+        project_edge_operations_viewport_ =
+            operations_scroll->viewport();
+        project_edge_operations_viewport_->installEventFilter(this);
+        updateProjectGeometryResponsiveRows(
+            project_edge_operations_viewport_->width());
+    }
 
     QObject::connect(
         undo_button_,
@@ -5619,6 +5702,11 @@ bool CadWorkbench::activateDocument(
     }
 
     captureActiveViewState();
+    if (document_session_ != nullptr) {
+        document_right_panel_ratios_[
+            std::string{document_session_->documentId().value()}] =
+            shell_->rightPanelRatio();
+    }
     clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
@@ -5632,6 +5720,11 @@ bool CadWorkbench::activateDocument(
 
     document_session_ = session;
     workspace_root_ = std::move(workspace_root);
+    const auto saved_panel_ratio = document_right_panel_ratios_.find(
+        std::string{session->documentId().value()});
+    shell_->setRightPanelRatio(
+        saved_panel_ratio == document_right_panel_ratios_.end()
+            ? 0.4 : saved_panel_ratio->second);
 
     restoreActiveViewState();
     refreshActiveContext();
@@ -5643,6 +5736,9 @@ bool CadWorkbench::activateDocument(
 void CadWorkbench::deactivateDocument() {
     if (document_session_ != nullptr) {
         captureActiveViewState();
+        document_right_panel_ratios_[
+            std::string{document_session_->documentId().value()}] =
+            shell_->rightPanelRatio();
     }
 
     clearAxisRuntimeContext();
@@ -5654,6 +5750,7 @@ void CadWorkbench::deactivateDocument() {
     clearSketchRuntimeContext();
     document_session_ = nullptr;
     workspace_root_.clear();
+    shell_->setRightPanelRatio(0.4);
 
     clearActiveContext();
     setStatusText(
@@ -5663,6 +5760,8 @@ void CadWorkbench::deactivateDocument() {
 void CadWorkbench::resetRuntimeState() {
     deactivateDocument();
     document_view_states_.clear();
+    document_right_panel_ratios_.clear();
+    shell_->setRightPanelRatio(0.4);
     setStatusText(
         QStringLiteral(
             "No Part Document is active."));
@@ -5677,6 +5776,8 @@ void CadWorkbench::forgetDocumentRuntimeState(
     }
 
     document_view_states_.erase(
+        std::string{document_id.value()});
+    document_right_panel_ratios_.erase(
         std::string{document_id.value()});
 }
 
@@ -11253,11 +11354,30 @@ void CadWorkbench::cancelSketchTool() {
     syncActionState();
 }
 
+bool CadWorkbench::rejectSketchProfileEntryDuringFeatureDraft() {
+    // Reuse this gate for both Tree Sketch and Profile entry. The
+    // legitimate Axis-in-Sketch draft intentionally remains legal.
+    if (!extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !revolve_draft_ &&
+        !fillet_draft_ &&
+        !chamfer_draft_) {
+        return false;
+    }
+    setStatusText(
+        QStringLiteral(
+            "Finish or cancel the active Feature draft before editing a Sketch or Profile."));
+    return true;
+}
+
 void CadWorkbench::requestEditSketch(
     const sketch::SketchId& sketch_id) {
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+    if (rejectSketchProfileEntryDuringFeatureDraft()) {
         return;
     }
 
@@ -11298,6 +11418,9 @@ void CadWorkbench::requestEditProfile(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+    if (rejectSketchProfileEntryDuringFeatureDraft()) {
         return;
     }
 
@@ -14586,9 +14709,53 @@ void CadWorkbench::navigateToFeature(
         feature_id);
 }
 
+void CadWorkbench::updateProjectGeometryResponsiveRows(
+    int viewport_width) {
+    if (viewport_width <= 0) return;
+    // The fixed Operations scrollbar gutter and margins are outside
+    // the usable button width. No physical screen/DPI threshold:
+    // actual translated text and the current Qt font drive the choice.
+    const int budget = std::max(0, viewport_width - 12);
+    for (const char* object_name : {
+             "projectEdgeSourceRow",
+             "projectEdgeRoleRow",
+             "projectEdgePickRow"}) {
+        auto* row = findChild<QWidget*>(
+            QString::fromLatin1(object_name));
+        if (row == nullptr) continue;
+        auto* layout = qobject_cast<QBoxLayout*>(row->layout());
+        if (layout == nullptr) continue;
+        int inline_width = 0;
+        int controls = 0;
+        for (int i = 0; i < layout->count(); ++i) {
+            auto* item = layout->itemAt(i);
+            auto* button = item == nullptr ? nullptr :
+                item->widget();
+            if (button == nullptr) continue;
+            inline_width += button->sizeHint().width();
+            ++controls;
+        }
+        inline_width += std::max(0, controls - 1) *
+            std::max(0, layout->spacing());
+        const auto direction = inline_width > budget
+            ? QBoxLayout::TopToBottom
+            : QBoxLayout::LeftToRight;
+        if (layout->direction() != direction) {
+            layout->setDirection(direction);
+            row->updateGeometry();
+        }
+    }
+}
+
 bool CadWorkbench::eventFilter(
     QObject* watched,
     QEvent* event) {
+    if (event != nullptr &&
+        event->type() == QEvent::Resize &&
+        watched == project_edge_operations_viewport_) {
+        updateProjectGeometryResponsiveRows(
+            project_edge_operations_viewport_->width());
+    }
     if (event != nullptr &&
         event->type() == QEvent::MouseButtonPress &&
         watched == viewport_widget_ &&
@@ -15101,6 +15268,12 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::select);
     }
 
+    if (sketch_references_tools_label_ != nullptr) {
+        sketch_references_tools_label_->setVisible(editing);
+    }
+    if (sketch_transform_tools_label_ != nullptr) {
+        sketch_transform_tools_label_->setVisible(editing);
+    }
     if (create_tools_label_ != nullptr) {
         create_tools_label_->setVisible(editing);
     }
@@ -16121,6 +16294,89 @@ void CadWorkbench::syncActionState() {
         document_session_ != nullptr &&
         *sketch_edit_document_id_ ==
             document_session_->documentId();
+    shell_->setOperationsActive(
+        active && (
+            editing_sketch ||
+            sketch_support_pick_active_ ||
+            axis_draft_.has_value() ||
+            datum_plane_draft_.has_value() ||
+            extrude_profile_pick_active_ ||
+            extrude_draft_.has_value() ||
+            revolve_draft_.has_value() ||
+            edge_feature_active ||
+            project_edge_active_));
+
+    // The footer and cue follow the sole live edit draft, not the latest
+    // inspected Tree item. No new Finish/Cancel behaviors are introduced.
+    QString footer_mode;
+    QString mode_cue;
+    if (axis_draft_) {
+        footer_mode = QStringLiteral("axis");
+        mode_cue = QStringLiteral("Axis operation");
+    } else if (datum_plane_draft_) {
+        footer_mode = QStringLiteral("datum");
+        mode_cue = QStringLiteral("Datum Plane operation");
+    } else if (extrude_draft_) {
+        footer_mode = QStringLiteral("extrude");
+        mode_cue = QStringLiteral("Extrude operation");
+    } else if (revolve_draft_) {
+        footer_mode = QStringLiteral("revolve");
+        mode_cue = QStringLiteral("Revolve operation");
+    } else if (fillet_draft_ || chamfer_draft_) {
+        footer_mode = QStringLiteral("edge");
+        mode_cue = fillet_draft_
+            ? QStringLiteral("Fillet operation")
+            : QStringLiteral("Chamfer operation");
+    } else if (project_edge_active_) {
+        footer_mode = QStringLiteral("project");
+        mode_cue = QStringLiteral("Project Geometry operation");
+    } else if (sketch_support_pick_active_) {
+        footer_mode = QStringLiteral("sketch");
+        mode_cue = QStringLiteral("Choose Sketch support");
+    } else if (extrude_profile_pick_active_) {
+        mode_cue = QStringLiteral("Choose Extrude Profile");
+    } else if (editing_sketch &&
+               sketch_interaction_controller_ &&
+               sketch_interaction_controller_->profileToolActive()) {
+        footer_mode = QStringLiteral("profile");
+        mode_cue = QStringLiteral("Profile operation in Sketch");
+    } else if (editing_sketch &&
+               !cancel_line_button_->isHidden()) {
+        footer_mode = QStringLiteral("sketchline");
+        mode_cue = QStringLiteral("Sketch tool operation");
+    } else if (editing_sketch) {
+        footer_mode = QStringLiteral("sketch");
+        mode_cue = QStringLiteral("Sketch edit");
+    }
+    // UI-01 G2: an Edit cue refers to the immutable Feature draft
+    // target, never to the mutable Tree/Viewport inspection selection.
+    // Creation drafts intentionally have no authored target to display.
+    std::optional<part::FeatureId> edited_feature_id;
+    if (extrude_draft_) {
+        edited_feature_id = extrude_draft_->featureId();
+    } else if (revolve_draft_) {
+        edited_feature_id = revolve_draft_->featureId();
+    } else if (fillet_draft_) {
+        edited_feature_id = fillet_draft_->featureId();
+    } else if (chamfer_draft_) {
+        edited_feature_id = chamfer_draft_->featureId();
+    }
+    if (edited_feature_id && document_session != nullptr) {
+        const auto* edited_feature =
+            document_session->document().findFeature(
+                *edited_feature_id);
+        if (edited_feature != nullptr) {
+            mode_cue +=
+                QStringLiteral(" — Edit %1 (Feature %2)")
+                    .arg(fromUtf8(edited_feature->name),
+                         fromUtf8(edited_feature_id->serialized()));
+        } else {
+            mode_cue +=
+                QStringLiteral(" — unavailable edit target");
+        }
+    }
+    shell_->showOperationsFooterRow(footer_mode);
+    shell_->setModeCue(mode_cue);
 
     sketch_button_->setText(
         QStringLiteral("Sketch"));
@@ -16181,9 +16437,13 @@ void CadWorkbench::syncActionState() {
         !revolve_draft_ &&
         !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
+        // Create-button engagement is not Feature Edit state. An
+        // authored FeatureId belongs to the Operations/viewport Edit
+        // cue; do not light the creation tool for that same draft.
         extrude_button_->setChecked(
-            extrude_profile_pick_active_ ||
-            extrude_draft_.has_value());
+            !edited_feature_id &&
+            (extrude_profile_pick_active_ ||
+             extrude_draft_.has_value()));
     }
 
     if (revolve_button_ != nullptr) {
@@ -16201,9 +16461,16 @@ void CadWorkbench::syncActionState() {
         !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         revolve_button_->setChecked(
+            !edited_feature_id &&
             revolve_draft_.has_value());
     }
 
+    if (part_sketch_tools_label_ != nullptr) {
+        part_sketch_tools_label_->setVisible(!editing_sketch);
+    }
+    if (part_work_features_tools_label_ != nullptr) {
+        part_work_features_tools_label_->setVisible(!editing_sketch);
+    }
     if (part_create_tools_label_ != nullptr) {
         part_create_tools_label_->setVisible(
             !editing_sketch);
@@ -16231,6 +16498,7 @@ void CadWorkbench::syncActionState() {
             edge_feature_tool_available &&
             !chamfer_draft_);
         fillet_button_->setChecked(
+            !edited_feature_id &&
             fillet_draft_.has_value());
     }
     if (chamfer_button_ != nullptr) {
@@ -16240,6 +16508,7 @@ void CadWorkbench::syncActionState() {
             edge_feature_tool_available &&
             !fillet_draft_);
         chamfer_button_->setChecked(
+            !edited_feature_id &&
             chamfer_draft_.has_value());
     }
 
@@ -16252,6 +16521,8 @@ void CadWorkbench::syncActionState() {
     }
     select_sketch_button_->setVisible(
         editing_sketch);
+    sketch_references_tools_label_->setVisible(editing_sketch);
+    sketch_transform_tools_label_->setVisible(editing_sketch);
     create_tools_label_->setVisible(
         editing_sketch);
     line_sketch_button_->setVisible(
@@ -16360,6 +16631,10 @@ void CadWorkbench::syncActionState() {
     syncExtrudeUi();
     syncRevolveUi();
     syncEdgeFeatureUi();
+    // UI-01 G3 responds only to the live Part/Sketch mode after every
+    // native QAction/QPushButton state has been synchronized. Collapsing
+    // presentation groups never registers a second CAD command.
+    shell_->setToolbarContext(editing_sketch);
 }
 
 void CadWorkbench::notifyCadInputContextChanged() {
