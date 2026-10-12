@@ -7,6 +7,7 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QBoxLayout>
 #include <QItemSelectionModel>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -467,6 +468,48 @@ int main(int argc, char* argv[]) {
         CHECK(frame->focusPolicy() == Qt::NoFocus);
         CHECK(frame->testAttribute(Qt::WA_TransparentForMouseEvents));
     }
+
+    // Owner screenshot G2 RED: Project Geometry Source/Role/Remove
+    // widgets must adapt to the measured Operations viewport width
+    // rather than exposing clipped second/third source buttons.
+    auto* project_source_row = workbench.findChild<QWidget*>(
+        QStringLiteral("projectEdgeSourceRow"));
+    auto* project_role_row = workbench.findChild<QWidget*>(
+        QStringLiteral("projectEdgeRoleRow"));
+    auto* project_pick_row = workbench.findChild<QWidget*>(
+        QStringLiteral("projectEdgePickRow"));
+    auto* operations_scroll = workbench.findChild<QScrollArea*>(
+        QStringLiteral("workbenchOperationsScroll"));
+    CHECK(project_source_row && project_role_row && project_pick_row);
+    CHECK(operations_scroll != nullptr);
+    auto* source_layout =
+        qobject_cast<QBoxLayout*>(project_source_row->layout());
+    auto* role_layout =
+        qobject_cast<QBoxLayout*>(project_role_row->layout());
+    auto* pick_layout =
+        qobject_cast<QBoxLayout*>(project_pick_row->layout());
+    CHECK(source_layout && role_layout && pick_layout);
+    const auto original_panel_sizes = splitter->sizes();
+    workbench.resize(850, 800);
+    splitter->setSizes({145, 500, 200});
+    QApplication::processEvents();
+    CHECK(operations_scroll->viewport()->width() < 260);
+    CHECK(source_layout->direction() == QBoxLayout::TopToBottom);
+    auto* project_source_face = workbench.findChild<QPushButton*>(
+        QStringLiteral("projectEdgeSourceFaceButton"));
+    auto* project_source_boundary = workbench.findChild<QPushButton*>(
+        QStringLiteral("projectEdgeSourceBoundaryButton"));
+    CHECK(project_source_face && project_source_boundary);
+    CHECK(project_source_face->text() ==
+          QStringLiteral("Planar Face"));
+    CHECK(project_source_boundary->text() ==
+          QStringLiteral("Face Boundary"));
+    CHECK(role_layout->direction() == QBoxLayout::TopToBottom);
+    CHECK(pick_layout->direction() == QBoxLayout::TopToBottom ||
+          pick_layout->direction() == QBoxLayout::LeftToRight);
+    workbench.resize(1400, 800);
+    splitter->setSizes(original_panel_sizes);
+    QApplication::processEvents();
 
     // G3 customization RED: pin affordances are passive outside the
     // explicit editable toolbar mode. Clicking a pin affects only
