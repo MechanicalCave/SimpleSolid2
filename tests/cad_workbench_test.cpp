@@ -528,9 +528,28 @@ int main(int argc, char* argv[]) {
     check_row_reflow(source_layout);
     check_row_reflow(role_layout);
     check_row_reflow(pick_layout);
+    // Re-expansion is just as important as narrow stacking: the
+    // original three-button Source row must return inline when the
+    // actual Operations viewport can comfortably accommodate it.
+    workbench.resize(1400, 800);
+    splitter->setSizes({150, 820, 420});
+    QApplication::processEvents();
+    CHECK(project_ops_scroll->viewport()->width() >= 310);
+    check_row_reflow(source_layout);
+    check_row_reflow(role_layout);
+    check_row_reflow(pick_layout);
+    CHECK(source_layout->direction() == QBoxLayout::LeftToRight);
+    CHECK(role_layout->direction() == QBoxLayout::LeftToRight);
+    CHECK(pick_layout->direction() == QBoxLayout::LeftToRight);
+    workbench.resize(850, 800);
+    splitter->setSizes({145, 500, 200});
+    QApplication::processEvents();
+    CHECK(source_layout->direction() == QBoxLayout::TopToBottom);
     workbench.resize(1400, 800);
     splitter->setSizes(original_panel_sizes);
     QApplication::processEvents();
+    std::cout << "UI01_PROJECT_GEOMETRY_SOURCE_REFLOW_BOTH_WAYS_PASS"
+              << std::endl;
 
     // G3 customization RED: pin affordances are passive outside the
     // explicit editable toolbar mode. Clicking a pin affects only
