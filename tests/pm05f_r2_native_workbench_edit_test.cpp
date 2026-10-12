@@ -481,6 +481,20 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
     const auto context_cue = operations_cue->text();
     CHECK(!context_cue.isEmpty());
     CHECK(viewport_cue->text() == context_cue);
+    // The cue must identify the actual immutable Feature target, not
+    // merely the tool category or an unrelated Tree inspection row.
+    const auto selected_feature_key =
+        feature_item->data(0, Qt::UserRole + 45).toString();
+    QString draft_target_name;
+    for (const auto& feature : session.document().body().features) {
+        if (QString::fromStdString(feature.id.serialized()) ==
+                selected_feature_key) {
+            draft_target_name = QString::fromStdString(feature.name);
+            break;
+        }
+    }
+    CHECK(!draft_target_name.isEmpty());
+    CHECK(context_cue.contains(draft_target_name));
     const auto finish_name =
         std::string_view{operation_widget_name} ==
             "revolveOperationsWidget"
