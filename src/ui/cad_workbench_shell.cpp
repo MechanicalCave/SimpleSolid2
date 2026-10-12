@@ -6,7 +6,11 @@
 #include <QGroupBox>
 #include <QFontMetrics>
 #include <QHBoxLayout>
+#include <QIcon>
+#include <QPainter>
+#include <QPixmap>
 #include <QMenu>
+#include <QPalette>
 #include <QPushButton>
 #include <QLabel>
 #include <QResizeEvent>
@@ -66,6 +70,67 @@ std::vector<ToolbarGroupSpec> toolbarGroups(bool sketch) {
         {"Inspect", "sketchInspectToolsLabel",
             {"measureSketchToolButton"}, false},
     };
+}
+
+// Small antialiased geometric tool glyphs; generated in Qt rather than
+// relying on theme icons (which may not exist on native Windows).
+// All glyphs remain neutral and inherit the active UI text palette.
+QIcon makeCadToolbarIcon(
+    const QString& object_name,
+    const QColor& foreground) {
+    QPixmap image{20, 20};
+    image.fill(Qt::transparent);
+    QPainter painter{&image};
+    painter.setRenderHint(QPainter::Antialiasing);
+    QPen ink{foreground};
+    ink.setWidthF(1.6);
+    ink.setCapStyle(Qt::RoundCap);
+    ink.setJoinStyle(Qt::RoundJoin);
+    painter.setPen(ink);
+    painter.setBrush(Qt::NoBrush);
+    if (object_name.contains(QStringLiteral("extrude"),
+                             Qt::CaseInsensitive)) {
+        painter.drawRect(QRectF{3.5, 7, 10, 10});
+        painter.drawLine(QPointF{3.5, 7}, QPointF{8, 3});
+        painter.drawLine(QPointF{8, 3}, QPointF{17, 3});
+        painter.drawLine(QPointF{17, 3}, QPointF{13.5, 7});
+        painter.drawLine(QPointF{17, 3}, QPointF{17, 13});
+        painter.drawLine(QPointF{13.5, 17}, QPointF{17, 13});
+    } else if (object_name.contains(QStringLiteral("revolve"),
+                                    Qt::CaseInsensitive)) {
+        painter.drawArc(QRectF{3, 3, 14, 14}, 35 * 16, 295 * 16);
+        painter.drawLine(QPointF{15.1, 3.2}, QPointF{18, 4});
+        painter.drawLine(QPointF{15.1, 3.2}, QPointF{14, 6.1});
+        painter.drawLine(QPointF{9, 5}, QPointF{9, 15});
+    } else if (object_name.contains(QStringLiteral("circle"),
+                                    Qt::CaseInsensitive)) {
+        painter.drawEllipse(QRectF{3, 3, 14, 14});
+    } else if (object_name.contains(QStringLiteral("rectangle"),
+                                    Qt::CaseInsensitive)) {
+        painter.drawRect(QRectF{3, 5, 14, 10});
+    } else if (object_name.contains(QStringLiteral("arc"),
+                                    Qt::CaseInsensitive)) {
+        painter.drawArc(QRectF{3, 3, 14, 14}, 0, 180 * 16);
+        painter.drawEllipse(QPointF{3, 10}, 1, 1);
+        painter.drawEllipse(QPointF{17, 10}, 1, 1);
+    } else if (object_name.contains(QStringLiteral("line"),
+                                    Qt::CaseInsensitive)) {
+        painter.drawLine(QPointF{4, 16}, QPointF{16, 4});
+        painter.drawEllipse(QPointF{4, 16}, 1.4, 1.4);
+        painter.drawEllipse(QPointF{16, 4}, 1.4, 1.4);
+    } else if (object_name.contains(QStringLiteral("project"),
+                                    Qt::CaseInsensitive)) {
+        painter.drawEllipse(QRectF{3, 3, 10, 10});
+        ink.setStyle(Qt::DashLine);
+        painter.setPen(ink);
+        painter.drawLine(QPointF{12, 12}, QPointF{17, 17});
+    } else {
+        painter.drawLine(QPointF{3, 15}, QPointF{16, 4});
+        painter.drawLine(QPointF{3, 15}, QPointF{6, 9});
+        painter.drawLine(QPointF{3, 15}, QPointF{9, 15});
+    }
+    painter.end();
+    return QIcon{image};
 }
 
 } // namespace
@@ -634,6 +699,15 @@ void CadWorkbenchShell::setToolbarContext(bool sketch_context) {
     refreshToolbarOverflow();
 }
 
+QString CadWorkbenchShell::toolbarActionLabel(
+    const QPushButton* button) const {
+    if (button == nullptr) return {};
+    const auto it = toolbar_icon_compacted_.constFind(
+        const_cast<QPushButton*>(button));
+    return it != toolbar_icon_compacted_.cend()
+        ? it.value() : button->text();
+}
+
 void CadWorkbenchShell::rebuildToolbarMoreMenu() {
     if (toolbar_more_menu_ == nullptr) return;
     toolbar_more_menu_->clear();
@@ -649,7 +723,7 @@ void CadWorkbenchShell::rebuildToolbarMoreMenu() {
                     QString::fromLatin1(group.name));
             }
             auto* action =
-                subgroup->addAction(original->text());
+                subgroup->addAction(toolbarActionLabel(original));
             action->setEnabled(original->isEnabled());
             action->setCheckable(original->isCheckable());
             action->setChecked(original->isChecked());
@@ -675,6 +749,16 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     QScopedValueRollback<bool> reentry_guard(
         refreshing_toolbar_, true);
     const auto groups = toolbarGroups(toolbar_sketch_context_);
+    // Undo only UI presentation compaction, including when the Part /
+    // Sketch mode changes. A draft that updates a label while compacted
+    // is never inferred from the Tree inspection selection.
+    for (auto it = toolbar_icon_compacted_.begin();
+         it != toolbar_icon_compacted_.end(); ++it) {
+        if (it.key() != nullptr && it.key()->text().isEmpty()) {
+            it.key()->setText(it.value());
+        }
+    }
+    toolbar_icon_compacted_.clear();
     const QString context_name = toolbar_sketch_context_
         ? QStringLiteral("Sketch") : QStringLiteral("Part");
 
@@ -707,7 +791,8 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
                 auto* original = findChild<QPushButton*>(
                     QString::fromLatin1(id));
                 if (original == nullptr) continue;
-                auto* action = menu->addAction(original->text());
+                auto* action = menu->addAction(
+                    toolbarActionLabel(original));
                 action->setEnabled(original->isEnabled());
                 action->setCheckable(original->isCheckable());
                 action->setChecked(original->isChecked());
@@ -864,6 +949,49 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         for (int i : {6, 5, 4, 2}) {
             try_named_group(groups[static_cast<std::size_t>(i)]);
         }
+    }
+    if (required <= direct_available) {
+        toolbar_more_->hide();
+        return;
+    }
+
+    // Tier 2: pinned groups retain their ORIGINAL buttons and keep
+    // checked/disabled/focus/shortcut semantics; only the presentation
+    // changes to a neutral CAD icon and an accessible tooltip/name.
+    // Labels are restored before each recalculation; no command proxy.
+    const auto compact_pinned = [&](const ToolbarGroupSpec& group) {
+        if (!group.pinned || required <= direct_available) return;
+        for (const char* name : group.tool_object_names) {
+            if (required <= direct_available) break;
+            auto* button = findChild<QPushButton*>(
+                QString::fromLatin1(name));
+            if (button == nullptr || button->isHidden() ||
+                button->text().isEmpty()) continue;
+            const QString label = button->text();
+            const int previous_width =
+                button->sizeHint().width() + gap;
+            if (button->icon().isNull()) {
+                button->setIcon(makeCadToolbarIcon(
+                    button->objectName(),
+                    button->palette().buttonText().color()));
+                button->setIconSize(QSize{20, 20});
+            }
+            button->setAccessibleName(label);
+            if (button->toolTip().isEmpty()) {
+                button->setToolTip(label);
+            }
+            toolbar_icon_compacted_.insert(button, label);
+            button->setText({});
+            required -= previous_width -
+                (button->sizeHint().width() + gap);
+        }
+    };
+    if (!toolbar_sketch_context_) {
+        compact_pinned(groups[2]); // Create
+        compact_pinned(groups[0]); // Sketch 2D
+    } else {
+        compact_pinned(groups[1]); // Create
+        compact_pinned(groups[3]); // References
     }
     if (required <= direct_available) {
         toolbar_more_->hide();
