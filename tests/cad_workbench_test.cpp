@@ -13,6 +13,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -1310,6 +1311,64 @@ int main(int argc, char* argv[]) {
         responsive_session->undoDepth();
     const bool responsive_dirty =
         responsive_session->needsSave();
+
+    // G3 focus and keyboard ownership: whole-group toolbar reflow is
+    // presentation-only. A focused Properties QLineEdit retains its
+    // local Ctrl+Z / Ctrl+Y history while Customize/Move/Reset execute.
+    // This does not substitute for the separate Workspace input-router
+    // native shortcut regression; it proves the Workbench shell boundary.
+    title->setFocus(Qt::OtherFocusReason);
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    const QString focus_original_text = title->text();
+    title->setCursorPosition(focus_original_text.size());
+    title->insert(QStringLiteral("X"));
+    CHECK(title->text() == focus_original_text +
+          QStringLiteral("X"));
+    CHECK(title->hasFocus());
+
+    CHECK(!customize_toolbar->isChecked());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    CHECK(customize_toolbar->isChecked());
+    group_left->trigger();
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    CHECK(group_layout->indexOf(extrude_for_order) <
+          group_layout->indexOf(datum_tool));
+    group_reset->trigger();
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(title->hasFocus());
+
+    QKeyEvent local_undo{
+        QEvent::KeyPress, Qt::Key_Z,
+        Qt::ControlModifier, QStringLiteral("z")};
+    QApplication::sendEvent(title, &local_undo);
+    QApplication::processEvents();
+    CHECK(title->text() == focus_original_text);
+    QKeyEvent local_redo{
+        QEvent::KeyPress, Qt::Key_Y,
+        Qt::ControlModifier, QStringLiteral("y")};
+    QApplication::sendEvent(title, &local_redo);
+    QApplication::processEvents();
+    CHECK(title->text() == focus_original_text +
+          QStringLiteral("X"));
+    QApplication::sendEvent(title, &local_undo);
+    QApplication::processEvents();
+    CHECK(title->text() == focus_original_text);
+    CHECK(responsive_session->document().revision() ==
+          responsive_revision);
+    CHECK(responsive_session->undoDepth() == responsive_undo);
+    CHECK(responsive_session->needsSave() == responsive_dirty);
+    std::cout << "UI01_G3_CUSTOMIZE_TEXT_FOCUS_SHORTCUT_ISOLATION_PASS"
+              << std::endl;
 
     // G3: the overflow menu must invoke the ORIGINAL connected
     // QPushButton, not a second command or an authoring proxy.
