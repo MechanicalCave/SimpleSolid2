@@ -473,6 +473,27 @@ int main(int argc, char* argv[]) {
         static_cast<double>(panel_heights[0] + panel_heights[1]);
     CHECK(std::abs(initial_properties_fraction - 0.4) < 0.12);
     std::cout << "UI01_G2_RIGHT_PANELS_NATIVE_LAYOUT_PASS" << std::endl;
+    // G2 second characterization: width alone is never permission to
+    // collapse Properties/Operations; insufficient *height* is.
+    auto* short_tabs = workbench.findChild<QTabWidget*>(
+        QStringLiteral("workbenchRightShortTabs"));
+    CHECK(short_tabs != nullptr);
+    CHECK(short_tabs->isHidden());
+    CHECK(!right_vertical_splitter->isHidden());
+    workbench.resize(1400, 440);
+    QApplication::processEvents();
+    CHECK(!short_tabs->isHidden());
+    CHECK(right_vertical_splitter->isHidden());
+    CHECK(short_tabs->count() == 2);
+    CHECK(short_tabs->tabText(0) == QStringLiteral("Properties"));
+    CHECK(short_tabs->tabText(1) == QStringLiteral("Operations"));
+    short_tabs->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(short_tabs->currentIndex() == 1);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(short_tabs->isHidden());
+    CHECK(!right_vertical_splitter->isHidden());
 
     const auto initial_side_widths = splitter->sizes();
     CHECK(initial_side_widths.size() == 3);
