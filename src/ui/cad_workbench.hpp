@@ -448,6 +448,9 @@ private:
         std::string,
         viewer::CameraState>
         document_view_states_;
+    // UI-01 G2 UI-only session state, keyed by DocumentId, never authored.
+    std::unordered_map<std::string, double>
+        document_right_panel_ratios_;
 
     bool sketch_support_pick_active_{};
     std::optional<sketch::SketchId>
