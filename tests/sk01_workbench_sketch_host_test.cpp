@@ -941,6 +941,12 @@ int main(int argc, char* argv[]) {
     CHECK(
         finish_button->text() ==
         QStringLiteral("Create Sketch"));
+    // UI-01 Owner-reported RED: isHidden() alone misses a button
+    // in a non-current QStackedWidget footer. After selecting a
+    // real support plane, Create Sketch and Cancel must BOTH
+    // actually be visible and clickable in the ACTIVE footer.
+    CHECK(finish_button->isVisible());
+    CHECK(cancel_button->isVisible());
     CHECK(!cancel_button->isHidden());
     CHECK(!sketch_button->isEnabled());
 
