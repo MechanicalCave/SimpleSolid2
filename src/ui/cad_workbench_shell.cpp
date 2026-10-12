@@ -3,6 +3,7 @@
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QEvent>
+#include <QFrame>
 #include <QGroupBox>
 #include <QFontMetrics>
 #include <QHBoxLayout>
@@ -22,6 +23,7 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QTabWidget>
+#include <QTimer>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -191,6 +193,7 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     editor_tools_layout_->addStretch(1);
     document_tools_scroll->setWidget(
         document_tools_host);
+    document_tools_host->installEventFilter(this);
     // The scroll host may be smaller than the fixed Document zone.
     // Center its one-row tools vertically, and recompute overflow only
     // once the QScrollArea viewport has a measured final size.
@@ -755,6 +758,18 @@ void CadWorkbenchShell::resizeEvent(QResizeEvent* event) {
 bool CadWorkbenchShell::eventFilter(
     QObject* watched,
     QEvent* event) {
+    // The original command widgets stay in the single QHBoxLayout.
+    // Redraw their shared lightweight group outline only AFTER Qt has
+    // laid out the reflowed widgets; visual frames are not layout items.
+    if (event != nullptr &&
+        contextual_tools_scroll_ != nullptr &&
+        watched == contextual_tools_scroll_->widget() &&
+        (event->type() == QEvent::Resize ||
+         event->type() == QEvent::LayoutRequest)) {
+        QTimer::singleShot(0, this, [this] {
+            updateToolbarGroupFrames();
+        });
+    }
     if (contextual_tools_scroll_ != nullptr &&
         watched == contextual_tools_scroll_->viewport() &&
         event != nullptr &&
@@ -1043,7 +1058,26 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     }
     QScopedValueRollback<bool> reentry_guard(
         refreshing_toolbar_, true);
+    // Refresh may return at any compaction tier; every tier must update
+    // the outline after the final inline/dropdown geometry has settled.
+    QTimer::singleShot(0, this, [this] {
+        updateToolbarGroupFrames();
+    });
     auto groups = toolbarGroups(toolbar_sketch_context_);
+    // Every native button follows the same baseline height, while
+    // larger font/DPI metrics can grow the minimum instead of clipping.
+    for (const auto& group : groups) {
+        for (const char* object_name : group.tool_object_names) {
+            auto* button = findChild<QPushButton*>(
+                QString::fromLatin1(object_name));
+            if (button == nullptr) continue;
+            const int height = std::max(
+                32, button->fontMetrics().height() + 12);
+            if (button->minimumHeight() != height) {
+                button->setMinimumHeight(height);
+            }
+        }
+    }
     const QString current_context =
         toolbar_sketch_context_
             ? QStringLiteral("Sketch") : QStringLiteral("Part");
@@ -1542,6 +1576,69 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         }
     }
     rebuildToolbarMoreMenu();
+}
+
+void CadWorkbenchShell::updateToolbarGroupFrames() {
+    if (contextual_tools_scroll_ == nullptr) return;
+    auto* host = contextual_tools_scroll_->widget();
+    if (host == nullptr) return;
+    for (auto* frame : toolbar_group_frames_) {
+        if (frame != nullptr) frame->hide();
+    }
+    const QString context = toolbar_sketch_context_
+        ? QStringLiteral("Sketch") : QStringLiteral("Part");
+    for (const auto& group : toolbarGroups(toolbar_sketch_context_)) {
+        const QString name = QString::fromLatin1(group.name);
+        if (toolbar_sketch_context_ &&
+            name == QStringLiteral("Select")) {
+            continue; // fixed base tool, intentionally has no group box
+        }
+        const QString key = context + QStringLiteral("_") + name;
+        auto* frame = toolbar_group_frames_.value(key, nullptr);
+        if (frame == nullptr) {
+            frame = new QFrame(host);
+            frame->setObjectName(
+                QStringLiteral("workbenchToolbarGroupFrame_") + key);
+            frame->setAttribute(Qt::WA_TransparentForMouseEvents);
+            frame->setFocusPolicy(Qt::NoFocus);
+            frame->setStyleSheet(QStringLiteral(
+                "QFrame { border: 1px solid palette(midlight);"
+                " background-color: palette(alternate-base);"
+                " border-radius: 4px; }"));
+            frame->hide();
+            toolbar_group_frames_.insert(key, frame);
+        }
+
+        QRect bounds;
+        bool any = false;
+        const auto collect = [&](QWidget* widget) {
+            if (widget == nullptr || widget->isHidden() ||
+                widget->width() <= 0 || widget->height() <= 0 ||
+                widget->parentWidget() != host) return;
+            const QRect rect{
+                widget->mapTo(host, QPoint{0, 0}), widget->size()};
+            bounds = any ? bounds.united(rect) : rect;
+            any = true;
+        };
+        if (*group.label_object_name != '\0') {
+            collect(findChild<QWidget*>(
+                QString::fromLatin1(group.label_object_name)));
+        }
+        collect(toolbar_pin_markers_.value(key, nullptr));
+        collect(toolbar_group_handles_.value(key, nullptr));
+        for (const char* object_name : group.tool_object_names) {
+            collect(findChild<QPushButton*>(
+                QString::fromLatin1(object_name)));
+        }
+        collect(toolbar_group_dropdowns_.value(key, nullptr));
+        if (!any) continue;
+        // Paint behind the existing widgets: neither the single-row
+        // layout's measured width nor native command identity changes.
+        frame->setGeometry(
+            bounds.adjusted(-3, -3, 3, 3).intersected(host->rect()));
+        frame->show();
+        frame->lower();
+    }
 }
 
 bool CadWorkbenchShell::panelContainsFocus(
