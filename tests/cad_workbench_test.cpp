@@ -706,6 +706,56 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == first_camera);
 
+    // G2 per-Document proportion is runtime-only and independent of the
+    // camera/geometry state already tested above. A user-adjusted split
+    // belongs to the active Document for this application session.
+    right_vertical_splitter->setSizes({160, 500});
+    QApplication::processEvents();
+    const auto first_ui_sizes = right_vertical_splitter->sizes();
+    CHECK(first_ui_sizes.size() == 2);
+    CHECK(first_ui_sizes[0] > 0 && first_ui_sizes[1] > 0);
+    const double first_ui_fraction =
+        static_cast<double>(first_ui_sizes[0]) /
+        static_cast<double>(
+            first_ui_sizes[0] + first_ui_sizes[1]);
+    CHECK(first_ui_fraction < 0.35);
+    const auto first_ui_revision =
+        opened.session->documentSession(first_id)
+            ->document().revision();
+    const auto first_ui_undo =
+        opened.session->documentSession(first_id)->undoDepth();
+    const auto first_ui_dirty =
+        opened.session->documentSession(first_id)->needsSave();
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id), workspace));
+    QApplication::processEvents();
+    const auto second_ui_sizes = right_vertical_splitter->sizes();
+    CHECK(second_ui_sizes.size() == 2);
+    CHECK(second_ui_sizes[0] > 0 && second_ui_sizes[1] > 0);
+    const double second_ui_fraction =
+        static_cast<double>(second_ui_sizes[0]) /
+        static_cast<double>(
+            second_ui_sizes[0] + second_ui_sizes[1]);
+    CHECK(std::abs(second_ui_fraction - 0.4) < 0.1);
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id), workspace));
+    QApplication::processEvents();
+    const auto restored_ui_sizes = right_vertical_splitter->sizes();
+    CHECK(restored_ui_sizes.size() == 2);
+    CHECK(restored_ui_sizes[0] > 0 && restored_ui_sizes[1] > 0);
+    const double restored_ui_fraction =
+        static_cast<double>(restored_ui_sizes[0]) /
+        static_cast<double>(
+            restored_ui_sizes[0] + restored_ui_sizes[1]);
+    CHECK(std::abs(restored_ui_fraction - first_ui_fraction) < 0.1);
+    CHECK(opened.session->documentSession(first_id)
+              ->document().revision() == first_ui_revision);
+    CHECK(opened.session->documentSession(first_id)->undoDepth() ==
+          first_ui_undo);
+    CHECK(opened.session->documentSession(first_id)->needsSave() ==
+          first_ui_dirty);
+    std::cout << "UI01_G2_PER_DOCUMENT_RATIO_NATIVE_PASS" << std::endl;
+
     auto* first_session_for_view =
         opened.session->documentSession(first_id);
     auto* second_session_for_view =
