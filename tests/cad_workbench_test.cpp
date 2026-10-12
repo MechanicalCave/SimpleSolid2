@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "cad_workbench_shell.hpp"
 
 #include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
@@ -462,6 +463,52 @@ int main(int argc, char* argv[]) {
     CHECK(!persisted_toolbar_prefs.value(
         QStringLiteral("ui/workbench/toolbar/v1/Part/pins/Create"),
         true).toBool());
+
+    // A fresh shell must restore the Part override while Sketch has a
+    // genuinely independent user-scope preference. All INI storage is
+    // redirected to the test's private TempDirectory above.
+    {
+        ui::CadWorkbenchShell new_sketch_shell;
+        new_sketch_shell.setToolbarContext(true);
+        auto* customize_sketch =
+            new_sketch_shell.findChild<QToolButton*>(
+                QStringLiteral("workbenchToolbarCustomizeButton"));
+        auto* pin_references =
+            new_sketch_shell.findChild<QToolButton*>(
+                QStringLiteral(
+                    "workbenchToolbarPin_Sketch_References"));
+        CHECK(customize_sketch && pin_references);
+        CHECK(pin_references->property("pinned").toBool());
+        customize_sketch->click();
+        pin_references->click();
+        QApplication::processEvents();
+        CHECK(!pin_references->property("pinned").toBool());
+        persisted_toolbar_prefs.sync();
+        CHECK(!persisted_toolbar_prefs.value(
+            QStringLiteral(
+                "ui/workbench/toolbar/v1/Sketch/pins/References"),
+            true).toBool());
+
+        ui::CadWorkbenchShell fresh_shell;
+        fresh_shell.setToolbarContext(false);
+        auto* cold_part_pin =
+            fresh_shell.findChild<QToolButton*>(
+                QStringLiteral("workbenchToolbarPin_Part_Create"));
+        CHECK(cold_part_pin != nullptr);
+        CHECK(!cold_part_pin->property("pinned").toBool());
+        fresh_shell.setToolbarContext(true);
+        auto* cold_sketch_pin =
+            fresh_shell.findChild<QToolButton*>(
+                QStringLiteral(
+                    "workbenchToolbarPin_Sketch_References"));
+        CHECK(cold_sketch_pin != nullptr);
+        CHECK(!cold_sketch_pin->property("pinned").toBool());
+
+        // Restore defaults for the remainder of the CAD test suite.
+        pin_references->click();
+        QApplication::processEvents();
+        CHECK(pin_references->property("pinned").toBool());
+    }
     pin_create->click();
     QApplication::processEvents();
     CHECK(pin_create->property("pinned").toBool());
