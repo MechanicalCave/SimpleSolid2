@@ -500,6 +500,12 @@ int main(int argc, char* argv[]) {
     auto* project_source_boundary = workbench.findChild<QPushButton*>(
         QStringLiteral("projectEdgeSourceBoundaryButton"));
     CHECK(project_source_face && project_source_boundary);
+    auto* project_selection_label = workbench.findChild<QLabel*>(
+        QStringLiteral("projectEdgeSelectionLabel"));
+    CHECK(project_selection_label != nullptr);
+    // Full material-Edge/Face counts must wrap within narrow
+    // Operations instead of forcing a horizontal content minimum.
+    CHECK(project_selection_label->wordWrap());
     CHECK(project_source_face->text() ==
           QStringLiteral("Planar Face"));
     CHECK(project_source_boundary->text() ==
