@@ -192,7 +192,7 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
         QStringLiteral("workbenchRightVerticalSplitter"));
     right_vertical_splitter_->setChildrenCollapsible(false);
 
-    auto* properties_group_ =
+    properties_group_ =
         new QGroupBox(
             QStringLiteral("Properties"), right_vertical_splitter_);
     properties_group_->setMinimumHeight(0);
@@ -212,7 +212,7 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     properties_host_layout_->addWidget(properties_scroll_, 1);
     right_vertical_splitter_->addWidget(properties_group_);
 
-    auto* operations_group_ =
+    operations_group_ =
         new QGroupBox(
             QStringLiteral("Operations"), right_vertical_splitter_);
     operations_group_->setMinimumHeight(0);
