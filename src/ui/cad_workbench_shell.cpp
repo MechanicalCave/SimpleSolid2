@@ -16,6 +16,7 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScopedValueRollback>
+#include <QSettings>
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStackedWidget>
@@ -463,6 +464,26 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
 
     initial_font_line_height_ =
         std::max(1, fontMetrics().lineSpacing());
+    // Deliberately non-CAD, OS user-scope UI preferences. Part and
+    // Sketch have distinct keys; no Part Document/Undo/dirty mutation.
+    QSettings toolbar_settings{
+        QStringLiteral("MechanicalCave"),
+        QStringLiteral("SimpleSolid2")};
+    for (bool sketch : {false, true}) {
+        const QString context = sketch
+            ? QStringLiteral("Sketch") : QStringLiteral("Part");
+        for (const auto& group : toolbarGroups(sketch)) {
+            const QString name = QString::fromLatin1(group.name);
+            const QString storage_key =
+                QStringLiteral("ui/workbench/toolbar/v1/") +
+                context + QStringLiteral("/pins/") + name;
+            if (toolbar_settings.contains(storage_key)) {
+                toolbar_pin_overrides_.insert(
+                    context + QStringLiteral("_") + name,
+                    toolbar_settings.value(storage_key).toBool());
+            }
+        }
+    }
     updateResponsiveLayout(true);
 }
 
@@ -821,15 +842,25 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
                 QStringLiteral("Pin or unpin the complete ") +
                 QString::fromLatin1(group.name) +
                 QStringLiteral(" group"));
-            const auto set_group_pin = [this, key] {
-                if (!toolbar_customize_active_) return;
-                const bool currently_pinned =
-                    toolbar_pin_markers_.value(key)
-                        ->property("pinned").toBool();
-                toolbar_pin_overrides_.insert(
-                    key, !currently_pinned);
-                refreshToolbarOverflow();
-            };
+            const QString preference_key =
+                QStringLiteral("ui/workbench/toolbar/v1/") +
+                current_context + QStringLiteral("/pins/") +
+                QString::fromLatin1(group.name);
+            const auto set_group_pin =
+                [this, key, preference_key] {
+                    if (!toolbar_customize_active_) return;
+                    const bool currently_pinned =
+                        toolbar_pin_markers_.value(key)
+                            ->property("pinned").toBool();
+                    const bool next_pin = !currently_pinned;
+                    toolbar_pin_overrides_.insert(key, next_pin);
+                    QSettings settings{
+                        QStringLiteral("MechanicalCave"),
+                        QStringLiteral("SimpleSolid2")};
+                    settings.setValue(preference_key, next_pin);
+                    settings.sync();
+                    refreshToolbarOverflow();
+                };
             connect(pin, &QToolButton::clicked,
                     this, set_group_pin);
             QWidget* group_first = nullptr;
