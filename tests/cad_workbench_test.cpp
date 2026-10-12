@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSettings>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QStackedWidget>
@@ -258,6 +259,12 @@ int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
 
     TempDirectory temp;
+    // App preferences belong to an isolated native-test directory,
+    // never to the Windows CI runner's real user profile.
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(
+        QSettings::IniFormat, QSettings::UserScope,
+        QString::fromStdString((temp.path / "prefs").string()));
     const auto workspace = temp.path / "Project";
     std::filesystem::create_directories(workspace);
 
@@ -448,9 +455,20 @@ int main(int argc, char* argv[]) {
     pin_create->click();
     QApplication::processEvents();
     CHECK(!pin_create->property("pinned").toBool());
+    QSettings persisted_toolbar_prefs{
+        QStringLiteral("MechanicalCave"),
+        QStringLiteral("SimpleSolid2")};
+    persisted_toolbar_prefs.sync();
+    CHECK(!persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/pins/Create"),
+        true).toBool());
     pin_create->click();
     QApplication::processEvents();
     CHECK(pin_create->property("pinned").toBool());
+    persisted_toolbar_prefs.sync();
+    CHECK(persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/pins/Create"),
+        false).toBool());
     customize_toolbar->click();
     QApplication::processEvents();
     CHECK(!customize_toolbar->isChecked());
