@@ -62,6 +62,7 @@ private:
     void updateRightPanelHeightMode();
     void refreshToolbarOverflow();
     void rebuildToolbarMoreMenu();
+    void setToolbarCustomizeActive(bool active);
     [[nodiscard]] QString toolbarActionLabel(
         const QPushButton* button) const;
     void applyRightPanelRatio();
@@ -101,6 +102,10 @@ private:
     bool operations_active_{};
     QScrollArea* contextual_tools_scroll_{};
     QToolButton* toolbar_more_{};
+    QToolButton* toolbar_customize_{};
+    QHash<QString, QToolButton*> toolbar_pin_markers_;
+    QHash<QString, bool> toolbar_pin_overrides_;
+    bool toolbar_customize_active_{};
     QMenu* toolbar_more_menu_{};
     QHash<QString, QToolButton*> toolbar_group_dropdowns_;
     QHash<QPushButton*, QString> toolbar_icon_compacted_;
