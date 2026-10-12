@@ -501,6 +501,11 @@ int main(int argc, char* argv[]) {
     CHECK(document_top_row->isAncestorOf(save));
     workbench.resize(1400, 800);
     QApplication::processEvents();
+    // More is last-resort only: normal Part width retains all labelled
+    // native creation buttons and does not waste a permanent overflow slot.
+    CHECK(toolbar_more->isHidden());
+    CHECK(!sketch_tool->isHidden());
+    CHECK(!real_extrude_button->isHidden());
     std::cout << "UI01_G3_NARROW_MORE_GROUP_REACHABILITY_PASS"
               << std::endl;
 
