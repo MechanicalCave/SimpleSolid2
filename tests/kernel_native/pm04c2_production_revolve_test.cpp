@@ -1117,5 +1117,9 @@ int main() {
 
     std::cout
         << "PM-04C2 production OCCT Revolve tests passed\n";
-    return EXIT_SUCCESS;
+    // TEMPORARY G0 measurement: force CTest to publish all preceding
+    // successful native fixture counters. This is an INTENTIONAL RED,
+    // to be removed and replaced with value-backed assertions.
+    std::cerr << "G0_MEASURE_ONLY_PM04C2: expected diagnostic-only RED" << '\n';
+    return EXIT_FAILURE;
 }
