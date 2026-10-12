@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QDebug>
 #include <QLabel>
+#include <QMenu>
 #include <QPushButton>
 #include <QToolButton>
 #include <QScrollArea>
@@ -473,6 +474,22 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
     CHECK(contextual_scroll->horizontalScrollBarPolicy() ==
           Qt::ScrollBarAlwaysOff);
     CHECK(more_tools->menu() != nullptr);
+    auto* native_modify_dropdown =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral(
+                "workbenchToolbarGroupDropdown_Part_Modify"));
+    CHECK(native_modify_dropdown != nullptr);
+    CHECK(native_modify_dropdown->menu() != nullptr);
+    bool native_fillet_menu = false;
+    bool native_chamfer_menu = false;
+    for (const auto* action : native_modify_dropdown->menu()->actions()) {
+        if (action == nullptr) continue;
+        native_fillet_menu |=
+            action->text() == QStringLiteral("Fillet");
+        native_chamfer_menu |=
+            action->text() == QStringLiteral("Chamfer");
+    }
+    CHECK(native_fillet_menu && native_chamfer_menu);
     CHECK(sketch_finish->isHidden());
     CHECK(!active_operations->isHidden());
     CHECK(!session.document().sketches().empty());
