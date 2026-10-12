@@ -81,9 +81,9 @@ E01–E08 are accepted future product expectations, **not** already passing test
 
 ## 4. Owner-activated G0 execution scope and remaining bounded evidence
 
-**Read-only baseline characterization first:** choose real native OCCT fixture generation in the existing C++ testing architecture; reuse existing tests/fixtures where feasible (`tests/pm05b2_strict_edge_resolver_test.cpp`, `tests/pm05c1_edge_semantic_kernel_test.cpp`, `tests/pm02p_e_core_lifecycle_test.cpp`, `tests/pm03b_datum_evaluation_test.cpp`) but do not claim those tests already prove the new VERTEX matrix. Fixture additions/target registration need an explicitly accepted allowed-path and test matrix. Do not edit existing tests outside an active bounded contract.
+**Executed bounded characterization:** real OCCT fixtures V01–V12 are in the two contract-allowed native test sources and documented by exact SHA and native CI links above. The separate existing tests `tests/pm05b2_strict_edge_resolver_test.cpp`, `tests/pm05c1_edge_semantic_kernel_test.cpp`, `tests/pm02p_e_core_lifecycle_test.cpp`, `tests/pm03b_datum_evaluation_test.cpp` are historical regression controls only; their presence is not proof of a newly persisted construction-point source. No additional fixture paths or CMake are authorized.
 
-**Evidence checkpoint before changes:** publish per-case native results V01–V12 with actual stage, accounting status and native fixture conditions. If common user-visible Vertices fail durable referenceability, stop and ask Owner to approve an explicitly bounded semantic identity extension and its schema/API/lifecycle consequences. Do not widen `FeaturePointAddress` or store XYZ opportunistically.
+**Evidence checkpoint after native measurement:** the actual Part-state histograms already show unsupported Fillet/Chamfer corners (3/13 each) and full-circle Vertices (2/2), plus real analytic ambiguity in a cut cylinder (4/6 native Vertices). The next step is Owner review of a separate bounded semantic Vertex discrimination D2 proposal after required FAST/FULL. No `FeaturePointAddress` widening, persistent XYZ or automatic auth of ambiguous/current unsupported geometry under G0.
 
 **Only then design exact query contract:** Part-owned typed point intent (true semantic Vertex vs strict Edge-derived `MID`/`CENTER`); provider-neutral exact 3D Edge queries; stage/revision/token guards; schema upgrade and cold rebuild. An implementation contract must enumerate exact file paths, tests and acceptance gates.
 
@@ -93,4 +93,4 @@ All VERTEX/MID/CENTER Body snap feedback, pick eligibility/priorities, marker ap
 
 ## Documentation impact
 
-Draft test matrix only, no as-built changes or execution claims. On approved implementation: Internal docs required; PL/EN product docs and Browser update required for released UX.
+Activated evidence-only test matrix with measured Windows native execution and an independently maintained detailed G0 evidence report; **not** an as-built production behavior change. On separately Owner-approved later product implementation: Internal docs required, and PL/EN product docs and Browser update for released UX.
