@@ -3,13 +3,13 @@
 **Status:** DRAFT — design decisions recorded; **NOT accepted as an executable Work Contract; NOT active**  
 **Recorded:** 2026-10-12 — Owner/assistant RG-02 design discussion  
 **Decision boundary:** Owner has accepted the product behaviors summarized below and the proposed A→D planning sequence. This document records them for later contract finalization; it does **not** authorize production implementation, a roadmap amendment, or changes to `work/ACTIVE.yaml`.  
-**Existing authority:** `governance/CONSTITUTION.md`, `governance/FOUNDATION.md`, accepted ADRs, `work/ACTIVE.yaml`, `work/PART_MODELING_V1_ROADMAP.md` v1.31, PM-03 Datum and PM-04 Axis contracts.
+**Existing authority:** `governance/CONSTITUTION.md`, `governance/FOUNDATION.md`, accepted ADRs, `work/ACTIVE.yaml`, `work/PART_MODELING_V1_ROADMAP.md` v1.32 (Owner D2 sequencing approved and roadmap merged via PR #330), PM-03 Datum and PM-04 Axis contracts.
 
 ## 1. Purpose and limits
 
 Extend the existing Part-owned Datum Plane and Axis facilities before future solid Mirror/Pattern, using the existing single-Body Part architecture. Preserve semantic, stage-aware, fail-closed references; do not create an independent construction-geometry identity system.
 
-This is a **design record / prospective Work Contract only**. The executable contract still requires a technical baseline/evidence audit, exact bounded file and test scope, a roadmap sequencing decision where needed, separate Owner acceptance, and formal activation through the repository's governance process. The existing completed UI-01 contract pointer must not be treated as RG-02 authority.
+This is a **design record / prospective RG-02 production Work Contract only**. The separate **RG-02A/G0 evidence-only Work Contract scope** was Owner-accepted on 2026-10-12 and its placement in Part-v1 roadmap v1.32 was accepted and merged via PR #330, but the G0 contract is **not yet merged or activated**. Any broader RG-02 production implementation still requires its own technical evidence, bounded contract, separate Owner approval and formal activation. The existing completed UI-01 `ACTIVE.yaml` pointer must not be treated as RG-02 authority. No native G0 tests have been run under RG-02A.
 
 ## 2. Owner-accepted product behavior (design baseline)
 
