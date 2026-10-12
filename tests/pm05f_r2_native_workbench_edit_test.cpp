@@ -1887,8 +1887,8 @@ int main(int argc, char* argv[]) {
             CHECK(!session.document().sketches().empty());
             doubleClickTreeEntry(
                 Qt::UserRole + 42,
-                QString::fromStdString(
-                    session.document().sketches().front().id.value()));
+                QString::fromStdString(std::string{
+                    session.document().sketches().front().id.value()}));
             std::cerr << "UI01_G0_NATIVE_SKETCH_ENTRY"
                       << " sketch_finish_visible="
                       << (!finish_sketch->isHidden())
