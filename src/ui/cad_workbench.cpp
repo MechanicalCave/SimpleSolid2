@@ -11277,8 +11277,9 @@ void CadWorkbench::requestEditSketch(
     // Feature draft, its active selection and Undo/dirty state remain
     // untouched. Tree, properties-action and profile entry share this gate.
     if (hasActiveSolidFeatureContext()) {
-        setStatusText(QStringLiteral(
-            "Finish or cancel the active solid Feature before editing a Sketch or Profile."));
+        // UI-01 G1 diagnostic ONLY: isolate status-label geometry as a
+        // candidate cause of transient Viewer/Edge selection invalidation.
+        // The user-visible rejection text MUST be restored before GREEN.
         return;
     }
 
@@ -11325,8 +11326,9 @@ void CadWorkbench::requestEditProfile(
     // Do not bypass the single Sketch-entry authority when a Sketch
     // context happens to exist. Keep the solid Feature draft intact.
     if (hasActiveSolidFeatureContext()) {
-        setStatusText(QStringLiteral(
-            "Finish or cancel the active solid Feature before editing a Sketch or Profile."));
+        // UI-01 G1 diagnostic ONLY: isolate status-label geometry as a
+        // candidate cause of transient Viewer/Edge selection invalidation.
+        // The user-visible rejection text MUST be restored before GREEN.
         return;
     }
 
