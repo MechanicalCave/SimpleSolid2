@@ -808,6 +808,57 @@ int main(int argc, char* argv[]) {
     const bool responsive_dirty =
         responsive_session->needsSave();
 
+    // G3: the overflow menu must invoke the ORIGINAL connected
+    // QPushButton, not a second command or an authoring proxy.
+    // A sketch-support draft is cancelable and must leave the Part clean.
+    workbench.resize(560, 800);
+    QApplication::processEvents();
+    CHECK(!toolbar_more->isHidden());
+    CHECK(sketch_tool->isEnabled());
+    QMenu* sketch_submenu = nullptr;
+    for (auto* action : toolbar_more->menu()->actions()) {
+        if (action != nullptr &&
+            action->text() == QStringLiteral("Sketch")) {
+            sketch_submenu = action->menu();
+            break;
+        }
+    }
+    CHECK(sketch_submenu != nullptr);
+    QAction* sketch_overflow_action = nullptr;
+    for (auto* action : sketch_submenu->actions()) {
+        if (action != nullptr &&
+            action->text() == sketch_tool->text()) {
+            sketch_overflow_action = action;
+            break;
+        }
+    }
+    CHECK(sketch_overflow_action != nullptr);
+    CHECK(sketch_overflow_action->isEnabled());
+    int real_sketch_button_invocations = 0;
+    const auto sketch_click_connection = QObject::connect(
+        sketch_tool, &QPushButton::clicked, &workbench,
+        [&real_sketch_button_invocations] {
+            ++real_sketch_button_invocations;
+        });
+    sketch_overflow_action->trigger();
+    QApplication::processEvents();
+    CHECK(real_sketch_button_invocations == 1);
+    QObject::disconnect(sketch_click_connection);
+    auto* overflow_sketch_cancel =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("cancelSketchButton"));
+    CHECK(overflow_sketch_cancel != nullptr);
+    overflow_sketch_cancel->click();
+    QApplication::processEvents();
+    CHECK(responsive_session->document().revision() ==
+          responsive_revision);
+    CHECK(responsive_session->undoDepth() == responsive_undo);
+    CHECK(responsive_session->needsSave() == responsive_dirty);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    std::cout << "UI01_G3_OVERFLOW_ORIGINAL_COMMAND_PASS"
+              << std::endl;
+
     // G2: a real active operation in a short-height window must bring
     // Operations forward in one step. The existing Cancel Sketch support
     // button remains in the fixed footer; cancelling is non-authoring.
