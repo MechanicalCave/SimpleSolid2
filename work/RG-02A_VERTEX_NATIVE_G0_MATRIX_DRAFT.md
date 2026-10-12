@@ -1,11 +1,11 @@
 # RG-02A — VERTEX native G0 evidence matrix (DRAFT)
 
-**Status:** DRAFT — evidence plan only; no native test executions claimed  
+**Status:** OWNER-ACCEPTED AND ACTIVATED G0 EVIDENCE PLAN — PARTIALLY EXECUTED; source-native tests have run; final evidence matrix / FULL / Owner D2 synthesis are NOT CLOSED  
 **Date:** 2026-10-12  
 **Audited source baseline:** `main` `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c`; roadmap v1.32 subsequently merged to `main` as `108420705aaee9182ca649401e73f1ca23309de2` (revalidate at G0 activation).  
 **Design authority:** `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md`  
 **Audit:** `work/RG-02A_REFERENCE_FOUNDATION_AUDIT_DRAFT.md`  
-**Authorization:** bounded RG-02A/G0 evidence-only Work Contract scope was Owner-accepted 2026-10-12, and roadmap v1.32 sequencing was separately approved and merged in PR #330. The contract remains **unmerged and unactivated**: no G0 test mutation may start before its governance merge and an independent `ACTIVE.yaml` activation PR. No RG-02 UI changes before separate Owner UX consultation and explicit approval.
+**Authorization:** Owner accepted bounded RG-02A/G0 evidence-only Work Contract scope on 2026-10-12, roadmap v1.32 was merged through PR #330, the contract was merged through PR #328, and the dedicated activation [PR #331](https://github.com/MechanicalCave/SimpleSolid2/pull/331) was Owner-approved and merged to `main` at `351840b95b58bdbe7b17085f67b3ddd2cc2cf8c7`. The sole active authority is the bounded test/evidence contract, **not** broader RG-02 production/UI work. No RG-02 UI changes before separate Owner UX consultation and explicit approval.
 
 ## 1. Hard evidence found in current implementation
 
@@ -39,6 +39,31 @@ For each case, record ALL of: Feature sequence, selected source Body stage, curr
 
 **Important:** G0 is a *characterization* gate, not a directive to make all cases GREEN by modifying identity logic. Observed native outcomes determine the next D2 architecture choice. Mark status `UNRUN` until native execution; do not assert current runtime failures without evidence.
 
+## 2A. Observed native G0 run status — 2026-10-12 (NOT FINAL)
+
+The initial V01–V12 table above remains a *test design*; results and precise per-case limits live in [`work/RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md`](RG-02A_G0_NATIVE_VERTEX_EVIDENCE.md) on [Draft PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332). A **controlled, intentional diagnostic RED** in [run #38309695097](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38309695097) captured hidden real OCCT Vertex histograms; all temporary fail returns were removed and **exact numeric assertions GREEN** in [run #38310021876](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38310021876), source SHA `98107ed3bada2c121ea2055bf8d090830dbf48af`, FOCUSED 2/2 PASS and `windows-msvc` PASS. The default passing CTest transcript alone does not expose those counters.
+
+| Case | Verified status | Observation / missing work |
+| --- | --- | --- |
+| V01 | PASS, bounded native prism | 8 of 8 Vertex Point addresses uniquely Resolved through three semantic Surfaces |
+| V02 | PASS, bounded edit | All 8 addresses survive Extrude height 20 → 35; 4 Z moves +15, 4 stationary; no coordinate matching |
+| V03 | PASS Part histogram, provider detail open | Real interior Cut 16 native = 16 Resolved; exactly 8 inherited + 8 newly authored Point meanings; separate raw Surface incidence outstanding |
+| V04 | PASS numeric provider+Part histograms | 90° provider 8 all 3-Surface vs Part 6 Resolved; 360° provider 4 all 2-Surface vs Part 2 Unsupported; seam/pick UX not asserted |
+| V05 | PASS Part histogram, raw adjacency open | Fillet 13 current = 10 Resolved + 3 Unsupported; exact raw/semantic adjacency of unsupported corners not measured |
+| V06 | PASS Part histogram, raw adjacency open | Chamfer 13 current = 10 Resolved + 3 Unsupported; exact raw/semantic adjacency of unsupported corners not measured |
+| V07 | PASS, bounded removed corner | At least one old semantic Point becomes Missing with zero current native candidates |
+| V08 | PASS genuine counted ambiguity | Half-cylinder Cut 6 = 4 Ambiguous + 2 Unsupported; exactly 2 three-Surface Point groups have 2+ native realizations each |
+| V09 | PASS, bounded stage identity | Pre-Chamfer stage retains all 8 original semantic Point addresses; later-stage identity is distinct |
+| V10 | PASS numeric native/policy, not UI | Cylinder Extrude 2 native Unsupported, zero current Point candidates; ordinary Viewport policy eligibility proven from source logic, actual hit interaction untested |
+| V11 | PARTIAL, semantic cold in-memory rebuild PASS | Independent OCCT kernel rebuild reconstructs all 8 semantic addresses; stale UI selection generation and future RG-02 file persistence are NOT proved |
+| V12 | PASS, bounded provenance replacement | All 8 same-XYZ regenerated Vertices have different semantic producer; old addresses not reused |
+
+**Exact Windows focused evidence (earlier cases):** V01 [#38304772610](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38304772610), V03 [#38306302187](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306302187), V04 [#38306630003](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306630003), V02/V09 [#38307244650](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307244650), V07 [#38307452459](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307452459), V12 [#38307830593](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307830593), V10 [#38308507132](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308507132), V11 [#38308647893](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308647893), V08 [#38308817803](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38308817803). The measured histograms derive from [diagnostic RED #38309695097](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38309695097) and numeric-assertion [GREEN #38310021876](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38310021876), and are recorded per fixture in the linked native report. Each test result applies only to its verified source SHA. **No exact-head FULL, Owner G0 acceptance, D2 schema approval or UX approval** is claimed.
+
+### Native accounting note
+
+The observed status counts are **current Part-stage native Vertex records**, distinct from historical lineage Point entries. In a full-height corner Cut, **12 current Vertices are Resolved**, yet **2 of 8 inherited semantic Point addresses are Missing** and only **6** survive: old missing references are not themselves current native Vertex records. On a half-cylinder Cut, **2 ambiguous three-Surface semantic Point groups produce 4 ambiguous native Vertices**. Provider raw Revolve Surface adjacency uses a different source inventory (partial 8×3, full 4×2), which is not interchangeable with Part-stage point counts (partial 6 Resolved, full 2 Unsupported).
+
 ## 3. Separate edge-derived point matrix after VERTEX boundary is known
 
 | Case | Source | Required future behavior |
@@ -54,11 +79,11 @@ For each case, record ALL of: Feature sequence, selected source Body stage, curr
 
 E01–E08 are accepted future product expectations, **not** already passing tests or permission to implement.
 
-## 4. Proposed minimal G0 execution scope — pending contract activation
+## 4. Owner-activated G0 execution scope and remaining bounded evidence
 
-**Read-only baseline characterization first:** choose real native OCCT fixture generation in the existing C++ testing architecture; reuse existing tests/fixtures where feasible (`tests/pm05b2_strict_edge_resolver_test.cpp`, `tests/pm05c1_edge_semantic_kernel_test.cpp`, `tests/pm02p_e_core_lifecycle_test.cpp`, `tests/pm03b_datum_evaluation_test.cpp`) but do not claim those tests already prove the new VERTEX matrix. Fixture additions/target registration need an explicitly accepted allowed-path and test matrix. Do not edit existing tests outside an active bounded contract.
+**Executed bounded characterization:** real OCCT fixtures V01–V12 are in the two contract-allowed native test sources and documented by exact SHA and native CI links above. The separate existing tests `tests/pm05b2_strict_edge_resolver_test.cpp`, `tests/pm05c1_edge_semantic_kernel_test.cpp`, `tests/pm02p_e_core_lifecycle_test.cpp`, `tests/pm03b_datum_evaluation_test.cpp` are historical regression controls only; their presence is not proof of a newly persisted construction-point source. No additional fixture paths or CMake are authorized.
 
-**Evidence checkpoint before changes:** publish per-case native results V01–V12 with actual stage, accounting status and native fixture conditions. If common user-visible Vertices fail durable referenceability, stop and ask Owner to approve an explicitly bounded semantic identity extension and its schema/API/lifecycle consequences. Do not widen `FeaturePointAddress` or store XYZ opportunistically.
+**Evidence checkpoint after native measurement:** the actual Part-state histograms already show unsupported Fillet/Chamfer corners (3/13 each) and full-circle Vertices (2/2), plus real analytic ambiguity in a cut cylinder (4/6 native Vertices). The next step is Owner review of a separate bounded semantic Vertex discrimination D2 proposal after required FAST/FULL. No `FeaturePointAddress` widening, persistent XYZ or automatic auth of ambiguous/current unsupported geometry under G0.
 
 **Only then design exact query contract:** Part-owned typed point intent (true semantic Vertex vs strict Edge-derived `MID`/`CENTER`); provider-neutral exact 3D Edge queries; stage/revision/token guards; schema upgrade and cold rebuild. An implementation contract must enumerate exact file paths, tests and acceptance gates.
 
@@ -68,4 +93,4 @@ All VERTEX/MID/CENTER Body snap feedback, pick eligibility/priorities, marker ap
 
 ## Documentation impact
 
-Draft test matrix only, no as-built changes or execution claims. On approved implementation: Internal docs required; PL/EN product docs and Browser update required for released UX.
+Activated evidence-only test matrix with measured Windows native execution and an independently maintained detailed G0 evidence report; **not** an as-built production behavior change. On separately Owner-approved later product implementation: Internal docs required, and PL/EN product docs and Browser update for released UX.

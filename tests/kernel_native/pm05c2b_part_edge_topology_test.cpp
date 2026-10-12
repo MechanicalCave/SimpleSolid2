@@ -4,6 +4,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
@@ -98,6 +99,137 @@ part::PartDocument makeBasePart() {
             session.document().revision());
     CHECK(restored.ok());
     return std::move(*restored.document);
+}
+
+// G0/V03: a real Part-owned Add followed by a native Cut. Each Profile has
+// its own Sketch; never infer new topological identity from coordinates.
+part::PartDocument withInteriorCut(
+    const part::PartDocument& base,
+    sketch::Point2 first_corner = {10.0, 5.0},
+    sketch::Point2 opposite_corner = {30.0, 25.0},
+    double cut_depth = 10.0) {
+    auto restored =
+        part::PartDocument::restore(
+            base.documentId(),
+            base.state(),
+            base.revision());
+    CHECK(restored.ok());
+    application::DocumentSession session{
+        {},
+        std::move(*restored.document)};
+
+    const auto sketch_created =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
+
+    const auto cut_rectangle =
+        session.execute(
+            application::AddSketchRectangleCommand{
+                *sketch_created.sketch_id,
+                session.document().revision(),
+                first_corner,
+                opposite_corner,
+                sketch::EntityRole::regular,
+                false});
+    CHECK(cut_rectangle.ok());
+
+    const auto* cut_sketch =
+        session.document().findSketch(
+            *sketch_created.sketch_id);
+    CHECK(cut_sketch != nullptr);
+    const auto cut_regions =
+        sketch::analyzeRegions(cut_sketch->model);
+    CHECK(cut_regions.complete());
+    CHECK(cut_regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            cut_regions.regions.front());
+    CHECK(intent.has_value());
+    const auto cut_profile =
+        session.execute(
+            application::CreateProfileCommand{
+                *sketch_created.sketch_id,
+                session.document().revision(),
+                *intent});
+    CHECK(cut_profile.ok() && cut_profile.profile_id);
+
+    auto state = session.document().state();
+    const auto cut_id =
+        state.body.next_feature_id.allocate();
+    CHECK(cut_id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *cut_id,
+            "InteriorCut",
+            false,
+            part::ExtrudeFeature{
+                *cut_profile.profile_id,
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{cut_depth},
+                    false}}});
+    auto cut_document =
+        part::PartDocument::restore(
+            session.document().documentId(),
+            std::move(state),
+            session.document().revision());
+    CHECK(cut_document.ok());
+    return std::move(*cut_document.document);
+}
+
+// G0/V02: edit only the upstream Extrude extent in the same authored
+// Part document, retaining Feature/Sketch/Profile semantic identity.
+part::PartDocument withEditedBaseHeight(
+    const part::PartDocument& base,
+    double new_height) {
+    auto state = base.state();
+    CHECK(state.body.features.size() == 1U);
+    auto* extrude = std::get_if<part::ExtrudeFeature>(
+        &state.body.features.front().definition);
+    CHECK(extrude != nullptr);
+    const auto* current =
+        std::get_if<part::OneSidedExtrudeExtent>(
+            &extrude->extent);
+    CHECK(current != nullptr);
+    extrude->extent =
+        part::OneSidedExtrudeExtent{
+            core::LengthValue{new_height},
+            current->reversed};
+    auto rebuilt = part::PartDocument::restore(
+        base.documentId(),
+        std::move(state),
+        base.revision());
+    CHECK(rebuilt.ok());
+    return std::move(*rebuilt.document);
+}
+
+// G0/V12: deliberately produce the same geometric prism with a NEW
+// FeatureId. The complete old Feature is no longer in the authored history.
+// Equality of XYZ is a diagnostic fixture fact, never a Point address repair.
+part::PartDocument withReplacementBaseFeature(
+    const part::PartDocument& base) {
+    auto state = base.state();
+    CHECK(state.body.features.size() == 1U);
+    const auto replacement_id =
+        state.body.next_feature_id.allocate();
+    CHECK(replacement_id.has_value());
+    CHECK(
+        *replacement_id !=
+        state.body.features.front().id);
+    state.body.features.front().id =
+        *replacement_id;
+    state.body.features.front().name =
+        "ReplacementBase";
+    auto rebuilt = part::PartDocument::restore(
+        base.documentId(),
+        std::move(state),
+        base.revision());
+    CHECK(rebuilt.ok());
+    return std::move(*rebuilt.document);
 }
 
 std::vector<part::MaterialEdgeReference>
@@ -431,6 +563,94 @@ generatedBoundaryReferences(
     return result;
 }
 
+
+struct G0VertexCounts final {
+    std::size_t native{};
+    std::size_t resolved{};
+    std::size_t ambiguous{};
+    std::size_t missing{};
+    std::size_t unsupported{};
+    std::size_t point_witnesses{};
+    std::size_t diagnostic_xyz{};
+};
+
+// RG-02A/G0: read-only *native Part-stage* characterization. A click in
+// the Viewer is not itself a durable Point, and XYZ never grants identity.
+// Retain every unsupported/ambiguous outcome as evidence, not a test fix.
+G0VertexCounts characterizeNativeVertices(
+    const part::BodyStageTopologyCatalog& catalog,
+    const char* fixture) {
+    CHECK(catalog.valid());
+    CHECK(catalog.complete());
+
+    G0VertexCounts counts;
+    counts.native = catalog.vertices.size();
+    for (const auto& vertex : catalog.vertices) {
+        CHECK(vertex.runtime_token.valid());
+        CHECK(
+            vertex.accounting_class !=
+            part::TopologyAccountingClass::
+                integrity_failure);
+        if (vertex.provider_point) {
+            ++counts.diagnostic_xyz;
+        }
+        switch (vertex.referenceability) {
+        case kernel::ReferenceStatus::resolved: {
+            ++counts.resolved;
+            CHECK(vertex.point_candidates.size() == 1U);
+            const auto& address =
+                vertex.point_candidates.front();
+            CHECK(address.valid());
+            CHECK(address.adjacent_surfaces.size() == 3U);
+            const auto point =
+                std::find_if(
+                    catalog.points.begin(),
+                    catalog.points.end(),
+                    [&address](const auto& candidate) {
+                        return candidate.address == address;
+                    });
+            CHECK(point != catalog.points.end());
+            CHECK(
+                point->status ==
+                kernel::ReferenceStatus::resolved);
+            CHECK(point->current_vertices.size() == 1U);
+            CHECK(
+                point->current_vertices.front() ==
+                vertex.runtime_token);
+            ++counts.point_witnesses;
+            break;
+        }
+        case kernel::ReferenceStatus::ambiguous:
+            ++counts.ambiguous;
+            break;
+        case kernel::ReferenceStatus::missing:
+            ++counts.missing;
+            break;
+        case kernel::ReferenceStatus::unsupported:
+            ++counts.unsupported;
+            break;
+        }
+    }
+    CHECK(
+        counts.native ==
+        counts.resolved + counts.ambiguous +
+            counts.missing + counts.unsupported);
+    std::cout
+        << "RG02A_G0_VERTEX_NATIVE"
+        << " fixture=" << fixture
+        << " native=" << counts.native
+        << " resolved=" << counts.resolved
+        << " ambiguous=" << counts.ambiguous
+        << " missing=" << counts.missing
+        << " unsupported=" << counts.unsupported
+        << " unique_point_witnesses=" << counts.point_witnesses
+        << " provider_xyz_diagnostic=" << counts.diagnostic_xyz
+        << " stage_valid=" << catalog.stage.valid()
+        << " viewport_pickability=NOT_PROVEN"
+        << " cold_rebuild=NOT_PROVEN\n";
+    return counts;
+}
+
 } // namespace
 
 int main() {
@@ -452,6 +672,319 @@ int main() {
     CHECK(
         base_evaluation.features[0]
             .result_topology);
+    const auto g0_base = characterizeNativeVertices(
+        *base_evaluation.features[0].result_topology,
+        "V01-extrude");
+    CHECK(g0_base.native == 8U);
+    CHECK(g0_base.resolved == 8U);
+    CHECK(g0_base.point_witnesses == 8U);
+    CHECK(g0_base.ambiguous == 0U);
+    CHECK(g0_base.unsupported == 0U);
+    // G0/V11: reconstruct authored Part intent and reevaluate with an
+    // independent OCCT provider instance. Only FeaturePointAddress
+    // survives semantically; transient runtime tokens are neither
+    // serialized nor compared as identities.
+    auto reopened_document = part::PartDocument::restore(
+        base_document.documentId(),
+        base_document.state(),
+        base_document.revision());
+    CHECK(reopened_document.ok());
+    kernel_occt::OcctSolidModelingKernel separate_kernel;
+    const auto fresh_evaluation = part::evaluatePart(
+        *reopened_document.document, separate_kernel);
+    CHECK(
+        fresh_evaluation.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(fresh_evaluation.features.size() == 1U);
+    CHECK(fresh_evaluation.features[0].result_topology);
+    const auto& rebuilt_topology =
+        *fresh_evaluation.features[0].result_topology;
+    const auto reconstructed_counts =
+        characterizeNativeVertices(
+            rebuilt_topology, "V11-new-provider");
+    CHECK(reconstructed_counts.native == 8U);
+    CHECK(reconstructed_counts.resolved == 8U);
+    CHECK(
+        rebuilt_topology.stage ==
+        base_evaluation.features[0].result_topology->stage);
+    std::size_t reconstructed_addresses = 0U;
+    for (const auto& address_resolution :
+         base_evaluation.features[0].result_topology->points) {
+        CHECK(address_resolution.status ==
+              kernel::ReferenceStatus::resolved);
+        const auto found = std::find_if(
+            rebuilt_topology.points.begin(),
+            rebuilt_topology.points.end(),
+            [&address_resolution](const auto& current) {
+                return current.address ==
+                       address_resolution.address;
+            });
+        CHECK(found != rebuilt_topology.points.end());
+        CHECK(found->status ==
+              kernel::ReferenceStatus::resolved);
+        CHECK(found->current_vertices.size() == 1U);
+        ++reconstructed_addresses;
+    }
+    CHECK(reconstructed_addresses == 8U);
+    std::cout
+        << "RG02A_G0_V11"
+        << " reconstructed_semantic_addresses=8"
+        << " independent_kernel=1"
+        << " runtime_token_equality=NOT_AUTHORITY"
+        << " persisted_rg02_point_source=NOT_IMPLEMENTED\\n";
+    // G0/V02: changing the earlier Feature geometry must recompute
+    // points without changing their authored FeaturePointAddress meaning.
+    // XYZ is checked only AFTER semantic identity was matched.
+    const auto taller_document =
+        withEditedBaseHeight(base_document, 35.0);
+    const auto taller_evaluation =
+        part::evaluatePart(taller_document, kernel);
+    CHECK(
+        taller_evaluation.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(taller_evaluation.features.size() == 1U);
+    CHECK(taller_evaluation.features[0].result_topology);
+    const auto& original_stage =
+        *base_evaluation.features[0].result_topology;
+    const auto& taller_stage =
+        *taller_evaluation.features[0].result_topology;
+    CHECK(original_stage.stage == taller_stage.stage);
+    const auto g0_taller = characterizeNativeVertices(
+        taller_stage, "V02-edited-extrude");
+    CHECK(g0_taller.native == 8U);
+    CHECK(g0_taller.resolved == 8U);
+    std::size_t moved_semantic_points = 0U;
+    std::size_t stationary_semantic_points = 0U;
+    for (const auto& before_vertex : original_stage.vertices) {
+        CHECK(
+            before_vertex.referenceability ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(before_vertex.point_candidates.size() == 1U);
+        CHECK(before_vertex.provider_point.has_value());
+        const auto& identity =
+            before_vertex.point_candidates.front();
+        const auto later = std::find_if(
+            taller_stage.vertices.begin(),
+            taller_stage.vertices.end(),
+            [&identity](const auto& vertex) {
+                return vertex.referenceability ==
+                           kernel::ReferenceStatus::resolved &&
+                       vertex.point_candidates.size() == 1U &&
+                       vertex.point_candidates.front() == identity;
+            });
+        CHECK(later != taller_stage.vertices.end());
+        CHECK(later->provider_point.has_value());
+        const auto delta_z =
+            later->provider_point->z -
+            before_vertex.provider_point->z;
+        if (delta_z > 14.99 && delta_z < 15.01) {
+            ++moved_semantic_points;
+        } else {
+            CHECK(delta_z > -0.01 && delta_z < 0.01);
+            ++stationary_semantic_points;
+        }
+    }
+    CHECK(moved_semantic_points == 4U);
+    CHECK(stationary_semantic_points == 4U);
+    // G0/V12: replacing the producer Feature, while keeping the same
+    // Sketch/Profile/shape dimensions, must make every former semantic
+    // address absent from the new stage. Equal provider XYZ is NO authority.
+    const auto replaced_document =
+        withReplacementBaseFeature(base_document);
+    const auto replaced_evaluation =
+        part::evaluatePart(replaced_document, kernel);
+    CHECK(
+        replaced_evaluation.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(replaced_evaluation.features.size() == 1U);
+    CHECK(replaced_evaluation.features[0].result_topology);
+    const auto& replacement_stage =
+        *replaced_evaluation.features[0].result_topology;
+    CHECK(replacement_stage.stage != original_stage.stage);
+    const auto replaced_counts =
+        characterizeNativeVertices(
+            replacement_stage, "V12-replaced-producer");
+    CHECK(replaced_counts.native == g0_base.native);
+    CHECK(replaced_counts.resolved == g0_base.resolved);
+    std::size_t equal_xyz_different_semantics = 0U;
+    for (const auto& old_vertex : original_stage.vertices) {
+        CHECK(old_vertex.referenceability ==
+              kernel::ReferenceStatus::resolved);
+        CHECK(old_vertex.provider_point.has_value());
+        CHECK(old_vertex.point_candidates.size() == 1U);
+        const auto old_address =
+            old_vertex.point_candidates.front();
+        CHECK(std::none_of(
+            replacement_stage.points.begin(),
+            replacement_stage.points.end(),
+            [&old_address](const auto& point) {
+                return point.address == old_address;
+            }));
+        // Only verify the requested same-looking-geometry fixture.
+        // The test NEVER uses matching coordinates to resolve identity.
+        const auto identical_xyz = std::count_if(
+            replacement_stage.vertices.begin(),
+            replacement_stage.vertices.end(),
+            [&old_vertex](const auto& candidate) {
+                if (!candidate.provider_point) return false;
+                const auto& a = *old_vertex.provider_point;
+                const auto& b = *candidate.provider_point;
+                return std::abs(a.x - b.x) < 1.0e-8 &&
+                       std::abs(a.y - b.y) < 1.0e-8 &&
+                       std::abs(a.z - b.z) < 1.0e-8;
+            });
+        CHECK(identical_xyz == 1);
+        ++equal_xyz_different_semantics;
+    }
+    CHECK(equal_xyz_different_semantics == 8U);
+    std::cout
+        << "RG02A_G0_V12"
+        << " same_xyz_different_semantic_address=8"
+        << " source_feature_removed_from_history=1"
+        << " no_coordinate_rebind=1\\n";
+    std::cout
+        << "RG02A_G0_V02"
+        << " same_semantic_stage=1"
+        << " preserved_point_addresses=8"
+        << " moved_z=4"
+        << " stationary_z=4"
+        << " xyz_used_for_identity=0\\n";
+
+    // G0/V03: a real bounded Cut opening an interior pocket in the
+    // positive-Z base prism. Inherited and new Vertex semantics are compared
+    // by durable Point addresses, not runtime token/XYZ equality.
+    const auto cut_document =
+        withInteriorCut(base_document);
+    const auto cut_evaluation =
+        part::evaluatePart(cut_document, kernel);
+    CHECK(
+        cut_evaluation.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(cut_evaluation.features.size() == 2U);
+    CHECK(
+        cut_evaluation.features[0].result_topology);
+    CHECK(
+        cut_evaluation.features[1].status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(
+        cut_evaluation.features[1].result_topology);
+    const auto& g0_cut_stage =
+        *cut_evaluation.features[1].result_topology;
+    CHECK(
+        g0_cut_stage.stage !=
+        cut_evaluation.features[0]
+            .result_topology->stage);
+    const auto g0_cut =
+        characterizeNativeVertices(
+            g0_cut_stage,
+            "V03-interior-cut");
+    CHECK(g0_cut.native > g0_base.native);
+    CHECK(g0_cut.native == 16U);
+    CHECK(g0_cut.resolved == 16U);
+    CHECK(g0_cut.ambiguous == 0U);
+    CHECK(g0_cut.missing == 0U);
+    CHECK(g0_cut.unsupported == 0U);
+    std::size_t inherited_points = 0U;
+    std::size_t new_points = 0U;
+    for (const auto& vertex : g0_cut_stage.vertices) {
+        if (vertex.referenceability !=
+                kernel::ReferenceStatus::resolved) {
+            continue;
+        }
+        CHECK(vertex.point_candidates.size() == 1U);
+        const auto& current_point =
+            vertex.point_candidates.front();
+        const auto inherited =
+            std::find_if(
+                base_evaluation.features[0]
+                    .result_topology->points.begin(),
+                base_evaluation.features[0]
+                    .result_topology->points.end(),
+                [&current_point](const auto& point) {
+                    return point.address == current_point;
+                });
+        if (inherited !=
+            base_evaluation.features[0]
+                .result_topology->points.end()) {
+            ++inherited_points;
+        } else {
+            ++new_points;
+        }
+    }
+    CHECK(inherited_points == 8U);
+    CHECK(new_points == 8U);
+    // G0/V07: remove a full-height corner with an overlapping Cut. A
+    // three-Surface point carried by the removed corner must be Missing
+    // in the final stage; it must never rebind by similar XYZ geometry.
+    const auto removed_corner_document =
+        withInteriorCut(
+            base_document,
+            {-5.0, -5.0},
+            {15.0, 15.0},
+            20.0);
+    const auto removed_corner_eval =
+        part::evaluatePart(
+            removed_corner_document, kernel);
+    CHECK(
+        removed_corner_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(removed_corner_eval.features.size() == 2U);
+    CHECK(removed_corner_eval.features[0].result_topology);
+    CHECK(removed_corner_eval.features[1].result_topology);
+    const auto& removed_stage =
+        *removed_corner_eval.features[1].result_topology;
+    const auto removed_counts =
+        characterizeNativeVertices(
+            removed_stage, "V07-removed-corner");
+    CHECK(removed_stage.stage != original_stage.stage);
+    CHECK(removed_counts.native == 12U);
+    CHECK(removed_counts.resolved == 12U);
+    CHECK(removed_counts.unsupported == 0U);
+    CHECK(removed_counts.ambiguous == 0U);
+    CHECK(removed_counts.missing == 0U);
+    std::size_t disappeared_addresses = 0U;
+    std::size_t retained_addresses = 0U;
+    for (const auto& old_point : original_stage.points) {
+        CHECK(
+            old_point.status ==
+            kernel::ReferenceStatus::resolved);
+        const auto current = std::find_if(
+            removed_stage.points.begin(),
+            removed_stage.points.end(),
+            [&old_point](const auto& candidate) {
+                return candidate.address == old_point.address;
+            });
+        CHECK(current != removed_stage.points.end());
+        if (current->status ==
+                kernel::ReferenceStatus::missing) {
+            CHECK(current->candidate_vertex_count == 0U);
+            CHECK(current->current_vertices.empty());
+            ++disappeared_addresses;
+        } else {
+            CHECK(
+                current->status ==
+                kernel::ReferenceStatus::resolved);
+            CHECK(current->current_vertices.size() == 1U);
+            ++retained_addresses;
+        }
+    }
+    CHECK(disappeared_addresses == 2U);
+    CHECK(retained_addresses == 6U);
+    CHECK(
+        disappeared_addresses + retained_addresses ==
+        original_stage.points.size());
+    std::cout
+        << "RG02A_G0_V07"
+        << " disappeared_addresses=" << disappeared_addresses
+        << " retained_addresses=" << retained_addresses
+        << " current_native_vertices=" << removed_counts.native
+        << " nearest_xyz_rebind=0\\n";
+    std::cout
+        << "RG02A_G0_V03"
+        << " inherited_resolved=" << inherited_points
+        << " new_resolved=" << new_points
+        << " prior_stage_independent=1"
+        << " persisted_new_point_source=NOT_IMPLEMENTED\\n";
     const auto fillet_edges =
         trihedralReferences(
             *base_evaluation.features[0]
@@ -487,6 +1020,50 @@ int main() {
     CHECK(
         chamfer_feature.result_topology
             ->complete());
+    // G0/V09: an authored earlier-stage Vertex source stays bound
+    // to its before-Chamfer history stage. This is catalog evidence,
+    // not a persisted Datum or a repair behavior claim.
+    CHECK(
+        trihedral_chamfer.features[0].result_topology);
+    const auto& earlier_stage =
+        *trihedral_chamfer.features[0].result_topology;
+    const auto& after_chamfer_stage =
+        *chamfer_feature.result_topology;
+    CHECK(earlier_stage.stage == original_stage.stage);
+    CHECK(after_chamfer_stage.stage != earlier_stage.stage);
+    CHECK(earlier_stage.vertices.size() == 8U);
+    std::size_t original_addresses_in_earlier_stage = 0U;
+    for (const auto& vertex : original_stage.vertices) {
+        CHECK(vertex.point_candidates.size() == 1U);
+        const auto& address = vertex.point_candidates.front();
+        const auto found = std::find_if(
+            earlier_stage.vertices.begin(),
+            earlier_stage.vertices.end(),
+            [&address](const auto& candidate) {
+                return candidate.referenceability ==
+                           kernel::ReferenceStatus::resolved &&
+                       candidate.point_candidates.size() == 1U &&
+                       candidate.point_candidates.front() == address;
+            });
+        CHECK(found != earlier_stage.vertices.end());
+        ++original_addresses_in_earlier_stage;
+    }
+    CHECK(original_addresses_in_earlier_stage == 8U);
+    std::cout
+        << "RG02A_G0_V09"
+        << " original_stage_vertices=8"
+        << " before_chamfer_point_addresses=8"
+        << " stage_scoping=1"
+        << " persisted_datum_source=NOT_IMPLEMENTED\\n";
+    // G0.2 characterization only: no guessed expected cardinality.
+    const auto g0_chamfer = characterizeNativeVertices(
+        *chamfer_feature.result_topology,
+        "V06-chamfer");
+    CHECK(g0_chamfer.native == 13U);
+    CHECK(g0_chamfer.resolved == 10U);
+    CHECK(g0_chamfer.unsupported == 3U);
+    CHECK(g0_chamfer.ambiguous == 0U);
+    CHECK(g0_chamfer.missing == 0U);
     CHECK(
         countRole(
             chamfer_feature,
@@ -574,6 +1151,15 @@ int main() {
         part::FeatureEvaluationStatus::up_to_date);
     CHECK(fillet.result_topology);
     CHECK(fillet.result_topology->complete());
+    // G0.2 characterization only: record any unsupported transitions.
+    const auto g0_fillet = characterizeNativeVertices(
+        *fillet.result_topology,
+        "V05-fillet");
+    CHECK(g0_fillet.native == 13U);
+    CHECK(g0_fillet.resolved == 10U);
+    CHECK(g0_fillet.unsupported == 3U);
+    CHECK(g0_fillet.ambiguous == 0U);
+    CHECK(g0_fillet.missing == 0U);
     CHECK(
         countRole(
             fillet,

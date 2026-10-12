@@ -341,6 +341,73 @@ part::PartDocument makeExtrudeCylinder() {
     return std::move(*restored.document);
 }
 
+// G0/V08: a real analytic cylinder clipped by one planar Boolean
+// Cut through its axis. Two distinct native rim Vertices can share the
+// same THREE semantic Surface sources (cap, cylinder, cut wall).
+part::PartDocument withCylinderHalfCut(
+    const part::PartDocument& source) {
+    auto restored = part::PartDocument::restore(
+        source.documentId(),
+        source.state(),
+        source.revision());
+    CHECK(restored.ok());
+    application::DocumentSession session{
+        {},
+        std::move(*restored.document)};
+    const auto sketch_created = session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
+    const auto rectangle = session.execute(
+        application::AddSketchRectangleCommand{
+            *sketch_created.sketch_id,
+            session.document().revision(),
+            {-15.0, -15.0},
+            {0.0, 15.0},
+            sketch::EntityRole::regular,
+            false});
+    CHECK(rectangle.ok());
+    const auto* sketch = session.document().findSketch(
+        *sketch_created.sketch_id);
+    CHECK(sketch != nullptr);
+    const auto analysis = sketch::analyzeRegions(
+        sketch->model);
+    CHECK(analysis.complete());
+    CHECK(analysis.regions.size() == 1U);
+    const auto intent = part::makeProfileRegionIntent(
+        analysis.regions.front());
+    CHECK(intent.has_value());
+    const auto profile = session.execute(
+        application::CreateProfileCommand{
+            *sketch_created.sketch_id,
+            session.document().revision(),
+            *intent});
+    CHECK(profile.ok() && profile.profile_id);
+    auto state = session.document().state();
+    const auto feature_id =
+        state.body.next_feature_id.allocate();
+    CHECK(feature_id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *feature_id,
+            "G0HalfCylinderCut",
+            false,
+            part::ExtrudeFeature{
+                *profile.profile_id,
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{12.0},
+                    false}}});
+    auto rebuilt = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(state),
+        session.document().revision());
+    CHECK(rebuilt.ok());
+    return std::move(*rebuilt.document);
+}
+
 std::optional<part::MaterialEdgeReference>
 firstAuthorableCircle(
     const part::BodyStageTopologyCatalog& catalog) {
@@ -421,6 +488,124 @@ std::size_t countSurfaceRole(
             }));
 }
 
+// RG-02A/G0 V04: independent real native OCCT and Part semantic inventories.
+// None of these runtime tokens or provider XYZ values becomes authored intent.
+struct G0RevolveVertexCounts final {
+    std::size_t native{};
+    std::size_t resolved{};
+    std::size_t missing{};
+    std::size_t ambiguous{};
+    std::size_t unsupported{};
+    std::size_t three_surface_witnesses{};
+};
+
+G0RevolveVertexCounts observeRevolvePartVertices(
+    const part::BodyStageTopologyCatalog& catalog,
+    const char* fixture) {
+    CHECK(catalog.valid());
+    CHECK(catalog.complete());
+    G0RevolveVertexCounts counts;
+    counts.native = catalog.vertices.size();
+    for (const auto& vertex : catalog.vertices) {
+        CHECK(vertex.runtime_token.valid());
+        CHECK(
+            vertex.accounting_class !=
+            part::TopologyAccountingClass::integrity_failure);
+        switch (vertex.referenceability) {
+        case kernel::ReferenceStatus::resolved: {
+            ++counts.resolved;
+            CHECK(vertex.point_candidates.size() == 1U);
+            const auto& address =
+                vertex.point_candidates.front();
+            CHECK(address.valid());
+            CHECK(address.adjacent_surfaces.size() == 3U);
+            const auto point = std::find_if(
+                catalog.points.begin(),
+                catalog.points.end(),
+                [&address](const auto& candidate) {
+                    return candidate.address == address;
+                });
+            CHECK(point != catalog.points.end());
+            CHECK(point->status ==
+                  kernel::ReferenceStatus::resolved);
+            CHECK(point->current_vertices.size() == 1U);
+            CHECK(point->current_vertices.front() ==
+                  vertex.runtime_token);
+            ++counts.three_surface_witnesses;
+            break;
+        }
+        case kernel::ReferenceStatus::missing:
+            ++counts.missing;
+            break;
+        case kernel::ReferenceStatus::ambiguous:
+            ++counts.ambiguous;
+            break;
+        case kernel::ReferenceStatus::unsupported:
+            ++counts.unsupported;
+            break;
+        }
+    }
+    CHECK(counts.native ==
+          counts.resolved + counts.missing +
+          counts.ambiguous + counts.unsupported);
+    std::cout
+        << "RG02A_G0_V04_PART"
+        << " fixture=" << fixture
+        << " native=" << counts.native
+        << " resolved=" << counts.resolved
+        << " missing=" << counts.missing
+        << " ambiguous=" << counts.ambiguous
+        << " unsupported=" << counts.unsupported
+        << " three_surface_witnesses="
+        << counts.three_surface_witnesses
+        << " viewport_pickability=NOT_PROVEN\\n";
+    return counts;
+}
+
+struct G0ProviderAdjacencyCounts final {
+    std::size_t native{};
+    std::size_t two_surfaces{};
+    std::size_t three_surfaces{};
+    std::size_t other_surfaces{};
+};
+
+G0ProviderAdjacencyCounts observeRevolveProviderVertices(
+    const kernel::SolidModelingResult& result,
+    const char* fixture) {
+    verifyCompleteRuntimeInventory(result);
+    std::size_t two_surfaces = 0U;
+    std::size_t three_surfaces = 0U;
+    std::size_t other_surfaces = 0U;
+    for (const auto& vertex :
+         result.current_vertex_semantics) {
+        CHECK(vertex.runtime_token.valid());
+        const auto count = vertex.adjacent_surfaces.size();
+        if (count == 2U) {
+            ++two_surfaces;
+        } else if (count == 3U) {
+            ++three_surfaces;
+        } else {
+            ++other_surfaces;
+        }
+    }
+    CHECK(two_surfaces + three_surfaces +
+          other_surfaces ==
+          result.current_vertices.size());
+    std::cout
+        << "RG02A_G0_V04_PROVIDER"
+        << " fixture=" << fixture
+        << " native=" << result.current_vertices.size()
+        << " two_surfaces=" << two_surfaces
+        << " three_surfaces=" << three_surfaces
+        << " other_surfaces=" << other_surfaces
+        << " semantic_identity=NOT_INFERRED\\n";
+    return {
+        result.current_vertices.size(),
+        two_surfaces,
+        three_surfaces,
+        other_surfaces};
+}
+
 } // namespace
 
 int main() {
@@ -435,6 +620,13 @@ int main() {
                     0.0,
                     pi / 2.0));
         verifyCompleteRuntimeInventory(result);
+        const auto g0_partial_provider =
+            observeRevolveProviderVertices(
+                result, "V04-partial-90-provider");
+        CHECK(g0_partial_provider.native == 8U);
+        CHECK(g0_partial_provider.two_surfaces == 0U);
+        CHECK(g0_partial_provider.three_surfaces == 8U);
+        CHECK(g0_partial_provider.other_surfaces == 0U);
         CHECK(result.new_surfaces.size() == 6U);
 
         const auto* start =
@@ -529,6 +721,13 @@ int main() {
                     0.0,
                     full_turn));
         verifyCompleteRuntimeInventory(result);
+        const auto g0_full_provider =
+            observeRevolveProviderVertices(
+                result, "V04-full-360-provider");
+        CHECK(g0_full_provider.native == 4U);
+        CHECK(g0_full_provider.two_surfaces == 4U);
+        CHECK(g0_full_provider.three_surfaces == 0U);
+        CHECK(g0_full_provider.other_surfaces == 0U);
         CHECK(result.new_surfaces.size() == 4U);
         CHECK(
             surfaceByRole(
@@ -679,6 +878,14 @@ int main() {
                 up_to_date);
         CHECK(feature.result_topology.has_value());
         CHECK(feature.result_topology->complete());
+        const auto g0_full_part = observeRevolvePartVertices(
+            *feature.result_topology,
+            "V04-full-360-part");
+        CHECK(g0_full_part.native == 2U);
+        CHECK(g0_full_part.resolved == 0U);
+        CHECK(g0_full_part.ambiguous == 0U);
+        CHECK(g0_full_part.missing == 0U);
+        CHECK(g0_full_part.unsupported == 2U);
         CHECK(
             countSurfaceRole(
                 feature,
@@ -775,6 +982,86 @@ int main() {
               part::BodyEvaluationStatus::up_to_date);
         CHECK(evaluated.current_topology.has_value());
         CHECK(evaluated.current_topology->complete());
+        // RG-02A/G0 V10: real OCCT cylinder seam Vertices. Ordinary
+        // Viewport pick eligibility only excludes integrity failure and
+        // representation artifacts; it does not certify a durable Point.
+        const auto g0_cylinder = observeRevolvePartVertices(
+            *evaluated.current_topology,
+            "V10-cylinder-extrude");
+        CHECK(g0_cylinder.native == 2U);
+        CHECK(g0_cylinder.resolved == 0U);
+        CHECK(g0_cylinder.missing == 0U);
+        CHECK(g0_cylinder.ambiguous == 0U);
+        CHECK(g0_cylinder.unsupported == 2U);
+        std::size_t ordinary_policy_eligible_unsupported = 0U;
+        for (const auto& vertex :
+             evaluated.current_topology->vertices) {
+            if (vertex.referenceability !=
+                    kernel::ReferenceStatus::unsupported) {
+                continue;
+            }
+            CHECK(vertex.accounting_class ==
+                  part::TopologyAccountingClass::
+                      semantically_unsupported);
+            CHECK(vertex.point_candidates.empty());
+            CHECK(vertex.runtime_token.valid());
+            // This corresponds to the existing ordinary Viewer
+            // accounting-class filter; this test does not execute UI.
+            ++ordinary_policy_eligible_unsupported;
+        }
+        CHECK(ordinary_policy_eligible_unsupported == 2U);
+        CHECK(ordinary_policy_eligible_unsupported ==
+              g0_cylinder.unsupported);
+        // G0/V08: check a real two-point intersection of one analytic
+        // cylinder, a cap plane and a planar Boolean Cut wall. If
+        // multiple native Vertices claim one semantic 3-Surface Point,
+        // Part must mark Ambiguous and never choose one by XYZ.
+        const auto half_document =
+            withCylinderHalfCut(extrude);
+        const auto half_evaluation =
+            part::evaluatePart(half_document, kernel);
+        CHECK(
+            half_evaluation.body_status ==
+            part::BodyEvaluationStatus::up_to_date);
+        CHECK(half_evaluation.features.size() == 2U);
+        CHECK(
+            half_evaluation.features[1].result_topology);
+        const auto& half_catalog =
+            *half_evaluation.features[1].result_topology;
+        const auto half_counts = observeRevolvePartVertices(
+            half_catalog, "V08-half-cylinder-cut");
+        CHECK(half_counts.native == 6U);
+        CHECK(half_counts.resolved == 0U);
+        CHECK(half_counts.missing == 0U);
+        CHECK(half_counts.ambiguous == 4U);
+        CHECK(half_counts.unsupported == 2U);
+        std::size_t branched_points = 0U;
+        for (const auto& point : half_catalog.points) {
+            if (point.status !=
+                    kernel::ReferenceStatus::ambiguous) {
+                continue;
+            }
+            CHECK(point.candidate_vertex_count > 1U);
+            CHECK(point.current_vertices.size() > 1U);
+            CHECK(point.address.valid());
+            CHECK(point.address.adjacent_surfaces.size() == 3U);
+            ++branched_points;
+        }
+        CHECK(branched_points == 2U);
+        CHECK(half_counts.ambiguous == 4U);
+        std::cout
+            << "RG02A_G0_V08"
+            << " ambiguous_three_surface_point_groups="
+            << branched_points
+            << " ambiguous_native_vertices="
+            << half_counts.ambiguous
+            << " nearest_vertex_chosen=0\\n";
+        std::cout
+            << "RG02A_G0_V10"
+            << " unsupported_native_eligible_by_policy="
+            << ordinary_policy_eligible_unsupported
+            << " ui_interaction=NOT_TESTED"
+            << " durable_point=UNSUPPORTED\\n";
         const auto circle =
             firstAuthorableCircle(
                 *evaluated.current_topology);
@@ -809,6 +1096,14 @@ int main() {
         const auto& feature = evaluated.features.front();
         CHECK(feature.result_topology.has_value());
         CHECK(feature.result_topology->complete());
+        const auto g0_partial_part = observeRevolvePartVertices(
+            *feature.result_topology,
+            "V04-partial-90-part");
+        CHECK(g0_partial_part.native == 6U);
+        CHECK(g0_partial_part.resolved == 6U);
+        CHECK(g0_partial_part.ambiguous == 0U);
+        CHECK(g0_partial_part.missing == 0U);
+        CHECK(g0_partial_part.unsupported == 0U);
 
         std::size_t authorable_edges = 0U;
         std::size_t authorable_lines = 0U;
