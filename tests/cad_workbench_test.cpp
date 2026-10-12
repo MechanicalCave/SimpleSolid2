@@ -504,9 +504,30 @@ int main(int argc, char* argv[]) {
           QStringLiteral("Planar Face"));
     CHECK(project_source_boundary->text() ==
           QStringLiteral("Face Boundary"));
-    CHECK(role_layout->direction() == QBoxLayout::TopToBottom);
-    CHECK(pick_layout->direction() == QBoxLayout::TopToBottom ||
-          pick_layout->direction() == QBoxLayout::LeftToRight);
+    // The two-button rows should stack only when their current
+    // measured button widths really exceed the usable viewport.
+    const auto check_row_reflow = [&](QBoxLayout* layout) {
+        int inline_width = 0;
+        int controls = 0;
+        for (int i = 0; i < layout->count(); ++i) {
+            auto* item = layout->itemAt(i);
+            auto* button = item == nullptr ? nullptr :
+                item->widget();
+            if (!button) continue;
+            inline_width += button->sizeHint().width();
+            ++controls;
+        }
+        inline_width += std::max(0, controls - 1) *
+            std::max(0, layout->spacing());
+        const auto expected =
+            inline_width > project_ops_scroll->viewport()->width() - 12
+                ? QBoxLayout::TopToBottom
+                : QBoxLayout::LeftToRight;
+        CHECK(layout->direction() == expected);
+    };
+    check_row_reflow(source_layout);
+    check_row_reflow(role_layout);
+    check_row_reflow(pick_layout);
     workbench.resize(1400, 800);
     splitter->setSizes(original_panel_sizes);
     QApplication::processEvents();
