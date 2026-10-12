@@ -770,8 +770,11 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         if (it.value()) it.value()->hide();
     }
     for (const auto& group : groups) {
-        if (group.pinned) continue;
         const QString name = QString::fromLatin1(group.name);
+        // Sketch Select is a direct, fixed base tool, never a
+        // customizable/reorderable toolbar group.
+        if (toolbar_sketch_context_ &&
+            name == QStringLiteral("Select")) continue;
         const QString key = context_name + QStringLiteral("_") +
             name;
         if (toolbar_group_dropdowns_.contains(key)) continue;
@@ -998,7 +1001,39 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         return;
     }
 
-    // Conservative G3 fallback while pinned compact/icon phases remain
+    // Tier 3: a still-too-wide pinned icon group can become a DIRECT
+    // named dropdown. It delegates to the same connected CAD widgets
+    // and retains their accessible labels, checks and enabled states.
+    std::vector<QToolButton*> pinned_dropdowns;
+    const auto try_named_pinned = [&](const ToolbarGroupSpec& group) {
+        if (!group.pinned || required <= direct_available) return;
+        const auto key = context_name + QStringLiteral("_") +
+            QString::fromLatin1(group.name);
+        auto* dropdown = toolbar_group_dropdowns_.value(
+            key, nullptr);
+        if (dropdown == nullptr) return;
+        const int before = group_width(group);
+        const int named_width = dropdown->sizeHint().width() + gap;
+        if (before <= named_width) return;
+        collapse_group(group);
+        dropdown->show();
+        required += named_width;
+        pinned_dropdowns.push_back(dropdown);
+    };
+    if (!toolbar_sketch_context_) {
+        try_named_pinned(groups[2]); // Create
+        try_named_pinned(groups[0]); // Sketch 2D
+    } else {
+        try_named_pinned(groups[1]); // Create
+        try_named_pinned(groups[3]); // References
+    }
+    if (required <= direct_available) {
+        toolbar_more_->hide();
+        return;
+    }
+
+    // Conservative final fallback when even direct named groups cannot
+    // fit: More -> group -> original action. No action is discarded.
     // open: no command is discarded, every button remains accessible in
     // More -> named group -> original tool. Never hide Document controls.
     toolbar_more_->show();
@@ -1015,6 +1050,11 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     }
     if (required > available) {
         for (auto* dropdown : direct_dropdowns) {
+            if (required <= available) break;
+            required -= dropdown->sizeHint().width() + gap;
+            dropdown->hide();
+        }
+        for (auto* dropdown : pinned_dropdowns) {
             if (required <= available) break;
             required -= dropdown->sizeHint().width() + gap;
             dropdown->hide();
