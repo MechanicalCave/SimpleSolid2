@@ -421,6 +421,112 @@ std::size_t countSurfaceRole(
             }));
 }
 
+// RG-02A/G0 V04: independent real native OCCT and Part semantic inventories.
+// None of these runtime tokens or provider XYZ values becomes authored intent.
+struct G0RevolveVertexCounts final {
+    std::size_t native{};
+    std::size_t resolved{};
+    std::size_t missing{};
+    std::size_t ambiguous{};
+    std::size_t unsupported{};
+    std::size_t three_surface_witnesses{};
+};
+
+G0RevolveVertexCounts observeRevolvePartVertices(
+    const part::BodyStageTopologyCatalog& catalog,
+    const char* fixture) {
+    CHECK(catalog.valid());
+    CHECK(catalog.complete());
+    G0RevolveVertexCounts counts;
+    counts.native = catalog.vertices.size();
+    for (const auto& vertex : catalog.vertices) {
+        CHECK(vertex.runtime_token.valid());
+        CHECK(
+            vertex.accounting_class !=
+            part::TopologyAccountingClass::integrity_failure);
+        switch (vertex.referenceability) {
+        case kernel::ReferenceStatus::resolved: {
+            ++counts.resolved;
+            CHECK(vertex.point_candidates.size() == 1U);
+            const auto& address =
+                vertex.point_candidates.front();
+            CHECK(address.valid());
+            CHECK(address.adjacent_surfaces.size() == 3U);
+            const auto point = std::find_if(
+                catalog.points.begin(),
+                catalog.points.end(),
+                [&address](const auto& candidate) {
+                    return candidate.address == address;
+                });
+            CHECK(point != catalog.points.end());
+            CHECK(point->status ==
+                  kernel::ReferenceStatus::resolved);
+            CHECK(point->current_vertices.size() == 1U);
+            CHECK(point->current_vertices.front() ==
+                  vertex.runtime_token);
+            ++counts.three_surface_witnesses;
+            break;
+        }
+        case kernel::ReferenceStatus::missing:
+            ++counts.missing;
+            break;
+        case kernel::ReferenceStatus::ambiguous:
+            ++counts.ambiguous;
+            break;
+        case kernel::ReferenceStatus::unsupported:
+            ++counts.unsupported;
+            break;
+        }
+    }
+    CHECK(counts.native ==
+          counts.resolved + counts.missing +
+          counts.ambiguous + counts.unsupported);
+    std::cout
+        << "RG02A_G0_V04_PART"
+        << " fixture=" << fixture
+        << " native=" << counts.native
+        << " resolved=" << counts.resolved
+        << " missing=" << counts.missing
+        << " ambiguous=" << counts.ambiguous
+        << " unsupported=" << counts.unsupported
+        << " three_surface_witnesses="
+        << counts.three_surface_witnesses
+        << " viewport_pickability=NOT_PROVEN\\n";
+    return counts;
+}
+
+void observeRevolveProviderVertices(
+    const kernel::SolidModelingResult& result,
+    const char* fixture) {
+    verifyCompleteRuntimeInventory(result);
+    std::size_t two_surfaces = 0U;
+    std::size_t three_surfaces = 0U;
+    std::size_t other_surfaces = 0U;
+    for (const auto& vertex :
+         result.current_vertex_semantics) {
+        CHECK(vertex.runtime_token.valid());
+        const auto count = vertex.adjacent_surfaces.size();
+        if (count == 2U) {
+            ++two_surfaces;
+        } else if (count == 3U) {
+            ++three_surfaces;
+        } else {
+            ++other_surfaces;
+        }
+    }
+    CHECK(two_surfaces + three_surfaces +
+          other_surfaces ==
+          result.current_vertices.size());
+    std::cout
+        << "RG02A_G0_V04_PROVIDER"
+        << " fixture=" << fixture
+        << " native=" << result.current_vertices.size()
+        << " two_surfaces=" << two_surfaces
+        << " three_surfaces=" << three_surfaces
+        << " other_surfaces=" << other_surfaces
+        << " semantic_identity=NOT_INFERRED\\n";
+}
+
 } // namespace
 
 int main() {
@@ -435,6 +541,8 @@ int main() {
                     0.0,
                     pi / 2.0));
         verifyCompleteRuntimeInventory(result);
+        observeRevolveProviderVertices(
+            result, "V04-partial-90-provider");
         CHECK(result.new_surfaces.size() == 6U);
 
         const auto* start =
@@ -529,6 +637,8 @@ int main() {
                     0.0,
                     full_turn));
         verifyCompleteRuntimeInventory(result);
+        observeRevolveProviderVertices(
+            result, "V04-full-360-provider");
         CHECK(result.new_surfaces.size() == 4U);
         CHECK(
             surfaceByRole(
@@ -679,6 +789,9 @@ int main() {
                 up_to_date);
         CHECK(feature.result_topology.has_value());
         CHECK(feature.result_topology->complete());
+        (void)observeRevolvePartVertices(
+            *feature.result_topology,
+            "V04-full-360-part");
         CHECK(
             countSurfaceRole(
                 feature,
@@ -809,6 +922,9 @@ int main() {
         const auto& feature = evaluated.features.front();
         CHECK(feature.result_topology.has_value());
         CHECK(feature.result_topology->complete());
+        (void)observeRevolvePartVertices(
+            *feature.result_topology,
+            "V04-partial-90-part");
 
         std::size_t authorable_edges = 0U;
         std::size_t authorable_lines = 0U;
