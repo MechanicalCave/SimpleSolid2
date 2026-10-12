@@ -765,7 +765,18 @@ bool CadWorkbenchShell::eventFilter(
 
 
 void CadWorkbenchShell::setToolbarContext(bool sketch_context) {
+    const bool context_changed = !toolbar_order_initialized_ ||
+        toolbar_sketch_context_ != sketch_context;
     toolbar_sketch_context_ = sketch_context;
+    toolbar_order_initialized_ = true;
+    if (context_changed) {
+        const QString context = sketch_context
+            ? QStringLiteral("Sketch") : QStringLiteral("Part");
+        if (toolbar_group_order_.value(context) !=
+            defaultToolbarGroupOrder(sketch_context)) {
+            applyToolbarGroupOrder(context);
+        }
+    }
     refreshToolbarOverflow();
 }
 
@@ -917,7 +928,22 @@ QString CadWorkbenchShell::toolbarActionLabel(
 void CadWorkbenchShell::rebuildToolbarMoreMenu() {
     if (toolbar_more_menu_ == nullptr) return;
     toolbar_more_menu_->clear();
-    const auto groups = toolbarGroups(toolbar_sketch_context_);
+    auto groups = toolbarGroups(toolbar_sketch_context_);
+    const QString context = toolbar_sketch_context_
+        ? QStringLiteral("Sketch") : QStringLiteral("Part");
+    const auto order = toolbar_group_order_.value(context);
+    std::stable_sort(
+        groups.begin(), groups.end(),
+        [&](const ToolbarGroupSpec& a, const ToolbarGroupSpec& b) {
+            if (toolbar_sketch_context_) {
+                if (QString::fromLatin1(a.name) ==
+                    QStringLiteral("Select")) return true;
+                if (QString::fromLatin1(b.name) ==
+                    QStringLiteral("Select")) return false;
+            }
+            return order.indexOf(QString::fromLatin1(a.name)) <
+                order.indexOf(QString::fromLatin1(b.name));
+        });
     for (const auto& group : groups) {
         QMenu* subgroup = nullptr;
         for (const char* name : group.tool_object_names) {
@@ -966,6 +992,21 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             group.pinned = pin.value();
         }
     }
+    const auto preferred_order =
+        toolbar_group_order_.value(current_context);
+    std::stable_sort(
+        groups.begin(), groups.end(),
+        [&](const ToolbarGroupSpec& a, const ToolbarGroupSpec& b) {
+            if (toolbar_sketch_context_) {
+                if (QString::fromLatin1(a.name) ==
+                    QStringLiteral("Select")) return true;
+                if (QString::fromLatin1(b.name) ==
+                    QStringLiteral("Select")) return false;
+            }
+            return preferred_order.indexOf(
+                QString::fromLatin1(a.name)) <
+                preferred_order.indexOf(QString::fromLatin1(b.name));
+        });
     // Undo only UI presentation compaction, including when the Part /
     // Sketch mode changes. A draft that updates a label while compacted
     // is never inferred from the Tree inspection selection.
@@ -1052,6 +1093,79 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             toolbar_customize_active_
                 ? Qt::StrongFocus : Qt::NoFocus);
         pin->setVisible(toolbar_customize_active_ || group.pinned);
+    }
+
+    // Intentional whole-group keyboard customization. No individual
+    // tool drag/reorder is introduced; these handles are hidden outside
+    // explicit Customize mode and move the actual QWidget group as a unit.
+    for (auto it = toolbar_group_handles_.begin();
+         it != toolbar_group_handles_.end(); ++it) {
+        if (it.value()) it.value()->hide();
+    }
+    for (const auto& group : groups) {
+        const QString name = QString::fromLatin1(group.name);
+        if (toolbar_sketch_context_ &&
+            name == QStringLiteral("Select")) {
+            continue; // fixed direct base action, not a group handle
+        }
+        const QString key = current_context +
+            QStringLiteral("_") + name;
+        auto* handle = toolbar_group_handles_.value(key, nullptr);
+        if (handle == nullptr) {
+            handle = new QToolButton(
+                contextual_tools_scroll_->widget());
+            handle->setObjectName(
+                QStringLiteral("workbenchToolbarHandle_") + key);
+            handle->setText(QStringLiteral("⋮"));
+            handle->setFixedWidth(20);
+            handle->setToolTip(
+                QStringLiteral("Reorder whole toolbar group ") +
+                name);
+            handle->setAccessibleName(
+                QStringLiteral("Reorder toolbar group ") + name);
+            handle->setPopupMode(QToolButton::InstantPopup);
+            auto* menu = new QMenu(handle);
+            auto* move_left = menu->addAction(
+                QStringLiteral("Przesuń w lewo"));
+            auto* move_right = menu->addAction(
+                QStringLiteral("Przesuń w prawo"));
+            menu->addSeparator();
+            auto* reset = menu->addAction(
+                QStringLiteral("Przywróć domyślne"));
+            connect(move_left, &QAction::triggered, this,
+                [this, context = current_context, name] {
+                    moveToolbarGroup(context, name, -1);
+                });
+            connect(move_right, &QAction::triggered, this,
+                [this, context = current_context, name] {
+                    moveToolbarGroup(context, name, +1);
+                });
+            connect(reset, &QAction::triggered, this,
+                [this, context = current_context] {
+                    resetToolbarGroups(context);
+                });
+            handle->setMenu(menu);
+            QWidget* first = nullptr;
+            if (*group.label_object_name != '\0') {
+                first = findChild<QWidget*>(
+                    QString::fromLatin1(group.label_object_name));
+            }
+            if (first == nullptr &&
+                !group.tool_object_names.empty()) {
+                first = findChild<QWidget*>(
+                    QString::fromLatin1(
+                        group.tool_object_names.front()));
+            }
+            const int idx = first == nullptr ? -1 :
+                editor_tools_layout_->indexOf(first);
+            editor_tools_layout_->insertWidget(
+                idx >= 0 ? idx :
+                    std::max(0, editor_tools_layout_->count() - 1),
+                handle);
+            handle->hide();
+            toolbar_group_handles_.insert(key, handle);
+        }
+        handle->setVisible(toolbar_customize_active_);
     }
 
     // Install real-command dropdowns next to each existing unpinned
@@ -1165,10 +1279,12 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             width += count(findChild<QPushButton*>(
                 QString::fromLatin1(id)));
         }
+        const QString group_key = context_name +
+            QStringLiteral("_") + QString::fromLatin1(group.name);
         width += count(toolbar_pin_markers_.value(
-            context_name + QStringLiteral("_") +
-                QString::fromLatin1(group.name),
-            nullptr));
+            group_key, nullptr));
+        width += count(toolbar_group_handles_.value(
+            group_key, nullptr));
         return width;
     };
     int required = 0;
@@ -1220,10 +1336,12 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             hide_one(findChild<QPushButton*>(
                 QString::fromLatin1(id)));
         }
+        const QString group_key = context_name +
+            QStringLiteral("_") + QString::fromLatin1(group.name);
         hide_one(toolbar_pin_markers_.value(
-            context_name + QStringLiteral("_") +
-                QString::fromLatin1(group.name),
-            nullptr));
+            group_key, nullptr));
+        hide_one(toolbar_group_handles_.value(
+            group_key, nullptr));
     };
     // Tier 1: collapse unpinned whole groups into named, direct menus.
     // Place each dropdown where its group used to be. They can be reached
