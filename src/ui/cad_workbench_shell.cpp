@@ -723,11 +723,27 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     for (const auto& group : groups) {
         required += group_width(group);
     }
-    // Preserve the fixed Document-control zone. Reserve room for the
-    // named two-level More menu before collapsing whole tool groups.
+    // Measure the WHOLE toolbar row. The QScrollArea viewport can still
+    // reflect its previous, collapsed size when a responsive layout pass
+    // restores hidden controls; using it as the total budget kept More
+    // incorrectly visible even on a 1400 px ordinary Part window.
+    // Subtract fixed Document actions/recovery without ever hiding them.
+    const auto* top_row = contextual_tools_scroll_->parentWidget();
+    int non_contextual_width =
+        document_actions_->sizeHint().width() +
+        toolbar_more_->sizeHint().width();
+    if (!tree_recovery_button_->isHidden()) {
+        non_contextual_width +=
+            tree_recovery_button_->sizeHint().width();
+    }
+    if (!right_recovery_button_->isHidden()) {
+        non_contextual_width +=
+            right_recovery_button_->sizeHint().width();
+    }
+    constexpr int fixed_row_gutters = 64;
     const int available = std::max(
-        0, contextual_tools_scroll_->viewport()->width() -
-           toolbar_more_->sizeHint().width() - 16);
+        0, (top_row == nullptr ? 0 : top_row->width()) -
+           non_contextual_width - fixed_row_gutters);
     if (required <= available) {
         toolbar_more_->hide();
         return;
