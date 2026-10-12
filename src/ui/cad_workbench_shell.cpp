@@ -190,7 +190,14 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
         QStringLiteral("documentToolsHost"));
     editor_tools_layout_ =
         new QHBoxLayout(document_tools_host);
-    editor_tools_layout_->setContentsMargins(0, 0, 0, 0);
+    // Reserve a compact caption rail WITHIN the contextual tool row.
+    // Original CAD buttons remain direct members of this QHBoxLayout;
+    // passive group headings occupy the rail above them, not width
+    // between them. The row height is independent of Edit/hover state.
+    const int toolbar_caption_height =
+        std::max(18, fontMetrics().lineSpacing() + 4);
+    editor_tools_layout_->setContentsMargins(
+        0, toolbar_caption_height + 4, 0, 3);
     editor_tools_layout_->addStretch(1);
     document_tools_scroll->setWidget(
         document_tools_host);
@@ -1145,6 +1152,23 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     const QString context_name = toolbar_sketch_context_
         ? QStringLiteral("Sketch") : QStringLiteral("Part");
 
+    // The original semantic group QLabel keeps its identity/text and
+    // Workbench ownership, but leaves the horizontal button layout.
+    // The passive frame pass positions it above the original buttons.
+    // This removes the previously oversized inline caption width.
+    for (const auto& group : groups) {
+        if (*group.label_object_name == '\0') continue;
+        auto* label = findChild<QLabel*>(
+            QString::fromLatin1(group.label_object_name));
+        if (label == nullptr ||
+            editor_tools_layout_->indexOf(label) < 0) continue;
+        editor_tools_layout_->removeWidget(label);
+        label->setAttribute(Qt::WA_TransparentForMouseEvents);
+        label->setFocusPolicy(Qt::NoFocus);
+        label->setToolTip(label->text());
+        label->hide(); // later positioned by the coalesced frame pass
+    }
+
     // Explicit Customize mode: one marker per WHOLE contextual group.
     // The marker is a passive hidden affordance outside this mode and
     // is never part of the CAD command routing/Undo/Part authored data.
@@ -1210,12 +1234,10 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
                     QString::fromLatin1(
                         group.tool_object_names.front()));
             }
-            const int index = group_first == nullptr
-                ? -1 : editor_tools_layout_->indexOf(group_first);
-            editor_tools_layout_->insertWidget(
-                index >= 0 ? index :
-                    std::max(0, editor_tools_layout_->count() - 1),
-                pin);
+            // Pin stays the SAME real interactive Qt widget, but
+            // is overlaid next to the caption rather than consuming
+            // an entire button-height column in the tools layout.
+            pin->hide();
             toolbar_pin_markers_.insert(key, pin);
         }
         pin->setProperty("pinned", group.pinned);
@@ -1227,7 +1249,9 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         pin->setFocusPolicy(
             toolbar_customize_active_
                 ? Qt::StrongFocus : Qt::NoFocus);
-        pin->setVisible(toolbar_customize_active_ || group.pinned);
+        // Only the frame update may reveal a pin: groups collapsed
+        // into named dropdowns must not leave orphan markers.
+        pin->hide();
     }
 
     // Intentional whole-group keyboard customization. No individual
@@ -1413,7 +1437,10 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     const auto group_width = [&](const ToolbarGroupSpec& group) {
         int width = 0;
         const auto count = [&](QWidget* widget) {
-            return widget != nullptr && !widget->isHidden()
+            // Floating headings/pins never take horizontal layout
+            // space and must not distort tier-1..4 width decisions.
+            return widget != nullptr && !widget->isHidden() &&
+                editor_tools_layout_->indexOf(widget) >= 0
                 ? widget->sizeHint().width() + gap
                 : 0;
         };
@@ -1474,18 +1501,14 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             widget->hide();
             hidden_for_context.push_back(widget);
         };
-        if (*group.label_object_name != '\0') {
-            hide_one(findChild<QWidget*>(
-                QString::fromLatin1(group.label_object_name)));
-        }
+        // Caption and pin are overlays; they follow the visibility
+        // of the original buttons in updateToolbarGroupFrames().
         for (const char* id : group.tool_object_names) {
             hide_one(findChild<QPushButton*>(
                 QString::fromLatin1(id)));
         }
         const QString group_key = context_name +
             QStringLiteral("_") + QString::fromLatin1(group.name);
-        hide_one(toolbar_pin_markers_.value(
-            group_key, nullptr));
         hide_one(toolbar_group_handles_.value(
             group_key, nullptr));
     };
@@ -1626,7 +1649,7 @@ void CadWorkbenchShell::updateToolbarGroupFrames() {
         const QString name = QString::fromLatin1(group.name);
         if (toolbar_sketch_context_ &&
             name == QStringLiteral("Select")) {
-            continue; // fixed base tool, intentionally has no group box
+            continue; // original fixed base tool has no frame/caption
         }
         const QString key = context + QStringLiteral("_") + name;
         auto* frame = toolbar_group_frames_.value(key, nullptr);
@@ -1645,49 +1668,109 @@ void CadWorkbenchShell::updateToolbarGroupFrames() {
             toolbar_group_frames_.insert(key, frame);
         }
 
-        QRect bounds;
-        bool any = false;
+        // Measure only actual DIRECT command widgets. Named group menus
+        // have their own captions; decorating those again would leave
+        // a redundant header and needlessly widen compact overflow.
+        QRect tools_bounds;
+        bool has_direct_tool = false;
         const auto collect = [&](QWidget* widget) {
             if (widget == nullptr || widget->isHidden() ||
                 widget->width() <= 0 || widget->height() <= 0 ||
                 widget->parentWidget() != host) return;
             const QRect rect{
                 widget->mapTo(host, QPoint{0, 0}), widget->size()};
-            bounds = any ? bounds.united(rect) : rect;
-            any = true;
+            tools_bounds = tools_bounds.isNull()
+                ? rect : tools_bounds.united(rect);
         };
-        if (*group.label_object_name != '\0') {
-            collect(findChild<QWidget*>(
-                QString::fromLatin1(group.label_object_name)));
+        for (const char* id : group.tool_object_names) {
+            auto* original = findChild<QPushButton*>(
+                QString::fromLatin1(id));
+            if (original != nullptr && !original->isHidden()) {
+                has_direct_tool = true;
+                collect(original);
+            }
         }
-        collect(toolbar_pin_markers_.value(key, nullptr));
+        if (!has_direct_tool || tools_bounds.isNull()) continue;
+        // Customize's existing whole-group drag handle stays directly
+        // in the button row and within the same outlined group.
         collect(toolbar_group_handles_.value(key, nullptr));
-        for (const char* object_name : group.tool_object_names) {
-            collect(findChild<QPushButton*>(
-                QString::fromLatin1(object_name)));
-        }
-        collect(toolbar_group_dropdowns_.value(key, nullptr));
-        if (!any) continue;
-        // Paint behind the existing widgets: neither the single-row
-        // layout's measured width nor native command identity changes.
-        const QRect border_rect =
-            bounds.adjusted(-3, -3, 3, 3).intersected(host->rect());
+
+        auto* label = *group.label_object_name == '\0'
+            ? nullptr : findChild<QLabel*>(
+                QString::fromLatin1(group.label_object_name));
+        auto* pin = toolbar_pin_markers_.value(key, nullptr);
+        const int title_height = label == nullptr
+            ? std::max(18, host->fontMetrics().lineSpacing() + 4)
+            : std::max(18, label->fontMetrics().lineSpacing() + 4);
+        // A single compact, bounded caption rail is ABOVE the
+        // untouched command buttons; no second toolbar row is created.
+        // Avoid frame/header geometry feedback into the QHBoxLayout.
+        const QRect border_rect = tools_bounds.adjusted(
+            -3, -title_height - 5, 3, 3).intersected(host->rect());
         if (frame->geometry() != border_rect) {
             frame->setGeometry(border_rect);
         }
         if (frame->isHidden()) frame->show();
-        // Lower only once at construction. Repeated lower() repaints
-        // the full group area even if its geometry is unchanged.
         if (first_frame) frame->lower();
+
+        const bool pin_visible = pin != nullptr &&
+            (toolbar_customize_active_ ||
+             pin->property("pinned").toBool());
+        const int top = border_rect.top() + 2;
+        const int left = border_rect.left() + 4;
+        if (pin != nullptr) {
+            if (pin_visible) {
+                const QRect pin_rect{left, top, 16, title_height};
+                if (pin->geometry() != pin_rect) {
+                    pin->setGeometry(pin_rect);
+                }
+                if (pin->isHidden()) pin->show();
+            } else if (!pin->isHidden()) {
+                pin->hide();
+            }
+        }
+        if (label != nullptr) {
+            const int caption_left =
+                left + (pin_visible ? 18 : 0);
+            const QRect label_rect{
+                caption_left, top,
+                std::max(0, border_rect.right() - caption_left - 3),
+                title_height};
+            if (label->geometry() != label_rect) {
+                label->setGeometry(label_rect);
+            }
+            if (label->isHidden()) label->show();
+        }
         visible_frames.insert(key);
     }
-    // Avoid hide/show on every resize callback: that can trigger
-    // needless LayoutRequest feedback in the QScrollArea host.
+    // Reflow or context switches cannot leave old floating captions
+    // or pins stranded after the original buttons have disappeared.
     for (auto it = toolbar_group_frames_.begin();
          it != toolbar_group_frames_.end(); ++it) {
-        if (it.value() && !visible_frames.contains(it.key()) &&
+        if (it.value() != nullptr &&
+            !visible_frames.contains(it.key()) &&
             !it.value()->isHidden()) {
             it.value()->hide();
+        }
+    }
+    for (bool sketch : {false, true}) {
+        const QString other_context = sketch
+            ? QStringLiteral("Sketch") : QStringLiteral("Part");
+        for (const auto& group : toolbarGroups(sketch)) {
+            if (*group.label_object_name == '\0') continue;
+            const QString key = other_context +
+                QStringLiteral("_") +
+                QString::fromLatin1(group.name);
+            if (visible_frames.contains(key)) continue;
+            auto* label = findChild<QLabel*>(
+                QString::fromLatin1(group.label_object_name));
+            // Do not manipulate a label still owned by the original
+            // layout before this context's first activation.
+            if (label != nullptr &&
+                editor_tools_layout_->indexOf(label) < 0 &&
+                !label->isHidden()) label->hide();
+            auto* pin = toolbar_pin_markers_.value(key, nullptr);
+            if (pin != nullptr && !pin->isHidden()) pin->hide();
         }
     }
 }
