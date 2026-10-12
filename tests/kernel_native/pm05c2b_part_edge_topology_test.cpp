@@ -431,6 +431,94 @@ generatedBoundaryReferences(
     return result;
 }
 
+
+struct G0VertexCounts final {
+    std::size_t native{};
+    std::size_t resolved{};
+    std::size_t ambiguous{};
+    std::size_t missing{};
+    std::size_t unsupported{};
+    std::size_t point_witnesses{};
+    std::size_t diagnostic_xyz{};
+};
+
+// RG-02A/G0: read-only *native Part-stage* characterization. A click in
+// the Viewer is not itself a durable Point, and XYZ never grants identity.
+// Retain every unsupported/ambiguous outcome as evidence, not a test fix.
+G0VertexCounts characterizeNativeVertices(
+    const part::BodyStageTopologyCatalog& catalog,
+    const char* fixture) {
+    CHECK(catalog.valid());
+    CHECK(catalog.complete());
+
+    G0VertexCounts counts;
+    counts.native = catalog.vertices.size();
+    for (const auto& vertex : catalog.vertices) {
+        CHECK(vertex.runtime_token.valid());
+        CHECK(
+            vertex.accounting_class !=
+            part::TopologyAccountingClass::
+                integrity_failure);
+        if (vertex.provider_point) {
+            ++counts.diagnostic_xyz;
+        }
+        switch (vertex.referenceability) {
+        case kernel::ReferenceStatus::resolved: {
+            ++counts.resolved;
+            CHECK(vertex.point_candidates.size() == 1U);
+            const auto& address =
+                vertex.point_candidates.front();
+            CHECK(address.valid());
+            CHECK(address.adjacent_surfaces.size() == 3U);
+            const auto point =
+                std::find_if(
+                    catalog.points.begin(),
+                    catalog.points.end(),
+                    [&address](const auto& candidate) {
+                        return candidate.address == address;
+                    });
+            CHECK(point != catalog.points.end());
+            CHECK(
+                point->status ==
+                kernel::ReferenceStatus::resolved);
+            CHECK(point->current_vertices.size() == 1U);
+            CHECK(
+                point->current_vertices.front() ==
+                vertex.runtime_token);
+            ++counts.point_witnesses;
+            break;
+        }
+        case kernel::ReferenceStatus::ambiguous:
+            ++counts.ambiguous;
+            break;
+        case kernel::ReferenceStatus::missing:
+            ++counts.missing;
+            break;
+        case kernel::ReferenceStatus::unsupported:
+            ++counts.unsupported;
+            break;
+        }
+    }
+    CHECK(
+        counts.native ==
+        counts.resolved + counts.ambiguous +
+            counts.missing + counts.unsupported);
+    std::cout
+        << "RG02A_G0_VERTEX_NATIVE"
+        << " fixture=" << fixture
+        << " native=" << counts.native
+        << " resolved=" << counts.resolved
+        << " ambiguous=" << counts.ambiguous
+        << " missing=" << counts.missing
+        << " unsupported=" << counts.unsupported
+        << " unique_point_witnesses=" << counts.point_witnesses
+        << " provider_xyz_diagnostic=" << counts.diagnostic_xyz
+        << " stage_valid=" << catalog.stage.valid()
+        << " viewport_pickability=NOT_PROVEN"
+        << " cold_rebuild=NOT_PROVEN\n";
+    return counts;
+}
+
 } // namespace
 
 int main() {
@@ -452,6 +540,14 @@ int main() {
     CHECK(
         base_evaluation.features[0]
             .result_topology);
+    const auto g0_base = characterizeNativeVertices(
+        *base_evaluation.features[0].result_topology,
+        "V01-extrude");
+    CHECK(g0_base.native == 8U);
+    CHECK(g0_base.resolved == 8U);
+    CHECK(g0_base.point_witnesses == 8U);
+    CHECK(g0_base.ambiguous == 0U);
+    CHECK(g0_base.unsupported == 0U);
     const auto fillet_edges =
         trihedralReferences(
             *base_evaluation.features[0]
@@ -487,6 +583,10 @@ int main() {
     CHECK(
         chamfer_feature.result_topology
             ->complete());
+    // G0.2 characterization only: no guessed expected cardinality.
+    (void)characterizeNativeVertices(
+        *chamfer_feature.result_topology,
+        "V06-chamfer");
     CHECK(
         countRole(
             chamfer_feature,
@@ -574,6 +674,10 @@ int main() {
         part::FeatureEvaluationStatus::up_to_date);
     CHECK(fillet.result_topology);
     CHECK(fillet.result_topology->complete());
+    // G0.2 characterization only: record any unsupported transitions.
+    (void)characterizeNativeVertices(
+        *fillet.result_topology,
+        "V05-fillet");
     CHECK(
         countRole(
             fillet,
