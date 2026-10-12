@@ -7483,6 +7483,29 @@ int main(int argc, char* argv[]) {
         CHECK(chamfer_committed.body_status ==
               part::BodyEvaluationStatus::up_to_date);
         CHECK(viewport->runtimeDiagnostics().solid_committed_displayed);
+
+        // UI-01 G1: actual authorable Chamfer draft, not a synthetic
+        // pending flag. Tree entries for its Sketch/Profile are forbidden.
+        auto* chamfer_edit_item = featureTreeItem(
+            *tree, chamfer_session.document().body().features.back().id);
+        auto* chamfer_operations =
+            workbench.findChild<QWidget*>(
+                QStringLiteral("edgeFeatureOperationsWidget"));
+        CHECK(chamfer_edit_item && chamfer_operations);
+        tree->clearSelection();
+        tree->setCurrentItem(chamfer_edit_item);
+        chamfer_edit_item->setSelected(true);
+        QApplication::processEvents();
+        CHECK(edit->isEnabled());
+        edit->click();
+        QApplication::processEvents();
+        CHECK(!chamfer_operations->isHidden());
+        verifyUi01SolidFeatureEntryGuard(
+            workbench, *tree, chamfer_session,
+            *chamfer_operations, "Chamfer");
+        cancel->click();
+        QApplication::processEvents();
+        CHECK(chamfer_operations->isHidden());
         std::cerr
             << "PM05F_R2_PART008_CHAMFER_FINISH_PASS"
             << std::endl;
