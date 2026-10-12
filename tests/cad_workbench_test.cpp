@@ -526,6 +526,54 @@ int main(int argc, char* argv[]) {
         CHECK(frame->testAttribute(Qt::WA_TransparentForMouseEvents));
     }
 
+    // UI-01 G3 Owner-accepted compact sectors: the semantic heading
+    // and the passive pin belong ABOVE the original command buttons,
+    // inside the SAME tight frame, not inline as an extra wide button row.
+    // Keep this geometry check native and independent of screenshot DPI.
+    auto* compact_host = workbench.findChild<QWidget*>(
+        QStringLiteral("documentToolsHost"));
+    auto* compact_modify_heading = workbench.findChild<QLabel*>(
+        QStringLiteral("partModifyToolsLabel"));
+    auto* compact_modify_frame = workbench.findChild<QFrame*>(
+        QStringLiteral("workbenchToolbarGroupFrame_Part_Modify"));
+    auto* compact_fillet = workbench.findChild<QPushButton*>(
+        QStringLiteral("filletToolButton"));
+    auto* compact_create_heading = workbench.findChild<QLabel*>(
+        QStringLiteral("partCreateToolsLabel"));
+    auto* compact_create_pin = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarPin_Part_Create"));
+    CHECK(compact_host && compact_modify_heading &&
+          compact_modify_frame && compact_fillet &&
+          compact_create_heading && compact_create_pin);
+    CHECK(compact_modify_heading->isVisible());
+    CHECK(compact_fillet->isVisible());
+    const QRect compact_modify_heading_bounds{
+        compact_modify_heading->mapTo(compact_host, QPoint{0, 0}),
+        compact_modify_heading->size()};
+    const QRect compact_fillet_bounds{
+        compact_fillet->mapTo(compact_host, QPoint{0, 0}),
+        compact_fillet->size()};
+    CHECK(compact_modify_heading_bounds.bottom() <
+          compact_fillet_bounds.top());
+    CHECK(compact_modify_frame->geometry().contains(
+        compact_modify_heading_bounds));
+    CHECK(compact_modify_frame->geometry().contains(
+        compact_fillet_bounds));
+    const QRect compact_create_heading_bounds{
+        compact_create_heading->mapTo(compact_host, QPoint{0, 0}),
+        compact_create_heading->size()};
+    const QRect compact_create_pin_bounds{
+        compact_create_pin->mapTo(compact_host, QPoint{0, 0}),
+        compact_create_pin->size()};
+    CHECK(compact_create_pin_bounds.center().y() >=
+          compact_create_heading_bounds.top());
+    CHECK(compact_create_pin_bounds.center().y() <=
+          compact_create_heading_bounds.bottom());
+    CHECK(compact_create_heading_bounds.bottom() <
+          compact_fillet_bounds.top());
+    std::cout << "UI01_G3_COMPACT_SECTOR_HEADER_NATIVE_PASS"
+              << std::endl;
+
     // Owner screenshot G2 RED: Project Geometry Source/Role/Remove
     // widgets must adapt to the measured Operations viewport width
     // rather than exposing clipped second/third source buttons.
