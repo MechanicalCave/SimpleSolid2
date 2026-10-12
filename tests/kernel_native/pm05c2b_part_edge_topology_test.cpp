@@ -100,6 +100,83 @@ part::PartDocument makeBasePart() {
     return std::move(*restored.document);
 }
 
+// G0/V03: a real Part-owned Add followed by a native Cut. Each Profile has
+// its own Sketch; never infer new topological identity from coordinates.
+part::PartDocument withInteriorCut(
+    const part::PartDocument& base) {
+    auto restored =
+        part::PartDocument::restore(
+            base.documentId(),
+            base.state(),
+            base.revision());
+    CHECK(restored.ok());
+    application::DocumentSession session{
+        {},
+        std::move(*restored.document)};
+
+    const auto sketch_created =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
+
+    const auto cut_rectangle =
+        session.execute(
+            application::AddSketchRectangleCommand{
+                *sketch_created.sketch_id,
+                session.document().revision(),
+                {10.0, 5.0},
+                {30.0, 25.0},
+                sketch::EntityRole::regular,
+                false});
+    CHECK(cut_rectangle.ok());
+
+    const auto* cut_sketch =
+        session.document().findSketch(
+            *sketch_created.sketch_id);
+    CHECK(cut_sketch != nullptr);
+    const auto cut_regions =
+        sketch::analyzeRegions(cut_sketch->model);
+    CHECK(cut_regions.complete());
+    CHECK(cut_regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            cut_regions.regions.front());
+    CHECK(intent.has_value());
+    const auto cut_profile =
+        session.execute(
+            application::CreateProfileCommand{
+                *sketch_created.sketch_id,
+                session.document().revision(),
+                *intent});
+    CHECK(cut_profile.ok() && cut_profile.profile_id);
+
+    auto state = session.document().state();
+    const auto cut_id =
+        state.body.next_feature_id.allocate();
+    CHECK(cut_id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *cut_id,
+            "InteriorCut",
+            false,
+            part::ExtrudeFeature{
+                *cut_profile.profile_id,
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0},
+                    false}}});
+    auto cut_document =
+        part::PartDocument::restore(
+            session.document().documentId(),
+            std::move(state),
+            session.document().revision());
+    CHECK(cut_document.ok());
+    return std::move(*cut_document.document);
+}
+
 std::vector<part::MaterialEdgeReference>
 trihedralReferences(
     const part::BodyStageTopologyCatalog& catalog) {
@@ -548,6 +625,70 @@ int main() {
     CHECK(g0_base.point_witnesses == 8U);
     CHECK(g0_base.ambiguous == 0U);
     CHECK(g0_base.unsupported == 0U);
+    // G0/V03: a real bounded Cut opening an interior pocket in the
+    // positive-Z base prism. Inherited and new Vertex semantics are compared
+    // by durable Point addresses, not runtime token/XYZ equality.
+    const auto cut_document =
+        withInteriorCut(base_document);
+    const auto cut_evaluation =
+        part::evaluatePart(cut_document, kernel);
+    CHECK(
+        cut_evaluation.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(cut_evaluation.features.size() == 2U);
+    CHECK(
+        cut_evaluation.features[0].result_topology);
+    CHECK(
+        cut_evaluation.features[1].status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(
+        cut_evaluation.features[1].result_topology);
+    const auto& g0_cut_stage =
+        *cut_evaluation.features[1].result_topology;
+    CHECK(
+        g0_cut_stage.stage !=
+        cut_evaluation.features[0]
+            .result_topology->stage);
+    const auto g0_cut =
+        characterizeNativeVertices(
+            g0_cut_stage,
+            "V03-interior-cut");
+    CHECK(g0_cut.native > g0_base.native);
+    std::size_t inherited_points = 0U;
+    std::size_t new_points = 0U;
+    for (const auto& vertex : g0_cut_stage.vertices) {
+        if (vertex.referenceability !=
+                kernel::ReferenceStatus::resolved) {
+            continue;
+        }
+        CHECK(vertex.point_candidates.size() == 1U);
+        const auto& current_point =
+            vertex.point_candidates.front();
+        const auto inherited =
+            std::find_if(
+                base_evaluation.features[0]
+                    .result_topology->points.begin(),
+                base_evaluation.features[0]
+                    .result_topology->points.end(),
+                [&current_point](const auto& point) {
+                    return point.address == current_point;
+                });
+        if (inherited !=
+            base_evaluation.features[0]
+                .result_topology->points.end()) {
+            ++inherited_points;
+        } else {
+            ++new_points;
+        }
+    }
+    CHECK(inherited_points >= 8U);
+    CHECK(new_points > 0U);
+    std::cout
+        << "RG02A_G0_V03"
+        << " inherited_resolved=" << inherited_points
+        << " new_resolved=" << new_points
+        << " prior_stage_independent=1"
+        << " persisted_new_point_source=NOT_IMPLEMENTED\\n";
     const auto fillet_edges =
         trihedralReferences(
             *base_evaluation.features[0]
