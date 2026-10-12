@@ -9,9 +9,12 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QSplitter>
+#include <QTabWidget>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace simplesolid2::ui {
 
@@ -189,12 +192,12 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
         QStringLiteral("workbenchRightVerticalSplitter"));
     right_vertical_splitter_->setChildrenCollapsible(false);
 
-    auto* properties_group =
+    auto* properties_group_ =
         new QGroupBox(
             QStringLiteral("Properties"), right_vertical_splitter_);
-    properties_group->setMinimumHeight(0);
-    properties_host_layout_ = new QVBoxLayout(properties_group);
-    properties_scroll_ = new QScrollArea(properties_group);
+    properties_group_->setMinimumHeight(0);
+    properties_host_layout_ = new QVBoxLayout(properties_group_);
+    properties_scroll_ = new QScrollArea(properties_group_);
     properties_scroll_->setObjectName(
         QStringLiteral("workbenchPropertiesScroll"));
     properties_scroll_->setWidgetResizable(true);
@@ -207,14 +210,14 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     properties_scroll_->setSizePolicy(
         QSizePolicy::Ignored, QSizePolicy::Expanding);
     properties_host_layout_->addWidget(properties_scroll_, 1);
-    right_vertical_splitter_->addWidget(properties_group);
+    right_vertical_splitter_->addWidget(properties_group_);
 
-    auto* operations_group =
+    auto* operations_group_ =
         new QGroupBox(
             QStringLiteral("Operations"), right_vertical_splitter_);
-    operations_group->setMinimumHeight(0);
-    operations_host_layout_ = new QVBoxLayout(operations_group);
-    operations_scroll_ = new QScrollArea(operations_group);
+    operations_group_->setMinimumHeight(0);
+    operations_host_layout_ = new QVBoxLayout(operations_group_);
+    operations_scroll_ = new QScrollArea(operations_group_);
     operations_scroll_->setObjectName(
         QStringLiteral("workbenchOperationsScroll"));
     operations_scroll_->setWidgetResizable(true);
@@ -227,11 +230,33 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     operations_scroll_->setSizePolicy(
         QSizePolicy::Ignored, QSizePolicy::Expanding);
     operations_host_layout_->addWidget(operations_scroll_, 1);
-    right_vertical_splitter_->addWidget(operations_group);
+    right_vertical_splitter_->addWidget(operations_group_);
     right_vertical_splitter_->setStretchFactor(0, 2);
     right_vertical_splitter_->setStretchFactor(1, 3);
     right_vertical_splitter_->setSizes({400, 600});
     right_layout->addWidget(right_vertical_splitter_, 1);
+
+    // Tabs occupy the same right-column slot only when measured effective
+    // height is insufficient for two independently usable scroll panes.
+    right_short_tabs_ = new QTabWidget(right_panel);
+    right_short_tabs_->setObjectName(
+        QStringLiteral("workbenchRightShortTabs"));
+    right_short_tabs_->setTabPosition(QTabWidget::North);
+    right_short_tabs_->setVisible(false);
+    right_layout->addWidget(right_short_tabs_, 1);
+    connect(
+        right_vertical_splitter_,
+        &QSplitter::splitterMoved,
+        this,
+        [this](int, int) {
+            const auto sizes = right_vertical_splitter_->sizes();
+            if (!short_right_panel_mode_ && sizes.size() == 2 &&
+                sizes[0] > 0 && sizes[1] > 0) {
+                right_panel_ratio_ =
+                    static_cast<double>(sizes[0]) /
+                    static_cast<double>(sizes[0] + sizes[1]);
+            }
+        });
 
     splitter->addWidget(right_panel);
 
@@ -324,6 +349,88 @@ void CadWorkbenchShell::setOperationsContent(QWidget* widget) {
     // installed. Content size hints must not silently promote the side
     // panels or undo a narrow/compact presentation.
     updateResponsiveLayout(true);
+}
+
+double CadWorkbenchShell::rightPanelRatio() const {
+    if (!short_right_panel_mode_ &&
+        right_vertical_splitter_ != nullptr &&
+        !right_vertical_splitter_->isHidden()) {
+        const auto sizes = right_vertical_splitter_->sizes();
+        if (sizes.size() == 2 && sizes[0] > 0 && sizes[1] > 0) {
+            return static_cast<double>(sizes[0]) /
+                static_cast<double>(sizes[0] + sizes[1]);
+        }
+    }
+    return right_panel_ratio_;
+}
+
+void CadWorkbenchShell::setRightPanelRatio(double ratio) {
+    if (!(ratio > 0.0 && ratio < 1.0)) return;
+    right_panel_ratio_ = ratio;
+    applyRightPanelRatio();
+}
+
+void CadWorkbenchShell::setOperationsActive(bool active) {
+    const bool entering = active && !operations_active_;
+    operations_active_ = active;
+    if (entering && short_right_panel_mode_) {
+        right_short_tabs_->setCurrentIndex(1);
+    }
+}
+
+void CadWorkbenchShell::applyRightPanelRatio() {
+    if (right_vertical_splitter_ == nullptr ||
+        short_right_panel_mode_) {
+        return;
+    }
+    const int total = std::max(
+        200, right_vertical_splitter_->height());
+    const int properties_height = static_cast<int>(
+        right_panel_ratio_ * total);
+    right_vertical_splitter_->setSizes(
+        {properties_height, total - properties_height});
+}
+
+void CadWorkbenchShell::updateRightPanelHeightMode() {
+    if (right_panel_ == nullptr ||
+        right_vertical_splitter_ == nullptr ||
+        right_short_tabs_ == nullptr ||
+        !isVisible()) {
+        return;
+    }
+    // Measured available panel height with separate enter/exit thresholds.
+    // Never depend on width; do not modify a draft or the Tree selection.
+    constexpr int enter_short_height = 470;
+    constexpr int leave_short_height = 550;
+    const int available_height = right_panel_->height();
+    const bool short_required = short_right_panel_mode_
+        ? available_height < leave_short_height
+        : available_height < enter_short_height;
+    if (short_required == short_right_panel_mode_) return;
+
+    if (short_required) {
+        right_panel_ratio_ = rightPanelRatio();
+        right_vertical_splitter_->hide();
+        right_short_tabs_->addTab(
+            properties_group_, QStringLiteral("Properties"));
+        right_short_tabs_->addTab(
+            operations_group_, QStringLiteral("Operations"));
+        short_right_panel_mode_ = true;
+        right_short_tabs_->setCurrentIndex(
+            operations_active_ ? 1 : 0);
+        right_short_tabs_->show();
+    } else {
+        right_short_tabs_->hide();
+        right_short_tabs_->removeTab(1);
+        right_short_tabs_->removeTab(0);
+        right_vertical_splitter_->addWidget(properties_group_);
+        right_vertical_splitter_->addWidget(operations_group_);
+        short_right_panel_mode_ = false;
+        right_vertical_splitter_->show();
+        properties_group_->show();
+        operations_group_->show();
+        applyRightPanelRatio();
+    }
 }
 
 void CadWorkbenchShell::resizeEvent(QResizeEvent* event) {
@@ -424,6 +531,8 @@ void CadWorkbenchShell::updateResponsiveLayout(bool force) {
             break;
         }
     }
+
+    updateRightPanelHeightMode();
 
     if (!force &&
         responsive_initialized_ &&
