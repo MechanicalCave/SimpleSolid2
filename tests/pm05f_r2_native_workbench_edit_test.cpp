@@ -1857,10 +1857,14 @@ int main(int argc, char* argv[]) {
             const auto undo_before = session.undoDepth();
             const bool dirty_before = session.needsSave();
 
-            auto doubleClickTreeEntry = [&](const QString& title) {
+            // Tree labels are presentation (Profile can have a generated
+            // semantic-ID label or an authored name). Pick exact identities.
+            auto doubleClickTreeEntry = [&](int id_role,
+                                            const QString& semantic_id) {
                 QTreeWidgetItem* target = nullptr;
                 for (QTreeWidgetItemIterator it(tree); *it; ++it) {
-                    if ((*it)->text(0) == title) {
+                    if ((*it)->data(0, id_role).toString() ==
+                        semantic_id) {
                         target = *it;
                         break;
                     }
@@ -1880,7 +1884,11 @@ int main(int argc, char* argv[]) {
                 QApplication::processEvents();
             };
 
-            doubleClickTreeEntry(QStringLiteral("Sketch 1"));
+            CHECK(!session.document().sketches().empty());
+            doubleClickTreeEntry(
+                Qt::UserRole + 42,
+                QString::fromStdString(
+                    session.document().sketches().front().id.value()));
             std::cerr << "UI01_G0_NATIVE_SKETCH_ENTRY"
                       << " sketch_finish_visible="
                       << (!finish_sketch->isHidden())
@@ -1895,7 +1903,11 @@ int main(int argc, char* argv[]) {
             CHECK(session.undoDepth() == undo_before);
             CHECK(session.needsSave() == dirty_before);
 
-            doubleClickTreeEntry(QStringLiteral("Profile 1"));
+            CHECK(!session.document().profiles().empty());
+            doubleClickTreeEntry(
+                Qt::UserRole + 43,
+                QString::fromStdString(
+                    session.document().profiles().front().id.serialized()));
             CHECK(finish_sketch->isHidden());
             CHECK(!extrude_operations->isHidden());
             CHECK(session.document().state() == state_before);
