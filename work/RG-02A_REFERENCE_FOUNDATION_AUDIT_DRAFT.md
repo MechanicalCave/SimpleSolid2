@@ -1,8 +1,8 @@
 # RG-02A — Stage-aware Body point/reference foundation: technical audit (DRAFT)
 
-**Status:** DRAFT technical evidence, NOT implementation authority  
+**Status:** DRAFT technical evidence, NOT implementation authority; bounded RG-02A/G0 evidence-only contract scope was Owner-accepted, but remains unmerged/unactivated  
 **Date:** 2026-10-12  
-**Baseline:** `main` at `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c`  
+**Audited source baseline:** `main` at `fa0f8074dc7bb0eb5e2c45ab0fa313644febf55c` (UI-01 merge); governance subsequently advanced to roadmap v1.32 as of `108420705aaee9182ca649401e73f1ca23309de2`. Source assumptions must be revalidated against active `main` before executing G0.  
 **Parent design draft:** `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md` (mandatory Owner UX approval before any UI work)
 
 ## 1. Audited current production contracts
