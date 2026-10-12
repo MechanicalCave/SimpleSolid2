@@ -11253,11 +11253,28 @@ void CadWorkbench::cancelSketchTool() {
     syncActionState();
 }
 
+bool CadWorkbench::hasActiveSolidFeatureDraft() const noexcept {
+    return extrude_draft_.has_value() ||
+           revolve_draft_.has_value() ||
+           fillet_draft_.has_value() ||
+           chamfer_draft_.has_value();
+}
+
 void CadWorkbench::requestEditSketch(
     const sketch::SketchId& sketch_id) {
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+
+    if (hasActiveSolidFeatureDraft()) {
+        // A Tree action may inspect another object but must never
+        // open a second mutable Sketch/Profile edit beside a live
+        // Extrude/Revolve/Fillet/Chamfer Feature draft.
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active Feature Edit before editing a Sketch or Profile."));
         return;
     }
 
@@ -11298,6 +11315,13 @@ void CadWorkbench::requestEditProfile(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+
+    if (hasActiveSolidFeatureDraft()) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active Feature Edit before editing a Sketch or Profile."));
         return;
     }
 

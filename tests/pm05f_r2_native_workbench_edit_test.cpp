@@ -1776,6 +1776,11 @@ int main(int argc, char* argv[]) {
     const bool pg01d_negative_only =
         argc == 2 &&
         std::string_view{argv[1]} == "--pg01d-negative";
+    // G0: run just this real Qt/OCCT edit-context characterization
+    // with --ui01-p0-red, or as a mandatory prelude to the native suite.
+    const bool ui01_p0_red_only =
+        argc == 2 &&
+        std::string_view{argv[1]} == "--ui01-p0-red";
     kernel_occt::OcctSolidModelingKernel kernel;
     if (pg01d_negative_only) {
         verifyPg01dMalformedBoundaryFailClosed(kernel);
@@ -1819,6 +1824,208 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+
+        if (ui01_p0_red_only ||
+            (!pg01d_ui_only && !pg01c_only)) {
+            // UI-01 G0 P0: native Tree -> Workbench edit entry.
+            // This MUST be RED before introducing any product guard.
+            // The fixture is a real authored Part with a valid Extrude
+            // and a selectable source Sketch/Profile, not a mock draft.
+            CHECK(session.document().body().features.size() == 1U);
+            auto* extrude_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("extrudeOperationsWidget"));
+            auto* extrude_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("extrudeCancelButton"));
+            auto* finish_sketch = workbench.findChild<QPushButton*>(
+                QStringLiteral("finishSketchButton"));
+            auto* edit_sketch = workbench.findChild<QAction*>(
+                QStringLiteral("editSketchAction"));
+            auto* edit_profile = workbench.findChild<QAction*>(
+                QStringLiteral("editProfileAction"));
+            auto* status = workbench.findChild<QLabel*>(
+                QStringLiteral("workbenchStatus"));
+            CHECK(extrude_operations && extrude_cancel &&
+                  finish_sketch && edit_sketch && edit_profile && status);
+
+            auto* feature_item = featureTreeItem(
+                *tree, session.document().body().features.front().id);
+            CHECK(feature_item != nullptr);
+            tree->clearSelection();
+            tree->setCurrentItem(feature_item);
+            feature_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(edit->isEnabled());
+            edit->click();
+            QApplication::processEvents();
+            CHECK(!extrude_operations->isHidden());
+            CHECK(!extrude_cancel->isHidden());
+            CHECK(finish_sketch->isHidden());
+
+            const auto feature_draft_revision =
+                session.document().revision();
+            const auto feature_draft_state =
+                session.document().state();
+            const auto feature_draft_undo =
+                session.undoDepth();
+
+            const auto sketch_items = tree->findItems(
+                QStringLiteral("Sketch 1"),
+                Qt::MatchExactly | Qt::MatchRecursive);
+            CHECK(sketch_items.size() == 1);
+            tree->clearSelection();
+            tree->setCurrentItem(sketch_items.front());
+            sketch_items.front()->setSelected(true);
+            QApplication::processEvents();
+            CHECK(edit_sketch->isEnabled());
+            edit_sketch->trigger();
+            QApplication::processEvents();
+
+            const bool sketch_opened =
+                !finish_sketch->isHidden();
+            const bool draft_preserved =
+                !extrude_operations->isHidden();
+            std::cerr
+                << "UI01_G0_P0_FEATURE_SKETCH_ENTRY"
+                << " sketch_opened=" << (sketch_opened ? 1 : 0)
+                << " feature_draft_present=" << (draft_preserved ? 1 : 0)
+                << " revision_unchanged="
+                << (session.document().revision() ==
+                    feature_draft_revision ? 1 : 0)
+                << " undo_unchanged="
+                << (session.undoDepth() == feature_draft_undo ? 1 : 0)
+                << " status=" << status->text().toStdString()
+                << std::endl;
+
+            // This assertion is intentionally expected to FAIL on
+            // the as-built baseline: requestEditSketch has no active
+            // solid-Feature draft guard. Keep the witnessed RED.
+            CHECK(!sketch_opened);
+            CHECK(status->text().contains(
+                QStringLiteral("Finish or cancel")));
+            CHECK(draft_preserved);
+            CHECK(session.document().revision() ==
+                  feature_draft_revision);
+            CHECK(session.document().state() ==
+                  feature_draft_state);
+            CHECK(session.undoDepth() == feature_draft_undo);
+
+            // The Profile path also enters Sketch Edit indirectly.
+            // Once G1 fixes the Sketch path, cover this sibling path
+            // before allowing P1 UI layout changes.
+            CHECK(session.document().profiles().size() == 1U);
+            const auto profile_identity = QString::fromStdString(
+                session.document().profiles().front().id.serialized());
+            constexpr int profile_id_tree_role = Qt::UserRole + 43;
+            QTreeWidgetItem* profile_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                // Tree labels are user-editable (e.g. "Main Profile");
+                // route by immutable semantic ProfileId, not text.
+                if ((*it)->data(0, profile_id_tree_role).toString() ==
+                    profile_identity) {
+                    profile_item = *it;
+                    break;
+                }
+            }
+            CHECK(profile_item);
+            tree->clearSelection();
+            tree->setCurrentItem(profile_item);
+            profile_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(edit_profile->isEnabled());
+            edit_profile->trigger();
+            QApplication::processEvents();
+            CHECK(status->text().contains(
+                QStringLiteral("Finish or cancel")));
+            CHECK(finish_sketch->isHidden());
+            CHECK(!extrude_operations->isHidden());
+            CHECK(session.document().revision() ==
+                  feature_draft_revision);
+            CHECK(session.document().state() ==
+                  feature_draft_state);
+            CHECK(session.undoDepth() == feature_draft_undo);
+
+            // Positive control: explicit cancel unlocks legal Sketch
+            // editing and finishing it requires no authored mutation.
+            extrude_cancel->click();
+            QApplication::processEvents();
+            CHECK(extrude_operations->isHidden());
+            tree->clearSelection();
+            tree->setCurrentItem(sketch_items.front());
+            sketch_items.front()->setSelected(true);
+            edit_sketch->trigger();
+            QApplication::processEvents();
+            CHECK(!finish_sketch->isHidden());
+            finish_sketch->click();
+            QApplication::processEvents();
+            CHECK(finish_sketch->isHidden());
+            CHECK(session.document().revision() ==
+                  feature_draft_revision);
+            CHECK(session.document().state() ==
+                  feature_draft_state);
+            CHECK(session.undoDepth() == feature_draft_undo);
+            std::cout << "UI01_G0_P0_NATIVE_ENTRY_GUARD_PASS"
+                      << std::endl;
+
+            // Native creation-draft coverage for the other three solid
+            // Feature families. Using the same valid OCCT-backed Part
+            // avoids fabricating an invalid persisted Revolve fixture.
+            CHECK(workbench.activateDocument(&session, {}));
+            QApplication::processEvents();
+            auto* revolve_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("revolveOperationsWidget"));
+            auto* revolve_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("revolveCancelButton"));
+            auto* edge_operations = workbench.findChild<QWidget*>(
+                QStringLiteral("edgeFeatureOperationsWidget"));
+            CHECK(revolve_operations && revolve_cancel &&
+                  edge_operations);
+            for (const auto* command :
+                 {"REVOLVE", "FILLET", "CHAMFER"}) {
+                const bool revolve =
+                    std::string_view{command} == "REVOLVE";
+                auto* operations =
+                    revolve ? revolve_operations : edge_operations;
+                auto* cancel_draft =
+                    revolve ? revolve_cancel : cancel;
+                const auto reply = workbench.submitCadInput(
+                    command, workbench.cadInputContextGeneration());
+                CHECK(reply.accepted);
+                QApplication::processEvents();
+                CHECK(!operations->isHidden());
+                const auto draft_revision =
+                    session.document().revision();
+                const auto draft_state = session.document().state();
+                const auto draft_undo = session.undoDepth();
+                const auto sketch_rows = tree->findItems(
+                    QStringLiteral("Sketch 1"),
+                    Qt::MatchExactly | Qt::MatchRecursive);
+                CHECK(sketch_rows.size() == 1);
+                tree->clearSelection();
+                tree->setCurrentItem(sketch_rows.front());
+                sketch_rows.front()->setSelected(true);
+                edit_sketch->trigger();
+                QApplication::processEvents();
+                CHECK(finish_sketch->isHidden());
+                CHECK(!operations->isHidden());
+                CHECK(status->text().contains(
+                    QStringLiteral("Finish or cancel")));
+                CHECK(session.document().revision() == draft_revision);
+                CHECK(session.document().state() == draft_state);
+                CHECK(session.undoDepth() == draft_undo);
+                cancel_draft->click();
+                QApplication::processEvents();
+                CHECK(operations->isHidden());
+                std::cout << "UI01_P0_" << command
+                          << "_DRAFT_GUARD_PASS" << std::endl;
+            }
+
+            if (ui01_p0_red_only) {
+                result = EXIT_SUCCESS;
+                workbench.close();
+                app.quit();
+                return;
+            }
+        }
         if (!pg01d_ui_only && !pg01c_only) {
             // Edge Picking R1 G1 — exactly the untouched Owner native v16/v2
             // Part, unlike the auxiliary synthetic viewer visibility RED.
