@@ -9,6 +9,7 @@
 #include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -426,6 +427,21 @@ int main(int argc, char* argv[]) {
 
     CHECK(document_top_row->isAncestorOf(sketch_tool));
     CHECK(document_top_row->isAncestorOf(undo));
+
+    // UI-01 G3 native RED: the contextual tool surface must not rely on
+    // a horizontal scrollbar, must stay in one row with fixed Document
+    // actions, and must expose a last-resort named two-level More menu.
+    auto* contextual_tools_scroll =
+        workbench.findChild<QScrollArea*>(
+            QStringLiteral("documentToolsScroll"));
+    CHECK(contextual_tools_scroll != nullptr);
+    CHECK(contextual_tools_scroll->horizontalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOff);
+    auto* toolbar_more =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarMoreButton"));
+    CHECK(toolbar_more != nullptr);
+    CHECK(toolbar_more->menu() != nullptr);
 
     const auto sketch_top =
         sketch_tool->mapTo(
