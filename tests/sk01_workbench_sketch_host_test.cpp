@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFrame>
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
