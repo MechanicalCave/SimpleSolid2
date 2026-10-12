@@ -5946,11 +5946,26 @@ int main(int argc, char* argv[]) {
         QApplication::processEvents();
         const auto probes = authorableEdgeProbes(session, kernel);
 
+        // UI-01 G3 positive control for newly created Features:
+        // while Create owns the native draft, its ORIGINAL toolbar
+        // button is engaged; an authored Feature Edit is not.
+        auto* create_fillet_button =
+            workbench.findChild<QPushButton*>(
+                QStringLiteral("filletToolButton"));
+        auto* create_chamfer_button =
+            workbench.findChild<QPushButton*>(
+                QStringLiteral("chamferToolButton"));
+        CHECK(create_fillet_button && create_chamfer_button);
+        CHECK(!create_fillet_button->isChecked());
+        CHECK(!create_chamfer_button->isChecked());
         // Create the original Fillet through actual native cursor input,
         // not a fabricated provider-neutral PresentationToken intent.
         auto reply = workbench.submitCadInput(
             "FILLET", workbench.cadInputContextGeneration());
         CHECK(reply.accepted);
+        QApplication::processEvents();
+        CHECK(create_fillet_button->isChecked());
+        CHECK(!create_chamfer_button->isChecked());
         reply = workbench.lockCadDynamicInputField(
             0U, "1", workbench.cadInputContextGeneration());
         CHECK(reply.accepted);
@@ -5980,6 +5995,8 @@ int main(int argc, char* argv[]) {
         CHECK(creating_preview.solid_shading_styles_isolated);
         finish->click();
         QApplication::processEvents();
+        CHECK(!create_fillet_button->isChecked());
+        CHECK(!create_chamfer_button->isChecked());
         CHECK(session.document().body().features.size() == 2U);
         CHECK(!viewport->runtimeDiagnostics().solid_preview_displayed);
         const auto feature_id =
@@ -6139,6 +6156,11 @@ int main(int argc, char* argv[]) {
                 command,
                 workbench.cadInputContextGeneration());
             CHECK(reply.accepted);
+            QApplication::processEvents();
+            CHECK(create_fillet_button->isChecked() ==
+                  (variant == 0));
+            CHECK(create_chamfer_button->isChecked() ==
+                  (variant == 1));
             reply = workbench.lockCadDynamicInputField(
                 0U, "0.75",
                 workbench.cadInputContextGeneration());
@@ -6149,6 +6171,8 @@ int main(int argc, char* argv[]) {
             CHECK(finish->isEnabled());
             finish->click();
             QApplication::processEvents();
+            CHECK(!create_fillet_button->isChecked());
+            CHECK(!create_chamfer_button->isChecked());
             CHECK(
                 revolve_session.document().body()
                     .features.size() == 2U);
