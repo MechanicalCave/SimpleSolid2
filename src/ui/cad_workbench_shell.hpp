@@ -5,6 +5,7 @@
 #include <QString>
 #include <vector>
 
+class QEvent;
 class QGroupBox;
 class QHBoxLayout;
 class QMenu;
@@ -47,6 +48,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     enum class ResponsiveRegime {
