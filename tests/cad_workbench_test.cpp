@@ -760,6 +760,60 @@ int main(int argc, char* argv[]) {
               cold_layout->indexOf(cold_profile));
     }
 
+    // G3 native Sketch mouse gesture uses the SAME whole-group handle
+    // and Move Left/Right operation as the keyboard menu. Starting
+    // after keyboard move, a second move left crosses the Create group.
+    // Never drag Select or replace the original Project Geometry button.
+    auto* sketch_line_for_order =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("lineSketchToolButton"));
+    CHECK(sketch_line_for_order != nullptr);
+    CHECK(group_layout->indexOf(sketch_line_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    CHECK(sketch_references_handle->popupMode() ==
+          QToolButton::MenuButtonPopup);
+    const QPoint sketch_drag_begin{
+        4, sketch_references_handle->height() / 2};
+    const QPoint sketch_drag_end =
+        sketch_drag_begin + QPoint{-68, 0};
+    const QPointF sketch_drag_global_begin =
+        sketch_references_handle->mapToGlobal(sketch_drag_begin);
+    const QPointF sketch_drag_global_end =
+        sketch_references_handle->mapToGlobal(sketch_drag_end);
+    QMouseEvent sketch_drag_press{
+        QEvent::MouseButtonPress, QPointF{sketch_drag_begin},
+        sketch_drag_global_begin, Qt::LeftButton,
+        Qt::LeftButton, Qt::NoModifier};
+    QApplication::sendEvent(sketch_references_handle,
+                            &sketch_drag_press);
+    QMouseEvent sketch_drag_move{
+        QEvent::MouseMove, QPointF{sketch_drag_end},
+        sketch_drag_global_end, Qt::NoButton,
+        Qt::LeftButton, Qt::NoModifier};
+    QApplication::sendEvent(sketch_references_handle,
+                            &sketch_drag_move);
+    QMouseEvent sketch_drag_release{
+        QEvent::MouseButtonRelease, QPointF{sketch_drag_end},
+        sketch_drag_global_end, Qt::LeftButton,
+        Qt::NoButton, Qt::NoModifier};
+    QApplication::sendEvent(sketch_references_handle,
+                            &sketch_drag_release);
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(sketch_select_for_order) <
+          group_layout->indexOf(sketch_project_for_order));
+    CHECK(group_layout->indexOf(sketch_project_for_order) <
+          group_layout->indexOf(sketch_line_for_order));
+    persisted_toolbar_prefs.sync();
+    const auto sketch_dragged = persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Sketch/order"))
+            .toStringList();
+    CHECK(sketch_dragged.indexOf(QStringLiteral("References")) <
+          sketch_dragged.indexOf(QStringLiteral("Create")));
+    CHECK(!persisted_toolbar_prefs.contains(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/order")));
+    std::cout << "UI01_G3_SKETCH_WHOLE_GROUP_DRAG_PASS"
+              << std::endl;
+
     sketch_reset->trigger();
     QApplication::processEvents();
     CHECK(group_layout->indexOf(sketch_profile_for_order) <
