@@ -464,8 +464,14 @@ void verifyUi01SolidFeatureEntryGuard(
     const bool dirty_before = session.needsSave();
     auto* edge_label = workbench.findChild<QLabel*>(
         QStringLiteral("edgeFeatureSelectionLabel"));
-    auto* viewport_controller =
-        workbench.findChild<ui::PartViewportController*>();
+    ui::PartViewportController* viewport_controller = nullptr;
+    for (auto* child : workbench.children()) {
+        if (auto* found =
+                dynamic_cast<ui::PartViewportController*>(child)) {
+            viewport_controller = found;
+            break;
+        }
+    }
     const auto traceSelection = [&](const char* phase) {
         const auto edge_refs =
             viewport_controller != nullptr
