@@ -12,6 +12,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -614,6 +615,51 @@ int main(int argc, char* argv[]) {
     CHECK(group_layout->indexOf(datum_tool) <
           group_layout->indexOf(extrude_for_order));
     CHECK(pin_create->property("pinned").toBool());
+
+    // G3 mouse RED: use the SAME original whole-group handle; dragging
+    // it to the left moves Create exactly one group, leaving every
+    // QPushButton/QAction identity intact. Keyboard move remains available
+    // in the adjacent arrow menu; the gesture cannot open that menu.
+    CHECK(group_create_handle->popupMode() ==
+          QToolButton::MenuButtonPopup);
+    const QPoint drag_begin{
+        4, group_create_handle->height() / 2};
+    const QPoint drag_end = drag_begin + QPoint{-68, 0};
+    const QPointF drag_begin_global =
+        group_create_handle->mapToGlobal(drag_begin);
+    const QPointF drag_end_global =
+        group_create_handle->mapToGlobal(drag_end);
+    QMouseEvent drag_press{
+        QEvent::MouseButtonPress, QPointF{drag_begin},
+        drag_begin_global, Qt::LeftButton,
+        Qt::LeftButton, Qt::NoModifier};
+    QApplication::sendEvent(group_create_handle, &drag_press);
+    QMouseEvent drag_move{
+        QEvent::MouseMove, QPointF{drag_end},
+        drag_end_global, Qt::NoButton,
+        Qt::LeftButton, Qt::NoModifier};
+    QApplication::sendEvent(group_create_handle, &drag_move);
+    QMouseEvent drag_release{
+        QEvent::MouseButtonRelease, QPointF{drag_end},
+        drag_end_global, Qt::LeftButton,
+        Qt::NoButton, Qt::NoModifier};
+    QApplication::sendEvent(group_create_handle, &drag_release);
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(extrude_for_order) <
+          group_layout->indexOf(datum_tool));
+    persisted_toolbar_prefs.sync();
+    const auto dragged_part_order = persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Part/order"))
+            .toStringList();
+    CHECK(dragged_part_order.indexOf(QStringLiteral("Create")) <
+          dragged_part_order.indexOf(QStringLiteral("Work Features")));
+    group_reset->trigger();
+    QApplication::processEvents();
+    CHECK(group_layout->indexOf(datum_tool) <
+          group_layout->indexOf(extrude_for_order));
+    std::cout << "UI01_G3_WHOLE_GROUP_MOUSE_DRAG_PASS"
+              << std::endl;
+
     customize_toolbar->click();
     QApplication::processEvents();
     CHECK(group_create_handle->isHidden());
