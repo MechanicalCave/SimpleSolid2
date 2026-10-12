@@ -1362,14 +1362,8 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         required += named_width;
         direct_dropdowns.push_back(dropdown);
     };
-    if (!toolbar_sketch_context_) {
-        for (int i : {3, 1}) {
-            try_named_group(groups[static_cast<std::size_t>(i)]);
-        }
-    } else {
-        for (int i : {6, 5, 4, 2}) {
-            try_named_group(groups[static_cast<std::size_t>(i)]);
-        }
+    for (auto it = groups.rbegin(); it != groups.rend(); ++it) {
+        try_named_group(*it);
     }
     if (required <= direct_available) {
         toolbar_more_->hide();
@@ -1407,12 +1401,8 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
                 (button->sizeHint().width() + gap);
         }
     };
-    if (!toolbar_sketch_context_) {
-        compact_pinned(groups[2]); // Create
-        compact_pinned(groups[0]); // Sketch 2D
-    } else {
-        compact_pinned(groups[1]); // Create
-        compact_pinned(groups[3]); // References
+    for (auto it = groups.rbegin(); it != groups.rend(); ++it) {
+        compact_pinned(*it);
     }
     if (required <= direct_available) {
         toolbar_more_->hide();
@@ -1438,12 +1428,8 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         required += named_width;
         pinned_dropdowns.push_back(dropdown);
     };
-    if (!toolbar_sketch_context_) {
-        try_named_pinned(groups[2]); // Create
-        try_named_pinned(groups[0]); // Sketch 2D
-    } else {
-        try_named_pinned(groups[1]); // Create
-        try_named_pinned(groups[3]); // References
+    for (auto it = groups.rbegin(); it != groups.rend(); ++it) {
+        try_named_pinned(*it);
     }
     if (required <= direct_available) {
         toolbar_more_->hide();
@@ -1455,16 +1441,9 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
     // open: no command is discarded, every button remains accessible in
     // More -> named group -> original tool. Never hide Document controls.
     toolbar_more_->show();
-    if (!toolbar_sketch_context_) {
-        for (int i : {2, 0}) {
-            if (required <= available) break;
-            collapse_group(groups[static_cast<std::size_t>(i)]);
-        }
-    } else {
-        for (int i : {3, 1, 0}) {
-            if (required <= available) break;
-            collapse_group(groups[static_cast<std::size_t>(i)]);
-        }
+    for (auto it = groups.rbegin(); it != groups.rend(); ++it) {
+        if (required <= available) break;
+        if (it->pinned) collapse_group(*it);
     }
     if (required > available) {
         for (auto* dropdown : direct_dropdowns) {
