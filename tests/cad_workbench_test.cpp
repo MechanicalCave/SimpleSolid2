@@ -464,6 +464,46 @@ int main(int argc, char* argv[]) {
               << std::endl;
     CHECK(std::abs(sketch_top - undo_top) <= 4);
 
+    // G3 narrow native reachability: More -> named group -> the SAME
+    // existing tool command; the fixed Document zone remains outside
+    // responsive tool collapse, without a second row or scrollbars.
+    workbench.resize(560, 800);
+    QApplication::processEvents();
+    CHECK(!toolbar_more->isHidden());
+    CHECK(toolbar_more->menu() != nullptr);
+    QMenu* create_submenu = nullptr;
+    for (auto* action : toolbar_more->menu()->actions()) {
+        if (action != nullptr &&
+            action->text() == QStringLiteral("Create")) {
+            create_submenu = action->menu();
+            break;
+        }
+    }
+    CHECK(create_submenu != nullptr);
+    QAction* menu_extrude_action = nullptr;
+    for (auto* action : create_submenu->actions()) {
+        if (action != nullptr &&
+            action->text() == QStringLiteral("Extrude")) {
+            menu_extrude_action = action;
+            break;
+        }
+    }
+    CHECK(menu_extrude_action != nullptr);
+    auto* real_extrude_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeToolButton"));
+    CHECK(real_extrude_button != nullptr);
+    CHECK(menu_extrude_action->isEnabled() ==
+          real_extrude_button->isEnabled());
+    CHECK(contextual_tools_scroll->horizontalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOff);
+    CHECK(document_top_row->isAncestorOf(undo));
+    CHECK(document_top_row->isAncestorOf(save));
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    std::cout << "UI01_G3_NARROW_MORE_GROUP_REACHABILITY_PASS"
+              << std::endl;
+
     CHECK(tree_panel->width() >= 110);
     CHECK(tree_panel->width() <= 210);
     CHECK(right_panel->width() >= 210);
