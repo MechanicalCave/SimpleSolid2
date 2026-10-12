@@ -16,6 +16,7 @@
 #include <QDebug>
 #include <QLabel>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QTest>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -464,6 +465,50 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
     CHECK(!active_operations->isHidden());
     CHECK(!session.document().sketches().empty());
 
+    // G2: the same native Finish/Cancel widgets stay in the fixed footer
+    // while inspecting other Tree entities; the cue follows the live
+    // Feature draft and must not be rebound to the inspected selection.
+    auto* footer = workbench.findChild<QWidget*>(
+        QStringLiteral("workbenchOperationsFooter"));
+    auto* operations_scroll = workbench.findChild<QScrollArea*>(
+        QStringLiteral("workbenchOperationsScroll"));
+    auto* operations_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchOperationsModeCue"));
+    auto* viewport_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchViewportModeCue"));
+    CHECK(footer && operations_scroll && operations_cue && viewport_cue);
+    CHECK(footer->isVisible());
+    const auto context_cue = operations_cue->text();
+    CHECK(!context_cue.isEmpty());
+    CHECK(viewport_cue->text() == context_cue);
+    const auto finish_name =
+        std::string_view{operation_widget_name} ==
+            "revolveOperationsWidget"
+            ? QStringLiteral("revolveFinishButton")
+            : std::string_view{operation_widget_name} ==
+                  "extrudeOperationsWidget"
+                ? QStringLiteral("extrudeFinishButton")
+                : QStringLiteral("edgeFeatureFinishButton");
+    const auto cancel_name =
+        std::string_view{operation_widget_name} ==
+            "revolveOperationsWidget"
+            ? QStringLiteral("revolveCancelButton")
+            : std::string_view{operation_widget_name} ==
+                  "extrudeOperationsWidget"
+                ? QStringLiteral("extrudeCancelButton")
+                : QStringLiteral("edgeFeatureCancelButton");
+    auto* original_finish =
+        workbench.findChild<QPushButton*>(finish_name);
+    auto* original_cancel =
+        workbench.findChild<QPushButton*>(cancel_name);
+    CHECK(original_finish && original_cancel);
+    CHECK(footer->isAncestorOf(original_finish));
+    CHECK(footer->isAncestorOf(original_cancel));
+    CHECK(!operations_scroll->isAncestorOf(original_finish));
+    CHECK(!operations_scroll->isAncestorOf(original_cancel));
+    CHECK(original_finish->isVisible());
+    CHECK(original_cancel->isVisible());
+
     const auto original_state = session.document().state();
     const auto original_revision = session.document().revision();
     const auto original_undo = session.undoDepth();
@@ -493,6 +538,11 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
         QApplication::processEvents();
         CHECK(sketch_finish->isHidden());
         CHECK(!active_operations->isHidden());
+        CHECK(footer->isVisible());
+        CHECK(operations_cue->text() == context_cue);
+        CHECK(viewport_cue->text() == context_cue);
+        CHECK(original_finish->isVisible());
+        CHECK(original_cancel->isVisible());
         CHECK(status->text().contains(
             QStringLiteral(
                 "Finish or cancel the active Feature draft")));
@@ -519,6 +569,11 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
         QApplication::processEvents();
         CHECK(sketch_finish->isHidden());
         CHECK(!active_operations->isHidden());
+        CHECK(footer->isVisible());
+        CHECK(operations_cue->text() == context_cue);
+        CHECK(viewport_cue->text() == context_cue);
+        CHECK(original_finish->isVisible());
+        CHECK(original_cancel->isVisible());
         CHECK(status->text().contains(
             QStringLiteral(
                 "Finish or cancel the active Feature draft")));
