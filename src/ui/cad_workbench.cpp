@@ -7,6 +7,7 @@
 #include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/precision_input.hpp>
 
+#include <QBoxLayout>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QEvent>
@@ -22,6 +23,7 @@
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStringList>
@@ -3926,6 +3928,8 @@ void CadWorkbench::buildUi() {
     project_layout->addWidget(project_edge_stage_label_);
 
     auto* source_row = new QWidget(project_edge_operations_widget_);
+    source_row->setObjectName(
+        QStringLiteral("projectEdgeSourceRow"));
     auto* source_layout = new QHBoxLayout(source_row);
     source_layout->setContentsMargins(0, 0, 0, 0);
     project_edge_edges_button_ =
@@ -3955,6 +3959,8 @@ void CadWorkbench::buildUi() {
     project_layout->addWidget(project_edge_selection_label_);
 
     auto* role_row = new QWidget(project_edge_operations_widget_);
+    role_row->setObjectName(
+        QStringLiteral("projectEdgeRoleRow"));
     auto* role_layout = new QHBoxLayout(role_row);
     role_layout->setContentsMargins(0, 0, 0, 0);
     project_edge_regular_button_ =
@@ -3972,6 +3978,8 @@ void CadWorkbench::buildUi() {
     project_layout->addWidget(role_row);
 
     auto* pick_row = new QWidget(project_edge_operations_widget_);
+    pick_row->setObjectName(
+        QStringLiteral("projectEdgePickRow"));
     auto* pick_layout = new QHBoxLayout(pick_row);
     pick_layout->setContentsMargins(0, 0, 0, 0);
     project_edge_remove_button_ =
@@ -4151,6 +4159,17 @@ void CadWorkbench::buildUi() {
         QStringLiteral("profile"),
         profile_finish_button_, profile_cancel_button_);
     shell_->setOperationsContent(operations_content);
+    // Use the real usable Operations scroll viewport, not the main
+    // Workbench/window width. Changing orientation affects only layout.
+    auto* operations_scroll = shell_->findChild<QScrollArea*>(
+        QStringLiteral("workbenchOperationsScroll"));
+    if (operations_scroll != nullptr) {
+        project_edge_operations_viewport_ =
+            operations_scroll->viewport();
+        project_edge_operations_viewport_->installEventFilter(this);
+        updateProjectGeometryResponsiveRows(
+            project_edge_operations_viewport_->width());
+    }
 
     QObject::connect(
         undo_button_,
@@ -14684,9 +14703,53 @@ void CadWorkbench::navigateToFeature(
         feature_id);
 }
 
+void CadWorkbench::updateProjectGeometryResponsiveRows(
+    int viewport_width) {
+    if (viewport_width <= 0) return;
+    // The fixed Operations scrollbar gutter and margins are outside
+    // the usable button width. No physical screen/DPI threshold:
+    // actual translated text and the current Qt font drive the choice.
+    const int budget = std::max(0, viewport_width - 12);
+    for (const char* object_name : {
+             "projectEdgeSourceRow",
+             "projectEdgeRoleRow",
+             "projectEdgePickRow"}) {
+        auto* row = findChild<QWidget*>(
+            QString::fromLatin1(object_name));
+        if (row == nullptr) continue;
+        auto* layout = qobject_cast<QBoxLayout*>(row->layout());
+        if (layout == nullptr) continue;
+        int inline_width = 0;
+        int controls = 0;
+        for (int i = 0; i < layout->count(); ++i) {
+            auto* item = layout->itemAt(i);
+            auto* button = item == nullptr ? nullptr :
+                item->widget();
+            if (button == nullptr) continue;
+            inline_width += button->sizeHint().width();
+            ++controls;
+        }
+        inline_width += std::max(0, controls - 1) *
+            std::max(0, layout->spacing());
+        const auto direction = inline_width > budget
+            ? QBoxLayout::TopToBottom
+            : QBoxLayout::LeftToRight;
+        if (layout->direction() != direction) {
+            layout->setDirection(direction);
+            row->updateGeometry();
+        }
+    }
+}
+
 bool CadWorkbench::eventFilter(
     QObject* watched,
     QEvent* event) {
+    if (event != nullptr &&
+        event->type() == QEvent::Resize &&
+        watched == project_edge_operations_viewport_) {
+        updateProjectGeometryResponsiveRows(
+            project_edge_operations_viewport_->width());
+    }
     if (event != nullptr &&
         event->type() == QEvent::MouseButtonPress &&
         watched == viewport_widget_ &&
