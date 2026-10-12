@@ -9,6 +9,7 @@ class QEvent;
 class QGroupBox;
 class QHBoxLayout;
 class QMenu;
+class QPushButton;
 class QLabel;
 class QResizeEvent;
 class QScrollArea;
@@ -61,6 +62,8 @@ private:
     void updateRightPanelHeightMode();
     void refreshToolbarOverflow();
     void rebuildToolbarMoreMenu();
+    [[nodiscard]] QString toolbarActionLabel(
+        const QPushButton* button) const;
     void applyRightPanelRatio();
     void setNarrowPanel(QWidget* panel);
     [[nodiscard]] bool panelContainsFocus(
@@ -100,6 +103,7 @@ private:
     QToolButton* toolbar_more_{};
     QMenu* toolbar_more_menu_{};
     QHash<QString, QToolButton*> toolbar_group_dropdowns_;
+    QHash<QPushButton*, QString> toolbar_icon_compacted_;
     std::vector<QWidget*> toolbar_overflow_hidden_;
     bool toolbar_sketch_context_{};
     bool refreshing_toolbar_{};
