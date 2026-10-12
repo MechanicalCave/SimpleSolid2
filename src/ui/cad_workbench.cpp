@@ -1505,6 +1505,13 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         1,
         sketch_button_);
+    part_sketch_tools_label_ =
+        new QLabel(QStringLiteral("Sketch:"), shell_);
+    part_sketch_tools_label_->setObjectName(
+        QStringLiteral("partSketchToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(sketch_button_),
+        part_sketch_tools_label_);
 
     datum_plane_button_ =
         new QPushButton(
@@ -1516,6 +1523,13 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         2,
         datum_plane_button_);
+    part_work_features_tools_label_ =
+        new QLabel(QStringLiteral("Work Features:"), shell_);
+    part_work_features_tools_label_->setObjectName(
+        QStringLiteral("partWorkFeaturesToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(datum_plane_button_),
+        part_work_features_tools_label_);
 
     extrude_button_ =
         new QPushButton(
@@ -1743,6 +1757,13 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         16,
         mirror_sketch_button_);
+    sketch_transform_tools_label_ =
+        new QLabel(QStringLiteral("Transform:"), shell_);
+    sketch_transform_tools_label_->setObjectName(
+        QStringLiteral("sketchTransformToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(move_sketch_button_),
+        sketch_transform_tools_label_);
 
     inspect_tools_label_ =
         new QLabel(
@@ -1786,6 +1807,13 @@ void CadWorkbench::buildUi() {
     // Same Sketch Modify group as Trim/Extend, not a Part-level dialog.
     shell_->editorToolsLayout().insertWidget(
         10, project_edge_button_);
+    sketch_references_tools_label_ =
+        new QLabel(QStringLiteral("References:"), shell_);
+    sketch_references_tools_label_->setObjectName(
+        QStringLiteral("sketchReferencesToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(project_edge_button_),
+        sketch_references_tools_label_);
 
     viewport_controller_ =
         new PartViewportController(
@@ -15171,6 +15199,12 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::select);
     }
 
+    if (sketch_references_tools_label_ != nullptr) {
+        sketch_references_tools_label_->setVisible(editing);
+    }
+    if (sketch_transform_tools_label_ != nullptr) {
+        sketch_transform_tools_label_->setVisible(editing);
+    }
     if (create_tools_label_ != nullptr) {
         create_tools_label_->setVisible(editing);
     }
@@ -16362,6 +16396,12 @@ void CadWorkbench::syncActionState() {
             revolve_draft_.has_value());
     }
 
+    if (part_sketch_tools_label_ != nullptr) {
+        part_sketch_tools_label_->setVisible(!editing_sketch);
+    }
+    if (part_work_features_tools_label_ != nullptr) {
+        part_work_features_tools_label_->setVisible(!editing_sketch);
+    }
     if (part_create_tools_label_ != nullptr) {
         part_create_tools_label_->setVisible(
             !editing_sketch);
@@ -16412,6 +16452,8 @@ void CadWorkbench::syncActionState() {
     }
     select_sketch_button_->setVisible(
         editing_sketch);
+    sketch_references_tools_label_->setVisible(editing_sketch);
+    sketch_transform_tools_label_->setVisible(editing_sketch);
     create_tools_label_->setVisible(
         editing_sketch);
     line_sketch_button_->setVisible(
