@@ -134,6 +134,19 @@ QIcon makeCadToolbarIcon(
     return QIcon{image};
 }
 
+QStringList defaultToolbarGroupOrder(bool sketch) {
+    QStringList order;
+    for (const auto& group : toolbarGroups(sketch)) {
+        if (sketch &&
+            QString::fromLatin1(group.name) ==
+                QStringLiteral("Select")) {
+            continue; // fixed base action, never a movable group
+        }
+        order.push_back(QString::fromLatin1(group.name));
+    }
+    return order;
+}
+
 } // namespace
 
 CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
@@ -472,6 +485,22 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     for (bool sketch : {false, true}) {
         const QString context = sketch
             ? QStringLiteral("Sketch") : QStringLiteral("Part");
+        const QStringList defaults =
+            defaultToolbarGroupOrder(sketch);
+        const QStringList saved_order = toolbar_settings.value(
+            QStringLiteral("ui/workbench/toolbar/v1/") +
+            context + QStringLiteral("/order")).toStringList();
+        QStringList validated_order = defaults;
+        if (saved_order.size() == defaults.size()) {
+            QStringList sorted_saved = saved_order;
+            QStringList sorted_default = defaults;
+            sorted_saved.sort();
+            sorted_default.sort();
+            if (sorted_saved == sorted_default) {
+                validated_order = saved_order;
+            }
+        }
+        toolbar_group_order_.insert(context, validated_order);
         for (const auto& group : toolbarGroups(sketch)) {
             const QString name = QString::fromLatin1(group.name);
             const QString storage_key =
@@ -743,6 +772,136 @@ void CadWorkbenchShell::setToolbarContext(bool sketch_context) {
 void CadWorkbenchShell::setToolbarCustomizeActive(bool active) {
     if (toolbar_customize_active_ == active) return;
     toolbar_customize_active_ = active;
+    refreshToolbarOverflow();
+}
+
+void CadWorkbenchShell::applyToolbarGroupOrder(
+    const QString& context) {
+    const bool sketch = context == QStringLiteral("Sketch");
+    if ((sketch ? QStringLiteral("Sketch")
+                : QStringLiteral("Part")) != context ||
+        toolbar_sketch_context_ != sketch ||
+        editor_tools_layout_ == nullptr) {
+        return;
+    }
+    auto groups = toolbarGroups(sketch);
+    const auto order = toolbar_group_order_.value(
+        context, defaultToolbarGroupOrder(sketch));
+    std::stable_sort(
+        groups.begin(), groups.end(),
+        [&](const ToolbarGroupSpec& a,
+            const ToolbarGroupSpec& b) {
+            if (sketch) {
+                if (QString::fromLatin1(a.name) ==
+                    QStringLiteral("Select")) return true;
+                if (QString::fromLatin1(b.name) ==
+                    QStringLiteral("Select")) return false;
+            }
+            return order.indexOf(QString::fromLatin1(a.name)) <
+                order.indexOf(QString::fromLatin1(b.name));
+        });
+
+    std::vector<QWidget*> active_widgets;
+    for (const auto& group : groups) {
+        const QString group_name = QString::fromLatin1(group.name);
+        if (sketch && group_name == QStringLiteral("Select")) {
+            continue;
+        }
+        const QString key = context + QStringLiteral("_") +
+            group_name;
+        const auto push_if_present = [&](QWidget* widget) {
+            if (widget != nullptr &&
+                editor_tools_layout_->indexOf(widget) >= 0) {
+                active_widgets.push_back(widget);
+            }
+        };
+        push_if_present(toolbar_pin_markers_.value(key, nullptr));
+        push_if_present(toolbar_group_handles_.value(key, nullptr));
+        if (*group.label_object_name != '\0') {
+            push_if_present(findChild<QWidget*>(
+                QString::fromLatin1(group.label_object_name)));
+        }
+        for (const char* id : group.tool_object_names) {
+            push_if_present(findChild<QPushButton*>(
+                QString::fromLatin1(id)));
+        }
+        push_if_present(toolbar_group_dropdowns_.value(
+            key, nullptr));
+    }
+    // Qt QWidget identity, enablement, check state, connections and
+    // focus stay unchanged. Move only existing WHOLE groups as units.
+    for (auto* widget : active_widgets) {
+        editor_tools_layout_->removeWidget(widget);
+    }
+    int insert_at = 0;
+    if (sketch) {
+        auto* select = findChild<QPushButton*>(
+            QStringLiteral("selectSketchToolButton"));
+        if (select != nullptr &&
+            editor_tools_layout_->indexOf(select) >= 0) {
+            editor_tools_layout_->removeWidget(select);
+            editor_tools_layout_->insertWidget(0, select);
+            insert_at = 1;
+        }
+    }
+    for (auto* widget : active_widgets) {
+        editor_tools_layout_->insertWidget(insert_at++, widget);
+    }
+}
+
+void CadWorkbenchShell::moveToolbarGroup(
+    const QString& context,
+    const QString& group,
+    int direction) {
+    if (!toolbar_customize_active_ ||
+        (direction != -1 && direction != 1) ||
+        context != (toolbar_sketch_context_
+            ? QStringLiteral("Sketch") : QStringLiteral("Part"))) {
+        return;
+    }
+    auto order = toolbar_group_order_.value(context);
+    const int old_index = order.indexOf(group);
+    const int new_index = old_index + direction;
+    if (old_index < 0 || new_index < 0 ||
+        new_index >= order.size()) return;
+    order.swapItemsAt(old_index, new_index);
+    toolbar_group_order_.insert(context, order);
+    QSettings settings{
+        QStringLiteral("MechanicalCave"),
+        QStringLiteral("SimpleSolid2")};
+    settings.setValue(
+        QStringLiteral("ui/workbench/toolbar/v1/") +
+            context + QStringLiteral("/order"),
+        order);
+    settings.sync();
+    applyToolbarGroupOrder(context);
+    refreshToolbarOverflow();
+}
+
+void CadWorkbenchShell::resetToolbarGroups(
+    const QString& context) {
+    if (!toolbar_customize_active_ ||
+        context != (toolbar_sketch_context_
+            ? QStringLiteral("Sketch") : QStringLiteral("Part"))) {
+        return;
+    }
+    const bool sketch = context == QStringLiteral("Sketch");
+    toolbar_group_order_.insert(
+        context, defaultToolbarGroupOrder(sketch));
+    for (const auto& group : toolbarGroups(sketch)) {
+        toolbar_pin_overrides_.remove(
+            context + QStringLiteral("_") +
+            QString::fromLatin1(group.name));
+    }
+    QSettings settings{
+        QStringLiteral("MechanicalCave"),
+        QStringLiteral("SimpleSolid2")};
+    const auto prefix =
+        QStringLiteral("ui/workbench/toolbar/v1/") + context;
+    settings.remove(prefix + QStringLiteral("/order"));
+    settings.remove(prefix + QStringLiteral("/pins"));
+    settings.sync();
+    applyToolbarGroupOrder(context);
     refreshToolbarOverflow();
 }
 
