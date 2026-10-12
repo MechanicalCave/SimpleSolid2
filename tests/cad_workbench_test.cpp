@@ -577,6 +577,35 @@ int main(int argc, char* argv[]) {
             .toStringList();
     CHECK(changed_part_order.indexOf(QStringLiteral("Create")) <
           changed_part_order.indexOf(QStringLiteral("Work Features")));
+    // Persistence means a completely new Workbench with original
+    // command widgets must restore the real layout, not just read
+    // the saved INI key. Sketch ordering remains independent.
+    CHECK(persisted_toolbar_prefs.value(
+        QStringLiteral("ui/workbench/toolbar/v1/Sketch/order"))
+              .toStringList().isEmpty());
+    {
+        ui::CadWorkbench restarted{
+            [](QWidget* parent) {
+                auto* native_view = new TestViewportWidget{parent};
+                return ui::ViewportSurface{native_view, native_view};
+            }};
+        restarted.resize(1400, 800);
+        restarted.show();
+        QApplication::processEvents();
+        auto* restarted_host = restarted.findChild<QWidget*>(
+            QStringLiteral("documentToolsHost"));
+        auto* restarted_datum = restarted.findChild<QPushButton*>(
+            QStringLiteral("datumPlaneToolButton"));
+        auto* restarted_extrude = restarted.findChild<QPushButton*>(
+            QStringLiteral("extrudeToolButton"));
+        CHECK(restarted_host && restarted_datum &&
+              restarted_extrude);
+        auto* restarted_layout =
+            qobject_cast<QHBoxLayout*>(restarted_host->layout());
+        CHECK(restarted_layout != nullptr);
+        CHECK(restarted_layout->indexOf(restarted_extrude) <
+              restarted_layout->indexOf(restarted_datum));
+    }
     group_reset->trigger();
     QApplication::processEvents();
     CHECK(group_layout->indexOf(datum_tool) <
