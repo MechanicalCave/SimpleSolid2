@@ -2,9 +2,9 @@
 
 **Status:** PARTIAL / G0 NOT CLOSED; no Owner D2 synthesis yet, no FINAL FULL PASS claimed  
 **Active authority:** `work/RG-02A_G0_VERTEX_CHARACTERIZATION_WORK_CONTRACT_DRAFT.md`, activated by [PR #331](https://github.com/MechanicalCave/SimpleSolid2/pull/331) (`351840b95b58bdbe7b17085f67b3ddd2cc2cf8c7`) under Part-v1 roadmap v1.32. The historical "NOT MERGED / NOT ACTIVATED" wording in the original G0 Work Contract heading predates these separately approved governance merges; this report does not amend its substantive contract scope.  
-**Test sources:** `tests/kernel_native/pm05c2b_part_edge_topology_test.cpp` (V01/V02/V03/V05/V06/V07/V09) and `tests/kernel_native/pm04c2_production_revolve_test.cpp` (V04), both existing native tests explicitly allowed by the G0 contract.  
+**Test sources:** `tests/kernel_native/pm05c2b_part_edge_topology_test.cpp` (V01/V02/V03/V05/V06/V07/V09/V12) and `tests/kernel_native/pm04c2_production_revolve_test.cpp` (V04), both existing native tests explicitly allowed by the G0 contract.  
 **Evidence source SHA:** `37fed9e523e5dee4113f1d7127f1962ff7a018ca`, Draft [PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332), [Windows FOCUSED run #38304772610](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38304772610), test `pm05c2b.part_edge_topology`.  
-**Validation:** V01 source SHA `37fed9e523e5dee4113f1d7127f1962ff7a018ca` — Windows FOCUSED 1/1 PASS; V03 Add→Cut source SHA `5397db379690949f51a8daf7c831e85a8149a32e` — [Windows FOCUSED #38306302187](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306302187) 1/1 PASS and aggregate PASS; **V04 partial/full Revolve source SHA `5052f998533a220242eb0eaece781a0fa58aba24` — [Windows FOCUSED #38306630003](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306630003) 2/2 PASS**. **V02/V09 source SHA `691d0f1379b289a1824430e7fdf1b42d5ab9f04d` — [Windows FOCUSED #38307244650](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307244650) 2/2 PASS; V07 source SHA `dfdcc7e276544cda6cc3a8f92eca881ab641002c` — [Windows FOCUSED #38307452459](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307452459) 2/2 PASS, aggregate `windows-msvc` PASS.** Each claim applies to its precise tested code SHA; this subsequent evidence commit requires a separate head check. FAST and FULL are not yet claimed PASS.
+**Validation:** V01 source SHA `37fed9e523e5dee4113f1d7127f1962ff7a018ca` — Windows FOCUSED 1/1 PASS; V03 Add→Cut source SHA `5397db379690949f51a8daf7c831e85a8149a32e` — [Windows FOCUSED #38306302187](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306302187) 1/1 PASS and aggregate PASS; **V04 partial/full Revolve source SHA `5052f998533a220242eb0eaece781a0fa58aba24` — [Windows FOCUSED #38306630003](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38306630003) 2/2 PASS**. **V02/V09 source SHA `691d0f1379b289a1824430e7fdf1b42d5ab9f04d` — [Windows FOCUSED #38307244650](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307244650) 2/2 PASS; V07 source SHA `dfdcc7e276544cda6cc3a8f92eca881ab641002c` — [Windows FOCUSED #38307452459](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307452459) 2/2 PASS, aggregate `windows-msvc` PASS.** **V12 source SHA `958bf75561239b92b1905a71f4ec652e6a5d44a3` — [Windows FOCUSED #38307830593](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307830593) 2/2 PASS and aggregate `windows-msvc` PASS.** Each claim applies to the indicated exact code SHA; this subsequent evidence commit requires its own check. FAST and FULL are not yet claimed PASS.
 
 ## 1. Proven V01 result — real OCCT and actual Part-stage topology
 
@@ -52,13 +52,19 @@ Verified assertions:
 
 **Limits:** The default successful CTest output suppresses printed status count histograms; no unavailable per-stage counts are invented. G0 is not proof of end-user 3D picking or of a new persistent RG-02 point-source schema.
 
-## 5. V05/V06 partial execution — classification witness checks, exact distribution pending
+## 5. V12 — same native geometry, different source Feature provenance
+
+**V12: PASS for the tested replacement-producer fixture.** In the same Part document, recreate the exact same 40×30×20 mm prism using the same Profile, Sketch, dimensions and support, but assign a **new FeatureId** to the only Body Feature. After evaluating both versions using native OCCT and actual Part topology catalogs, the test checks all eight original Vertex positions have an equal-XYZ counterpart in the replacement solid. Nevertheless, **none of their old `FeaturePointAddress` values is present in the replacement catalog**, and the two `BodyStageRef` values differ. This comparison uses XYZ solely to demonstrate geometric equality, **not** as an identity-resolution input.
+
+This proves an *existing* semantic Point reference cannot silently transfer to a recreated Feature merely because a visually indistinguishable Vertex happens to occupy the same coordinates. The test does **not** assert a persisted RG-02 construction-point reference or its typed runtime diagnostic (those are future implementation scope). Exact source SHA `958bf75561239b92b1905a71f4ec652e6a5d44a3`, [Windows FOCUSED #38307830593](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38307830593) PASS 2/2 and aggregate `windows-msvc` PASS.
+
+## 6. V05/V06 partial execution — classification witness checks, exact distribution pending
 
 The same passing FOCUSED test executes `characterizeNativeVertices` on real, successful Part Fillet and Chamfer stages (`V05-fillet`, `V06-chamfer`). At each stage it asserts a complete Part topology catalog, accounted Vertex statuses, and that **any resolved Vertex** has a one-to-one three-Surface `FeaturePointResolution` witness. These invariant checks passed.
 
 **V05 and V06 status: PARTIAL / classification totals not yet published**. The helper prints `native/resolved/ambiguous/missing/unsupported` counters on stdout, but the default successful CTest transcript only shows 1/1 PASS and **does not expose those counter lines** in the fetched GitHub Actions job log. We therefore do **not** claim observed totals, a demonstrated non-three-Surface Vertex, or full V05/V06 characterization until the actual counters are captured with a suitable authorized test execution. Do not infer nonzero Unsupported from the source code alone.
 
-## 6. Remaining VERTEX matrix (not executed or not demonstrated)
+## 7. Remaining VERTEX matrix (not executed or not demonstrated)
 
 | Case | Evidence status | Outstanding proof |
 | --- | --- | --- |
@@ -73,19 +79,19 @@ The same passing FOCUSED test executes `characterizeNativeVertices` on real, suc
 | V09 | **PASS for tested Extrude→Chamfer stage separation** | Earlier stage has all 8 original Point identities; Datum/Axis source persistence not implemented |
 | V10 | **NOT DEMONSTRATED** | Concrete native ordinary-pickable but semantically Unsupported Vertex |
 | V11 | UNRUN | Stale token/session/generation and cold source lifecycle |
-| V12 | UNRUN | Same XYZ but wrong-provenance replacement remains Missing |
+| V12 | **PASS for tested same-XYZ replacement Feature** | Old semantic Point addresses absent despite identical geometry; no persisted RG-02 source/detailed typed diagnostic tested |
 
 `MID`/`CENTER` E01–E08 are **not in this activated G0 execution scope**, except as future test planning. All E01–E08 remain UNRUN.
 
-## 7. Immediate next G0 evidence steps
+## 8. Immediate next G0 evidence steps
 
 - Complete V03 native/semantic Surface-adjacency cross-check and publish the observed Cut status histogram without inferring values from successful default CTest output.
 - Complete the V04 provider native adjacency and Part status distribution from real execution evidence; do not infer a pickable Vertex from an OCCT seam Edge.
 - Obtain V05/V06 status distributions with a legitimate test output capture; not by synthetic B-Rep catalogs or asserted guesses.
-- Characterize remaining V08 (real ambiguous one-to-many), V10 (native pickable-but-unsupported), V11 (stale session/generation), and V12 (wrong-provenance same-XYZ). Do not treat tested V02/V07/V09 fixtures as universal coverage. STOP for Owner amendment if any required fixture would require changes outside the three allowed native tests.
+- Characterize remaining V08 (real ambiguous one-to-many), V10 (native pickable-but-unsupported) and V11 (stale session/generation), and collect per-fixture native referenceability histograms. The tested V02/V07/V09/V12 fixtures do not prove universal coverage. STOP for Owner amendment if any required fixture would require changes outside the three allowed native tests.
 - Final exact-head Windows FULL, Owner G0 evidence acceptance and separate production evidence merge approval only at genuine completion. No claims of full RG-02A or RG-02 implementation.
 
-## 8. Independent UI STOP and documentation impact
+## 9. Independent UI STOP and documentation impact
 
 **No RG-02 UI work.** Prior to any Body 3D `VERTEX/MID/CENTER` marker/pick implementation or Datum/Axis tool interaction, submit UX design for separate explicit Owner approval, regardless of these native findings.
 
