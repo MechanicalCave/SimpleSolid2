@@ -666,7 +666,7 @@ int main(int argc, char* argv[]) {
     std::cout << "UI01_G3_GROUP_KEYBOARD_ORDER_RESET_PASS"
               << std::endl;
 
-    // G3 Sketch group ordering is a separate preference domain. Select
+    // G3 Sketch ordering is independent of Part and survives cold rebuild. Select
     // must stay the fixed base action while References moves as a WHOLE
     // group, with its original Project Geometry command widget intact.
     // Exercise this on the existing visible Workbench so a second native
