@@ -599,6 +599,14 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
     QApplication::processEvents();
     CHECK(customize_toolbar->isChecked());
     CHECK(create_group_handle->menu() != nullptr);
+    CHECK(create_group_handle->popupMode() ==
+          QToolButton::MenuButtonPopup);
+    CHECK(!create_group_handle->isHidden());
+    CHECK(create_group_handle->toolTip().contains(
+        QStringLiteral("Przeciągnij")));
+    // This is the same real Feature Edit that rejected Sketch/Profile
+    // conflicts. The drag affordance itself may exist, but merely
+    // entering Customize cannot create a CAD command or ghost draft.
     customize_toolbar->click();
     QApplication::processEvents();
     CHECK(!customize_toolbar->isChecked());
