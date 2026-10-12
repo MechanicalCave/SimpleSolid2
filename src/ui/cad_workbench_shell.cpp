@@ -179,16 +179,59 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
         QSizePolicy::Ignored);
     auto* right_layout = new QVBoxLayout(right_panel);
     right_layout->setContentsMargins(0, 0, 0, 0);
+    right_layout->setSpacing(0);
+
+    // G2: two independently scrolling panels. The splitter changes only
+    // transient UI presentation, never the active Part/Sketch edit owner.
+    right_vertical_splitter_ =
+        new QSplitter(Qt::Vertical, right_panel);
+    right_vertical_splitter_->setObjectName(
+        QStringLiteral("workbenchRightVerticalSplitter"));
+    right_vertical_splitter_->setChildrenCollapsible(false);
 
     auto* properties_group =
-        new QGroupBox(QStringLiteral("Properties"), right_panel);
+        new QGroupBox(
+            QStringLiteral("Properties"), right_vertical_splitter_);
+    properties_group->setMinimumHeight(0);
     properties_host_layout_ = new QVBoxLayout(properties_group);
-    right_layout->addWidget(properties_group, 0);
+    properties_scroll_ = new QScrollArea(properties_group);
+    properties_scroll_->setObjectName(
+        QStringLiteral("workbenchPropertiesScroll"));
+    properties_scroll_->setWidgetResizable(true);
+    properties_scroll_->setFrameShape(QFrame::NoFrame);
+    properties_scroll_->setVerticalScrollBarPolicy(
+        Qt::ScrollBarAlwaysOn);
+    properties_scroll_->setHorizontalScrollBarPolicy(
+        Qt::ScrollBarAsNeeded);
+    properties_scroll_->setMinimumHeight(0);
+    properties_scroll_->setSizePolicy(
+        QSizePolicy::Ignored, QSizePolicy::Expanding);
+    properties_host_layout_->addWidget(properties_scroll_, 1);
+    right_vertical_splitter_->addWidget(properties_group);
 
     auto* operations_group =
-        new QGroupBox(QStringLiteral("Operations"), right_panel);
+        new QGroupBox(
+            QStringLiteral("Operations"), right_vertical_splitter_);
+    operations_group->setMinimumHeight(0);
     operations_host_layout_ = new QVBoxLayout(operations_group);
-    right_layout->addWidget(operations_group, 1);
+    operations_scroll_ = new QScrollArea(operations_group);
+    operations_scroll_->setObjectName(
+        QStringLiteral("workbenchOperationsScroll"));
+    operations_scroll_->setWidgetResizable(true);
+    operations_scroll_->setFrameShape(QFrame::NoFrame);
+    operations_scroll_->setVerticalScrollBarPolicy(
+        Qt::ScrollBarAlwaysOn);
+    operations_scroll_->setHorizontalScrollBarPolicy(
+        Qt::ScrollBarAsNeeded);
+    operations_scroll_->setMinimumHeight(0);
+    operations_scroll_->setSizePolicy(
+        QSizePolicy::Ignored, QSizePolicy::Expanding);
+    operations_host_layout_->addWidget(operations_scroll_, 1);
+    right_vertical_splitter_->addWidget(operations_group);
+    right_vertical_splitter_->setStretchFactor(0, 2);
+    right_vertical_splitter_->setStretchFactor(1, 3);
+    right_vertical_splitter_->setSizes({400, 600});
+    right_layout->addWidget(right_vertical_splitter_, 1);
 
     splitter->addWidget(right_panel);
 
@@ -254,18 +297,28 @@ void CadWorkbenchShell::setCommandLineContent(QWidget* widget) {
         widget);
 }
 
+void CadWorkbenchShell::replaceScrollContent(
+    QScrollArea& scroll,
+    QWidget*& current,
+    QWidget* replacement) {
+    if (current == replacement) return;
+    if (auto* previous = scroll.takeWidget()) {
+        previous->deleteLater();
+    }
+    current = replacement;
+    if (current != nullptr) {
+        scroll.setWidget(current);
+    }
+}
+
 void CadWorkbenchShell::setPropertiesContent(QWidget* widget) {
-    replaceContent(
-        *properties_host_layout_,
-        properties_content_,
-        widget);
+    replaceScrollContent(
+        *properties_scroll_, properties_content_, widget);
 }
 
 void CadWorkbenchShell::setOperationsContent(QWidget* widget) {
-    replaceContent(
-        *operations_host_layout_,
-        operations_content_,
-        widget);
+    replaceScrollContent(
+        *operations_scroll_, operations_content_, widget);
 
     // Re-apply the active regime after final right-panel content has been
     // installed. Content size hints must not silently promote the side
