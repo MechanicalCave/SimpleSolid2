@@ -10,6 +10,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPalette>
 #include <QPushButton>
 #include <QLabel>
@@ -760,6 +761,65 @@ bool CadWorkbenchShell::eventFilter(
         event->type() == QEvent::Resize) {
         refreshToolbarOverflow();
     }
+    // A customization handle is a normal QToolButton with a keyboard
+    // command menu on its arrow. Dragging its main area sends an adjacent
+    // whole-group move through the same validated preference operation as
+    // Move Left/Right. Other editing, focus, and viewport mouse routing
+    // remain untouched.
+    if (event != nullptr && toolbar_customize_active_) {
+        for (auto it = toolbar_group_handles_.cbegin();
+             it != toolbar_group_handles_.cend(); ++it) {
+            QToolButton* handle = it.value();
+            if (handle == nullptr || watched != handle ||
+                handle->isHidden()) continue;
+            const QString context = toolbar_sketch_context_
+                ? QStringLiteral("Sketch") : QStringLiteral("Part");
+            if (!it.key().startsWith(
+                    context + QStringLiteral("_"))) break;
+            if (event->type() == QEvent::MouseButtonPress) {
+                auto* mouse = static_cast<QMouseEvent*>(event);
+                // The right arrow retains normal QToolButton menu access.
+                if (mouse->button() == Qt::LeftButton &&
+                    mouse->position().x() <
+                        handle->width() - 14) {
+                    toolbar_drag_handle_ = handle;
+                    toolbar_drag_press_global_ =
+                        mouse->globalPosition().toPoint();
+                }
+            } else if (event->type() == QEvent::MouseMove &&
+                       toolbar_drag_handle_ == handle) {
+                auto* mouse = static_cast<QMouseEvent*>(event);
+                const QPoint delta =
+                    mouse->globalPosition().toPoint() -
+                    toolbar_drag_press_global_;
+                if ((mouse->buttons() & Qt::LeftButton) &&
+                    std::abs(delta.x()) >=
+                        QApplication::startDragDistance()) {
+                    handle->setCursor(Qt::ClosedHandCursor);
+                }
+            } else if (event->type() == QEvent::MouseButtonRelease &&
+                       toolbar_drag_handle_ == handle) {
+                auto* mouse = static_cast<QMouseEvent*>(event);
+                toolbar_drag_handle_.clear();
+                handle->setCursor(Qt::OpenHandCursor);
+                if (mouse->button() != Qt::LeftButton) break;
+                const QPoint delta =
+                    mouse->globalPosition().toPoint() -
+                    toolbar_drag_press_global_;
+                if (std::abs(delta.x()) >=
+                        QApplication::startDragDistance() &&
+                    std::abs(delta.x()) > std::abs(delta.y())) {
+                    const QString name =
+                        it.key().mid(context.size() + 1);
+                    handle->setDown(false);
+                    moveToolbarGroup(
+                        context, name, delta.x() < 0 ? -1 : 1);
+                    return true; // no QAction/CAD command click on drag
+                }
+            }
+            break;
+        }
+    }
     return QWidget::eventFilter(watched, event);
 }
 
@@ -1117,13 +1177,16 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             handle->setObjectName(
                 QStringLiteral("workbenchToolbarHandle_") + key);
             handle->setText(QStringLiteral("⋮"));
-            handle->setFixedWidth(20);
+            handle->setFixedWidth(36);
+            handle->setCursor(Qt::OpenHandCursor);
             handle->setToolTip(
-                QStringLiteral("Reorder whole toolbar group ") +
-                name);
+                QStringLiteral("Przeciągnij grupę w lewo/prawo "
+                               "lub użyj menu obok: ") + name);
             handle->setAccessibleName(
                 QStringLiteral("Reorder toolbar group ") + name);
-            handle->setPopupMode(QToolButton::InstantPopup);
+            handle->setPopupMode(
+                QToolButton::MenuButtonPopup);
+            handle->installEventFilter(this);
             auto* menu = new QMenu(handle);
             auto* move_left = menu->addAction(
                 QStringLiteral("Przesuń w lewo"));
@@ -1145,6 +1208,11 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
                     resetToolbarGroups(context);
                 });
             handle->setMenu(menu);
+            // Normal click opens the same keyboard-accessible group
+            // options; the drag-release event filter consumes only
+            // gestures over QApplication::startDragDistance().
+            connect(handle, &QToolButton::clicked,
+                    handle, &QToolButton::showMenu);
             QWidget* first = nullptr;
             if (*group.label_object_name != '\0') {
                 first = findChild<QWidget*>(
