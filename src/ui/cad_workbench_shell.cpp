@@ -1326,13 +1326,16 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         return false;
     };
 
-    // Restore only controls hidden by the previous responsive pass and
-    // belonging to the CURRENT context. A Sketch/Part context switch
-    // must not resurrect production-hidden controls from another mode.
-    for (QWidget* widget : toolbar_overflow_hidden_) {
+    // Restore only overflow-hidden original tool widgets of the CURRENT
+    // Part/Sketch context. Keep the other context's hidden widgets in
+    // its own bucket: changing modes must neither resurrect inactive
+    // tool commands nor permanently lose the previous mode's buttons.
+    auto& hidden_for_context =
+        toolbar_overflow_hidden_by_context_[context_name];
+    for (QWidget* widget : hidden_for_context) {
         if (belongs_to_context(widget)) widget->show();
     }
-    toolbar_overflow_hidden_.clear();
+    hidden_for_context.clear();
 
     const int gap = std::max(0, editor_tools_layout_->spacing());
     const auto group_width = [&](const ToolbarGroupSpec& group) {
@@ -1397,7 +1400,7 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
             if (widget == nullptr || widget->isHidden()) return;
             required -= widget->sizeHint().width() + gap;
             widget->hide();
-            toolbar_overflow_hidden_.push_back(widget);
+            hidden_for_context.push_back(widget);
         };
         if (*group.label_object_name != '\0') {
             hide_one(findChild<QWidget*>(
