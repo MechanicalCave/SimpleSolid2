@@ -4,6 +4,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
@@ -198,6 +199,31 @@ part::PartDocument withEditedBaseHeight(
         part::OneSidedExtrudeExtent{
             core::LengthValue{new_height},
             current->reversed};
+    auto rebuilt = part::PartDocument::restore(
+        base.documentId(),
+        std::move(state),
+        base.revision());
+    CHECK(rebuilt.ok());
+    return std::move(*rebuilt.document);
+}
+
+// G0/V12: deliberately produce the same geometric prism with a NEW
+// FeatureId. The complete old Feature is no longer in the authored history.
+// Equality of XYZ is a diagnostic fixture fact, never a Point address repair.
+part::PartDocument withReplacementBaseFeature(
+    const part::PartDocument& base) {
+    auto state = base.state();
+    CHECK(state.body.features.size() == 1U);
+    const auto replacement_id =
+        state.body.next_feature_id.allocate();
+    CHECK(replacement_id.has_value());
+    CHECK(
+        *replacement_id !=
+        state.body.features.front().id);
+    state.body.features.front().id =
+        *replacement_id;
+    state.body.features.front().name =
+        "ReplacementBase";
     auto rebuilt = part::PartDocument::restore(
         base.documentId(),
         std::move(state),
@@ -708,6 +734,62 @@ int main() {
     }
     CHECK(moved_semantic_points == 4U);
     CHECK(stationary_semantic_points == 4U);
+    // G0/V12: replacing the producer Feature, while keeping the same
+    // Sketch/Profile/shape dimensions, must make every former semantic
+    // address absent from the new stage. Equal provider XYZ is NO authority.
+    const auto replaced_document =
+        withReplacementBaseFeature(base_document);
+    const auto replaced_evaluation =
+        part::evaluatePart(replaced_document, kernel);
+    CHECK(
+        replaced_evaluation.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(replaced_evaluation.features.size() == 1U);
+    CHECK(replaced_evaluation.features[0].result_topology);
+    const auto& replacement_stage =
+        *replaced_evaluation.features[0].result_topology;
+    CHECK(replacement_stage.stage != original_stage.stage);
+    const auto replaced_counts =
+        characterizeNativeVertices(
+            replacement_stage, "V12-replaced-producer");
+    CHECK(replaced_counts.native == g0_base.native);
+    CHECK(replaced_counts.resolved == g0_base.resolved);
+    std::size_t equal_xyz_different_semantics = 0U;
+    for (const auto& old_vertex : original_stage.vertices) {
+        CHECK(old_vertex.referenceability ==
+              kernel::ReferenceStatus::resolved);
+        CHECK(old_vertex.provider_point.has_value());
+        CHECK(old_vertex.point_candidates.size() == 1U);
+        const auto old_address =
+            old_vertex.point_candidates.front();
+        CHECK(std::none_of(
+            replacement_stage.points.begin(),
+            replacement_stage.points.end(),
+            [&old_address](const auto& point) {
+                return point.address == old_address;
+            }));
+        // Only verify the requested same-looking-geometry fixture.
+        // The test NEVER uses matching coordinates to resolve identity.
+        const auto identical_xyz = std::count_if(
+            replacement_stage.vertices.begin(),
+            replacement_stage.vertices.end(),
+            [&old_vertex](const auto& candidate) {
+                if (!candidate.provider_point) return false;
+                const auto& a = *old_vertex.provider_point;
+                const auto& b = *candidate.provider_point;
+                return std::abs(a.x - b.x) < 1.0e-8 &&
+                       std::abs(a.y - b.y) < 1.0e-8 &&
+                       std::abs(a.z - b.z) < 1.0e-8;
+            });
+        CHECK(identical_xyz == 1);
+        ++equal_xyz_different_semantics;
+    }
+    CHECK(equal_xyz_different_semantics == 8U);
+    std::cout
+        << "RG02A_G0_V12"
+        << " same_xyz_different_semantic_address=8"
+        << " source_feature_removed_from_history=1"
+        << " no_coordinate_rebind=1\\n";
     std::cout
         << "RG02A_G0_V02"
         << " same_semantic_stage=1"
