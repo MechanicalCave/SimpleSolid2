@@ -478,10 +478,10 @@ int main(int argc, char* argv[]) {
         QStringLiteral("projectEdgeRoleRow"));
     auto* project_pick_row = workbench.findChild<QWidget*>(
         QStringLiteral("projectEdgePickRow"));
-    auto* operations_scroll = workbench.findChild<QScrollArea*>(
+    auto* project_ops_scroll = workbench.findChild<QScrollArea*>(
         QStringLiteral("workbenchOperationsScroll"));
     CHECK(project_source_row && project_role_row && project_pick_row);
-    CHECK(operations_scroll != nullptr);
+    CHECK(project_ops_scroll != nullptr);
     auto* source_layout =
         qobject_cast<QBoxLayout*>(project_source_row->layout());
     auto* role_layout =
@@ -493,7 +493,7 @@ int main(int argc, char* argv[]) {
     workbench.resize(850, 800);
     splitter->setSizes({145, 500, 200});
     QApplication::processEvents();
-    CHECK(operations_scroll->viewport()->width() < 260);
+    CHECK(project_ops_scroll->viewport()->width() < 260);
     CHECK(source_layout->direction() == QBoxLayout::TopToBottom);
     auto* project_source_face = workbench.findChild<QPushButton*>(
         QStringLiteral("projectEdgeSourceFaceButton"));
