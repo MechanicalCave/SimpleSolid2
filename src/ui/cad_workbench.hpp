@@ -641,12 +641,16 @@ private:
     QPushButton* datum_plane_button_{};
     QPushButton* extrude_button_{};
     QPushButton* revolve_button_{};
+    QLabel* part_sketch_tools_label_{};
+    QLabel* part_work_features_tools_label_{};
     QLabel* part_create_tools_label_{};
     QLabel* part_modify_tools_label_{};
     QPushButton* fillet_button_{};
     QPushButton* chamfer_button_{};
     QPushButton* project_edge_button_{};
     QPushButton* select_sketch_button_{};
+    QLabel* sketch_references_tools_label_{};
+    QLabel* sketch_transform_tools_label_{};
     QLabel* create_tools_label_{};
     QPushButton* line_sketch_button_{};
     QPushButton* circle_sketch_button_{};
