@@ -451,6 +451,17 @@ int main(int argc, char* argv[]) {
         undo->mapTo(
             document_top_row,
             QPoint{0, 0}).y();
+    std::cout << "UI01_G3_TOP_ROW_GEOMETRY"
+              << " sketch_y=" << sketch_top
+              << " undo_y=" << undo_top
+              << " tools_y="
+              << contextual_tools_scroll->mapTo(
+                     document_top_row, QPoint{0, 0}).y()
+              << " tools_height=" << contextual_tools_scroll->height()
+              << " sketch_height=" << sketch_tool->height()
+              << " undo_height=" << undo->height()
+              << " more_hidden=" << toolbar_more->isHidden()
+              << std::endl;
     CHECK(std::abs(sketch_top - undo_top) <= 4);
 
     CHECK(tree_panel->width() >= 110);
