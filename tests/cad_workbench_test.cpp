@@ -439,6 +439,20 @@ int main(int argc, char* argv[]) {
     CHECK(document_top_row->isAncestorOf(sketch_tool));
     CHECK(document_top_row->isAncestorOf(undo));
 
+    // Owner screenshot G3 D1 RED: group titles are real inline controls,
+    // including singleton Sketch/Work Features, not implied by a pin
+    // or by the command's own label.
+    for (const auto& pair : {
+             std::pair{"partSketchToolsLabel", "Sketch:"},
+             std::pair{"partWorkFeaturesToolsLabel", "Work Features:"},
+             std::pair{"partCreateToolsLabel", "Create:"},
+             std::pair{"partModifyToolsLabel", "Modify:"}}) {
+        auto* heading = workbench.findChild<QLabel*>(
+            QString::fromLatin1(pair.first));
+        CHECK(heading != nullptr);
+        CHECK(heading->text() == QString::fromLatin1(pair.second));
+    }
+
     // G3 customization RED: pin affordances are passive outside the
     // explicit editable toolbar mode. Clicking a pin affects only
     // UI presentation state, never the Part authored transaction.
@@ -679,6 +693,18 @@ int main(int argc, char* argv[]) {
     CHECK(shell_for_sketch_order != nullptr);
     shell_for_sketch_order->setToolbarContext(true);
     QApplication::processEvents();
+    // Select is a fixed direct command, never a customisable group;
+    // a pin for Select appears as a stray orphan dot after Inspect.
+    CHECK(workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarPin_Sketch_Select")) == nullptr);
+    for (const auto& pair : {
+             std::pair{"sketchReferencesToolsLabel", "References:"},
+             std::pair{"sketchTransformToolsLabel", "Transform:"}}) {
+        auto* heading = workbench.findChild<QLabel*>(
+            QString::fromLatin1(pair.first));
+        CHECK(heading != nullptr);
+        CHECK(heading->text() == QString::fromLatin1(pair.second));
+    }
     auto* sketch_select_for_order =
         workbench.findChild<QPushButton*>(
             QStringLiteral("selectSketchToolButton"));
