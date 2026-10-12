@@ -1912,10 +1912,16 @@ int main(int argc, char* argv[]) {
             // The Profile path also enters Sketch Edit indirectly.
             // Once G1 fixes the Sketch path, cover this sibling path
             // before allowing P1 UI layout changes.
+            CHECK(session.document().profiles().size() == 1U);
+            const auto profile_identity = QString::fromStdString(
+                session.document().profiles().front().id.serialized());
+            constexpr int profile_id_tree_role = Qt::UserRole + 43;
             QTreeWidgetItem* profile_item = nullptr;
             for (QTreeWidgetItemIterator it(tree); *it; ++it) {
-                if ((*it)->text(0).startsWith(
-                        QStringLiteral("Profile "))) {
+                // Tree labels are user-editable (e.g. "Main Profile");
+                // route by immutable semantic ProfileId, not text.
+                if ((*it)->data(0, profile_id_tree_role).toString() ==
+                    profile_identity) {
                     profile_item = *it;
                     break;
                 }
