@@ -123,7 +123,9 @@ private:
     QMenu* toolbar_more_menu_{};
     QHash<QString, QToolButton*> toolbar_group_dropdowns_;
     QHash<QPushButton*, QString> toolbar_icon_compacted_;
-    std::vector<QWidget*> toolbar_overflow_hidden_;
+    // Overflow-hidden command widgets must survive switching away from
+    // their Part/Sketch context until that SAME context is restored.
+    QHash<QString, std::vector<QWidget*>> toolbar_overflow_hidden_by_context_;
     bool toolbar_sketch_context_{};
     bool refreshing_toolbar_{};
     QScrollArea* properties_scroll_{};
