@@ -16334,9 +16334,13 @@ void CadWorkbench::syncActionState() {
         !revolve_draft_ &&
         !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
+        // Create-button engagement is not Feature Edit state. An
+        // authored FeatureId belongs to the Operations/viewport Edit
+        // cue; do not light the creation tool for that same draft.
         extrude_button_->setChecked(
-            extrude_profile_pick_active_ ||
-            extrude_draft_.has_value());
+            !edited_feature_id &&
+            (extrude_profile_pick_active_ ||
+             extrude_draft_.has_value()));
     }
 
     if (revolve_button_ != nullptr) {
@@ -16354,6 +16358,7 @@ void CadWorkbench::syncActionState() {
         !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         revolve_button_->setChecked(
+            !edited_feature_id &&
             revolve_draft_.has_value());
     }
 
@@ -16384,6 +16389,7 @@ void CadWorkbench::syncActionState() {
             edge_feature_tool_available &&
             !chamfer_draft_);
         fillet_button_->setChecked(
+            !edited_feature_id &&
             fillet_draft_.has_value());
     }
     if (chamfer_button_ != nullptr) {
@@ -16393,6 +16399,7 @@ void CadWorkbench::syncActionState() {
             edge_feature_tool_available &&
             !fillet_draft_);
         chamfer_button_->setChecked(
+            !edited_feature_id &&
             chamfer_draft_.has_value());
     }
 
