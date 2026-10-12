@@ -438,6 +438,40 @@ int main(int argc, char* argv[]) {
     workbench.show();
     QApplication::processEvents();
 
+    // UI-01 Owner RED: changing the active Feature/Sketch mode cue must
+    // NEVER push the 3D editor down or shrink it. A mode cue occupies
+    // a reserved, fixed-height rail even when its text is empty.
+    auto* mode_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchViewportModeCue"));
+    auto* operations_mode_cue = workbench.findChild<QLabel*>(
+        QStringLiteral("workbenchOperationsModeCue"));
+    auto* shell_for_mode_cue = dynamic_cast<ui::CadWorkbenchShell*>(
+        splitter->parentWidget());
+    CHECK(mode_cue && operations_mode_cue && shell_for_mode_cue);
+    CHECK(mode_cue->isVisible());
+    CHECK(!mode_cue->wordWrap());
+    const QRect idle_editor_bounds = editor->geometry();
+    const QRect idle_viewport_bounds = viewport->geometry();
+    const int idle_mode_cue_height = mode_cue->height();
+    CHECK(idle_mode_cue_height > 0);
+    for (const QString& message : {
+             QStringLiteral("Extrude operation — Edit Extrude001 (Feature 1)"),
+             QStringLiteral("Sketch edit"),
+             QStringLiteral(
+                 "Extrude operation — Edit unusually-long-feature-name "
+                 "(Feature 123456789)"),
+             QString{}}) {
+        shell_for_mode_cue->setModeCue(message);
+        QApplication::processEvents();
+        CHECK(editor->geometry() == idle_editor_bounds);
+        CHECK(viewport->geometry() == idle_viewport_bounds);
+        CHECK(mode_cue->height() == idle_mode_cue_height);
+        CHECK(mode_cue->isVisible());
+        CHECK(operations_mode_cue->text() == message);
+    }
+    std::cout << "UI01_MODE_CUE_STABLE_VIEWPORT_NATIVE_PASS"
+              << std::endl;
+
     CHECK(document_top_row->isAncestorOf(sketch_tool));
     CHECK(document_top_row->isAncestorOf(undo));
 
