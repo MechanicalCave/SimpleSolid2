@@ -460,6 +460,31 @@ int main(int argc, char* argv[]) {
             action->text() == QStringLiteral("Chamfer");
     }
     CHECK(fillet_in_group_menu && chamfer_in_group_menu);
+    // At an intermediate width, unpinned Modify should be a DIRECT
+    // named dropdown. More is reserved for widths where that still
+    // cannot represent the contextual tools. The pinned Create command
+    // remains directly accessible at this intermediate stage.
+    bool direct_modify_reached = false;
+    auto* pinned_extrude =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extrudeToolButton"));
+    CHECK(pinned_extrude != nullptr);
+    for (int candidate_width :
+         {1020, 980, 940, 900, 860, 820, 780, 740, 700}) {
+        workbench.resize(candidate_width, 800);
+        QApplication::processEvents();
+        if (!modify_dropdown->isHidden() &&
+            toolbar_more->isHidden() &&
+            !pinned_extrude->isHidden()) {
+            direct_modify_reached = true;
+            break;
+        }
+    }
+    CHECK(direct_modify_reached);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    std::cout << "UI01_G3_DIRECT_GROUP_BEFORE_MORE_PASS"
+              << std::endl;
 
     const auto sketch_top =
         sketch_tool->mapTo(
