@@ -16,6 +16,7 @@
 #include <QDebug>
 #include <QLabel>
 #include <QPushButton>
+#include <QToolButton>
 #include <QScrollArea>
 #include <QTest>
 #include <QTemporaryDir>
@@ -461,6 +462,17 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
         QString::fromLatin1(operation_widget_name));
     CHECK(sketch_action && profile_action && sketch_finish &&
           status && active_operations && feature_item);
+    // G3 regression at the actual OCCT Feature Edit boundary: grouped
+    // toolbar presentation must not interfere with the sole live draft,
+    // original Tree command entry or fixed Document controls.
+    auto* contextual_scroll = workbench.findChild<QScrollArea*>(
+        QStringLiteral("documentToolsScroll"));
+    auto* more_tools = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarMoreButton"));
+    CHECK(contextual_scroll && more_tools);
+    CHECK(contextual_scroll->horizontalScrollBarPolicy() ==
+          Qt::ScrollBarAlwaysOff);
+    CHECK(more_tools->menu() != nullptr);
     CHECK(sketch_finish->isHidden());
     CHECK(!active_operations->isHidden());
     CHECK(!session.document().sketches().empty());
