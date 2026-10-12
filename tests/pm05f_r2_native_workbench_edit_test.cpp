@@ -5698,6 +5698,14 @@ int main(int argc, char* argv[]) {
         CHECK(viewport->runtimeDiagnostics().solid_preview_displayed);
         CHECK(viewport->runtimeDiagnostics().solid_preview_style_expected);
 
+        auto* fillet_operations = workbench.findChild<QWidget*>(
+            QStringLiteral("edgeFeatureOperationsWidget"));
+        CHECK(fillet_operations);
+        verifyUi01SolidFeatureEntryGuard(
+            workbench, *tree, session, *fillet_operations, "Fillet");
+        CHECK(selectedCount(*label, 1));
+        CHECK(viewport->runtimeDiagnostics().solid_preview_displayed);
+
         // This is the central R2-B acceptance boundary: real native click,
         // tool_stage Viewer's query, controller semantic selection and
         // Workbench draft state must all agree.
