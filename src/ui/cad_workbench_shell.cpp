@@ -9,6 +9,7 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -162,6 +163,12 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     editor_host_layout_ = new QVBoxLayout(editor_host);
     editor_host_layout_->setContentsMargins(0, 0, 0, 0);
     editor_host_layout_->setSpacing(4);
+    viewport_mode_cue_ = new QLabel(editor_host);
+    viewport_mode_cue_->setObjectName(
+        QStringLiteral("workbenchViewportModeCue"));
+    viewport_mode_cue_->setWordWrap(true);
+    viewport_mode_cue_->setVisible(false);
+    editor_host_layout_->addWidget(viewport_mode_cue_, 0);
 
     splitter->addWidget(editor_host);
 
@@ -217,6 +224,12 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
             QStringLiteral("Operations"), right_vertical_splitter_);
     operations_group_->setMinimumHeight(0);
     operations_host_layout_ = new QVBoxLayout(operations_group_);
+    operations_mode_cue_ = new QLabel(operations_group_);
+    operations_mode_cue_->setObjectName(
+        QStringLiteral("workbenchOperationsModeCue"));
+    operations_mode_cue_->setWordWrap(true);
+    operations_mode_cue_->hide();
+    operations_host_layout_->addWidget(operations_mode_cue_, 0);
     operations_scroll_ = new QScrollArea(operations_group_);
     operations_scroll_->setObjectName(
         QStringLiteral("workbenchOperationsScroll"));
@@ -230,6 +243,23 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     operations_scroll_->setSizePolicy(
         QSizePolicy::Ignored, QSizePolicy::Expanding);
     operations_host_layout_->addWidget(operations_scroll_, 1);
+
+    // Fixed-height action area stays outside the scrolling form.
+    // Existing Finish/Cancel QWidget identity is preserved.
+    operations_footer_ = new QWidget(operations_group_);
+    operations_footer_->setObjectName(
+        QStringLiteral("workbenchOperationsFooter"));
+    auto* footer_layout = new QVBoxLayout(operations_footer_);
+    footer_layout->setContentsMargins(0, 0, 0, 0);
+    footer_layout->setSpacing(0);
+    operations_footer_stack_ =
+        new QStackedWidget(operations_footer_);
+    operations_footer_stack_->setObjectName(
+        QStringLiteral("workbenchOperationsFooterStack"));
+    footer_layout->addWidget(operations_footer_stack_);
+    operations_host_layout_->addWidget(operations_footer_, 0);
+    operations_footer_->hide();
+
     right_vertical_splitter_->addWidget(operations_group_);
     right_vertical_splitter_->setStretchFactor(0, 2);
     right_vertical_splitter_->setStretchFactor(1, 3);
@@ -376,6 +406,54 @@ void CadWorkbenchShell::setOperationsActive(bool active) {
     if (entering && short_right_panel_mode_) {
         right_short_tabs_->setCurrentIndex(1);
     }
+}
+
+void CadWorkbenchShell::registerOperationsFooterRow(
+    const QString& mode,
+    QWidget* primary,
+    QWidget* secondary) {
+    if (mode.isEmpty() || primary == nullptr ||
+        operations_footer_stack_ == nullptr ||
+        operations_footer_rows_.contains(mode)) {
+        return;
+    }
+    auto* row = new QWidget(operations_footer_stack_);
+    auto* layout = new QHBoxLayout(row);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(5);
+    for (auto* control : {primary, secondary}) {
+        if (control == nullptr) continue;
+        const bool explicitly_hidden = control->isHidden();
+        if (auto* old_parent = control->parentWidget()) {
+            if (auto* old_layout = old_parent->layout()) {
+                old_layout->removeWidget(control);
+            }
+        }
+        control->setParent(row);
+        layout->addWidget(control);
+        if (!explicitly_hidden) control->show();
+    }
+    operations_footer_stack_->addWidget(row);
+    operations_footer_rows_.insert(mode, row);
+}
+
+void CadWorkbenchShell::showOperationsFooterRow(
+    const QString& mode) {
+    const auto row = operations_footer_rows_.value(mode, nullptr);
+    if (row == nullptr) {
+        operations_footer_->hide();
+        return;
+    }
+    operations_footer_stack_->setCurrentWidget(row);
+    operations_footer_->show();
+}
+
+void CadWorkbenchShell::setModeCue(const QString& mode) {
+    viewport_mode_cue_->setText(mode);
+    operations_mode_cue_->setText(mode);
+    const bool present = !mode.isEmpty();
+    viewport_mode_cue_->setVisible(present);
+    operations_mode_cue_->setVisible(present);
 }
 
 void CadWorkbenchShell::applyRightPanelRatio() {
