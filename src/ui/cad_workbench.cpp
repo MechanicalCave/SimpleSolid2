@@ -5619,6 +5619,11 @@ bool CadWorkbench::activateDocument(
     }
 
     captureActiveViewState();
+    if (document_session_ != nullptr) {
+        document_right_panel_ratios_[
+            std::string{document_session_->documentId().value()}] =
+            shell_->rightPanelRatio();
+    }
     clearAxisRuntimeContext();
     clearDatumPlaneRuntimeContext();
     clearExtrudeRuntimeContext();
@@ -5632,6 +5637,11 @@ bool CadWorkbench::activateDocument(
 
     document_session_ = session;
     workspace_root_ = std::move(workspace_root);
+    const auto saved_panel_ratio = document_right_panel_ratios_.find(
+        std::string{session->documentId().value()});
+    shell_->setRightPanelRatio(
+        saved_panel_ratio == document_right_panel_ratios_.end()
+            ? 0.4 : saved_panel_ratio->second);
 
     restoreActiveViewState();
     refreshActiveContext();
@@ -5643,6 +5653,9 @@ bool CadWorkbench::activateDocument(
 void CadWorkbench::deactivateDocument() {
     if (document_session_ != nullptr) {
         captureActiveViewState();
+        document_right_panel_ratios_[
+            std::string{document_session_->documentId().value()}] =
+            shell_->rightPanelRatio();
     }
 
     clearAxisRuntimeContext();
@@ -5654,6 +5667,7 @@ void CadWorkbench::deactivateDocument() {
     clearSketchRuntimeContext();
     document_session_ = nullptr;
     workspace_root_.clear();
+    shell_->setRightPanelRatio(0.4);
 
     clearActiveContext();
     setStatusText(
@@ -5663,6 +5677,8 @@ void CadWorkbench::deactivateDocument() {
 void CadWorkbench::resetRuntimeState() {
     deactivateDocument();
     document_view_states_.clear();
+    document_right_panel_ratios_.clear();
+    shell_->setRightPanelRatio(0.4);
     setStatusText(
         QStringLiteral(
             "No Part Document is active."));
@@ -5677,6 +5693,8 @@ void CadWorkbench::forgetDocumentRuntimeState(
     }
 
     document_view_states_.erase(
+        std::string{document_id.value()});
+    document_right_panel_ratios_.erase(
         std::string{document_id.value()});
 }
 
@@ -16143,6 +16161,17 @@ void CadWorkbench::syncActionState() {
         document_session_ != nullptr &&
         *sketch_edit_document_id_ ==
             document_session_->documentId();
+    shell_->setOperationsActive(
+        active && (
+            editing_sketch ||
+            sketch_support_pick_active_ ||
+            axis_draft_.has_value() ||
+            datum_plane_draft_.has_value() ||
+            extrude_profile_pick_active_ ||
+            extrude_draft_.has_value() ||
+            revolve_draft_.has_value() ||
+            edge_feature_active ||
+            project_edge_active_));
 
     sketch_button_->setText(
         QStringLiteral("Sketch"));
