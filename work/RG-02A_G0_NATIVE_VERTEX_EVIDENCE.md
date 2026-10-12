@@ -112,7 +112,7 @@ The following values were observed at **source SHA `6c0ab31e9e51d266e00812f6bae0
 
 These bounded fixture outcomes establish the actual **non-universal three-Surface identity** of real `VERTEX`: native Unsupported at both Fillet/Chamfer corners and closed cylinders, and non-unique triple-Surface meaning on a cut analytic cylinder. The exact additional semantic discriminator (if any) is a **future Owner D2 decision**, not implemented or preapproved here.
 
-## 10. Remaining VERTEX matrix (not executed or not demonstrated)
+## 10. VERTEX evidence acceptance matrix (measured fixtures and explicit gaps)
 
 | Case | Evidence status | Outstanding proof |
 | --- | --- | --- |
@@ -131,12 +131,23 @@ These bounded fixture outcomes establish the actual **non-universal three-Surfac
 
 `MID`/`CENTER` E01–E08 are **not in this activated G0 execution scope**, except as future test planning. All E01–E08 remain UNRUN.
 
+## 10A. Proposed minimal Owner D2 decision after G0 verification (NOT APPROVED)
+
+The current `FeaturePointAddress` has demonstrated **two distinct strict-identity limits**:
+
+1. **Unsupported genuine native Vertices:** bounded Fillet/Chamfer corners (3/13 each) and closed cylinders (2/2), which cannot currently be semantically authored as Point sources even though some are eligible for ordinary viewport inspection.
+2. **Ambiguous genuine native Vertices:** one current 3-Surface Point relation may correspond to multiple different actual native Vertices (analytic half-cylinder: 2 ambiguous groups / 4 vertices). A proposed "accept all three-Surface triples" solution would still be invalid.
+
+**Minimal next architecture question for Owner:** authorize a separately audited, bounded *semantic Vertex discrimination* design, rather than changing referenceability to Resolved by screen position, provider token, nearest XYZ, seam order, or a universal speculative `VertexId`. Preserve the current three-Surface cases when unique; fail closed until exact independently evidenced provenance distinguishes ambiguous bounded branches. New persisted `VERTEX` source schema, repair UX, extra producer constraints, provider-neutral data contracts, `MID/CENTER`, Datum/Axis/ Mirror remain **NOT AUTHORIZED** by G0.
+
+**V11 boundary:** The permitted independent OCCT rebuild proves current semantic Point meaning is reconstructed. Separately, the previously accepted `tests/pm02p_e_core_lifecycle_test.cpp` is a *nonnative simulated topology-ticket freshness control* that checks document revision, session, evaluation generation and provider generation; it is not a production RG-02 authored Vertex lifecycle test. If included in exact-head FULL, that is baseline regression evidence only. Interactive Viewport old-token rejection, serialized RG-02 point sources and edit/repair require future scoped implementation/test authority, not a workaround under G0.
+
 ## 11. Immediate next G0 evidence steps
 
 - Any additional V03 provider raw Surface incidence characterization must be separately demonstrated with a contract-allowed native fixture; its **Part** 16/16 Resolved classification and 8+8 lineage are now measured.
 - Preserve measured V04 provider/Part distinction: 90° provider 8 three-Surface Vertices vs Part 6 Resolved; 360° provider 4 two-Surface Vertices vs Part 2 Unsupported. Do not infer actual hit/pick behavior from seam-edge presence.
 - Further characterize why the **3 Unsupported** native Vertices in each real Fillet/Chamfer fixture lack current semantic Point relations (native/semantic Surface adjacency or unresolved provenance) only through allowed test paths.
-- Part-level and V04 native-provider status histograms are now evidenced. Remaining scope is diagnosing unsupported Fillet/Chamfer Surface cardinality, assessing the separately controlled stale-selection V11 generation evidence, and completing exact-head FAST/FULL. The tested finite native fixtures do not prove every possible Part Vertex. STOP for Owner amendment if a necessary test requires a fourth file, production code or UI implementation.
+- Part and Revolve-provider status histograms are evidenced. Still open: exact raw/semantic Surface incidence of Fillet/Chamfer Unsupported Vertices; UI stale-selection and future serialized RG-02 source semantics are OUTSIDE the activated G0 implementation paths. Complete exact-head FAST/FULL and present G0 findings for separate Owner D2 acceptance. No claim that a finite fixture set covers every possible Part Vertex; STOP for Owner amendment if further native evidence requires a fourth file or production/UI code.
 - Final exact-head Windows FULL, Owner G0 evidence acceptance and separate production evidence merge approval only at genuine completion. No claims of full RG-02A or RG-02 implementation.
 
 ## 12. Independent UI STOP and documentation impact
