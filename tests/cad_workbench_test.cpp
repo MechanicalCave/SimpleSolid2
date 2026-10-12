@@ -1413,6 +1413,35 @@ int main(int argc, char* argv[]) {
     sketch_overflow_action->trigger();
     QApplication::processEvents();
     CHECK(real_sketch_button_invocations == 1);
+    // While the original Sketch support-pick draft owns the context,
+    // the launch button is disabled. The More menu must reflect that
+    // LIVE state, not keep a stale enabled proxy that can start a
+    // conflicting command or dispatch the old slot twice.
+    CHECK(!sketch_tool->isEnabled());
+    CHECK(!toolbar_more->isHidden());
+    QMenu* draft_sketch_menu = nullptr;
+    for (auto* action : toolbar_more->menu()->actions()) {
+        if (action != nullptr &&
+            action->text() == QStringLiteral("Sketch")) {
+            draft_sketch_menu = action->menu();
+            break;
+        }
+    }
+    CHECK(draft_sketch_menu != nullptr);
+    QAction* disabled_sketch_entry = nullptr;
+    for (auto* action : draft_sketch_menu->actions()) {
+        if (action != nullptr &&
+            action->text() == sketch_command_label) {
+            disabled_sketch_entry = action;
+            break;
+        }
+    }
+    CHECK(disabled_sketch_entry != nullptr);
+    CHECK(!disabled_sketch_entry->isEnabled());
+    disabled_sketch_entry->trigger();
+    QApplication::processEvents();
+    CHECK(real_sketch_button_invocations == 1);
+    CHECK(!sketch_tool->isEnabled());
     QObject::disconnect(sketch_click_connection);
     auto* overflow_sketch_cancel =
         workbench.findChild<QPushButton*>(
