@@ -582,6 +582,35 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
     const auto original_revision = session.document().revision();
     const auto original_undo = session.undoDepth();
     const bool original_dirty = session.needsSave();
+
+    // Native Qt/OCCT P0 guard: entering and leaving toolbar Customize
+    // while a real Feature Edit draft is live changes neither draft
+    // ownership/cue nor the authored Part/revision/Undo/dirty state.
+    auto* customize_toolbar =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarCustomizeButton"));
+    auto* create_group_handle =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchToolbarHandle_Part_Create"));
+    CHECK(customize_toolbar && create_group_handle);
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(create_group_handle->isHidden());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(customize_toolbar->isChecked());
+    CHECK(create_group_handle->menu() != nullptr);
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(create_group_handle->isHidden());
+    CHECK(active_operations->isVisible());
+    CHECK(operations_cue->text() == context_cue);
+    CHECK(viewport_cue->text() == context_cue);
+    CHECK(session.document().state() == original_state);
+    CHECK(session.document().revision() == original_revision);
+    CHECK(session.undoDepth() == original_undo);
+    CHECK(session.needsSave() == original_dirty);
+
     const auto sketch_key = QString::fromStdString(
         std::string{session.document().sketches().front().id.value()});
     QTreeWidgetItem* sketch_item = nullptr;
