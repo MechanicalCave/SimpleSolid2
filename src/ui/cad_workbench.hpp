@@ -323,6 +323,9 @@ private:
     void startSketchResupport(
         const sketch::SketchId& sketch_id);
     void cancelSketchTool();
+    // A pending solid Feature must remain the sole mutable edit context.
+    // Deliberately excludes AxisDraft: Axis-in-Sketch is a valid context.
+    [[nodiscard]] bool hasActiveSolidFeatureContext() const noexcept;
     void requestEditSketch(
         const sketch::SketchId& sketch_id);
     void requestEditProfile(

@@ -2043,7 +2043,11 @@ void CadWorkbench::buildUi() {
                 selected_axis_id_.reset();
                 selected_datum_id_.reset();
             }
-            if (viewport_controller_) {
+            // A Feature draft uses a tool-stage Body selection. Tree
+            // inspection must not reconfigure that Viewer overlay and
+            // discard the exact selected material Edge inputs.
+            if (viewport_controller_ &&
+                !fillet_draft_ && !chamfer_draft_) {
                 viewport_controller_->
                     setFeatureContributionSelection(
                         semantic);
@@ -11253,11 +11257,29 @@ void CadWorkbench::cancelSketchTool() {
     syncActionState();
 }
 
+bool CadWorkbench::hasActiveSolidFeatureContext() const noexcept {
+    return extrude_profile_pick_active_ ||
+           extrude_draft_.has_value() ||
+           revolve_draft_.has_value() ||
+           fillet_draft_.has_value() ||
+           chamfer_draft_.has_value();
+}
+
 void CadWorkbench::requestEditSketch(
     const sketch::SketchId& sketch_id) {
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+
+    // UI-01 P0: fail closed before any Sketch enter/cancel/reflow.
+    // Feature draft, its active selection and Undo/dirty state remain
+    // untouched. Tree, properties-action and profile entry share this gate.
+    if (hasActiveSolidFeatureContext()) {
+        // UI-01 G1 diagnostic ONLY: isolate status-label geometry as a
+        // candidate cause of transient Viewer/Edge selection invalidation.
+        // The user-visible rejection text MUST be restored before GREEN.
         return;
     }
 
@@ -11298,6 +11320,15 @@ void CadWorkbench::requestEditProfile(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
+        return;
+    }
+
+    // Do not bypass the single Sketch-entry authority when a Sketch
+    // context happens to exist. Keep the solid Feature draft intact.
+    if (hasActiveSolidFeatureContext()) {
+        // UI-01 G1 diagnostic ONLY: isolate status-label geometry as a
+        // candidate cause of transient Viewer/Edge selection invalidation.
+        // The user-visible rejection text MUST be restored before GREEN.
         return;
     }
 
