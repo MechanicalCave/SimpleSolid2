@@ -9,6 +9,7 @@
 #include <vector>
 
 class QEvent;
+class QFrame;
 class QGroupBox;
 class QHBoxLayout;
 class QMenu;
@@ -64,6 +65,7 @@ private:
     void updateResponsiveLayout(bool force = false);
     void updateRightPanelHeightMode();
     void refreshToolbarOverflow();
+    void updateToolbarGroupFrames();
     void rebuildToolbarMoreMenu();
     void setToolbarCustomizeActive(bool active);
     void moveToolbarGroup(
@@ -113,6 +115,9 @@ private:
     QToolButton* toolbar_more_{};
     QToolButton* toolbar_customize_{};
     QHash<QString, QToolButton*> toolbar_pin_markers_;
+    // Passive, mouse-transparent visual chrome behind original tools.
+    // It never participates in QHBoxLayout ordering or CAD input.
+    QHash<QString, QFrame*> toolbar_group_frames_;
     QHash<QString, QToolButton*> toolbar_group_handles_;
     QHash<QString, QStringList> toolbar_group_order_;
     QHash<QString, bool> toolbar_pin_overrides_;
