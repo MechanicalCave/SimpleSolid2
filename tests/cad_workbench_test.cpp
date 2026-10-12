@@ -8,6 +8,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QItemSelectionModel>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -453,6 +454,20 @@ int main(int argc, char* argv[]) {
         CHECK(heading->text() == QString::fromLatin1(pair.second));
     }
 
+    // Owner-approved UI-01 Variant A: the entire visible group, from
+    // its title/pin through the actual connected buttons, must have one
+    // passive, palette-aware frame. An unrelated floating pin is not
+    // an acceptable group representation.
+    for (const char* name : {"Sketch", "Work Features", "Create",
+                             "Modify"}) {
+        auto* frame = workbench.findChild<QFrame*>(
+            QStringLiteral("workbenchToolbarGroupFrame_Part_") +
+            QString::fromLatin1(name));
+        CHECK(frame != nullptr);
+        CHECK(frame->focusPolicy() == Qt::NoFocus);
+        CHECK(frame->testAttribute(Qt::WA_TransparentForMouseEvents));
+    }
+
     // G3 customization RED: pin affordances are passive outside the
     // explicit editable toolbar mode. Clicking a pin affects only
     // UI presentation state, never the Part authored transaction.
@@ -693,6 +708,17 @@ int main(int argc, char* argv[]) {
     CHECK(shell_for_sketch_order != nullptr);
     shell_for_sketch_order->setToolbarContext(true);
     QApplication::processEvents();
+    for (const char* name : {"Create", "Profile", "References",
+                             "Modify", "Transform", "Inspect"}) {
+        auto* frame = workbench.findChild<QFrame*>(
+            QStringLiteral("workbenchToolbarGroupFrame_Sketch_") +
+            QString::fromLatin1(name));
+        CHECK(frame != nullptr);
+        CHECK(frame->testAttribute(Qt::WA_TransparentForMouseEvents));
+    }
+    CHECK(workbench.findChild<QFrame*>(
+        QStringLiteral("workbenchToolbarGroupFrame_Sketch_Select")) ==
+        nullptr);
     // Select is a fixed direct command, never a customisable group;
     // a pin for Select appears as a stray orphan dot after Inspect.
     CHECK(workbench.findChild<QToolButton*>(
