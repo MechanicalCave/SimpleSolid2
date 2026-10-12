@@ -2,6 +2,7 @@
 
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QEvent>
 #include <QGroupBox>
 #include <QFontMetrics>
 #include <QHBoxLayout>
@@ -110,6 +111,12 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     editor_tools_layout_->addStretch(1);
     document_tools_scroll->setWidget(
         document_tools_host);
+    // The scroll host may be smaller than the fixed Document zone.
+    // Center its one-row tools vertically, and recompute overflow only
+    // once the QScrollArea viewport has a measured final size.
+    document_tools_scroll->setAlignment(
+        Qt::AlignLeft | Qt::AlignVCenter);
+    document_tools_scroll->viewport()->installEventFilter(this);
 
     document_actions_ = new QHBoxLayout;
     document_actions_->setContentsMargins(0, 0, 0, 0);
@@ -607,6 +614,18 @@ void CadWorkbenchShell::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     updateResponsiveLayout();
     refreshToolbarOverflow();
+}
+
+bool CadWorkbenchShell::eventFilter(
+    QObject* watched,
+    QEvent* event) {
+    if (contextual_tools_scroll_ != nullptr &&
+        watched == contextual_tools_scroll_->viewport() &&
+        event != nullptr &&
+        event->type() == QEvent::Resize) {
+        refreshToolbarOverflow();
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 
