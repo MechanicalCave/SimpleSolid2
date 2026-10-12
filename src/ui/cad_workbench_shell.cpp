@@ -46,8 +46,8 @@ struct ToolbarGroupSpec final {
 std::vector<ToolbarGroupSpec> toolbarGroups(bool sketch) {
     if (!sketch) {
         return {
-            {"Sketch", "", {"sketchToolButton"}, true},
-            {"Work Features", "", {"datumPlaneToolButton"}, false},
+            {"Sketch", "partSketchToolsLabel", {"sketchToolButton"}, true},
+            {"Work Features", "partWorkFeaturesToolsLabel", {"datumPlaneToolButton"}, false},
             {"Create", "partCreateToolsLabel",
                 {"extrudeToolButton", "revolveToolButton"}, true},
             {"Modify", "partModifyToolsLabel",
@@ -61,11 +61,11 @@ std::vector<ToolbarGroupSpec> toolbarGroups(bool sketch) {
              "arcSketchToolButton", "rectangleSketchToolButton"}, true},
         {"Profile", "sketchProfileToolsLabel",
             {"profileSketchToolButton"}, false},
-        {"References", "", {"projectEdgeToolButton"}, true},
+        {"References", "sketchReferencesToolsLabel", {"projectEdgeToolButton"}, true},
         {"Modify", "sketchModifyToolsLabel",
             {"trimSketchToolButton", "extendSketchToolButton",
              "extendBothSketchToolButton"}, false},
-        {"Transform", "",
+        {"Transform", "sketchTransformToolsLabel",
             {"moveSketchToolButton", "copySketchToolButton",
              "rotateSketchToolButton", "scaleSketchToolButton",
              "mirrorSketchToolButton"}, false},
@@ -1091,6 +1091,12 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
         if (it.value()) it.value()->hide();
     }
     for (const auto& group : groups) {
+        // Select is the permanently fixed Sketch base action, not a
+        // customisable/pinnable group. Its marker was stranded after
+        // Inspect when restoring the default group order.
+        if (toolbar_sketch_context_ &&
+            QString::fromLatin1(group.name) ==
+                QStringLiteral("Select")) continue;
         const QString key = current_context + QStringLiteral("_") +
             QString::fromLatin1(group.name);
         auto* pin = toolbar_pin_markers_.value(key, nullptr);
@@ -1106,6 +1112,10 @@ void CadWorkbenchShell::refreshToolbarOverflow() {
                 QString::fromLatin1(group.name) +
                 QStringLiteral(" group"));
             pin->setFixedWidth(16);
+            pin->setAutoRaise(true);
+            pin->setStyleSheet(QStringLiteral(
+                "QToolButton { border: none; background: transparent;"
+                " padding: 0px; }"));
             const QString preference_key =
                 QStringLiteral("ui/workbench/toolbar/v1/") +
                 current_context + QStringLiteral("/pins/") +
