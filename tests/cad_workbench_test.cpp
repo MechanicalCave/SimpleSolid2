@@ -531,10 +531,24 @@ int main(int argc, char* argv[]) {
     // Re-expansion is just as important as narrow stacking: the
     // original three-button Source row must return inline when the
     // actual Operations viewport can comfortably accommodate it.
-    workbench.resize(1400, 800);
-    splitter->setSizes({150, 820, 420});
+    workbench.resize(1800, 800);
+    splitter->setSizes({150, 800, 800});
     QApplication::processEvents();
-    CHECK(project_ops_scroll->viewport()->width() >= 310);
+    int source_inline_minimum = 0;
+    for (int i = 0; i < source_layout->count(); ++i) {
+        auto* item = source_layout->itemAt(i);
+        CHECK(item != nullptr && item->widget() != nullptr);
+        source_inline_minimum += item->widget()->sizeHint().width();
+    }
+    source_inline_minimum += std::max(0, source_layout->count() - 1) *
+        std::max(0, source_layout->spacing());
+    std::cout << "UI01_PROJECT_GEOMETRY_WIDE_BUDGET"
+              << " viewport=" << project_ops_scroll->viewport()->width()
+              << " source_inline_minimum=" << source_inline_minimum
+              << " source_direction=" << source_layout->direction()
+              << std::endl;
+    CHECK(project_ops_scroll->viewport()->width() - 12 >=
+          source_inline_minimum);
     check_row_reflow(source_layout);
     check_row_reflow(role_layout);
     check_row_reflow(pick_layout);
