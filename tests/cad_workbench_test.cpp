@@ -428,6 +428,36 @@ int main(int argc, char* argv[]) {
     CHECK(document_top_row->isAncestorOf(sketch_tool));
     CHECK(document_top_row->isAncestorOf(undo));
 
+    // G3 customization RED: pin affordances are passive outside the
+    // explicit editable toolbar mode. Clicking a pin affects only
+    // UI presentation state, never the Part authored transaction.
+    auto* customize_toolbar = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarCustomizeButton"));
+    CHECK(customize_toolbar != nullptr);
+    CHECK(customize_toolbar->isCheckable());
+    CHECK(!customize_toolbar->isChecked());
+    auto* pin_create = workbench.findChild<QToolButton*>(
+        QStringLiteral("workbenchToolbarPin_Part_Create"));
+    CHECK(pin_create != nullptr);
+    CHECK(pin_create->isHidden());
+    CHECK(pin_create->property("pinned").toBool());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(customize_toolbar->isChecked());
+    CHECK(!pin_create->isHidden());
+    pin_create->click();
+    QApplication::processEvents();
+    CHECK(!pin_create->property("pinned").toBool());
+    pin_create->click();
+    QApplication::processEvents();
+    CHECK(pin_create->property("pinned").toBool());
+    customize_toolbar->click();
+    QApplication::processEvents();
+    CHECK(!customize_toolbar->isChecked());
+    CHECK(pin_create->isHidden());
+    std::cout << "UI01_G3_CUSTOMIZE_PASSIVE_PIN_NATIVE_PASS"
+              << std::endl;
+
     // UI-01 G3 native RED: the contextual tool surface must not rely on
     // a horizontal scrollbar, must stay in one row with fixed Document
     // actions, and must expose a last-resort named two-level More menu.
