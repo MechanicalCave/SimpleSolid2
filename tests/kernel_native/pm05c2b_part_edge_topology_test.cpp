@@ -1167,6 +1167,40 @@ private:
     bool duplicate_terminal_token_;
 };
 
+// A foreign OCCT *instance* is not a different Body: Q0 authority is the
+// exact RuntimeSolidHandle. This deliberately misbinds an otherwise valid
+// native Edge to a DIFFERENT actual Body and must be rejected before query.
+class Q1ForeignBodyBinderQuery final :
+    public kernel::IExactBoundedEdgeGeometryQuery {
+public:
+    Q1ForeignBodyBinderQuery(
+        kernel::IExactBoundedEdgeGeometryQuery& delegate,
+        kernel::RuntimeSolidHandle foreign_body,
+        kernel::RuntimeEdgeToken foreign_edge)
+        : delegate_{delegate},
+          foreign_body_{std::move(foreign_body)},
+          foreign_edge_{foreign_edge} {}
+
+    [[nodiscard]] std::optional<kernel::ScopedExactEdge>
+    bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle,
+        kernel::RuntimeEdgeToken) noexcept override {
+        return delegate_.bindExactEdgeToBody(
+            foreign_body_, foreign_edge_);
+    }
+
+    [[nodiscard]] kernel::ExactEdge3dResult queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedExactEdge& edge) noexcept override {
+        return delegate_.queryExactBoundedEdge3d(
+            std::move(body), edge);
+    }
+private:
+    kernel::IExactBoundedEdgeGeometryQuery& delegate_;
+    kernel::RuntimeSolidHandle foreign_body_;
+    kernel::RuntimeEdgeToken foreign_edge_;
+};
+
 // Q1-06: real Fillet/Chamfer generated Vertices remain globally
 // Unsupported; incident Edge selection cannot upgrade their Point meaning.
 void verifyQ1NoGlobalPointPromotion(
@@ -1822,12 +1856,27 @@ int main() {
         CHECK(!gone_edge.reference);
         CHECK(gone_edge.status == part::SelectedEdgeEndStatus::edge_missing);
         kernel_occt::OcctSolidModelingKernel other_provider;
+        const auto other_document = makeBasePart();
+        const auto other_evaluation = part::evaluatePart(
+            other_document, other_provider);
+        CHECK(other_evaluation.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(other_evaluation.features.size() == 1U);
+        const auto& other_feature = other_evaluation.features.front();
+        CHECK(other_feature.result_solid);
+        CHECK(other_feature.result_topology);
+        CHECK(other_feature.result_topology->edges.size() == 12U);
+        CHECK(other_feature.result_solid.get() !=
+              base_evaluation.features.front().result_solid.get());
+        Q1ForeignBodyBinderQuery wrong_body{
+            other_provider, other_feature.result_solid,
+            other_feature.result_topology->edges.front().runtime_token};
         assertNoPayload(part::resolveSelectedMaterialEdgeEnd(
-            base_document, source, base_evaluation, other_provider),
+            base_document, source, base_evaluation, wrong_body),
             part::SelectedEdgeEndStatus::native_geometry_unavailable);
         const auto foreign_native = part::authorSelectedMaterialEdgeEnd(
             base_document, base_evaluation, catalog.stage,
-            current_edge, current_vertex, other_provider);
+            current_edge, current_vertex, wrong_body);
         CHECK(!foreign_native.ok());
         CHECK(!foreign_native.reference);
         CHECK(foreign_native.status ==
