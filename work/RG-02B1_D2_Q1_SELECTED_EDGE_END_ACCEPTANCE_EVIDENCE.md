@@ -12,12 +12,12 @@
 | Q1 initial kernel FOCUSED (`pm05c2b.part_edge_topology`, `pm02p.e_kernel_lifecycle`) | `6c5b0c130179fc09fd00a0ad80de96db8720c873` | [Actions #2885](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38441775808): actual MSVC Release build + registered native CTest **2/2** | **PASS 2/2** |
 | Q1 Fillet/Chamfer negative FOCUSED | `9fd299f659ccd9e3b31fbbf2adb2610e7f627db4` | [Actions #2886](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38442307105): real OCCT kernel native registered **2/2 PASS**, including Fillet/Chamfer unsupported global Point negative assertions | **PASS 2/2** |
 | Q1 intrinsic Point-status negative FOCUSED | `0940f4ef55f2f669d18523da889cdc42a2206c78` | [Actions #2887](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38442654618): real native CTest **2/2 PASS**, plus simulated current-catalog global Point `Ambiguous/Unsupported/Missing` independently rejected | **PASS 2/2** |
-| Q1 post-settle FAST | Not yet recorded | Must test final source/test snapshot | **UNRUN** |
+| Q1 post-settle FAST #2888 | `77194e81b2f60a41e4425d1a428f223ae3cea233` | [Actions #2888](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38442922542), desktop FAST **93/93 PASS**, including `pm05b2.strict_edge_resolver` | **PASS 93/93** |
 | Ready-for-Review Windows FULL | Not yet recorded | Exact source SHA; Core/Native/Desktop/docs aggregate | **UNRUN** |
 | Browser DOC-01 freshness | Not yet recorded | Canonical internal docs plus generated Browser byte comparison | **UNRUN** |
 | Owner technical FINAL PASS / independent production merge | Not requested | Requires all evidence and separate explicit PR consent | **PENDING** |
 
-The 93/93 FAST result is **not** evidence for kernel-native Q1. Unlike FAST, exact-head Windows FOCUSED #2885, #2886 and #2887 each built and executed both registered real OCCT CTests (2/2 PASS each) with the canonical 12/24/8/replay, Fillet/Chamfer negative and synthetic Point status witnesses, respectively. These are code-stage checkpoints, not final QA or Owner acceptance. A specific real Part half-cylinder/Revolve Q1 negative family is **not yet witnessed**, and final FAST/FULL on the final source remain **UNRUN**.
+The 93/93 FAST result is **not** evidence for kernel-native Q1. Unlike FAST, exact-head Windows FOCUSED #2885, #2886 and #2887 each built and executed both registered real OCCT CTests (2/2 PASS each) with the canonical 12/24/8/replay, Fillet/Chamfer negative and synthetic Point status witnesses, respectively. These are code-stage checkpoints, not final QA or Owner acceptance. A specific real Part half-cylinder/Revolve Q1 negative family is **not yet witnessed**, while READY FULL on the final source and DOC-01 verification remain **UNRUN**.
 
 ## Finite Q1-01…Q1-08 witness ledger
 
