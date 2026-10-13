@@ -4412,6 +4412,185 @@ int main(int argc, char* argv[]) {
             CHECK(cold_manual_projection->model.state().lines.size() ==
                   5U);
             CHECK(cold_manual_projection->model.state().circles.empty());
+
+            // PG-01E/E1-C: two *manually* picked bounded Faces can
+            // produce five independent strict Edge links whose planar
+            // images overlap. A region must NOT be silently healed by
+            // treating equal coordinates as equal material identity.
+            // A human-authorized explicit Sketch Erase (existing
+            // Command) of ONE precisely identified collocated target
+            // is an allowed repair; the other four strict linked
+            // EntityIds and material sources must survive.
+            const auto unedited_regions =
+                sketch::analyzeRegions(cold_manual_projection->model);
+            CHECK(unedited_regions.regions.empty());
+            CHECK(!unedited_regions.complete());
+            const auto five_lines =
+                cold_manual_projection->model.state().lines;
+            CHECK(five_lines.size() == 5U);
+            const auto point_same = [](sketch::Point2 a,
+                                       sketch::Point2 b) {
+                return std::abs(a.u - b.u) < 1.0e-7 &&
+                       std::abs(a.v - b.v) < 1.0e-7;
+            };
+            std::optional<sketch::EntityId> explicit_erase_id;
+            std::optional<sketch::EntityId> other_overlap_id;
+            std::size_t overlapping_pairs = 0U;
+            for (std::size_t first = 0U;
+                 first < five_lines.size(); ++first) {
+                for (std::size_t second = first + 1U;
+                     second < five_lines.size(); ++second) {
+                    const auto& a = five_lines[first];
+                    const auto& b = five_lines[second];
+                    if ((point_same(a.start, b.start) &&
+                         point_same(a.end, b.end)) ||
+                        (point_same(a.start, b.end) &&
+                         point_same(a.end, b.start))) {
+                        ++overlapping_pairs;
+                        explicit_erase_id = b.id;
+                        other_overlap_id = a.id;
+                    }
+                }
+            }
+            CHECK(overlapping_pairs == 1U);
+            CHECK(explicit_erase_id && other_overlap_id);
+            const auto& original_links =
+                cold_saved->projection_bindings;
+            const auto erase_source = std::find_if(
+                original_links.begin(), original_links.end(),
+                [&explicit_erase_id](const auto& link) {
+                    return link.target_entity == *explicit_erase_id;
+                });
+            const auto preserved_source = std::find_if(
+                original_links.begin(), original_links.end(),
+                [&other_overlap_id](const auto& link) {
+                    return link.target_entity == *other_overlap_id;
+                });
+            CHECK(erase_source != original_links.end());
+            CHECK(preserved_source != original_links.end());
+            CHECK(erase_source->source != preserved_source->source);
+
+            auto repaired_copy = part::PartDocument::restore(
+                manual_loaded.document->documentId(),
+                manual_loaded.document->state());
+            CHECK(repaired_copy.ok());
+            application::DocumentSession repaired_manual{
+                {}, std::move(*repaired_copy.document)};
+            const auto delete_one = repaired_manual.execute(
+                application::EraseSketchEntityCommand{
+                    *manual_target.sketch_id, *explicit_erase_id});
+            CHECK(delete_one.ok() && delete_one.changed);
+            const auto* repaired_sketch =
+                repaired_manual.document().findSketch(
+                    *manual_target.sketch_id);
+            CHECK(repaired_sketch &&
+                  repaired_sketch->projection_bindings.size() == 4U);
+            CHECK(repaired_sketch->model.entityCount() == 4U);
+            CHECK(!repaired_sketch->model.contains(*explicit_erase_id));
+            CHECK(repaired_sketch->model.contains(*other_overlap_id));
+            CHECK(std::none_of(
+                repaired_sketch->projection_bindings.begin(),
+                repaired_sketch->projection_bindings.end(),
+                [&explicit_erase_id](const auto& link) {
+                    return link.target_entity == *explicit_erase_id;
+                }));
+            // New provider, not a cached upstream Face token or seed.
+            kernel_occt::OcctSolidModelingKernel repair_provider;
+            const auto repaired_body = part::evaluatePart(
+                repaired_manual.document(), repair_provider);
+            CHECK(repaired_body.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto repaired_projection =
+                part::evaluateEffectiveSketchProjection(
+                    repaired_manual.document(),
+                    *manual_target.sketch_id,
+                    repaired_body, repair_provider);
+            CHECK(repaired_projection &&
+                  repaired_projection->allResolved());
+            CHECK(repaired_projection->outcomes.size() == 4U);
+            const auto repaired_regions =
+                sketch::analyzeRegions(repaired_projection->model);
+            CHECK(repaired_regions.complete());
+            CHECK(repaired_regions.regions.size() == 1U);
+            const auto repaired_intent = part::makeProfileRegionIntent(
+                repaired_regions.regions.front());
+            CHECK(repaired_intent);
+            const auto repaired_profile = repaired_manual.execute(
+                application::CreateProfileCommand{
+                    *manual_target.sketch_id,
+                    repaired_manual.document().revision(),
+                    *repaired_intent},
+                repair_provider);
+            CHECK(repaired_profile.ok() &&
+                  repaired_profile.profile_id);
+            const auto repaired_add = repaired_manual.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *repaired_profile.profile_id,
+                    repaired_manual.document().revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{25.0}, false},
+                    "PG-01E Explicit Multi-Face Repair Add"},
+                repair_provider);
+            CHECK(repaired_add.ok() && repaired_add.feature_id);
+            const auto multi_feature = part::evaluatePart(
+                repaired_manual.document(), repair_provider);
+            CHECK(multi_feature.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto* accepted_multi_feature =
+                multi_feature.findFeature(*repaired_add.feature_id);
+            CHECK(accepted_multi_feature &&
+                  accepted_multi_feature->status ==
+                      part::FeatureEvaluationStatus::up_to_date);
+            // End-to-end Save/Close/Reopen: original five distinct
+            // material IDs were not silently rebound; only the
+            // explicitly erased ID and its binding were removed.
+            const std::filesystem::path multi_path =
+                std::filesystem::path{
+                    manual_store_dir.path().toStdWString()} /
+                "PG01EManualMultiFaceRepaired.ss2part";
+            CHECK(manual_store.createNew(
+                multi_path, repaired_manual.document()).ok());
+            const auto multi_reopened = manual_store.load(multi_path);
+            CHECK(multi_reopened.ok() && multi_reopened.document);
+            CHECK(multi_reopened.document->state() ==
+                  repaired_manual.document().state());
+            CHECK(multi_reopened.document->findProfile(
+                *repaired_profile.profile_id));
+            CHECK(multi_reopened.document->findFeature(
+                *repaired_add.feature_id));
+            kernel_occt::OcctSolidModelingKernel multi_fresh_provider;
+            const auto multi_cold_body = part::evaluatePart(
+                *multi_reopened.document, multi_fresh_provider);
+            CHECK(multi_cold_body.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(multi_cold_body.findFeature(
+                *repaired_add.feature_id)->status ==
+                part::FeatureEvaluationStatus::up_to_date);
+            const auto multi_cold_projection =
+                part::evaluateEffectiveSketchProjection(
+                    *multi_reopened.document,
+                    *manual_target.sketch_id,
+                    multi_cold_body,
+                    multi_fresh_provider,
+                    *repaired_add.feature_id);
+            CHECK(multi_cold_projection &&
+                  multi_cold_projection->allResolved());
+            CHECK(multi_cold_projection->outcomes.size() == 4U);
+            CHECK(multi_cold_projection->model.entityCount() == 4U);
+            CHECK(multi_reopened.document()->modelingSemanticsVersion() ==
+                  part::current_modeling_semantics_version);
+            std::cout
+                << "PG01E_E1_MANUAL_MULTI_FACE_EXPLICIT_REPAIR_COLD_PASS"
+                << " two_native_faces=1"
+                << " supported_semantic_links_before=5"
+                << " overlapping_planar_pair=1"
+                << " erased_one_explicit_link=1"
+                << " repaired_linked_profile=1"
+                << " dependent_extrude_add=1"
+                << " fresh_occt_provider=1"
+                << " stable_profile_and_feature_ids=1\\n";
+
             std::cout
                 << "PG01D_MANUAL_MULTI_FACE_NATIVE_COLD_V15_PASS"
                 << " unique_links=5"
