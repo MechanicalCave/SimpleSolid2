@@ -232,6 +232,224 @@ part::PartDocument withReplacementBaseFeature(
     return std::move(*rebuilt.document);
 }
 
+// Q1-06 real native Part fixtures adapted from the existing PM-04C2
+// provider lifecycle test: half-cylinder Cut and partial Revolve. These
+// construct actual authored Feature history and current OCCT topology.
+part::PartDocument makeQ1PartRevolve(
+    core::BuiltinReferenceRole axis_role,
+    sketch::Point2 first,
+    sketch::Point2 opposite,
+    double angle) {
+    auto source =
+        part::PartDocument::create(
+            core::DocumentId::generate());
+    application::DocumentSession session{
+        {},
+        std::move(source)};
+
+    const auto sketch_created =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::
+                    xy_plane});
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
+    const auto sketch_id =
+        *sketch_created.sketch_id;
+
+    const auto rectangle_created =
+        session.execute(
+            application::AddSketchRectangleCommand{
+                sketch_id,
+                session.document().revision(),
+                first,
+                opposite,
+                sketch::EntityRole::regular,
+                false});
+    CHECK(rectangle_created.ok());
+
+    const auto* sketch =
+        session.document().findSketch(
+            sketch_id);
+    CHECK(sketch != nullptr);
+    const auto analysis =
+        sketch::analyzeRegions(
+            sketch->model);
+    CHECK(analysis.complete());
+    CHECK(analysis.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            analysis.regions.front());
+    CHECK(intent.has_value());
+
+    const auto profile =
+        session.execute(
+            application::CreateProfileCommand{
+                sketch_id,
+                session.document().revision(),
+                *intent});
+    CHECK(profile.ok() && profile.profile_id);
+
+    auto state = session.document().state();
+    const auto feature_id =
+        state.body.next_feature_id.allocate();
+    CHECK(feature_id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *feature_id,
+            "Revolve001",
+            false,
+            part::RevolveFeature{
+                *profile.profile_id,
+                part::AxisReference{
+                    part::BuiltinOriginAxisReference{
+                        axis_role}},
+                part::RevolveOperation::add,
+                part::OneSidedRevolveExtent{
+                    core::AngleValue{angle},
+                    false}}});
+
+    auto restored =
+        part::PartDocument::restore(
+            session.document().documentId(),
+            std::move(state),
+            session.document().revision());
+    CHECK(restored.ok());
+    return std::move(*restored.document);
+}
+
+part::PartDocument makeQ1ExtrudeCylinder() {
+    auto source =
+        part::PartDocument::create(
+            core::DocumentId::generate());
+    application::DocumentSession session{
+        {},
+        std::move(source)};
+
+    const auto sketch =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+    CHECK(sketch.ok() && sketch.sketch_id);
+    const auto circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                *sketch.sketch_id,
+                {0.0, 0.0},
+                10.0,
+                sketch::EntityRole::regular});
+    CHECK(circle.ok());
+    const auto* model =
+        session.document().findSketch(
+            *sketch.sketch_id);
+    CHECK(model != nullptr);
+    const auto regions =
+        sketch::analyzeRegions(model->model);
+    CHECK(regions.complete());
+    CHECK(regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            regions.regions.front());
+    CHECK(intent.has_value());
+    const auto profile =
+        session.execute(
+            application::CreateProfileCommand{
+                *sketch.sketch_id,
+                session.document().revision(),
+                *intent});
+    CHECK(profile.ok() && profile.profile_id);
+
+    auto state = session.document().state();
+    const auto id = state.body.next_feature_id.allocate();
+    CHECK(id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *id,
+            "ExtrudeCylinder",
+            false,
+            part::ExtrudeFeature{
+                *profile.profile_id,
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0},
+                    false}}});
+    auto restored = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(state),
+        session.document().revision());
+    CHECK(restored.ok());
+    return std::move(*restored.document);
+}
+
+// G0/V08: a real analytic cylinder clipped by one planar Boolean
+// Cut through its axis. Two distinct native rim Vertices can share the
+// same THREE semantic Surface sources (cap, cylinder, cut wall).
+part::PartDocument withQ1CylinderHalfCut(
+    const part::PartDocument& source) {
+    auto restored = part::PartDocument::restore(
+        source.documentId(),
+        source.state(),
+        source.revision());
+    CHECK(restored.ok());
+    application::DocumentSession session{
+        {},
+        std::move(*restored.document)};
+    const auto sketch_created = session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
+    const auto rectangle = session.execute(
+        application::AddSketchRectangleCommand{
+            *sketch_created.sketch_id,
+            session.document().revision(),
+            {-15.0, -15.0},
+            {0.0, 15.0},
+            sketch::EntityRole::regular,
+            false});
+    CHECK(rectangle.ok());
+    const auto* sketch = session.document().findSketch(
+        *sketch_created.sketch_id);
+    CHECK(sketch != nullptr);
+    const auto analysis = sketch::analyzeRegions(
+        sketch->model);
+    CHECK(analysis.complete());
+    CHECK(analysis.regions.size() == 1U);
+    const auto intent = part::makeProfileRegionIntent(
+        analysis.regions.front());
+    CHECK(intent.has_value());
+    const auto profile = session.execute(
+        application::CreateProfileCommand{
+            *sketch_created.sketch_id,
+            session.document().revision(),
+            *intent});
+    CHECK(profile.ok() && profile.profile_id);
+    auto state = session.document().state();
+    const auto feature_id =
+        state.body.next_feature_id.allocate();
+    CHECK(feature_id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *feature_id,
+            "G0HalfCylinderCut",
+            false,
+            part::ExtrudeFeature{
+                *profile.profile_id,
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{12.0},
+                    false}}});
+    auto rebuilt = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(state),
+        session.document().revision());
+    CHECK(rebuilt.ok());
+    return std::move(*rebuilt.document);
+}
+
+
 std::vector<part::MaterialEdgeReference>
 trihedralReferences(
     const part::BodyStageTopologyCatalog& catalog) {
