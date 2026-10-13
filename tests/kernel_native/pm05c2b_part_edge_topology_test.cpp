@@ -1624,6 +1624,9 @@ int main() {
     const auto q1_base_sources = verifyQ1CanonicalSelectedEnds(
         base_document, base_evaluation, kernel, "Q1-01-pristine");
     CHECK(q1_base_sources.size() == 24U);
+    const auto q2_base_sources = verifyQ2CanonicalSelectedMids(
+        base_document, base_evaluation, kernel, "Q2-M01-pristine");
+    CHECK(q2_base_sources.size() == 12U);
     // Q1-07: full tuple reorder is harmless; a forged membership token
     // causes typed unavailable with no partial END/geometry publication.
     {
@@ -1990,6 +1993,18 @@ int main() {
         *reopened_document.document, fresh_evaluation,
         separate_kernel, "Q1-03-cold-native");
     CHECK(q1_fresh_sources.size() == 24U);
+    const auto q2_fresh_sources = verifyQ2CanonicalSelectedMids(
+        *reopened_document.document, fresh_evaluation,
+        separate_kernel, "Q2-M03-cold-native");
+    for (const auto& original : q2_base_sources) {
+        CHECK(std::find(q2_fresh_sources.begin(),
+                        q2_fresh_sources.end(),
+                        original) != q2_fresh_sources.end());
+        const auto replay = part::resolveSelectedMaterialEdgeMid(
+            *reopened_document.document, original,
+            fresh_evaluation, separate_kernel);
+        CHECK(replay.resolved());
+    }
     // Compare complete semantic identity sets independently of native
     // Edge/Vertex enumeration and fresh OCCT provider generation.
     for (const auto& original : q1_base_sources) {
@@ -2071,6 +2086,27 @@ int main() {
     const auto q1_taller_sources = verifyQ1CanonicalSelectedEnds(
         taller_document, taller_evaluation, kernel, "Q1-04-height-edit");
     CHECK(q1_taller_sources.size() == 24U);
+    const auto q2_taller_sources = verifyQ2CanonicalSelectedMids(
+        taller_document, taller_evaluation, kernel, "Q2-M04-height-edit");
+    CHECK(q2_taller_sources.size() == q2_base_sources.size());
+    std::size_t changed_mid_positions = 0U;
+    for (const auto& original : q2_base_sources) {
+        CHECK(std::find(q2_taller_sources.begin(),
+                        q2_taller_sources.end(),
+                        original) != q2_taller_sources.end());
+        const auto original_mid = part::resolveSelectedMaterialEdgeMid(
+            base_document, original, base_evaluation, kernel);
+        const auto edited_mid = part::resolveSelectedMaterialEdgeMid(
+            taller_document, original, taller_evaluation, kernel);
+        CHECK(original_mid.resolved() && edited_mid.resolved());
+        const auto& a = *original_mid.current_position_world;
+        const auto& b = *edited_mid.current_position_world;
+        if (std::abs(a.z - b.z) > 1.0e-6) {
+            ++changed_mid_positions;
+        }
+    }
+    CHECK(changed_mid_positions >= 1U);
+    // Q1 regression: original END identity unchanged
     for (const auto& original : q1_base_sources) {
         CHECK(std::find(q1_taller_sources.begin(),
                         q1_taller_sources.end(),
@@ -2134,6 +2170,16 @@ int main() {
     const auto& replacement_stage =
         *replaced_evaluation.features[0].result_topology;
     CHECK(replacement_stage.stage != original_stage.stage);
+    for (const auto& original : q2_base_sources) {
+        const auto missing = part::resolveSelectedMaterialEdgeMid(
+            replaced_document, original, replaced_evaluation, kernel);
+        CHECK(missing.status ==
+              part::SelectedEdgeMidStatus::edge_missing);
+        CHECK(!missing.resolved());
+        CHECK(!missing.current_edge);
+        CHECK(!missing.current_position_world);
+        CHECK(!missing.current_tangent_line);
+    }
     for (const auto& old_source : q1_base_sources) {
         const auto absent = part::resolveSelectedMaterialEdgeEnd(
             replaced_document, old_source, replaced_evaluation, kernel);
