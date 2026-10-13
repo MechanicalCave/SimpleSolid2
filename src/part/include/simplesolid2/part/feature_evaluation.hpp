@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/core/document.hpp>
+#include <simplesolid2/kernel/exact_bounded_edge_geometry.hpp>
 #include <simplesolid2/kernel/reference_status.hpp>
 #include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
