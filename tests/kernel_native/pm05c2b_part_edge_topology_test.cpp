@@ -1163,6 +1163,91 @@ int main() {
             CHECK(!forged.current_tangent_line);
         }
     }
+    // Q1-06 synthetic mutation of a REAL native current-stage catalog:
+    // global Point status is independently Ambiguous/Unsupported/Missing.
+    // Exact Edge incidence and same-Body native geometry are unchanged;
+    // no selected material Edge may promote that Point to Resolved.
+    {
+        const auto& source = q1_base_sources.front();
+        const auto current = part::resolveSelectedMaterialEdgeEnd(
+            base_document, source, base_evaluation, kernel);
+        CHECK(current.resolved());
+        const auto native_vertex = *current.current_terminal;
+        const auto native_edge = *current.current_edge;
+        const auto replayWithPointStatus = [&](
+            kernel::ReferenceStatus point_status,
+            part::SelectedEdgeEndStatus expected) {
+            auto synthetic = base_evaluation;
+            CHECK(synthetic.features.front().result_topology);
+            auto& cat =
+                *synthetic.features.front().result_topology;
+            auto p = std::find_if(
+                cat.points.begin(), cat.points.end(),
+                [&source](const auto& item) {
+                    return item.address ==
+                        source.terminal.certified_semantic_point;
+                });
+            CHECK(p != cat.points.end());
+            auto v = std::find_if(
+                cat.vertices.begin(), cat.vertices.end(),
+                [native_vertex](const auto& item) {
+                    return item.runtime_token == native_vertex;
+                });
+            CHECK(v != cat.vertices.end());
+            p->status = point_status;
+            if (point_status ==
+                    kernel::ReferenceStatus::ambiguous) {
+                const auto different = std::find_if(
+                    cat.vertices.begin(), cat.vertices.end(),
+                    [native_vertex](const auto& item) {
+                        return item.runtime_token != native_vertex;
+                    });
+                CHECK(different != cat.vertices.end());
+                p->current_vertices.push_back(
+                    different->runtime_token);
+                p->candidate_vertex_count = 2U;
+                v->referenceability =
+                    kernel::ReferenceStatus::ambiguous;
+            } else {
+                p->current_vertices.clear();
+                p->candidate_vertex_count = 0U;
+                if (point_status ==
+                        kernel::ReferenceStatus::unsupported) {
+                    v->accounting_class =
+                        part::TopologyAccountingClass::
+                            semantically_unsupported;
+                    v->referenceability =
+                        kernel::ReferenceStatus::unsupported;
+                    v->point_candidates.clear();
+                }
+            }
+            CHECK(cat.complete());
+            const auto absent = part::resolveSelectedMaterialEdgeEnd(
+                base_document, source, synthetic, kernel);
+            CHECK(absent.status == expected);
+            CHECK(!absent.resolved());
+            CHECK(!absent.current_edge);
+            CHECK(!absent.current_terminal);
+            CHECK(!absent.current_position_world);
+            CHECK(!absent.current_tangent_line);
+            const auto not_authored =
+                part::authorSelectedMaterialEdgeEnd(
+                    base_document, synthetic, cat.stage,
+                    native_edge, native_vertex, kernel);
+            CHECK(!not_authored.ok());
+            CHECK(!not_authored.reference);
+            CHECK(not_authored.status == expected);
+        };
+        replayWithPointStatus(
+            kernel::ReferenceStatus::ambiguous,
+            part::SelectedEdgeEndStatus::terminal_ambiguous);
+        replayWithPointStatus(
+            kernel::ReferenceStatus::unsupported,
+            part::SelectedEdgeEndStatus::terminal_unsupported);
+        replayWithPointStatus(
+            kernel::ReferenceStatus::missing,
+            part::SelectedEdgeEndStatus::terminal_missing);
+    }
     // Q1-05: cross-document ownership and revision staleness cannot be
     // masked by equal source Feature IDs or coincident runtime geometry.
     {
