@@ -3553,6 +3553,111 @@ int main(int argc, char* argv[]) {
                 }
             }
             CHECK(full_face_region);
+
+            // PG-01E/E1-A+B: the SAME native Viewer-acquired mixed
+            // manual Edge + bounded Planar Face links (4 Lines + 2
+            // hole Circles) must drive a real downstream Feature.
+            // The prior PG-01D check stopped after a cold Sketch
+            // projection, without a linked Profile/Feature consumer.
+            const auto region_with_holes = std::find_if(
+                cold_regions.regions.begin(),
+                cold_regions.regions.end(),
+                [](const auto& region) {
+                    return region.holes.size() == 2U;
+                });
+            CHECK(region_with_holes != cold_regions.regions.end());
+            const auto derived_face_intent =
+                part::makeProfileRegionIntent(*region_with_holes);
+            CHECK(derived_face_intent);
+            auto downstream_copy = part::PartDocument::restore(
+                loaded.document->documentId(),
+                loaded.document->state());
+            CHECK(downstream_copy.ok());
+            application::DocumentSession linked_face_session{
+                {}, std::move(*downstream_copy.document)};
+            const auto projected_profile = linked_face_session.execute(
+                application::CreateProfileCommand{
+                    *holed_target.sketch_id,
+                    linked_face_session.document().revision(),
+                    *derived_face_intent},
+                cold_kernel);
+            CHECK(projected_profile.ok() &&
+                  projected_profile.profile_id);
+            const auto dependent_add = linked_face_session.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *projected_profile.profile_id,
+                    linked_face_session.document().revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{23.0}, false},
+                    "PG-01E Native Face-Linked Add"},
+                cold_kernel);
+            CHECK(dependent_add.ok() && dependent_add.feature_id);
+            const auto linked_face_evaluation =
+                part::evaluatePart(
+                    linked_face_session.document(), cold_kernel);
+            CHECK(linked_face_evaluation.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto* linked_face_feature =
+                linked_face_evaluation.findFeature(
+                    *dependent_add.feature_id);
+            CHECK(linked_face_feature &&
+                  linked_face_feature->status ==
+                      part::FeatureEvaluationStatus::up_to_date);
+            const auto downstream_file =
+                std::filesystem::path{
+                    holed_store_dir.path().toStdWString()} /
+                "PG01ENativeFaceLinkedAdd.ss2part";
+            CHECK(store.createNew(
+                downstream_file, linked_face_session.document()).ok());
+            const auto downstream_loaded = store.load(downstream_file);
+            CHECK(downstream_loaded.ok() &&
+                  downstream_loaded.document);
+            CHECK(downstream_loaded.document->state() ==
+                  linked_face_session.document().state());
+            CHECK(downstream_loaded.document->findProfile(
+                *projected_profile.profile_id));
+            CHECK(downstream_loaded.document->findFeature(
+                *dependent_add.feature_id));
+            const auto* downstream_sketch =
+                downstream_loaded.document->findSketch(
+                    *holed_target.sketch_id);
+            CHECK(downstream_sketch &&
+                  downstream_sketch->projection_bindings.size() == 6U);
+            kernel_occt::OcctSolidModelingKernel downstream_fresh_kernel;
+            const auto downstream_evaluation = part::evaluatePart(
+                *downstream_loaded.document, downstream_fresh_kernel);
+            CHECK(downstream_evaluation.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto* downstream_feature =
+                downstream_evaluation.findFeature(
+                    *dependent_add.feature_id);
+            CHECK(downstream_feature &&
+                  downstream_feature->status ==
+                      part::FeatureEvaluationStatus::up_to_date);
+            CHECK(downstream_feature->result_solid);
+            const auto downstream_projection =
+                part::evaluateEffectiveSketchProjection(
+                    *downstream_loaded.document,
+                    *holed_target.sketch_id,
+                    downstream_evaluation,
+                    downstream_fresh_kernel,
+                    *dependent_add.feature_id);
+            CHECK(downstream_projection &&
+                  downstream_projection->allResolved());
+            CHECK(downstream_projection->model.state().lines.size() ==
+                  4U);
+            CHECK(downstream_projection->model.state().circles.size() ==
+                  2U);
+            CHECK(downstream_projection->outcomes.size() == 6U);
+            std::cout << "PG01E_E1_FACE_LINKED_CONSUMER_COLD_PASS"
+                      << " real_occt=1"
+                      << " mixed_manual_planar_face_dedup=1"
+                      << " outer_lines=4"
+                      << " hole_circles=2"
+                      << " stable_profile_and_feature_ids=1"
+                      << " independent_provider_cold_reopen=1\\n";
+
             std::cout << "PG01D_D3_NATIVE_TWO_HOLE_COLD_PASS"
                       << " outer=4"
                       << " inner=2"
