@@ -60,6 +60,19 @@ The Part read boundary takes the actual owning `PartDocument`; `PartEvaluation.s
 
 Current supported Q1 authoring is deliberately restricted to strictly Resolved material bounded Lines or open circular Arcs with a separately Resolved terminal Point; a globally Ambiguous/Unsupported Point is **never promoted** by incident Edge. Fillet/Chamfer/Revolve or cylinder/half-cylinder ends lacking that independent evidence remain typed unavailable. This is headless read-only Part/Kernel functionality, **not** a native Part-v17 schema, persisted END/Datum source, signed Frame3, Reverse UI, new picking mode or completed Datum Plane Edge+Point constructor. The existing exact 2D projection and material Face boundary APIs retain their separate ownership.
 
+
+
+<!-- section-id: internal.part-edge-projection-kernel.rg02b1-q2 -->
+## RG-02B1/D2-Q2 — exact native MID observation behind strict Part Edge semantics
+
+`kernel::IExactBoundedEdgeGeometryQuery` already returns `ExactBoundedEdge3d.midpoint_at_half_bounded_length_world` and `midpoint_tangent_line`. Q2 **does not change Kernel**: it consumes these Q0 fields only after Part has independently accepted the owning DocumentId/live revision, exact successful Feature `BodyStageRef` and strict material semantic `MaterialEdgeReference`. Q1 END certification is not reused as a MID terminal Point: MID is a **distinct Part-local Edge role**. Its identity stores the semantic Edge, not the geometry result.
+
+Native MID is measured at **half current exact bounded 3D arclength**: for a bounded Line it is the Euclidean midpoint of its two material ends; for a genuinely open circular Arc it is at half its trimmed sweep length and generally **not** the straight chord midpoint or an average of the parameter bounds. Source Edge topology must remain strict and referenceable at exactly the target stage; an unscoped runtime Edge token is not semantic identity. `bindExactEdgeToBody(stage_solid, current_edge)` must return a lease to **that exact same Body object and Edge**, followed by `queryExactBoundedEdge3d` for that Body. A second OCCT provider instance using the same compatible Body is legal; a different Body is not. Returned MID position, unoriented tangent and runtime Edge token are transient observations.
+
+The headless `authorSelectedMaterialEdgeMid` and `resolveSelectedMaterialEdgeMid` return typed `SelectedEdgeMidStatus` and atomically publish observations **only on success**. Reject missing/ambiguous/unsupported semantic Edge, representation-only seam/partition, stale/foreign Document, bad Stage, unsupported analytic curve, nonpositive/nonfinite length, nonfinite midpoint or non-unit tangent, and native Q0 failure. Do not repair missing semantics using first/last Vertex, XYZ similarity, tessellation, viewer hit rank or stale provider handles. Only strict material bounded **Line** and genuinely **open circular Arc** are supported. Their MID does not require a globally Resolved terminal Point, nor may it promote existing global Ambiguous/Unsupported Point meaning.
+
+This is not a new signed CAD frame, Datum Plane MID constructor, global Point, persisted Part source, UI MID marker or Sketch tool. Q1 END/current Vertex tuple and existing projection/boundary/Face APIs retain their separate ownership. Q2 native witness obligations are tracked in `work/RG-02B1_D2_Q2_STRICT_MATERIAL_EDGE_MID_ACCEPTANCE_EVIDENCE.md` (actual CI outcomes only); no FOCUSED/FAST/FULL outcome is implied by this as-built architecture description.
+
 <!-- section-id: internal.part-edge-projection-kernel.pg01d-native-face -->
 ## PG-01D — exact read-only native planar Face wire boundary
 
