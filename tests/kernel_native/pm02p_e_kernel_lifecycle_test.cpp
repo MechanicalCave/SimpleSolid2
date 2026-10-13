@@ -865,6 +865,17 @@ void verifyRg02b1Q0Exact3dGeometry() {
               kernel::ExactEdge3dKind::bounded_line);
         CHECK(result.geometry->bounded_length_mm > 0.0);
         const auto& g = *result.geometry;
+        // Q1-07/Q1-08: transient native END tokens must be in THIS
+        // returned Body inventory, paired with the existing Q0 tuples.
+        const auto& vt = g.current_terminal_vertex_tokens;
+        CHECK(vt[0].valid() && vt[1].valid());
+        CHECK(vt[0] != vt[1]);
+        CHECK(std::find(box.current_vertices.begin(),
+                        box.current_vertices.end(), vt[0]) !=
+              box.current_vertices.end());
+        CHECK(std::find(box.current_vertices.begin(),
+                        box.current_vertices.end(), vt[1]) !=
+              box.current_vertices.end());
         const auto& p = g.current_terminal_positions_world;
         CHECK(near(g.midpoint_at_half_bounded_length_world.x,
                    (p[0].x + p[1].x) * 0.5));
@@ -944,6 +955,15 @@ void verifyRg02b1Q0Exact3dGeometry() {
                 continue;
             }
             const auto& g = *current.geometry;
+            CHECK(g.current_terminal_vertex_tokens[0].valid());
+            CHECK(g.current_terminal_vertex_tokens[1].valid());
+            CHECK(g.current_terminal_vertex_tokens[0] !=
+                  g.current_terminal_vertex_tokens[1]);
+            for (const auto endpoint : g.current_terminal_vertex_tokens) {
+                CHECK(std::find(body.current_vertices.begin(),
+                                body.current_vertices.end(),
+                                endpoint) != body.current_vertices.end());
+            }
             CHECK(near(g.bounded_length_mm, 10.0 * std::abs(sweep)));
             const auto& mid = g.midpoint_at_half_bounded_length_world;
             CHECK(near(mid.x*mid.x + mid.y*mid.y, 100.0));
