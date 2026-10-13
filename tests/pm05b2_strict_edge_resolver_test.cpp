@@ -325,6 +325,26 @@ int main() {
               part::SelectedEdgeMidStatus::invalid_context);
     }
 
+    // S1-F08: signed-Frame status is independent of source identity and
+    // never claims success without an actual Frame payload.
+    {
+        const part::SelectedEdgeFrameResult absent;
+        CHECK(absent.status ==
+              part::SelectedEdgeFrameStatus::invalid_context);
+        CHECK(!absent.resolved());
+        CHECK(!absent.frame);
+        CHECK(!absent.initialized_intent);
+        CHECK(!absent.native_error);
+        auto invalid = absent;
+        invalid.status = part::SelectedEdgeFrameStatus::resolved;
+        CHECK(!invalid.resolved());
+        const part::SelectedEdgeFrameIntent intent{
+            {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}, false};
+        auto flipped = intent;
+        flipped.reverse = true;
+        CHECK(intent != flipped);
+    }
+
     // Singular authored meaning follows strict bounded-Edge survival:
     // 1 -> Resolved, 0 -> Missing, split -> Ambiguous.
     {

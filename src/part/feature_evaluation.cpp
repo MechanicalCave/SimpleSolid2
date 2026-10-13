@@ -4879,6 +4879,300 @@ resolveSelectedMaterialEdgeMid(
         *stage, current->current_edges.front(), provider);
 }
 
+bool SelectedEdgeFrameResult::resolved() const noexcept {
+    return status == SelectedEdgeFrameStatus::resolved &&
+           frame.has_value() && frame->valid() && !native_error;
+}
+
+namespace {
+
+using S1Vec = kernel::Point3;
+constexpr double s1UnitTolerance = 1.0e-10;
+constexpr double s1ProjectedSeedMinimumSquared = 1.0 / 16.0;
+
+[[nodiscard]] bool s1Finite(const S1Vec& v) noexcept {
+    return std::isfinite(v.x) && std::isfinite(v.y) &&
+           std::isfinite(v.z);
+}
+
+[[nodiscard]] double s1Dot(
+    const S1Vec& a, const S1Vec& b) noexcept {
+    return a.x*b.x + a.y*b.y + a.z*b.z;
+}
+
+[[nodiscard]] S1Vec s1Cross(
+    const S1Vec& a, const S1Vec& b) noexcept {
+    return {
+        a.y*b.z - a.z*b.y,
+        a.z*b.x - a.x*b.z,
+        a.x*b.y - a.y*b.x};
+}
+
+[[nodiscard]] S1Vec s1Scaled(const S1Vec& a, double v) noexcept {
+    return {a.x*v, a.y*v, a.z*v};
+}
+
+[[nodiscard]] S1Vec s1Subtract(
+    const S1Vec& a, const S1Vec& b) noexcept {
+    return {a.x-b.x, a.y-b.y, a.z-b.z};
+}
+
+[[nodiscard]] double s1Squared(const S1Vec& a) noexcept {
+    return s1Dot(a, a);
+}
+
+[[nodiscard]] std::optional<S1Vec> s1Normalized(
+    const S1Vec& v) noexcept {
+    if (!s1Finite(v)) return std::nullopt;
+    const double length_squared = s1Squared(v);
+    if (!std::isfinite(length_squared) || length_squared <= 0.0)
+        return std::nullopt;
+    const double inv = 1.0 / std::sqrt(length_squared);
+    const S1Vec unit = s1Scaled(v, inv);
+    return s1Finite(unit) ? std::optional<S1Vec>{unit}
+                          : std::nullopt;
+}
+
+[[nodiscard]] bool s1Unit(const S1Vec& v) noexcept {
+    return s1Finite(v) &&
+           std::isfinite(s1Squared(v)) &&
+           std::abs(s1Squared(v) - 1.0) <= s1UnitTolerance;
+}
+
+[[nodiscard]] bool s1Orthogonal(
+    const S1Vec& a, const S1Vec& b) noexcept {
+    return std::abs(s1Dot(a, b)) <= s1UnitTolerance;
+}
+
+[[nodiscard]] bool s1FrameValid(
+    const kernel::Frame3& frame) noexcept {
+    const auto& u = frame.u_axis;
+    const auto& v = frame.v_axis;
+    const auto& n = frame.normal;
+    return s1Finite(frame.origin) && s1Unit(u) &&
+           s1Unit(v) && s1Unit(n) &&
+           s1Orthogonal(u, v) && s1Orthogonal(u, n) &&
+           s1Orthogonal(v, n) &&
+           s1Dot(s1Cross(u, v), n) >= 1.0 - s1UnitTolerance &&
+           frame.valid();
+}
+
+[[nodiscard]] SelectedEdgeFrameStatus s1Status(
+    SelectedEdgeEndStatus status) noexcept {
+    switch (status) {
+    case SelectedEdgeEndStatus::resolved:
+        return SelectedEdgeFrameStatus::resolved;
+    case SelectedEdgeEndStatus::invalid_context:
+        return SelectedEdgeFrameStatus::invalid_context;
+    case SelectedEdgeEndStatus::edge_missing:
+    case SelectedEdgeEndStatus::terminal_missing:
+        return SelectedEdgeFrameStatus::source_missing;
+    case SelectedEdgeEndStatus::edge_ambiguous:
+    case SelectedEdgeEndStatus::terminal_ambiguous:
+        return SelectedEdgeFrameStatus::source_ambiguous;
+    case SelectedEdgeEndStatus::edge_unsupported:
+    case SelectedEdgeEndStatus::terminal_unsupported:
+        return SelectedEdgeFrameStatus::source_unsupported;
+    case SelectedEdgeEndStatus::native_geometry_unavailable:
+        return SelectedEdgeFrameStatus::native_geometry_unavailable;
+    }
+    return SelectedEdgeFrameStatus::invalid_context;
+}
+
+[[nodiscard]] SelectedEdgeFrameStatus s1Status(
+    SelectedEdgeMidStatus status) noexcept {
+    switch (status) {
+    case SelectedEdgeMidStatus::resolved:
+        return SelectedEdgeFrameStatus::resolved;
+    case SelectedEdgeMidStatus::invalid_context:
+        return SelectedEdgeFrameStatus::invalid_context;
+    case SelectedEdgeMidStatus::edge_missing:
+        return SelectedEdgeFrameStatus::source_missing;
+    case SelectedEdgeMidStatus::edge_ambiguous:
+        return SelectedEdgeFrameStatus::source_ambiguous;
+    case SelectedEdgeMidStatus::edge_unsupported:
+        return SelectedEdgeFrameStatus::source_unsupported;
+    case SelectedEdgeMidStatus::native_geometry_unavailable:
+        return SelectedEdgeFrameStatus::native_geometry_unavailable;
+    }
+    return SelectedEdgeFrameStatus::invalid_context;
+}
+
+[[nodiscard]] SelectedEdgeFrameResult s1GeometryFrame(
+    const kernel::Point3& origin,
+    const kernel::UnorientedUnitTangent3& tangent,
+    const SelectedEdgeFrameIntent* intent,
+    bool initial_reverse) {
+    SelectedEdgeFrameResult result;
+    result.status = SelectedEdgeFrameStatus::invalid_geometry;
+    if (!s1Finite(origin) || !s1Finite(tangent.representative))
+        return result;
+    const auto& t = tangent.representative;
+    const double norm_squared = s1Squared(t);
+    if (!std::isfinite(norm_squared) || norm_squared <= 0.0 ||
+        std::abs(norm_squared - 1.0) > 1.0e-6)
+        return result;
+    const auto unit = s1Normalized(t);
+    if (!unit) return result;
+
+    S1Vec signed_n = *unit;
+    S1Vec u;
+    if (!intent) {
+        // Initialization ONLY: dominant-axis sign, exact ties X -> Y -> Z.
+        double dominant = std::abs(signed_n.x);
+        double component = signed_n.x;
+        if (std::abs(signed_n.y) > dominant) {
+            dominant = std::abs(signed_n.y);
+            component = signed_n.y;
+        }
+        if (std::abs(signed_n.z) > dominant)
+            component = signed_n.z;
+        if (component < 0.0) signed_n = s1Scaled(signed_n, -1.0);
+        bool found = false;
+        for (const auto axis : {S1Vec{1.0, 0.0, 0.0},
+                                S1Vec{0.0, 1.0, 0.0},
+                                S1Vec{0.0, 0.0, 1.0}}) {
+            const auto projected = s1Subtract(
+                axis, s1Scaled(signed_n, s1Dot(axis, signed_n)));
+            if (s1Squared(projected) >= s1ProjectedSeedMinimumSquared) {
+                const auto normalized = s1Normalized(projected);
+                if (!normalized) return result;
+                u = *normalized;
+                found = true;
+                break;
+            }
+        }
+        if (!found) return result;
+    } else {
+        result.status = SelectedEdgeFrameStatus::invalid_orientation_intent;
+        const auto& nref = intent->signed_normal_reference_world;
+        const auto& uref = intent->u_seed_world;
+        if (!s1Unit(nref) || !s1Unit(uref) ||
+            !s1Orthogonal(nref, uref))
+            return result;
+
+        result.status = SelectedEdgeFrameStatus::orientation_review_required;
+        const double similarity = s1Dot(*unit, nref);
+        // Acute line angle at most 30 degrees from authored normal.
+        if (!std::isfinite(similarity) ||
+            std::abs(similarity) < std::sqrt(3.0) / 2.0)
+            return result;
+        if (similarity < 0.0) signed_n = s1Scaled(signed_n, -1.0);
+        const auto projected = s1Subtract(
+            uref, s1Scaled(signed_n, s1Dot(uref, signed_n)));
+        if (!std::isfinite(s1Squared(projected)) ||
+            s1Squared(projected) < s1ProjectedSeedMinimumSquared)
+            return result;
+        const auto normalized = s1Normalized(projected);
+        if (!normalized) return result;
+        u = *normalized;
+    }
+
+    const S1Vec v = s1Cross(signed_n, u);
+    kernel::Frame3 frame{origin, u, v, signed_n};
+    if (!s1FrameValid(frame)) {
+        result.status = SelectedEdgeFrameStatus::invalid_geometry;
+        return result;
+    }
+    if (!intent) {
+        result.initialized_intent =
+            SelectedEdgeFrameIntent{signed_n, u, initial_reverse};
+    }
+    const bool reverse = intent ? intent->reverse : initial_reverse;
+    if (reverse) {
+        frame.v_axis = s1Scaled(frame.v_axis, -1.0);
+        frame.normal = s1Scaled(frame.normal, -1.0);
+    }
+    if (!s1FrameValid(frame)) {
+        result.initialized_intent.reset();
+        result.status = SelectedEdgeFrameStatus::invalid_geometry;
+        return result;
+    }
+    result.status = SelectedEdgeFrameStatus::resolved;
+    result.frame = frame;
+    return result;
+}
+
+[[nodiscard]] SelectedEdgeFrameResult s1EndFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeEnd& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider,
+    const SelectedEdgeFrameIntent* intent,
+    bool reverse) {
+    const auto observed = resolveSelectedMaterialEdgeEnd(
+        owner, source, evaluation, provider);
+    if (!observed.resolved()) {
+        SelectedEdgeFrameResult failed;
+        failed.status = s1Status(observed.status);
+        failed.native_error = observed.native_error;
+        return failed;
+    }
+    return s1GeometryFrame(
+        *observed.current_position_world,
+        *observed.current_tangent_line,
+        intent, reverse);
+}
+
+[[nodiscard]] SelectedEdgeFrameResult s1MidFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeMid& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider,
+    const SelectedEdgeFrameIntent* intent,
+    bool reverse) {
+    const auto observed = resolveSelectedMaterialEdgeMid(
+        owner, source, evaluation, provider);
+    if (!observed.resolved()) {
+        SelectedEdgeFrameResult failed;
+        failed.status = s1Status(observed.status);
+        failed.native_error = observed.native_error;
+        return failed;
+    }
+    return s1GeometryFrame(
+        *observed.current_position_world,
+        *observed.current_tangent_line,
+        intent, reverse);
+}
+
+} // namespace
+
+SelectedEdgeFrameResult initializeSelectedEdgeEndFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeEnd& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider,
+    bool reverse) {
+    return s1EndFrame(owner, source, evaluation, provider, nullptr, reverse);
+}
+
+SelectedEdgeFrameResult initializeSelectedEdgeMidFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeMid& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider,
+    bool reverse) {
+    return s1MidFrame(owner, source, evaluation, provider, nullptr, reverse);
+}
+
+SelectedEdgeFrameResult resolveSelectedEdgeEndFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeEnd& source,
+    const SelectedEdgeFrameIntent& intent,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) {
+    return s1EndFrame(owner, source, evaluation, provider, &intent, false);
+}
+
+SelectedEdgeFrameResult resolveSelectedEdgeMidFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeMid& source,
+    const SelectedEdgeFrameIntent& intent,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) {
+    return s1MidFrame(owner, source, evaluation, provider, &intent, false);
+}
+
 MaterialEdgeAuthoringResult
 authorProjectedMaterialEdgeReference(
     const BodyStageTopologyCatalog& catalog,
