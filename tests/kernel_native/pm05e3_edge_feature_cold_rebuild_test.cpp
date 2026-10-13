@@ -1339,6 +1339,99 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               << " preview_delta=1"
               << " source_unchanged=1\n";
 
+    // PG-01E/E1-B: previous PG-01B native Revolve test ended at
+    // preview. Commit the SAME linked Regular Profile as real OCCT
+    // Revolve Add and reconstruct it with a new independent provider.
+    const auto committed_revolve = revolve_session.execute(
+        application::CreateRevolveFeatureCommand{
+            *profile.profile_id,
+            part::AxisReference{
+                part::BuiltinOriginAxisReference{
+                    core::BuiltinReferenceRole::y_axis}},
+            revolve_session.document().revision(),
+            part::RevolveOperation::add,
+            part::OneSidedRevolveExtent{
+                core::AngleValue{1.5707963267948966}, false},
+            "PG-01E Native Linked Revolve"},
+        revolve_kernel);
+    CHECK(committed_revolve.ok() && committed_revolve.feature_id);
+    const auto revolve_feature_id = *committed_revolve.feature_id;
+    CHECK(revolve_session.document().findProfile(*profile.profile_id));
+    CHECK(revolve_session.document().findFeature(revolve_feature_id));
+    CHECK(revolve_session.document().findSketch(id)
+              ->projection_bindings.size() == 1U);
+    CHECK(revolve_session.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+    const auto committed_eval = part::evaluatePart(
+        revolve_session.document(), revolve_kernel);
+    CHECK(committed_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(committed_eval.findFeature(revolve_feature_id));
+    CHECK(committed_eval.findFeature(revolve_feature_id)->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+
+    const auto revolve_file =
+        temp.path / "Pg01eNativeLinkedRevolve.ss2part";
+    part::PartDocumentStore revolve_store;
+    CHECK(revolve_store.createNew(
+              revolve_file, revolve_session.document()).ok());
+    const auto persisted_revolve = revolve_store.load(revolve_file);
+    CHECK(persisted_revolve.ok() && persisted_revolve.document);
+    CHECK(persisted_revolve.document->state() ==
+          revolve_session.document().state());
+    CHECK(persisted_revolve.document->modelingSemanticsVersion() ==
+          part::current_modeling_semantics_version);
+    const auto* saved_revolve_sketch =
+        persisted_revolve.document->findSketch(id);
+    CHECK(saved_revolve_sketch);
+    CHECK(saved_revolve_sketch->projection_bindings.size() == 1U);
+    CHECK(saved_revolve_sketch->projection_bindings.front().target_entity ==
+          *sourceLine.entity_id);
+    CHECK(saved_revolve_sketch->projection_bindings.front().source ==
+          *selected);
+    CHECK(saved_revolve_sketch->model.findLine(
+              *sourceLine.entity_id)->start().v == -8.0);
+    CHECK(persisted_revolve.document->findProfile(
+              *profile.profile_id));
+    CHECK(persisted_revolve.document->findFeature(revolve_feature_id));
+    CHECK(!persisted_revolve.document->evaluateProfile(
+          *profile.profile_id));
+
+    kernel_occt::OcctSolidModelingKernel cold_revolve_provider;
+    const auto cold_revolve_eval = part::evaluatePart(
+        *persisted_revolve.document, cold_revolve_provider);
+    CHECK(cold_revolve_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto* current_revolve =
+        cold_revolve_eval.findFeature(revolve_feature_id);
+    CHECK(current_revolve &&
+          current_revolve->status ==
+              part::FeatureEvaluationStatus::up_to_date);
+    CHECK(current_revolve->result_solid);
+    const auto cold_revolve_projection =
+        part::evaluateEffectiveSketchProjection(
+            *persisted_revolve.document, id,
+            cold_revolve_eval, cold_revolve_provider,
+            revolve_feature_id);
+    CHECK(cold_revolve_projection &&
+          cold_revolve_projection->allResolved());
+    const auto* cold_revolve_line =
+        cold_revolve_projection->model.findLine(
+            *sourceLine.entity_id);
+    CHECK(cold_revolve_line);
+    CHECK(close(cold_revolve_line->start().v, 0.0));
+    CHECK(close(cold_revolve_line->end().v, 0.0));
+    CHECK(saved_revolve_sketch->model.findLine(
+              *sourceLine.entity_id)->start().v == -8.0);
+    std::cout << "PG01E_E1_NATIVE_LINKED_REVOLVE_COLD_PASS"
+              << " exact_committed_revolve=1"
+              << " linked_entity_id_preserved=1"
+              << " profile_id_preserved=1"
+              << " revolve_feature_id_preserved=1"
+              << " fresh_occt_reprojection=1"
+              << " stale_authored_seed_rejected=1\n";
+
     // B3 draft regression: Finish already uses the effective source.
     // The live Edit Extrude preview must use it too, not the OPEN
     // authored line at v=-8 which cannot produce this Profile.
