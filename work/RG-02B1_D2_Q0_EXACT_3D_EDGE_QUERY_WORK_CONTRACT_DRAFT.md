@@ -220,13 +220,13 @@ A. **OWNER-ACCEPTED PROVISIONALLY:** N1a-P1..P5 (physical native END vs analytic
 
 B. **OWNER-ACCEPTED PROVISIONALLY:** E1a-P calls the **same Q0-specific** production/test exception guard and tests deliberate generic C++ throw and passthrough. The direct **new-Q0 OCCT Standard_Failure** case remains explicitly **NOT DIRECTLY TESTED**; it may not be reported as PASS without new proof. Scope amendment E1b only if direct native-specific injection becomes mandatory.
 
-C. **STILL OPEN:** final exact C++ declarations (including fully defined scoped class and distinct collision-free method names), optional result and sign-invariant tangent implementation, complete six exact production/native-test/DOC-01 writable paths and documented scope feasibility. §2C acceptance did NOT approve the executable contract, specific PR merge or ACTIVE switch.
+C. **LATER SEPARATELY ACCEPTED:** the complete §2E exact C++ declaration text and integrated six-file Work Contract scope were accepted by Owner on 2026-10-13, after this initial §2C-era note. That approval is scoped, **not** an assertion of C++ build/native PASS and **not** PR squash merge, `ACTIVE.yaml` activation or immediate authorization to mutate the six files. The prior request for a distinct full header/text gate was satisfied.
 
 ## 2D. Owner-accepted scoped Edge interface direction — historical pre-acceptance feasibility audit
 
 **Read-only C++ issue:** the §2A illustrative `class ScopedExactEdge;` declaration alone is NOT a final complete definition. The real existing `edge_projection.hpp` defines a **complete** `ScopedProjectionEdge` value, with default-invalid state, private `RuntimeSolidHandle`+token constructor, friend query interface and protected factory, **before** it returns `std::optional<ScopedProjectionEdge>`. The proposed new neutral `std::optional<ScopedExactEdge>` similarly needs a *complete* scoped type, proper public `valid()/sourceBody()/edge()`, private constructor and a factory accessible only to the new query interface. Do not implement a merely forward-declared class as a finished return-value API.
 
-**Candidate implementation detail for the later independent exact-header Owner gate:**
+**Historical §2D type-viability explanation (design direction accepted before the subsequent §2E exact-text approval):**
 - `ScopedExactEdge final` encapsulates `RuntimeSolidHandle` and `RuntimeEdgeToken`; default invalid, never persisted. Only `IExactBoundedEdgeGeometryQuery` can create a valid binding via a protected static `makeScopedExactEdge`.
 - `IExactBoundedEdgeGeometryQuery` declares `bindExactEdgeToBody(Body,token)` and `queryExactBoundedEdge3d(Body,ScopedExactEdge)`; both names are distinct from existing **2D** `IEdgeProjectionQuery::bindEdgeToBody`. No return-type-overload collision or change to `ISolidModelingKernel` ABI.
 - `ExactBoundedEdge3d` contains `std::array<Point3,2>` paired native transient terminal positions and `UnorientedUnitTangent3` representatives for each END plus MID. All unit-tangent comparisons must be **sign-insensitive**; the representative's sign is NOT a persistent Frame3 or P4 preview choice. Include the necessary standard headers (`<array>`, `<optional>`, `<utility>`) explicitly.
@@ -236,7 +236,7 @@ C. **STILL OPEN:** final exact C++ declarations (including fully defined scoped 
 
 ## 2E. Owner-accepted exact C++ neutral-header contract text — NOT COMPILED / NOT ACTIVE
 
-The following **exact §2E text was Owner-accepted as prospective executable contract scope**, but is **NOT compiled, merged or activated**. It supersedes
+The following **exact §2E declaration text was Owner-accepted as prospective executable contract scope**, but is **NOT compiled, merged or activated**. It supersedes the abbreviated `ScopedExactEdge` forward declaration in the historical §2A conceptual sketch for the future implementation boundary; validation of source behavior remains subject to actual Windows compiler/native tests **after** independently merged Q0 activation.
 
 ```cpp
 // PROPOSAL ONLY: src/kernel/include/simplesolid2/kernel/exact_bounded_edge_geometry.hpp
