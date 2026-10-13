@@ -1,10 +1,10 @@
 # RG-02B1/D2-Q0 — exact bounded 3D Edge geometry: proposed executable Work Contract
 
-**STATUS 2026-10-13: Owner accepted Q0 three unoriented tangents (END, END, MID), eight statuses and analytic Line/open Arc MID IN PRINCIPLE; N1a/E1a preferred, and separately accepted §2C N1a-P1…P5/E1a-P as PROVISIONAL, FALSIFIABLE design-to-test rules. All NEW Q0 native tests UNRUN. Exact C++ header/ABI and six-file executable Work Contract STILL UNAPPROVED. PR #352 OPEN/DRAFT/UNMERGED, ACTIVE still E0 evidence-only; NO product code/test permission. New-Q0 OCCT Standard_Failure direct injection remains NOT DIRECTLY TESTED.**  
+**STATUS 2026-10-13: Owner accepted Q0 phase order; three unoriented END/END/MID tangents, eight statuses and analytic bounded Line/open-Arc MID IN PRINCIPLE; N1a-P1..P5/E1a-P as PROVISIONAL test hypotheses; and separately §2D complete scoped Edge interface DIRECTION plus SIX EXACT prospective code/test/docs paths AS BASIS FOR THE FINAL EXECUTABLE CONTRACT. Exact final C++ public API/Work Contract text STILL REQUIRES independent Owner acceptance. No new Q0 native tests run, no new-Q0 Standard_Failure direct injection proven. PR #352 OPEN/DRAFT/UNMERGED, ACTIVE E0 evidence-only, NO CODE AUTHORITY.**  
 **Date:** 2026-10-13  
 **Program:** accepted Part Modeling roadmap v1.33; milestone RG-02B1 (Datum Plane Edge+Point), **Q0 geometry-enabling phase ONLY**.  
 **Repository source baseline:** `main` `c346133790a644d44b529a1dd288b162f0158540`; `work/ACTIVE.yaml.active_work` still accepted **RG-02B1/E0 evidence-only Work Contract**. This candidate does NOT supersede ACTIVE until a separately authorized and merged activation.  
-**Owner planning and technical direction:** On 2026-10-13 the Owner accepted the sequence Q0 → strict durable Edge-local END (Q1) → Datum/UX (Q2+); Q0 3-tangent/8-status/analytic MID principles; N1a+E1a preferences; and then accepted **§2C N1a-P1..P5 and E1a-P exact provisional test criteria** with direct new-Q0 OCCT Standard_Failure expressly **NOT DIRECTLY TESTED**. These are design criteria, NOT measured evidence or authorization to change C++ API/tests. Exact header/ABI, six-file future code/test/docs allowlist, full executable contract, PR merge, ACTIVE activation and Q0 code remain independently gated. Draft planning [PR #351](https://github.com/MechanicalCave/SimpleSolid2/pull/351) still OPEN/UNMERGED.
+**Owner planning and technical direction:** Owner accepted Q0 → Q1 durable Edge-local END → Q2+ Datum/UX ordering, Q0 three-tangent/eight-status bounded analytic Line/open-Arc geometry in principle, N1a/E1a preferred methods and §2C exact provisional test hypotheses. Most recently Owner replied “akceptuję - kontynuuj” to a question expressly limited to accepting §2D **interface direction and six exact proposed paths as the basis of a future executable Q0 contract**, not the complete final contract text, PR #352 merge, Q0 ACTIVE or code/test/docs changes. The native new-Q0 Standard_Failure injection remains NOT DIRECTLY TESTED. Planning PR #351 remains OPEN/DRAFT/UNMERGED.
 **Accepted background:** E0 [PR #348](https://github.com/MechanicalCave/SimpleSolid2/pull/348) MERGED, native Windows FULL [#2828](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38392879099) 199/199 PASS, **E0 capability PARTIAL**; source identity design [#349](https://github.com/MechanicalCave/SimpleSolid2/pull/349), P4 default-orientation/Reverse [#350](https://github.com/MechanicalCave/SimpleSolid2/pull/350), complete UX basis [#345](https://github.com/MechanicalCave/SimpleSolid2/pull/345) individually MERGED as **design only**.  
 **Authority order:** `AGENTS.md` → Constitution/Foundation/Architecture → accepted ADRs 0014/0016/0017 and relevant earlier ADRs → ACTIVE → roadmap → accepted active contract → source/tests → DOC-01. **Architecture D2 requires Owner acceptance, never agent inference.**
 
@@ -232,9 +232,117 @@ C. **STILL OPEN:** final exact C++ declarations (including fully defined scoped 
 - `ExactBoundedEdge3d` contains `std::array<Point3,2>` paired native transient terminal positions and `UnorientedUnitTangent3` representatives for each END plus MID. All unit-tangent comparisons must be **sign-insensitive**; the representative's sign is NOT a persistent Frame3 or P4 preview choice. Include the necessary standard headers (`<array>`, `<optional>`, `<utility>`) explicitly.
 - Only one new neutral header is proposed and can be exposed through already existing PUBLIC kernel include directory; existing OCCT .cpp and header must implement the additional interface without CMake/CI/source growth. This is **source inspected, not compiled or tested**. If the exact C++ design cannot be implemented inside six prospective allowed files, STOP for Owner D2 amendment.
 
-**Remaining independent Owner decision:** approve **the complete, exact, compilable public C++ API proposal plus six-file executable Work Contract scope**, preserving the now provisionally accepted §2C criteria and the direct `Standard_Failure` coverage caveat. **Do not mark PR #352 Ready** solely from the §2C design-basis sign-off. Separate Work Contract exact-text approval, exact-HEAD merge consent and independent dedicated ACTIVE Q0 authorization remain mandatory. All new native Q0-01..07 tests remain UNRUN.
+**Remaining independent Owner decision:** §2D interface direction and six exact proposed future source/test/docs paths were accepted by Owner **FOR CONTRACT PREPARATION ONLY**. The complete exact-header proposal and integrated executable Q0 Work Contract text still need **independent exact-text acceptance**. Do NOT mark PR #352 Ready just because §2C/§2D directions were accepted; PR-specific exact-HEAD squash merge and dedicated ACTIVE activation remain separate and future.
 
-## 3. Exact **proposed** future D0 mutation allowlist: six paths ONLY, pending Owner acceptance + ACTIVE
+## 2E. Full C++ neutral-header candidate for separate exact-text Owner review — NOT COMPILED
+
+This *illustrative complete declaration set* supersedes the incomplete `class ScopedExactEdge;` shorthand in §2A for final interface review. The Owner accepted §2D's **direction** and the six future file paths as a proposed bounded scope, **not this specific API text or the full Work Contract as executable**.
+
+```cpp
+// PROPOSAL ONLY: src/kernel/include/simplesolid2/kernel/exact_bounded_edge_geometry.hpp
+#pragma once
+
+#include <simplesolid2/kernel/solid_modeling.hpp>
+#include <array>
+#include <optional>
+#include <utility>
+
+namespace simplesolid2::kernel {
+
+enum class ExactEdge3dStatus {
+    ok,
+    invalid_input,
+    provider_mismatch,
+    edge_unavailable,
+    unsupported_curve,
+    closed_or_periodic,
+    degenerate_edge,
+    kernel_failure,
+};
+enum class ExactEdge3dKind {
+    bounded_line,
+    open_circular_arc,
+};
+
+// The geometry is one unoriented line {+t,-t}.
+// Point3 merely stores three components, NOT a source point or signed frame.
+struct UnorientedUnitTangent3 final {
+    Point3 representative;
+};
+struct ExactBoundedEdge3d final {
+    ExactEdge3dKind kind{ExactEdge3dKind::bounded_line};
+    // Position[i] and tangent[i] belong to the SAME current physical terminal.
+    // The index is NEVER a durable END key; order may change on rebuild.
+    std::array<Point3, 2> current_terminal_positions_world{};
+    std::array<UnorientedUnitTangent3, 2> terminal_tangent_lines{};
+    double bounded_length_mm{};
+    Point3 midpoint_at_half_bounded_length_world{};
+    UnorientedUnitTangent3 midpoint_tangent_line{};
+};
+struct ExactEdge3dResult final {
+    ExactEdge3dStatus status{ExactEdge3dStatus::invalid_input};
+    std::optional<ExactBoundedEdge3d> geometry;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status == ExactEdge3dStatus::ok && geometry.has_value();
+    }
+};
+
+class ScopedExactEdge final {
+public:
+    ScopedExactEdge() = default;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return source_body_ != nullptr && edge_.valid();
+    }
+    [[nodiscard]] const RuntimeSolidHandle& sourceBody() const noexcept {
+        return source_body_;
+    }
+    [[nodiscard]] RuntimeEdgeToken edge() const noexcept {
+        return edge_;
+    }
+
+private:
+    friend class IExactBoundedEdgeGeometryQuery;
+    ScopedExactEdge(RuntimeSolidHandle body, RuntimeEdgeToken token) noexcept
+        : source_body_{std::move(body)}, edge_{token} {}
+
+    RuntimeSolidHandle source_body_;
+    RuntimeEdgeToken edge_;
+};
+
+class IExactBoundedEdgeGeometryQuery {
+protected:
+    [[nodiscard]] static ScopedExactEdge makeScopedExactEdge(
+        RuntimeSolidHandle body, RuntimeEdgeToken token) noexcept {
+        return {std::move(body), token};
+    }
+public:
+    virtual ~IExactBoundedEdgeGeometryQuery() = default;
+
+    [[nodiscard]] virtual std::optional<ScopedExactEdge>
+    bindExactEdgeToBody(
+        RuntimeSolidHandle source_body,
+        RuntimeEdgeToken current_edge) noexcept = 0;
+
+    [[nodiscard]] virtual ExactEdge3dResult queryExactBoundedEdge3d(
+        RuntimeSolidHandle current_body,
+        const ScopedExactEdge& edge) noexcept = 0;
+};
+
+} // namespace simplesolid2::kernel
+```
+
+**Review obligations, not proof:**
+- This complete value declaration precedes `std::optional<ScopedExactEdge>` and copies the valid/default-invalid scoped-binding pattern from already shipped 2D `ScopedProjectionEdge` without persisting Body/tokens. Correct generation authorization still requires runtime Body object equality and actual strict Part-stage source provenance before binding.
+- The independently named `bindExactEdgeToBody` does NOT collide with existing 2D `bindEdgeToBody`. `OcctSolidModelingKernel` would inherit this new interface without altering the older interface or `ISolidModelingKernel`. The binder's `nullopt` is deliberately untyped like the 2D binder; the eight statuses belong to **query results**, not binding failures. If typed binding failure becomes required, STOP for Owner D2 amendment.
+- `UnorientedUnitTangent3` is a sign-invariant CONTRACT, although its three numeric components have an arbitrary representative sign. The provider MUST check finite unit norm and compare tangent lines up to ±; no Q0 output determines persisted Datum `N`, END key or user Reverse.
+- Every unsuccessful query returns no geometry, source/Body ownership is current-generation only, and the shared **E1a** guard controls all native exceptions. The direct new-Q0 `Standard_Failure` case remains `NOT DIRECTLY TESTED` unless later actual evidence is obtained; old 2D injection evidence cannot count.
+- This is a **source-grounded declaration proposal, not an actual compiled header**. The six paths remain exactly the accepted prospective set from §3. New Q0 native FOCUSED/FAST/FULL, E1a and N1a measurements, link feasibility and current DOC-01 as-built update are all **NOT RUN**; these occur only after separately approved executable contract merge and ACTIVE activation.
+
+**Next Owner gate:** separately accept/revise this exact header proposal and the full integrated Q0 executable Work Contract before Ready-for-Review. This does not authorize PR #352 squash merge or Q0 ACTIVE switch.
+
+## 3. Six Owner-accepted prospective future source/test/docs paths — executable Work Contract and ACTIVE still gated
 
 | Exact file | Permitted narrow mutation only AFTER accepted activation |
 | --- | --- |
@@ -245,7 +353,7 @@ C. **STILL OPEN:** final exact C++ declarations (including fully defined scoped 
 | `tests/kernel_native/pm05c2b_part_edge_topology_test.cpp` | Existing registered **CTest `pm05c2b.part_edge_topology`** bind only after Part certifies a real strict `MaterialEdgeReference` in the correct source Body stage; current provider, provider rebuild and height edit; preserve all E0 evidence |
 | `docs/internal/PART_EDGE_PROJECTION_KERNEL.md` | Existing verified DOC-01 canonical as-built `doc-id: internal.part-edge-projection-kernel`: describe **new distinct 3D geometry-only query** while preserving old exact **2D projection**, Face Boundary contracts and stable section markers |
 
-**No seventh mutation path by inference.** NOT allowed: `src/part/**`, `src/application/**`, `src/ui/**`, `src/viewer/**`, `src/kernel/solid_modeling.cpp`, any other source/tests/internal doc, CMakeLists, new test target, workflow/CI, schema/persistence/UI/Product PL/EN or `docs/browser/index.html`, `work/ACTIVE.yaml`, new ADR or roadmap editing. Existing E0 tests cannot be removed, relaxed or rewritten to accommodate an implementation.
+**Owner accepted exactly the six paths listed above **as proposed future contract scope**, NOT permission to edit them before a separately accepted full Work Contract and independently merged Q0 ACTIVE activation. No seventh mutation path by inference.** Not allowed: src/part, src/application, UI/Viewer, Part schema, other production tests/docs, CMake, CI, generated Browser, ACTIVE, ADR or roadmap. Existing E0 tests must not be weakened.
 
 **Feasibility STOP:** Before accepting/activating this contract, verify that (a) the new public header participates in existing build/include rules **without editing CMake**, (b) Q0 real native Arc/Line fixtures can be obtained inside the two registered test sources **without other path edits**, and (c) the existing provider-private guarded metric implementation fits inside the one OCCT .cpp. If not, present exact additional path/change for a new Owner D2 scope amendment; **do not** bypass with a test-only production helper, synthetic 2D midpoint, or broad wildcard.
 
@@ -271,8 +379,8 @@ C. **STILL OPEN:** final exact C++ declarations (including fully defined scoped 
 
 **Owner accepted the §2A three-tangent/eight-status/analytic-MID DIRECTION and separately N1a/E1a as preferred, conditional methods.** Exact C++ types, numerical thresholds, exception coverage proof, six-file executable authority and PR merge/activation are still independent. Generic “continue” does NOT authorize code or these further gates. Independent gates:
 
-1. **DONE only as plan:** Owner chose Q0 → Q1 → Q2+ sequence on 2026-10-13. [Plan PR #351](https://github.com/MechanicalCave/SimpleSolid2/pull/351) remains OPEN/DRAFT, a one-file planning artifact, **not yet Owner-approved as exact six-path code authority**.
-2. **THIS draft executable-contract proposal:** Owner to review/accept exact six-file implementation scope (or amend), semantic 3D typed query contract, status/length/orientation/tolerance rules, existing fixture feasibility and documentation. **Before final exact-text approval** resolve the unresolved items in §2 and pre-activation build/test feasibility STOP in §3. No auto-accept based on this draft PR's green governance CI.
+1. **DONE only as planning/architecture gates:** Owner accepted Q0→Q1→Q2+ order, §2C provisional test hypotheses, §2D interface direction and six exact future-scope paths on 2026-10-13. This is NOT exact final Work Contract approval. Planning PR #351 remains OPEN/DRAFT/UNMERGED.
+2. **THIS draft executable-contract proposal:** Owner still must independently accept the complete integrated C++ header/API contract and exact final Work Contract text. Six paths are accepted as candidate FUTURE scope but not writable now. Verify remaining native fixtures/build/test feasibility STOPs and declared E1a Standard_Failure direct-coverage limitation; work-only CI is not code/test proof.
 3. **Governance contract merge:** once Owner explicitly accepts the final exact Work Contract text, make the one-document Work Contract PR Ready for Review, require work-only exact-head Windows closure, request **separate PR-specific squash merge authorization**. The accepted scope alone is NOT merge permission.
 4. **Separate dedicated activation:** propose minimal `work/ACTIVE.yaml.active_work` switch from the E0 evidence-only contract to this accepted Q0 contract. Preserve roadmap v1.33, Foundation and history pointers. Obtain Owner **scope approval**, Windows governance at exact HEAD, then **separate explicit squash merge consent**. No Q0 code/test mutations until merged activation.
 5. **Only then D0 coding:** new code/test branch from active `main`, exact file allowlist, actual Windows FOCUSED/FAST/FULL, measured evidence and scope/source audit. If any FOCUSED or native test fails, diagnose; no extra helper, test weakening, ownerless API or broad refactor without new approval.
@@ -286,4 +394,4 @@ Internal docs: required
 User/Product docs: not required  
 Reason: **If separately accepted and activated**, Q0 adds a new provider-neutral exact 3D Kernel query boundary, runtime ownership/generation and typed failure semantics; therefore it requires the exact existing `docs/internal/PART_EDGE_PROJECTION_KERNEL.md` current-state update under DOC-01. No user-visible Datum feature, new command, UI, persistence or Product Browser is changed within Q0; paired PL/EN Product updates are deferred to independently approved Q2+ implementation. Documentation verification and as-built current-state accuracy are completion gates, not optional append-only history.
 
-**Owner decision requested in future:** accept/revise THIS six-file Q0 executable scope and settle the explicitly listed D2 API/numeric feasibility questions. This Draft itself, PR #351 plan and all Q0-01…07 tests are NOT approved as production work by the prior sequencing consent.
+**Next distinct Owner decision:** accept/revise the COMPLETE exact C++ header and integrated executable Q0 Work Contract text (not another vote on previously accepted §2C/§2D principles). This is separate from PR #352 exact-HEAD squash merge permission, independently merged ACTIVE and any coding.
