@@ -6039,4 +6039,202 @@ OcctSolidModelingKernel::projectEdgeToPlane(
     });
 }
 
+
+std::optional<kernel::ScopedExactEdge>
+OcctSolidModelingKernel::bindExactEdgeToBody(
+    kernel::RuntimeSolidHandle source_body,
+    kernel::RuntimeEdgeToken current_edge) noexcept {
+    if (!source_body || !current_edge.valid()) {
+        return std::nullopt;
+    }
+    const auto* runtime =
+        dynamic_cast<const OcctRuntimeSolid*>(source_body.get());
+    if (runtime == nullptr ||
+        runtime->inventory_edges.find(current_edge.value) ==
+            runtime->inventory_edges.end()) {
+        return std::nullopt;
+    }
+    return makeScopedExactEdge(std::move(source_body), current_edge);
+}
+
+kernel::ExactEdge3dResult
+OcctSolidModelingKernel::queryExactBoundedEdge3d(
+    kernel::RuntimeSolidHandle current_body,
+    const kernel::ScopedExactEdge& bound_edge) noexcept {
+    using Status = kernel::ExactEdge3dStatus;
+    const auto fail = [](Status status) -> kernel::ExactEdge3dResult {
+        return {status, std::nullopt};
+    };
+
+    if (!current_body || !bound_edge.valid()) {
+        return fail(Status::invalid_input);
+    }
+    // A numerically equal token from another generation is NOT authority.
+    if (current_body.get() != bound_edge.sourceBody().get()) {
+        return fail(Status::provider_mismatch);
+    }
+    const auto* runtime =
+        dynamic_cast<const OcctRuntimeSolid*>(current_body.get());
+    if (!runtime) {
+        return fail(Status::provider_mismatch);
+    }
+    const auto found = runtime->inventory_edges.find(
+        bound_edge.edge().value);
+    if (found == runtime->inventory_edges.end() ||
+        found->second.IsNull()) {
+        return fail(Status::edge_unavailable);
+    }
+
+    return detail::guardExactBoundedEdge3dResult(
+        [&]() -> kernel::ExactEdge3dResult {
+            const TopoDS_Edge& edge = found->second;
+            const BRepAdaptor_Curve curve{edge};
+            const auto kind = curve.GetType();
+            if (kind != GeomAbs_Line && kind != GeomAbs_Circle) {
+                return fail(Status::unsupported_curve);
+            }
+
+            const double first = curve.FirstParameter();
+            const double last = curve.LastParameter();
+            const double span = last - first;
+            const double linear_tol = Precision::Confusion();
+            const double angular_tol = Precision::Angular();
+            if (!std::isfinite(first) || !std::isfinite(last) ||
+                !std::isfinite(span) || !(span > 0.0) ||
+                !std::isfinite(linear_tol) || !(linear_tol > 0.0) ||
+                !std::isfinite(angular_tol) || !(angular_tol > 0.0)) {
+                return fail(Status::kernel_failure);
+            }
+
+            double radius = 0.0;
+            if (kind == GeomAbs_Circle) {
+                radius = curve.Circle().Radius();
+                if (!std::isfinite(radius) ||
+                    !(radius > linear_tol)) {
+                    return fail(Status::degenerate_edge);
+                }
+                if (span >= full_turn) {
+                    return span <= full_turn + angular_tol
+                        ? fail(Status::closed_or_periodic)
+                        : fail(Status::kernel_failure);
+                }
+            }
+
+            TopoDS_Vertex first_vertex;
+            TopoDS_Vertex last_vertex;
+            TopExp::Vertices(
+                edge, first_vertex, last_vertex, true);
+            if (first_vertex.IsNull() || last_vertex.IsNull()) {
+                return fail(Status::kernel_failure);
+            }
+            if (first_vertex.IsSame(last_vertex)) {
+                return fail(kind == GeomAbs_Circle
+                    ? Status::closed_or_periodic
+                    : Status::degenerate_edge);
+            }
+
+            const gp_Pnt analytic_first = curve.Value(first);
+            const gp_Pnt analytic_last = curve.Value(last);
+            const gp_Pnt native_first = BRep_Tool::Pnt(first_vertex);
+            const gp_Pnt native_last = BRep_Tool::Pnt(last_vertex);
+            const auto finite = [](const gp_Pnt& p) noexcept {
+                return std::isfinite(p.X()) &&
+                       std::isfinite(p.Y()) &&
+                       std::isfinite(p.Z());
+            };
+            if (!finite(analytic_first) || !finite(analytic_last) ||
+                !finite(native_first) || !finite(native_last)) {
+                return fail(Status::kernel_failure);
+            }
+
+            // Native Edge-owned Vertices are transient physical END
+            // observations. Only the SAME Edge's analytic carrier can
+            // validate/associate them with their own 3D tangent lines.
+            const double edge_tol = BRep_Tool::Tolerance(edge);
+            const double first_tol = BRep_Tool::Tolerance(first_vertex);
+            const double last_tol = BRep_Tool::Tolerance(last_vertex);
+            if (!std::isfinite(edge_tol) || edge_tol < 0.0 ||
+                !std::isfinite(first_tol) || first_tol < 0.0 ||
+                !std::isfinite(last_tol) || last_tol < 0.0) {
+                return fail(Status::kernel_failure);
+            }
+            const double t0 = std::max({linear_tol, edge_tol, first_tol});
+            const double t1 = std::max({linear_tol, edge_tol, last_tol});
+            const bool ordered =
+                native_first.Distance(analytic_first) <= t0 &&
+                native_last.Distance(analytic_last) <= t1;
+            const bool swapped =
+                native_first.Distance(analytic_last) <= t0 &&
+                native_last.Distance(analytic_first) <= t1;
+            if (!ordered && !swapped) {
+                return fail(Status::kernel_failure);
+            }
+            if (ordered && swapped) {
+                return fail(Status::degenerate_edge);
+            }
+
+            double length = analytic_first.Distance(analytic_last);
+            if (kind == GeomAbs_Circle) {
+                // Exactly constant speed on this certified trimmed Circle.
+                // Generic parameter averaging of other curves is forbidden.
+                length = radius * span;
+            }
+            const double physical_gap = native_first.Distance(native_last);
+            if (!std::isfinite(length) ||
+                !(length > linear_tol) ||
+                !std::isfinite(physical_gap) ||
+                !(physical_gap > std::max(t0, t1))) {
+                return fail(Status::degenerate_edge);
+            }
+
+            const double middle = first + span / 2.0;
+            const gp_Pnt analytic_mid = curve.Value(middle);
+            if (!finite(analytic_mid)) {
+                return fail(Status::kernel_failure);
+            }
+
+            const auto tangentAt = [&](double parameter)
+                -> std::optional<kernel::UnorientedUnitTangent3> {
+                gp_Pnt point;
+                gp_Vec derivative;
+                curve.D1(parameter, point, derivative);
+                const auto unit = unit3({
+                    derivative.X(),
+                    derivative.Y(),
+                    derivative.Z()});
+                if (!finite(point) || !unit) {
+                    return std::nullopt;
+                }
+                return kernel::UnorientedUnitTangent3{*unit};
+            };
+            const auto first_line = tangentAt(first);
+            const auto last_line = tangentAt(last);
+            const auto mid_line = tangentAt(middle);
+            if (!first_line || !last_line || !mid_line) {
+                return fail(Status::degenerate_edge);
+            }
+            const auto xyz = [](const gp_Pnt& p) -> kernel::Point3 {
+                return {p.X(), p.Y(), p.Z()};
+            };
+
+            kernel::ExactBoundedEdge3d geometry;
+            geometry.kind = kind == GeomAbs_Line
+                ? kernel::ExactEdge3dKind::bounded_line
+                : kernel::ExactEdge3dKind::open_circular_arc;
+            geometry.current_terminal_positions_world = {
+                xyz(native_first), xyz(native_last)};
+            // Pair by the actual within-one-Edge native trim match.
+            // Index and derivative +/- sign NEVER become durable END IDs.
+            geometry.terminal_tangent_lines = ordered
+                ? std::array<kernel::UnorientedUnitTangent3, 2>{
+                    *first_line, *last_line}
+                : std::array<kernel::UnorientedUnitTangent3, 2>{
+                    *last_line, *first_line};
+            geometry.bounded_length_mm = length;
+            geometry.midpoint_at_half_bounded_length_world = xyz(analytic_mid);
+            geometry.midpoint_tangent_line = *mid_line;
+            return {Status::ok, std::move(geometry)};
+        });
+}
+
 } // namespace simplesolid2::kernel_occt
