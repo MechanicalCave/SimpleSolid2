@@ -19,6 +19,24 @@
 
 **Current completed planning gates:** E0 real-native measured proof [PR #348](https://github.com/MechanicalCave/SimpleSolid2/pull/348) MERGED, 199/199 Windows FULL, technical result still **PARTIAL**; D2 source [PR #349](https://github.com/MechanicalCave/SimpleSolid2/pull/349) MERGED and P4 orientation/default-preview [PR #350](https://github.com/MechanicalCave/SimpleSolid2/pull/350) MERGED as work-only **DESIGN**, not executable Work Contracts. E0 `ACTIVE.yaml` remains active. This PR #345 stays OPEN/DRAFT/UNMERGED until separate complete UX Owner acceptance, independent exact-HEAD merge consent, and later distinct D2 executable Work Contract plus ACTIVE activation.
 
+## 0B. Owner-clarified complete UX principle: EXACT PARITY with existing Datum Plane and application CAD input (2026-10-13)
+
+**Owner response to §0A/§1B acceptance request:** “UX i zachowanie klawiszy, Command Line — spójne z narzędziem Datum Plane i resztą aplikacji — to oczywiste.” **Binding constraint:** `Edge + Point` is **another constructor inside the SAME Datum Plane tool**. It inherits the existing Operations / Viewport / Tree / Command Line / global CAD-input ownership, keyboard/focus handling, semantic selection, Cancel/Finish, Undo/Redo and draft-generation rules. Do **not** create a new isolated input grammar, separate dispatcher, extra hotkeys, different Esc/Enter priorities or independent command parser. This accepts **UX consistency as a required direction**, not any currently unimplemented UI/schema/API code.
+
+**Verified shipping source and tests (read-only, current main):**
+- `src/application/datum_plane_draft.cpp` — `submitDatumPlaneCadInput()` maps **empty submission / `FINISH` to Finish**, **`CANCEL` / `ESC` to Cancel**, and **`REVERSE` to existing draft Reverse**, using the same draft instance and an existing `CadInputNumberFormat` for Offset. **These are commands in the current Datum input context, not instructions to invent an application-wide physical Esc/Enter shortcut.**
+- `tests/pm03c2_cad_workbench_datum_plane_test.cpp` — tests existing `datumPlaneToolButton`, `datumPlaneConstructorCombo`, `datumPlaneReverseButton`, `datumPlaneFinishButton`, `datumPlaneCancelButton`. Selection-first and `DATUMPLANE` command-first share the same Operations state, preview, Reverse, Finish and Cancel. `CadInputSession` **empty Enter triggers Finish** when the Datum Plane endpoint owns the input context. Invalid input drops the preview without writing, Cancel does not change Undo depth, and successful Finish commits exactly one Undo.
+- `src/application/include/simplesolid2/application/cad_input.hpp` — the global CAD input endpoint exposes a **context generation**, `acceptsEmptyCadInput()` and dynamic input support. Reuse the application's existing focus and text-buffer priority rather than claiming new interpretation of physical Esc/Enter.
+- `src/ui/part_viewport_controller.cpp` — the existing ranked topology hit list orders candidate presentation types before screen distance/depth, but the tie-breaking runtime `PresentationToken` is **only a transient pick ordering**, never durable source identity. Keep this behavior outside the candidate disambiguation logic of this Datum constructor.
+
+**Concrete parity requirements, to be regression-tested rather than redesigned:**
+1. `DATUMPLANE` / `DATUM PLANE`, existing Operations tool button, and current selection-first entrance converge on **the same draft / constructor selection**. `Offset` remains unchanged. When `Edge + Point` is active, the Viewport and Command Line use the **same** strict Edge-local END/MID / independent off-line Point meanings and a **single** draft generation and current-stage eligibility; no raw XYZ typed point substitutes for semantic meaning.
+2. Existing `FINISH`, **empty Enter in the owning Datum input context**, `CANCEL`/`ESC` command and **`REVERSE`** route to the SAME existing finish/cancel/reverse action shared with Operations buttons. **Physical** Enter/Esc and active input-buffer precedence must obey the **currently implemented global CAD input/focus routing**; no new override or fabricated keybinding. If an unrepresented semantic CLI source requires an integration adaptation, document and test that gap through this same endpoint, not a new command language.
+3. While source+exact geometry are certified, the same preview appears in the Viewport whether the source was picked in either order; `Odwróć` button / existing `REVERSE` action show the same flipped frame `(O,U,V,N)→(O,U,−V,−N)`, including MID with free normal sign. No extra MID user mode or marker. Invalid source, stale stage or unsupported native query cannot be committed by either path.
+4. Source replacement in Edit, focus restoration, cancel and invalid-input recovery have the SAME semantics as the existing Datum Plane and global CAD input. Every valid Finish revalidates one stable semantic source set and commits **one Command / one Undo**; transient clicks/preview/cancel produce **zero authored mutation**. New constructor-specific failure diagnostics may be clearer, but the interaction model and keyboard grammar may not diverge.
+
+**Strict unresolved implementation facts, not new UX choices:** the current Datum Command Line can parse Offset length and REVERSE but has **no shipped typed Edge-local END/MID source grammar** or 3D native source query. Implementation needs a separately activated bounded contract and explicit integration proof. **Do not mistake UX parity for a working Datum END/MID tool today.** No new keyboard/Command Line conceptual design approval question is needed when behavior is identical to shipping Datum Plane. If an actual required deviation from the existing input grammar emerges, STOP and present **that concrete difference** for Owner decision, rather than ask abstractly how Esc/Enter ought to behave.
+
 ## 1. Owner-accepted interaction direction (bounded UX principle, NOT the full RG-02 UI gate)
 
 Owner supplied a screenshot of the **existing Datum Plane** Operations panel with `Constructor: Offset`, then proposed developing **Edge with on-edge END/MID** before other Datum constructors. When offered two distinct interpretations:
@@ -65,9 +83,9 @@ Owner first explicitly chose **B**. Owner then explicitly refined the user exper
 - E6: `Finish/Cancel/Edit`, upstream edit versus later Chamfer, Undo/Redo, Save/Reopen and genuinely fresh OCCT provider preserve/fail-closed according to exact authored Edge and Point meaning, independent of pick order.
 
 
-## 1B. Reviewable UX flow for Owner consultation — PROPOSED, NOT APPROVED
+## 1B. Reviewable UX flow — source/preview states proposed, existing input grammar required by Owner (§0B)
 
-This is a **remaining full-UX review artifact**, not an amendment to the already accepted one-constructor/any-order/automatic-overlap direction in §1/§1A. All state text, focus/Esc policy and Edit/repair choices below are *candidates* requiring separate explicit Owner approval under parent RG-02 §3; no UI code authority.
+This is a **reviewable state outline**, not permission to change product code. Owner already required **exact parity with the shipping Datum Plane / global CAD input** (§0B); no new keyboard/focus/Esc/Enter/Command Line grammar is to be separately invented. Source-state feedback, typed error copy and any concrete **deviation from current behavior** need review; exact native semantics and executable scope remain gated.
 
 | Transient state | Operator action | Proposed Operations/help feedback | Allowed system effect |
 | --- | --- | --- | --- |
@@ -79,15 +97,15 @@ This is a **remaining full-UX review artifact**, not an amendment to the already
 | S3 Committed | Finish on still-current valid pair | Standard completion / Tree selection | Revalidate Part/session/stage/semantic pair/geometry at execution; one Command / Transaction and one Undo. |
 | S0 Cancelled | Cancel or ordinary tool exit | Existing cancellation UX | Drop transient picks and preview; no persistent mutation or Undo entry. |
 
-**Specific unapproved UX details for independent Owner review:**
+**Specific implementation obligations within existing approved UX consistency rule (§0B), with unimplemented sources/frame still gated:**
 
 - Re-picking a source replaces that *transient* source and invalidates preview; the opposite source remains only while fresh and stage-compatible. Editing an existing broken Datum preserves DatumId and authored references until a successful atomic Finish; highlight and permit replacement of the offending source without silent repair.
 - Hover is highlight/preview only; no new END-versus-MID colors or shapes, no overlapping-point chooser and no extra on/off-edge mode. Automatic filtering is semantic, not a screen-nearest choice.
 - Reverse changes orientation, **not** the sourced point or its semantic identity. Exact U/V/N and persisted orientation remain D2 OPEN; this proposal does not approve a frame convention.
-- Reuse the existing global CAD input priority and Command Line semantic routing. **No invented Esc/Enter override:** exact source-clear vs cancel behavior, text-buffer precedence, focus restoration and keyboard equivalents need an Owner review against shipping input grammar. Command Line must eventually resolve the same strict semantic pair and never serialize raw screen XYZ.
+- Reuse the **existing global CAD input priority, context generation, text-buffer/focus ownership and Datum Plane Command Line endpoint** as-is. **No invented Esc/Enter override or additional grammar.** Existing `DATUMPLANE` entry and `FINISH`/owning-context empty Enter, `CANCEL`/`ESC`, `REVERSE` have source-backed behavior (§0B); both Command Line and Operations must call the same draft/actions. New Edge-local END/MID acquisition is not yet shipped in Command Line; implement semantic parity using the existing endpoint under a future separately approved D2 contract, never raw screen XYZ as source identity.
 - A visible but semantically Unsupported END must report unavailability instead of pretending to create a durable Datum. MID can only be eligible where bounded analytic geometry and the typed Edge+MID source are proven.
 
-**Full Owner UX approval remains OPEN:** copy and source-stage feedback, focus/keyboard/Esc, source replacement during Edit, typed diagnostic presentation, Reverse UX and Command Line parity. Compare existing Offset Operations panel with this state flow before any UI mutation.
+**Owner's UX parity requirement is accepted and binding**: behavior of focus/keyboard/Esc/Enter, Command Line, Cancel/Finish, Undo and Reverse **must match the current Datum Plane and rest of the application**; do not re-request conceptual approval to preserve existing shortcuts. Remaining review concerns **only genuinely new Edge+Point semantic acquisition, useful source-specific diagnostics, proven frame/persistence and any demonstrated conflict with shipping behavior**. Concrete implementation, tests and PR-specific merge remain separate governance gates.
 
 ## 2. Exact meaning proposed for this one constructor
 
@@ -199,7 +217,7 @@ Geometry classification is **not a pixel-distance threshold**: use exact provide
 
 1. **Native END and MID exact referenceability:** proof and legal small fixture class per strict `MaterialEdgeReference`, with ambiguous/missing stress cases. Is a new typed point semantic variant required? If so stop for Owner D2.
 2. **Exact frame orientation and Reverse meaning** consistent across straight lines, arc tangent endpoints and persisted rebuild; reject orientation driven by provider order.
-3. **Remaining UX details, not the already accepted overlap algorithm:** preserve existing END visuals for MID and automatic Edge-filtered point-first resolution (§1A); present keyboard/focus, current selection priority edge cases, user-facing state/help text, diagnostics and repair scenarios to Owner for separate complete UX approval.
+3. **No separate Esc/Enter/Command Line redesign**: Owner requires exact current Datum Plane/application input semantics (§0B). Verify actual keyboard/focus/Cancel/Finish/Reverse, shared draft, selection-stack semantics, help/typed diagnostics and Edit in regression tests; escalate only a concrete novel behavior or incompatibility to Owner, not a reapproval of obvious consistency.
 4. **Complete file allowlist, schema version and migration/refusal impact** after inspecting the accepted code and test anchors. No guessed code edit targets.
 5. **Numerical tolerances and concrete expected results** as exact native fixtures; mark everything `UNRUN` until verified.
 
