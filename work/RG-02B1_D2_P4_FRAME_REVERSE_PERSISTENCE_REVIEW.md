@@ -1,6 +1,6 @@
 # RG-02B1/D2-P4 — stable signed Datum frame, Reverse and Part persistence (OWNER REVIEW DRAFT)
 
-**Status:** **PROPOSED FOR OWNER CONSULTATION ONLY / UNACCEPTED / UNMERGED / NOT ACTIVE / NO PRODUCT-CODE AUTHORITY.**  
+**Status:** **OWNER ACCEPTED P4-A/P4-B/P4-C DESIGN DIRECTION IN PRINCIPLE (2026-10-13); exact technical specification remains DRAFT / UNMERGED / NOT ACTIVE / NO PRODUCT-CODE AUTHORITY.**  
 **Prepared:** 2026-10-13; baseline `main` `b46bbe69b59d660f089967cba9b9f2e9a10ac029`; roadmap v1.33; `ACTIVE.yaml` still authorizes **only E0 four-test evidence**.  
 **Prerequisite UX direction:** Owner accepted **in principle** source/gesture design P1/P2/P3/P5 in [PR #349](https://github.com/MechanicalCave/SimpleSolid2/pull/349) (exact corrected proposal HEAD `38f34f6ee378030db8c91503a2e799a8d5cb096a`); **no merge or executable semantics were authorized**. E0 measured facts reside in [PR #348](https://github.com/MechanicalCave/SimpleSolid2/pull/348), separate OPEN/UNMERGED, exact-head Windows FULL [#2828](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38392879099) 199/199 PASS; owner accepted these **limited findings as design input**, not a completed END/MID feature.  
 **Request:** review P4 options below; **no option is Owner-approved by this Draft**. Parent [UX Draft #345](https://github.com/MechanicalCave/SimpleSolid2/pull/345) remains independent.
@@ -19,7 +19,17 @@ These three sourced cases yield **derived** geometrical planes but their authore
 - `src/kernel/include/simplesolid2/kernel/edge_projection.hpp` only supplies current-body-bound **2D** projected Edge geometry; the proposed exact 3D endpoint/MID/tangent query is **not currently implemented**.
 - Accepted ADR-0014, ADR-0016 and ADR-0017 require semantic/stage provenance, fail-closed resolution, no provider/screen/nearest-XYZ identity, explicit modeling-semantics compatibility where outcomes change, and no representation-seam/partition promotion.
 
-## 2. P4-A — deterministic tangent sign and basis ownership (NOT APPROVED)
+## 1A. Successful Point+Edge selection versus admissible Datum Finish (OWNER QUESTION; PROPOSED PRECISION)
+
+**Owner question, 2026-10-13:** If the user successfully identifies a particular Edge and Point, why should the system be unable to establish its source semantics? The intended interaction must distinguish **three separate certificates**, while hiding unnecessary technical complexity from the user:
+
+1. **Current exact gesture** (transient): click determines the Point/MID hit location and the specific selected material Edge, including the corresponding endpoint of **that Edge** when different coincident Edge/Point hits overlap. The first hovered Point belongs to no binding authority. A successful gesture is **not** automatically a durable source/reference or a complete signed plane frame.
+2. **Durable source intent** (authored): identify the same Edge-local END terminal, Edge-local MID, or independently certified off-line Point in the same declared Body stage across dimension edits, re-evaluation and cold provider reconstruction. Current native endpoint coordinates/order are insufficient to establish this by themselves.
+3. **Deterministic signed frame** (derived): once sources and exact geometry are certified, a declared canonical rule must uniquely construct metric, orthonormal, right-handed `O/U/V/N`. For an open straight Edge and a uniquely selected END, the **current** tangent can naturally point from that END toward the other terminal; stable replay still requires a durable terminal key. MID at half-length of an unoriented Edge admits **±tangent**, and straight-line-plus-off-line-Point defines one geometric plane but admits **±normal**. This is a deterministic *modeling convention to implement*, not a new click users should make.
+
+**Required user-visible invariant proposed for later exact D3/implementation review:** The app must **not present an Edge+Point pair as a valid, finishable Datum** before both durable-source and signed-frame certification succeed. Unsupported orientation/provenance yields a typed non-admissible candidate with useful feedback, not a green preview followed by a surprise `Finish` failure. `Finish` must revalidate freshness atomically; a valid earlier datum can still become Missing/Ambiguous/Blocked after an upstream edit and must not publish last-good geometry. The Owner has accepted the **P4 source-based direction in principle**, but these specific operational success/error states need separate complete UX agreement in [Draft #345](https://github.com/MechanicalCave/SimpleSolid2/pull/345) and executable test authority. **Do not infer universal END coverage from a valid on-screen click.**
+
+## 2. P4-A — deterministic tangent sign and basis ownership (IN-PRINCIPLE DIRECTION ACCEPTED, ALGORITHM NOT YET AUTHORIZED)
 
 **Candidate A1 — source-proven signed orientation, recommended as the baseline constraint:** an open straight Edge uses **two stable Edge-local terminal keys** and a stage-bound source rule deciding their order. Its signed tangent goes from the *semantic* first terminal to the *semantic* second, **not** from OCCT parameter first/last. MID inherits exactly that sign. An open circular Arc uses signed trim orientation **from independently proven producer/Curve/terminal provenance**, evaluated on the actual bounded arc; negative/positive source sweep and provider reversal cannot silently change it. If these semantics cannot be established, report `UnsupportedOrientation`, not an arbitrary frame.
 
@@ -31,7 +41,7 @@ These three sourced cases yield **derived** geometrical planes but their authore
 
 **Requested P4-A choice:** accept A1 + A2 as proof obligations with **fail-closed** if source sign/basis is not certifiable, or separately approve an explicit A3/A4 fallback contract with its user-visible consequences. There is **no universal 3D stable frame proof from E0**.
 
-## 3. P4-B — exact geometry and Reverse (PROPOSED CONVENTION, NOT APPROVED)
+## 3. P4-B — exact geometry and Reverse (R1 ACCEPTED IN PRINCIPLE; EXACT PRODUCT BEHAVIOR NOT YET AUTHORIZED)
 
 For a **strict source-Edge END or MID**:
 - `O` = exact 3D evaluated terminal point / half-bounded-length midpoint at that specific source stage.
@@ -47,7 +57,7 @@ For **straight Edge + independently resolved off-line Point**:
 
 **Numeric STOP:** zero/short Edge, native circle seam/closed Edge, trim ambiguity, ARC midpoint without exact 3D arc-length query, nearly collinear off-line Point, near-parallel seed, non-finite derivative and any unstable sign/provenance => typed Unsupported/Ambiguous/Blocked; retain authored source; never publish stale fallback frame. An accepted numeric tolerance is a *modeling* policy, not a Viewer pixel/snap tolerance, and cannot be invented by this design-only draft.
 
-## 4. P4-C — versioned authored Datum persistence (DESIGN OPTIONS, NOT SCHEMA APPROVAL)
+## 4. P4-C — versioned authored Datum persistence (DIRECTION ACCEPTED IN PRINCIPLE; NO SCHEMA APPROVAL)
 
 **Recommended structural invariant:** keep one existing `DatumId` and existing Offset behavior; introduce a future tagged `EdgePointDatumPlane`-style authored variant distinct from `OffsetDatumPlane`, with strict `MaterialEdgeReference` + one of:
 - `edge_local_end`: **proven stable Edge-local terminal key** for selected source Edge;
@@ -99,7 +109,7 @@ P4 decisions to discuss **separately from the already accepted P1/P2/P3/P5 direc
 2. **P4-B:** the concrete orientation convention `(O,U,V,N) -> (O,U,-V,-N)` for Reverse, plus the canonical proven terminal anchor for through-line+Point.
 3. **P4-C:** new **versioned** Datum-kind approach (current Offset/v16 unchanged), without approving C++/JSON fields or a v17 bump yet.
 
-**Owner's acceptance of this design review in principle would not authorize code, schema, UI, PR merge, D2 ACTIVE activation, E0 evidence PR #348 merge, or parent UX PR #345 merge.** Every subsequent acceptance, exact-head merge and ACTIVE switch remains independent.
+**Owner accepted the P4-A/P4-B/P4-C directions in principle on 2026-10-13.** This acceptance does **not** authorize code, exact schema/JSON fields, UI or signed-frame implementation, PR merge, D2 ACTIVE activation, E0 evidence PR #348 merge, or parent UX PR #345 merge. The accompanying Owner question about successful Edge+Point selection is analyzed in §1A; the proposed valid-preview/Finish clarification still requires concrete UX and code-contract review. Every subsequent acceptance, exact-head merge and ACTIVE switch remains independent.
 
 ## Documentation impact
 
