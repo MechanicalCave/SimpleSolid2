@@ -569,6 +569,64 @@ struct PartEvaluation final {
     findFeature(FeatureId id) const noexcept;
 };
 
+// Q1 read-only selected-material-Edge END semantics. Every failed query
+// carries no Edge/Vertex/position/tangent observations.
+enum class SelectedEdgeEndStatus {
+    resolved,
+    invalid_context,
+    edge_missing,
+    edge_ambiguous,
+    edge_unsupported,
+    terminal_missing,
+    terminal_ambiguous,
+    terminal_unsupported,
+    native_geometry_unavailable,
+};
+
+struct SelectedEdgeEndResolution final {
+    SelectedEdgeEndStatus status{SelectedEdgeEndStatus::invalid_context};
+    std::optional<kernel::RuntimeEdgeToken> current_edge;
+    std::optional<kernel::RuntimeVertexToken> current_terminal;
+    std::optional<kernel::Point3> current_position_world;
+    std::optional<kernel::UnorientedUnitTangent3> current_tangent_line;
+    std::optional<kernel::ExactEdge3dStatus> native_error;
+
+    [[nodiscard]] bool resolved() const noexcept {
+        return status == SelectedEdgeEndStatus::resolved &&
+               current_edge && current_edge->valid() &&
+               current_terminal && current_terminal->valid() &&
+               current_position_world && current_tangent_line &&
+               !native_error;
+    }
+};
+
+struct SelectedEdgeEndAuthoringResult final {
+    SelectedEdgeEndStatus status{SelectedEdgeEndStatus::invalid_context};
+    std::optional<SelectedMaterialEdgeEnd> reference;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status == SelectedEdgeEndStatus::resolved &&
+               reference && reference->valid();
+    }
+};
+
+// Owner+current revision+exact stage are checked at the Part query boundary.
+[[nodiscard]] SelectedEdgeEndAuthoringResult
+authorSelectedMaterialEdgeEnd(
+    const PartDocument& owning_document,
+    const PartEvaluation& evaluation,
+    const BodyStageRef& source_stage,
+    kernel::RuntimeEdgeToken picked_material_edge,
+    kernel::RuntimeVertexToken indicated_current_terminal,
+    kernel::IExactBoundedEdgeGeometryQuery& provider);
+
+[[nodiscard]] SelectedEdgeEndResolution
+resolveSelectedMaterialEdgeEnd(
+    const PartDocument& owning_document,
+    const SelectedMaterialEdgeEnd& authored,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider);
+
 enum class EdgeFeatureKernelInputStatus {
     resolved,
     missing_upstream_body,
