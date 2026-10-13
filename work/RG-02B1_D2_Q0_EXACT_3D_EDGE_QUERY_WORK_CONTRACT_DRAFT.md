@@ -33,9 +33,9 @@ class ScopedExactEdge { // opaque, only query interface may populate
   never persists, never rebinds to an equally numbered token in another Body;
 }
 
-bindCurrentEdge(RuntimeSolidHandle body, RuntimeEdgeToken token)
+bindExactEdgeToBody(RuntimeSolidHandle body, RuntimeEdgeToken token)
   -> optional<ScopedExactEdge> // rejects invalid Body, token, missing inventory member
-queryCurrentEdge(RuntimeSolidHandle currentBody, const ScopedExactEdge&)
+queryExactBoundedEdge3d(RuntimeSolidHandle currentBody, const ScopedExactEdge&)
   -> {status, optional<ExactBoundedEdge3d>{
       kind, currentTerminalPositions[2] (unlabeled transient positions),
       currentTerminalTangents[2] (paired with respective positions; UNORIENTED),
@@ -88,15 +88,15 @@ class IExactBoundedEdgeGeometryQuery {
     // protected scoped-binding factory modeled on IEdgeProjectionQuery;
 public:
     virtual ~IExactBoundedEdgeGeometryQuery() = default;
-    virtual std::optional<ScopedExactEdge> bindEdgeToBody(
+    virtual std::optional<ScopedExactEdge> bindExactEdgeToBody(
         RuntimeSolidHandle body, RuntimeEdgeToken edge) noexcept = 0;
-    virtual ExactEdge3dResult queryBoundedGeometry(
+    virtual ExactEdge3dResult queryExactBoundedEdge3d(
         RuntimeSolidHandle same_current_body,
         const ScopedExactEdge& edge) noexcept = 0;
 };
 ```
 
-The API is an **independent interface**, added to `OcctSolidModelingKernel` as a separate base; do not append a pure virtual method to the existing `ISolidModelingKernel` or alter 2D `IEdgeProjectionQuery`. Existing `RuntimeSolidHandle = shared_ptr<const RuntimeSolid>`, `RuntimeEdgeToken` and `Point3` already exist; no new persistence/Part source type. Endpoint `[i]` pairing is **ONLY for the same current query result**: position and tangent in slot i describe the same physical terminal. Native order may flip after rebuild or Edge reversal; slot i is NEVER an authored End0/End1, source key or canonical orientation. Compare **unordered pairs** and unsigned tangent lines in tests. Both END tangents are needed by future END-perpendicular Datum, not just the MID tangent. None carries authored ±sign; user-visible default orientation and Odwróć remain future Q2, not an error in Q0.
+**Source-verified C++ name collision correction (UNAPPROVED SPELLING):** existing 2D `IEdgeProjectionQuery::bindEdgeToBody(RuntimeSolidHandle,RuntimeEdgeToken)` already returns `optional<ScopedProjectionEdge>`. A second identically parameterized inherited method returning `optional<ScopedExactEdge>` cannot coexist in `OcctSolidModelingKernel`: C++ does not overload by return type. Propose DISTINCT names `bindExactEdgeToBody` and `queryExactBoundedEdge3d`; the existing 2D method remains unchanged. Exact new names require separate Owner signature approval. The new interface is a separate base; no new old-base pure virtual method. Existing `RuntimeSolidHandle = shared_ptr<const RuntimeSolid>`, `RuntimeEdgeToken` and `Point3` already exist; no new persistence/Part source type. Endpoint `[i]` pairing is **ONLY for the same current query result**: position and tangent in slot i describe the same physical terminal. Native order may flip after rebuild or Edge reversal; slot i is NEVER an authored End0/End1, source key or canonical orientation. Compare **unordered pairs** and unsigned tangent lines in tests. Both END tangents are needed by future END-perpendicular Datum, not just the MID tangent. None carries authored ±sign; user-visible default orientation and Odwróć remain future Q2, not an error in Q0.
 
 ### Q0-D2-B — analytic Line/Open-Circle metric DIRECTION OWNER-ACCEPTED; exact modeling thresholds OPEN
 
@@ -191,6 +191,36 @@ The Q0 three-tangent/eight-status/analytic-MID **direction is accepted in princi
 **After independently merged activation ONLY:** a bounded implementation branch may add the provider-neutral Q0 interface and native witnesses in its approved paths, actually measure `N1a-01..03` and `E1a-01..02`, run FOCUSED/FAST/Ready-FULL on exact committed heads, and report physical geometry/error/status results. An earlier `work/**` governance PASS measures **no** native Q0 tests. If actual results require revising an accepted N1a threshold or E1a coverage contract, STOP, request Owner D2 amendment and rerun. **Do not reclassify unsupported evidence as PASS.**
 
 **Distinguish the two approvals:** accepting a *provisional, testable* D2 numeric/exception procedure allows a future test only **after ACTIVE**; accepting measured D0 behavior comes **after those future tests**. These are not equivalent.
+
+## 2C. Provisional exact N1a/E1a closure proposal — not accepted or tested
+
+Owner prefers N1a/E1a **as directions**. The following falsifiable comparison predicates and exception tests are **candidate D2 contract terms**, not verified new-Q0 results and not code authority.
+
+### N1a-P — source-backed proposed numerical rules
+
+**Units:** model length and physical residuals in **mm**, angles in **radians**. Let `p=Precision::Confusion()` (mm), `a=Precision::Angular()` (radians), require both finite and strictly positive. For each physical owned endpoint Vertex `v_i`, propose `T_endpoint_i=max(p, BRep_Tool::Tolerance(v_i), BRep_Tool::Tolerance(edge))` mm, checking native tolerance values finite/nonnegative. OCCT's Edge overload must be **compile-verified**, not assumed from the existing Face-tolerance call. These constants are provider-derived *local comparison hypotheses*, **not** a new global SS2 Sketch/OSNAP/modeling tolerance.
+
+1. **Native Vertex ↔ analytic carrier pairing:** for current bounded Edge only, obtain two native physical terminal points `P_i` and `BRepAdaptor_Curve::Value(first/last)` endpoints. Allow the **two permutations only within that same Edge**; require one unequivocally valid position-to-trim assignment with per-Vertex `|P_i-Value(boundary_j)|<=T_endpoint_i`. If neither fits, `kernel_failure` (inconsistent native accounting); if both fit because terminal points are indistinguishable within tolerances, `degenerate_edge`. No cross-Edge proximity inference, persisted XYZ or native slot identity. Audit `T_endpoint_i` and residuals at both ends.
+2. **Bounded `GeomAbs_Line`:** require finite trim and analytic endpoints, `L=norm(Value(last)-Value(first))>p` mm, distinct native current Vertices and physical separation `>max(T_endpoint_0,T_endpoint_1)`. Derive **true curve MID** via `Value((first+last)/2)` on this certified constant-speed Line; do **not** take an unvalidated arithmetic midpoint of topological Vertex coordinates. Obtain analytic unoriented tangent lines at both trims and MID.
+3. **Genuinely open `GeomAbs_Circle` Arc:** require finite `radius>p`, native `span=last-first` with `0<span<2π`, `L=radius*span>p`, two distinct owned current terminal Vertices, valid carrier/Vertex pairing, and END/MID `D1`. Constant Circle speed makes `MID=Value((first+last)/2)` a half-**bounded-arclength** point. Reject actual topologically closed/same-Vertex or full-turn Edge as `closed_or_periodic`; do **not** reject a distinct open trimmed Edge solely because its Circle carrier is periodic. For a mathematically open `span<2π` whose **native END gap <=max(T_endpoint_i)`**, propose `degenerate_edge`; if END gap is larger, allow near-full open arc even when `2π-span<a`, subject to strict native trim proof. Native invalid spans (>full turn, negative or nonfinite) are `kernel_failure`, not an implicit opened circle.
+4. **Derivative validity with correct dimensions:** the native `D1` is a derivative with respect to its curve parameter, **not a generic length in mm**. For certified analytic Line/Circle require finite `D1` and a strictly positive norm, then normalize to a sign-free tangent-line representative. Do not compare `|D1|` with `p` mm or invent `T_derivative=p`; Line has regular constant direction, Circle has regular derivative when its radius is valid. If real supported geometry underflows or `D1` is invalid, mark `degenerate_edge` and STOP to review a unit-correct additional rule.
+5. **Atomic status mapping:** `invalid_input` for null/bad capture; `provider_mismatch` for wrong provider/Body object; `edge_unavailable` for missing inventory member; `unsupported_curve` for non-Line/non-Circle; `closed_or_periodic` for genuine closed/full-turn circle; `degenerate_edge` for length/radius/END gap/derivative failure; `kernel_failure` for malformed carrier/topological accounting or exception. `ok` only with finite complete geometry; **all non-ok require empty payload** and no public C++ throw. Tangent representative ±sign and endpoint indices are never persisted.
+
+**Numerical witness gate after activation:** sample real Line lengths/radii both sides of `p`, native carrier↔Vertex residuals both sides of `T_endpoint_i`, open Arc trim span/END gap near full-turn/angle seam, clockwise/counterclockwise trims and cold Body edit. Log actual parameter units, provider tolerances and status. In any contradiction: STOP, ask Owner D2 for a policy amendment; do not quietly change magic thresholds. **All Q0 numeric tests are currently UNRUN.**
+
+### E1a-P — exact shared-guard candidate within the six-file scope
+
+In the existing allowed `src/kernel_occt/include/simplesolid2/kernel_occt/solid_modeling_kernel.hpp`, propose a **distinct provider-detail** templated `guardExactBoundedEdge3dResult(callable)` mapping any escaped C++ exception to a **new-Q0** `{ExactEdge3dStatus::kernel_failure, nullopt}` under `noexcept`. The new production `queryExactBoundedEdge3d()` in the existing OCCT `.cpp` **must use this same helper** around actual native analytic evaluation. Never alter the existing old `guardedExactEdgeProjection()` or its `EdgeProjectionResult` ABI.
+
+In the existing allowed `tests/kernel_native/pm02p_e_kernel_lifecycle_test.cpp`, invoke **that exact same helper** with one deterministic `std::runtime_error`-throwing callable and one successful well-typed Q0 result; assert no escaped exception, typed `kernel_failure` with **no geometry**, success passthrough, and verify the production method truly uses the shared helper. This tests new Q0's **generic C++ exception conversion**, not native OCCT fault injection. `catch(...)` syntactically includes `Standard_Failure`, but unless directly injected through **this same new guard**, document `Standard_Failure = NOT_DIRECTLY_TESTED`, never claim it passed due to earlier 2D tests. If direct OCCT-specific fault injection is mandatory for Q0 closure and the six-file scope cannot perform it, request **Owner E1b exact-path scope amendment before editing product or tests**. Do not introduce a runtime fault toggle or test-only public API.
+
+### Specific remaining Owner D2 approvals
+
+A. Accept/revise **provisional N1a-P 1–5** policy, including short-but-open Arc `degenerate_edge` vs true `closed_or_periodic`, dimensionally sound D1 and per-Edge/Vertex carrier consistency, as **test hypotheses** — not a claim of Q0 test PASS.
+
+B. Accept/revise E1a **one identical provider guard** + generic throw and success witness, and decide whether **direct OCCT `Standard_Failure` injection may remain explicitly UNTESTED** for this narrow Q0 gate or requires E1b amendment.
+
+C. Accept/revise exact collision-free C++ names `bindExactEdgeToBody` / `queryExactBoundedEdge3d`, and exact six-file future mutation list independently. None is yet executable; separate complete Work Contract approval, its exact-HEAD squash merge authorization and dedicated ACTIVE activation remain mandatory.
 
 ## 3. Exact **proposed** future D0 mutation allowlist: six paths ONLY, pending Owner acceptance + ACTIVE
 
