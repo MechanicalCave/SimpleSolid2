@@ -20,7 +20,7 @@ Create one Part-owned, provider-neutral, **strictly stage-scoped, selected-mater
 
 **Fail-closed coverage boundary:** When the global Point is Ambiguous/Unsupported/Missing, or the chosen source branch or current physical END lacks a unique certification, Q1 explicitly declines to author that END. This does **not** redefine the global Point, claim universal END support, nor silently satisfy future Q2's complete feature acceptance for these families. Noncanonical Fillet/Chamfer/Revolve/half-cylinder cases may remain not-authorable. If Owner requires END coverage there now, STOP and seek a separate narrowly evidenced terminal-provenance D2 amendment, not a coordinate or provider-order fallback.
 
-**Important classification:** Q1 produces a **durable-ready in-memory semantic reference value and a read-only runtime resolver**. Q1 does **not persist that value in native Part v16**; Q2+ must separately accept a new Datum authored source, schema compatibility, frame orientation and Command/Undo/Save meaning. "Cold rebuild" tests mean carrying this semantic value across a fresh native Part evaluation/reopen, not claiming it was already serialized.
+**Important classification:** Q1 produces a **durable-ready in-memory Part-local semantic reference value and a read-only runtime resolver**. Q1 does **not persist that value in native Part v16**; Q2+ must separately accept a new Datum authored source, schema compatibility, frame orientation and Command/Undo/Save meaning. A Part-local value is qualified externally by its owning `DocumentId`. Neither `FeatureId` nor `DocumentRevision` is a substitute for `DocumentId`. "Cold rebuild" tests mean carrying this semantic value across a fresh native Part evaluation/reopen, not claiming it was already serialized.
 
 ## 2. SOURCE AUDIT AND ENGINEERING RATIONALE
 
@@ -72,7 +72,7 @@ std::array<RuntimeVertexToken, 2> current_terminal_vertex_tokens{};
 
 Only successful Q0 queries can populate it, and `ok` must mean exactly two distinct valid tokens in the same `RuntimeSolidHandle` vertex inventory, paired with the two existing Q0 END positions/tangent lines. All eight existing `ExactEdge3dStatus` results and failure payload rules remain unchanged; no appended token may be retained on non-`ok`. Runtime token carries **zero durable authority**. If OCCT cannot certify the two matching Edge-owned native Vertex objects **in the exact bound Body**, return the existing typed Q0 failure with **no geometry**; no XYZ matching or new heuristics.
 
-In `src/part/include/simplesolid2/part/feature_evaluation.hpp` declare the following **read-only Q1 result/query boundary** (exact names/signatures are D2 proposal to accept in one go):
+In `src/part/include/simplesolid2/part/feature_evaluation.hpp`, **append** to the existing `PartEvaluation` (without reordering existing fields) `std::optional<core::DocumentId> source_document_id;` as **runtime-only evaluation ownership evidence**, populated by `evaluatePart` from `document.documentId()` in `src/part/feature_evaluation.cpp`. This field is neither native persistence nor a new global identity framework. A default-constructed/synthetic PartEvaluation without the owner ID cannot authorize Q1 source resolution. Also declare the following **read-only Q1 result/query boundary** (exact names/signatures are D2 proposal to accept in one go):
 
 ```cpp
 enum class SelectedEdgeEndStatus {
@@ -103,14 +103,15 @@ struct SelectedEdgeEndAuthoringResult final {
     [[nodiscard]] bool ok() const noexcept; // strict resolved+valid invariant
 };
 
-// Caller supplies an evaluation of its currently owned PartDocument;
-// current_revision must equal evaluation.source_revision.
+// Caller supplies the actual owning PartDocument, not a self-attested
+// raw revision. Its DocumentId AND current revision must match the
+// evaluation's source_document_id AND source_revision.
 // source_stage must resolve one currently successful Feature result with
 // its exact paired result_solid and complete result_topology.
 [[nodiscard]] SelectedEdgeEndAuthoringResult
 authorSelectedMaterialEdgeEnd(
+    const PartDocument& owning_document,
     const PartEvaluation& evaluation,
-    core::DocumentRevision current_revision,
     const BodyStageRef& source_stage,
     kernel::RuntimeEdgeToken picked_material_edge,
     kernel::RuntimeVertexToken indicated_current_terminal,
@@ -118,17 +119,17 @@ authorSelectedMaterialEdgeEnd(
 
 [[nodiscard]] SelectedEdgeEndResolution
 resolveSelectedMaterialEdgeEnd(
+    const PartDocument& owning_document,
     const SelectedMaterialEdgeEnd& authored,
     const PartEvaluation& evaluation,
-    core::DocumentRevision current_revision,
     kernel::IExactBoundedEdgeGeometryQuery& provider);
 ```
 
-The header may directly include `kernel/exact_bounded_edge_geometry.hpp` to name the 3D geometry-result types; no new generic platform reference framework. The Q1 reference has no Body/token/session data. The resolution result is a disposable runtime snapshot; `current_position_world` and `current_tangent_line` are **observations**, not identity nor signed Datum frame. `native_error` is present exactly for `native_geometry_unavailable` when the Q0 query supplies a typed failure. Failed results carry **no** Edge/Vertex/position/tangent publication and no stale last-good observation.
+The header may directly include `kernel/exact_bounded_edge_geometry.hpp` to name the 3D geometry-result types; no new generic platform reference framework. The Q1 reference has no Body/token/session data; its Part-local address is qualified by the owning Document's `DocumentId` at the read boundary. The resolution result is a disposable runtime snapshot; `current_position_world` and `current_tangent_line` are **observations**, not identity nor signed Datum frame. `native_error` is present exactly for `native_geometry_unavailable` when the Q0 query supplies a typed failure. Failed results carry **no** Edge/Vertex/position/tangent publication and no stale last-good observation.
 
 ## 4. ALGORITHM, PRECEDENCE, AUTHORING AND COLD REPLAY
 
-**Shared stage admission**: require valid semantic source and required/current `DocumentRevision` equality; inspect `PartEvaluation.features` for exactly one `FeatureEvaluation` of `source_stage.feature_id` whose `status == up_to_date`, `result_solid` exists and whose complete `result_topology.stage == source_stage`. Reject invalid/duplicate/wrong stage, stale revision or unavailable current Feature without using `current_topology` from final Body by substitution. Runtime request/session lease beyond evaluation revision remains the owning future application/command's responsibility and cannot be fabricated by this pure Part query. The caller is responsible for supplying evaluation tied to its owning Part DocumentSession; Q2 commit must revalidate DocumentId, revision, session lease, exact stage and all dependencies.
+**Shared stage admission**: require valid semantic source, `evaluation.source_document_id == owning_document.documentId()` and `evaluation.source_revision == owning_document.revision()` (do **not** accept a caller-supplied bare revision as independent authority); also require the stage's `FeatureId` to exist in the owning Document. Inspect `PartEvaluation.features` for exactly one `FeatureEvaluation` of `source_stage.feature_id` whose `status == up_to_date`, `result_solid` exists and whose complete `result_topology.stage == source_stage`. Reject missing evaluation owner, cross-document mix, invalid/duplicate/wrong stage, stale revision or unavailable current Feature without using `current_topology` from final Body by substitution. Runtime request/session lease beyond evaluation revision remains the owning future application/command's responsibility and cannot be fabricated by this pure Part query. The owner check protects identity scoping; the caller must still use the authentic owning document evaluation (not fabricate a manually assembled `PartEvaluation`). Q2 commit must revalidate DocumentId, revision, session lease, exact stage and all dependencies.
 
 **Edge first:** require `authorMaterialEdgeReference` followed by `resolveMaterialEdgeReference` to yield exactly the input picked Edge; for existing specialized PG-01D `AtSingleSemanticPoint` do not silently switch to projection-only admission. On replay, re-resolve the *stored exact* `MaterialEdgeReference` at that stored stage; none/one/many map Missing/Resolved/Ambiguous/Unsupported as declared. A different source FeatureId with identical XYZ is never equivalent.
 
@@ -152,8 +153,8 @@ The header may directly include `kernel/exact_bounded_edge_geometry.hpp` to name
 | # | Exact path | Allowed bounded change |
 | --- | --- | --- |
 | 1 | `src/part/include/simplesolid2/part/semantic_topology_reference.hpp` | Typed `StableEdgeLocalTerminalKey` and composite selected-Edge END semantic value only |
-| 2 | `src/part/include/simplesolid2/part/feature_evaluation.hpp` | Typed Q1 statuses, result value and two read-only author/resolve declarations |
-| 3 | `src/part/feature_evaluation.cpp` | Exact-stage strict Edge+certified Point admission/replay/Q0 runtime-token association; no modification of existing global Point resolver meaning |
+| 2 | `src/part/include/simplesolid2/part/feature_evaluation.hpp` | Append runtime-only `PartEvaluation.source_document_id`, typed Q1 statuses/results and two read-only author/resolve declarations |
+| 3 | `src/part/feature_evaluation.cpp` | Populate evaluation owner DocumentId; check owner+revision+stage; strict Edge+certified Point admission/replay/Q0 runtime-token association; no modification of existing global Point resolver meaning |
 | 4 | `src/kernel/include/simplesolid2/kernel/exact_bounded_edge_geometry.hpp` | One appended runtime-only endpoint-token pair on Q0 result |
 | 5 | `src/kernel_occt/solid_modeling_kernel.cpp` | Current-inventory `TopoDS_Vertex`→`RuntimeVertexToken` lookup for existing paired Q0 output, fail-closed atomic success |
 | 6 | `tests/pm05b2_strict_edge_resolver_test.cpp` | Registered semantic negative/alias/branch/structural Q1 unit regressions, preserve old negatives |
@@ -174,7 +175,7 @@ The header may directly include `kernel/exact_bounded_edge_geometry.hpp` to name
 | **Q1-02** 8 shared corners | `pm05c2b.part_edge_topology` | At **8** corners, Edge A/B/C END references have their own selected `MaterialEdgeReference`, share legitimate current corner Point but remain **three distinct composite source meanings**; direct B+corner author unaffected by an independently recorded transient hint on A; this is **headless semantics only**, not a tested viewport Point-first pick |
 | **Q1-03** fresh provider | `pm05c2b.part_edge_topology` | Carry the exact Q1 reference values into a completely independent real OCCT provider/evaluation and optionally a cold v16 Part Save/Reopen; **24/24** preserve semantic terminal, native tokens may differ, no cached Body/Vertex/geometry required; the Q1 source itself is not serialized |
 | **Q1-04** upstream height | `pm05c2b.part_edge_topology` | Edit original Extrude extent while preserving Feature identity: all still-defensible keys stay attached to their original bottom/top corner semantics; moved point follows upstream shape, not original XYZ; physically same-looking **new FeatureId** leaves old key Missing |
-| **Q1-05** wrong/stale/branch | `pm05b2.strict_edge_resolver` + native `pm05c2b` | Wrong `BodyStageRef`, stale `DocumentRevision`, missing Edge, extra bounded branch, deleted certified Point, foreign runtime Vertex, native Body mismatch all fail typed, no current END/geometry, no false Resolved |
+| **Q1-05** wrong/stale/branch | `pm05b2.strict_edge_resolver` + native `pm05c2b` | Wrong `BodyStageRef`, missing/mismatched owning `DocumentId`, stale owning Document revision, missing Edge, extra bounded branch, deleted certified Point, foreign runtime Vertex, native Body mismatch all fail typed, no current END/geometry, no false Resolved |
 | **Q1-06** negative families | `pm05c2b.part_edge_topology` + `pm05b2.strict_edge_resolver` | Half-cylinder ambiguous, Fillet/Chamfer/Revolve/unsupported Point variants retain **original global Point statuses**; selected Edge does not upgrade intrinsic Ambiguous Point; support only where independent same-Edge certification **actually passes**, otherwise typed not-authorable; record precise family counts |
 | **Q1-07** closed/degenerate/slot | `pm02p.e_kernel_lifecycle` + semantic test | Q0 full circle/periodic/degenerate rejection, same selected Edge's indistinguishable terminal cases, duplicated native token, reversed/relabeled native terminal ordering and one whole-tuple swap: no silently persisted ordinal and no false valid END |
 | **Q1-08** current Q0 coupling | Both registered native targets | Selected reference resolves strict exact stage, binds **same current Body**, joins unique certified Vertex to Q0 token→position/unoriented tangent tuple by identity; wrong Body and provider mismatch preserve Q0 failure; **no** Datum, signed Frame3, Reverse, MID source persistence, UI or native Part v17 |
