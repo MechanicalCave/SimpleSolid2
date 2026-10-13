@@ -50,6 +50,31 @@ Owner first explicitly chose **B**. Owner then explicitly refined the user exper
 - E5: Missing, stale, unsupported, split/ambiguous branch, invalid MID/full circle, wrong Body stage and degenerate geometry: no preview/commit; typed diagnostic, no silent source reattachment.
 - E6: `Finish/Cancel/Edit`, upstream edit versus later Chamfer, Undo/Redo, Save/Reopen and genuinely fresh OCCT provider preserve/fail-closed according to exact authored Edge and Point meaning, independent of pick order.
 
+
+## 1B. Reviewable UX flow for Owner consultation — PROPOSED, NOT APPROVED
+
+This is a **remaining full-UX review artifact**, not an amendment to the already accepted one-constructor/any-order/automatic-overlap direction in §1/§1A. All state text, focus/Esc policy and Edit/repair choices below are *candidates* requiring separate explicit Owner approval under parent RG-02 §3; no UI code authority.
+
+| Transient state | Operator action | Proposed Operations/help feedback | Allowed system effect |
+| --- | --- | --- | --- |
+| S0 AwaitEither | Enter existing Datum Plane, select Constructor: Edge + Point | "Wskaż krawędź lub punkt (END/MID)" (draft copy) | No authored change; existing Offset remains untouched. |
+| S1E HaveEdge | Click certified material Edge first | Existing selected-Edge highlight; "Wskaż punkt" | Hold current strict Edge/stage in tool draft, never durable Viewer token. |
+| S1P HavePointCandidates | Click END/MID candidate(s) first | Existing point marker, **identical** for MID; "Wskaż krawędź" | Retain *all* stage/current-generation eligible hit candidates as operation-local transient set, not one hover-displayed token. |
+| S2 ReadyPreview | Select complementary source; unique semantic relation and exact geometry succeed | Highlight chosen Edge/Point; show plane with existing Reverse / Finish / Cancel affordances | On-Edge certified END/MID wins over unrelated overlapping hits; otherwise exactly one independently certified off-line Point may drive straight-Edge interpretation. Preview only. |
+| S1 Unresolved | Complementary pick stale, unsupported, nonunique, stage-incompatible or degenerate | Short typed reason, request replacement of invalid source (copy pending) | No preview/commit/Undo. Keep a valid current source if legal, reset stale source if necessary. |
+| S3 Committed | Finish on still-current valid pair | Standard completion / Tree selection | Revalidate Part/session/stage/semantic pair/geometry at execution; one Command / Transaction and one Undo. |
+| S0 Cancelled | Cancel or ordinary tool exit | Existing cancellation UX | Drop transient picks and preview; no persistent mutation or Undo entry. |
+
+**Specific unapproved UX details for independent Owner review:**
+
+- Re-picking a source replaces that *transient* source and invalidates preview; the opposite source remains only while fresh and stage-compatible. Editing an existing broken Datum preserves DatumId and authored references until a successful atomic Finish; highlight and permit replacement of the offending source without silent repair.
+- Hover is highlight/preview only; no new END-versus-MID colors or shapes, no overlapping-point chooser and no extra on/off-edge mode. Automatic filtering is semantic, not a screen-nearest choice.
+- Reverse changes orientation, **not** the sourced point or its semantic identity. Exact U/V/N and persisted orientation remain D2 OPEN; this proposal does not approve a frame convention.
+- Reuse the existing global CAD input priority and Command Line semantic routing. **No invented Esc/Enter override:** exact source-clear vs cancel behavior, text-buffer precedence, focus restoration and keyboard equivalents need an Owner review against shipping input grammar. Command Line must eventually resolve the same strict semantic pair and never serialize raw screen XYZ.
+- A visible but semantically Unsupported END must report unavailability instead of pretending to create a durable Datum. MID can only be eligible where bounded analytic geometry and the typed Edge+MID source are proven.
+
+**Full Owner UX approval remains OPEN:** copy and source-stage feedback, focus/keyboard/Esc, source replacement during Edit, typed diagnostic presentation, Reverse UX and Command Line parity. Compare existing Offset Operations panel with this state flow before any UI mutation.
+
 ## 2. Exact meaning proposed for this one constructor
 
 User sequence: **Datum Plane → Constructor: Edge + Point → select an Edge and a Point in either order**. Point-first may temporarily hold several overlapping semantic hit candidates; the selected strict Edge filters the candidates automatically. The completed pair is admissible only when semantic source certification and exact evaluated geometry prove a **unique** legal result (§1A); no visually presented hit or proximity heuristic chooses authored meaning.
@@ -108,6 +133,33 @@ Geometry classification is **not a pixel-distance threshold**: use exact provide
 **Existing implementation candidate paths for later allowlist review** (NOT authorization to edit): `src/part/include/simplesolid2/part/{semantic_topology_reference.hpp,datum.hpp,datum_evaluation.hpp,feature_evaluation.hpp}`, `src/part/{datum.cpp,datum_evaluation.cpp,feature_evaluation.cpp,part_document.cpp,part_document_store.cpp}`, `src/kernel/include/simplesolid2/kernel/solid_modeling.hpp`, `src/kernel_occt/solid_modeling_kernel.cpp`, `src/application/{datum_plane_draft.cpp,include/simplesolid2/application/datum_plane_draft.hpp}`, `src/ui/{part_viewport_controller.cpp,part_viewport_controller.hpp}`, plus exact existing Qt workbench controller/Panel files **to be inventoried**, applicable already registered tests, and mandated docs. **This is not a wildcard edit permission**; a final executable contract must name exact permitted paths, finite fixture matrix, staged CI and Owner UI acceptance.
 
 **Delivery planning constraint:** One eventual **user-visible `Datum Plane → Edge + Point` constructor** with **both interpretations in the same workflow**, not two separately shipped features. Read-only native E0 can be a gate **inside one bounded contract**; further scope expansion requiring a new persistent Vertex identity is a hard STOP and a fresh Owner amendment, not a covert implementation detour.
+
+
+## 3B. Next evidence-first gate — source-backed E0 native characterization PROPOSAL (UNRUN)
+
+**Purpose:** test whether present Body END/MID and a strict material Edge can support durable construction intent. This is a future *test-only native evidence proposal*, not activated by this Draft, accepted UX direction, or a generic instruction to continue. No production/tests/CI/schema changes are made in PR #345.
+
+| Witness | Native input and required assertion | Refusal / distinction |
+| --- | --- | --- |
+| E0-01 straight END | Real OCCT rectangular Extrude current Body stage; select one strict material Edge, check both native endpoint statuses and actual material incidence; independently certify END addressability or mark Unsupported. | Never infer identity from token, B-Rep orientation, first/last iteration, XYZ or sorting; G0 V01 8 Resolved is only a bounded fixture. |
+| E0-02 coincident corner | Two different certified straight Edges meeting at one displayed Vertex; retain independently certified candidate meanings, compare Edge→Point vs Point→Edge under strict Edge membership. | A single intrinsically Ambiguous FeaturePointAddress **stays Ambiguous**, even when Edge incidence appears to distinguish provider vertices. |
+| E0-03 straight MID | Certified bounded straight material Edge: analytic half-length, tangent, reproducible stage-bound cold evaluation. | No tessellation midpoint, screen coordinate, traversal-defined persisted sign or guessed parameter. |
+| E0-04 open arc END/MID | Native real OCCT trimmed circular material Edge: exact half **bounded arc-length**, tangent, endpoint meaning and strict source stage. | Closed circle MID, seams/partitions and unsupported curves fail closed; a 2D projection is not a 3D source query. |
+| E0-05 independent off-line Point | Strict straight Edge plus one independently certified noncollinear Point at one common valid Body stage; verify both pick orders. | Collinear non-END/MID rejects; visually equal XYZ is not identity; multiple off-line meanings reject. |
+| E0-06 hard negative sources | G0 half-cylinder Ambiguous, full Revolve Unsupported, Fillet/Chamfer Unsupported cases: inspect strict Edge and Point certification at actual stage. | Resolved Edge does not automatically promote Unsupported/Ambiguous Vertex to valid END; no implicit G1. |
+| E0-07 stage/lifecycle | Edit upstream dimension, evaluate later Chamfer history, simulate source disappearance and native orientation variation, rebuild with fresh provider. | No stale last-good, nearest XYZ or later-stage auto-rebinding. Distinguish geometric feasibility from semantic source resolution. |
+
+**Suggested proof order:** first E0-01/02/06 strict identity and incidence, then E0-03/04/05 exact provider-neutral query requirements, then E0-07 stage/cold lifecycle. Existing G0 witnesses prove catalog classification, **not** the new Datum END/MID semantics. All proposed E0 cases remain **UNRUN**; no CI PASS claimed.
+
+**Authority before any test mutation:** a separately accepted bounded evidence-only Work Contract (or expressly accepted amendment) must enumerate exact *already registered* native test paths, any permitted fixture/helpers, expected results, exact HEAD/tier verification and explicit exclusions. No wildcard tests/**, new targets, CI/CMake edits, schema, Kernel API, UI or product changes may be inferred from this proposal.
+
+**D2 branching decision after native evidence:**
+
+1. If concrete source ENDs independently resolve and MID can be anchored strictly to Edge+role, propose the smallest typed, stage-aware Point-source variant, analytic Kernel query and deterministic frame/Reverse/schema compatibility to Owner. This is **not** a schema decision today.
+2. If required END is Unsupported/Ambiguous, do not author a Viewer-only substitute. Compare a **bounded provenance-backed Edge-local endpoint selector**, a deliberately narrower supported fixture scope, and a separately authorized deeper provenance investigation. An arbitrary provider END1/END2 index or deferred G1 implementation is not allowed.
+3. If overlap certification, open-arc half-length, stage-aware geometry or cold persistence requires out-of-scope production changes, record exact evidence and STOP for Owner D2 rather than covertly shipping MID-only or splitting into two user tools.
+
+**Single point of failure:** a source Edge can be unambiguously durable while its visible endpoint is not. The Datum needs **both** source meanings; successful Viewer picking does not close the gap.
 
 ## 4. One bounded executable package — PROPOSED, not yet accepted for code
 
