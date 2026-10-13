@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 
 using namespace simplesolid2;
@@ -55,6 +56,16 @@ void writeBytes(
         static_cast<std::streamsize>(
             bytes.size()));
     CHECK(static_cast<bool>(out));
+}
+
+// Preserve exact native document bytes, not only parsed authored JSON.
+std::string readBytes(
+    const std::filesystem::path& path) {
+    std::ifstream in{path, std::ios::binary};
+    CHECK(static_cast<bool>(in));
+    return {
+        std::istreambuf_iterator<char>{in},
+        std::istreambuf_iterator<char>{}};
 }
 
 std::string buildPartPackage(
@@ -205,12 +216,15 @@ int main() {
                 temp.path /
                 ("ModelingSemantics" + std::to_string(version) +
                  ".ss2part");
-            writeBytes(
-                rejected_path,
-                buildPartPackage(
-                    std::string{id.value()},
-                    part::PartDocumentStore::current_schema_version,
-                    unsupported));
+            // PG-01E/E2: model-v1 and unsupported future policy
+            // fixtures must remain *byte-for-byte* untouched when
+            // the native v16 reader refuses them. No load migration.
+            const auto rejected_bytes = buildPartPackage(
+                std::string{id.value()},
+                part::PartDocumentStore::current_schema_version,
+                unsupported);
+            writeBytes(rejected_path, rejected_bytes);
+            CHECK(readBytes(rejected_path) == rejected_bytes);
             const auto rejected = store.load(rejected_path);
             CHECK(!rejected.ok());
             CHECK(rejected.diagnostic.code ==
@@ -218,6 +232,13 @@ int main() {
                       unsupported_modeling_semantics);
             CHECK(rejected.diagnostic.message ==
                   "Native Part contains unsupported modeling semantics version");
+            CHECK(readBytes(rejected_path) == rejected_bytes);
+            const auto rejected_again = store.load(rejected_path);
+            CHECK(!rejected_again.ok());
+            CHECK(rejected_again.diagnostic.code ==
+                  part::PartStoreErrorCode::
+                      unsupported_modeling_semantics);
+            CHECK(readBytes(rejected_path) == rejected_bytes);
         }
         const auto after =
             persistence::readNativeDocumentContainer(path);
