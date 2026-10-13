@@ -1,13 +1,13 @@
-# RG-02B1/D2-Q1 — selected material Edge-local END provenance: proposed executable Work Contract
+# RG-02B1/D2-Q1 — selected material Edge-local END provenance: Owner-accepted prospective executable Work Contract
 
-**STATUS: DRAFT FOR ONE COMPLETE OWNER D2 DECISION — NOT ACCEPTED / NOT ACTIVE / NO IMPLEMENTATION AUTHORITY.**
+**STATUS (Owner complete-text D2 acceptance, 2026-10-13): ACCEPTED AS PROSPECTIVE Q1 EXECUTABLE SCOPE, NOT MERGED / NOT ACTIVE / NO IMPLEMENTATION AUTHORITY.** Owner responded **“akceptuję - kontynuuj”** to the request for the entire bounded Q1 contract in Draft PR #356, including the owning-DocumentId hardening, with reviewed exact-text HEAD `0a226abd5553340475963ef88c71bb7d264ccfb8` (Windows governance #2868 SUCCESS; FOCUSED/FAST/FULL SKIPPED). This acceptance covers the full twelve-path implementation scope, typed semantic/API bounds, Q1-01…08 required future tests and DOC-01 obligations **as future work only**. It does **not** approve merging PR #356, changing `work/ACTIVE.yaml`, writing implementation code/tests, claiming any Q1 test PASS or activating Q2+. Independent exact-head PR-specific merge permission and a separately authorized/merged Q1 ACTIVE switch are still mandatory.
 **Date:** 2026-10-13
 **Repository:** `MechanicalCave/SimpleSolid2`; proposal based on `main` `596ec70fd10d5931c09a20dd5111f709812f0692`.
 **Milestone:** Part Modeling roadmap **ACCEPTED v1.33**, RG-02B1 **Q1 only**.
 **Governance:** `AGENTS.md` → Constitution/Foundation v1.0 → Architecture → accepted ADR-0014/0016/0017 (+ ADR-0009, 0012, 0013) → `work/ACTIVE.yaml` → program roadmap → accepted Work Contract → code/tests → DOC-01.
 **Current ACTIVE:** `work/RG-02B1_D2_Q0_EXACT_3D_EDGE_QUERY_WORK_CONTRACT_DRAFT.md` is still pointed to, even though its Q0 implementation PR #354 was squash merged. **No Q1 mutation of code, tests, as-built docs, schema or ACTIVE is authorized by this draft.**
 **Input:** planning-only Draft PR #355 and `work/RG-02B1_D2_Q1_EDGE_LOCAL_END_PROVENANCE_SCOPE_PLAN.md` §0–5; accepted design `work/RG-02B1_D2_EDGE_POINT_SEMANTIC_DESIGN_PROPOSAL.md` (merged PR #349); accepted Datum UX basis `work/RG-02B1_DATUM_EDGE_POINT_WORK_CONTRACT_DRAFT.md` (merged PR #345); Q0 contract #352, activation #353 and production #354 merged. The historical headers/statuses of these input documents do not override live GitHub.
-**Decision requested:** approve or reject **the entire bounded Q1 contract below once**. No incremental public API/signature/allowed-path or UX micro-approvals are solicited. Any subsequently discovered out-of-scope requirement is a hard STOP requiring an explicit amended Owner decision.
+**Owner decision recorded:** the **entire bounded Q1 contract below** was accepted once as prospective D2 scope at PR #356 reviewed HEAD `0a226abd5553340475963ef88c71bb7d264ccfb8`. No incremental public API/signature/allowed-path or UX micro-approvals are solicited. Any subsequently discovered out-of-scope requirement is a hard STOP requiring an explicit amended Owner decision.
 
 ## 1. GOAL — deliberately bounded authorable END semantics
 
@@ -206,8 +206,8 @@ Internal docs: **required** — accepted public Part Edge-terminal semantic valu
 
 User/Product docs: **not required** — Q1 adds **no** user-visible Datum constructor, UI, persisted schema, input grammar or production capability. Future Q2+ must declare full PL/EN Product/Browser impact when the tool is implemented.
 
-## 9. ONE OWNER DECISION AFTER THIS DRAFT
+## 9. OWNER COMPLETE-TEXT D2 DECISION — RECORDED
 
-**Requested decision:** accept/reject this **complete** RG-02B1/D2-Q1 bounded reference/query API, certified-point-backed initial support limit, additive *runtime-only* Q0 terminal-token pairing, twelve exact file paths, Q1-01…08 matrix, failure classification, CI and documentation obligations **as one prospective executable Work Contract**.
+**Accepted as one prospective executable Work Contract (2026-10-13):** the **complete** RG-02B1/D2-Q1 bounded reference/query API, certified-point-backed initial support limit, owning `DocumentId`/live revision read admission, additive *runtime-only* Q0 terminal-token pairing, twelve exact future paths, Q1-01…08 unrun proof matrix, failure classification, Windows validation and documentation obligations. Exact text reviewed at PR #356 HEAD `0a226abd5553340475963ef88c71bb7d264ccfb8` before this governance-only status annotation; this annotation neither adds a new implementation requirement nor changes the previously accepted API.
 
-Such acceptance is **text/scope approval only**, not permission to merge this PR, not `ACTIVE.yaml` activation, and not source implementation approval until both distinct governance merges complete. No speculative follow-on stage is activated by this decision.
+**Still required:** PR #356 exact-HEAD governance validation and **separate explicit Owner permission to squash merge this specific PR**, followed by an independently Owner-approved, tested and merged `work/ACTIVE.yaml`-only Q1 activation. Until then Q0 remains ACTIVE. This text/scope approval is **not** permission to merge PR #356, alter ACTIVE, implement Q1 or mark Q1 tests PASS. No speculative Q2+ phase is activated.
