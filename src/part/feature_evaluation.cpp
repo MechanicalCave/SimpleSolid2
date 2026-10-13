@@ -4656,6 +4656,18 @@ resolveSelectedMaterialEdgeEnd(
     if (!authored.valid()) {
         return result;
     }
+    // A historically valid, now deleted producer is semantically Missing,
+    // not a license to rebind to a same-XYZ replacement Feature. Cross-
+    // document/stale evaluation context still has higher failure precedence.
+    if (evaluation.source_document_id &&
+        *evaluation.source_document_id == owning_document.documentId() &&
+        evaluation.source_revision == owning_document.revision() &&
+        authored.source_edge.stage.feature_id &&
+        owning_document.findFeature(
+            *authored.source_edge.stage.feature_id) == nullptr) {
+        result.status = SelectedEdgeEndStatus::edge_missing;
+        return result;
+    }
     const auto stage = admitSelectedEdgeEndStage(
         owning_document, evaluation, authored.source_edge.stage);
     if (!stage) {
