@@ -6242,6 +6242,8 @@ OcctSolidModelingKernel::queryExactBoundedEdge3d(
                     *first_line, *last_line}
                 : std::array<kernel::UnorientedUnitTangent3, 2>{
                     *last_line, *first_line};
+            geometry.current_terminal_vertex_tokens = {
+                *first_token, *last_token};
             geometry.bounded_length_mm = length;
             geometry.midpoint_at_half_bounded_length_world = xyz(analytic_mid);
             geometry.midpoint_tangent_line = *mid_line;
