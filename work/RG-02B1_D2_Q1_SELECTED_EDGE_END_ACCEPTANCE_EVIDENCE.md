@@ -11,12 +11,13 @@
 | Windows FAST #2884 | `d6239703ebd882b474e53b904a86f491b0270483` | [Actions #2884](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38440959996), desktop FAST 93/93, including registered `pm05b2.strict_edge_resolver` | **PASS 93/93** |
 | Q1 initial kernel FOCUSED (`pm05c2b.part_edge_topology`, `pm02p.e_kernel_lifecycle`) | `6c5b0c130179fc09fd00a0ad80de96db8720c873` | [Actions #2885](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38441775808): actual MSVC Release build + registered native CTest **2/2** | **PASS 2/2** |
 | Q1 Fillet/Chamfer negative FOCUSED | `9fd299f659ccd9e3b31fbbf2adb2610e7f627db4` | [Actions #2886](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38442307105): real OCCT kernel native registered **2/2 PASS**, including Fillet/Chamfer unsupported global Point negative assertions | **PASS 2/2** |
+| Q1 intrinsic Point-status negative FOCUSED | `0940f4ef55f2f669d18523da889cdc42a2206c78` | [Actions #2887](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38442654618): real native CTest **2/2 PASS**, plus simulated current-catalog global Point `Ambiguous/Unsupported/Missing` independently rejected | **PASS 2/2** |
 | Q1 post-settle FAST | Not yet recorded | Must test final source/test snapshot | **UNRUN** |
 | Ready-for-Review Windows FULL | Not yet recorded | Exact source SHA; Core/Native/Desktop/docs aggregate | **UNRUN** |
 | Browser DOC-01 freshness | Not yet recorded | Canonical internal docs plus generated Browser byte comparison | **UNRUN** |
 | Owner technical FINAL PASS / independent production merge | Not requested | Requires all evidence and separate explicit PR consent | **PENDING** |
 
-The 93/93 FAST result is **not** evidence for kernel-native Q1. Unlike FAST, the exact-head #2885 FOCUSED run **did** build and execute the two registered real OCCT CTests (2/2 PASS) with the canonical 12/24/8 source and replay witnesses. This is a code-stage checkpoint, not a final QA or Owner acceptance. Fillet/Chamfer Q1-06 additional negative assertions are staged separately and **UNRUN**; final FAST/FULL on the final production source remain **UNRUN**.
+The 93/93 FAST result is **not** evidence for kernel-native Q1. Unlike FAST, exact-head Windows FOCUSED #2885, #2886 and #2887 each built and executed both registered real OCCT CTests (2/2 PASS each) with the canonical 12/24/8/replay, Fillet/Chamfer negative and synthetic Point status witnesses, respectively. These are code-stage checkpoints, not final QA or Owner acceptance. A specific real Part half-cylinder/Revolve Q1 negative family is **not yet witnessed**, and final FAST/FULL on the final source remain **UNRUN**.
 
 ## Finite Q1-01…Q1-08 witness ledger
 
@@ -27,7 +28,7 @@ The 93/93 FAST result is **not** evidence for kernel-native Q1. Unlike FAST, the
 | Q1-03 cold provider | Real independent OCCT provider and rebuilt Part, all 24 semantic addresses replay | **PASS in #2885** |
 | Q1-04 height edit/Feature decoy | Real height edited same Feature IDs, plus identical geometry with new FeatureId rejects 24 old sources | **PASS in #2885** |
 | Q1-05 wrong/stale/branch | Native cross-DocumentId, live-revision stale, foreign endpoint; strict existing branch tests | **PASS native subset #2885; broader matrix pending** |
-| Q1-06 negative families | Real Fillet and Chamfer generated unsupported vertices and attempted current incident material END uses; explicit headless synthetic Ambiguous/Unsupported/Missing Point status regression now staged | **Fillet/Chamfer PASS in #2886; synthetic status regression UNRUN; half-cylinder/Revolve real native Part evidence remains incomplete** |
+| Q1-06 negative families | Real Fillet and Chamfer generated unsupported vertices/incident material END uses (#2886); explicit synthetic current-catalog Ambiguous/Unsupported/Missing global Point statuses (#2887) | **PASS for the tested negative families; real Part half-cylinder/Revolve evidence STILL MISSING — NOT Q1-06 FINAL PASS** |
 | Q1-07 closed/degenerate/slot | Existing native closed-arc guards + new two-token inventory, complete terminal tuple permutation and forged token | **PASS in #2885 (tested families only)** |
 | Q1-08 current Q0 membership coupling | Exact stage + same-body native inventory, runtime-only paired Vertex→position/unoriented tangent | **PASS in #2885** |
 
