@@ -561,6 +561,9 @@ struct PartEvaluation final {
         current_curve_references;
     std::vector<FeaturePointResolution>
         current_point_references;
+    // Runtime-only ownership evidence for exact-stage semantic queries.
+    // Appended: existing PartEvaluation aggregate member order is unchanged.
+    std::optional<core::DocumentId> source_document_id;
 
     [[nodiscard]] const FeatureEvaluation*
     findFeature(FeatureId id) const noexcept;
