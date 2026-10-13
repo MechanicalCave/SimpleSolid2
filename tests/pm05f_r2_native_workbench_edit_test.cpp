@@ -4580,6 +4580,153 @@ int main(int argc, char* argv[]) {
             CHECK(multi_cold_projection->model.entityCount() == 4U);
             CHECK(multi_reopened.document->modelingSemanticsVersion() ==
                   part::current_modeling_semantics_version);
+
+            // PG-01E/E3 Windows observation on a REAL repaired
+            // two-Face Part/Feature/linked Profile: each iteration
+            // independently loads the SAME immutable native document
+            // and builds a FRESH OCCT provider. Do not infer no leak
+            // from this small bounded sampling window.
+            constexpr std::size_t e3_warmup = 2U;
+            constexpr std::size_t e3_measured = 8U;
+            const auto e3_native_bytes =
+                std::filesystem::file_size(multi_path);
+            const auto e3_private_before =
+                currentProcessPrivateBytes();
+            std::vector<long long> e3_elapsed_microseconds;
+            std::vector<std::optional<std::uint64_t>>
+                e3_private_samples;
+            e3_elapsed_microseconds.reserve(e3_measured);
+            e3_private_samples.reserve(e3_measured);
+            for (std::size_t e3_cycle = 0U;
+                 e3_cycle < e3_warmup + e3_measured;
+                 ++e3_cycle) {
+                const auto started =
+                    std::chrono::steady_clock::now();
+                {
+                    const auto reloaded =
+                        manual_store.load(multi_path);
+                    CHECK(reloaded.ok() && reloaded.document);
+                    CHECK(reloaded.document->state() ==
+                          repaired_manual.document().state());
+                    kernel_occt::OcctSolidModelingKernel
+                        cycle_kernel;
+                    const auto cycle_body = part::evaluatePart(
+                        *reloaded.document, cycle_kernel);
+                    CHECK(cycle_body.body_status ==
+                          part::BodyEvaluationStatus::up_to_date);
+                    const auto* cycle_feature =
+                        cycle_body.findFeature(
+                            *repaired_add.feature_id);
+                    CHECK(cycle_feature &&
+                          cycle_feature->status ==
+                              part::FeatureEvaluationStatus::
+                                  up_to_date);
+                    const auto cycle_projection =
+                        part::evaluateEffectiveSketchProjection(
+                            *reloaded.document,
+                            *manual_target.sketch_id,
+                            cycle_body,
+                            cycle_kernel,
+                            *repaired_add.feature_id);
+                    CHECK(cycle_projection &&
+                          cycle_projection->allResolved());
+                    CHECK(cycle_projection->outcomes.size() == 4U);
+                    CHECK(cycle_projection->model.entityCount() ==
+                          4U);
+                }
+                const auto duration =
+                    std::chrono::duration_cast<
+                        std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() -
+                        started).count();
+                CHECK(duration >= 0);
+                CHECK(std::filesystem::file_size(multi_path) ==
+                      e3_native_bytes);
+                if (e3_cycle >= e3_warmup) {
+                    e3_elapsed_microseconds.push_back(duration);
+                    // Sample after the temporary kernel/provider
+                    // and loaded Part have left their scope.
+                    e3_private_samples.push_back(
+                        currentProcessPrivateBytes());
+                }
+            }
+            CHECK(e3_elapsed_microseconds.size() == e3_measured);
+            CHECK(e3_private_samples.size() == e3_measured);
+            const auto e3_extrema = std::minmax_element(
+                e3_elapsed_microseconds.begin(),
+                e3_elapsed_microseconds.end());
+            long long e3_sum = 0;
+            for (const auto duration : e3_elapsed_microseconds) {
+                e3_sum += duration;
+            }
+            const auto e3_private_after =
+                currentProcessPrivateBytes();
+            const auto format_bytes = [](
+                std::optional<std::uint64_t> value) {
+                return value
+                    ? std::to_string(*value)
+                    : std::string{"UNAVAILABLE"};
+            };
+            std::cerr
+                << "PG01E_E3_WINDOWS_MULTI_FACE_REPLAY"
+                << " warmup=" << e3_warmup
+                << " measured=" << e3_measured
+                << " min_us=" << *e3_extrema.first
+                << " mean_us=" << e3_sum /
+                    static_cast<long long>(e3_measured)
+                << " max_us=" << *e3_extrema.second
+                << " package_bytes=" << e3_native_bytes
+                << " private_before="
+                << format_bytes(e3_private_before)
+                << " private_after="
+                << format_bytes(e3_private_after)
+                << std::endl;
+            if (const char* summary_path =
+                    std::getenv("GITHUB_STEP_SUMMARY")) {
+                std::ofstream e3_summary{
+                    summary_path, std::ios::app};
+                if (e3_summary) {
+                    e3_summary
+                        << "\n### PG-01E/E3 native Qt/OCCT multi-Face "
+                        << "linked Feature cold replay\n"
+                        << "Real bounded two-Face input with explicit "
+                        << "overlap-target deletion; current Part v16/"
+                        << "modeling-v2 linked Profile + Extrude Add. "
+                        << "2 warm-up, 8 measured distinct native "
+                        << "file loads, fresh OCCT providers, and "
+                        << "post-teardown Windows private-byte samples."
+                        << " Not a memory SLA or leak proof.\n\n"
+                        << "| Metric | Observed |\n"
+                        << "| --- | ---: |\n"
+                        << "| min/mean/max cold replay (us) | "
+                        << *e3_extrema.first << " / "
+                        << e3_sum /
+                           static_cast<long long>(e3_measured)
+                        << " / " << *e3_extrema.second
+                        << " |\n"
+                        << "| native package bytes | "
+                        << e3_native_bytes << " (unchanged) |\n"
+                        << "| Windows private bytes before | "
+                        << format_bytes(e3_private_before)
+                        << " |\n"
+                        << "| Windows private bytes after | "
+                        << format_bytes(e3_private_after)
+                        << " |\n"
+                        << "| per-cycle private bytes (post teardown) | ";
+                    for (std::size_t m = 0U;
+                         m < e3_private_samples.size(); ++m) {
+                        if (m) e3_summary << ", ";
+                        e3_summary
+                            << format_bytes(e3_private_samples[m]);
+                    }
+                    e3_summary
+                        << " |\n"
+                        << "One bounded run only, with process-wide "
+                        << "memory affected by Qt, CTest and caches; "
+                        << "no comparative baseline, native handle "
+                        << "series, leak conclusion or budget claim.\n";
+                }
+            }
             std::cout
                 << "PG01E_E1_MANUAL_MULTI_FACE_EXPLICIT_REPAIR_COLD_PASS"
                 << " two_native_faces=1"
