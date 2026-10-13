@@ -4,9 +4,11 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -1201,6 +1203,59 @@ private:
     kernel::RuntimeEdgeToken foreign_edge_;
 };
 
+// Q2-M06: inject native provider failure and malformed exact MID payload.
+// A rejected MID never leaks a current Edge or geometry observation.
+class Q2BadMidQuery final :
+    public kernel::IExactBoundedEdgeGeometryQuery {
+public:
+    enum class Failure {
+        kernel_failure,
+        nonfinite_mid,
+        zero_tangent,
+        zero_length,
+    };
+    Q2BadMidQuery(
+        kernel::IExactBoundedEdgeGeometryQuery& delegate,
+        Failure failure)
+        : delegate_{delegate}, failure_{failure} {}
+
+    [[nodiscard]] std::optional<kernel::ScopedExactEdge>
+    bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle body,
+        kernel::RuntimeEdgeToken edge) noexcept override {
+        return delegate_.bindExactEdgeToBody(std::move(body), edge);
+    }
+
+    [[nodiscard]] kernel::ExactEdge3dResult queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedExactEdge& edge) noexcept override {
+        auto current = delegate_.queryExactBoundedEdge3d(
+            std::move(body), edge);
+        if (!current.ok()) return current;
+        switch (failure_) {
+        case Failure::kernel_failure:
+            current.geometry.reset();
+            current.status = kernel::ExactEdge3dStatus::kernel_failure;
+            break;
+        case Failure::nonfinite_mid:
+            current.geometry->midpoint_at_half_bounded_length_world.x =
+                std::numeric_limits<double>::infinity();
+            break;
+        case Failure::zero_tangent:
+            current.geometry->midpoint_tangent_line.representative =
+                {0.0, 0.0, 0.0};
+            break;
+        case Failure::zero_length:
+            current.geometry->bounded_length_mm = 0.0;
+            break;
+        }
+        return current;
+    }
+private:
+    kernel::IExactBoundedEdgeGeometryQuery& delegate_;
+    Failure failure_;
+};
+
 // Q1-06: real Fillet/Chamfer generated Vertices remain globally
 // Unsupported; incident Edge selection cannot upgrade their Point meaning.
 void verifyQ1NoGlobalPointPromotion(
@@ -1240,12 +1295,143 @@ void verifyQ1NoGlobalPointPromotion(
     }
     CHECK(unsupported_vertices >= 1U);
     CHECK(rejected_end_uses >= 1U);
+    // Q2-M07: real Fillet/Chamfer may have unsupported endpoint
+    // Points; MID does not adopt their Point meaning. It may resolve
+    // only when the independently strict Edge and Q0 exact MID do.
+    CHECK(evaluation.features.back().result_solid);
+    std::size_t q2_admitted_mids = 0U;
+    std::size_t q2_checked_edges = 0U;
+    for (const auto& edge : catalog.edges) {
+        const auto authored =
+            part::authorSelectedMaterialEdgeMid(
+                document, evaluation, catalog.stage,
+                edge.runtime_token, provider);
+        const auto strict = part::authorMaterialEdgeReference(
+            catalog, edge.runtime_token);
+        if (!strict.ok()) {
+            CHECK(!authored.ok());
+            CHECK(!authored.reference);
+            ++q2_checked_edges;
+            continue;
+        }
+        const auto bound = provider.bindExactEdgeToBody(
+            evaluation.features.back().result_solid,
+            edge.runtime_token);
+        const auto exact = bound
+            ? provider.queryExactBoundedEdge3d(
+                evaluation.features.back().result_solid, *bound)
+            : kernel::ExactEdge3dResult{};
+        if (!exact.ok()) {
+            CHECK(!authored.ok());
+            CHECK(!authored.reference);
+        } else {
+            CHECK(authored.ok());
+            const auto replay =
+                part::resolveSelectedMaterialEdgeMid(
+                    document, *authored.reference,
+                    evaluation, provider);
+            CHECK(replay.resolved());
+            CHECK(replay.current_edge == edge.runtime_token);
+            ++q2_admitted_mids;
+        }
+        ++q2_checked_edges;
+    }
+    CHECK(q2_checked_edges == catalog.edges.size());
+    CHECK(q2_checked_edges >= 1U);
+    for (const auto& vertex : catalog.vertices) {
+        if (vertex.referenceability ==
+                kernel::ReferenceStatus::unsupported ||
+            vertex.referenceability ==
+                kernel::ReferenceStatus::ambiguous) {
+            CHECK(vertex.referenceability !=
+                  kernel::ReferenceStatus::resolved);
+        }
+    }
+    std::cout << "RG02B1_Q2_FILLET_CHAMFER_MID"
+              << " fixture=" << fixture
+              << " checked_edges=" << q2_checked_edges
+              << " admitted_strict_mids=" << q2_admitted_mids
+              << " global_point_promotions=0\n";
     std::cout << "RG02B1_Q1_NEGATIVE"
               << " fixture=" << fixture
               << " unsupported_or_ambiguous_vertices="
               << unsupported_vertices
               << " rejected_edge_terminal_uses=" << rejected_end_uses
               << " global_point_promotions=0\n";
+}
+
+// Q2-M01/03/04: the MID is the one half-arc-length role of each
+// current-stage material Edge. It has no invented FeaturePointAddress,
+// terminal choice, OCCT enumeration index or persistent XYZ.
+std::vector<part::SelectedMaterialEdgeMid>
+verifyQ2CanonicalSelectedMids(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture) {
+    CHECK(evaluation.source_document_id);
+    CHECK(*evaluation.source_document_id == document.documentId());
+    CHECK(evaluation.source_revision == document.revision());
+    CHECK(evaluation.features.size() == 1U);
+    CHECK(evaluation.features.front().result_solid);
+    CHECK(evaluation.features.front().result_topology);
+    const auto& stage = evaluation.features.front();
+    const auto& catalog = *stage.result_topology;
+    CHECK(catalog.complete());
+    CHECK(catalog.edges.size() == 12U);
+    std::vector<part::SelectedMaterialEdgeMid> sources;
+    for (const auto& edge : catalog.edges) {
+        CHECK(edge.curve_kind == kernel::CurveKind::line);
+        const auto authored = part::authorSelectedMaterialEdgeMid(
+            document, evaluation, catalog.stage,
+            edge.runtime_token, provider);
+        CHECK(authored.ok());
+        CHECK(authored.status == part::SelectedEdgeMidStatus::resolved);
+        CHECK(authored.reference->source_edge.stage == catalog.stage);
+        CHECK(std::find(sources.begin(), sources.end(),
+                        *authored.reference) == sources.end());
+        const auto mid = part::resolveSelectedMaterialEdgeMid(
+            document, *authored.reference, evaluation, provider);
+        CHECK(mid.resolved());
+        CHECK(mid.current_edge == edge.runtime_token);
+        CHECK(mid.current_position_world);
+        CHECK(mid.current_tangent_line);
+        const auto bound = provider.bindExactEdgeToBody(
+            stage.result_solid, edge.runtime_token);
+        CHECK(bound);
+        const auto exact = provider.queryExactBoundedEdge3d(
+            stage.result_solid, *bound);
+        CHECK(exact.ok());
+        CHECK(exact.geometry->kind ==
+              kernel::ExactEdge3dKind::bounded_line);
+        const auto& g = *exact.geometry;
+        const auto& pos = *mid.current_position_world;
+        const auto& tangent = mid.current_tangent_line->representative;
+        const auto& a = g.current_terminal_positions_world[0];
+        const auto& b = g.current_terminal_positions_world[1];
+        CHECK(std::abs(pos.x - (a.x + b.x)*0.5) < 1.0e-6);
+        CHECK(std::abs(pos.y - (a.y + b.y)*0.5) < 1.0e-6);
+        CHECK(std::abs(pos.z - (a.z + b.z)*0.5) < 1.0e-6);
+        CHECK(std::abs(pos.x -
+            g.midpoint_at_half_bounded_length_world.x) < 1.0e-9);
+        CHECK(std::abs(pos.y -
+            g.midpoint_at_half_bounded_length_world.y) < 1.0e-9);
+        CHECK(std::abs(pos.z -
+            g.midpoint_at_half_bounded_length_world.z) < 1.0e-9);
+        CHECK(std::abs(tangent.x*tangent.x +
+                       tangent.y*tangent.y +
+                       tangent.z*tangent.z - 1.0) < 1.0e-7);
+        sources.push_back(*authored.reference);
+    }
+    CHECK(sources.size() == 12U);
+    std::cout << "RG02B1_Q2_CANONICAL_MID"
+              << " fixture=" << fixture
+              << " strict_line_mids=" << sources.size()
+              << " Q1_END_unchanged=1"
+              << " durable_XYZ=0"
+              << " durable_vertex_token=0"
+              << " UI_MID_tested=0\n";
+    return sources;
 }
 
 // Q1-01/Q1-02: real OCCT material Edge selection plus one independently
@@ -1440,6 +1626,45 @@ void verifyQ1RealHalfCylinderAndRevolve(
         }
     }
     CHECK(ambiguous_point_addresses == 2U);
+    // Q2-M07: MID requires strict Edge+exact Q0 evidence, not a terminal
+    // Point. These real ambiguous global Points must remain unchanged.
+    std::size_t q2_checked_edges = 0U;
+    for (const auto& edge : cat.edges) {
+        const auto strict = part::authorMaterialEdgeReference(
+            cat, edge.runtime_token);
+        const auto candidate = part::authorSelectedMaterialEdgeMid(
+            half_document, half_evaluation, cat.stage,
+            edge.runtime_token, kernel);
+        if (strict.ok()) {
+            const auto bound = kernel.bindExactEdgeToBody(
+                half_evaluation.features.back().result_solid,
+                edge.runtime_token);
+            const auto exact = bound
+                ? kernel.queryExactBoundedEdge3d(
+                    half_evaluation.features.back().result_solid, *bound)
+                : kernel::ExactEdge3dResult{};
+            if (exact.ok()) {
+                CHECK(candidate.ok());
+                const auto replay = part::resolveSelectedMaterialEdgeMid(
+                    half_document, *candidate.reference,
+                    half_evaluation, kernel);
+                CHECK(replay.resolved());
+            } else {
+                CHECK(!candidate.ok());
+                CHECK(!candidate.reference);
+            }
+        } else {
+            CHECK(!candidate.ok());
+            CHECK(!candidate.reference);
+        }
+        ++q2_checked_edges;
+    }
+    CHECK(q2_checked_edges == cat.edges.size());
+    for (const auto& point : cat.points) {
+        if (point.status == kernel::ReferenceStatus::ambiguous) {
+            CHECK(point.candidate_vertex_count > 1U);
+        }
+    }
     std::cout << "RG02B1_Q1_REAL_HALF_CYLINDER"
               << " ambiguous_vertices=" << real_ambiguous
               << " unsupported_vertices=" << real_unsupported
@@ -1503,6 +1728,49 @@ void verifyQ1RealHalfCylinderAndRevolve(
     }
     CHECK(line_terminal_uses >= 2U);
     CHECK(arc_terminal_uses >= 2U);
+    // Q2-M02/M07: actual Part Revolve open circular Arc MIDs use
+    // the strict Edge source alone, without choosing an END/Vertex.
+    std::size_t q2_arc_mids = 0U;
+    std::size_t q2_line_mids = 0U;
+    for (const auto& edge : revolved.edges) {
+        const auto mid = part::authorSelectedMaterialEdgeMid(
+            partial, partial_eval, revolved.stage,
+            edge.runtime_token, kernel);
+        if (!mid.ok()) {
+            CHECK(mid.status != part::SelectedEdgeMidStatus::resolved);
+            continue;
+        }
+        const auto current = part::resolveSelectedMaterialEdgeMid(
+            partial, *mid.reference, partial_eval, kernel);
+        CHECK(current.resolved());
+        CHECK(current.current_edge == edge.runtime_token);
+        const auto bound = kernel.bindExactEdgeToBody(
+            partial_eval.features.front().result_solid,
+            edge.runtime_token);
+        CHECK(bound);
+        const auto exact = kernel.queryExactBoundedEdge3d(
+            partial_eval.features.front().result_solid, *bound);
+        CHECK(exact.ok());
+        CHECK(std::abs(
+            current.current_position_world->x -
+            exact.geometry->midpoint_at_half_bounded_length_world.x) <
+            1.0e-9);
+        if (edge.curve_kind == kernel::CurveKind::circle) {
+            CHECK(exact.geometry->kind ==
+                  kernel::ExactEdge3dKind::open_circular_arc);
+            ++q2_arc_mids;
+        } else if (edge.curve_kind == kernel::CurveKind::line) {
+            ++q2_line_mids;
+        } else {
+            CHECK(false);
+        }
+    }
+    CHECK(q2_line_mids >= 1U);
+    CHECK(q2_arc_mids >= 1U);
+    std::cout << "RG02B1_Q2_REAL_REVOLVE_MID"
+              << " supported_line_mids=" << q2_line_mids
+              << " supported_arc_mids=" << q2_arc_mids
+              << " new_global_points=0\n";
     std::cout << "RG02B1_Q1_REAL_PARTIAL_REVOLVE"
               << " certified_line_end_uses=" << line_terminal_uses
               << " certified_arc_end_uses=" << arc_terminal_uses
@@ -1550,6 +1818,207 @@ int main() {
     const auto q1_base_sources = verifyQ1CanonicalSelectedEnds(
         base_document, base_evaluation, kernel, "Q1-01-pristine");
     CHECK(q1_base_sources.size() == 24U);
+    const auto q2_base_sources = verifyQ2CanonicalSelectedMids(
+        base_document, base_evaluation, kernel, "Q2-M01-pristine");
+    CHECK(q2_base_sources.size() == 12U);
+    // Q2-M05/06/07: negative semantic and native provider matrix on a
+    // REAL OCCT box stage. No failure publishes a partial observation.
+    {
+        const auto& source = q2_base_sources.front();
+        const auto original = part::resolveSelectedMaterialEdgeMid(
+            base_document, source, base_evaluation, kernel);
+        CHECK(original.resolved());
+        const auto token = *original.current_edge;
+        const auto noObservation = [](
+            const part::SelectedEdgeMidResolution& value,
+            part::SelectedEdgeMidStatus expected) {
+            CHECK(value.status == expected);
+            CHECK(!value.resolved());
+            CHECK(!value.current_edge);
+            CHECK(!value.current_position_world);
+            CHECK(!value.current_tangent_line);
+        };
+        const auto foreign_owner = makeBasePart();
+        noObservation(part::resolveSelectedMaterialEdgeMid(
+            foreign_owner, source, base_evaluation, kernel),
+            part::SelectedEdgeMidStatus::invalid_context);
+        auto unowned = base_evaluation;
+        unowned.source_document_id.reset();
+        noObservation(part::resolveSelectedMaterialEdgeMid(
+            base_document, source, unowned, kernel),
+            part::SelectedEdgeMidStatus::invalid_context);
+        const auto stale_document = part::PartDocument::restore(
+            base_document.documentId(),
+            base_document.state(),
+            core::DocumentRevision{
+                base_document.revision().value() + 1U});
+        CHECK(stale_document.ok());
+        noObservation(part::resolveSelectedMaterialEdgeMid(
+            *stale_document.document, source, base_evaluation, kernel),
+            part::SelectedEdgeMidStatus::invalid_context);
+        auto wrong_stage = source;
+        wrong_stage.source_edge.stage.kind =
+            part::BodyStageKind::empty_body;
+        noObservation(part::resolveSelectedMaterialEdgeMid(
+            base_document, wrong_stage, base_evaluation, kernel),
+            part::SelectedEdgeMidStatus::invalid_context);
+        const auto& catalog = *base_evaluation.features.front().result_topology;
+        const auto wrong_author = part::authorSelectedMaterialEdgeMid(
+            base_document, base_evaluation, wrong_stage.source_edge.stage,
+            token, kernel);
+        CHECK(!wrong_author.ok());
+        CHECK(wrong_author.status ==
+              part::SelectedEdgeMidStatus::invalid_context);
+        CHECK(!wrong_author.reference);
+        const auto absent_author = part::authorSelectedMaterialEdgeMid(
+            base_document, base_evaluation, catalog.stage,
+            kernel::RuntimeEdgeToken{999999999U}, kernel);
+        CHECK(!absent_author.ok());
+        CHECK(absent_author.status ==
+              part::SelectedEdgeMidStatus::edge_missing);
+        CHECK(!absent_author.reference);
+
+        const auto editCatalog = [&](
+            auto mutate,
+            part::SelectedEdgeMidStatus expected) {
+            auto synthetic = base_evaluation;
+            auto& cat = *synthetic.features.front().result_topology;
+            mutate(cat);
+            CHECK(cat.complete());
+            noObservation(part::resolveSelectedMaterialEdgeMid(
+                base_document, source, synthetic, kernel), expected);
+        };
+        const auto sourceCurve = [&source](
+            part::BodyStageTopologyCatalog& cat) {
+            const auto c = std::find_if(
+                cat.curves.begin(), cat.curves.end(),
+                [&source](const auto& entry) {
+                    return entry.address == source.source_edge.curve;
+                });
+            CHECK(c != cat.curves.end());
+            return c;
+        };
+        editCatalog([&](auto& cat) {
+            const auto c = sourceCurve(cat);
+            c->status = kernel::ReferenceStatus::missing;
+            c->strict_edge_status = kernel::ReferenceStatus::missing;
+            c->current_edges.clear();
+            c->candidate_edge_count = 0U;
+        }, part::SelectedEdgeMidStatus::edge_missing);
+        editCatalog([&](auto& cat) {
+            const auto c = sourceCurve(cat);
+            const auto other = std::find_if(
+                cat.edges.begin(), cat.edges.end(),
+                [token](const auto& e) {
+                    return e.runtime_token != token;
+                });
+            CHECK(other != cat.edges.end());
+            c->current_edges.push_back(other->runtime_token);
+            c->candidate_edge_count = c->current_edges.size();
+            c->strict_edge_status = kernel::ReferenceStatus::ambiguous;
+        }, part::SelectedEdgeMidStatus::edge_ambiguous);
+        editCatalog([&](auto& cat) {
+            const auto e = std::find_if(
+                cat.edges.begin(), cat.edges.end(),
+                [token](const auto& item) {
+                    return item.runtime_token == token;
+                });
+            CHECK(e != cat.edges.end());
+            e->accounting_class =
+                part::TopologyAccountingClass::semantically_unsupported;
+            e->referenceability = kernel::ReferenceStatus::unsupported;
+            e->curve_kind = kernel::CurveKind::other;
+            e->curve_candidates.clear();
+        }, part::SelectedEdgeMidStatus::edge_unsupported);
+        // Even a globally Ambiguous Point is NOT a MID identity or a
+        // request to promote that Point; only strict Edge provenance
+        // and Q0 geometry determine MID source admissibility.
+        {
+            auto synthetic = base_evaluation;
+            auto& cat = *synthetic.features.front().result_topology;
+            CHECK(!cat.points.empty());
+            auto& point = cat.points.front();
+            CHECK(point.current_vertices.size() == 1U);
+            const auto different = std::find_if(
+                cat.vertices.begin(), cat.vertices.end(),
+                [&point](const auto& vertex) {
+                    return vertex.runtime_token !=
+                        point.current_vertices.front();
+                });
+            CHECK(different != cat.vertices.end());
+            point.status = kernel::ReferenceStatus::ambiguous;
+            point.current_vertices.push_back(different->runtime_token);
+            point.candidate_vertex_count = 2U;
+            CHECK(cat.complete());
+            const auto r = part::resolveSelectedMaterialEdgeMid(
+                base_document, source, synthetic, kernel);
+            CHECK(r.resolved());
+            CHECK(cat.points.front().status ==
+                  kernel::ReferenceStatus::ambiguous);
+        }
+        Q2BadMidQuery badKernel{kernel,
+            Q2BadMidQuery::Failure::kernel_failure};
+        Q2BadMidQuery badPosition{kernel,
+            Q2BadMidQuery::Failure::nonfinite_mid};
+        Q2BadMidQuery badTangent{kernel,
+            Q2BadMidQuery::Failure::zero_tangent};
+        Q2BadMidQuery badLength{kernel,
+            Q2BadMidQuery::Failure::zero_length};
+        for (auto* provider : std::array<
+             kernel::IExactBoundedEdgeGeometryQuery*, 4>{
+                &badKernel, &badPosition, &badTangent, &badLength}) {
+            const auto rejected = part::resolveSelectedMaterialEdgeMid(
+                base_document, source, base_evaluation, *provider);
+            noObservation(
+                rejected,
+                part::SelectedEdgeMidStatus::native_geometry_unavailable);
+            const auto failed_author = part::authorSelectedMaterialEdgeMid(
+                base_document, base_evaluation, catalog.stage,
+                token, *provider);
+            CHECK(!failed_author.ok());
+            CHECK(!failed_author.reference);
+            CHECK(failed_author.status ==
+                  part::SelectedEdgeMidStatus::native_geometry_unavailable);
+        }
+        const auto typed = part::resolveSelectedMaterialEdgeMid(
+            base_document, source, base_evaluation, badKernel);
+        CHECK(typed.native_error ==
+              kernel::ExactEdge3dStatus::kernel_failure);
+        kernel_occt::OcctSolidModelingKernel second_instance;
+        const auto legal = part::resolveSelectedMaterialEdgeMid(
+            base_document, source, base_evaluation, second_instance);
+        CHECK(legal.resolved());
+        const auto legal_author = part::authorSelectedMaterialEdgeMid(
+            base_document, base_evaluation, catalog.stage,
+            token, second_instance);
+        CHECK(legal_author.ok());
+        CHECK(*legal_author.reference == source);
+
+        const auto unrelated = makeBasePart();
+        const auto unrelated_eval = part::evaluatePart(
+            unrelated, second_instance);
+        CHECK(unrelated_eval.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(unrelated_eval.features.front().result_solid);
+        CHECK(unrelated_eval.features.front().result_topology);
+        CHECK(unrelated_eval.features.front().result_solid.get() !=
+              base_evaluation.features.front().result_solid.get());
+        Q1ForeignBodyBinderQuery foreign_body{
+            second_instance,
+            unrelated_eval.features.front().result_solid,
+            unrelated_eval.features.front()
+                .result_topology->edges.front().runtime_token};
+        noObservation(part::resolveSelectedMaterialEdgeMid(
+            base_document, source, base_evaluation, foreign_body),
+            part::SelectedEdgeMidStatus::native_geometry_unavailable);
+        const auto wrong_body_author = part::authorSelectedMaterialEdgeMid(
+            base_document, base_evaluation, catalog.stage,
+            token, foreign_body);
+        CHECK(!wrong_body_author.ok());
+        CHECK(!wrong_body_author.reference);
+        CHECK(wrong_body_author.status ==
+              part::SelectedEdgeMidStatus::native_geometry_unavailable);
+    }
     // Q1-07: full tuple reorder is harmless; a forged membership token
     // causes typed unavailable with no partial END/geometry publication.
     {
@@ -1916,6 +2385,18 @@ int main() {
         *reopened_document.document, fresh_evaluation,
         separate_kernel, "Q1-03-cold-native");
     CHECK(q1_fresh_sources.size() == 24U);
+    const auto q2_fresh_sources = verifyQ2CanonicalSelectedMids(
+        *reopened_document.document, fresh_evaluation,
+        separate_kernel, "Q2-M03-cold-native");
+    for (const auto& original : q2_base_sources) {
+        CHECK(std::find(q2_fresh_sources.begin(),
+                        q2_fresh_sources.end(),
+                        original) != q2_fresh_sources.end());
+        const auto replay = part::resolveSelectedMaterialEdgeMid(
+            *reopened_document.document, original,
+            fresh_evaluation, separate_kernel);
+        CHECK(replay.resolved());
+    }
     // Compare complete semantic identity sets independently of native
     // Edge/Vertex enumeration and fresh OCCT provider generation.
     for (const auto& original : q1_base_sources) {
@@ -1997,6 +2478,27 @@ int main() {
     const auto q1_taller_sources = verifyQ1CanonicalSelectedEnds(
         taller_document, taller_evaluation, kernel, "Q1-04-height-edit");
     CHECK(q1_taller_sources.size() == 24U);
+    const auto q2_taller_sources = verifyQ2CanonicalSelectedMids(
+        taller_document, taller_evaluation, kernel, "Q2-M04-height-edit");
+    CHECK(q2_taller_sources.size() == q2_base_sources.size());
+    std::size_t changed_mid_positions = 0U;
+    for (const auto& original : q2_base_sources) {
+        CHECK(std::find(q2_taller_sources.begin(),
+                        q2_taller_sources.end(),
+                        original) != q2_taller_sources.end());
+        const auto original_mid = part::resolveSelectedMaterialEdgeMid(
+            base_document, original, base_evaluation, kernel);
+        const auto edited_mid = part::resolveSelectedMaterialEdgeMid(
+            taller_document, original, taller_evaluation, kernel);
+        CHECK(original_mid.resolved() && edited_mid.resolved());
+        const auto& a = *original_mid.current_position_world;
+        const auto& b = *edited_mid.current_position_world;
+        if (std::abs(a.z - b.z) > 1.0e-6) {
+            ++changed_mid_positions;
+        }
+    }
+    CHECK(changed_mid_positions >= 1U);
+    // Q1 regression: original END identity unchanged
     for (const auto& original : q1_base_sources) {
         CHECK(std::find(q1_taller_sources.begin(),
                         q1_taller_sources.end(),
@@ -2060,6 +2562,16 @@ int main() {
     const auto& replacement_stage =
         *replaced_evaluation.features[0].result_topology;
     CHECK(replacement_stage.stage != original_stage.stage);
+    for (const auto& original : q2_base_sources) {
+        const auto missing = part::resolveSelectedMaterialEdgeMid(
+            replaced_document, original, replaced_evaluation, kernel);
+        CHECK(missing.status ==
+              part::SelectedEdgeMidStatus::edge_missing);
+        CHECK(!missing.resolved());
+        CHECK(!missing.current_edge);
+        CHECK(!missing.current_position_world);
+        CHECK(!missing.current_tangent_line);
+    }
     for (const auto& old_source : q1_base_sources) {
         const auto absent = part::resolveSelectedMaterialEdgeEnd(
             replaced_document, old_source, replaced_evaluation, kernel);

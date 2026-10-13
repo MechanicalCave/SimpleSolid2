@@ -4694,6 +4694,191 @@ resolveSelectedMaterialEdgeEnd(
         *stage, edge, certified, provider);
 }
 
+namespace {
+
+[[nodiscard]] SelectedEdgeMidStatus
+q2MidEdgeStatus(kernel::ReferenceStatus status) noexcept {
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return SelectedEdgeMidStatus::resolved;
+    case kernel::ReferenceStatus::missing:
+        return SelectedEdgeMidStatus::edge_missing;
+    case kernel::ReferenceStatus::ambiguous:
+        return SelectedEdgeMidStatus::edge_ambiguous;
+    case kernel::ReferenceStatus::unsupported:
+        return SelectedEdgeMidStatus::edge_unsupported;
+    }
+    return SelectedEdgeMidStatus::invalid_context;
+}
+
+[[nodiscard]] bool
+validBoundedHalfLengthMid(
+    const kernel::ExactBoundedEdge3d& geometry) noexcept {
+    if (geometry.kind != kernel::ExactEdge3dKind::bounded_line &&
+        geometry.kind != kernel::ExactEdge3dKind::open_circular_arc) {
+        return false;
+    }
+    const auto& p = geometry.midpoint_at_half_bounded_length_world;
+    const auto& t = geometry.midpoint_tangent_line.representative;
+    const double tangent_norm_squared =
+        t.x * t.x + t.y * t.y + t.z * t.z;
+    return std::isfinite(geometry.bounded_length_mm) &&
+           geometry.bounded_length_mm > 0.0 &&
+           std::isfinite(p.x) && std::isfinite(p.y) &&
+           std::isfinite(p.z) &&
+           std::isfinite(t.x) && std::isfinite(t.y) &&
+           std::isfinite(t.z) &&
+           std::isfinite(tangent_norm_squared) &&
+           tangent_norm_squared > 0.0 &&
+           std::abs(tangent_norm_squared - 1.0) <= 1.0e-6;
+}
+
+[[nodiscard]] SelectedEdgeMidResolution
+observeSelectedMaterialEdgeMid(
+    const Q1StageView& stage,
+    kernel::RuntimeEdgeToken edge,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) {
+    SelectedEdgeMidResolution result;
+    result.status = SelectedEdgeMidStatus::native_geometry_unavailable;
+    if (!edge.valid() || !stage.solid ||
+        stage.catalog == nullptr) {
+        result.status = SelectedEdgeMidStatus::invalid_context;
+        return result;
+    }
+    const auto bound =
+        provider.bindExactEdgeToBody(stage.solid, edge);
+    // This lease belongs to the current Body object, NOT to one OCCT
+    // provider-instance address; a different Body must fail atomically.
+    if (!bound || !bound->valid() ||
+        bound->sourceBody().get() != stage.solid.get() ||
+        bound->edge() != edge) {
+        return result;
+    }
+    const auto exact =
+        provider.queryExactBoundedEdge3d(stage.solid, *bound);
+    if (!exact.ok()) {
+        result.native_error = exact.status;
+        return result;
+    }
+    const auto& geometry = *exact.geometry;
+    if (!validBoundedHalfLengthMid(geometry)) {
+        return result;
+    }
+    result.status = SelectedEdgeMidStatus::resolved;
+    result.current_edge = edge;
+    result.current_position_world =
+        geometry.midpoint_at_half_bounded_length_world;
+    result.current_tangent_line = geometry.midpoint_tangent_line;
+    return result;
+}
+
+} // namespace
+
+SelectedEdgeMidAuthoringResult
+authorSelectedMaterialEdgeMid(
+    const PartDocument& owning_document,
+    const PartEvaluation& evaluation,
+    const BodyStageRef& source_stage,
+    kernel::RuntimeEdgeToken picked_material_edge,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) {
+    SelectedEdgeMidAuthoringResult result;
+    if (!picked_material_edge.valid()) {
+        return result;
+    }
+    // Shared with Q1 END: reject foreign documents, stale revisions,
+    // incomplete stages and prefix/final-Body fallback before Q0.
+    const auto stage = admitSelectedEdgeEndStage(
+        owning_document, evaluation, source_stage);
+    if (!stage) {
+        return result;
+    }
+    const auto& catalog = *stage->catalog;
+    const auto* record = findEdgeRecord(
+        catalog, picked_material_edge);
+    if (!record) {
+        result.status = SelectedEdgeMidStatus::edge_missing;
+        return result;
+    }
+    if (record->accounting_class !=
+            TopologyAccountingClass::referenceable ||
+        record->periodic_seam ||
+        record->representation_partition) {
+        result.status = SelectedEdgeMidStatus::edge_unsupported;
+        return result;
+    }
+    if (record->curve_candidates.size() != 1U) {
+        result.status = SelectedEdgeMidStatus::edge_ambiguous;
+        return result;
+    }
+    const auto authored = authorMaterialEdgeReference(
+        catalog, picked_material_edge);
+    if (!authored.ok()) {
+        result.status = q2MidEdgeStatus(authored.status);
+        return result;
+    }
+    const auto current = resolveMaterialEdgeReference(
+        *authored.reference, catalog);
+    if (!current) {
+        return result;
+    }
+    result.status = q2MidEdgeStatus(current->status);
+    if (!current->resolved()) {
+        return result;
+    }
+    if (current->current_edges.front() != picked_material_edge) {
+        result.status = SelectedEdgeMidStatus::edge_ambiguous;
+        return result;
+    }
+    const auto observation = observeSelectedMaterialEdgeMid(
+        *stage, picked_material_edge, provider);
+    result.status = observation.status;
+    if (!observation.resolved()) {
+        return result;
+    }
+    result.reference = SelectedMaterialEdgeMid{*authored.reference};
+    return result;
+}
+
+SelectedEdgeMidResolution
+resolveSelectedMaterialEdgeMid(
+    const PartDocument& owning_document,
+    const SelectedMaterialEdgeMid& authored,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) {
+    SelectedEdgeMidResolution result;
+    if (!authored.valid()) {
+        return result;
+    }
+    // Distinguish a vanished producer from an invalid owner/revision:
+    // identical replacement geometry and old token numbers never repair
+    // a deleted authored Feature's semantic identity.
+    if (evaluation.source_document_id &&
+        *evaluation.source_document_id == owning_document.documentId() &&
+        evaluation.source_revision == owning_document.revision() &&
+        authored.source_edge.stage.feature_id &&
+        owning_document.findFeature(
+            *authored.source_edge.stage.feature_id) == nullptr) {
+        result.status = SelectedEdgeMidStatus::edge_missing;
+        return result;
+    }
+    const auto stage = admitSelectedEdgeEndStage(
+        owning_document, evaluation, authored.source_edge.stage);
+    if (!stage) {
+        return result;
+    }
+    const auto current = resolveMaterialEdgeReference(
+        authored.source_edge, *stage->catalog);
+    if (!current) {
+        return result;
+    }
+    result.status = q2MidEdgeStatus(current->status);
+    if (!current->resolved()) {
+        return result;
+    }
+    return observeSelectedMaterialEdgeMid(
+        *stage, current->current_edges.front(), provider);
+}
+
 MaterialEdgeAuthoringResult
 authorProjectedMaterialEdgeReference(
     const BodyStageTopologyCatalog& catalog,

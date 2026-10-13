@@ -261,6 +261,21 @@ struct StableEdgeLocalTerminalKey final {
         const StableEdgeLocalTerminalKey&) = default;
 };
 
+// Q2: MID is the unique half-bounded-arclength role of this
+// exact-stage strict material Edge. No Point/Vertex/OCCT token/XYZ is stored;
+// the owning DocumentId is validated separately at the read boundary.
+struct SelectedMaterialEdgeMid final {
+    MaterialEdgeReference source_edge;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return source_edge.valid();
+    }
+
+    friend bool operator==(
+        const SelectedMaterialEdgeMid&,
+        const SelectedMaterialEdgeMid&) = default;
+};
+
 struct SelectedMaterialEdgeEnd final {
     MaterialEdgeReference source_edge;
     StableEdgeLocalTerminalKey terminal;
