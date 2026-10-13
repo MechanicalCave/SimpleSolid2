@@ -20,16 +20,16 @@ PR #311 proposes separate PG-01E reassessment; it is not Owner-accepted. No auth
 
 **Owner decision:** A, solely as **one more finite evidence-only exception** before returning to PG-01E; no merge/activation approval. This does not preapprove new VERTEX selectors or supersede PG-01E obligations.
 
-## 2. Approved Variant A — roadmap-only v1.33 amendment to prepare for separate merge review
+## 2. Approved Variant A — roadmap-only v1.33 amendment prepared for separate merge review
 
-A separate roadmap-only PR may now be **prepared and checked** (not merged without explicit Owner permission) to:
+A separate roadmap-only [Draft PR #336](https://github.com/MechanicalCave/SimpleSolid2/pull/336) has now been **prepared for checks**, changing only `work/PART_MODELING_V1_ROADMAP.md` (not merged without explicit Owner permission), to:
 1. Update `work/PART_MODELING_V1_ROADMAP.md` **1.32 → 1.33** with a dated explicit Owner D2 sequencing acceptance. Preserve all previously frozen Part-v1 scopes, ADRs, schema versions and historical decisions.
 2. Mark RG-02A/G0 **COMPLETED, Owner-accepted with two limitations**, cite G0 merge `5b495c4bbed8754d7a1f01e87a30716429db786d` and exact-head Windows FAST **93/93 PASS**, FULL **199/199 PASS**. Preserve both limits: Fillet/Chamfer unsupported raw-vs-semantic provenance unknown; future V11 stale UI source / RG-02 persistence not yet proved.
 3. Add **RG-02A/G1 — bounded real-OCCT native provenance evidence only** after G0 and before PG-01E, referring to the exact accepted scope in `work/RG-02A_G1_VERTEX_SEMANTIC_PROVENANCE_WORK_CONTRACT_DRAFT.md` in PR #334, G1-F01/C01/A01/A02/S01/P01/L01 cases and at most **three named existing native test sources** plus a `work/**` evidence report. No `src/**`, CMake, APIs, persistence, MID/CENTER, Datum/Axis, UI, Mirror/Pattern.
 4. Keep **PG-01E NOT ACCEPTED** and **PM-06 SEPARATELY GATED**. No retroactive completion, no feature-scope creep, no auto-activation.
 5. Do **not** modify `work/ACTIVE.yaml` in that roadmap PR; activation of G1 after all separately authorized merges requires its **own** PR, exact-head CI, Owner permission, and matching `program_roadmap_version: "1.33"`.
 
-This decision proposal itself makes no change to the accepted `work/PART_MODELING_V1_ROADMAP.md`; any roadmap-only PR remains unmerged until its own explicit Owner merge permission.
+This decision proposal itself makes no change to accepted `work/PART_MODELING_V1_ROADMAP.md` on main; [Draft PR #336](https://github.com/MechanicalCave/SimpleSolid2/pull/336) proposes the amendment and must not merge without its own explicit Owner consent.
 
 ## 3. Independent decisions and STOP controls
 
@@ -41,7 +41,7 @@ This decision proposal itself makes no change to the accepted `work/PART_MODELIN
 | **G1 vs PG-01E order** | **OWNER-ACCEPTED A for preparation of v1.33 roadmap amendment only** (`akceptuje kontynuj`, 2026-10-13); merge and activation still pending |
 | D2 discussion PR #333 merge | **PENDING separate Owner consent** |
 | G1 contract PR #334 merge | **PENDING separate Owner consent** |
-| Roadmap-only v1.33 PR, if A | **AUTHORIZED TO PREPARE ONLY**; requires exact-head CI and separate explicit Owner merge approval |
+| Roadmap-only v1.33 PR, if A | **PREPARED in [Draft PR #336](https://github.com/MechanicalCave/SimpleSolid2/pull/336)**; exact-head CI and separate explicit Owner merge approval required; not activated |
 | G1 `work/ACTIVE.yaml` activation | **NOT CREATED / NOT ACTIVE** |
 | G1 native test/evidence implementation | **NOT AUTHORIZED** until all applicable merges and activation |
 | Technical Vertex schema or production Kernel/Part logic | **NOT AUTHORIZED**, future evidence-backed D2 |
