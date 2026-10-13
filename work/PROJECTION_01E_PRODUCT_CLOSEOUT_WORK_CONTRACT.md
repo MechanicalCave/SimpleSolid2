@@ -64,7 +64,8 @@ Initial **verified audit lead:** `docs/internal/PART_DOCUMENTS.md` still states 
 
 ## Documentation impact
 
-Internal docs: not required (contract proposal only)
-PL/EN Product docs: not required (no product code/UI mutations now)
+Internal docs: not required
+User/Product docs: not required
+Reason: This contract-only governance change does not alter current product behavior or accepted as-built documentation; later activated PG-01E evidence work may correct only verified documentation defects within the existing conditional allowlist.
 Browser: not required (no source Markdown changes now)
 Later test/evidence work may correct **only proven** canonical docs inaccuracies within the accepted allowlist, with Browser regeneration when required.
