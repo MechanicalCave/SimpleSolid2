@@ -1338,6 +1338,15 @@ int main() {
     const auto& replacement_stage =
         *replaced_evaluation.features[0].result_topology;
     CHECK(replacement_stage.stage != original_stage.stage);
+    for (const auto& old_source : q1_base_sources) {
+        const auto absent = part::resolveSelectedMaterialEdgeEnd(
+            replaced_document, old_source, replaced_evaluation, kernel);
+        CHECK(absent.status == part::SelectedEdgeEndStatus::edge_missing);
+        CHECK(!absent.resolved());
+        CHECK(!absent.current_edge);
+        CHECK(!absent.current_terminal);
+        CHECK(!absent.current_position_world);
+    }
     const auto replaced_counts =
         characterizeNativeVertices(
             replacement_stage, "V12-replaced-producer");
