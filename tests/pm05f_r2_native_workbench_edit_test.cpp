@@ -4603,7 +4603,7 @@ int main(int argc, char* argv[]) {
                 multi_reopened.document->state();
             CHECK(!broken_multi_state.body.features.empty());
             broken_multi_state.body.features.front().suppressed = true;
-            const auto broken_multi_document =
+            auto broken_multi_document =
                 part::PartDocument::restore(
                     multi_reopened.document->documentId(),
                     std::move(broken_multi_state));
@@ -4638,7 +4638,7 @@ int main(int argc, char* argv[]) {
                   .findSketch(*manual_target.sketch_id)
                   ->projection_bindings.size() == 4U);
 
-            const auto valid_multi_document =
+            auto valid_multi_document =
                 part::PartDocument::restore(
                     multi_reopened.document->documentId(),
                     multi_reopened.document->state());
