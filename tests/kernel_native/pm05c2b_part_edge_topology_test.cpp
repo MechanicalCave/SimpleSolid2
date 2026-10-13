@@ -1082,6 +1082,40 @@ int main() {
     const auto q1_base_sources = verifyQ1CanonicalSelectedEnds(
         base_document, base_evaluation, kernel, "Q1-01-pristine");
     CHECK(q1_base_sources.size() == 24U);
+    // Q1-07: full tuple reorder is harmless; a forged membership token
+    // causes typed unavailable with no partial END/geometry publication.
+    {
+        Q1TerminalTupleQuery permuted{kernel, false};
+        Q1TerminalTupleQuery corrupted{kernel, true};
+        for (const auto& source : q1_base_sources) {
+            const auto original =
+                part::resolveSelectedMaterialEdgeEnd(
+                    base_document, source, base_evaluation, kernel);
+            const auto reordered =
+                part::resolveSelectedMaterialEdgeEnd(
+                    base_document, source, base_evaluation, permuted);
+            CHECK(original.resolved());
+            CHECK(reordered.resolved());
+            CHECK(reordered.current_terminal ==
+                  original.current_terminal);
+            CHECK(reordered.current_position_world->x ==
+                  original.current_position_world->x);
+            CHECK(reordered.current_position_world->y ==
+                  original.current_position_world->y);
+            CHECK(reordered.current_position_world->z ==
+                  original.current_position_world->z);
+            const auto forged =
+                part::resolveSelectedMaterialEdgeEnd(
+                    base_document, source, base_evaluation, corrupted);
+            CHECK(forged.status ==
+                  part::SelectedEdgeEndStatus::native_geometry_unavailable);
+            CHECK(!forged.resolved());
+            CHECK(!forged.current_edge);
+            CHECK(!forged.current_terminal);
+            CHECK(!forged.current_position_world);
+            CHECK(!forged.current_tangent_line);
+        }
+    }
     // Q1-05: cross-document ownership and revision staleness cannot be
     // masked by equal source Feature IDs or coincident runtime geometry.
     {
