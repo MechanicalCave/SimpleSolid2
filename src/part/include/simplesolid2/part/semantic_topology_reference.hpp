@@ -245,6 +245,35 @@ struct MaterialEdgeReference final {
         const MaterialEdgeReference&) = default;
 };
 
+// Q1: strict material Edge plus a separately certified producer-semantic
+// Point at its selected physical terminal. This value is Part-local; callers
+// must separately qualify it with its owning DocumentId. No current native
+// Vertex, endpoint ordinal or world position is part of its identity.
+struct StableEdgeLocalTerminalKey final {
+    FeaturePointAddress certified_semantic_point;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return certified_semantic_point.valid();
+    }
+
+    friend bool operator==(
+        const StableEdgeLocalTerminalKey&,
+        const StableEdgeLocalTerminalKey&) = default;
+};
+
+struct SelectedMaterialEdgeEnd final {
+    MaterialEdgeReference source_edge;
+    StableEdgeLocalTerminalKey terminal;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return source_edge.valid() && terminal.valid();
+    }
+
+    friend bool operator==(
+        const SelectedMaterialEdgeEnd&,
+        const SelectedMaterialEdgeEnd&) = default;
+};
+
 inline bool FeatureSurfaceAddress::valid() const noexcept {
     if (!producer_feature_id.valid()) {
         return false;

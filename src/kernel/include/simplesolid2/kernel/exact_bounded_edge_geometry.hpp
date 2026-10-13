@@ -38,6 +38,10 @@ struct ExactBoundedEdge3d final {
     double bounded_length_mm{};
     Point3 midpoint_at_half_bounded_length_world{};
     UnorientedUnitTangent3 midpoint_tangent_line{};
+    // Q1 transient membership bridge only: token[i], position[i] and
+    // tangent[i] denote the SAME physical terminal on the SAME current Edge.
+    // Slot ordering and runtime tokens never enter durable Part identity.
+    std::array<RuntimeVertexToken, 2> current_terminal_vertex_tokens{};
 };
 struct ExactEdge3dResult final {
     ExactEdge3dStatus status{ExactEdge3dStatus::invalid_input};

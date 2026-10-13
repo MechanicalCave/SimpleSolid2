@@ -278,6 +278,29 @@ int main() {
     constexpr kernel::RuntimeEdgeToken edge1{101U};
     constexpr kernel::RuntimeEdgeToken edge2{102U};
 
+    // Q1 semantic value is the exact chosen Edge together with one
+    // independently valid three-Surface Point. It stores no ordinal,
+    // provider Vertex token or XYZ. The global Point kind is untouched.
+    {
+        const part::MaterialEdgeReference edge_ref{
+            v.stage, v.curve_address,
+            part::SingularAtAuthoredStage{}};
+        const part::SelectedMaterialEdgeEnd end_a{
+            edge_ref,
+            part::StableEdgeLocalTerminalKey{v.first_point}};
+        const part::SelectedMaterialEdgeEnd end_b{
+            edge_ref,
+            part::StableEdgeLocalTerminalKey{v.second_point}};
+        CHECK(end_a.valid());
+        CHECK(end_b.valid());
+        CHECK(end_a != end_b);
+        CHECK(end_a == end_a);
+        CHECK(!part::SelectedMaterialEdgeEnd{}.valid());
+        CHECK(!part::StableEdgeLocalTerminalKey{}.valid());
+        CHECK(!part::SelectedEdgeEndResolution{}.resolved());
+        CHECK(!part::SelectedEdgeEndAuthoringResult{}.ok());
+    }
+
     // Singular authored meaning follows strict bounded-Edge survival:
     // 1 -> Resolved, 0 -> Missing, split -> Ambiguous.
     {

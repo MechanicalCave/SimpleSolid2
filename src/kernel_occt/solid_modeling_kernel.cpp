@@ -6132,6 +6132,18 @@ OcctSolidModelingKernel::queryExactBoundedEdge3d(
                     ? Status::closed_or_periodic
                     : Status::degenerate_edge);
             }
+            // Match the actual Edge-owned native vertices in THIS exact
+            // runtime Body inventory. Failure is atomic: no Q0 geometry is
+            // ever published without the Q1 transient token membership pair.
+            const auto first_token =
+                inventoryVertexToken(*runtime, first_vertex);
+            const auto last_token =
+                inventoryVertexToken(*runtime, last_vertex);
+            if (!first_token || !last_token ||
+                !first_token->valid() || !last_token->valid() ||
+                *first_token == *last_token) {
+                return fail(Status::kernel_failure);
+            }
 
             const gp_Pnt analytic_first = curve.Value(first);
             const gp_Pnt analytic_last = curve.Value(last);
@@ -6230,6 +6242,8 @@ OcctSolidModelingKernel::queryExactBoundedEdge3d(
                     *first_line, *last_line}
                 : std::array<kernel::UnorientedUnitTangent3, 2>{
                     *last_line, *first_line};
+            geometry.current_terminal_vertex_tokens = {
+                *first_token, *last_token};
             geometry.bounded_length_mm = length;
             geometry.midpoint_at_half_bounded_length_world = xyz(analytic_mid);
             geometry.midpoint_tangent_line = *mid_line;

@@ -4303,6 +4303,397 @@ authorMaterialEdgeReference(
     return result;
 }
 
+namespace {
+
+struct Q1StageView final {
+    const BodyStageTopologyCatalog* catalog{};
+    kernel::RuntimeSolidHandle solid;
+};
+
+// A raw revision supplied by an arbitrary caller is never source authority.
+[[nodiscard]] std::optional<Q1StageView>
+admitSelectedEdgeEndStage(
+    const PartDocument& owner,
+    const PartEvaluation& evaluation,
+    const BodyStageRef& source_stage) {
+    if (!evaluation.source_document_id ||
+        *evaluation.source_document_id != owner.documentId() ||
+        evaluation.source_revision != owner.revision() ||
+        !source_stage.valid() ||
+        source_stage.kind != BodyStageKind::after_feature ||
+        !source_stage.feature_id ||
+        owner.findFeature(*source_stage.feature_id) == nullptr) {
+        return std::nullopt;
+    }
+    const FeatureEvaluation* found = nullptr;
+    for (const auto& feature : evaluation.features) {
+        if (feature.feature_id != *source_stage.feature_id) {
+            continue;
+        }
+        if (found != nullptr) {
+            return std::nullopt;
+        }
+        found = &feature;
+    }
+    if (!found ||
+        found->status != FeatureEvaluationStatus::up_to_date ||
+        !found->result_solid || !found->result_topology ||
+        found->result_topology->stage != source_stage ||
+        !found->result_topology->complete()) {
+        return std::nullopt;
+    }
+    return Q1StageView{&*found->result_topology, found->result_solid};
+}
+
+[[nodiscard]] SelectedEdgeEndStatus
+q1EdgeStatus(kernel::ReferenceStatus status) noexcept {
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return SelectedEdgeEndStatus::resolved;
+    case kernel::ReferenceStatus::missing:
+        return SelectedEdgeEndStatus::edge_missing;
+    case kernel::ReferenceStatus::ambiguous:
+        return SelectedEdgeEndStatus::edge_ambiguous;
+    case kernel::ReferenceStatus::unsupported:
+        return SelectedEdgeEndStatus::edge_unsupported;
+    }
+    return SelectedEdgeEndStatus::invalid_context;
+}
+
+[[nodiscard]] SelectedEdgeEndStatus
+q1TerminalStatus(kernel::ReferenceStatus status) noexcept {
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return SelectedEdgeEndStatus::resolved;
+    case kernel::ReferenceStatus::missing:
+        return SelectedEdgeEndStatus::terminal_missing;
+    case kernel::ReferenceStatus::ambiguous:
+        return SelectedEdgeEndStatus::terminal_ambiguous;
+    case kernel::ReferenceStatus::unsupported:
+        return SelectedEdgeEndStatus::terminal_unsupported;
+    }
+    return SelectedEdgeEndStatus::invalid_context;
+}
+
+struct Q1TerminalCertificate final {
+    SelectedEdgeEndStatus status{SelectedEdgeEndStatus::terminal_missing};
+    std::optional<FeaturePointAddress> point;
+    std::optional<kernel::RuntimeVertexToken> vertex;
+    std::array<kernel::RuntimeVertexToken, 2> edge_vertices{};
+};
+
+// Incidence is a current-Body membership test, never a semantic Point
+// winner. Every accepted Point has its OWN globally Resolved lineage.
+[[nodiscard]] Q1TerminalCertificate
+certifySelectedEdgeTerminal(
+    const BodyStageTopologyCatalog& catalog,
+    kernel::RuntimeEdgeToken current_edge,
+    const std::optional<FeaturePointAddress>& authored_point,
+    const std::optional<kernel::RuntimeVertexToken>& indicated_vertex) {
+    Q1TerminalCertificate result;
+    if (!current_edge.valid()) {
+        result.status = SelectedEdgeEndStatus::invalid_context;
+        return result;
+    }
+    std::array<const BodyVertexTopologyRecord*, 2> physical{};
+    std::size_t count = 0U;
+    for (const auto& vertex : catalog.vertices) {
+        if (std::find(
+                vertex.incident_material_edges.begin(),
+                vertex.incident_material_edges.end(),
+                current_edge) == vertex.incident_material_edges.end()) {
+            continue;
+        }
+        if (count < physical.size()) {
+            physical[count] = &vertex;
+        }
+        ++count;
+    }
+    if (count != physical.size()) {
+        result.status = count > physical.size()
+            ? SelectedEdgeEndStatus::terminal_ambiguous
+            : SelectedEdgeEndStatus::terminal_missing;
+        return result;
+    }
+    if (!physical[0]->runtime_token.valid() ||
+        !physical[1]->runtime_token.valid() ||
+        physical[0]->runtime_token == physical[1]->runtime_token) {
+        result.status = SelectedEdgeEndStatus::terminal_ambiguous;
+        return result;
+    }
+    result.edge_vertices = {
+        physical[0]->runtime_token, physical[1]->runtime_token};
+
+    const FeaturePointResolution* claimed = nullptr;
+    if (authored_point) {
+        for (const auto& point : catalog.points) {
+            if (point.address == *authored_point) {
+                if (claimed != nullptr) {
+                    result.status = SelectedEdgeEndStatus::terminal_ambiguous;
+                    return result;
+                }
+                claimed = &point;
+            }
+        }
+        if (!claimed) {
+            return result;
+        }
+        result.status = q1TerminalStatus(claimed->status);
+        if (result.status != SelectedEdgeEndStatus::resolved) {
+            return result;
+        }
+        if (claimed->current_vertices.size() != 1U) {
+            result.status = SelectedEdgeEndStatus::terminal_ambiguous;
+            return result;
+        }
+    }
+
+    const BodyVertexTopologyRecord* chosen = nullptr;
+    for (const auto* candidate : physical) {
+        if ((indicated_vertex &&
+             candidate->runtime_token == *indicated_vertex) ||
+            (claimed && claimed->current_vertices.size() == 1U &&
+             candidate->runtime_token == claimed->current_vertices.front())) {
+            if (chosen) {
+                result.status = SelectedEdgeEndStatus::terminal_ambiguous;
+                return result;
+            }
+            chosen = candidate;
+        }
+    }
+    if (!chosen) {
+        return result;
+    }
+    if (chosen->accounting_class !=
+            TopologyAccountingClass::referenceable) {
+        result.status = SelectedEdgeEndStatus::terminal_unsupported;
+        return result;
+    }
+    result.status = q1TerminalStatus(chosen->referenceability);
+    if (result.status != SelectedEdgeEndStatus::resolved) {
+        return result;
+    }
+    if (chosen->point_candidates.size() != 1U) {
+        result.status = chosen->point_candidates.empty()
+            ? SelectedEdgeEndStatus::terminal_unsupported
+            : SelectedEdgeEndStatus::terminal_ambiguous;
+        return result;
+    }
+    const auto& address = chosen->point_candidates.front();
+    if (authored_point && address != *authored_point) {
+        result.status = SelectedEdgeEndStatus::terminal_missing;
+        return result;
+    }
+    // The current vertex cannot be claimed by two independently Resolved
+    // global Points. Never upgrade an intrinsically Ambiguous global Point.
+    const FeaturePointResolution* unique = nullptr;
+    std::size_t resolved_claim_count = 0U;
+    for (const auto& point : catalog.points) {
+        if (point.address == address) {
+            if (unique != nullptr) {
+                result.status = SelectedEdgeEndStatus::terminal_ambiguous;
+                return result;
+            }
+            unique = &point;
+        }
+        if (point.status == kernel::ReferenceStatus::resolved &&
+            point.current_vertices.size() == 1U &&
+            point.current_vertices.front() == chosen->runtime_token) {
+            ++resolved_claim_count;
+        }
+    }
+    if (!unique) {
+        result.status = SelectedEdgeEndStatus::terminal_missing;
+        return result;
+    }
+    result.status = q1TerminalStatus(unique->status);
+    if (result.status != SelectedEdgeEndStatus::resolved) {
+        return result;
+    }
+    if (unique->current_vertices.size() != 1U ||
+        unique->current_vertices.front() != chosen->runtime_token ||
+        resolved_claim_count != 1U ||
+        (claimed && claimed != unique)) {
+        result.status = SelectedEdgeEndStatus::terminal_ambiguous;
+        return result;
+    }
+    result.point = address;
+    result.vertex = chosen->runtime_token;
+    return result;
+}
+
+[[nodiscard]] SelectedEdgeEndResolution
+materializeSelectedEdgeTerminal(
+    const Q1StageView& stage,
+    kernel::RuntimeEdgeToken edge,
+    const Q1TerminalCertificate& certified,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) {
+    SelectedEdgeEndResolution result;
+    if (certified.status != SelectedEdgeEndStatus::resolved ||
+        !certified.vertex || !certified.point) {
+        result.status = certified.status;
+        return result;
+    }
+    result.status = SelectedEdgeEndStatus::native_geometry_unavailable;
+    const auto bound = provider.bindExactEdgeToBody(stage.solid, edge);
+    if (!bound || !bound->valid() ||
+        bound->sourceBody().get() != stage.solid.get() ||
+        bound->edge() != edge) {
+        return result;
+    }
+    const auto current = provider.queryExactBoundedEdge3d(
+        stage.solid, *bound);
+    if (!current.ok()) {
+        result.native_error = current.status;
+        return result;
+    }
+    const auto& g = *current.geometry;
+    const auto& tokens = g.current_terminal_vertex_tokens;
+    if (!tokens[0].valid() || !tokens[1].valid() ||
+        tokens[0] == tokens[1] ||
+        !((tokens[0] == certified.edge_vertices[0] &&
+           tokens[1] == certified.edge_vertices[1]) ||
+          (tokens[1] == certified.edge_vertices[0] &&
+           tokens[0] == certified.edge_vertices[1]))) {
+        return result;
+    }
+    for (std::size_t i = 0U; i < tokens.size(); ++i) {
+        if (tokens[i] == *certified.vertex) {
+            result.status = SelectedEdgeEndStatus::resolved;
+            result.current_edge = edge;
+            result.current_terminal = *certified.vertex;
+            result.current_position_world =
+                g.current_terminal_positions_world[i];
+            result.current_tangent_line = g.terminal_tangent_lines[i];
+            return result;
+        }
+    }
+    return result;
+}
+
+} // namespace
+
+SelectedEdgeEndAuthoringResult
+authorSelectedMaterialEdgeEnd(
+    const PartDocument& owning_document,
+    const PartEvaluation& evaluation,
+    const BodyStageRef& source_stage,
+    kernel::RuntimeEdgeToken picked_material_edge,
+    kernel::RuntimeVertexToken indicated_current_terminal,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) {
+    SelectedEdgeEndAuthoringResult result;
+    if (!picked_material_edge.valid() ||
+        !indicated_current_terminal.valid()) {
+        return result;
+    }
+    const auto stage = admitSelectedEdgeEndStage(
+        owning_document, evaluation, source_stage);
+    if (!stage) {
+        return result;
+    }
+    const auto& catalog = *stage->catalog;
+    const auto* existing = findEdgeRecord(
+        catalog, picked_material_edge);
+    if (!existing) {
+        result.status = SelectedEdgeEndStatus::edge_missing;
+        return result;
+    }
+    if (existing->accounting_class !=
+            TopologyAccountingClass::referenceable ||
+        existing->periodic_seam || existing->representation_partition) {
+        result.status = SelectedEdgeEndStatus::edge_unsupported;
+        return result;
+    }
+    if (existing->curve_candidates.size() != 1U) {
+        result.status = SelectedEdgeEndStatus::edge_ambiguous;
+        return result;
+    }
+    const auto authored_edge = authorMaterialEdgeReference(
+        catalog, picked_material_edge);
+    if (!authored_edge.ok()) {
+        result.status = q1EdgeStatus(authored_edge.status);
+        return result;
+    }
+    const auto edge_resolution = resolveMaterialEdgeReference(
+        *authored_edge.reference, catalog);
+    if (!edge_resolution) {
+        return result;
+    }
+    result.status = q1EdgeStatus(edge_resolution->status);
+    if (!edge_resolution->resolved() ||
+        edge_resolution->current_edges.front() != picked_material_edge) {
+        if (edge_resolution->resolved()) {
+            result.status = SelectedEdgeEndStatus::edge_ambiguous;
+        }
+        return result;
+    }
+    const auto certified = certifySelectedEdgeTerminal(
+        catalog, picked_material_edge, std::nullopt,
+        indicated_current_terminal);
+    result.status = certified.status;
+    if (certified.status != SelectedEdgeEndStatus::resolved) {
+        return result;
+    }
+    const auto geometry = materializeSelectedEdgeTerminal(
+        *stage, picked_material_edge, certified, provider);
+    result.status = geometry.status;
+    if (!geometry.resolved()) {
+        return result;
+    }
+    result.reference = SelectedMaterialEdgeEnd{
+        *authored_edge.reference,
+        StableEdgeLocalTerminalKey{*certified.point}};
+    return result;
+}
+
+SelectedEdgeEndResolution
+resolveSelectedMaterialEdgeEnd(
+    const PartDocument& owning_document,
+    const SelectedMaterialEdgeEnd& authored,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) {
+    SelectedEdgeEndResolution result;
+    if (!authored.valid()) {
+        return result;
+    }
+    // A historically valid, now deleted producer is semantically Missing,
+    // not a license to rebind to a same-XYZ replacement Feature. Cross-
+    // document/stale evaluation context still has higher failure precedence.
+    if (evaluation.source_document_id &&
+        *evaluation.source_document_id == owning_document.documentId() &&
+        evaluation.source_revision == owning_document.revision() &&
+        authored.source_edge.stage.feature_id &&
+        owning_document.findFeature(
+            *authored.source_edge.stage.feature_id) == nullptr) {
+        result.status = SelectedEdgeEndStatus::edge_missing;
+        return result;
+    }
+    const auto stage = admitSelectedEdgeEndStage(
+        owning_document, evaluation, authored.source_edge.stage);
+    if (!stage) {
+        return result;
+    }
+    const auto edge_resolution = resolveMaterialEdgeReference(
+        authored.source_edge, *stage->catalog);
+    if (!edge_resolution) {
+        return result;
+    }
+    result.status = q1EdgeStatus(edge_resolution->status);
+    if (!edge_resolution->resolved()) {
+        return result;
+    }
+    const auto edge = edge_resolution->current_edges.front();
+    const auto certified = certifySelectedEdgeTerminal(
+        *stage->catalog, edge,
+        authored.terminal.certified_semantic_point, std::nullopt);
+    if (certified.status != SelectedEdgeEndStatus::resolved) {
+        result.status = certified.status;
+        return result;
+    }
+    return materializeSelectedEdgeTerminal(
+        *stage, edge, certified, provider);
+}
+
 MaterialEdgeAuthoringResult
 authorProjectedMaterialEdgeReference(
     const BodyStageTopologyCatalog& catalog,
@@ -4957,6 +5348,7 @@ PartEvaluation evaluatePart(
     PartEvaluation result;
     result.source_revision =
         document.revision();
+    result.source_document_id = document.documentId();
     result.features.reserve(
         document.body().features.size());
 

@@ -232,6 +232,224 @@ part::PartDocument withReplacementBaseFeature(
     return std::move(*rebuilt.document);
 }
 
+// Q1-06 real native Part fixtures adapted from the existing PM-04C2
+// provider lifecycle test: half-cylinder Cut and partial Revolve. These
+// construct actual authored Feature history and current OCCT topology.
+part::PartDocument makeQ1PartRevolve(
+    core::BuiltinReferenceRole axis_role,
+    sketch::Point2 first,
+    sketch::Point2 opposite,
+    double angle) {
+    auto source =
+        part::PartDocument::create(
+            core::DocumentId::generate());
+    application::DocumentSession session{
+        {},
+        std::move(source)};
+
+    const auto sketch_created =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::
+                    xy_plane});
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
+    const auto sketch_id =
+        *sketch_created.sketch_id;
+
+    const auto rectangle_created =
+        session.execute(
+            application::AddSketchRectangleCommand{
+                sketch_id,
+                session.document().revision(),
+                first,
+                opposite,
+                sketch::EntityRole::regular,
+                false});
+    CHECK(rectangle_created.ok());
+
+    const auto* sketch =
+        session.document().findSketch(
+            sketch_id);
+    CHECK(sketch != nullptr);
+    const auto analysis =
+        sketch::analyzeRegions(
+            sketch->model);
+    CHECK(analysis.complete());
+    CHECK(analysis.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            analysis.regions.front());
+    CHECK(intent.has_value());
+
+    const auto profile =
+        session.execute(
+            application::CreateProfileCommand{
+                sketch_id,
+                session.document().revision(),
+                *intent});
+    CHECK(profile.ok() && profile.profile_id);
+
+    auto state = session.document().state();
+    const auto feature_id =
+        state.body.next_feature_id.allocate();
+    CHECK(feature_id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *feature_id,
+            "Revolve001",
+            false,
+            part::RevolveFeature{
+                *profile.profile_id,
+                part::AxisReference{
+                    part::BuiltinOriginAxisReference{
+                        axis_role}},
+                part::RevolveOperation::add,
+                part::OneSidedRevolveExtent{
+                    core::AngleValue{angle},
+                    false}}});
+
+    auto restored =
+        part::PartDocument::restore(
+            session.document().documentId(),
+            std::move(state),
+            session.document().revision());
+    CHECK(restored.ok());
+    return std::move(*restored.document);
+}
+
+part::PartDocument makeQ1ExtrudeCylinder() {
+    auto source =
+        part::PartDocument::create(
+            core::DocumentId::generate());
+    application::DocumentSession session{
+        {},
+        std::move(source)};
+
+    const auto sketch =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+    CHECK(sketch.ok() && sketch.sketch_id);
+    const auto circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                *sketch.sketch_id,
+                {0.0, 0.0},
+                10.0,
+                sketch::EntityRole::regular});
+    CHECK(circle.ok());
+    const auto* model =
+        session.document().findSketch(
+            *sketch.sketch_id);
+    CHECK(model != nullptr);
+    const auto regions =
+        sketch::analyzeRegions(model->model);
+    CHECK(regions.complete());
+    CHECK(regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            regions.regions.front());
+    CHECK(intent.has_value());
+    const auto profile =
+        session.execute(
+            application::CreateProfileCommand{
+                *sketch.sketch_id,
+                session.document().revision(),
+                *intent});
+    CHECK(profile.ok() && profile.profile_id);
+
+    auto state = session.document().state();
+    const auto id = state.body.next_feature_id.allocate();
+    CHECK(id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *id,
+            "ExtrudeCylinder",
+            false,
+            part::ExtrudeFeature{
+                *profile.profile_id,
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0},
+                    false}}});
+    auto restored = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(state),
+        session.document().revision());
+    CHECK(restored.ok());
+    return std::move(*restored.document);
+}
+
+// G0/V08: a real analytic cylinder clipped by one planar Boolean
+// Cut through its axis. Two distinct native rim Vertices can share the
+// same THREE semantic Surface sources (cap, cylinder, cut wall).
+part::PartDocument withQ1CylinderHalfCut(
+    const part::PartDocument& source) {
+    auto restored = part::PartDocument::restore(
+        source.documentId(),
+        source.state(),
+        source.revision());
+    CHECK(restored.ok());
+    application::DocumentSession session{
+        {},
+        std::move(*restored.document)};
+    const auto sketch_created = session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
+    const auto rectangle = session.execute(
+        application::AddSketchRectangleCommand{
+            *sketch_created.sketch_id,
+            session.document().revision(),
+            {-15.0, -15.0},
+            {0.0, 15.0},
+            sketch::EntityRole::regular,
+            false});
+    CHECK(rectangle.ok());
+    const auto* sketch = session.document().findSketch(
+        *sketch_created.sketch_id);
+    CHECK(sketch != nullptr);
+    const auto analysis = sketch::analyzeRegions(
+        sketch->model);
+    CHECK(analysis.complete());
+    CHECK(analysis.regions.size() == 1U);
+    const auto intent = part::makeProfileRegionIntent(
+        analysis.regions.front());
+    CHECK(intent.has_value());
+    const auto profile = session.execute(
+        application::CreateProfileCommand{
+            *sketch_created.sketch_id,
+            session.document().revision(),
+            *intent});
+    CHECK(profile.ok() && profile.profile_id);
+    auto state = session.document().state();
+    const auto feature_id =
+        state.body.next_feature_id.allocate();
+    CHECK(feature_id.has_value());
+    state.body.features.push_back(
+        part::PartFeature{
+            *feature_id,
+            "G0HalfCylinderCut",
+            false,
+            part::ExtrudeFeature{
+                *profile.profile_id,
+                part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{12.0},
+                    false}}});
+    auto rebuilt = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(state),
+        session.document().revision());
+    CHECK(rebuilt.ok());
+    return std::move(*rebuilt.document);
+}
+
+
 std::vector<part::MaterialEdgeReference>
 trihedralReferences(
     const part::BodyStageTopologyCatalog& catalog) {
@@ -900,10 +1118,404 @@ std::vector<double> verifyQ0StrictPartStageGeometry(
     return lengths;
 }
 
+// Test-only Q0 decorator: reorders complete native endpoint tuples (or
+// corrupts one tuple's token). Part must join by certified runtime membership,
+// never by OCCT traversal order or a coordinate/first/last heuristic.
+class Q1TerminalTupleQuery final :
+    public kernel::IExactBoundedEdgeGeometryQuery {
+public:
+    Q1TerminalTupleQuery(
+        kernel::IExactBoundedEdgeGeometryQuery& delegate,
+        bool mismatch,
+        bool duplicate_terminal_token = false)
+        : delegate_{delegate}, mismatch_{mismatch},
+          duplicate_terminal_token_{duplicate_terminal_token} {}
+
+    [[nodiscard]] std::optional<kernel::ScopedExactEdge>
+    bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle body,
+        kernel::RuntimeEdgeToken token) noexcept override {
+        return delegate_.bindExactEdgeToBody(std::move(body), token);
+    }
+
+    [[nodiscard]] kernel::ExactEdge3dResult queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedExactEdge& edge) noexcept override {
+        auto q = delegate_.queryExactBoundedEdge3d(
+            std::move(body), edge);
+        if (!q.ok()) return q;
+        auto& g = *q.geometry;
+        std::swap(g.current_terminal_vertex_tokens[0],
+                  g.current_terminal_vertex_tokens[1]);
+        std::swap(g.current_terminal_positions_world[0],
+                  g.current_terminal_positions_world[1]);
+        std::swap(g.terminal_tangent_lines[0],
+                  g.terminal_tangent_lines[1]);
+        if (mismatch_) {
+            g.current_terminal_vertex_tokens[0] =
+                kernel::RuntimeVertexToken{999999999U};
+        }
+        if (duplicate_terminal_token_) {
+            g.current_terminal_vertex_tokens[0] =
+                g.current_terminal_vertex_tokens[1];
+        }
+        return q;
+    }
+private:
+    kernel::IExactBoundedEdgeGeometryQuery& delegate_;
+    bool mismatch_;
+    bool duplicate_terminal_token_;
+};
+
+// A foreign OCCT *instance* is not a different Body: Q0 authority is the
+// exact RuntimeSolidHandle. This deliberately misbinds an otherwise valid
+// native Edge to a DIFFERENT actual Body and must be rejected before query.
+class Q1ForeignBodyBinderQuery final :
+    public kernel::IExactBoundedEdgeGeometryQuery {
+public:
+    Q1ForeignBodyBinderQuery(
+        kernel::IExactBoundedEdgeGeometryQuery& delegate,
+        kernel::RuntimeSolidHandle foreign_body,
+        kernel::RuntimeEdgeToken foreign_edge)
+        : delegate_{delegate},
+          foreign_body_{std::move(foreign_body)},
+          foreign_edge_{foreign_edge} {}
+
+    [[nodiscard]] std::optional<kernel::ScopedExactEdge>
+    bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle,
+        kernel::RuntimeEdgeToken) noexcept override {
+        return delegate_.bindExactEdgeToBody(
+            foreign_body_, foreign_edge_);
+    }
+
+    [[nodiscard]] kernel::ExactEdge3dResult queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedExactEdge& edge) noexcept override {
+        return delegate_.queryExactBoundedEdge3d(
+            std::move(body), edge);
+    }
+private:
+    kernel::IExactBoundedEdgeGeometryQuery& delegate_;
+    kernel::RuntimeSolidHandle foreign_body_;
+    kernel::RuntimeEdgeToken foreign_edge_;
+};
+
+// Q1-06: real Fillet/Chamfer generated Vertices remain globally
+// Unsupported; incident Edge selection cannot upgrade their Point meaning.
+void verifyQ1NoGlobalPointPromotion(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture) {
+    CHECK(!evaluation.features.empty());
+    CHECK(evaluation.features.back().result_topology);
+    const auto& catalog =
+        *evaluation.features.back().result_topology;
+    CHECK(catalog.complete());
+    std::size_t unsupported_vertices = 0U;
+    std::size_t rejected_end_uses = 0U;
+    for (const auto& vertex : catalog.vertices) {
+        if (vertex.referenceability !=
+                kernel::ReferenceStatus::unsupported &&
+            vertex.referenceability !=
+                kernel::ReferenceStatus::ambiguous) {
+            continue;
+        }
+        ++unsupported_vertices;
+        const auto original_status = vertex.referenceability;
+        for (const auto edge : vertex.incident_material_edges) {
+            const auto attempt = part::authorSelectedMaterialEdgeEnd(
+                document, evaluation, catalog.stage,
+                edge, vertex.runtime_token, provider);
+            CHECK(!attempt.ok());
+            CHECK(!attempt.reference);
+            CHECK(attempt.status !=
+                  part::SelectedEdgeEndStatus::resolved);
+            CHECK(attempt.status !=
+                  part::SelectedEdgeEndStatus::native_geometry_unavailable);
+            CHECK(vertex.referenceability == original_status);
+            ++rejected_end_uses;
+        }
+    }
+    CHECK(unsupported_vertices >= 1U);
+    CHECK(rejected_end_uses >= 1U);
+    std::cout << "RG02B1_Q1_NEGATIVE"
+              << " fixture=" << fixture
+              << " unsupported_or_ambiguous_vertices="
+              << unsupported_vertices
+              << " rejected_edge_terminal_uses=" << rejected_end_uses
+              << " global_point_promotions=0\n";
+}
+
+// Q1-01/Q1-02: real OCCT material Edge selection plus one independently
+// certified current native terminal. This helper never chooses by XYZ/order.
+std::vector<part::SelectedMaterialEdgeEnd>
+verifyQ1CanonicalSelectedEnds(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture) {
+    CHECK(evaluation.source_document_id.has_value());
+    CHECK(*evaluation.source_document_id == document.documentId());
+    CHECK(evaluation.source_revision == document.revision());
+    CHECK(evaluation.features.size() == 1U);
+    CHECK(evaluation.features.front().result_topology);
+    const auto& catalog =
+        *evaluation.features.front().result_topology;
+    CHECK(catalog.complete());
+    CHECK(catalog.edges.size() == 12U);
+    CHECK(catalog.vertices.size() == 8U);
+
+    std::vector<part::SelectedMaterialEdgeEnd> result;
+    for (const auto& edge : catalog.edges) {
+        std::size_t end_uses = 0U;
+        for (const auto& vertex : catalog.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge.runtime_token) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            const auto authored =
+                part::authorSelectedMaterialEdgeEnd(
+                    document, evaluation, catalog.stage,
+                    edge.runtime_token, vertex.runtime_token, provider);
+            CHECK(authored.ok());
+            const auto resolved =
+                part::resolveSelectedMaterialEdgeEnd(
+                    document, *authored.reference,
+                    evaluation, provider);
+            CHECK(resolved.resolved());
+            CHECK(resolved.current_edge == edge.runtime_token);
+            CHECK(resolved.current_terminal == vertex.runtime_token);
+            CHECK(vertex.provider_point);
+            CHECK(std::abs(resolved.current_position_world->x -
+                           vertex.provider_point->x) < 1.0e-6);
+            CHECK(std::abs(resolved.current_position_world->y -
+                           vertex.provider_point->y) < 1.0e-6);
+            CHECK(std::abs(resolved.current_position_world->z -
+                           vertex.provider_point->z) < 1.0e-6);
+            const auto& t =
+                resolved.current_tangent_line->representative;
+            CHECK(std::abs(t.x*t.x + t.y*t.y + t.z*t.z - 1.0) <
+                  1.0e-7);
+            for (const auto& other : result) {
+                CHECK(other != *authored.reference);
+            }
+            result.push_back(*authored.reference);
+            ++end_uses;
+        }
+        CHECK(end_uses == 2U);
+    }
+    CHECK(result.size() == 24U);
+    std::size_t trihedral = 0U;
+    for (const auto& vertex : catalog.vertices) {
+        CHECK(vertex.incident_material_edges.size() == 3U);
+        std::vector<part::SelectedMaterialEdgeEnd> at_corner;
+        for (const auto edge : vertex.incident_material_edges) {
+            const auto authored =
+                part::authorSelectedMaterialEdgeEnd(
+                    document, evaluation, catalog.stage, edge,
+                    vertex.runtime_token, provider);
+            CHECK(authored.ok());
+            CHECK(std::find(result.begin(), result.end(),
+                            *authored.reference) != result.end());
+            at_corner.push_back(*authored.reference);
+        }
+        CHECK(at_corner.size() == 3U);
+        CHECK(at_corner[0] != at_corner[1]);
+        CHECK(at_corner[1] != at_corner[2]);
+        CHECK(at_corner[0] != at_corner[2]);
+        // B+corner stays B, regardless of an earlier A transient hint.
+        const auto edge_b =
+            part::authorSelectedMaterialEdgeEnd(
+                document, evaluation, catalog.stage,
+                vertex.incident_material_edges[1],
+                vertex.runtime_token, provider);
+        CHECK(edge_b.ok());
+        CHECK(*edge_b.reference == at_corner[1]);
+        CHECK(*edge_b.reference != at_corner[0]);
+        ++trihedral;
+    }
+    CHECK(trihedral == 8U);
+    std::cout << "RG02B1_Q1_CANONICAL"
+              << " fixture=" << fixture
+              << " semantic_edge_ends=" << result.size()
+              << " trihedral_corners=" << trihedral
+              << " provider_token_durable=0"
+              << " xyz_rebind=0"
+              << " UI_picker_tested=0\n";
+    return result;
+}
+
+// Q1-06: do not classify an actual half-cylinder cut's ambiguous
+// three-Surface Point as uniquely selected merely because an Edge touches
+// its current native Vertex. Partial Revolve is a distinct real positive
+// family, not conflated with the half-cylinder's ambiguous Points.
+void verifyQ1RealHalfCylinderAndRevolve(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    const auto cylinder = makeQ1ExtrudeCylinder();
+    const auto cylinder_eval = part::evaluatePart(cylinder, kernel);
+    CHECK(cylinder_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(cylinder_eval.features.size() == 1U);
+    CHECK(cylinder_eval.features[0].result_topology);
+    const auto& whole = *cylinder_eval.features[0].result_topology;
+    CHECK(whole.vertices.size() == 2U);
+    for (const auto& vertex : whole.vertices) {
+        CHECK(vertex.referenceability ==
+              kernel::ReferenceStatus::unsupported);
+        CHECK(vertex.point_candidates.empty());
+        for (const auto current_edge : vertex.incident_material_edges) {
+            const auto rejected = part::authorSelectedMaterialEdgeEnd(
+                cylinder, cylinder_eval, whole.stage,
+                current_edge, vertex.runtime_token, kernel);
+            CHECK(!rejected.ok());
+            CHECK(!rejected.reference);
+        }
+    }
+
+    const auto half_document = withQ1CylinderHalfCut(cylinder);
+    const auto half_evaluation = part::evaluatePart(
+        half_document, kernel);
+    CHECK(half_evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(half_evaluation.features.size() == 2U);
+    CHECK(half_evaluation.features.back().result_topology);
+    const auto& cat =
+        *half_evaluation.features.back().result_topology;
+    CHECK(cat.complete());
+    CHECK(cat.vertices.size() == 6U);
+    std::size_t real_ambiguous = 0U;
+    std::size_t real_unsupported = 0U;
+    std::size_t ambiguous_terminal_uses = 0U;
+    for (const auto& vertex : cat.vertices) {
+        if (vertex.referenceability ==
+                kernel::ReferenceStatus::ambiguous) {
+            ++real_ambiguous;
+            CHECK(vertex.point_candidates.size() == 1U);
+            const auto& address = vertex.point_candidates.front();
+            const auto point = std::find_if(
+                cat.points.begin(), cat.points.end(),
+                [&address](const auto& item) {
+                    return item.address == address;
+                });
+            CHECK(point != cat.points.end());
+            CHECK(point->status ==
+                  kernel::ReferenceStatus::ambiguous);
+            CHECK(point->current_vertices.size() > 1U);
+        } else {
+            CHECK(vertex.referenceability ==
+                  kernel::ReferenceStatus::unsupported);
+            CHECK(vertex.point_candidates.empty());
+            ++real_unsupported;
+        }
+        for (const auto edge : vertex.incident_material_edges) {
+            const auto attempt = part::authorSelectedMaterialEdgeEnd(
+                half_document, half_evaluation, cat.stage,
+                edge, vertex.runtime_token, kernel);
+            CHECK(!attempt.ok());
+            CHECK(!attempt.reference);
+            CHECK(attempt.status !=
+                  part::SelectedEdgeEndStatus::resolved);
+            CHECK(attempt.status !=
+                  part::SelectedEdgeEndStatus::native_geometry_unavailable);
+            if (vertex.referenceability ==
+                    kernel::ReferenceStatus::ambiguous) {
+                ++ambiguous_terminal_uses;
+            }
+        }
+    }
+    CHECK(real_ambiguous == 4U);
+    CHECK(real_unsupported == 2U);
+    CHECK(ambiguous_terminal_uses >= 1U);
+    std::size_t ambiguous_point_addresses = 0U;
+    for (const auto& point : cat.points) {
+        if (point.status ==
+                kernel::ReferenceStatus::ambiguous) {
+            ++ambiguous_point_addresses;
+            CHECK(point.candidate_vertex_count > 1U);
+        }
+    }
+    CHECK(ambiguous_point_addresses == 2U);
+    std::cout << "RG02B1_Q1_REAL_HALF_CYLINDER"
+              << " ambiguous_vertices=" << real_ambiguous
+              << " unsupported_vertices=" << real_unsupported
+              << " ambiguous_terminal_uses_denied="
+              << ambiguous_terminal_uses
+              << " false_resolved=0\n";
+
+    const auto partial = makeQ1PartRevolve(
+        core::BuiltinReferenceRole::x_axis,
+        {10.0, 0.0}, {20.0, 10.0},
+        1.57079632679489661923);
+    const auto partial_eval = part::evaluatePart(partial, kernel);
+    CHECK(partial_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(partial_eval.features.size() == 1U);
+    CHECK(partial_eval.features[0].result_topology);
+    const auto& revolved =
+        *partial_eval.features[0].result_topology;
+    CHECK(revolved.complete());
+    CHECK(revolved.vertices.size() == 6U);
+    for (const auto& vertex : revolved.vertices) {
+        CHECK(vertex.referenceability ==
+              kernel::ReferenceStatus::resolved);
+        CHECK(vertex.point_candidates.size() == 1U);
+    }
+    std::size_t line_terminal_uses = 0U;
+    std::size_t arc_terminal_uses = 0U;
+    for (const auto& edge : revolved.edges) {
+        for (const auto& vertex : revolved.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge.runtime_token) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            const auto authored = part::authorSelectedMaterialEdgeEnd(
+                partial, partial_eval, revolved.stage,
+                edge.runtime_token, vertex.runtime_token, kernel);
+            if (!authored.ok()) {
+                CHECK(authored.status !=
+                      part::SelectedEdgeEndStatus::resolved);
+                continue;
+            }
+            const auto resolved = part::resolveSelectedMaterialEdgeEnd(
+                partial, *authored.reference, partial_eval, kernel);
+            CHECK(resolved.resolved());
+            CHECK(resolved.current_edge == edge.runtime_token);
+            CHECK(resolved.current_terminal == vertex.runtime_token);
+            switch (edge.curve_kind) {
+            case kernel::CurveKind::line:
+                ++line_terminal_uses;
+                break;
+            case kernel::CurveKind::circle:
+                ++arc_terminal_uses;
+                break;
+            default:
+                CHECK(false);
+            }
+        }
+    }
+    CHECK(line_terminal_uses >= 2U);
+    CHECK(arc_terminal_uses >= 2U);
+    std::cout << "RG02B1_Q1_REAL_PARTIAL_REVOLVE"
+              << " certified_line_end_uses=" << line_terminal_uses
+              << " certified_arc_end_uses=" << arc_terminal_uses
+              << " global_point_promotion=0\n";
+}
+
 } // namespace
 
 int main() {
     kernel_occt::OcctSolidModelingKernel kernel;
+
+    // Q1-06: independent real Part/OCCT negative and Revolve witnesses.
+    verifyQ1RealHalfCylinderAndRevolve(kernel);
 
     auto base_document =
         makeBasePart();
@@ -935,6 +1547,341 @@ int main() {
             "E0-01-pristine-extrude");
     const auto q0_base_lengths = verifyQ0StrictPartStageGeometry(
         base_evaluation.features[0], kernel, "Q0-extrude");
+    const auto q1_base_sources = verifyQ1CanonicalSelectedEnds(
+        base_document, base_evaluation, kernel, "Q1-01-pristine");
+    CHECK(q1_base_sources.size() == 24U);
+    // Q1-07: full tuple reorder is harmless; a forged membership token
+    // causes typed unavailable with no partial END/geometry publication.
+    {
+        Q1TerminalTupleQuery permuted{kernel, false};
+        Q1TerminalTupleQuery corrupted{kernel, true};
+        Q1TerminalTupleQuery duplicated{kernel, false, true};
+        for (const auto& source : q1_base_sources) {
+            const auto original =
+                part::resolveSelectedMaterialEdgeEnd(
+                    base_document, source, base_evaluation, kernel);
+            const auto reordered =
+                part::resolveSelectedMaterialEdgeEnd(
+                    base_document, source, base_evaluation, permuted);
+            CHECK(original.resolved());
+            CHECK(reordered.resolved());
+            CHECK(reordered.current_terminal ==
+                  original.current_terminal);
+            CHECK(reordered.current_position_world->x ==
+                  original.current_position_world->x);
+            CHECK(reordered.current_position_world->y ==
+                  original.current_position_world->y);
+            CHECK(reordered.current_position_world->z ==
+                  original.current_position_world->z);
+            const auto forged =
+                part::resolveSelectedMaterialEdgeEnd(
+                    base_document, source, base_evaluation, corrupted);
+            CHECK(forged.status ==
+                  part::SelectedEdgeEndStatus::native_geometry_unavailable);
+            CHECK(!forged.resolved());
+            CHECK(!forged.current_edge);
+            CHECK(!forged.current_terminal);
+            CHECK(!forged.current_position_world);
+            CHECK(!forged.current_tangent_line);
+            const auto repeated = part::resolveSelectedMaterialEdgeEnd(
+                base_document, source, base_evaluation, duplicated);
+            CHECK(repeated.status ==
+                  part::SelectedEdgeEndStatus::native_geometry_unavailable);
+            CHECK(!repeated.resolved());
+            CHECK(!repeated.current_edge);
+            CHECK(!repeated.current_terminal);
+            CHECK(!repeated.current_position_world);
+            CHECK(!repeated.current_tangent_line);
+        }
+    }
+    // Q1-06 synthetic mutation of a REAL native current-stage catalog:
+    // global Point status is independently Ambiguous/Unsupported/Missing.
+    // Exact Edge incidence and same-Body native geometry are unchanged;
+    // no selected material Edge may promote that Point to Resolved.
+    {
+        const auto& source = q1_base_sources.front();
+        const auto current = part::resolveSelectedMaterialEdgeEnd(
+            base_document, source, base_evaluation, kernel);
+        CHECK(current.resolved());
+        const auto native_vertex = *current.current_terminal;
+        const auto native_edge = *current.current_edge;
+        const auto replayWithPointStatus = [&](
+            kernel::ReferenceStatus point_status,
+            part::SelectedEdgeEndStatus expected) {
+            auto synthetic = base_evaluation;
+            CHECK(synthetic.features.front().result_topology);
+            auto& cat =
+                *synthetic.features.front().result_topology;
+            auto p = std::find_if(
+                cat.points.begin(), cat.points.end(),
+                [&source](const auto& item) {
+                    return item.address ==
+                        source.terminal.certified_semantic_point;
+                });
+            CHECK(p != cat.points.end());
+            auto v = std::find_if(
+                cat.vertices.begin(), cat.vertices.end(),
+                [native_vertex](const auto& item) {
+                    return item.runtime_token == native_vertex;
+                });
+            CHECK(v != cat.vertices.end());
+            p->status = point_status;
+            if (point_status ==
+                    kernel::ReferenceStatus::ambiguous) {
+                const auto different = std::find_if(
+                    cat.vertices.begin(), cat.vertices.end(),
+                    [native_vertex](const auto& item) {
+                        return item.runtime_token != native_vertex;
+                    });
+                CHECK(different != cat.vertices.end());
+                p->current_vertices.push_back(
+                    different->runtime_token);
+                p->candidate_vertex_count = 2U;
+                v->referenceability =
+                    kernel::ReferenceStatus::ambiguous;
+            } else {
+                p->current_vertices.clear();
+                p->candidate_vertex_count = 0U;
+                if (point_status ==
+                        kernel::ReferenceStatus::unsupported) {
+                    v->accounting_class =
+                        part::TopologyAccountingClass::
+                            semantically_unsupported;
+                    v->referenceability =
+                        kernel::ReferenceStatus::unsupported;
+                    v->point_candidates.clear();
+                }
+            }
+            CHECK(cat.complete());
+            const auto absent = part::resolveSelectedMaterialEdgeEnd(
+                base_document, source, synthetic, kernel);
+            CHECK(absent.status == expected);
+            CHECK(!absent.resolved());
+            CHECK(!absent.current_edge);
+            CHECK(!absent.current_terminal);
+            CHECK(!absent.current_position_world);
+            CHECK(!absent.current_tangent_line);
+            const auto not_authored =
+                part::authorSelectedMaterialEdgeEnd(
+                    base_document, synthetic, cat.stage,
+                    native_edge, native_vertex, kernel);
+            CHECK(!not_authored.ok());
+            CHECK(!not_authored.reference);
+            CHECK(not_authored.status == expected);
+        };
+        replayWithPointStatus(
+            kernel::ReferenceStatus::ambiguous,
+            part::SelectedEdgeEndStatus::terminal_ambiguous);
+        replayWithPointStatus(
+            kernel::ReferenceStatus::unsupported,
+            part::SelectedEdgeEndStatus::terminal_unsupported);
+        replayWithPointStatus(
+            kernel::ReferenceStatus::missing,
+            part::SelectedEdgeEndStatus::terminal_missing);
+    }
+    // Q1-05: cross-document ownership and revision staleness cannot be
+    // masked by equal source Feature IDs or coincident runtime geometry.
+    {
+        const auto other_document = makeBasePart();
+        const auto foreign = part::resolveSelectedMaterialEdgeEnd(
+            other_document, q1_base_sources.front(),
+            base_evaluation, kernel);
+        CHECK(foreign.status ==
+              part::SelectedEdgeEndStatus::invalid_context);
+        CHECK(!foreign.resolved());
+        CHECK(!foreign.current_edge);
+        CHECK(!foreign.current_position_world);
+        const auto revised = part::PartDocument::restore(
+            base_document.documentId(),
+            base_document.state(),
+            core::DocumentRevision{
+                base_document.revision().value() + 1U});
+        CHECK(revised.ok());
+        const auto stale_owner = part::resolveSelectedMaterialEdgeEnd(
+            *revised.document, q1_base_sources.front(),
+            base_evaluation, kernel);
+        CHECK(stale_owner.status ==
+              part::SelectedEdgeEndStatus::invalid_context);
+        CHECK(!stale_owner.current_terminal);
+    }
+    {
+        const auto& cat = *base_evaluation.features[0].result_topology;
+        const auto current_edge = cat.edges.front().runtime_token;
+        const auto not_incident = std::find_if(
+            cat.vertices.begin(), cat.vertices.end(),
+            [current_edge](const auto& v) {
+                return std::find(
+                    v.incident_material_edges.begin(),
+                    v.incident_material_edges.end(),
+                    current_edge) == v.incident_material_edges.end();
+            });
+        CHECK(not_incident != cat.vertices.end());
+        const auto wrong = part::authorSelectedMaterialEdgeEnd(
+            base_document, base_evaluation, cat.stage,
+            current_edge, not_incident->runtime_token, kernel);
+        CHECK(!wrong.ok());
+        CHECK(wrong.status ==
+              part::SelectedEdgeEndStatus::terminal_missing);
+    }
+    // Q1-05: typed failure precedence for a still-live document but
+    // semantically changed, otherwise complete *current* stage inventory.
+    // Distinguish a vanished source, extra bounded Curve realization,
+    // inadmissible material Edge, lost certified terminal and provider
+    // mismatch; none may fall back to provider XYZ or a different Edge.
+    {
+        const auto& source = q1_base_sources.front();
+        CHECK(std::holds_alternative<part::SingularAtAuthoredStage>(
+            source.source_edge.branch));
+        const auto native = part::resolveSelectedMaterialEdgeEnd(
+            base_document, source, base_evaluation, kernel);
+        CHECK(native.resolved());
+        const auto current_edge = *native.current_edge;
+        const auto current_vertex = *native.current_terminal;
+        const auto assertNoPayload = [](
+            const part::SelectedEdgeEndResolution& result,
+            part::SelectedEdgeEndStatus expected) {
+            if (result.status != expected) {
+                std::cerr << "RG02B1_Q1_05_STATUS_DIAGNOSTIC"
+                          << " expected=" << static_cast<int>(expected)
+                          << " actual=" << static_cast<int>(result.status)
+                          << " geometry_present="
+                          << result.current_position_world.has_value()
+                          << "\\n";
+            }
+            CHECK(result.status == expected);
+            CHECK(!result.resolved());
+            CHECK(!result.current_edge);
+            CHECK(!result.current_terminal);
+            CHECK(!result.current_position_world);
+            CHECK(!result.current_tangent_line);
+        };
+        const auto withCatalogEdit = [&](
+            auto edit,
+            part::SelectedEdgeEndStatus expected) {
+            auto changed = base_evaluation;
+            CHECK(changed.features.front().result_topology);
+            auto& catalog = *changed.features.front().result_topology;
+            edit(catalog);
+            CHECK(catalog.complete());
+            assertNoPayload(part::resolveSelectedMaterialEdgeEnd(
+                base_document, source, changed, kernel), expected);
+        };
+        const auto findSourceCurve = [&source](
+            part::BodyStageTopologyCatalog& cat) {
+            const auto c = std::find_if(
+                cat.curves.begin(), cat.curves.end(),
+                [&source](const auto& item) {
+                    return item.address == source.source_edge.curve;
+                });
+            CHECK(c != cat.curves.end());
+            return c;
+        };
+        withCatalogEdit([&](auto& cat) {
+            auto c = findSourceCurve(cat);
+            c->status = kernel::ReferenceStatus::missing;
+            c->strict_edge_status = kernel::ReferenceStatus::missing;
+            c->current_edges.clear();
+            c->candidate_edge_count = 0U;
+        }, part::SelectedEdgeEndStatus::edge_missing);
+        withCatalogEdit([&](auto& cat) {
+            auto c = findSourceCurve(cat);
+            const auto other = std::find_if(
+                cat.edges.begin(), cat.edges.end(),
+                [current_edge](const auto& item) {
+                    return item.runtime_token != current_edge;
+                });
+            CHECK(other != cat.edges.end());
+            c->current_edges.push_back(other->runtime_token);
+            c->candidate_edge_count = c->current_edges.size();
+            c->strict_edge_status = kernel::ReferenceStatus::ambiguous;
+        }, part::SelectedEdgeEndStatus::edge_ambiguous);
+        withCatalogEdit([&](auto& cat) {
+            const auto e = std::find_if(
+                cat.edges.begin(), cat.edges.end(),
+                [current_edge](const auto& item) {
+                    return item.runtime_token == current_edge;
+                });
+            CHECK(e != cat.edges.end());
+            e->accounting_class =
+                part::TopologyAccountingClass::semantically_unsupported;
+            e->referenceability = kernel::ReferenceStatus::unsupported;
+            e->curve_kind = kernel::CurveKind::other;
+            e->curve_candidates.clear();
+        }, part::SelectedEdgeEndStatus::edge_unsupported);
+        withCatalogEdit([&](auto& cat) {
+            const auto p = std::find_if(
+                cat.points.begin(), cat.points.end(),
+                [&source](const auto& item) {
+                    return item.address ==
+                        source.terminal.certified_semantic_point;
+                });
+            CHECK(p != cat.points.end());
+            cat.points.erase(p);
+        }, part::SelectedEdgeEndStatus::terminal_missing);
+        withCatalogEdit([&](auto& cat) {
+            const auto p = std::find_if(
+                cat.points.begin(), cat.points.end(),
+                [&source](const auto& item) {
+                    return item.address ==
+                        source.terminal.certified_semantic_point;
+                });
+            CHECK(p != cat.points.end());
+            p->status = kernel::ReferenceStatus::unsupported;
+            p->current_vertices.clear();
+            p->candidate_vertex_count = 0U;
+        }, part::SelectedEdgeEndStatus::terminal_unsupported);
+        const auto bad_stage = [&] {
+            auto altered = source;
+            altered.source_edge.stage.kind =
+                part::BodyStageKind::empty_body;
+            return altered;
+        }();
+        assertNoPayload(part::resolveSelectedMaterialEdgeEnd(
+            base_document, bad_stage, base_evaluation, kernel),
+            part::SelectedEdgeEndStatus::invalid_context);
+        const auto& catalog =
+            *base_evaluation.features.front().result_topology;
+        const auto wrong_author = part::authorSelectedMaterialEdgeEnd(
+            base_document, base_evaluation, bad_stage.source_edge.stage,
+            current_edge, current_vertex, kernel);
+        CHECK(!wrong_author.ok());
+        CHECK(!wrong_author.reference);
+        CHECK(wrong_author.status ==
+              part::SelectedEdgeEndStatus::invalid_context);
+        const auto gone_edge = part::authorSelectedMaterialEdgeEnd(
+            base_document, base_evaluation, catalog.stage,
+            kernel::RuntimeEdgeToken{999999999U},
+            current_vertex, kernel);
+        CHECK(!gone_edge.ok());
+        CHECK(!gone_edge.reference);
+        CHECK(gone_edge.status == part::SelectedEdgeEndStatus::edge_missing);
+        kernel_occt::OcctSolidModelingKernel other_provider;
+        const auto other_document = makeBasePart();
+        const auto other_evaluation = part::evaluatePart(
+            other_document, other_provider);
+        CHECK(other_evaluation.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(other_evaluation.features.size() == 1U);
+        const auto& other_feature = other_evaluation.features.front();
+        CHECK(other_feature.result_solid);
+        CHECK(other_feature.result_topology);
+        CHECK(other_feature.result_topology->edges.size() == 12U);
+        CHECK(other_feature.result_solid.get() !=
+              base_evaluation.features.front().result_solid.get());
+        Q1ForeignBodyBinderQuery wrong_body{
+            other_provider, other_feature.result_solid,
+            other_feature.result_topology->edges.front().runtime_token};
+        assertNoPayload(part::resolveSelectedMaterialEdgeEnd(
+            base_document, source, base_evaluation, wrong_body),
+            part::SelectedEdgeEndStatus::native_geometry_unavailable);
+        const auto foreign_native = part::authorSelectedMaterialEdgeEnd(
+            base_document, base_evaluation, catalog.stage,
+            current_edge, current_vertex, wrong_body);
+        CHECK(!foreign_native.ok());
+        CHECK(!foreign_native.reference);
+        CHECK(foreign_native.status ==
+              part::SelectedEdgeEndStatus::native_geometry_unavailable);
+    }
     // G0/V11: reconstruct authored Part intent and reevaluate with an
     // independent OCCT provider instance. Only FeaturePointAddress
     // survives semantically; transient runtime tokens are neither
@@ -965,6 +1912,21 @@ int main() {
     const auto q0_fresh_lengths = verifyQ0StrictPartStageGeometry(
         fresh_evaluation.features[0], separate_kernel,
         "Q0-cold-rebuilt-provider");
+    const auto q1_fresh_sources = verifyQ1CanonicalSelectedEnds(
+        *reopened_document.document, fresh_evaluation,
+        separate_kernel, "Q1-03-cold-native");
+    CHECK(q1_fresh_sources.size() == 24U);
+    // Compare complete semantic identity sets independently of native
+    // Edge/Vertex enumeration and fresh OCCT provider generation.
+    for (const auto& original : q1_base_sources) {
+        CHECK(std::find(q1_fresh_sources.begin(),
+                        q1_fresh_sources.end(),
+                        original) != q1_fresh_sources.end());
+        const auto replay = part::resolveSelectedMaterialEdgeEnd(
+            *reopened_document.document, original,
+            fresh_evaluation, separate_kernel);
+        CHECK(replay.resolved());
+    }
     CHECK(q0_fresh_lengths.size() == q0_base_lengths.size());
     for (std::size_t i = 0; i < q0_base_lengths.size(); ++i) {
         CHECK(std::abs(q0_fresh_lengths[i] - q0_base_lengths[i]) < 1.0e-6);
@@ -1032,6 +1994,17 @@ int main() {
             taller_stage, "E0-07-height-edit");
     const auto q0_taller_lengths = verifyQ0StrictPartStageGeometry(
         taller_evaluation.features[0], kernel, "Q0-height-edit");
+    const auto q1_taller_sources = verifyQ1CanonicalSelectedEnds(
+        taller_document, taller_evaluation, kernel, "Q1-04-height-edit");
+    CHECK(q1_taller_sources.size() == 24U);
+    for (const auto& original : q1_base_sources) {
+        CHECK(std::find(q1_taller_sources.begin(),
+                        q1_taller_sources.end(),
+                        original) != q1_taller_sources.end());
+        const auto replay = part::resolveSelectedMaterialEdgeEnd(
+            taller_document, original, taller_evaluation, kernel);
+        CHECK(replay.resolved());
+    }
     CHECK(q0_taller_lengths.size() == q0_base_lengths.size());
     CHECK(q0_taller_lengths != q0_base_lengths);
     const auto stale_edit = kernel.queryExactBoundedEdge3d(
@@ -1087,6 +2060,15 @@ int main() {
     const auto& replacement_stage =
         *replaced_evaluation.features[0].result_topology;
     CHECK(replacement_stage.stage != original_stage.stage);
+    for (const auto& old_source : q1_base_sources) {
+        const auto absent = part::resolveSelectedMaterialEdgeEnd(
+            replaced_document, old_source, replaced_evaluation, kernel);
+        CHECK(absent.status == part::SelectedEdgeEndStatus::edge_missing);
+        CHECK(!absent.resolved());
+        CHECK(!absent.current_edge);
+        CHECK(!absent.current_terminal);
+        CHECK(!absent.current_position_world);
+    }
     const auto replaced_counts =
         characterizeNativeVertices(
             replacement_stage, "V12-replaced-producer");
@@ -1350,6 +2332,9 @@ int main() {
     CHECK(g0_chamfer.unsupported == 3U);
     CHECK(g0_chamfer.ambiguous == 0U);
     CHECK(g0_chamfer.missing == 0U);
+    verifyQ1NoGlobalPointPromotion(
+        trihedral_chamfer_document, trihedral_chamfer, kernel,
+        "Q1-06-real-chamfer");
     CHECK(
         countRole(
             chamfer_feature,
@@ -1446,6 +2431,9 @@ int main() {
     CHECK(g0_fillet.unsupported == 3U);
     CHECK(g0_fillet.ambiguous == 0U);
     CHECK(g0_fillet.missing == 0U);
+    verifyQ1NoGlobalPointPromotion(
+        *fillet_document.document, fillet_evaluation, kernel,
+        "Q1-06-real-fillet");
     CHECK(
         countRole(
             fillet,
