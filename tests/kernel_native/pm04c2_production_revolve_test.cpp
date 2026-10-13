@@ -1049,6 +1049,53 @@ int main() {
         }
         CHECK(branched_points == 2U);
         CHECK(half_counts.ambiguous == 4U);
+
+        // RG-02B1/E0-06: actual OCCT ambiguous native Point meaning.
+        // Each visually present candidate maps to an intrinsically
+        // Ambiguous three-Surface semantic Point; current Edge incidence
+        // cannot turn it into an independent Resolved Datum Point.
+        std::size_t e0_ambiguous_realizations = 0U;
+        std::size_t e0_unsupported_no_address = 0U;
+        for (const auto& vertex : half_catalog.vertices) {
+            if (vertex.referenceability ==
+                kernel::ReferenceStatus::ambiguous) {
+                CHECK(vertex.point_candidates.size() == 1U);
+                const auto& address =
+                    vertex.point_candidates.front();
+                CHECK(address.valid());
+                const auto found = std::find_if(
+                    half_catalog.points.begin(),
+                    half_catalog.points.end(),
+                    [&address](const auto& point) {
+                        return point.address == address;
+                    });
+                CHECK(found != half_catalog.points.end());
+                CHECK(found->status ==
+                      kernel::ReferenceStatus::ambiguous);
+                CHECK(found->current_vertices.size() > 1U);
+                CHECK(
+                    std::find(
+                        found->current_vertices.begin(),
+                        found->current_vertices.end(),
+                        vertex.runtime_token) !=
+                    found->current_vertices.end());
+                ++e0_ambiguous_realizations;
+            } else if (vertex.referenceability ==
+                       kernel::ReferenceStatus::unsupported) {
+                CHECK(vertex.point_candidates.empty());
+                ++e0_unsupported_no_address;
+            }
+        }
+        CHECK(e0_ambiguous_realizations == 4U);
+        CHECK(e0_unsupported_no_address == 2U);
+        std::cout
+            << "RG02B1_E0_NEGATIVE"
+            << " ambiguous_native_point_realizations="
+            << e0_ambiguous_realizations
+            << " unsupported_without_point="
+            << e0_unsupported_no_address
+            << " edge_incidence_not_point_authority=1"
+            << " source_end_selector=NOT_IMPLEMENTED\\n";
         std::cout
             << "RG02A_G0_V08"
             << " ambiguous_three_surface_point_groups="
