@@ -202,9 +202,9 @@ The header may directly include `kernel/exact_bounded_edge_geometry.hpp` to name
 
 ## Documentation impact
 
-Internal docs: **required** — accepted public Part Edge-terminal semantic value/resolution, additive current-only Kernel result membership, failure/stage/provider boundaries; canonical `docs/internal/PART_DOCUMENTS.md` and `docs/internal/PART_EDGE_PROJECTION_KERNEL.md`; regenerate `docs/browser/index.html` with `./ss2.ps1 docs`.
-
-User/Product docs: **not required** — Q1 adds **no** user-visible Datum constructor, UI, persisted schema, input grammar or production capability. Future Q2+ must declare full PL/EN Product/Browser impact when the tool is implemented.
+Internal docs: required
+User/Product docs: not required
+Reason: Q1 adds the Part-owned selected material Edge+certified semantic terminal contract, read-only current-stage resolution and a runtime-only Kernel Q0 terminal token pair. Update `docs/internal/PART_DOCUMENTS.md` and `docs/internal/PART_EDGE_PROJECTION_KERNEL.md`, then regenerate `docs/browser/index.html` using `./ss2.ps1 docs`; there is no Q1 user-visible Datum constructor, UI, persisted Part schema, input grammar or production capability, so PL/EN Product docs are not required. Q2+ must declare its own user-facing documentation impact.
 
 ## 9. OWNER COMPLETE-TEXT D2 DECISION — RECORDED
 
