@@ -1,9 +1,9 @@
 # PG-01E — Project Geometry product-wide closeout, D2 proposal (NOT ACCEPTED)
 
 **Status:** PROPOSAL ONLY — awaiting explicit Owner D2 scope decision and a separately accepted bounded PG-01E Work Contract. **NOT ACTIVE; NO PRODUCTION AUTHORIZATION.**  
-**Prepared:** 2026-10-11  
+**Prepared:** 2026-10-11; **governance context refreshed:** 2026-10-13. Original D2-E1–E6 proposals remain **UNACCEPTED**.  
 **Baseline:** `main` `5bec84370dbfdba44c5cdda677aaaaf028456ed2` after PG-01D implementation [PR #309](https://github.com/MechanicalCave/SimpleSolid2/pull/309) and historical closure [PR #310](https://github.com/MechanicalCave/SimpleSolid2/pull/310) were both squash merged.  
-**Program:** accepted `work/PART_MODELING_V1_ROADMAP.md` v1.30, milestone **9B Projection** before **PM-06**; source staging proposal `work/PROJECTION_01_PROJECT_GEOMETRY_DESIGN_PROPOSAL.md` labels **PG-01E product-wide closeout**.  
+**Program:** this document was originally drafted against v1.30. **Current `main` program is accepted `work/PART_MODELING_V1_ROADMAP.md` v1.32**, in which RG-02A/G0 native evidence was inserted before PG-01E and has since been separately Owner-accepted and merged via [PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332), commit `5b495c4bbed8754d7a1f01e87a30716429db786d` (FAST 93/93, FULL 199/199). **Owner explicitly restored PG-01E as NEXT** on 2026-10-13 (`akceptuje - kontynuu`) after questioning a proposed G1-first reordering; the superseded roadmap [PR #336](https://github.com/MechanicalCave/SimpleSolid2/pull/336) closed **without merge**. G1 remains deferred, future placement relative to PM-06 undecided. This *prioritization* does NOT approve D2-E1–E6 or this PR's merge.  
 **Authority:** Constitution and Foundation v1.0, Architecture, ADR-0014/0016/0017, completed PG-01A–D, documentation governance. No change to frozen authority in this proposal.
 
 ## 1. Existing accepted facts — do not reopen as design questions
@@ -13,9 +13,11 @@
 - One Project Geometry tool, **Edges / Planar Face / Face Boundary**, right Operations/Command Line grammar and current-stage source validation; Regular/Construction and linked Break Link; one atomic Finish and Undo; native Face-wire read and manual multi-Face partial support. The selected bounded Face remains a **transient gesture**, never an authored persistent Face link. Unsupported exact projection may be skipped **per independently certified Edge**; invalid semantics/provider, stale stage/revision, or identity ambiguity must **fail closed**.
 - Production default same-domain Refine after **Extrude Add / Revolve Add only**; exact material equivalence and strict semantic lineage. **ModelingSemanticsVersion=2** is required independently of native Part container schema **v16**. Old persisted modeling v1 files are **typed rejected**. Owner accepted **no automatic/bulk/offline migration** and no silent retargeting. The early staging proposal's phrase "migration" cannot overrule this later explicit D2-R1–R4 decision.
 - Existing CI issue [#302](https://github.com/MechanicalCave/SimpleSolid2/issues/302) (FAST build/CTest registry mismatch) is **independent**, not PG-01E implementation scope and not a PASS waiver.
-- `work/ACTIVE.yaml` still names the **completed** PG-01D contract for historical traceability. This provides **no PG-01E mutation authority**.
+- **Current `work/ACTIVE.yaml` on `main` names the already completed RG-02A/G0 evidence contract**, `work/RG-02A_G0_VERTEX_CHARACTERIZATION_WORK_CONTRACT_DRAFT.md`, with roadmap metadata **1.32**. This provides **no PG-01E mutation authority** and no authorization for deferred G1. The older PG-01D active reference was accurate when this D2 draft was first written, but has since been superseded by separately approved governance merges.
 
 ## 2. Proposed PG-01E purpose and bounded deliverables
+
+**2026-10-13 scope checkpoint:** The Owner's decision places **D2 review of PG-01E next**, NOT automatic acceptance of the following proposed D2-E1–E6 package. G0 evidence of Unsupported/Ambiguous Body Vertices is an independent Vertex referenceability limit, **not a demonstrated blocker** for PG-01E's previously completed Project Geometry behaviors. No G1 schema, new `VERTEX` authoring, or RG-02 UI is introduced here. These deliverables still require a fresh exact-path Work Contract and explicit activation after separate D2 acceptance.
 
 **D2-E1 — Final capability/requirements traceability and gap inventory.** Build a versioned evidence matrix for all committed PG-01A–D requirements to exact existing tests/CI runs, current PL/EN product behavior and one reproducible manual Windows procedure. Identify genuinely untested cross-package interactions without making those interactions new features. Distinguish already proven tests from pending PG-01E evidence. Every unresolved gap is tracked as **open**, never implicitly waived.
 
@@ -54,7 +56,7 @@ Any required new native schema/modeling semantics, Part/Kernel public API, ident
 3. **Approve performance scope?** Gather reproducible measurements and resource-growth evidence, without freezing broad Part-v1 budgets (PM-06 ownership).
 4. **Approve stage boundary?** PG-01E remains before PM-06; no package activation or default-branch merge is implicit in approving this design proposal.
 
-**Next action after D2 proposal approval:** draft a separate bounded `work/PROJECTION_01E_PRODUCT_CLOSEOUT_WORK_CONTRACT.md`, including detailed exact test matrix and allowed files; obtain explicit Owner Work Contract approval; then perform a **separate governance activation PR on main** changing `work/ACTIVE.yaml -> active_work`. Only after activation merges may a PG-01E implementation/evidence feature branch be opened.
+**Next action after SEPARATE Owner D2-E1–E6 proposal approval:** draft a separate bounded `work/PROJECTION_01E_PRODUCT_CLOSEOUT_WORK_CONTRACT.md`, including detailed exact test matrix and allowed files; obtain explicit Owner Work Contract approval; then perform a **separate governance activation PR on main** changing `work/ACTIVE.yaml -> active_work`. Only after activation merges may a PG-01E implementation/evidence feature branch be opened.
 
 ## Documentation impact
 
