@@ -6,6 +6,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <variant>
 #include <cstdlib>
@@ -1431,6 +1432,77 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               << " revolve_feature_id_preserved=1"
               << " fresh_occt_reprojection=1"
               << " stale_authored_seed_rejected=1\n";
+
+    // PG-01E/E3: bounded repeatability probe, not a new product budget.
+    // Two warm-up iterations followed by eight measured independent
+    // disk loads and independent OCCT provider instances. Timer covers
+    // native load + Part evaluation + linked projection, excludes setup,
+    // and does not purport to measure OS working-set/handle counts.
+    constexpr std::size_t warmup_cycles = 2U;
+    constexpr std::size_t measured_cycles = 8U;
+    const auto immutable_native_bytes =
+        std::filesystem::file_size(revolve_file);
+    std::vector<long long> elapsed_microseconds;
+    elapsed_microseconds.reserve(measured_cycles);
+    for (std::size_t cycle = 0U;
+         cycle < warmup_cycles + measured_cycles; ++cycle) {
+        const auto started = std::chrono::steady_clock::now();
+        const auto cycle_loaded = revolve_store.load(revolve_file);
+        CHECK(cycle_loaded.ok() && cycle_loaded.document);
+        CHECK(cycle_loaded.document->state() ==
+              revolve_session.document().state());
+        kernel_occt::OcctSolidModelingKernel cycle_provider;
+        const auto cycle_eval = part::evaluatePart(
+            *cycle_loaded.document, cycle_provider);
+        CHECK(cycle_eval.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto* cycle_revolve =
+            cycle_eval.findFeature(revolve_feature_id);
+        CHECK(cycle_revolve &&
+              cycle_revolve->status ==
+                  part::FeatureEvaluationStatus::up_to_date);
+        CHECK(cycle_revolve->result_solid);
+        const auto cycle_projected =
+            part::evaluateEffectiveSketchProjection(
+                *cycle_loaded.document, id, cycle_eval,
+                cycle_provider, revolve_feature_id);
+        CHECK(cycle_projected && cycle_projected->allResolved());
+        const auto* cycle_line =
+            cycle_projected->model.findLine(*sourceLine.entity_id);
+        CHECK(cycle_line);
+        CHECK(close(cycle_line->start().v, 0.0));
+        CHECK(close(cycle_line->end().v, 0.0));
+        CHECK(cycle_loaded.document->findSketch(id)
+                  ->model.findLine(*sourceLine.entity_id)
+                  ->start().v == -8.0);
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count();
+        CHECK(elapsed >= 0);
+        if (cycle >= warmup_cycles) {
+            elapsed_microseconds.push_back(elapsed);
+        }
+        CHECK(std::filesystem::file_size(revolve_file) ==
+              immutable_native_bytes);
+    }
+    CHECK(elapsed_microseconds.size() == measured_cycles);
+    const auto extrema = std::minmax_element(
+        elapsed_microseconds.begin(), elapsed_microseconds.end());
+    long long duration_sum = 0;
+    for (const auto duration : elapsed_microseconds) {
+        duration_sum += duration;
+    }
+    std::cout << "PG01E_E3_NATIVE_COLD_REPLAY_MEASURED"
+              << " warmup=" << warmup_cycles
+              << " measured=" << measured_cycles
+              << " min_us=" << *extrema.first
+              << " mean_us=" << duration_sum /
+                                    static_cast<long long>(measured_cycles)
+              << " max_us=" << *extrema.second
+              << " package_bytes=" << immutable_native_bytes
+              << " provider_instances=10"
+              << " process_memory=unavailable"
+              << " native_handles=unavailable\\n";
 
     // B3 draft regression: Finish already uses the effective source.
     // The live Edit Extrude preview must use it too, not the OPEN
