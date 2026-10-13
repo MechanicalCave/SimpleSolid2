@@ -26,7 +26,7 @@
 
 **Activated PG-01E E4 action in this candidate branch (pending CI/Owner evidence):** revise only the affected current-state paragraphs in `docs/internal/PART_DOCUMENTS.md`, retain historically scoped PG-01C facts where labelled as such, explicitly state the *manual* Face Boundary contract and no persistent Face source. If canonical Product docs are unaffected, no Browser rebuild is needed merely for Internal-only correction. The future exact approved PG-01E contract must allow the documentation source path and appropriate exact-head checks.
 
-**Classification:** CONFIRMED DOC DRIFT, not a runtime defect. The single allowlisted `docs/internal/PART_DOCUMENTS.md` was **corrected on this PG-01E feature branch**, preserving historical PG-01B semantics. Product PL/EN remain unchanged. The deterministic generated `docs/browser/index.html` now mirrors the corrected canonical Internal markdown as required by CI. Changes are not merged or Owner-final accepted.
+**Classification:** CONFIRMED DOC DRIFT, not a runtime defect. The single allowlisted `docs/internal/PART_DOCUMENTS.md` was **corrected on this PG-01E feature branch**, preserving historical PG-01B semantics. Product PL/EN now have one verified stale v15 phrase corrected **in each language** (E0-DOC-04). The deterministic generated `docs/browser/index.html` mirrors the corrected canonical Internal and PL/EN markdown as required by CI. Changes are not merged or Owner-final accepted.
 
 ### Additional verified drift: E0-DOC-02 — contradictory Part schema/current-state wording
 
@@ -38,6 +38,10 @@ Current `main` `docs/internal/PART_DOCUMENTS.md` explicitly names **native Part 
 ### E0-DOC-03 — Browser generator gate and historical RED
 
 On the first activated PG-01E evidence candidate (`b304a1fb6156fc09203f322247fea640856d0619`), [Windows FAST #2778](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38355121548) reached `Bootstrap verification` and was **RED before the PartStore test could run**. Runner log: `[BROWSER] docs/browser/index.html is stale. Run '.\\ss2.ps1 docs' and commit the generated file.` The global generator embeds **Internal** as well as PL/EN markdown, so E0's earlier assumption that Internal-only changes do not affect Browser was wrong. The fix stays within the Work Contract: generated `docs/browser/index.html` paired only with the changed allowlisted canonical `docs/internal/PART_DOCUMENTS.md`. The unchanged template's `@@DOC_SOURCES@@` substitution uses exact canonical Markdown embedded in individual text/plain script blocks; the regenerated result replaces exactly the old `internal.part-documents` canonical block, after verifying byte-exact equality to the old `main` canonical source. Fresh Windows validation remains the final authority: until its PASS, no PG-01E E2 proof is claimed.
+
+### E0-DOC-04 — verified current Product PL/EN v15-v16 contradiction
+
+A second E4 cross-language inspection found that **both** canonical `docs/product/pl/PARTS.md` and `docs/product/en/PARTS.md` at the accepted PG-01D Project Geometry section (~line 342) said that Face/wire tokens are not persisted to **Part v15**, although the same current-state section (~line 330) correctly asserts current native Part **v16** with independent **ModelingSemanticsVersion=2**. This is not merely an Internal historical paragraph: it was an unqualified current *Product* sentence. In the activated branch only the two factually stale v15 phrases were changed symmetrically to **current Part v16/modeling-v2**, with identical original refusal/Face-gesture semantics. Generated `docs/browser/index.html` is synchronized via the unchanged canonical text-source template contract and must pass exact-head docs CI. No product source/UI/schema, migration, new feature or other paragraphs were changed.
 
 ## E0-C. Current v16/v2 compatibility boundary — observed source/test, not new execution
 
@@ -52,7 +56,7 @@ Existing `tests/part_document_store_test.cpp` explicitly tests the `modeling_sem
 | Atomic Finish / no source on failure, partial geometric skip vs integrity errors, per-Face skip diagnostics | PG-01D accepted, current Workbench test source contains cases | **OPEN — prove exact PG-01E requirements and missing test entries** |
 | v16/v2 Save/Close/Reopen fresh provider and modeling-v1 strict typed refusal with immutable legacy bytes | Product/PartStore earlier policy + tests; **new E2 immutability assertions on this PG-01E branch** | **IN PROGRESS — test UNRUN; Owner original legacy fixtures and cold composite remain OPEN** |
 | Deterministic performance/resource methodology, repeated controlled cycles, memory/handle deltas | Existing Windows test resources exist, no PG-01E repeated baseline published | **OPEN, no fabricated metrics or budget** |
-| PL/EN + Internal/Browser parity | PL/EN already present; E0-DOC-01/02 verified, Internal source corrected and generated Browser synchronized in feature branch | **IN PROGRESS — exact-head CI verification and final parity review required** |
+| PL/EN + Internal/Browser parity | E0-DOC-01/02 Internal and E0-DOC-04 paired PL/EN v15→v16 confirmed; canonical texts corrected and Browser synchronized in feature branch | **IN PROGRESS — exact-head CI verification and final parity review required** |
 | PG-01E exact-head FOCUSED/FAST/FULL + Owner practical FINAL PASS and merge | Prior stage FULL only | **UNRUN / PENDING** |
 
 ## E0-E1. Exact existing test registration and evidence-layer audit (read-only)
@@ -99,11 +103,11 @@ The existing allowed sources on `main` `f4fbd1b73b5f76ae0927675b9b9c64306029f7de
 
 **Draft-only CI:** [E0 PR #338 exact-head Windows run #2770](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38350888710) **success** at `40ca0a1a87bf39ef6036ea81b7be152071100adc` (the previous E0 draft HEAD). This is a documentation closure signal, not PG-01E E1–E6 native/FULL proof; this metadata update creates a new PR head requiring its own CI check. [Contract PR #337 run #2768](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38349992628) **success** at exact unchanged accepted contract HEAD `052c569...`.
 
-**Mutation scope so far:** one allowlisted existing PartStore test, one verified inaccurate canonical Internal docs file, its deterministic generated Browser and this named `work/**` E0 report; no RG-02 Vertex/G1, production code, Viewer/Part/Kernel implementation, schema, CI, CMake or PL/EN edits.
+**Mutation scope so far:** one allowlisted existing PartStore test, one verified inaccurate canonical Internal docs file, paired one-paragraph schema correction in each allowlisted PL/EN Product guide, their deterministic generated Browser and this named `work/**` E0 report; no RG-02 Vertex/G1, production code, Viewer/Part/Kernel implementation, schema, CI or CMake edits.
 
 ## Documentation Impact
 
 Internal docs: required — confirmed E0-DOC-01/02 as-built corrections are included in this activated PG-01E feature branch and must pass docs verification.
-User/Product docs: not required — this branch does not change accepted user-facing behavior; the existing PL/EN product guides are already accurate for these findings.
-Reason: Source-of-truth internal stale current-state claims must be corrected to PG-01D accepted modes and native v16/modeling-v2 behavior; no canonical Product source changed.
-Browser: **required by the repository's global deterministic freshness validator**, and the generated `docs/browser/index.html` now embeds the exact corrected canonical Internal source; confirm byte-for-byte freshness via exact-head Windows CI.
+User/Product docs: required — confirmed E0-DOC-04 v15/v16 contradiction existed in **both** current PL/EN Project Geometry sections and is corrected symmetrically, without changing user-visible behavior.
+Reason: Source-of-truth Internal current-state and paired PL/EN Product current schema claims must match PG-01D accepted Project Geometry modes and native v16/modeling-v2 refusal policy; changes are documentation-only.
+Browser: **required by the repository's global deterministic freshness validator**, and generated `docs/browser/index.html` now embeds the exact corrected canonical Internal and paired PL/EN source blocks; confirm byte-for-byte freshness via exact-head Windows CI.
