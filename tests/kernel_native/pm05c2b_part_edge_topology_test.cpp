@@ -900,6 +900,108 @@ std::vector<double> verifyQ0StrictPartStageGeometry(
     return lengths;
 }
 
+// Q1-01/Q1-02: real OCCT material Edge selection plus one independently
+// certified current native terminal. This helper never chooses by XYZ/order.
+std::vector<part::SelectedMaterialEdgeEnd>
+verifyQ1CanonicalSelectedEnds(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture) {
+    CHECK(evaluation.source_document_id.has_value());
+    CHECK(*evaluation.source_document_id == document.documentId());
+    CHECK(evaluation.source_revision == document.revision());
+    CHECK(evaluation.features.size() == 1U);
+    CHECK(evaluation.features.front().result_topology);
+    const auto& catalog =
+        *evaluation.features.front().result_topology;
+    CHECK(catalog.complete());
+    CHECK(catalog.edges.size() == 12U);
+    CHECK(catalog.vertices.size() == 8U);
+
+    std::vector<part::SelectedMaterialEdgeEnd> result;
+    for (const auto& edge : catalog.edges) {
+        std::size_t end_uses = 0U;
+        for (const auto& vertex : catalog.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge.runtime_token) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            const auto authored =
+                part::authorSelectedMaterialEdgeEnd(
+                    document, evaluation, catalog.stage,
+                    edge.runtime_token, vertex.runtime_token, provider);
+            CHECK(authored.ok());
+            const auto resolved =
+                part::resolveSelectedMaterialEdgeEnd(
+                    document, *authored.reference,
+                    evaluation, provider);
+            CHECK(resolved.resolved());
+            CHECK(resolved.current_edge == edge.runtime_token);
+            CHECK(resolved.current_terminal == vertex.runtime_token);
+            CHECK(vertex.provider_point);
+            CHECK(std::abs(resolved.current_position_world->x -
+                           vertex.provider_point->x) < 1.0e-6);
+            CHECK(std::abs(resolved.current_position_world->y -
+                           vertex.provider_point->y) < 1.0e-6);
+            CHECK(std::abs(resolved.current_position_world->z -
+                           vertex.provider_point->z) < 1.0e-6);
+            const auto& t =
+                resolved.current_tangent_line->representative;
+            CHECK(std::abs(t.x*t.x + t.y*t.y + t.z*t.z - 1.0) <
+                  1.0e-7);
+            for (const auto& other : result) {
+                CHECK(other != *authored.reference);
+            }
+            result.push_back(*authored.reference);
+            ++end_uses;
+        }
+        CHECK(end_uses == 2U);
+    }
+    CHECK(result.size() == 24U);
+    std::size_t trihedral = 0U;
+    for (const auto& vertex : catalog.vertices) {
+        CHECK(vertex.incident_material_edges.size() == 3U);
+        std::vector<part::SelectedMaterialEdgeEnd> at_corner;
+        for (const auto edge : vertex.incident_material_edges) {
+            const auto authored =
+                part::authorSelectedMaterialEdgeEnd(
+                    document, evaluation, catalog.stage, edge,
+                    vertex.runtime_token, provider);
+            CHECK(authored.ok());
+            CHECK(std::find(result.begin(), result.end(),
+                            *authored.reference) != result.end());
+            at_corner.push_back(*authored.reference);
+        }
+        CHECK(at_corner.size() == 3U);
+        CHECK(at_corner[0] != at_corner[1]);
+        CHECK(at_corner[1] != at_corner[2]);
+        CHECK(at_corner[0] != at_corner[2]);
+        // B+corner stays B, regardless of an earlier A transient hint.
+        const auto edge_b =
+            part::authorSelectedMaterialEdgeEnd(
+                document, evaluation, catalog.stage,
+                vertex.incident_material_edges[1],
+                vertex.runtime_token, provider);
+        CHECK(edge_b.ok());
+        CHECK(*edge_b.reference == at_corner[1]);
+        CHECK(*edge_b.reference != at_corner[0]);
+        ++trihedral;
+    }
+    CHECK(trihedral == 8U);
+    std::cout << "RG02B1_Q1_CANONICAL"
+              << " fixture=" << fixture
+              << " semantic_edge_ends=" << result.size()
+              << " trihedral_corners=" << trihedral
+              << " provider_token_durable=0"
+              << " xyz_rebind=0"
+              << " UI_picker_tested=0\n";
+    return result;
+}
+
 } // namespace
 
 int main() {
