@@ -1126,8 +1126,10 @@ class Q1TerminalTupleQuery final :
 public:
     Q1TerminalTupleQuery(
         kernel::IExactBoundedEdgeGeometryQuery& delegate,
-        bool mismatch)
-        : delegate_{delegate}, mismatch_{mismatch} {}
+        bool mismatch,
+        bool duplicate_terminal_token = false)
+        : delegate_{delegate}, mismatch_{mismatch},
+          duplicate_terminal_token_{duplicate_terminal_token} {}
 
     [[nodiscard]] std::optional<kernel::ScopedExactEdge>
     bindExactEdgeToBody(
@@ -1153,11 +1155,16 @@ public:
             g.current_terminal_vertex_tokens[0] =
                 kernel::RuntimeVertexToken{999999999U};
         }
+        if (duplicate_terminal_token_) {
+            g.current_terminal_vertex_tokens[0] =
+                g.current_terminal_vertex_tokens[1];
+        }
         return q;
     }
 private:
     kernel::IExactBoundedEdgeGeometryQuery& delegate_;
     bool mismatch_;
+    bool duplicate_terminal_token_;
 };
 
 // Q1-06: real Fillet/Chamfer generated Vertices remain globally
@@ -1514,6 +1521,7 @@ int main() {
     {
         Q1TerminalTupleQuery permuted{kernel, false};
         Q1TerminalTupleQuery corrupted{kernel, true};
+        Q1TerminalTupleQuery duplicated{kernel, false, true};
         for (const auto& source : q1_base_sources) {
             const auto original =
                 part::resolveSelectedMaterialEdgeEnd(
@@ -1541,6 +1549,15 @@ int main() {
             CHECK(!forged.current_terminal);
             CHECK(!forged.current_position_world);
             CHECK(!forged.current_tangent_line);
+            const auto repeated = part::resolveSelectedMaterialEdgeEnd(
+                base_document, source, base_evaluation, duplicated);
+            CHECK(repeated.status ==
+                  part::SelectedEdgeEndStatus::native_geometry_unavailable);
+            CHECK(!repeated.resolved());
+            CHECK(!repeated.current_edge);
+            CHECK(!repeated.current_terminal);
+            CHECK(!repeated.current_position_world);
+            CHECK(!repeated.current_tangent_line);
         }
     }
     // Q1-06 synthetic mutation of a REAL native current-stage catalog:
