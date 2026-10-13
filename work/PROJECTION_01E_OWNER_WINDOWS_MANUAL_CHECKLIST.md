@@ -46,7 +46,32 @@ For W06–W08, actual closed profile construction is a **prerequisite**; a delib
 
 Run the same supported saved v2 Part and edit/reopen scenario for a declared number of repetitions and warm-up cycles. Record machine/build, fixture size/Face/Edge counts, repetitions, elapsed observations and whichever process working-set/native object metrics are **actually measured** with a stated collection method. Capture before/after and any reproducible growth; explicitly mark unavailable metrics **UNAVAILABLE**. This evidence alone does not accept PM-06 performance budgets or authorize optimization.
 
-**Measured setup:** UNRUN. **Cycles/warmup:** UNRECORDED. **Elapsed/resource data:** UNRECORDED. **Trend interpretation:** OPEN.
+**Automated precondition (not Owner practical PASS):** registered Windows kernel-native test `pm05e3.edge_feature_cold_rebuild` now has E3 **2 warm-up + 8 measured** independent native v16/v2 file load + fresh OCCT source evaluation + linked projection cycles; Windows FOCUSED [#2790](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38357221703) and [#2794](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38358056855) **1/1 PASS** at different immutable HEAD SHAs. The actual per-cycle min/mean/max microseconds, package bytes and explicit unavailable memory/handles are emitted to the [#2794 Actions job summary](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38358056855). **Do not divide CTest total by eight** to infer latency: the full test includes unrelated PG-01B cases.
+
+**Reproduce native per-cycle numbers on Windows:** checkout the exact accepted PG-01E candidate HEAD, configure and build the already-registered kernel-native Release target `pm05e3_edge_feature_cold_rebuild_test` using the current supported SS2 scripts, then run the same CTest in verbose mode from that actual build directory:
+
+```powershell
+ctest --test-dir "<actual kernel-release build directory>" -C Release -R '^pm05e3\\.edge_feature_cold_rebuild
+
+## 4. Strict final acceptance and STOP
+
+- **No individual Owner observations have been supplied for this PG-01E run.** All rows are UNRUN; previous PG-01C/D practical PASS does not fill them in.
+- Cross-check every required E1/E2 negative and positive with **real native OCCT/Qt test evidence**, exact **source SHA/run ID**, and the independent fresh-provider/EntityId checks. The core-only `pm04e2` test double is not real OCCT proof.
+- Final gate: required newly authored FOCUSED, applicable FAST and **one exact-head Windows FULL** with Core + native Kernel + Desktop + docs + aggregate; any RED/P0 => STOP and Owner D2 for required out-of-contract mutation.
+- **Owner FINAL PASS for PG-01E** and **separate authorization to merge the evidence PR** must be explicit. Neither is granted by this checklist.
+- No RG-02 Vertex UX, UI, schema, G1, PM-06 or CI #302 changes under PG-01E.
+
+## Documentation impact
+
+Internal docs: not required — this is an unexecuted Owner test procedure, not current implementation description.
+User/Product docs: not required — existing supported commands and caveats are transcribed from the current accepted PL/EN Part guides.
+Reason: No product behavior, canonical docs or generated Browser is changed by this work report.
+ -V
+```
+
+Record observed `PG01E_E3_NATIVE_COLD_REPLAY_MEASURED` min/mean/max microseconds, number of cycles, package byte count, exact executable/build source SHA and machine environment. This exposes passing CTest stdout without modifying workflow or CMake. For GUI resource trend, record process private committed bytes/working set/handle count **before and after repeated actual Project Geometry editing/reopen** with a named Windows system tool and sample protocol; note missing metrics as unavailable, not zero. Any two-point memory comparison by itself does not prove absence of leak.
+
+**Measured Owner setup:** UNRUN. **Owner-collected elapsed/resource series:** UNRECORDED. **Owner observed trend interpretation:** OPEN.
 
 ## 4. Strict final acceptance and STOP
 
