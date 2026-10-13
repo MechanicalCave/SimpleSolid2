@@ -532,6 +532,23 @@ void verifyPg01aUnsupportedIntersectionCurve() {
         }
     }
     CHECK(rejected_curves >= 1U);
+    std::size_t q0_unsupported = 0U;
+    for (const auto edge : result.current_edges) {
+        const auto scoped = query.bindExactEdgeToBody(result.solid, edge);
+        CHECK(scoped.has_value());
+        const auto geometry =
+            query.queryExactBoundedEdge3d(result.solid, *scoped);
+        if (geometry.status ==
+            kernel::ExactEdge3dStatus::unsupported_curve) {
+            CHECK(!geometry.geometry);
+            ++q0_unsupported;
+        } else {
+            CHECK(geometry.ok());
+        }
+    }
+    CHECK(q0_unsupported >= 1U);
+    std::cout << "RG02B1_Q0_NATIVE_NONANALYTIC_REJECTED"
+              << " unsupported=" << q0_unsupported << '\\n';
     std::cout << "PG01A_BOOLEAN_NONANALYTIC_PASS"
               << " unsupported="
               << rejected_curves << '\\n';
