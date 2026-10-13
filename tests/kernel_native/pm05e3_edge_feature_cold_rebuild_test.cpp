@@ -1502,7 +1502,7 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               << " package_bytes=" << immutable_native_bytes
               << " provider_instances=10"
               << " process_memory=unavailable"
-              << " native_handles=unavailable\\n";
+              << " native_handles=unavailable\n";
 
     // B3 draft regression: Finish already uses the effective source.
     // The live Edit Extrude preview must use it too, not the OPEN
