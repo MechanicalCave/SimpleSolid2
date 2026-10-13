@@ -627,6 +627,58 @@ resolveSelectedMaterialEdgeEnd(
     const PartEvaluation& evaluation,
     kernel::IExactBoundedEdgeGeometryQuery& provider);
 
+// Q2 headless strict material Edge MID source and exact-current-stage
+// read-only half-arc-length observation. No persisted Point, parameter or
+// signed Frame3 is returned. Every non-resolved query has no observations.
+enum class SelectedEdgeMidStatus {
+    resolved,
+    invalid_context,
+    edge_missing,
+    edge_ambiguous,
+    edge_unsupported,
+    native_geometry_unavailable,
+};
+
+struct SelectedEdgeMidAuthoringResult final {
+    SelectedEdgeMidStatus status{SelectedEdgeMidStatus::invalid_context};
+    std::optional<SelectedMaterialEdgeMid> reference;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status == SelectedEdgeMidStatus::resolved &&
+               reference && reference->valid();
+    }
+};
+
+struct SelectedEdgeMidResolution final {
+    SelectedEdgeMidStatus status{SelectedEdgeMidStatus::invalid_context};
+    std::optional<kernel::RuntimeEdgeToken> current_edge;
+    std::optional<kernel::Point3> current_position_world;
+    std::optional<kernel::UnorientedUnitTangent3> current_tangent_line;
+    std::optional<kernel::ExactEdge3dStatus> native_error;
+
+    [[nodiscard]] bool resolved() const noexcept {
+        return status == SelectedEdgeMidStatus::resolved &&
+               current_edge && current_edge->valid() &&
+               current_position_world && current_tangent_line &&
+               !native_error;
+    }
+};
+
+[[nodiscard]] SelectedEdgeMidAuthoringResult
+authorSelectedMaterialEdgeMid(
+    const PartDocument& owning_document,
+    const PartEvaluation& evaluation,
+    const BodyStageRef& source_stage,
+    kernel::RuntimeEdgeToken picked_material_edge,
+    kernel::IExactBoundedEdgeGeometryQuery& provider);
+
+[[nodiscard]] SelectedEdgeMidResolution
+resolveSelectedMaterialEdgeMid(
+    const PartDocument& owning_document,
+    const SelectedMaterialEdgeMid& authored,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider);
+
 enum class EdgeFeatureKernelInputStatus {
     resolved,
     missing_upstream_body,
