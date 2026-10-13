@@ -1,10 +1,10 @@
-# RG-02B1/E0 — strict Edge + Point native feasibility gate (DRAFT Work Contract)
+# RG-02B1/E0 — strict Edge + Point native feasibility gate (Owner-accepted evidence-only Work Contract)
 
-**Status:** **DRAFT FOR OWNER REVIEW; UNACCEPTED, UNMERGED, NOT ACTIVE, NO TEST OR PRODUCT MUTATION AUTHORITY.**  
-**Decision class:** bounded D2 evidence-only scope proposal; no approval of a new semantic Point type, kernel API, persisted Datum variant or UI.  
+**Status:** **OWNER-ACCEPTED EXACT FOUR-TEST SCOPE; PR #346 MERGED; PENDING SEPARATE ACTIVE ACTIVATION.** No E0 test/product mutation authority before an independently Owner-approved and merged `ACTIVE.yaml` activation.  
+**Decision class:** Owner-accepted bounded D2 evidence-only Work Contract; no approval of a new semantic Point type, kernel API, persisted Datum variant or UI.  
 **Prepared:** 2026-10-13; read-only source audit against `main` `b7da33653b8bc6214fd5774a34498838decb19cd`.  
-**Program:** accepted and merged Part Modeling roadmap v1.33 §6/9F, with the separate post-merge metadata correction PR #344 OPEN (`ACTIVE.yaml.program_roadmap_version` still says 1.32).  
-**Current authority:** `work/ACTIVE.yaml.active_work` still points to completed PG-01E **for history only**. This document neither changes it nor authorizes new tests.  
+**Program:** accepted and merged Part Modeling roadmap v1.33 §6/9F; independently Owner-approved post-merge metadata correction PR #344 MERGED as `20756f4da4c50f29e46f48cfc9fbf837bb7fa110` (`ACTIVE.yaml.program_roadmap_version` is `1.33`).  
+**Activation boundary:** Before an independently approved activation PR is merged, `work/ACTIVE.yaml.active_work` references completed PG-01E **for history only**. Once activated by that dedicated merge, this contract authorizes ONLY the evidence/test scope in §2; it never authorizes product, UI, schema or Kernel API changes.  
 **Design input:** `work/RG-02B1_DATUM_EDGE_POINT_WORK_CONTRACT_DRAFT.md` in Draft PR #345 (Owner-accepted one-constructor interaction direction, not executable or fully UX-approved). Preserve independent G0 findings, accepted ADR-0014/0016/0017 and Foundation v1.0.  
 **Repository authority:** `AGENTS.md` → Constitution → Foundation/Architecture → accepted ADRs → ACTIVE → accepted Part roadmap → active contract → code/tests; documentation rule `governance/DOCUMENTATION.md`.
 
@@ -53,7 +53,7 @@ Permit **at most these four already registered existing test source files**, wit
 
 **Test assertions must be objective.** Count actual native topology and statuses, preserve one-to-one semantic Point evidence, enforce source-stage equality and accepted strict Edge resolver outcomes. If an unsupported result is genuinely observed, it is a valid **negative architectural finding**, not permission to relax a test. For every gap distinguish `SUPPORTED`, `UNSUPPORTED`, `AMBIGUOUS`, `MISSING`, `BLOCKED` and `UNRUN`, with exact test SHA/run/log evidence. Never report full E0 feasibility PASS from skipped or limited tests.
 
-## 4. Execution sequence after formal activation — no tests executed by this DRAFT
+## 4. Execution sequence after formal activation — new E0 native tests UNRUN
 
 1. **Read-only exact baseline:** refresh main HEAD, ACTIVE, accepted v1.33 roadmap, parent PR #345 status, and the four existing registered tests; preserve historical G0 proof without relabeling its runs as new E0 execution.
 2. **Native Part identity FIRST:** stage-correct END/incident Edge at the canonical rectangle and shared corner; real difficult G0 negative topologies; strict semantic Point ambiguity guard. If the required END cannot be certified, stop before proposing a Datum schema.
@@ -74,9 +74,9 @@ Permit **at most these four already registered existing test source files**, wit
 **UI HARD STOP independently remains:** before new Datum/Viewer/Tree/Operations/Command Line behavior, review the complete UX details in parent Draft §1B and obtain explicit Owner approval. Previously accepted one-tool/two-pick-order principle is preserved, not equivalent to full UI sign-off. No implementation of Axis, G1, three-point/angled planes, Mirror/Pattern, PM-06, or CI issue #302 under this E0 scope.
 
 **Approval chain — each step independent:**
-1. Owner explicitly reviews and accepts **this exact four-path evidence-only contract**; the generic `kontynuuj` direction does not count as acceptance of these not-yet-reviewed details.
-2. Its dedicated governance-only PR passes exact-head checks; **Owner separately authorizes its merge**. Parent #345 and roadmap metadata #344 remain separate unmerged gates and cannot be merged incidentally.
-3. Owner separately approves and merges a dedicated `work/ACTIVE.yaml` activation PR pointing to the accepted E0 contract against the current accepted roadmap metadata (reconcile #344 under its own independent approval first, if still pending).
+1. **COMPLETED 2026-10-13:** Owner explicitly accepted **this exact four-path evidence-only contract** in response to an exact-scope approval request (not from generic `kontynuuj`).
+2. **COMPLETED 2026-10-13:** [PR #346](https://github.com/MechanicalCave/SimpleSolid2/pull/346) Windows governance #2817/#2818 PASS; Owner separately authorized exact-head squash merge, MERGED on main as `ef7721afc40486d576986611bb236e9396f94da8`. Independent roadmap metadata [PR #344](https://github.com/MechanicalCave/SimpleSolid2/pull/344) Owner-authorized squash MERGED as `20756f4da4c50f29e46f48cfc9fbf837bb7fa110`. Parent UX/design PR #345 remains Draft OPEN, unmerged.
+3. **PENDING:** a distinct governance-only activation PR updates `work/ACTIVE.yaml.active_work` to this accepted E0 contract, preserving roadmap v1.33 and every other scope boundary. Obtain exact-head CI, then independent Owner approval of this activation PR and separate PR-specific merge authorization. No E0 test changes before that merge.
 4. **Only after activation merge**, open a fresh test-only implementation PR from current main. Final evidence acceptance and separate PR-specific merge permission are later gates.
 5. Any required D2 schema/API/UX mutation is a **new contract**, not an E0 completion amendment by implication.
 
@@ -85,6 +85,6 @@ Permit **at most these four already registered existing test source files**, wit
 Internal docs: not required  
 User/Product docs: not required  
 Generated Browser: not required  
-**Reason:** this is a review-only proposal for evidence characterization with no product behavior changes. The later separately authorized test-only gate changes only tests and `work/` evidence. A future shipped Datum Edge + Point feature requires current-state Internal documentation, paired PL/EN Product documentation and deterministic `./ss2.ps1 docs` Browser regeneration.
+Reason: this accepted evidence-only Work Contract and proposed activation introduce no product behavior. The later separately activated test-only gate changes only the four allowed tests and specified `work/` evidence. A future shipped Datum Edge + Point feature requires current-state Internal documentation, paired PL/EN Product documentation and deterministic `./ss2.ps1 docs` Browser regeneration.
 
-**Requested narrow next Owner decision:** accept or amend the four-file E0 test-only proof scope. Do **not** infer acceptance of full Datum schema, new UI, merge or activation.
+**Next narrow Owner decision:** separately accept this dedicated E0 activation proposal after reviewing its two-file governance-only diff; then separately authorize exact-head merge after Windows closure. The prior four-test scope acceptance and contract merge do **not** themselves approve activation, product schema/API, full UI UX or future E0 implementation PR merge.
