@@ -762,6 +762,69 @@ characterizeE0CanonicalStraightEnds(
     }
     CHECK(strict_three_edge_corners == 8U);
 
+    // E0-05: the Point source is independently Resolved at this SAME
+    // stage before any geometric classification. XYZ is used only as
+    // current provider diagnostic geometry to prove non-collinearity,
+    // never to author, find or persist a semantic source identity.
+    const auto certifiedVertex = [&catalog](
+        const part::FeaturePointAddress& address) {
+        const auto found = std::find_if(
+            catalog.vertices.begin(), catalog.vertices.end(),
+            [&address](const auto& vertex) {
+                return vertex.referenceability ==
+                           kernel::ReferenceStatus::resolved &&
+                       vertex.point_candidates.size() == 1U &&
+                       vertex.point_candidates.front() == address;
+            });
+        CHECK(found != catalog.vertices.end());
+        CHECK(found->provider_point.has_value());
+        return &*found;
+    };
+
+    std::size_t independent_offline_pairs = 0U;
+    for (const auto& witness : witnesses) {
+        CHECK(witness.second.size() == 2U);
+        const auto& a =
+            *certifiedVertex(witness.second[0])->provider_point;
+        const auto& b =
+            *certifiedVertex(witness.second[1])->provider_point;
+        const double dx = b.x - a.x;
+        const double dy = b.y - a.y;
+        const double dz = b.z - a.z;
+        const double line_length_squared =
+            dx * dx + dy * dy + dz * dz;
+        CHECK(line_length_squared > 1.0);
+        for (const auto& other : catalog.vertices) {
+            CHECK(other.point_candidates.size() == 1U);
+            const auto& independent_address =
+                other.point_candidates.front();
+            if (std::find(
+                    witness.second.begin(),
+                    witness.second.end(),
+                    independent_address) !=
+                witness.second.end()) {
+                continue;
+            }
+            const auto& p =
+                *certifiedVertex(independent_address)
+                     ->provider_point;
+            const double ex = p.x - a.x;
+            const double ey = p.y - a.y;
+            const double ez = p.z - a.z;
+            const double cx = dy * ez - dz * ey;
+            const double cy = dz * ex - dx * ez;
+            const double cz = dx * ey - dy * ex;
+            const double cross_squared =
+                cx * cx + cy * cy + cz * cz;
+            CHECK(cross_squared >
+                  1.0e-12 * line_length_squared);
+            ++independent_offline_pairs;
+        }
+    }
+    // Every one of the 12 box Edges has six other uniquely certified
+    // Point sources that are off its infinite supporting line.
+    CHECK(independent_offline_pairs == 72U);
+
     std::cout << "RG02B1_E0_NATIVE_END"
               << " fixture=" << fixture
               << " strict_line_edges=" << witnesses.size()
