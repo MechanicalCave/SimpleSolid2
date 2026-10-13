@@ -1037,6 +1037,53 @@ int main() {
             "E0-01-pristine-extrude");
     const auto q0_base_lengths = verifyQ0StrictPartStageGeometry(
         base_evaluation.features[0], kernel, "Q0-extrude");
+    const auto q1_base_sources = verifyQ1CanonicalSelectedEnds(
+        base_document, base_evaluation, kernel, "Q1-01-pristine");
+    CHECK(q1_base_sources.size() == 24U);
+    // Q1-05: cross-document ownership and revision staleness cannot be
+    // masked by equal source Feature IDs or coincident runtime geometry.
+    {
+        const auto other_document = makeBasePart();
+        const auto foreign = part::resolveSelectedMaterialEdgeEnd(
+            other_document, q1_base_sources.front(),
+            base_evaluation, kernel);
+        CHECK(foreign.status ==
+              part::SelectedEdgeEndStatus::invalid_context);
+        CHECK(!foreign.resolved());
+        CHECK(!foreign.current_edge);
+        CHECK(!foreign.current_position_world);
+        const auto revised = part::PartDocument::restore(
+            base_document.documentId(),
+            base_document.state(),
+            core::DocumentRevision{
+                base_document.revision().value() + 1U});
+        CHECK(revised.ok());
+        const auto stale_owner = part::resolveSelectedMaterialEdgeEnd(
+            *revised.document, q1_base_sources.front(),
+            base_evaluation, kernel);
+        CHECK(stale_owner.status ==
+              part::SelectedEdgeEndStatus::invalid_context);
+        CHECK(!stale_owner.current_terminal);
+    }
+    {
+        const auto& cat = *base_evaluation.features[0].result_topology;
+        const auto current_edge = cat.edges.front().runtime_token;
+        const auto not_incident = std::find_if(
+            cat.vertices.begin(), cat.vertices.end(),
+            [current_edge](const auto& v) {
+                return std::find(
+                    v.incident_material_edges.begin(),
+                    v.incident_material_edges.end(),
+                    current_edge) == v.incident_material_edges.end();
+            });
+        CHECK(not_incident != cat.vertices.end());
+        const auto wrong = part::authorSelectedMaterialEdgeEnd(
+            base_document, base_evaluation, cat.stage,
+            current_edge, not_incident->runtime_token, kernel);
+        CHECK(!wrong.ok());
+        CHECK(wrong.status ==
+              part::SelectedEdgeEndStatus::terminal_missing);
+    }
     // G0/V11: reconstruct authored Part intent and reevaluate with an
     // independent OCCT provider instance. Only FeaturePointAddress
     // survives semantically; transient runtime tokens are neither
@@ -1067,6 +1114,21 @@ int main() {
     const auto q0_fresh_lengths = verifyQ0StrictPartStageGeometry(
         fresh_evaluation.features[0], separate_kernel,
         "Q0-cold-rebuilt-provider");
+    const auto q1_fresh_sources = verifyQ1CanonicalSelectedEnds(
+        *reopened_document.document, fresh_evaluation,
+        separate_kernel, "Q1-03-cold-native");
+    CHECK(q1_fresh_sources.size() == 24U);
+    // Compare complete semantic identity sets independently of native
+    // Edge/Vertex enumeration and fresh OCCT provider generation.
+    for (const auto& original : q1_base_sources) {
+        CHECK(std::find(q1_fresh_sources.begin(),
+                        q1_fresh_sources.end(),
+                        original) != q1_fresh_sources.end());
+        const auto replay = part::resolveSelectedMaterialEdgeEnd(
+            *reopened_document.document, original,
+            fresh_evaluation, separate_kernel);
+        CHECK(replay.resolved());
+    }
     CHECK(q0_fresh_lengths.size() == q0_base_lengths.size());
     for (std::size_t i = 0; i < q0_base_lengths.size(); ++i) {
         CHECK(std::abs(q0_fresh_lengths[i] - q0_base_lengths[i]) < 1.0e-6);
@@ -1134,6 +1196,17 @@ int main() {
             taller_stage, "E0-07-height-edit");
     const auto q0_taller_lengths = verifyQ0StrictPartStageGeometry(
         taller_evaluation.features[0], kernel, "Q0-height-edit");
+    const auto q1_taller_sources = verifyQ1CanonicalSelectedEnds(
+        taller_document, taller_evaluation, kernel, "Q1-04-height-edit");
+    CHECK(q1_taller_sources.size() == 24U);
+    for (const auto& original : q1_base_sources) {
+        CHECK(std::find(q1_taller_sources.begin(),
+                        q1_taller_sources.end(),
+                        original) != q1_taller_sources.end());
+        const auto replay = part::resolveSelectedMaterialEdgeEnd(
+            taller_document, original, taller_evaluation, kernel);
+        CHECK(replay.resolved());
+    }
     CHECK(q0_taller_lengths.size() == q0_base_lengths.size());
     CHECK(q0_taller_lengths != q0_base_lengths);
     const auto stale_edit = kernel.queryExactBoundedEdge3d(
