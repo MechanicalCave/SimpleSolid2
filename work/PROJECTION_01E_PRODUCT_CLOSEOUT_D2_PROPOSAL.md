@@ -1,7 +1,7 @@
-# PG-01E — Project Geometry product-wide closeout, D2 proposal (NOT ACCEPTED)
+# PG-01E — Project Geometry product-wide closeout, D2 direction (OWNER-ACCEPTED; NOT ACTIVE)
 
-**Status:** PROPOSAL ONLY — awaiting explicit Owner D2 scope decision and a separately accepted bounded PG-01E Work Contract. **NOT ACTIVE; NO PRODUCTION AUTHORIZATION.**  
-**Prepared:** 2026-10-11; **governance context refreshed:** 2026-10-13. Original D2-E1–E6 proposals remain **UNACCEPTED**.  
+**Status:** **OWNER-ACCEPTED D2-E1–E6 DESIGN SCOPE ONLY** (2026-10-13, response `akceptuję - pozamykaj wszystkie formalności i zacznij prace !` to explicit question accepting PG-01E E1–E6 solely as basis for a bounded Work Contract). **PR #311 MERGE NOT SEPARATELY APPROVED; WORK CONTRACT NOT YET OWNER-ACCEPTED / MERGED; `ACTIVE.yaml` STILL G0. NO PRODUCTION OR NATIVE TEST MUTATION AUTHORIZED.** Non-mutating E0 documentation and source/test inventory may be prepared as proposed evidence; it is not a G1/PG-01E implementation run.  
+**Prepared:** 2026-10-11; **Owner D2-E1–E6 design direction accepted and governance context refreshed:** 2026-10-13. Detailed bounded Work Contract scope and all PR merges/activation remain separately gated.  
 **Baseline:** `main` `5bec84370dbfdba44c5cdda677aaaaf028456ed2` after PG-01D implementation [PR #309](https://github.com/MechanicalCave/SimpleSolid2/pull/309) and historical closure [PR #310](https://github.com/MechanicalCave/SimpleSolid2/pull/310) were both squash merged.  
 **Program:** this document was originally drafted against v1.30. **Current `main` program is accepted `work/PART_MODELING_V1_ROADMAP.md` v1.32**, in which RG-02A/G0 native evidence was inserted before PG-01E and has since been separately Owner-accepted and merged via [PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332), commit `5b495c4bbed8754d7a1f01e87a30716429db786d` (FAST 93/93, FULL 199/199). **Owner explicitly restored PG-01E as NEXT** on 2026-10-13 (`akceptuje - kontynuu`) after questioning a proposed G1-first reordering; the superseded roadmap [PR #336](https://github.com/MechanicalCave/SimpleSolid2/pull/336) closed **without merge**. G1 remains deferred, future placement relative to PM-06 undecided. This *prioritization* does NOT approve D2-E1–E6 or this PR's merge.  
 **Authority:** Constitution and Foundation v1.0, Architecture, ADR-0014/0016/0017, completed PG-01A–D, documentation governance. No change to frozen authority in this proposal.
@@ -17,7 +17,7 @@
 
 ## 2. Proposed PG-01E purpose and bounded deliverables
 
-**2026-10-13 scope checkpoint:** The Owner's decision places **D2 review of PG-01E next**, NOT automatic acceptance of the following proposed D2-E1–E6 package. G0 evidence of Unsupported/Ambiguous Body Vertices is an independent Vertex referenceability limit, **not a demonstrated blocker** for PG-01E's previously completed Project Geometry behaviors. No G1 schema, new `VERTEX` authoring, or RG-02 UI is introduced here. These deliverables still require a fresh exact-path Work Contract and explicit activation after separate D2 acceptance.
+**2026-10-13 scope checkpoint:** The Owner first directed **PG-01E NEXT** ahead of deferred G1, then **explicitly accepted D2-E1–E6 as a bounded PG-01E design direction for Work Contract preparation**, NOT a PG-01E implementation/merge/activation approval. G0 evidence of Unsupported/Ambiguous Body Vertices is an independent Vertex referenceability limit, **not a demonstrated blocker** for PG-01E's previously completed Project Geometry behaviors. No G1 schema, new `VERTEX` authoring, or RG-02 UI is introduced here. These deliverables still require a fresh exact-path Work Contract and explicit activation after separate D2 acceptance.
 
 **D2-E1 — Final capability/requirements traceability and gap inventory.** Build a versioned evidence matrix for all committed PG-01A–D requirements to exact existing tests/CI runs, current PL/EN product behavior and one reproducible manual Windows procedure. Identify genuinely untested cross-package interactions without making those interactions new features. Distinguish already proven tests from pending PG-01E evidence. Every unresolved gap is tracked as **open**, never implicitly waived.
 
@@ -49,14 +49,14 @@ No new Project Geometry source mode, no automatic multi-Face adjacency/perimeter
 
 Any required new native schema/modeling semantics, Part/Kernel public API, identity, forward/backward-compatibility promise, test infrastructure change, or serious unknown must be reported with exact failing evidence and a **separate bounded Owner D2 amendment BEFORE implementation**.
 
-## 5. Governance and acceptance questions for Owner
+## 5. Owner D2 design decision and remaining separate authorization gates
 
-1. **Approve scope D2-E1–E6?** In particular: PG-01E primarily closes proof and cross-package lifecycle, not an open-ended feature package; demonstrated defects need a bounded remediation decision.
-2. **Approve legacy compatibility interpretation?** "Migration matrix" in the historical PG-01E staging line means a **compatibility/refusal test matrix only**. No automatic migration and no reopening modeling v1 are authorized by PG-01E.
-3. **Approve performance scope?** Gather reproducible measurements and resource-growth evidence, without freezing broad Part-v1 budgets (PM-06 ownership).
-4. **Approve stage boundary?** PG-01E remains before PM-06; no package activation or default-branch merge is implicit in approving this design proposal.
+1. **OWNER-ACCEPTED 2026-10-13:** D2-E1–E6 as bounded evidence/closeout direction, not open-ended functionality or remediation approval. Any concrete defects require a separate bounded Owner amendment before changing product code.
+2. **OWNER-ACCEPTED D2-E3 SCOPE:** "migration matrix" means a compatibility/refusal **test matrix only**; no automatic migration or modeling-v1 document reopening.
+3. **OWNER-ACCEPTED D2-E4 SCOPE:** gather reproducible measurements/resource-growth evidence; PM-06 budgets remain independently gated.
+4. **OWNER-ACCEPTED PRIORITY AND LIMIT:** PG-01E remains before separately gated PM-06. Deferred G1's eventual placement relative to PM-06 is undecided. Neither D2 approval nor the request to start work grants the distinct permission needed to merge PR #311 or later contract/activation PRs.
 
-**Next action after SEPARATE Owner D2-E1–E6 proposal approval:** draft a separate bounded `work/PROJECTION_01E_PRODUCT_CLOSEOUT_WORK_CONTRACT.md`, including detailed exact test matrix and allowed files; obtain explicit Owner Work Contract approval; then perform a **separate governance activation PR on main** changing `work/ACTIVE.yaml -> active_work`. Only after activation merges may a PG-01E implementation/evidence feature branch be opened.
+**Next authorized preparatory actions:** draft a separate bounded `work/PROJECTION_01E_PRODUCT_CLOSEOUT_WORK_CONTRACT.md` with exact tests, allowed paths and phase exit gates, and collect **read-only E0 existing-evidence inventory** clearly labeled PRELIMINARY. **Then obtain separate explicit Owner acceptance of the exact Work Contract**, separate Owner authorization to merge each specific PR (#311 and future contract), and a **dedicated Owner-approved `work/ACTIVE.yaml` activation PR**. Only after activation merges may PG-01E tests/product/docs-as-built be mutated. An accepted D2 design direction is not Work Contract acceptance.
 
 ## Documentation impact
 
