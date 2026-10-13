@@ -1,6 +1,6 @@
 # RG-02B1/D2-P4 — next executable Work Contract preparation: signed frame + Reverse + versioned Datum
 
-**STATUS: TECHNICAL CONTRACT-PREPARATION DRAFT — NOT ACCEPTED, NOT MERGED, NOT ACTIVE, NOT AN EXECUTABLE WORK CONTRACT.**
+**STATUS: OWNER ACCEPTED THE S1→S2→S3 EXECUTION SEQUENCING (2026-10-13); PR #366 STILL DRAFT/UNMERGED/NOT ACTIVE AND THIS IS NOT AN EXECUTABLE WORK CONTRACT.** The approved plan is independently bounded S1 read-only signed Frame3 math → S2 authored, versioned Datum and legacy-schema continuity → S3 same-tool UI/Command Line; every executable slice requires its own full-text D2 contract, separate merge/ACTIVE decision and technical FINAL PASS. **No numeric thresholds, exact C++/JSON source grammar or product code were approved by this sequencing decision.**
 **Prepared:** 2026-10-13, updated after **independently Owner-authorized** [PR #365](https://github.com/MechanicalCave/SimpleSolid2/pull/365) squash **MERGED** as `ac22ef5c3d2500e8dcfb2386be0bcb217757e61f`, verified live `main` HEAD. The earlier document-only branch was forked from `00b6020e1cdc5fbf008eab444e6c311ca51bbb7d` (Q2 implementation/closeout already MERGED); only this file changes, and its contents must be reviewed against the **new** main. Owner had separately accepted the two-stage orientation policy on #365 source HEAD `c542ad13febe138cec15bf0352c469369755572b`, Windows governance #2917 SUCCESS. **Design PR merge is completed; it still is NOT a later executable Work Contract or product-code authority.** `work/ACTIVE.yaml` still points at **completed Q2**; Foundation 1.0/roadmap v1.33 untouched.
 
 ## 1. What is already settled versus missing
@@ -67,7 +67,7 @@ This retrospective source audit was performed *after* Q2 production and design #
 - **Application/user actions:** `src/application/datum_plane_draft.cpp` already has create/edit, generation and Finish validation, but its current `reverse()` negates **offset distance**, not new `EdgePointDatumPlane` `V,N` signed orientation. A future new-constructor Reverse must not accidentally invert legacy Offset meaning. `src/ui/cad_workbench.cpp` and existing Datum/Sketch/Command Line tests must retain one tool and current input parity.
 - **Unresolved endpoint case:** Q1 requires an independently certified semantic terminal Point. A real globally Ambiguous/Unsupported Point is not made durable merely by a new Datum constructor; the intended shared-corner Edge B UX needs explicit source-provenance evidence or a precisely scoped follow-up, never automatic nearest XYZ/native endpoint or silent global Point promotion.
 
-**Recommend three separate bounded executable contracts, *subject to explicit Owner review of sequencing*, rather than a partially persisted product tool:**
+**Owner has ACCEPTED the three-separate-bounded-contract sequence (2026-10-13), instead of a prematurely shipped partially persistent product tool:**
 
 | Prospective slice | Proposed output and stopping condition | Real acceptance evidence (UNRUN) |
 | --- | --- | --- |
@@ -77,7 +77,7 @@ This retrospective source audit was performed *after* Q2 production and design #
 
 Every proposed slice would need its own **full-text D2 owner-approved executable Work Contract**, exact per-file allowlist, separate governance merge, independent `ACTIVE.yaml` switch and **technical FINAL PASS plus distinct production-merge permission**. Slices must not claim the **entire** user-visible Datum Plane Edge+Point feature until all required subcontracts and proofs are completed. A prior contract's active pointer should not be treated as indefinite authority after its own merge.
 
-**Still unresolved before S1 acceptance:** choose numeric dot/tie/near-parallel policy and precise behavior for the case `|dot(N_current_line,N_authored_ref)|` approaching zero. The engineering-safe candidate is typed `orientation_review_required` at a defined threshold, rather than silently guessing a ±normal or U-axis flip; the threshold and future remediation must be Owner-reviewed, not invented. **Still unresolved before S2:** exact orientation seed representation, v17-if-accepted source JSON/C++ grammar/migrations and legacy interactions. **Still unresolved before S3:** off-line stable terminal anchor and Point/Edge picker ambiguity handling. This PR **does not decide** any of these values.
+**Owner's acceptance of S1→S2→S3 is a sequencing decision, not S1 scope authorization. Still unresolved before S1 acceptance:** choose numeric dot/tie/near-parallel policy and precise behavior for the case `|dot(N_current_line,N_authored_ref)|` approaching zero. The engineering-safe candidate is typed `orientation_review_required` at a defined threshold, rather than silently guessing a ±normal or U-axis flip; the threshold and future remediation must be Owner-reviewed, not invented. **Still unresolved before S2:** exact orientation seed representation, v17-if-accepted source JSON/C++ grammar/migrations and legacy interactions. **Still unresolved before S3:** off-line stable terminal anchor and Point/Edge picker ambiguity handling. This PR **does not decide** any of these values.
 
 ## Documentation impact
 
