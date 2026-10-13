@@ -1295,6 +1295,63 @@ void verifyQ1NoGlobalPointPromotion(
     }
     CHECK(unsupported_vertices >= 1U);
     CHECK(rejected_end_uses >= 1U);
+    // Q2-M07: real Fillet/Chamfer may have unsupported endpoint
+    // Points; MID does not adopt their Point meaning. It may resolve
+    // only when the independently strict Edge and Q0 exact MID do.
+    CHECK(evaluation.features.back().result_solid);
+    std::size_t q2_admitted_mids = 0U;
+    std::size_t q2_checked_edges = 0U;
+    for (const auto& edge : catalog.edges) {
+        const auto authored =
+            part::authorSelectedMaterialEdgeMid(
+                document, evaluation, catalog.stage,
+                edge.runtime_token, provider);
+        const auto strict = part::authorMaterialEdgeReference(
+            catalog, edge.runtime_token);
+        if (!strict.ok()) {
+            CHECK(!authored.ok());
+            CHECK(!authored.reference);
+            ++q2_checked_edges;
+            continue;
+        }
+        const auto bound = provider.bindExactEdgeToBody(
+            evaluation.features.back().result_solid,
+            edge.runtime_token);
+        const auto exact = bound
+            ? provider.queryExactBoundedEdge3d(
+                evaluation.features.back().result_solid, *bound)
+            : kernel::ExactEdge3dResult{};
+        if (!exact.ok()) {
+            CHECK(!authored.ok());
+            CHECK(!authored.reference);
+        } else {
+            CHECK(authored.ok());
+            const auto replay =
+                part::resolveSelectedMaterialEdgeMid(
+                    document, *authored.reference,
+                    evaluation, provider);
+            CHECK(replay.resolved());
+            CHECK(replay.current_edge == edge.runtime_token);
+            ++q2_admitted_mids;
+        }
+        ++q2_checked_edges;
+    }
+    CHECK(q2_checked_edges == catalog.edges.size());
+    CHECK(q2_checked_edges >= 1U);
+    for (const auto& vertex : catalog.vertices) {
+        if (vertex.referenceability ==
+                kernel::ReferenceStatus::unsupported ||
+            vertex.referenceability ==
+                kernel::ReferenceStatus::ambiguous) {
+            CHECK(vertex.referenceability !=
+                  kernel::ReferenceStatus::resolved);
+        }
+    }
+    std::cout << "RG02B1_Q2_FILLET_CHAMFER_MID"
+              << " fixture=" << fixture
+              << " checked_edges=" << q2_checked_edges
+              << " admitted_strict_mids=" << q2_admitted_mids
+              << " global_point_promotions=0\n";
     std::cout << "RG02B1_Q1_NEGATIVE"
               << " fixture=" << fixture
               << " unsupported_or_ambiguous_vertices="
