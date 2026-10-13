@@ -1714,6 +1714,16 @@ void verifyQ1RealHalfCylinderAndRevolve(
             CHECK(resolved.resolved());
             CHECK(resolved.current_edge == edge.runtime_token);
             CHECK(resolved.current_terminal == vertex.runtime_token);
+            const auto s1 = part::initializeSelectedEdgeEndFrame(
+                partial,*authored.reference,partial_eval,kernel);
+            CHECK(s1.resolved());
+            CHECK(s1.initialized_intent);
+            CHECK(s1.frame->valid());
+            const auto s1_replay = part::resolveSelectedEdgeEndFrame(
+                partial,*authored.reference,*s1.initialized_intent,
+                partial_eval,kernel);
+            CHECK(s1_replay.resolved());
+            CHECK(s1_replay.frame->valid());
             switch (edge.curve_kind) {
             case kernel::CurveKind::line:
                 ++line_terminal_uses;
@@ -1744,6 +1754,15 @@ void verifyQ1RealHalfCylinderAndRevolve(
             partial, *mid.reference, partial_eval, kernel);
         CHECK(current.resolved());
         CHECK(current.current_edge == edge.runtime_token);
+        const auto s1 = part::initializeSelectedEdgeMidFrame(
+            partial,*mid.reference,partial_eval,kernel);
+        CHECK(s1.resolved());
+        CHECK(s1.initialized_intent);
+        CHECK(s1.frame->valid());
+        const auto s1_replay = part::resolveSelectedEdgeMidFrame(
+            partial,*mid.reference,*s1.initialized_intent,
+            partial_eval,kernel);
+        CHECK(s1_replay.resolved());
         const auto bound = kernel.bindExactEdgeToBody(
             partial_eval.features.front().result_solid,
             edge.runtime_token);
@@ -2609,6 +2628,32 @@ int main() {
             fresh_evaluation, separate_kernel);
         CHECK(replay.resolved());
     }
+    // S1-F03: caller-carried intent is replayed against independent
+    // native-provider and cold Part reconstruction, without persisting it.
+    for (const auto& source : q1_base_sources) {
+        const auto initial = part::initializeSelectedEdgeEndFrame(
+            base_document,source,base_evaluation,kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        const auto cold = part::resolveSelectedEdgeEndFrame(
+            *reopened_document.document,source,*initial.initialized_intent,
+            fresh_evaluation,separate_kernel);
+        CHECK(cold.resolved());
+        CHECK(s1Near3(initial.frame->origin,cold.frame->origin));
+        CHECK(s1Near3(initial.frame->u_axis,cold.frame->u_axis));
+        CHECK(s1Near3(initial.frame->normal,cold.frame->normal));
+    }
+    for (const auto& source : q2_base_sources) {
+        const auto initial = part::initializeSelectedEdgeMidFrame(
+            base_document,source,base_evaluation,kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        const auto cold = part::resolveSelectedEdgeMidFrame(
+            *reopened_document.document,source,*initial.initialized_intent,
+            fresh_evaluation,separate_kernel);
+        CHECK(cold.resolved());
+        CHECK(s1Near3(initial.frame->origin,cold.frame->origin));
+        CHECK(s1Near3(initial.frame->u_axis,cold.frame->u_axis));
+        CHECK(s1Near3(initial.frame->normal,cold.frame->normal));
+    }
     // Compare complete semantic identity sets independently of native
     // Edge/Vertex enumeration and fresh OCCT provider generation.
     for (const auto& original : q1_base_sources) {
@@ -2693,6 +2738,28 @@ int main() {
     const auto q2_taller_sources = verifyQ2CanonicalSelectedMids(
         taller_document, taller_evaluation, kernel, "Q2-M04-height-edit");
     CHECK(q2_taller_sources.size() == q2_base_sources.size());
+    // S1-F04: a source-preserving Extrude height edit must retain
+    // the signed orientation through the caller's original intent.
+    for (const auto& source : q1_base_sources) {
+        const auto initial = part::initializeSelectedEdgeEndFrame(
+            base_document,source,base_evaluation,kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        const auto edited = part::resolveSelectedEdgeEndFrame(
+            taller_document,source,*initial.initialized_intent,
+            taller_evaluation,kernel);
+        CHECK(edited.resolved());
+        CHECK(s1Near3(initial.frame->normal,edited.frame->normal));
+    }
+    for (const auto& source : q2_base_sources) {
+        const auto initial = part::initializeSelectedEdgeMidFrame(
+            base_document,source,base_evaluation,kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        const auto edited = part::resolveSelectedEdgeMidFrame(
+            taller_document,source,*initial.initialized_intent,
+            taller_evaluation,kernel);
+        CHECK(edited.resolved());
+        CHECK(s1Near3(initial.frame->normal,edited.frame->normal));
+    }
     std::size_t changed_mid_positions = 0U;
     for (const auto& original : q2_base_sources) {
         CHECK(std::find(q2_taller_sources.begin(),
