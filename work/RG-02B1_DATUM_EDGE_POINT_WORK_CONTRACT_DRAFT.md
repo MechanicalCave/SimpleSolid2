@@ -11,19 +11,48 @@ Owner supplied a screenshot of the **existing Datum Plane** Operations panel wit
 - A: a plane **through a straight Edge and a point outside its supporting line**, versus
 - B: a plane **perpendicular to an Edge at END/MID**,
 
-Owner first explicitly chose **B**. Owner then explicitly refined the user experience: **only choose the Datum constructor in the existing dropdown, click semantic END/MID directly in the model, never add a separate Position / END1 / END2 / MID selector**. Finally Owner explicitly insisted **not to split on-edge versus off-edge Point into two user-facing Datum tools**; one tool and automatic, exact geometric interpretation. After that precise proposal, Owner answered **"akceptuję - kontynuuj"**.
+Owner first explicitly chose **B**. Owner then explicitly refined the user experience: **only choose the Datum constructor in the existing dropdown, click semantic END/MID directly in the model, never add a separate Position / END1 / END2 / MID selector**. Finally Owner explicitly insisted **not to split on-edge versus off-edge Point into two user-facing Datum tools**; one tool and automatic, exact geometric interpretation. After that precise proposal, Owner answered **"akceptuję - kontynuuj"**. In a further screenshot-backed clarification on 2026-10-13, Owner specified **reuse current hover/select point, Edge and Face presentation; MID looks identical to existing END; accept either point-first or Edge-first input; resolve coincident point picks automatically by the subsequently chosen Edge**, with no UI disambiguation. After the exact rules were restated, Owner answered **"akceptuję - kontynuuj"**.
 
 **Accepted UX principle:**
 1. Continue with the **single existing Part `Datum Plane` tool** and one `Constructor` value, provisionally called **`Edge + Point`**; keep `Offset` unchanged. The name `Edge + Point` is a proposal, not a separately approved final label.
-2. Acquire the **source material Edge** and then one **semantic Point** in the **3D Viewport**, using clear hover/highlighting and direct **END/MID point snaps**, without extra panel toggles or separate on-edge/off-edge modes.
-3. On a valid second pick, compute the single appropriate plane interpretation; show a **transient preview**; preserve normal reversal, Finish/Cancel, Edit/repair through the same Datum Plane workflow.
+2. Acquire a **source material Edge** and a **semantic Point** in the **3D Viewport, in either order** (`Edge → Point` or `Point → Edge`). Reuse current hover/select Edge/Face/END presentation; show `MID` with **the same point marker as END**. No extra panel toggles, Point-kind selectors, overlap-candidate list or separate on-edge/off-edge modes.
+3. The second pick completes the selection pair. Match any overlapping visible Point candidates against the **chosen Edge** by **strict semantic Edge/Point membership**, not by the visually displayed candidate; automatically select a **unique eligible** relation and show the **transient preview**. Preserve normal reversal, Finish/Cancel, Edit/repair through the same Datum Plane workflow.
 4. `END`/`MID` labels are **semantic acquisition intents**, never screen-position CAD identity. A pick that has no proven unique durable meaning is rejected clearly.
 
-**Still open for actual separate Owner UX approval under parent §3:** presentation/shape/color/priority of END/MID markers, overlapping corner-Edge disambiguation, highlights, source-acquisition state/help text, focus/keyboard semantics, visual diagnostic/repair interactions, exact choice/placement of Reverse and Finish, and command-line parity. **No Viewer/Tree/Operations/Command Line UI code may start until these are reviewably presented and explicitly accepted.** This recorded narrow interaction agreement must not be claimed as blanket full UX approval.
+**Accepted for UX direction:** existing END marker reused for MID, existing selection/hover visualization reused, and coincident Point candidates filtered **automatically after Edge selection**, independent of pick order. **Still open for the mandatory separate full UX approval under parent §3:** precise state/help text, hover-to-snap hit radius/priority where current behavior lacks a proven rule, focus/keyboard grammar, typed ambiguity/repair feedback, Edit source replacement, exact Reverse/Finish interaction and Command Line parity. **No Viewer/Tree/Operations/Command Line UI code may start until the complete applicable design is reviewably presented and explicitly accepted.** This accepted interaction amendment is not a blanket production UX sign-off.
+
+
+## 1A. Owner-accepted Edge/Point acquisition order and coincident points (2026-10-13)
+
+**One constructor, any pick order.** The tool must not force the operator to know point topology or select an explicit END/MID mode; both source picks are acquired using the existing model Viewport semantics. The *visible* hover marker may be whichever coincident point is normally presented — it is not itself durable selection authority. MID uses **exactly the existing END point visual style**, not a new icon/color or extra panel control. The highlighted source Edge remains visually identifiable using the existing Edge preselect/select behavior.
+
+**`Edge → Point` (Edge first):**
+1. Capture a uniquely admissible semantic **source material Edge** and its explicit Body stage. An unsupported or ambiguous Edge cannot become authored source.
+2. Hover and click a visible candidate END/MID or independent model Point. If multiple Point hits occupy the same display location, **first filter by exact semantic membership/role on the already-selected Edge**. A unique eligible source-Edge END/MID wins over unrelated coincident hits; the arbitrary hover-displayed point does not decide CAD identity.
+3. If the accepted point is a unique END/MID **of that Edge**, derive the **perpendicular** plane. If none belongs to that Edge, an **independently and uniquely certified off-line Point** may drive the straight-Edge-through-Point interpretation; do not guess among unrelated coincident off-line meanings.
+4. Show preview **only after** the selected Edge plus unique certified Point yield exactly one valid supported Datum interpretation.
+
+**`Point → Edge` (Point first):**
+1. A click on a visually overlapping point retains **a transient set of semantic hit candidates**, not whichever individual candidate happened to be displayed by hover. The candidates are scoped to the current Part/selection context and are **not persisted as authored references**; every source must be current/stage-valid when consumed.
+2. Click the material Edge. Resolve its strict identity and **intersect/filter** the candidate set with certified END/MID semantic relations belonging to **this Edge**. If one eligible source-Edge relation is uniquely proven, select it automatically and present the **perpendicular plane preview**, even when a different coincident Point was shown at the first click.
+3. If **none** belongs to the selected Edge, do not pick a coincident point arbitrarily: only **one independently certifiable, noncollinear off-line Point** permits the straight-Edge-through-Point plane. Otherwise show a short explicit unresolved/unsupported diagnostic with **no preview**. A missing on-Edge membership must not automatically become off-line merely because the viewer shows an offset/matching XYZ.
+4. If multiple remaining candidate relations are truly distinct in **persisted semantic meaning** or the selected Edge cannot be certified, **fail closed**, keeping the draft editable and allowing fresh picks. No arbitrary first-hit, list-order, pixel-nearest or provider-order fallback.
+
+**Geometry and safety:** UI hit overlap is only a way to collect candidates. The **exact authored Edge/Point relation** (same declared Body stage, strict material branch, admissible END/MID role and source identity) makes the choice. Screen/pixel proximity, same XYZ, equal B-Rep token, viewport draw order or coincident geometry **never independently establishes persistent identity**. De-duplicate genuinely equivalent hit paths to the *same proven semantic reference*, but do not collapse different references just because they render at one position. A stale/lost/unsupported/ambiguous hit never becomes a legal source merely because some geometry looks plausible.
+
+**Transient/revalidation rule:** no authored mutation on hover, first pick or preview. A complete valid pair may display a temporary plane; `Finish` revalidates both live semantic sources/Body stage and the single deterministic interpretation before one atomic Datum commit. Failed, cancelled or revised picks do not create Undo entries. Identical rules apply to initial Create and Edit/re-source drafts, with Undo/Redo and cold reconstruction preserving the chosen authored meaning, not the temporary hit list.
+
+**Minimum future verification matrix (all UNRUN until independently executed):**
+- E1: `Edge → source MID` and `Point MID → Edge` yield the same certified Datum/frame for a bounded straight Edge; the same for END where source identity is proven.
+- E2: Shared visible corner with **two or more** overlay Point hits from distinct Edges; first-point hover shows an arbitrary one, then selecting Edge A uses **only A's valid END**; reverse order produces same result. Repeat for Edge B.
+- E3: Source Edge plus independently certified **off-line** Point, both input orders, gives one through-straight-Edge-and-Point plane; no extra constructor UI mode.
+- E4: Multiple truly distinct off-line Point meanings at one screen location: reject ambiguity; never pick displayed/first candidate. A source-Edge candidate, when uniquely present, wins over unrelated coincident candidates.
+- E5: Missing, stale, unsupported, split/ambiguous branch, invalid MID/full circle, wrong Body stage and degenerate geometry: no preview/commit; typed diagnostic, no silent source reattachment.
+- E6: `Finish/Cancel/Edit`, upstream edit versus later Chamfer, Undo/Redo, Save/Reopen and genuinely fresh OCCT provider preserve/fail-closed according to exact authored Edge and Point meaning, independent of pick order.
 
 ## 2. Exact meaning proposed for this one constructor
 
-User sequence: **Datum Plane → Constructor: Edge + Point → click a strict stage-bound material Edge → click a uniquely resolvable Point**. The second click is authoring intent only if the chosen semantic source and exact evaluated native geometry prove a unique answer; no proximity heuristic chooses a construction.
+User sequence: **Datum Plane → Constructor: Edge + Point → select an Edge and a Point in either order**. Point-first may temporarily hold several overlapping semantic hit candidates; the selected strict Edge filters the candidates automatically. The completed pair is admissible only when semantic source certification and exact evaluated geometry prove a **unique** legal result (§1A); no visually presented hit or proximity heuristic chooses authored meaning.
 
 | Exact semantic/geometry predicate | Derived meaning | Result |
 | --- | --- | --- |
@@ -51,11 +80,11 @@ Geometry classification is **not a pixel-distance threshold**: use exact provide
 ## 4. One bounded executable package — PROPOSED, not yet accepted for code
 
 **In-scope only after independent Owner gates:** reuse the existing Datum Plane/Offset lifecycle and add exactly one `Edge + Point` constructor (the on-edge and off-line straight-Edge interpretations are two semantics of that **same** user workflow), with:
-- acquisition/preview/Finish/Cancel without authoring on hover; one atomic Finish/Undo;
+- order-independent `Point → Edge` and `Edge → Point` acquisition, reuse of existing END and Edge visualizations for identical MID marker, automatic overlap filtering (§1A), preview/Finish/Cancel without authoring on hover or transient picks; one atomic Finish/Undo;
 - stable `DatumId`, source-bound Edit/resourcing and typed diagnostics `Missing/Ambiguous/Unsupported/Blocked`;
 - update under earlier Feature edits, stage preservation after later Features, Save/Close/Reopen and genuinely fresh OCCT provider cold rebuild;
 - regression-safe unchanged Offset behavior, dependent Datum-backed Sketch/Profile → existing Extrude composition where input support is valid;
-- kernel-native exact analytic line/arc, END/MID, proper tangent/frame, full circle/degenerate/ambiguity/refusal cases, and desktop UI workflows AFTER UX approval;
+- kernel-native exact analytic line/arc, END/MID, proper tangent/frame, full circle/degenerate/ambiguity/refusal cases; explicit future E1–E6 pair-order/overlap native and desktop verification (§1A), with any desktop UI workflows only AFTER separate full UX approval;
 - Windows FOCUSED on relevant existing registered targets, FAST if CI policy requires it, final exact-head Windows FULL, as-built Internal, PL/EN Product + regenerated Browser, and independent Owner manual Windows acceptance.
 
 **Unknown implementation allowlist:** must be audited and listed **exactly** (existing Part/domain/kernel/application/Qt UI, persistence/docs/test files) before executable contract acceptance. No "any `src/**`" catchall permission. If two interpretations cannot be supported without a larger independent ref/point contract, **STOP** to seek a narrower evidence-first amendment rather than silently splitting user tools or activating G1.
@@ -72,7 +101,7 @@ Geometry classification is **not a pixel-distance threshold**: use exact provide
 
 1. **Native END and MID exact referenceability:** proof and legal small fixture class per strict `MaterialEdgeReference`, with ambiguous/missing stress cases. Is a new typed point semantic variant required? If so stop for Owner D2.
 2. **Exact frame orientation and Reverse meaning** consistent across straight lines, arc tangent endpoints and persisted rebuild; reject orientation driven by provider order.
-3. **3D marker / selection UX detail and priority** at shared corners; mockups/scenarios to Owner and explicit independent approval.
+3. **Remaining UX details, not the already accepted overlap algorithm:** preserve existing END visuals for MID and automatic Edge-filtered point-first resolution (§1A); present keyboard/focus, current selection priority edge cases, user-facing state/help text, diagnostics and repair scenarios to Owner for separate complete UX approval.
 4. **Complete file allowlist, schema version and migration/refusal impact** after inspecting the accepted code and test anchors. No guessed code edit targets.
 5. **Numerical tolerances and concrete expected results** as exact native fixtures; mark everything `UNRUN` until verified.
 
