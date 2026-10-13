@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <memory>
 #include <variant>
@@ -822,6 +823,164 @@ void verifyPg01aExactProjection() {
               << tilted_rejections << '\\n';
 }
 
+
+void verifyRg02b1Q0Exact3dGeometry() {
+    using Status = kernel::ExactEdge3dStatus;
+    kernel_occt::OcctSolidModelingKernel query;
+
+    const auto box = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("rg02b1-q0-box"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(box.ok());
+    CHECK(box.current_edges.size() >= 12U);
+    std::size_t valid_lines = 0U;
+    kernel::ExactEdge3dResult exemplar;
+    for (const auto token : box.current_edges) {
+        const auto scoped = query.bindExactEdgeToBody(box.solid, token);
+        CHECK(scoped && scoped->valid());
+        const auto result =
+            query.queryExactBoundedEdge3d(box.solid, *scoped);
+        CHECK(result.ok());
+        CHECK(result.geometry->kind ==
+              kernel::ExactEdge3dKind::bounded_line);
+        CHECK(result.geometry->bounded_length_mm > 0.0);
+        const auto& g = *result.geometry;
+        const auto& p = g.current_terminal_positions_world;
+        CHECK(near(g.midpoint_at_half_bounded_length_world.x,
+                   (p[0].x + p[1].x) * 0.5));
+        CHECK(near(g.midpoint_at_half_bounded_length_world.y,
+                   (p[0].y + p[1].y) * 0.5));
+        CHECK(near(g.midpoint_at_half_bounded_length_world.z,
+                   (p[0].z + p[1].z) * 0.5));
+        for (const auto& tangent : g.terminal_tangent_lines) {
+            const auto& t = tangent.representative;
+            CHECK(near(t.x*t.x + t.y*t.y + t.z*t.z, 1.0));
+        }
+        const auto& t = g.midpoint_tangent_line.representative;
+        CHECK(near(t.x*t.x + t.y*t.y + t.z*t.z, 1.0));
+        ++valid_lines;
+        exemplar = result;
+    }
+    CHECK(valid_lines >= 12U);
+
+    CHECK(query.queryExactBoundedEdge3d(box.solid, {}).status ==
+          Status::invalid_input);
+    CHECK(!query.bindExactEdgeToBody(
+        box.solid, kernel::RuntimeEdgeToken{9999999U}));
+    const auto old = query.bindExactEdgeToBody(
+        box.solid, box.current_edges.front());
+    CHECK(old.has_value());
+    const auto rebuilt = query.extrude(
+        kernel::LinearExtrudeInput{
+            rectangle("rg02b1-q0-rebuilt"), 0.0, 15.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(rebuilt.ok());
+    const auto mismatched =
+        query.queryExactBoundedEdge3d(rebuilt.solid, *old);
+    CHECK(mismatched.status == Status::provider_mismatch);
+    CHECK(!mismatched.geometry);
+    struct ForeignBody final : kernel::RuntimeSolid {};
+    CHECK(!query.bindExactEdgeToBody(
+        std::make_shared<ForeignBody>(), box.current_edges.front()));
+
+    const auto generic_failure =
+        kernel_occt::detail::guardExactBoundedEdge3dResult(
+            []() -> kernel::ExactEdge3dResult {
+                throw std::runtime_error("q0-injected-generic-exception");
+            });
+    CHECK(generic_failure.status == Status::kernel_failure);
+    CHECK(!generic_failure.geometry);
+    const auto success =
+        kernel_occt::detail::guardExactBoundedEdge3dResult(
+            [&]() -> kernel::ExactEdge3dResult { return exemplar; });
+    CHECK(success.ok());
+    CHECK(success.geometry->kind == kernel::ExactEdge3dKind::bounded_line);
+
+    std::size_t open_arcs = 0U;
+    const double pi = std::numbers::pi_v<double>;
+    for (const auto sweep : {
+            pi, -pi, pi / 2.0}) {
+        const double start = sweep == pi/2.0
+            ? 5.0 * pi / 3.0
+            : (sweep < 0.0 ? pi : 0.0);
+        const auto body = query.extrude(
+            kernel::LinearExtrudeInput{
+                circularSegmentProfile(start, sweep), 0.0, 10.0,
+                kernel::ExtrudeCapRole::profile_cap,
+                kernel::ExtrudeCapRole::extent_cap,
+                kernel::SolidBooleanOperation::add});
+        CHECK(body.ok());
+        std::size_t arcs_this_body = 0U;
+        for (const auto token : body.current_edges) {
+            const auto scoped = query.bindExactEdgeToBody(body.solid, token);
+            CHECK(scoped);
+            const auto current =
+                query.queryExactBoundedEdge3d(body.solid, *scoped);
+            CHECK(current.ok());
+            if (current.geometry->kind !=
+                kernel::ExactEdge3dKind::open_circular_arc) {
+                continue;
+            }
+            const auto& g = *current.geometry;
+            CHECK(near(g.bounded_length_mm, 10.0 * std::abs(sweep)));
+            const auto& mid = g.midpoint_at_half_bounded_length_world;
+            CHECK(near(mid.x*mid.x + mid.y*mid.y, 100.0));
+            for (std::size_t i = 0U; i < 2U; ++i) {
+                const auto& endpoint = g.current_terminal_positions_world[i];
+                const auto& tangent = g.terminal_tangent_lines[i].representative;
+                CHECK(near(endpoint.x*endpoint.x + endpoint.y*endpoint.y,
+                           100.0));
+                CHECK(near(endpoint.x*tangent.x + endpoint.y*tangent.y,
+                           0.0));
+                CHECK(near(tangent.x*tangent.x + tangent.y*tangent.y +
+                           tangent.z*tangent.z, 1.0));
+            }
+            const auto& t = g.midpoint_tangent_line.representative;
+            CHECK(near(mid.x*t.x + mid.y*t.y, 0.0));
+            CHECK(near(t.x*t.x + t.y*t.y + t.z*t.z, 1.0));
+            ++arcs_this_body;
+        }
+        CHECK(arcs_this_body >= 2U);
+        open_arcs += arcs_this_body;
+    }
+
+    const auto cylinder = query.extrude(
+        kernel::LinearExtrudeInput{
+            circle("rg02b1-q0-full-circle"), 0.0, 10.0,
+            kernel::ExtrudeCapRole::profile_cap,
+            kernel::ExtrudeCapRole::extent_cap,
+            kernel::SolidBooleanOperation::add});
+    CHECK(cylinder.ok());
+    std::size_t closed_curves = 0U;
+    for (const auto token : cylinder.current_edges) {
+        const auto scoped = query.bindExactEdgeToBody(
+            cylinder.solid, token);
+        CHECK(scoped);
+        const auto result =
+            query.queryExactBoundedEdge3d(cylinder.solid, *scoped);
+        CHECK(result.status == Status::closed_or_periodic ||
+              result.status == Status::ok);
+        if (result.status == Status::closed_or_periodic) {
+            CHECK(!result.geometry);
+            ++closed_curves;
+        }
+    }
+    CHECK(closed_curves >= 2U);
+
+    std::cout << "RG02B1_Q0_EXACT_3D_EDGE"
+              << " real_box_lines=" << valid_lines
+              << " real_open_arcs=" << open_arcs
+              << " full_circle_rejections=" << closed_curves
+              << " generic_cpp_exception=TESTED"
+              << " native_Standard_Failure=NOT_DIRECTLY_TESTED"
+              << " persistent_END_identity=NOT_IMPLEMENTED\n";
+}
+
 } // namespace
 
 int main() {
@@ -835,6 +994,7 @@ int main() {
     verifyPg01aGenerationScope();
     verifyPg01aUnsupportedIntersectionCurve();
     verifyPg01aOcctExceptionGuard();
+    verifyRg02b1Q0Exact3dGeometry();
 
     std::cout
         << "PM02P_E_KERNEL_LIFECYCLE_PASS"
