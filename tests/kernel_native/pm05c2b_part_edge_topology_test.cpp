@@ -4,6 +4,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -1879,8 +1880,19 @@ int main() {
             auto synthetic = base_evaluation;
             auto& cat = *synthetic.features.front().result_topology;
             CHECK(!cat.points.empty());
-            cat.points.front().status =
-                kernel::ReferenceStatus::ambiguous;
+            auto& point = cat.points.front();
+            CHECK(point.current_vertices.size() == 1U);
+            const auto different = std::find_if(
+                cat.vertices.begin(), cat.vertices.end(),
+                [&point](const auto& vertex) {
+                    return vertex.runtime_token !=
+                        point.current_vertices.front();
+                });
+            CHECK(different != cat.vertices.end());
+            point.status = kernel::ReferenceStatus::ambiguous;
+            point.current_vertices.push_back(different->runtime_token);
+            point.candidate_vertex_count = 2U;
+            CHECK(cat.complete());
             const auto r = part::resolveSelectedMaterialEdgeMid(
                 base_document, source, synthetic, kernel);
             CHECK(r.resolved());
