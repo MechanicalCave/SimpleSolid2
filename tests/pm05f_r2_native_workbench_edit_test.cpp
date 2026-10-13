@@ -4578,7 +4578,7 @@ int main(int argc, char* argv[]) {
                   multi_cold_projection->allResolved());
             CHECK(multi_cold_projection->outcomes.size() == 4U);
             CHECK(multi_cold_projection->model.entityCount() == 4U);
-            CHECK(multi_reopened.document()->modelingSemanticsVersion() ==
+            CHECK(multi_reopened.document->modelingSemanticsVersion() ==
                   part::current_modeling_semantics_version);
             std::cout
                 << "PG01E_E1_MANUAL_MULTI_FACE_EXPLICIT_REPAIR_COLD_PASS"
@@ -4589,7 +4589,7 @@ int main(int argc, char* argv[]) {
                 << " repaired_linked_profile=1"
                 << " dependent_extrude_add=1"
                 << " fresh_occt_provider=1"
-                << " stable_profile_and_feature_ids=1\\n";
+                << " stable_profile_and_feature_ids=1\n";
 
             std::cout
                 << "PG01D_MANUAL_MULTI_FACE_NATIVE_COLD_V15_PASS"
