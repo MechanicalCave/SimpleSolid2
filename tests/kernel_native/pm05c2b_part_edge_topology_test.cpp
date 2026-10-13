@@ -1309,6 +1309,165 @@ verifyQ1CanonicalSelectedEnds(
     return result;
 }
 
+// Q1-06: do not classify an actual half-cylinder cut's ambiguous
+// three-Surface Point as uniquely selected merely because an Edge touches
+// its current native Vertex. Partial Revolve is a distinct real positive
+// family, not conflated with the half-cylinder's ambiguous Points.
+void verifyQ1RealHalfCylinderAndRevolve(
+    kernel_occt::OcctSolidModelingKernel& kernel) {
+    const auto cylinder = makeQ1ExtrudeCylinder();
+    const auto cylinder_eval = part::evaluatePart(cylinder, kernel);
+    CHECK(cylinder_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(cylinder_eval.features.size() == 1U);
+    CHECK(cylinder_eval.features[0].result_topology);
+    const auto& whole = *cylinder_eval.features[0].result_topology;
+    CHECK(whole.vertices.size() == 2U);
+    for (const auto& vertex : whole.vertices) {
+        CHECK(vertex.referenceability ==
+              kernel::ReferenceStatus::unsupported);
+        CHECK(vertex.point_candidates.empty());
+        for (const auto current_edge : vertex.incident_material_edges) {
+            const auto rejected = part::authorSelectedMaterialEdgeEnd(
+                cylinder, cylinder_eval, whole.stage,
+                current_edge, vertex.runtime_token, kernel);
+            CHECK(!rejected.ok());
+            CHECK(!rejected.reference);
+        }
+    }
+
+    const auto half_document = withQ1CylinderHalfCut(cylinder);
+    const auto half_evaluation = part::evaluatePart(
+        half_document, kernel);
+    CHECK(half_evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(half_evaluation.features.size() == 2U);
+    CHECK(half_evaluation.features.back().result_topology);
+    const auto& cat =
+        *half_evaluation.features.back().result_topology;
+    CHECK(cat.complete());
+    CHECK(cat.vertices.size() == 6U);
+    std::size_t real_ambiguous = 0U;
+    std::size_t real_unsupported = 0U;
+    std::size_t ambiguous_terminal_uses = 0U;
+    for (const auto& vertex : cat.vertices) {
+        if (vertex.referenceability ==
+                kernel::ReferenceStatus::ambiguous) {
+            ++real_ambiguous;
+            CHECK(vertex.point_candidates.size() == 1U);
+            const auto& address = vertex.point_candidates.front();
+            const auto point = std::find_if(
+                cat.points.begin(), cat.points.end(),
+                [&address](const auto& item) {
+                    return item.address == address;
+                });
+            CHECK(point != cat.points.end());
+            CHECK(point->status ==
+                  kernel::ReferenceStatus::ambiguous);
+            CHECK(point->current_vertices.size() > 1U);
+        } else {
+            CHECK(vertex.referenceability ==
+                  kernel::ReferenceStatus::unsupported);
+            CHECK(vertex.point_candidates.empty());
+            ++real_unsupported;
+        }
+        for (const auto edge : vertex.incident_material_edges) {
+            const auto attempt = part::authorSelectedMaterialEdgeEnd(
+                half_document, half_evaluation, cat.stage,
+                edge, vertex.runtime_token, kernel);
+            CHECK(!attempt.ok());
+            CHECK(!attempt.reference);
+            CHECK(attempt.status !=
+                  part::SelectedEdgeEndStatus::resolved);
+            CHECK(attempt.status !=
+                  part::SelectedEdgeEndStatus::native_geometry_unavailable);
+            if (vertex.referenceability ==
+                    kernel::ReferenceStatus::ambiguous) {
+                ++ambiguous_terminal_uses;
+            }
+        }
+    }
+    CHECK(real_ambiguous == 4U);
+    CHECK(real_unsupported == 2U);
+    CHECK(ambiguous_terminal_uses >= 1U);
+    std::size_t ambiguous_point_addresses = 0U;
+    for (const auto& point : cat.points) {
+        if (point.status ==
+                kernel::ReferenceStatus::ambiguous) {
+            ++ambiguous_point_addresses;
+            CHECK(point.candidate_vertex_count > 1U);
+        }
+    }
+    CHECK(ambiguous_point_addresses == 2U);
+    std::cout << "RG02B1_Q1_REAL_HALF_CYLINDER"
+              << " ambiguous_vertices=" << real_ambiguous
+              << " unsupported_vertices=" << real_unsupported
+              << " ambiguous_terminal_uses_denied="
+              << ambiguous_terminal_uses
+              << " false_resolved=0\n";
+
+    const auto partial = makeQ1PartRevolve(
+        core::BuiltinReferenceRole::x_axis,
+        {10.0, 0.0}, {20.0, 10.0},
+        1.57079632679489661923);
+    const auto partial_eval = part::evaluatePart(partial, kernel);
+    CHECK(partial_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(partial_eval.features.size() == 1U);
+    CHECK(partial_eval.features[0].result_topology);
+    const auto& revolved =
+        *partial_eval.features[0].result_topology;
+    CHECK(revolved.complete());
+    CHECK(revolved.vertices.size() == 6U);
+    for (const auto& vertex : revolved.vertices) {
+        CHECK(vertex.referenceability ==
+              kernel::ReferenceStatus::resolved);
+        CHECK(vertex.point_candidates.size() == 1U);
+    }
+    std::size_t line_terminal_uses = 0U;
+    std::size_t arc_terminal_uses = 0U;
+    for (const auto& edge : revolved.edges) {
+        for (const auto& vertex : revolved.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge.runtime_token) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            const auto authored = part::authorSelectedMaterialEdgeEnd(
+                partial, partial_eval, revolved.stage,
+                edge.runtime_token, vertex.runtime_token, kernel);
+            if (!authored.ok()) {
+                CHECK(authored.status !=
+                      part::SelectedEdgeEndStatus::resolved);
+                continue;
+            }
+            const auto resolved = part::resolveSelectedMaterialEdgeEnd(
+                partial, *authored.reference, partial_eval, kernel);
+            CHECK(resolved.resolved());
+            CHECK(resolved.current_edge == edge.runtime_token);
+            CHECK(resolved.current_terminal == vertex.runtime_token);
+            switch (edge.curve_kind) {
+            case kernel::CurveKind::line:
+                ++line_terminal_uses;
+                break;
+            case kernel::CurveKind::circle:
+                ++arc_terminal_uses;
+                break;
+            default:
+                CHECK(false);
+            }
+        }
+    }
+    CHECK(line_terminal_uses >= 2U);
+    CHECK(arc_terminal_uses >= 2U);
+    std::cout << "RG02B1_Q1_REAL_PARTIAL_REVOLVE"
+              << " certified_line_end_uses=" << line_terminal_uses
+              << " certified_arc_end_uses=" << arc_terminal_uses
+              << " global_point_promotion=0\n";
+}
+
 } // namespace
 
 int main() {
