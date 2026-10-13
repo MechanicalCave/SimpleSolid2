@@ -900,6 +900,48 @@ std::vector<double> verifyQ0StrictPartStageGeometry(
     return lengths;
 }
 
+// Test-only Q0 decorator: reorders complete native endpoint tuples (or
+// corrupts one tuple's token). Part must join by certified runtime membership,
+// never by OCCT traversal order or a coordinate/first/last heuristic.
+class Q1TerminalTupleQuery final :
+    public kernel::IExactBoundedEdgeGeometryQuery {
+public:
+    Q1TerminalTupleQuery(
+        kernel::IExactBoundedEdgeGeometryQuery& delegate,
+        bool mismatch)
+        : delegate_{delegate}, mismatch_{mismatch} {}
+
+    [[nodiscard]] std::optional<kernel::ScopedExactEdge>
+    bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle body,
+        kernel::RuntimeEdgeToken token) noexcept override {
+        return delegate_.bindExactEdgeToBody(std::move(body), token);
+    }
+
+    [[nodiscard]] kernel::ExactEdge3dResult queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedExactEdge& edge) noexcept override {
+        auto q = delegate_.queryExactBoundedEdge3d(
+            std::move(body), edge);
+        if (!q.ok()) return q;
+        auto& g = *q.geometry;
+        std::swap(g.current_terminal_vertex_tokens[0],
+                  g.current_terminal_vertex_tokens[1]);
+        std::swap(g.current_terminal_positions_world[0],
+                  g.current_terminal_positions_world[1]);
+        std::swap(g.terminal_tangent_lines[0],
+                  g.terminal_tangent_lines[1]);
+        if (mismatch_) {
+            g.current_terminal_vertex_tokens[0] =
+                kernel::RuntimeVertexToken{999999999U};
+        }
+        return q;
+    }
+private:
+    kernel::IExactBoundedEdgeGeometryQuery& delegate_;
+    bool mismatch_;
+};
+
 // Q1-01/Q1-02: real OCCT material Edge selection plus one independently
 // certified current native terminal. This helper never chooses by XYZ/order.
 std::vector<part::SelectedMaterialEdgeEnd>
