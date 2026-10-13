@@ -1,9 +1,10 @@
 # RG-02A/G1 — Native Body VERTEX semantic-provenance investigation Work Contract (DRAFT)
 
-**Status:** **PROPOSAL ONLY — NOT OWNER-ACCEPTED, NOT MERGED, NOT ACTIVATED. NO TEST OR PRODUCT MUTATION AUTHORIZED BY THIS DOCUMENT.**  
+**Status:** **OWNER-ACCEPTED BOUNDED G1 EVIDENCE CONTRACT TEXT — NOT MERGED, NOT ACTIVATED. NO TEST OR PRODUCT MUTATION AUTHORIZED BY THIS DOCUMENT.**  
+**Owner acceptance:** 2026-10-13 — explicit `akceptujekontynuuj` in response to the question accepting **the exact limited native RG-02A/G1 research scope in PR #334**. This acceptance covers ONLY this proposed evidence-only objective, the three allowed pre-existing test source paths, G1-F01/C01/A01/A02/S01/P01/L01 proof matrix and the listed hard exclusions. It is **not** Owner permission to merge PR #334 or #333, approve roadmap v1.33 sequencing, activate a Work Contract, execute G1 tests, adopt a persistent identity/schema or implement RG-02 UI.  
 **Draft date:** 2026-10-13  
 **Baseline for this proposal:** `main` `5b495c4bbed8754d7a1f01e87a30716429db786d` (Owner-authorized merge of G0 [PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332)). Revalidate all source APIs and exact `main` immediately before any future independent G1 activation.  
-**D2 direction accepted:** Owner answered `akceptuję - kontymuuj` on 2026-10-13 **only to approve Option B as an evidence-first investigation direction and authorize preparing this separate draft**. It did **not** approve this exact Work Contract, the unmerged architecture [Draft PR #333](https://github.com/MechanicalCave/SimpleSolid2/pull/333), any new persistent Vertex identity, stage sequencing, `ACTIVE.yaml` activation, implementation, or UI.  
+**D2 direction accepted:** Owner answered `akceptuję - kontymuuj` on 2026-10-13 **only to approve Option B as an evidence-first investigation direction and authorize preparing this separate draft**. That earlier narrow D2 decision did **not itself** approve this exact Work Contract, the unmerged architecture [Draft PR #333](https://github.com/MechanicalCave/SimpleSolid2/pull/333), any new persistent Vertex identity, stage sequencing, `ACTIVE.yaml` activation, implementation or UI. **The exact bounded Work Contract text was separately accepted afterward as documented in Owner acceptance above**; governance merge and activation remain pending.  
 **Current active contract:** `work/ACTIVE.yaml` still names `work/RG-02A_G0_VERTEX_CHARACTERIZATION_WORK_CONTRACT_DRAFT.md` with roadmap **v1.32**. It does **not** authorize G1 execution.  
 **Boundaries:** `governance/CONSTITUTION.md`, `governance/FOUNDATION.md`, `governance/ARCHITECTURE.md`, `work/PART_MODELING_V1_ROADMAP.md` v1.32, G0 native evidence on `main`, `work/RG-02A_VERTEX_SEMANTIC_IDENTITY_D2_PROPOSAL_DRAFT.md` on PR #333 (still unmerged). Older G0 file headers saying `UNRUN` or `NOT ACTIVE` are historical; only the independently approved G0 merge/CI and Owner decision determine the G0 evidence state.
 
@@ -32,7 +33,7 @@ Source: [G0 native report on merged main](https://github.com/MechanicalCave/Simp
 
 Read-only inspection is allowed when preparing/reviewing G1 design: `src/part/include/simplesolid2/part/semantic_topology_reference.hpp`, `src/part/include/simplesolid2/part/feature_evaluation.hpp`, `src/part/feature_evaluation.cpp`, `src/kernel/include/simplesolid2/kernel/solid_modeling.hpp`, `src/kernel_occt/solid_modeling_kernel.cpp`, existing Part test fixtures, current G0 reports and governance.
 
-**Only AFTER independent approval of this bounded contract, any needed roadmap sequencing amendment, separate governance merges and a dedicated `ACTIVE.yaml` activation, future G1 native test/evidence PRs may edit exactly:**
+**Only AFTER Owner-accepted bounded contract text is separately merged, any required roadmap sequencing amendment is separately accepted and merged, and a dedicated `ACTIVE.yaml` activation has separately merged, future G1 native test/evidence PRs may edit exactly:**
 
 1. `tests/kernel_native/pm05c2b_part_edge_topology_test.cpp` — primary: native **Part** Fillet and Chamfer Unsupported classifications, owning-Feature/Surface/Curve provenance, Part-stage semantic topology, source MaterialEdgeReference (if already independently certifiable), positive historical stage cases.
 2. `tests/kernel_native/pm04c2_production_revolve_test.cpp` — primary: real analytic half-cylinder Cut Ambiguous groups, ordinary cylinder and 90°/360° Revolve representation seams, native vs Part-stage counting, deterministic independent OCCT rebuilds.
@@ -75,7 +76,7 @@ The observations must come from **real production OCCT geometry and actual Part-
 
 Part-v1 roadmap v1.32 currently authorized **G0 evidence gate** before **PG-01E**; it did NOT automatically authorize G1 or permit inserting G1 before PG-01E. Proposed G1 is a further **evidence-only investigation**, not automatically part of Part-v1 features. Before activation, the Owner must explicitly decide whether a v1.33 roadmap amendment places G1 next, or whether work instead returns to separately gated PG-01E/PM-06. Do not change program ordering by implication.
 
-Required in order: (a) review and accept the narrowly bounded G1 Work Contract with exact paths/tests, (b) separately approve any roadmap v1.33 sequencing amendment (if G1 is next) and its merge, (c) separately approve merges of PR #333 D2 *discussion record* and this G1 Work Contract, (d) create a **dedicated** `work/ACTIVE.yaml` activation PR setting the accepted G1 contract as `active_work` and matching the accepted roadmap version, run exact-head CI and obtain separate merge approval, (e) **only then** change listed native tests on a new evidence branch. Ordering of the independent document merges may be adjusted on explicit Owner decision, but never skip acceptance/activation. No automatic merge anywhere.
+Required in order: (a) **DONE: Owner acceptance of the bounded G1 Work Contract text with exact paths/tests**, (b) separately approve any roadmap v1.33 sequencing amendment (if G1 is next) and its merge, (c) separately approve merges of PR #333 D2 *discussion record* and this G1 Work Contract, (d) create a **dedicated** `work/ACTIVE.yaml` activation PR setting the accepted G1 contract as `active_work` and matching the accepted roadmap version, run exact-head CI and obtain separate merge approval, (e) **only then** change listed native tests on a new evidence branch. Ordering of the independent document merges may be adjusted on explicit Owner decision, but never skip acceptance/activation. No automatic merge anywhere.
 
 **Explicitly excluded after any G1 evidence activation:** a production `FeaturePointAddress` variant, persistent VertexId, new source type or schema, MID/CENTER exact-kernel geometry, Datum Plane/Axis constructors, UI user interaction, PM-06, PG-01E, Mirror/Pattern implementation.
 
@@ -83,14 +84,14 @@ Required in order: (a) review and accept the narrowly bounded G1 Work Contract w
 
 ## 6. Acceptance questions when reviewing THIS DRAFT (not approved)
 
-1. Is the above G1 native evidence goal, exact three-test-source maximum and absence of production changes an acceptable bounded investigation scope?
+1. **ACCEPTED 2026-10-13:** G1 native evidence goal, exact three-test-source maximum and no production changes (Owner `akceptujekontynuuj`), **text acceptance only; merge and activation remain blocked**.
 2. Should G1 be proposed for sequencing **after G0 and before PG-01E**, requiring a separately approved roadmap v1.33 D2 amendment, or should PG-01E be handled first?
 3. After reviewing G1 evidence, should Option A remain the fail-closed baseline if no non-circular unique semantic discriminator can be proved? (Suggested: **yes**, never select a speculative provider- or XYZ-based surrogate.)
 
-**These are separate acceptance matters.** Acceptance of the Option B *direction to prepare this proposal* is already recorded, but acceptance of this exact contract scope, roadmap order, every PR merge, activation, technical D2 design and UX are **all still pending**.
+**These are separate acceptance matters.** Both the Option B direction and the exact **bounded G1 contract text** are now Owner-accepted. **Roadmap sequencing, each PR merge, activation, technical D2 schema/design and UX are all still pending**, and no G1 native test may run.
 
 ## Documentation Impact
 
 Internal docs: not required
 User/Product docs: not required
-Reason: this is an unaccepted Work Contract draft for native evidence only, with no production behavior, source schema, API or UI mutation. A future Owner-authorized RG-02 feature requires full Internal/PL+EN Product documentation and generated Browser validation.
+Reason: this is an Owner-accepted **contract text** for future native evidence only, not merged or activated, with no production behavior, source schema, API or UI mutation. A future Owner-authorized RG-02 feature requires full Internal/PL+EN Product documentation and generated Browser validation.
