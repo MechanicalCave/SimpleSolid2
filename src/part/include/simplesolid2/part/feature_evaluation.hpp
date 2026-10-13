@@ -679,6 +679,72 @@ resolveSelectedMaterialEdgeMid(
     const PartEvaluation& evaluation,
     kernel::IExactBoundedEdgeGeometryQuery& provider);
 
+// P4-S1: headless, read-only signed Edge-local Frame3. Orientation intent
+// belongs to the caller and is neither Part identity nor persisted Datum.
+enum class SelectedEdgeFrameStatus {
+    resolved,
+    invalid_context,
+    source_missing,
+    source_ambiguous,
+    source_unsupported,
+    native_geometry_unavailable,
+    invalid_geometry,
+    invalid_orientation_intent,
+    orientation_review_required,
+};
+
+struct SelectedEdgeFrameIntent final {
+    kernel::Point3 signed_normal_reference_world{};
+    kernel::Point3 u_seed_world{};
+    bool reverse{false};
+
+    friend bool operator==(
+        const SelectedEdgeFrameIntent&,
+        const SelectedEdgeFrameIntent&) = default;
+};
+
+struct SelectedEdgeFrameResult final {
+    SelectedEdgeFrameStatus status{SelectedEdgeFrameStatus::invalid_context};
+    std::optional<kernel::Frame3> frame;
+    // Set only by successful initialization. Replay never rewrites intent.
+    std::optional<SelectedEdgeFrameIntent> initialized_intent;
+    std::optional<kernel::ExactEdge3dStatus> native_error;
+
+    [[nodiscard]] bool resolved() const noexcept;
+};
+
+[[nodiscard]] SelectedEdgeFrameResult
+initializeSelectedEdgeEndFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeEnd& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider,
+    bool reverse = false);
+
+[[nodiscard]] SelectedEdgeFrameResult
+initializeSelectedEdgeMidFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeMid& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider,
+    bool reverse = false);
+
+[[nodiscard]] SelectedEdgeFrameResult
+resolveSelectedEdgeEndFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeEnd& source,
+    const SelectedEdgeFrameIntent& intent,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider);
+
+[[nodiscard]] SelectedEdgeFrameResult
+resolveSelectedEdgeMidFrame(
+    const PartDocument& owner,
+    const SelectedMaterialEdgeMid& source,
+    const SelectedEdgeFrameIntent& intent,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider);
+
 enum class EdgeFeatureKernelInputStatus {
     resolved,
     missing_upstream_body,

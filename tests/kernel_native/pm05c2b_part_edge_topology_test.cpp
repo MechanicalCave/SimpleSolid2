@@ -1821,6 +1821,110 @@ int main() {
     const auto q2_base_sources = verifyQ2CanonicalSelectedMids(
         base_document, base_evaluation, kernel, "Q2-M01-pristine");
     CHECK(q2_base_sources.size() == 12U);
+
+    // S1-F01/F05/F07: all 24 strict selected box ENDs and 12 MIDs
+    // produce genuine signed Frame3 only after Q1/Q2 native admission.
+    // Remembered intent is caller-carried; reversing affects V and N,
+    // never the origin, U or the semantic selected Edge/Point.
+    const auto sameVector = [](const kernel::Point3& a,
+                               const kernel::Point3& b) {
+        return std::abs(a.x-b.x) < 1.0e-10 &&
+               std::abs(a.y-b.y) < 1.0e-10 &&
+               std::abs(a.z-b.z) < 1.0e-10;
+    };
+    const auto negative = [](const kernel::Point3& a,
+                             const kernel::Point3& b) {
+        return std::abs(a.x+b.x) < 1.0e-10 &&
+               std::abs(a.y+b.y) < 1.0e-10 &&
+               std::abs(a.z+b.z) < 1.0e-10;
+    };
+    const auto verifyFrame = [](const kernel::Frame3& frame) {
+        CHECK(frame.valid());
+        const auto dot = [](const kernel::Point3& a,
+                            const kernel::Point3& b) {
+            return a.x*b.x + a.y*b.y + a.z*b.z;
+        };
+        const auto& u = frame.u_axis;
+        const auto& v = frame.v_axis;
+        const auto& n = frame.normal;
+        CHECK(std::abs(dot(u,u)-1.0) < 1.0e-10);
+        CHECK(std::abs(dot(v,v)-1.0) < 1.0e-10);
+        CHECK(std::abs(dot(n,n)-1.0) < 1.0e-10);
+        CHECK(std::abs(dot(u,v)) < 1.0e-10);
+        CHECK(std::abs(dot(u,n)) < 1.0e-10);
+        CHECK(std::abs(dot(v,n)) < 1.0e-10);
+        const kernel::Point3 cross{
+            u.y*v.z-u.z*v.y,
+            u.z*v.x-u.x*v.z,
+            u.x*v.y-u.y*v.x};
+        CHECK(dot(cross,n) > 1.0-1.0e-10);
+    };
+    for (const auto& source : q1_base_sources) {
+        const auto initial = part::initializeSelectedEdgeEndFrame(
+            base_document, source, base_evaluation, kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        CHECK(!initial.native_error);
+        verifyFrame(*initial.frame);
+        const auto replay = part::resolveSelectedEdgeEndFrame(
+            base_document, source, *initial.initialized_intent,
+            base_evaluation, kernel);
+        CHECK(replay.resolved() && !replay.initialized_intent);
+        CHECK(sameVector(initial.frame->normal, replay.frame->normal));
+        CHECK(sameVector(initial.frame->u_axis, replay.frame->u_axis));
+        const auto direct_reverse = part::initializeSelectedEdgeEndFrame(
+            base_document, source, base_evaluation, kernel, true);
+        CHECK(direct_reverse.resolved() &&
+              direct_reverse.initialized_intent->reverse);
+        CHECK(sameVector(initial.frame->origin,
+                         direct_reverse.frame->origin));
+        CHECK(sameVector(initial.frame->u_axis,
+                         direct_reverse.frame->u_axis));
+        CHECK(negative(initial.frame->v_axis,
+                       direct_reverse.frame->v_axis));
+        CHECK(negative(initial.frame->normal,
+                       direct_reverse.frame->normal));
+        verifyFrame(*direct_reverse.frame);
+    }
+    for (const auto& source : q2_base_sources) {
+        const auto initial = part::initializeSelectedEdgeMidFrame(
+            base_document, source, base_evaluation, kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        verifyFrame(*initial.frame);
+        auto intent = *initial.initialized_intent;
+        auto replay = part::resolveSelectedEdgeMidFrame(
+            base_document, source, intent, base_evaluation, kernel);
+        CHECK(replay.resolved() && !replay.initialized_intent);
+        CHECK(sameVector(initial.frame->normal, replay.frame->normal));
+        intent.reverse = true;
+        const auto flipped = part::resolveSelectedEdgeMidFrame(
+            base_document, source, intent, base_evaluation, kernel);
+        CHECK(flipped.resolved() && !flipped.initialized_intent);
+        CHECK(sameVector(flipped.frame->origin, initial.frame->origin));
+        CHECK(sameVector(flipped.frame->u_axis, initial.frame->u_axis));
+        CHECK(negative(flipped.frame->v_axis, initial.frame->v_axis));
+        CHECK(negative(flipped.frame->normal, initial.frame->normal));
+        intent.reverse = false;
+        replay = part::resolveSelectedEdgeMidFrame(
+            base_document, source, intent, base_evaluation, kernel);
+        CHECK(replay.resolved());
+        CHECK(sameVector(replay.frame->normal, initial.frame->normal));
+        CHECK(sameVector(replay.frame->v_axis, initial.frame->v_axis));
+        auto invalid = intent;
+        invalid.u_seed_world = {0.0, 0.0, 0.0};
+        const auto refused = part::resolveSelectedEdgeMidFrame(
+            base_document, source, invalid, base_evaluation, kernel);
+        CHECK(refused.status ==
+              part::SelectedEdgeFrameStatus::invalid_orientation_intent);
+        CHECK(!refused.frame && !refused.initialized_intent);
+        invalid = intent;
+        invalid.signed_normal_reference_world.x =
+            std::numeric_limits<double>::quiet_NaN();
+        const auto nonfinite = part::resolveSelectedEdgeMidFrame(
+            base_document, source, invalid, base_evaluation, kernel);
+        CHECK(nonfinite.status ==
+              part::SelectedEdgeFrameStatus::invalid_orientation_intent);
+        CHECK(!nonfinite.frame);
+    }
     // Q2-M05/06/07: negative semantic and native provider matrix on a
     // REAL OCCT box stage. No failure publishes a partial observation.
     {
@@ -1842,6 +1946,11 @@ int main() {
         noObservation(part::resolveSelectedMaterialEdgeMid(
             foreign_owner, source, base_evaluation, kernel),
             part::SelectedEdgeMidStatus::invalid_context);
+        const auto s1Foreign = part::initializeSelectedEdgeMidFrame(
+            foreign_owner, source, base_evaluation, kernel);
+        CHECK(s1Foreign.status ==
+              part::SelectedEdgeFrameStatus::invalid_context);
+        CHECK(!s1Foreign.frame && !s1Foreign.initialized_intent);
         auto unowned = base_evaluation;
         unowned.source_document_id.reset();
         noObservation(part::resolveSelectedMaterialEdgeMid(
