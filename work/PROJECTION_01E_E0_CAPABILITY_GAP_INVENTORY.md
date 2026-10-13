@@ -1,6 +1,6 @@
 # PG-01E/E0 — Project Geometry evidence and gap inventory (ACTIVE WORK / OPEN)
 
-**Status:** ACTIVE PG-01E — E0 source and gap inventory IN PROGRESS; **NOT E0 FINAL PASS**; PartStore E2 enhancement **UNVERIFIED**. First CI #2778 **RED on documentation bootstrap** before tests because Browser stale; corrected Browser in this branch and fresh exact-head CI is pending.  
+**Status:** ACTIVE PG-01E — E0 source and gap inventory IN PROGRESS; **NOT E0 FINAL PASS**. Initial CI #2778 **RED on documentation bootstrap** before tests; Browser corrected. Subsequent exact candidate source SHA `427d6a001450ab55284693ed6a25c254544677e5` **Windows FAST #2783 PASS 93/93**, including modified `part01.part_document_store` and docs verification. Later ledger/checklist-only commits need their own final exact-head CI.  
 **Date:** 2026-10-13  
 **Accepted baseline:** `main` `135e834bb0cf559569b848b332c5aa1b6dc5c3c3`, Part roadmap v1.32, `work/ACTIVE.yaml` **PG-01E**, Owner-accepted Work Contract after separate D2/contract correction/activation merges #311/#337/#340/#339.  
 **Previous source-audit provenance:** preliminary draft [PR #338](https://github.com/MechanicalCave/SimpleSolid2/pull/338), independently carried into this **now activated** evidence branch with current status and no unsupported claims. Its own closure CI is not a new PG-01E runtime test.  
@@ -45,7 +45,7 @@ A second E4 cross-language inspection found that **both** canonical `docs/produc
 
 ## E0-C. Current v16/v2 compatibility boundary — observed source/test, not new execution
 
-Existing `tests/part_document_store_test.cpp` explicitly tests the `modeling_semantics_version` field and typed `unsupported_modeling_semantics` rejection (source inspection). [PG-01D final](PROJECTION_01D_FINAL_ACCEPTANCE_AND_MERGE.md) establishes strict **new Part schema v16 and ModelingSemanticsVersion=2** distinction and Owner acceptance of no automatic or bulk v1 migration. This is a reader/refusal *policy*, not an obligation to make v1 documents load successfully. Real PG-01E E2 compatibility evidence is **IN PROGRESS**: the accepted existing `tests/part_document_store_test.cpp` has new byte-for-byte immutability assertions for rejected native v16/modeling-v1 and future-v3 policy test packages, including a second repeat refusal, but **no new execution PASS** is claimed before exact-head CI.
+Existing `tests/part_document_store_test.cpp` explicitly tests the `modeling_semantics_version` field and typed `unsupported_modeling_semantics` rejection (source inspection). [PG-01D final](PROJECTION_01D_FINAL_ACCEPTANCE_AND_MERGE.md) establishes strict **new Part schema v16 and ModelingSemanticsVersion=2** distinction and Owner acceptance of no automatic or bulk v1 migration. This is a reader/refusal *policy*, not an obligation to make v1 documents load successfully. Real PG-01E E2 compatibility evidence is **PARTIAL PASS / STILL OPEN**: modified existing `tests/part_document_store_test.cpp` now checks byte-for-byte immutability for rejected native v16/modeling-v1 and future-v3 **test-only** packages, including repeat refusal; it **ran and passed** in exact-head Windows FAST [#2783](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38355544107) at `427d6a...`. Original Owner v1 legacy file read-only refusal, real fresh-provider complete composite lifecycle and final exact-head FULL remain unproved.
 
 ## E0-D. Unresolved PG-01E requirements; NO claims of completion
 
@@ -54,7 +54,7 @@ Existing `tests/part_document_store_test.cpp` explicitly tests the `modeling_sem
 | One complete v2 ordered Extrude/Revolve Add/Cut → linked Regular Profile → later Feature with mixed source Edges/Planar Face/Face Boundary | Isolated earlier PG-01B and PG-01D successes, tests exist | **OPEN — composite fixture not newly tested** |
 | Supported upstream dimension edit, deletion/suppression, failed exact projection, broken source repair or Break Link and one Undo/Redo | Earlier native cold rebuild + UI lifecycle source inspected | **OPEN — verify exact combined current source stage and ref freshness** |
 | Atomic Finish / no source on failure, partial geometric skip vs integrity errors, per-Face skip diagnostics | PG-01D accepted, current Workbench test source contains cases | **OPEN — prove exact PG-01E requirements and missing test entries** |
-| v16/v2 Save/Close/Reopen fresh provider and modeling-v1 strict typed refusal with immutable legacy bytes | Product/PartStore earlier policy + tests; **new E2 immutability assertions on this PG-01E branch** | **IN PROGRESS — test UNRUN; Owner original legacy fixtures and cold composite remain OPEN** |
+| v16/v2 Save/Close/Reopen fresh provider and modeling-v1 strict typed refusal with immutable legacy bytes | Existing policy + **new E2 test-only package byte-immutability assertions PASS in FAST #2783 93/93** | **PARTIAL PASS — Owner original legacy fixtures and cold composite remain OPEN** |
 | Deterministic performance/resource methodology, repeated controlled cycles, memory/handle deltas | Existing Windows test resources exist, no PG-01E repeated baseline published | **OPEN, no fabricated metrics or budget** |
 | PL/EN + Internal/Browser parity | E0-DOC-01/02 Internal and E0-DOC-04 paired PL/EN v15→v16 confirmed; canonical texts corrected and Browser synchronized in feature branch | **IN PROGRESS — exact-head CI verification and final parity review required** |
 | PG-01E exact-head FOCUSED/FAST/FULL + Owner practical FINAL PASS and merge | Prior stage FULL only | **UNRUN / PENDING** |
@@ -76,7 +76,7 @@ Registration was inspected on `main` `5b495c4bbed8754d7a1f01e87a30716429db786d` 
 
 **CI #302 guard:** `pm04e2.revolve_lifecycle_cold_rebuild` carries `tier-fast` but is among the CTests not guaranteed built by `ss2_tests_fast` on a warm Windows tree ([open #302](https://github.com/MechanicalCave/SimpleSolid2/issues/302)). A FAST result must be tied to what was actually rebuilt and run; final PG-01E acceptance still requires **exact-head FULL**. Do not repair CMake/CI under PG-01E's proposed allowlist.
 
-**Status:** registration/source inspection plus first **unexecuted** PG-01E E2 PartStore test assertion extension; no PG-01E E1 native composite execution, no new Owner manual PASS, and no CMake/build/CI edits.
+**Status:** registration/source inspection and first **executed/PASS** PG-01E E2 PartStore immutability regression at exact source HEAD `427d6a...` Windows FAST #2783; no PG-01E E1 native composite execution, no new Owner manual PASS, no CMake/build/CI edits.
 
 ## E0-E2. Source-level test entrypoint map for subsequent activated regression (inspection only)
 
