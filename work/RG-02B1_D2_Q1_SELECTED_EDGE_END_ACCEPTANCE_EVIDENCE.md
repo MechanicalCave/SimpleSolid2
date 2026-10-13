@@ -28,7 +28,7 @@ The 93/93 FAST result is **not** evidence for kernel-native Q1. Unlike FAST, exa
 | Q1-03 cold provider | Real independent OCCT provider and rebuilt Part, all 24 semantic addresses replay | **PASS in #2885** |
 | Q1-04 height edit/Feature decoy | Real height edited same Feature IDs, plus identical geometry with new FeatureId rejects 24 old sources | **PASS in #2885** |
 | Q1-05 wrong/stale/branch | Native cross-DocumentId, live-revision stale, foreign endpoint; strict existing branch tests | **PASS native subset #2885; broader matrix pending** |
-| Q1-06 negative families | Real Fillet and Chamfer generated unsupported vertices/incident material END uses (#2886); explicit synthetic current-catalog Ambiguous/Unsupported/Missing global Point statuses (#2887) | **PASS for the tested negative families; real Part half-cylinder/Revolve evidence STILL MISSING — NOT Q1-06 FINAL PASS** |
+| Q1-06 negative families | Real Fillet/Chamfer (FOCUSED #2886), global Point status negative matrix (#2887), and **newly added unexecuted** actual Part half-cylinder Cut (expected 4 Ambiguous / 2 Unsupported current vertices) + 90° partial Revolve bounded Line/Arc semantics | **Existing families PASS; NEW REAL HALF-CYLINDER/REVOLVE TESTS UNRUN — NOT YET FINAL PASS** |
 | Q1-07 closed/degenerate/slot | Existing native closed-arc guards + new two-token inventory, complete terminal tuple permutation and forged token | **PASS in #2885 (tested families only)** |
 | Q1-08 current Q0 membership coupling | Exact stage + same-body native inventory, runtime-only paired Vertex→position/unoriented tangent | **PASS in #2885** |
 
