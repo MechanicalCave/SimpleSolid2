@@ -4581,6 +4581,112 @@ int main(int argc, char* argv[]) {
             CHECK(multi_reopened.document->modelingSemanticsVersion() ==
                   part::current_modeling_semantics_version);
 
+            // PG-01E/E1-C: batch Break Link on two of the remaining
+            // four strictly identified manual multi-Face source Edges.
+            // A suppressed earlier material source must refuse the
+            // WHOLE batch without detaching any target or consuming
+            // the old authored 2D seed. The accepted positive branch
+            // must detach both atomically in one Undo/Redo transaction.
+            const auto* multi_linked_sketch =
+                multi_reopened.document->findSketch(
+                    *manual_target.sketch_id);
+            CHECK(multi_linked_sketch &&
+                  multi_linked_sketch->projection_bindings.size() == 4U);
+            const auto pair_first =
+                multi_linked_sketch->projection_bindings.at(0)
+                    .target_entity;
+            const auto pair_second =
+                multi_linked_sketch->projection_bindings.at(1)
+                    .target_entity;
+            CHECK(pair_first != pair_second);
+            auto broken_multi_state =
+                multi_reopened.document->state();
+            CHECK(!broken_multi_state.body.features.empty());
+            broken_multi_state.body.features.front().suppressed = true;
+            const auto broken_multi_document =
+                part::PartDocument::restore(
+                    multi_reopened.document->documentId(),
+                    std::move(broken_multi_state));
+            CHECK(broken_multi_document.ok());
+            application::DocumentSession broken_multi_session{
+                {}, std::move(*broken_multi_document.document)};
+            const auto before_refusal =
+                broken_multi_session.document().state();
+            const auto before_refusal_revision =
+                broken_multi_session.document().revision();
+            const auto before_refusal_undo =
+                broken_multi_session.undoDepth();
+            kernel_occt::OcctSolidModelingKernel
+                suppressed_material_provider;
+            const auto denied_batch = broken_multi_session.execute(
+                application::BreakProjectedEdgeLinksCommand{
+                    *manual_target.sketch_id,
+                    {pair_first, pair_second},
+                    before_refusal_revision},
+                suppressed_material_provider);
+            CHECK(!denied_batch.ok() && !denied_batch.changed);
+            CHECK(denied_batch.status ==
+                  application::BreakProjectedEdgeLinkStatus::
+                      source_unavailable);
+            CHECK(broken_multi_session.document().state() ==
+                  before_refusal);
+            CHECK(broken_multi_session.document().revision() ==
+                  before_refusal_revision);
+            CHECK(broken_multi_session.undoDepth() ==
+                  before_refusal_undo);
+            CHECK(broken_multi_session.document()
+                  .findSketch(*manual_target.sketch_id)
+                  ->projection_bindings.size() == 4U);
+
+            const auto valid_multi_document =
+                part::PartDocument::restore(
+                    multi_reopened.document->documentId(),
+                    multi_reopened.document->state());
+            CHECK(valid_multi_document.ok());
+            application::DocumentSession detachable_multi_session{
+                {}, std::move(*valid_multi_document.document)};
+            const auto before_detach =
+                detachable_multi_session.document().state();
+            const auto before_detach_undo =
+                detachable_multi_session.undoDepth();
+            kernel_occt::OcctSolidModelingKernel
+                material_detach_provider;
+            const auto detached_pair = detachable_multi_session.execute(
+                application::BreakProjectedEdgeLinksCommand{
+                    *manual_target.sketch_id,
+                    {pair_first, pair_second},
+                    detachable_multi_session.document().revision()},
+                material_detach_provider);
+            CHECK(detached_pair.ok());
+            CHECK(detachable_multi_session.undoDepth() ==
+                  before_detach_undo + 1U);
+            CHECK(detachable_multi_session.document()
+                  .findSketch(*manual_target.sketch_id)
+                  ->projection_bindings.size() == 2U);
+            CHECK(detachable_multi_session.undo().changed);
+            CHECK(detachable_multi_session.document().state() ==
+                  before_detach);
+            CHECK(detachable_multi_session.redo().changed);
+            CHECK(detachable_multi_session.document()
+                  .findSketch(*manual_target.sketch_id)
+                  ->projection_bindings.size() == 2U);
+            const auto after_detach_eval = part::evaluatePart(
+                detachable_multi_session.document(),
+                material_detach_provider);
+            CHECK(after_detach_eval.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(after_detach_eval.findFeature(
+                *repaired_add.feature_id)->status ==
+                  part::FeatureEvaluationStatus::up_to_date);
+            std::cout
+                << "PG01E_E1_MULTI_FACE_BATCH_BREAK_FAIL_CLOSED_PASS"
+                << " original_material_links=4"
+                << " suppressed_source_batch_refused=1"
+                << " state_revision_undo_unchanged=1"
+                << " positive_pair_atomic=1"
+                << " one_undo_redo=1"
+                << " unaffected_linked_feature_current=1\n";
+
             // PG-01E/E3 Windows observation on a REAL repaired
             // two-Face Part/Feature/linked Profile: each iteration
             // independently loads the SAME immutable native document
