@@ -3,7 +3,7 @@ status: active
 active_work: "work/PROJECTION_01E_PRODUCT_CLOSEOUT_WORK_CONTRACT.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.32"
+program_roadmap_version: "1.33"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
