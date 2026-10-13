@@ -1706,6 +1706,14 @@ int main() {
         const auto assertNoPayload = [](
             const part::SelectedEdgeEndResolution& result,
             part::SelectedEdgeEndStatus expected) {
+            if (result.status != expected) {
+                std::cerr << "RG02B1_Q1_05_STATUS_DIAGNOSTIC"
+                          << " expected=" << static_cast<int>(expected)
+                          << " actual=" << static_cast<int>(result.status)
+                          << " geometry_present="
+                          << result.current_position_world.has_value()
+                          << "\\n";
+            }
             CHECK(result.status == expected);
             CHECK(!result.resolved());
             CHECK(!result.current_edge);
