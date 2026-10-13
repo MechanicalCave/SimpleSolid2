@@ -840,6 +840,66 @@ characterizeE0CanonicalStraightEnds(
     return witnesses;
 }
 
+
+std::vector<double> verifyQ0StrictPartStageGeometry(
+    const part::FeatureEvaluation& feature,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture) {
+    CHECK(feature.result_solid);
+    CHECK(feature.result_topology);
+    const auto& catalog = *feature.result_topology;
+    CHECK(catalog.valid() && catalog.complete());
+
+    // Part semantic author + same-stage resolution MUST precede every
+    // transient provider query. Numeric token/physical XYZ is never
+    // allowed to become a persistent source ID.
+    std::vector<double> lengths;
+    for (const auto& material : catalog.edges) {
+        if (material.curve_kind != kernel::CurveKind::line ||
+            material.referenceability != kernel::ReferenceStatus::resolved) {
+            continue;
+        }
+        const auto authored = part::authorMaterialEdgeReference(
+            catalog, material.runtime_token);
+        CHECK(authored.ok());
+        CHECK(authored.reference->stage == catalog.stage);
+        const auto resolved = part::resolveMaterialEdgeReference(
+            *authored.reference, catalog);
+        CHECK(resolved.has_value());
+        CHECK(resolved->resolved());
+        CHECK(resolved->current_edges.size() == 1U);
+
+        const auto bound = provider.bindExactEdgeToBody(
+            feature.result_solid,
+            resolved->current_edges.front());
+        CHECK(bound && bound->valid());
+        const auto result = provider.queryExactBoundedEdge3d(
+            feature.result_solid, *bound);
+        CHECK(result.ok());
+        CHECK(result.geometry->kind ==
+              kernel::ExactEdge3dKind::bounded_line);
+        CHECK(result.geometry->bounded_length_mm > 0.0);
+        const auto& g = *result.geometry;
+        const auto& a = g.current_terminal_positions_world[0];
+        const auto& b = g.current_terminal_positions_world[1];
+        CHECK(std::abs(g.midpoint_at_half_bounded_length_world.x -
+                   (a.x+b.x)/2.0) < 1.0e-6);
+        CHECK(std::abs(g.midpoint_at_half_bounded_length_world.y -
+                   (a.y+b.y)/2.0) < 1.0e-6);
+        CHECK(std::abs(g.midpoint_at_half_bounded_length_world.z -
+                   (a.z+b.z)/2.0) < 1.0e-6);
+        lengths.push_back(g.bounded_length_mm);
+    }
+    CHECK(lengths.size() == 12U);
+    std::sort(lengths.begin(), lengths.end());
+    std::cout << "RG02B1_Q0_STRICT_PART_STAGE"
+              << " fixture=" << fixture
+              << " source_stage_authorized_first=1"
+              << " bounded_native_line_edges=" << lengths.size()
+              << " runtime_XYZ_not_durable=1\n";
+    return lengths;
+}
+
 } // namespace
 
 int main() {
@@ -873,6 +933,8 @@ int main() {
         characterizeE0CanonicalStraightEnds(
             *base_evaluation.features[0].result_topology,
             "E0-01-pristine-extrude");
+    const auto q0_base_lengths = verifyQ0StrictPartStageGeometry(
+        base_evaluation.features[0], kernel, "Q0-extrude");
     // G0/V11: reconstruct authored Part intent and reevaluate with an
     // independent OCCT provider instance. Only FeaturePointAddress
     // survives semantically; transient runtime tokens are neither
@@ -900,6 +962,21 @@ int main() {
     const auto e0_fresh_ends =
         characterizeE0CanonicalStraightEnds(
             rebuilt_topology, "E0-07-independent-provider");
+    const auto q0_fresh_lengths = verifyQ0StrictPartStageGeometry(
+        fresh_evaluation.features[0], separate_kernel,
+        "Q0-cold-rebuilt-provider");
+    CHECK(q0_fresh_lengths.size() == q0_base_lengths.size());
+    for (std::size_t i = 0; i < q0_base_lengths.size(); ++i) {
+        CHECK(std::abs(q0_fresh_lengths[i] - q0_base_lengths[i]) < 1.0e-6);
+    }
+    const auto prior_bound = kernel.bindExactEdgeToBody(
+        base_evaluation.features[0].result_solid,
+        base_evaluation.features[0].result_topology->edges.front().runtime_token);
+    CHECK(prior_bound.has_value());
+    const auto stale = separate_kernel.queryExactBoundedEdge3d(
+        fresh_evaluation.features[0].result_solid, *prior_bound);
+    CHECK(stale.status == kernel::ExactEdge3dStatus::provider_mismatch);
+    CHECK(!stale.geometry);
     CHECK(e0_fresh_ends == e0_base_ends);
     CHECK(
         rebuilt_topology.stage ==
@@ -953,6 +1030,14 @@ int main() {
     const auto e0_taller_ends =
         characterizeE0CanonicalStraightEnds(
             taller_stage, "E0-07-height-edit");
+    const auto q0_taller_lengths = verifyQ0StrictPartStageGeometry(
+        taller_evaluation.features[0], kernel, "Q0-height-edit");
+    CHECK(q0_taller_lengths.size() == q0_base_lengths.size());
+    CHECK(q0_taller_lengths != q0_base_lengths);
+    const auto stale_edit = kernel.queryExactBoundedEdge3d(
+        taller_evaluation.features[0].result_solid, *prior_bound);
+    CHECK(stale_edit.status == kernel::ExactEdge3dStatus::provider_mismatch);
+    CHECK(!stale_edit.geometry);
     CHECK(e0_taller_ends == e0_base_ends);
     std::size_t moved_semantic_points = 0U;
     std::size_t stationary_semantic_points = 0U;
