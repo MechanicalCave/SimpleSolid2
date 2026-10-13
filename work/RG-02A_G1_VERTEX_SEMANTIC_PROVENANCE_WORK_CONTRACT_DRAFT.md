@@ -1,6 +1,6 @@
 # RG-02A/G1 — Native Body VERTEX semantic-provenance investigation Work Contract (DRAFT)
 
-**Status:** **OWNER-ACCEPTED BOUNDED G1 EVIDENCE CONTRACT TEXT — NOT MERGED, NOT ACTIVATED. NO TEST OR PRODUCT MUTATION AUTHORIZED BY THIS DOCUMENT.**  
+**Status:** **OWNER-ACCEPTED BOUNDED G1 EVIDENCE CONTRACT TEXT — DEFERRED BEHIND PG-01E, NOT MERGED, NOT ACTIVATED. NO TEST OR PRODUCT MUTATION AUTHORIZED BY THIS DOCUMENT.**  
 **Owner acceptance:** 2026-10-13 — explicit `akceptujekontynuuj` in response to the question accepting **the exact limited native RG-02A/G1 research scope in PR #334**. This acceptance covers ONLY this proposed evidence-only objective, the three allowed pre-existing test source paths, G1-F01/C01/A01/A02/S01/P01/L01 proof matrix and the listed hard exclusions. It is **not** Owner permission to merge PR #334 or #333, approve roadmap v1.33 sequencing, activate a Work Contract, execute G1 tests, adopt a persistent identity/schema or implement RG-02 UI.  
 **Draft date:** 2026-10-13  
 **Baseline for this proposal:** `main` `5b495c4bbed8754d7a1f01e87a30716429db786d` (Owner-authorized merge of G0 [PR #332](https://github.com/MechanicalCave/SimpleSolid2/pull/332)). Revalidate all source APIs and exact `main` immediately before any future independent G1 activation.  
@@ -74,9 +74,9 @@ The observations must come from **real production OCCT geometry and actual Part-
 
 ## 5. Roadmap / G1 authority are INDEPENDENT pending Owner decisions
 
-Part-v1 roadmap v1.32 currently authorized **G0 evidence gate** before **PG-01E**; it did NOT automatically authorize G1 or permit inserting G1 before PG-01E. Proposed G1 is a further **evidence-only investigation**, not automatically part of Part-v1 features. Before activation, the Owner must explicitly decide whether a v1.33 roadmap amendment places G1 next, or whether work instead returns to separately gated PG-01E/PM-06. Do not change program ordering by implication.
+Part-v1 roadmap v1.32 authorizes completed G0 evidence followed by a separately gated **PG-01E review** and later PM-06. After an earlier permission to draft G1-before-PG-01E as v1.33, the Owner asked why the order had changed and explicitly answered **`akceptuje - kontynuu` (2026-10-13)** to the proposed **return to PG-01E NEXT and G1 LATER**. That later decision supersedes the v1.33 Variant A draft ([superseded PR #336](https://github.com/MechanicalCave/SimpleSolid2/pull/336)); the record is [Draft PR #335](https://github.com/MechanicalCave/SimpleSolid2/pull/335). **The exact G1 evidence contract text remains accepted, but deferred, unmerged and inactive.** No placement of G1 relative to PM-06 has been accepted; a fresh explicit Owner sequencing decision is required before any later G1 activation.
 
-Required in order: (a) **DONE: Owner acceptance of the bounded G1 Work Contract text with exact paths/tests**, (b) separately approve any roadmap v1.33 sequencing amendment (if G1 is next) and its merge, (c) separately approve merges of PR #333 D2 *discussion record* and this G1 Work Contract, (d) create a **dedicated** `work/ACTIVE.yaml` activation PR setting the accepted G1 contract as `active_work` and matching the accepted roadmap version, run exact-head CI and obtain separate merge approval, (e) **only then** change listed native tests on a new evidence branch. Ordering of the independent document merges may be adjusted on explicit Owner decision, but never skip acceptance/activation. No automatic merge anywhere.
+Required for any **later** G1 work: (a) **DONE: Owner accepted this bounded native evidence contract text**, (b) **NOW: PG-01E is the next separately reviewed package**; do not insert or activate G1 during PG-01E review, (c) obtain a new Owner D2 sequencing decision when G1's later place relative to remaining Part-v1 gates (including PM-06) is actually considered, (d) only then obtain any required roadmap governance, each independent PR #333/#334 merge permission and a **dedicated `work/ACTIVE.yaml` activation PR**, (e) **only after its separate approval and merge** mutate named G1 native tests on a fresh branch. A documentation-only merge never activates tests. No auto-activation or automatic merge.
 
 **Explicitly excluded after any G1 evidence activation:** a production `FeaturePointAddress` variant, persistent VertexId, new source type or schema, MID/CENTER exact-kernel geometry, Datum Plane/Axis constructors, UI user interaction, PM-06, PG-01E, Mirror/Pattern implementation.
 
@@ -85,10 +85,10 @@ Required in order: (a) **DONE: Owner acceptance of the bounded G1 Work Contract 
 ## 6. Acceptance questions when reviewing THIS DRAFT (not approved)
 
 1. **ACCEPTED 2026-10-13:** G1 native evidence goal, exact three-test-source maximum and no production changes (Owner `akceptujekontynuuj`), **text acceptance only; merge and activation remain blocked**.
-2. Should G1 be proposed for sequencing **after G0 and before PG-01E**, requiring a separately approved roadmap v1.33 D2 amendment, or should PG-01E be handled first?
+2. **OWNER CHOSE PG-01E NEXT** (2026-10-13, `akceptuje - kontynuu`), superseding G1-first v1.33 draft. G1 is deferred; its final later placement relative to PM-06 has **not** been selected.
 3. After reviewing G1 evidence, should Option A remain the fail-closed baseline if no non-circular unique semantic discriminator can be proved? (Suggested: **yes**, never select a speculative provider- or XYZ-based surrogate.)
 
-**These are separate acceptance matters.** Both the Option B direction and the exact **bounded G1 contract text** are now Owner-accepted. **Roadmap sequencing, each PR merge, activation, technical D2 schema/design and UX are all still pending**, and no G1 native test may run.
+**These are separate acceptance matters.** Both the Option B direction and the exact **bounded G1 contract text** are now Owner-accepted. **A PG-01E-first sequencing choice is now made, but future G1 placement relative to PM-06, each PR merge, G1 activation, technical D2 schema/design and UX remain pending**, and no G1 native test may run.
 
 ## Documentation Impact
 
