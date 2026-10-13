@@ -3,7 +3,7 @@
 **Status:** **PRELIMINARY / NOT E0 FINAL PASS / NOT AN ACTIVATED PG-01E IMPLEMENTATION**  
 **Prepared:** 2026-10-13  
 **Inspected baseline:** main `5b495c4bbed8754d7a1f01e87a30716429db786d`. Accepted roadmap `work/PART_MODELING_V1_ROADMAP.md` **v1.32**, active work remains completed `RG-02A/G0`.  
-**Owner decisions:** PG-01E is NEXT, deferred G1 is not a blocker; PG-01E D2-E1–E6 accepted only as direction to prepare bounded Work Contract (see [PR #311](https://github.com/MechanicalCave/SimpleSolid2/pull/311)). Exact proposed Work Contract is in separate [Draft PR #337](https://github.com/MechanicalCave/SimpleSolid2/pull/337). Its text, merges and activation remain unapproved.  
+**Owner decisions:** PG-01E is NEXT, deferred G1 is not a blocker; PG-01E D2-E1–E6 accepted only as direction to prepare bounded Work Contract (see [PR #311](https://github.com/MechanicalCave/SimpleSolid2/pull/311)). Exact bounded Work Contract text is **Owner-accepted** at immutable [PR #337](https://github.com/MechanicalCave/SimpleSolid2/pull/337) source HEAD `052c569c84703dc43b7fb889d7bea109285c22d6`; [Owner's separate text-acceptance record](https://github.com/MechanicalCave/SimpleSolid2/pull/337#issuecomment-6138869133) was filed on 2026-10-13. **Neither PR #311 nor #337 has separate merge permission or has been merged; activation remains unapproved.**  
 **This document's scope:** independent read-only source/test/accepted-evidence inspection. Does not execute new PG-01E runtime tests, demonstrate cold composite PG-01E cross-feature coverage, correct product docs or authorize code changes.
 
 ## E0-A. Accepted prior packages: distinguish prior verification from new PG-01E requirements
@@ -73,10 +73,12 @@ Registration was inspected on `main` `5b495c4bbed8754d7a1f01e87a30716429db786d` 
 ## E0-E. Governance and next steps
 
 1. Owner D2-E1–E6 scope direction is **accepted for contract drafting only**; [PR #311](https://github.com/MechanicalCave/SimpleSolid2/pull/311) is still open, **not merged**.
-2. The bounded [contract PR #337](https://github.com/MechanicalCave/SimpleSolid2/pull/337) still needs **separate exact-text Owner acceptance** and independent Owner merge approval; PR #311 merge also separately gated.
+2. **DONE — exact text accepted:** [contract PR #337](https://github.com/MechanicalCave/SimpleSolid2/pull/337) has [Owner's contract-only approval](https://github.com/MechanicalCave/SimpleSolid2/pull/337#issuecomment-6138869133), with no file-body mutation. **PENDING — independent explicit Owner merge permissions** for PR #311 and PR #337, each separately; their green documentation closure checks are not functional PG-01E FULL.
 3. Only **after** accepted documents are merged, a **separate `work/ACTIVE.yaml` PG-01E activation PR** may be proposed for Owner permission; main roadmap stays v1.32 and no product/tests change beforehand.
 4. Once activated, execute E0–E6 within the exact accepted existing-test and conditional documentation allowlist. All required new production/source APIs or additional paths require a new bounded Owner amendment **before writing them**.
 5. Deferred RG-02A/G1 and any RG-02 UX remain separate; **prior independent Owner UX consultation and approval before ANY RG-02 UI code** remain mandatory.
+
+**Draft-only CI:** [E0 PR #338 exact-head Windows run #2770](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38350888710) **success** at `40ca0a1a87bf39ef6036ea81b7be152071100adc` (the previous E0 draft HEAD). This is a documentation closure signal, not PG-01E E1–E6 native/FULL proof; this metadata update creates a new PR head requiring its own CI check. [Contract PR #337 run #2768](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38349992628) **success** at exact unchanged accepted contract HEAD `052c569...`.
 
 **No RG-02 Vertex schema, G1 test, production, Viewer, Part/kernel, accepted docs or CI file has been mutated in preparing this report.**
 
