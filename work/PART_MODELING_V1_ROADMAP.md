@@ -1,8 +1,8 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** **OWNER-ACCEPTED Part-v1 baseline v1.32; proposed v1.33 NEXT-FOCUS amendment for review, NOT YET MERGED OR ACTIVE.** Earlier PM-01–PM-05, Sketch/Profile, Projection, UI-01, RG-02A/G0 and PG-01E gates are completed within their separately accepted scopes.  
-**Version:** 1.33 — **PROPOSED**; last merged/accepted version is **1.32** until this exact amendment passes independent Owner review and merge.  
-**Owner direction:** 2026-10-13 — choose **Datum Plane and Axis extension** as the **sole current next planning/contract focus**, remove unrelated future packages from current implementation attention, and agree one narrow executable contract at a time. This is **priority/scope direction**, NOT exact v1.33 text acceptance, product implementation authority, UI design approval or permission to merge this PR.  
+**Status:** **ACCEPTED v1.33 — DATUM PLANE + AXIS NEXT CONTRACT-PLANNING FOCUS; NOT CODE ACTIVE.** Earlier PM-01–PM-05, Sketch/Profile, Projection, UI-01, RG-02A/G0 and PG-01E gates are completed within their separately accepted scopes.  
+**Version:** 1.33 — **OWNER APPROVED AND MERGED** via [PR #343](https://github.com/MechanicalCave/SimpleSolid2/pull/343), squash on `main` `b7da33653b8bc6214fd5774a34498838decb19cd`.  
+**Owner direction:** 2026-10-13 — choose **Datum Plane and Axis extension** as the **sole current next planning/contract focus**, remove unrelated future packages from current implementation attention, and agree one narrow executable contract at a time. This priority/scope direction was **separately accepted as exact v1.33 roadmap text** and **separately authorized for squash merge PR #343**; it is NOT product implementation authority, UI design approval or Work Contract activation.  
 **Previous accepted version:** 1.32 — 2026-10-12
 
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
@@ -757,7 +757,7 @@ The added RG-02A/G0 milestone is an **evidence-only exception** before PG-01E, n
 **Governance order is mandatory:** this accepted D2 roadmap text needs its own exact-head validation and **separate Owner permission to merge** a roadmap-only PR; the bounded RG-02A/G0 contract requires independent governance merge approval; then **a separate activation PR** must change `work/ACTIVE.yaml -> active_work` to the accepted G0 contract path and synchronize `program_roadmap_version: "1.32"`, pass its exact-head checks and obtain **separate Owner merge approval**. Only a fresh evidence branch from activated main may change the three authorized test sources. PG-01E/PM-06 authority and the frozen Part-v1 feature exclusions are unchanged. No draft, D2 acceptance or roadmap merge alone authorizes G0 test mutation.
 
 
-## 20B. Proposed Owner next-focus amendment v1.33 — 2026-10-13 (PENDING EXACT-TEXT APPROVAL)
+## 20B. Owner-accepted next-focus amendment v1.33 — 2026-10-13 (MERGED PR #343)
 
 **Owner instruction:** after formal PG-01E FINAL PASS and squash merges #341/#342, concentrate only on **Datum Plane and Axis construction-geometry extensions**. Define **concrete bounded Work Contracts incrementally**, just before executing each slice. Do not clutter the current implementation view with speculative follow-on stages. This is **priority selection**, not approval to implement a broad RG-02 roadmap.
 
@@ -767,6 +767,6 @@ The added RG-02A/G0 milestone is an **evidence-only exception** before PG-01E, n
 
 **Out of current focus (not deleted, not authorized):** deferred G1 native Vertex provenance text [#334](https://github.com/MechanicalCave/SimpleSolid2/pull/334), later RG-02 VERTEX/MID/CENTER variants and further Datum/Axis constructors, **solid Mirror/Pattern** (still **excluded from Part Modeling v1**), and **PM-06** (valid existing obligation, but deferred for new Owner scheduling). Preserve decisions and source documents in history; **do not invent a delivery date, create broad future Work Contracts, place G1 before PM-06 or silently promote any deferred PR to implementation**. No Assembly, new Body scope or CI #302 repair.
 
-**This is a proposed roadmap amendment only:** the last merged roadmap remains **v1.32** until Owner accepts this exact v1.33 text and separately authorizes merge of its dedicated roadmap-only PR. Even after merge, `work/ACTIVE.yaml` stays on completed PG-01E for historical traceability until a **separate accepted Datum/Axis Work Contract and activation PR**; this proposal must not modify `ACTIVE.yaml`, `src/**`, schemas, APIs, tests, workflows, Product/Browser docs, Foundation or accepted ADRs.
+**Roadmap approval and merge completed:** the Owner accepted exact v1.33 wording, then independently authorized squash merge of [PR #343](https://github.com/MechanicalCave/SimpleSolid2/pull/343) as `b7da33653b8bc6214fd5774a34498838decb19cd`. The roadmap is now **accepted v1.33**. `work/ACTIVE.yaml` continues to reference **completed PG-01E solely for traceability**; its **roadmap version metadata** is synchronized to `1.33` by a later dedicated governance correction, which does NOT activate Datum/Axis. Any future `active_work` switch, `src/**`, schema/API, test or UI mutation requires a **separately accepted exact Datum/Axis Work Contract and independent Owner-approved activation**.
 
 **Documentation impact:** Work-only roadmap priority/status update; Internal/Product PL+EN/Browser changes **not required** because no current product behavior changes. Future accepted production Datum/Axis contract must specify those documentation obligations.
