@@ -651,6 +651,132 @@ G0VertexCounts characterizeNativeVertices(
     return counts;
 }
 
+
+// RG-02B1/E0-01/02: evidence from real current-stage OCCT Part topology.
+// The real three-Surface semantic Point must be independently Resolved
+// BEFORE consulting transient material-Edge incidence. This never authors
+// an Edge-local END selector or upgrades an Ambiguous Point by adjacency.
+using E0LineEndWitness = std::pair<
+    part::MaterialEdgeReference,
+    std::vector<part::FeaturePointAddress>>;
+
+std::vector<E0LineEndWitness>
+characterizeE0CanonicalStraightEnds(
+    const part::BodyStageTopologyCatalog& catalog,
+    const char* fixture) {
+    CHECK(catalog.valid());
+    CHECK(catalog.complete());
+    CHECK(catalog.edges.size() == 12U);
+    CHECK(catalog.vertices.size() == 8U);
+
+    std::vector<E0LineEndWitness> witnesses;
+    std::size_t independently_resolved_end_uses = 0U;
+    for (const auto& edge : catalog.edges) {
+        CHECK(edge.curve_kind == kernel::CurveKind::line);
+        CHECK(edge.accounting_class ==
+              part::TopologyAccountingClass::referenceable);
+        CHECK(edge.referenceability ==
+              kernel::ReferenceStatus::resolved);
+        const auto authored =
+            part::authorMaterialEdgeReference(
+                catalog, edge.runtime_token);
+        CHECK(authored.ok());
+        CHECK(authored.reference->stage == catalog.stage);
+        const auto current =
+            part::resolveMaterialEdgeReference(
+                *authored.reference, catalog);
+        CHECK(current.has_value());
+        CHECK(current->resolved());
+        CHECK(current->current_edges.front() ==
+              edge.runtime_token);
+
+        std::vector<part::FeaturePointAddress> endpoints;
+        for (const auto& vertex : catalog.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge.runtime_token) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            // Critically, this Point must already be Resolved independently.
+            CHECK(vertex.referenceability ==
+                  kernel::ReferenceStatus::resolved);
+            CHECK(vertex.point_candidates.size() == 1U);
+            const auto& address =
+                vertex.point_candidates.front();
+            CHECK(address.valid());
+            const auto point =
+                std::find_if(
+                    catalog.points.begin(),
+                    catalog.points.end(),
+                    [&address](const auto& candidate) {
+                        return candidate.address == address;
+                    });
+            CHECK(point != catalog.points.end());
+            CHECK(point->status ==
+                  kernel::ReferenceStatus::resolved);
+            CHECK(point->current_vertices.size() == 1U);
+            CHECK(point->current_vertices.front() ==
+                  vertex.runtime_token);
+            endpoints.push_back(address);
+            ++independently_resolved_end_uses;
+        }
+        CHECK(endpoints.size() == 2U);
+        std::sort(endpoints.begin(), endpoints.end());
+        CHECK(endpoints.front() != endpoints.back());
+        witnesses.emplace_back(
+            *authored.reference, std::move(endpoints));
+    }
+    CHECK(witnesses.size() == 12U);
+    CHECK(independently_resolved_end_uses == 24U);
+    std::sort(witnesses.begin(), witnesses.end());
+    CHECK(
+        std::adjacent_find(
+            witnesses.begin(), witnesses.end(),
+            [](const auto& first, const auto& second) {
+                return first.first == second.first;
+            }) == witnesses.end());
+
+    // A shared trihedral corner has three independently strict Edges.
+    // Membership here is an assertion about an already-Resolved Point,
+    // never a way to choose a descendant of an Ambiguous semantic Point.
+    std::size_t strict_three_edge_corners = 0U;
+    for (const auto& vertex : catalog.vertices) {
+        CHECK(vertex.referenceability ==
+              kernel::ReferenceStatus::resolved);
+        CHECK(vertex.point_candidates.size() == 1U);
+        CHECK(vertex.incident_material_edges.size() == 3U);
+        std::size_t semantic_incident_edges = 0U;
+        for (const auto& witness : witnesses) {
+            if (std::find(
+                    witness.second.begin(),
+                    witness.second.end(),
+                    vertex.point_candidates.front()) !=
+                witness.second.end()) {
+                ++semantic_incident_edges;
+            }
+        }
+        CHECK(semantic_incident_edges == 3U);
+        ++strict_three_edge_corners;
+    }
+    CHECK(strict_three_edge_corners == 8U);
+
+    std::cout << "RG02B1_E0_NATIVE_END"
+              << " fixture=" << fixture
+              << " strict_line_edges=" << witnesses.size()
+              << " independent_resolved_end_uses="
+              << independently_resolved_end_uses
+              << " strict_three_edge_corners="
+              << strict_three_edge_corners
+              << " declared_stage_consistent=1"
+              << " nearest_xyz_rebind=0"
+              << " durable_edge_local_end=NOT_IMPLEMENTED"
+              << " ui_point_first=NOT_TESTED"
+              << " 3d_mid_query=NOT_TESTED\\n";
+    return witnesses;
+}
+
 } // namespace
 
 int main() {
@@ -680,6 +806,10 @@ int main() {
     CHECK(g0_base.point_witnesses == 8U);
     CHECK(g0_base.ambiguous == 0U);
     CHECK(g0_base.unsupported == 0U);
+    const auto e0_base_ends =
+        characterizeE0CanonicalStraightEnds(
+            *base_evaluation.features[0].result_topology,
+            "E0-01-pristine-extrude");
     // G0/V11: reconstruct authored Part intent and reevaluate with an
     // independent OCCT provider instance. Only FeaturePointAddress
     // survives semantically; transient runtime tokens are neither
@@ -704,6 +834,10 @@ int main() {
             rebuilt_topology, "V11-new-provider");
     CHECK(reconstructed_counts.native == 8U);
     CHECK(reconstructed_counts.resolved == 8U);
+    const auto e0_fresh_ends =
+        characterizeE0CanonicalStraightEnds(
+            rebuilt_topology, "E0-07-independent-provider");
+    CHECK(e0_fresh_ends == e0_base_ends);
     CHECK(
         rebuilt_topology.stage ==
         base_evaluation.features[0].result_topology->stage);
@@ -753,6 +887,10 @@ int main() {
         taller_stage, "V02-edited-extrude");
     CHECK(g0_taller.native == 8U);
     CHECK(g0_taller.resolved == 8U);
+    const auto e0_taller_ends =
+        characterizeE0CanonicalStraightEnds(
+            taller_stage, "E0-07-height-edit");
+    CHECK(e0_taller_ends == e0_base_ends);
     std::size_t moved_semantic_points = 0U;
     std::size_t stationary_semantic_points = 0U;
     for (const auto& before_vertex : original_stage.vertices) {
