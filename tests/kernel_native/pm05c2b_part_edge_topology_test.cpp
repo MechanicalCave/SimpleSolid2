@@ -1248,6 +1248,80 @@ void verifyQ1NoGlobalPointPromotion(
               << " global_point_promotions=0\n";
 }
 
+// Q2-M01/03/04: the MID is the one half-arc-length role of each
+// current-stage material Edge. It has no invented FeaturePointAddress,
+// terminal choice, OCCT enumeration index or persistent XYZ.
+std::vector<part::SelectedMaterialEdgeMid>
+verifyQ2CanonicalSelectedMids(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture) {
+    CHECK(evaluation.source_document_id);
+    CHECK(*evaluation.source_document_id == document.documentId());
+    CHECK(evaluation.source_revision == document.revision());
+    CHECK(evaluation.features.size() == 1U);
+    CHECK(evaluation.features.front().result_solid);
+    CHECK(evaluation.features.front().result_topology);
+    const auto& stage = evaluation.features.front();
+    const auto& catalog = *stage.result_topology;
+    CHECK(catalog.complete());
+    CHECK(catalog.edges.size() == 12U);
+    std::vector<part::SelectedMaterialEdgeMid> sources;
+    for (const auto& edge : catalog.edges) {
+        CHECK(edge.curve_kind == kernel::CurveKind::line);
+        const auto authored = part::authorSelectedMaterialEdgeMid(
+            document, evaluation, catalog.stage,
+            edge.runtime_token, provider);
+        CHECK(authored.ok());
+        CHECK(authored.status == part::SelectedEdgeMidStatus::resolved);
+        CHECK(authored.reference->source_edge.stage == catalog.stage);
+        CHECK(std::find(sources.begin(), sources.end(),
+                        *authored.reference) == sources.end());
+        const auto mid = part::resolveSelectedMaterialEdgeMid(
+            document, *authored.reference, evaluation, provider);
+        CHECK(mid.resolved());
+        CHECK(mid.current_edge == edge.runtime_token);
+        CHECK(mid.current_position_world);
+        CHECK(mid.current_tangent_line);
+        const auto bound = provider.bindExactEdgeToBody(
+            stage.result_solid, edge.runtime_token);
+        CHECK(bound);
+        const auto exact = provider.queryExactBoundedEdge3d(
+            stage.result_solid, *bound);
+        CHECK(exact.ok());
+        CHECK(exact.geometry->kind ==
+              kernel::ExactEdge3dKind::bounded_line);
+        const auto& g = *exact.geometry;
+        const auto& pos = *mid.current_position_world;
+        const auto& tangent = mid.current_tangent_line->representative;
+        const auto& a = g.current_terminal_positions_world[0];
+        const auto& b = g.current_terminal_positions_world[1];
+        CHECK(std::abs(pos.x - (a.x + b.x)*0.5) < 1.0e-6);
+        CHECK(std::abs(pos.y - (a.y + b.y)*0.5) < 1.0e-6);
+        CHECK(std::abs(pos.z - (a.z + b.z)*0.5) < 1.0e-6);
+        CHECK(std::abs(pos.x -
+            g.midpoint_at_half_bounded_length_world.x) < 1.0e-9);
+        CHECK(std::abs(pos.y -
+            g.midpoint_at_half_bounded_length_world.y) < 1.0e-9);
+        CHECK(std::abs(pos.z -
+            g.midpoint_at_half_bounded_length_world.z) < 1.0e-9);
+        CHECK(std::abs(tangent.x*tangent.x +
+                       tangent.y*tangent.y +
+                       tangent.z*tangent.z - 1.0) < 1.0e-7);
+        sources.push_back(*authored.reference);
+    }
+    CHECK(sources.size() == 12U);
+    std::cout << "RG02B1_Q2_CANONICAL_MID"
+              << " fixture=" << fixture
+              << " strict_line_mids=" << sources.size()
+              << " Q1_END_unchanged=1"
+              << " durable_XYZ=0"
+              << " durable_vertex_token=0"
+              << " UI_MID_tested=0\n";
+    return sources;
+}
+
 // Q1-01/Q1-02: real OCCT material Edge selection plus one independently
 // certified current native terminal. This helper never chooses by XYZ/order.
 std::vector<part::SelectedMaterialEdgeEnd>
