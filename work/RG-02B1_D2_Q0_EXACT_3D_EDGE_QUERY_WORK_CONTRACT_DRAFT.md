@@ -1,10 +1,10 @@
 # RG-02B1/D2-Q0 — exact bounded 3D Edge geometry: proposed executable Work Contract
 
-**STATUS: DRAFT FOR INDEPENDENT OWNER D2 REVIEW — NOT OWNER-ACCEPTED, NOT MERGED, NOT ACTIVE, NOT IMPLEMENTATION AUTHORITY.**  
+**STATUS: D2-Q0 THREE UNORIENTED TANGENTS / EIGHT STATUSES / ANALYTIC LINE+OPEN-ARC MID ACCEPTED BY OWNER IN PRINCIPLE (2026-10-13); EXACT NUMERIC TOLERANCES AND EXCEPTION TEST NOT YET CLOSED. FULL EXECUTABLE WORK CONTRACT DRAFT / NOT MERGED / NOT ACTIVE / NO CODE AUTHORITY.**  
 **Date:** 2026-10-13  
 **Program:** accepted Part Modeling roadmap v1.33; milestone RG-02B1 (Datum Plane Edge+Point), **Q0 geometry-enabling phase ONLY**.  
 **Repository source baseline:** `main` `c346133790a644d44b529a1dd288b162f0158540`; `work/ACTIVE.yaml.active_work` still accepted **RG-02B1/E0 evidence-only Work Contract**. This candidate does NOT supersede ACTIVE until a separately authorized and merged activation.  
-**Owner planning input:** 2026-10-13 Owner accepted **phase sequence** **Q0 → durable Edge-local END provenance → Datum persistence/orientation/one-tool UX**, **NOT** the exact six-file path set, API shape, contract, PR merge or code execution. Draft planning [PR #351](https://github.com/MechanicalCave/SimpleSolid2/pull/351) is independently OPEN/UNMERGED.  
+**Owner planning and technical direction:** 2026-10-13 Owner accepted **phase sequence** Q0 → durable Edge-local END provenance → Datum persistence/orientation/one-tool UX, and then accepted **IN PRINCIPLE** the Q0 3-unoriented-tangent / 8-conceptual-status / analytic bounded Line+open-Circle-Arc MID design in §2A. Exact status-symbol/C++ signature and model-space/mm/angular/Vertex tolerance, near-seam behavior, Q0-06 exception proof, six-file executable allowlist, full Work Contract, PR merges and ACTIVE/code execution are **NOT approved**. Draft planning [PR #351](https://github.com/MechanicalCave/SimpleSolid2/pull/351) remains independently OPEN/UNMERGED.  
 **Accepted background:** E0 [PR #348](https://github.com/MechanicalCave/SimpleSolid2/pull/348) MERGED, native Windows FULL [#2828](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38392879099) 199/199 PASS, **E0 capability PARTIAL**; source identity design [#349](https://github.com/MechanicalCave/SimpleSolid2/pull/349), P4 default-orientation/Reverse [#350](https://github.com/MechanicalCave/SimpleSolid2/pull/350), complete UX basis [#345](https://github.com/MechanicalCave/SimpleSolid2/pull/345) individually MERGED as **design only**.  
 **Authority order:** `AGENTS.md` → Constitution/Foundation/Architecture → accepted ADRs 0014/0016/0017 and relevant earlier ADRs → ACTIVE → roadmap → accepted active contract → source/tests → DOC-01. **Architecture D2 requires Owner acceptance, never agent inference.**
 
@@ -57,7 +57,7 @@ queryCurrentEdge(RuntimeSolidHandle currentBody, const ScopedExactEdge&)
 
 **D2 DESIGN PROPOSAL — NOT APPROVED CODE / API / TOLERANCES.** Read-only audited `src/CMakeLists.txt`, `tests/kernel_native/CMakeLists.txt`, `src/kernel/include/simplesolid2/kernel/edge_projection.hpp`, `src/kernel_occt/solid_modeling_kernel.cpp`, and existing real `pm02p.e_kernel_lifecycle` / `pm05c2b.part_edge_topology` fixtures on `main` `c346133790a644d44b529a1dd288b162f0158540`.
 
-### Q0-D2-A — precise interface candidate, three unoriented tangents (NOT ACCEPTED)
+### Q0-D2-A — three tangents / eight-status interface DIRECTION OWNER-ACCEPTED; exact C++ remains DRAFT
 
 ```cpp
 // Illustrative C++ PUBLIC API only; requires independent Owner D2 approval.
@@ -98,7 +98,7 @@ public:
 
 The API is an **independent interface**, added to `OcctSolidModelingKernel` as a separate base; do not append a pure virtual method to the existing `ISolidModelingKernel` or alter 2D `IEdgeProjectionQuery`. Existing `RuntimeSolidHandle = shared_ptr<const RuntimeSolid>`, `RuntimeEdgeToken` and `Point3` already exist; no new persistence/Part source type. Endpoint `[i]` pairing is **ONLY for the same current query result**: position and tangent in slot i describe the same physical terminal. Native order may flip after rebuild or Edge reversal; slot i is NEVER an authored End0/End1, source key or canonical orientation. Compare **unordered pairs** and unsigned tangent lines in tests. Both END tangents are needed by future END-perpendicular Datum, not just the MID tangent. None carries authored ±sign; user-visible default orientation and Odwróć remain future Q2, not an error in Q0.
 
-### Q0-D2-B — metric/OCCT algorithm candidate; exact modeling thresholds remain OPEN
+### Q0-D2-B — analytic Line/Open-Circle metric DIRECTION OWNER-ACCEPTED; exact modeling thresholds OPEN
 
 Existing production `bindEdgeToBody` rejects wrong provider/missing inventory; `projectEdgeToPlane` binds the **exact Body object pointer** and uses `BRepAdaptor_Curve`, `TopExp::Vertices`, `BRep_Tool::Pnt`, `Precision::Confusion()` and `Precision::Angular()`. It specifically documents a physical endpoint discrepancy between analytic `Value(parameter)` and shared OCCT topological `BRep_Tool::Pnt(Vertex)`; **observed END positions should use the Edge-owned native Vertex coordinates, with analytic-carrier consistency validated**, not choose a point from another Edge by XYZ.
 
@@ -120,15 +120,57 @@ Existing production `bindEdgeToBody` rejects wrong provider/missing inventory; `
 
 Current projection's exception helper `detail::guardedExactEdgeProjection()` is typed to old `EdgeProjectionResult`. A new local provider `try/catch` inside permitted OCCT .cpp might handle Q0 `kernel_failure`, but a **deterministic native throw-injection regression** could require an adapter outside the six paths: mark `Q0-06 exception witness BLOCKED` and request **Owner scope amendment before code** if the existing native test cannot truly trigger that failure. Never declare Q0-06 fully PASS because a catch block merely exists.
 
-### Remaining independent Owner D2 choices (not answered by “continue”)
+### Remaining independent Owner D2 choices after IN-PRINCIPLE ACCEPTANCE (not exact executable approval)
 
-**A:** approve/revise the above **eight** statuses, three unsigned tangent-line observations (END1, END2, MID) and opaque same-Body binding; whether the wrapped `Point3` vector type sufficiently guards against misuse of sign.
+**A — ACCEPTED IN PRINCIPLE:** eight conceptual statuses, three **unoriented** tangent-line observations (END, END, MID), paired physical terminal positions and opaque same-Body binding. **Still open:** exact C++ symbol signatures and whether wrapped `Point3` is sufficiently sign-safe for future consumers; no persisted native slot ID.
 
-**B:** approve/revise **circle-only constant-speed half-length**, open/closed seam rules, model-space and angular tolerances, carrier-to-Vertex consistency diagnostics, and correct truly native Arc fixture expectations.
+**B — ANALYTIC DIRECTION ACCEPTED IN PRINCIPLE:** constant-speed certified **open** Circle Arc half-bounded-length metric and analytic Line MID. **Still open:** exact near-closed seam/short Edge status thresholds, model-space/Vertex/Edge/angular tolerance policy and proof in real native fixtures.
 
 **C:** confirm the six exact source/test/as-built paths are a sufficient **future code scope**, with explicit Q0-06 exception-path proof and CMake/link feasibility, or amend the contract BEFORE code. None of this has been implemented or validated by Q0 native tests.
 
-**This §2A is a precise engineering recommendation for Owner consultation, NOT an acceptance of exact C++ signatures, numerical precision or new tests.** E0 #2828 and 2D projection tests do not count as new Q0 proof.
+**This §2A is the Owner-accepted IN-PRINCIPLE engineering direction, NOT acceptance of exact C++ signatures, numerical tolerance, Q0 exception witness, allowed code edits or new tests.** E0 #2828 and 2D projection runs do not count as Q0 proof.
+
+## 2B. Outstanding numeric/exception D2 closure — independently reviewable options, UNAPPROVED (2026-10-13)
+
+This section addresses ONLY the two open subjects reserved by Owner after acceptance of the Q0 interface **in principle**. Its tests are **design obligations, not executed evidence**. No silent promotion of OCCT's internal tolerances to an SS2 product/modeling tolerance is authorized.
+
+### N1 — conservative numeric policy to prove on actual native geometry (candidate, NOT accepted)
+
+Distinct physical predicates, each with its own **explicit units and threshold**:
+
+| Check | Proposed mathematical comparison | Evidence/Owner decision needed |
+| --- | --- | --- |
+| Finite/typed input | All source `Point3`, native Curve trim bounds, Circle radius and analytic `D1` derivative finite; positive bounded interval | Reject nonfinite/invalid without geometry, before normalization |
+| Geometric Line length | `L = norm(Value(last) - Value(first))` in **mm**, positive beyond an explicitly accepted **geometric-length** lower bound `T_length` | Do not substitute topological Vertex distance for the analytic trimmed carrier; sweep known Line lengths against threshold |
+| Geometric Circle Arc length | Certified `GeomAbs_Circle`, `L = r * abs(last-first)` (**mm**) and `0 < span < 2π` (**radians**) | Prove constant speed, valid physical end trims, both source sweep signs and angle-0 seam crossing |
+| Physical carrier↔Vertex consistency | For each Edge-owned Vertex matched to the corresponding analytic trim boundary, `distance(Pvertex, Value(trim)) <= T_endpoint` (**mm**), allowing **only** the two candidate native pairing orders within the single current Edge | Candidate **`T_endpoint = max(Precision::Confusion(), BRep_Tool::Tolerance(vertex), BRep_Tool::Tolerance(edge))`** for the specific Vertex/Edge; **NOT** snapping to another Edge or creating persistent XYZ identity; verify OCCT Edge tolerance accessor compile availability and physical residuals |
+| Unoriented tangent | `|D1| > T_derivative` in derivative's actual native parameter units; finite normalized representative. Two signs represent one line | `T_derivative` cannot be presumed equal to geometric `T_length` for arbitrary parameterization; exact parameter/derivative-units policy requires Owner review |
+| Near full-circle/closed arc | Native topological END identity and finite bounded span; compare angular residual `delta = 2π - span` (radians) **and** physical near-closure gap `2*r*sin(delta/2)` (**mm**) | Decide whether geometrically open but nearly closed with indistinguishable physical terminals must be `closed_or_periodic` or `degenerate_edge`; never round up a tiny valid gap to a full closed circle without stated policy |
+
+**Two illustrative threshold policies for Owner to compare, NOT fabricated accepted constants:**
+
+- **N1a — OCCT-derived comparison policy (candidate baseline):** `T_length = Precision::Confusion()` (length in mm), `T_angle = Precision::Angular()` (radians), per Vertex/Edge `T_endpoint = max(provider linear precision, native Vertex tolerance, native Edge tolerance)`; derivative validity uses a separately justified scale or analytical `D1` regularity test, **not a casual mm epsilon**.
+- **N1b — minimum model-domain policy (alternative requiring broader modeling decision):** explicit SS2 D2 model-unit length and angular thresholds independent of OCCT defaults but still never overriding source-authorized native topology/Vertex tolerances. This alters modeled acceptance semantics across scale and must be reviewed against ADR-0016/0017 and existing E10 measurements. **Do not introduce it automatically under Q0.**
+
+**Read-only evidence provenance:** `src/kernel_occt/solid_modeling_kernel.cpp` already uses `Precision::Angular()` to compare planar normals and `max(Precision::Confusion(), BRep_Tool::Tolerance(Face1), BRep_Tool::Tolerance(Face2))` for planar Face distance; current 2D Edge projection uses OCCT precision for collapse/circular span. Native `tests/kernel_native/pm00a_e10_numerical_policy_evidence_test.cpp` already sweeps gaps around `Precision::Confusion()`, but explicitly calls the findings **evidence, NOT an accepted SS2 modeling tolerance**. Neither proves the new 3D Q0 carrier/Vertex checks.
+
+**Finite future numeric witnesses within allowed two native tests:** (N-01) actual Line lengths above/below selected threshold, provider-updated height and carrier↔Vertex residuals; (N-02) true circular Arc radii across e.g. sub-mm, 10 mm and large mm scales, positive/negative trims and seam crossing, exact half-bounded length; (N-03) residual span `delta` on both sides of candidate `T_angle`, and closure gap on both sides of candidate `T_endpoint`, real native topology distinct/closed; (N-04) same Body/generation replay determinism and changed Body refusal; (N-05) genuinely invalid `D1`/zero-length if constructible without out-of-scope helper. All are **UNRUN** for Q0; no numeric acceptance can be asserted by citing historical E10 or E0.
+
+**N1 Owner choice STILL REQUIRED before executable acceptance:** choose N1a with explicitly vetted and measured edge-specific limits, or propose a model-domain alternative; settle `T_length`, `T_derivative`, `T_endpoint`, `T_angle` and statuses for near-closed but distinct endpoints. Until then any exact API contract claiming stable acceptance boundaries is incomplete.
+
+### E1 — deterministic exception-path test without widening code API (two options, NOT accepted)
+
+**Existing proof, NOT transferable:** `src/kernel_occt/include/.../detail/edge_projection_exception_guard.hpp` implements a templated `guardedExactEdgeProjection` returning **old `EdgeProjectionResult`**; `src/kernel_occt/profile_face_evidence.cpp::buildEdgeProjectionExceptionEvidence()` throws actual `Standard_Failure` and `std::runtime_error` through that same old guard, and `pm02p.e_kernel_lifecycle` asserts `kernel_failure`/empty. The as-built `docs/internal/PART_EDGE_PROJECTION_KERNEL.md` documents this previous 2D proof. **None is Q0's new `ExactEdge3dResult` exception test**, and those provider evidence adapter files are NOT in the proposed six-file allowlist.
+
+- **E1a (preferred to investigate first, keeps six candidate file paths):** put ONE small pure, exception-to-typed-result **provider detail guard helper** inside the already allowed **existing OCCT provider header** (or the new allowed header where it can remain provider-neutral), and invoke the **same exact helper** in the new `queryBoundedGeometry()` production body and the already allowed `pm02p_e_kernel_lifecycle_test.cpp`. Test a deterministic throwing `std::runtime_error` callable plus success passthrough and typed empty failure. `catch(...)` is type-agnostic for C++ exceptions including `Standard_Failure`, but **without a real new-Q0 Standard_Failure injection test, report that precise subcase as NOT DIRECTLY TESTED**, not as native OCCT PASS. The helper is not a new user-facing mode, UI setting or persisted fault knob. **Owner must specifically accept this limited witness scope if sufficient.**
+- **E1b (stronger OCCT-type-specific proof, NEEDS OWNER SCOPE AMENDMENT if E1a insufficient):** place a provider-private Q0 exception evidence adapter where native OCCT `Standard_Failure` and unrelated exceptions can be deliberately raised through the **same Q0 guard** without adding a public test-injection switch to `IExactBoundedEdgeGeometryQuery`. The existing `profile_face_evidence.cpp` and its header are a proven pattern, but they are **outside** the six proposed paths. Any required extra paths must be enumerated and Owner-approved explicitly **before** D0 coding; do not simply mutate this existing module under the current Draft.
+- **E1c (not acceptable as completion):** merely add `try/catch` to the OCCT .cpp and exercise `invalid_input`/degenerate curve without ever throwing. These exercise typed negative results but **do not test exception conversion**. Report `Q0-06 exception_injection=BLOCKED`, not PASS.
+
+**E1 Owner choice STILL REQUIRED:** whether one helper exercised by production and deterministic generic C++ throw (E1a), with honest OCCT-specific coverage limit, is acceptable; otherwise grant an exact amended provider-only test adapter path set (E1b). No bogus runtime fault toggle, no CMake/CI edit and no weakening old E0/PG-01A exception tests. Q0-06 remains **UNRUN** until the future actual code/test and Windows evidence.
+
+### N/E gate outcome for present Draft
+
+The Q0 three-tangent/eight-status/analytic-MID **direction is accepted in principle**. **N1 threshold policy and E1 exception-proof method are NOT accepted yet**; the six-file set is a candidate, not activated. Explicit Owner N1/E1 selection and then complete Work Contract acceptance, its own exact-HEAD squash merge approval and a separate dedicated `ACTIVE.yaml` activation are prerequisites to changing any production or native test source.
 
 ## 3. Exact **proposed** future D0 mutation allowlist: six paths ONLY, pending Owner acceptance + ACTIVE
 
@@ -165,7 +207,7 @@ Current projection's exception helper `detail::guardedExactEdgeProjection()` is 
 
 ## 5. Decision chain and hard STOP
 
-**Q0 scope is not accepted by generic “continue.”** The source-audited §2A is an **unapproved candidate**, not a finalized API/precision decision. Independent gates:
+**Prior Owner consent accepted the §2A three-tangent/eight-status/analytic-MID DIRECTION only**, leaving exact types, §2B N1 thresholds and E1 exception proof, six-file executable authority and PR merge/activation independent. Generic “continue” does NOT authorize code or these independent gates. Independent gates:
 
 1. **DONE only as plan:** Owner chose Q0 → Q1 → Q2+ sequence on 2026-10-13. [Plan PR #351](https://github.com/MechanicalCave/SimpleSolid2/pull/351) remains OPEN/DRAFT, a one-file planning artifact, **not yet Owner-approved as exact six-path code authority**.
 2. **THIS draft executable-contract proposal:** Owner to review/accept exact six-file implementation scope (or amend), semantic 3D typed query contract, status/length/orientation/tolerance rules, existing fixture feasibility and documentation. **Before final exact-text approval** resolve the unresolved items in §2 and pre-activation build/test feasibility STOP in §3. No auto-accept based on this draft PR's green governance CI.
