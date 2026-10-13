@@ -29,6 +29,12 @@
 
 **Classification:** CONFIRMED DOC DRIFT, not a runtime defect. **No canonical doc changed in this E0 draft.**
 
+### Additional verified drift: E0-DOC-02 — contradictory Part schema/current-state wording
+
+Current `main` `docs/internal/PART_DOCUMENTS.md` explicitly names **native Part schema v16 / ModelingSemanticsVersion 2** near line 280, yet subsequent sections around lines 451 and 463–468 continue describing current linked-model persistence and Save/Close/Reopen as **v15**. This is a second, independent *current-state documentation* inconsistency; it must not be read as evidence that existing modeling-v1 documents are migrated. [PG-01D final accepted scope](PROJECTION_01D_FINAL_ACCEPTANCE_AND_MERGE.md) explicitly requires v16/v2 and typed rejection of modeling-v1.
+
+**Later allowed remedy (not performed here):** update only demonstrated present-tense v15 claims in the allowlisted Internal source to v16/v2-accurate behavior, while retaining explicitly historic PG-01B/v15 statements where clearly dated as such. Never advertise automatic modeling-v1 migration. No product source, test, canonical documentation or generated Browser was modified for this preliminary observation.
+
 ## E0-C. Current v16/v2 compatibility boundary — observed source/test, not new execution
 
 Existing `tests/part_document_store_test.cpp` explicitly tests the `modeling_semantics_version` field and typed `unsupported_modeling_semantics` rejection (source inspection). [PG-01D final](PROJECTION_01D_FINAL_ACCEPTANCE_AND_MERGE.md) establishes strict **new Part schema v16 and ModelingSemanticsVersion=2** distinction and Owner acceptance of no automatic or bulk v1 migration. This is a reader/refusal *policy*, not an obligation to make v1 documents load successfully. Real PG-01E E2 compatibility evidence on current main is **OPEN** until a new bounded replay and exact-head test run.
@@ -44,6 +50,25 @@ Existing `tests/part_document_store_test.cpp` explicitly tests the `modeling_sem
 | Deterministic performance/resource methodology, repeated controlled cycles, memory/handle deltas | Existing Windows test resources exist, no PG-01E repeated baseline published | **OPEN, no fabricated metrics or budget** |
 | PL/EN + Internal/Browser parity | PL/EN present; E0-DOC-01 confirmed Internal drift | **OPEN for final audit/repair after activation** |
 | PG-01E exact-head FOCUSED/FAST/FULL + Owner practical FINAL PASS and merge | Prior stage FULL only | **UNRUN / PENDING** |
+
+## E0-E1. Exact existing test registration and evidence-layer audit (read-only)
+
+Registration was inspected on `main` `5b495c4bbed8754d7a1f01e87a30716429db786d` in `tests/CMakeLists.txt`, `tests/kernel_native/CMakeLists.txt` and `tests/core_only/CMakeLists.txt`. These **six** files are the proposed future PG-01E Work Contract's entire test-source allowlist; merely finding a registered test does not prove a new PG-01E scenario or authorize modifying it.
+
+| Allowlisted source | Actual registered CTest(s) / tier | Correct evidence claim / limitation |
+| --- | --- | --- |
+| `tests/kernel_native/pm02p_e_kernel_lifecycle_test.cpp` | `pm02p.e_kernel_lifecycle`, native **FULL-only** | Real OCCT exact Kernel-level projection (Line/Circle/Arc, refusal); **not** authored linked Part / Qt GUI lifecycle by itself |
+| `tests/kernel_native/pm05e3_edge_feature_cold_rebuild_test.cpp` | `pm05e3.edge_feature_cold_rebuild`, native **FULL-only** | Real OCCT Part/Command linked-Edge chain and fresh-provider lifecycle; **not** proof of all new PG-01E mixed UI modes without new assertions |
+| `tests/pm05f_r2_native_workbench_edit_test.cpp` | `pm05f_r2.native_workbench_edit`, `pg01c.native_project_edge_command`, `pg01d.native_face_boundary_d0`, `pg01d.native_face_ui`, `pg01d.native_face_fail_closed`; all **FULL-only** | Real Qt/OCCT and isolated PG-01D modes; the named CTests launch the **same binary with different CLI arguments**. A generic executable PASS is not proof every selected mode ran |
+| `tests/part_document_store_test.cpp` | `part01.part_document_store`, desktop **FAST** | Real native persistence. Existing test around lines 183–231 constructs **test-only** v1/v3 policy variants from a valid v2 package and asserts typed `unsupported_modeling_semantics`; it separately confirms unchanged valid v2 authored bytes. **Not** an in-product migration or proof that original Owner fixtures were mutated |
+| `tests/pm02p_e_core_lifecycle_test.cpp` | `pm02p.e_core_lifecycle`, core-only **FULL-only** | Non-OCCT document/session/provider-generation control; cannot certify a real viewport hit or current provider B-Rep identity |
+| `tests/pm04e2_revolve_lifecycle_cold_rebuild_test.cpp` | `pm04e2.revolve_lifecycle_cold_rebuild`, desktop **FAST** | Implements `ColdRevolveKernel : ISolidModelingKernel` with `ColdRevolveSolid` test doubles (source around lines 66–120). Suitable for *semantic/command persistence* only; **not real OCCT Revolve**. Future native Revolve E1-B proof must be obtained through a different **already allowlisted native** test path or STOP for scoped Owner amendment |
+
+**Version-policy fixture boundary:** `tests/pm05f_r2_native_workbench_edit_test.cpp` defines `loadOwnerFixtureV2ForTest` (around lines 122–170), which first confirms the original legacy fixture is rejected, then creates a **separate temporary test-only v2 copy**. No such conversion is shipped or authorized for user documents.
+
+**CI #302 guard:** `pm04e2.revolve_lifecycle_cold_rebuild` carries `tier-fast` but is among the CTests not guaranteed built by `ss2_tests_fast` on a warm Windows tree ([open #302](https://github.com/MechanicalCave/SimpleSolid2/issues/302)). A FAST result must be tied to what was actually rebuilt and run; final PG-01E acceptance still requires **exact-head FULL**. Do not repair CMake/CI under PG-01E's proposed allowlist.
+
+**Status:** registration and source inspection only — no PG-01E E1/E2/E3 native execution, no new Owner manual PASS, no test/build/CI edits.
 
 ## E0-E. Governance and next steps
 
