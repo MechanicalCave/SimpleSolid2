@@ -11,6 +11,7 @@
 #include <variant>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <string_view>
@@ -1503,6 +1504,42 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               << " provider_instances=10"
               << " process_memory=unavailable"
               << " native_handles=unavailable\n";
+    // Existing SS2 Windows test conventions already publish bounded
+    // measurements to GitHub's step summary. Unlike passing CTest stdout,
+    // this retains actual numeric values without editing CI/workflows.
+    // This test deliberately DOES NOT claim process memory or handle
+    // trends; those cannot be measured by this kernel-only scenario.
+    if (const char* location = std::getenv("GITHUB_STEP_SUMMARY")) {
+        std::ofstream summary{location, std::ios::app};
+        if (summary) {
+            summary << "\n### PG-01E/E3 — native linked Revolve cold replay\n"
+                    << "Exact built source: this run's checkout SHA. "
+                    << "Part schema v16/modeling semantics v2, one "
+                    << "Extrude Add producer and linked Regular Profile "
+                    << "consumed by a committed Revolve Add; exact "
+                    << "fresh independent OCCT kernel per cycle. "
+                    << "2 warm-up and 8 measured cycles; measured "
+                    << "portion is disk load + Part/linked projection, "
+                    << "not UI frame time or an accepted budget.\n\n"
+                    << "| Metric | Actual value |\n"
+                    << "| --- | ---: |\n"
+                    << "| min cold replay | " << *extrema.first
+                    << " us |\n"
+                    << "| mean cold replay | "
+                    << duration_sum /
+                        static_cast<long long>(measured_cycles)
+                    << " us |\n"
+                    << "| max cold replay | " << *extrema.second
+                    << " us |\n"
+                    << "| native package size before/after | "
+                    << immutable_native_bytes << " bytes (unchanged) |\n"
+                    << "| OS private bytes / handle trend | "
+                    << "UNAVAILABLE (not sampled) |\n\n"
+                    << "Finite timing samples are not evidence for a "
+                    << "latency or memory SLA, leak absence or the "
+                    << "other still-open PG-01E Face/Qt E1 branches.\n";
+        }
+    }
 
     // B3 draft regression: Finish already uses the effective source.
     // The live Edit Extrude preview must use it too, not the OPEN
