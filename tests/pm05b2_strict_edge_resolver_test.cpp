@@ -301,6 +301,30 @@ int main() {
         CHECK(!part::SelectedEdgeEndAuthoringResult{}.ok());
     }
 
+    // Q2-M05: MID is a distinct semantic role, requiring a material
+    // Edge but never a global Point, provider token, parameter or XYZ.
+    // A MID and either of the two Q1 ENDs cannot share a value type.
+    {
+        const part::MaterialEdgeReference edge_ref{
+            v.stage, v.curve_address,
+            part::SingularAtAuthoredStage{}};
+        const part::SelectedMaterialEdgeMid mid{edge_ref};
+        const part::SelectedMaterialEdgeEnd end{
+            edge_ref,
+            part::StableEdgeLocalTerminalKey{v.first_point}};
+        CHECK(mid.valid());
+        CHECK(mid == part::SelectedMaterialEdgeMid{edge_ref});
+        CHECK(end.valid());
+        CHECK(!part::SelectedMaterialEdgeMid{}.valid());
+        CHECK(!part::SelectedEdgeMidAuthoringResult{}.ok());
+        CHECK(!part::SelectedEdgeMidResolution{}.resolved());
+        auto another = edge_ref;
+        another.stage = part::BodyStageRef{};
+        CHECK(!part::SelectedMaterialEdgeMid{another}.valid());
+        CHECK(part::SelectedEdgeMidResolution{}.status ==
+              part::SelectedEdgeMidStatus::invalid_context);
+    }
+
     // Singular authored meaning follows strict bounded-Edge survival:
     // 1 -> Resolved, 0 -> Missing, split -> Ambiguous.
     {
