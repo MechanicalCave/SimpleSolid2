@@ -4663,6 +4663,47 @@ int main(int argc, char* argv[]) {
             CHECK(detachable_multi_session.document()
                   .findSketch(*manual_target.sketch_id)
                   ->projection_bindings.size() == 2U);
+            // Explicit two-target detach must materialize precisely
+            // the CURRENT projected curves, not retained stale seeds.
+            // The two remaining linked targets must still name their
+            // unchanged original material Edge semantic sources.
+            const auto* pair_detached_sketch =
+                detachable_multi_session.document().findSketch(
+                    *manual_target.sketch_id);
+            CHECK(pair_detached_sketch &&
+                  pair_detached_sketch->projection_bindings.size() == 2U);
+            for (const auto id : {pair_first, pair_second}) {
+                CHECK(std::none_of(
+                    pair_detached_sketch->projection_bindings.begin(),
+                    pair_detached_sketch->projection_bindings.end(),
+                    [id](const auto& binding) {
+                        return binding.target_entity == id;
+                    }));
+                const auto* detached_line =
+                    pair_detached_sketch->model.findLine(id);
+                const auto* current_line =
+                    multi_cold_projection->model.findLine(id);
+                CHECK(detached_line && current_line);
+                CHECK(point_same(
+                    detached_line->start(), current_line->start()));
+                CHECK(point_same(
+                    detached_line->end(), current_line->end()));
+            }
+            for (const auto& binding :
+                 pair_detached_sketch->projection_bindings) {
+                const auto original_binding = std::find_if(
+                    multi_linked_sketch->projection_bindings.begin(),
+                    multi_linked_sketch->projection_bindings.end(),
+                    [&binding](const auto& candidate) {
+                        return candidate.target_entity ==
+                               binding.target_entity;
+                    });
+                CHECK(original_binding !=
+                      multi_linked_sketch->projection_bindings.end());
+                CHECK(original_binding->source == binding.source);
+                CHECK(binding.target_entity != pair_first);
+                CHECK(binding.target_entity != pair_second);
+            }
             CHECK(detachable_multi_session.undo().changed);
             CHECK(detachable_multi_session.document().state() ==
                   before_detach);
