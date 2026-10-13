@@ -930,6 +930,11 @@ void verifyRg02b1Q0Exact3dGeometry() {
             CHECK(near(g.bounded_length_mm, 10.0 * std::abs(sweep)));
             const auto& mid = g.midpoint_at_half_bounded_length_world;
             CHECK(near(mid.x*mid.x + mid.y*mid.y, 100.0));
+            // Verify the real bounded half-length point, not merely
+            // that the midpoint lies somewhere on the source circle.
+            const double expected_mid_angle = start + sweep * 0.5;
+            CHECK(near(mid.x, 10.0 * std::cos(expected_mid_angle)));
+            CHECK(near(mid.y, 10.0 * std::sin(expected_mid_angle)));
             for (std::size_t i = 0U; i < 2U; ++i) {
                 const auto& endpoint = g.current_terminal_positions_world[i];
                 const auto& tangent = g.terminal_tangent_lines[i].representative;
