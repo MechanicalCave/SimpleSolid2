@@ -4957,6 +4957,7 @@ PartEvaluation evaluatePart(
     PartEvaluation result;
     result.source_revision =
         document.revision();
+    result.source_document_id = document.documentId();
     result.features.reserve(
         document.body().features.size());
 
