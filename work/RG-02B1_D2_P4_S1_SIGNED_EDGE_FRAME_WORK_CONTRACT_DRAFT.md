@@ -151,8 +151,8 @@ After complete-text Owner D2 acceptance, independently Owner-approved **contract
 
 ## Documentation impact
 
-Internal docs: required **for future S1 implementation only**
-User/Product docs: not required **for S1**
+Internal docs: required
+User/Product docs: not required
 Reason: S1 adds **headless read-only Part frame-policy APIs**, not a user-visible Datum constructor, parser, command or new native persistence; as-built internal Part documentation and deterministic generated Browser must be updated and tested. The later S2/S3 work will independently assess native-schema docs and paired PL/EN Product UX docs before feature release.
 
 ## 8. Requested one Owner D2 decision
