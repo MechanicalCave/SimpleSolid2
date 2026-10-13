@@ -1689,6 +1689,142 @@ int main() {
         CHECK(wrong.status ==
               part::SelectedEdgeEndStatus::terminal_missing);
     }
+    // Q1-05: typed failure precedence for a still-live document but
+    // semantically changed, otherwise complete *current* stage inventory.
+    // Distinguish a vanished source, extra bounded Curve realization,
+    // inadmissible material Edge, lost certified terminal and provider
+    // mismatch; none may fall back to provider XYZ or a different Edge.
+    {
+        const auto& source = q1_base_sources.front();
+        CHECK(std::holds_alternative<part::SingularAtAuthoredStage>(
+            source.source_edge.branch));
+        const auto native = part::resolveSelectedMaterialEdgeEnd(
+            base_document, source, base_evaluation, kernel);
+        CHECK(native.resolved());
+        const auto current_edge = *native.current_edge;
+        const auto current_vertex = *native.current_terminal;
+        const auto assertNoPayload = [](
+            const part::SelectedEdgeEndResolution& result,
+            part::SelectedEdgeEndStatus expected) {
+            CHECK(result.status == expected);
+            CHECK(!result.resolved());
+            CHECK(!result.current_edge);
+            CHECK(!result.current_terminal);
+            CHECK(!result.current_position_world);
+            CHECK(!result.current_tangent_line);
+        };
+        const auto withCatalogEdit = [&](
+            auto edit,
+            part::SelectedEdgeEndStatus expected) {
+            auto changed = base_evaluation;
+            CHECK(changed.features.front().result_topology);
+            auto& catalog = *changed.features.front().result_topology;
+            edit(catalog);
+            CHECK(catalog.complete());
+            assertNoPayload(part::resolveSelectedMaterialEdgeEnd(
+                base_document, source, changed, kernel), expected);
+        };
+        const auto findSourceCurve = [&source](
+            part::BodyStageTopologyCatalog& cat) {
+            const auto c = std::find_if(
+                cat.curves.begin(), cat.curves.end(),
+                [&source](const auto& item) {
+                    return item.address == source.source_edge.curve;
+                });
+            CHECK(c != cat.curves.end());
+            return c;
+        };
+        withCatalogEdit([&](auto& cat) {
+            auto c = findSourceCurve(cat);
+            c->status = kernel::ReferenceStatus::missing;
+            c->strict_edge_status = kernel::ReferenceStatus::missing;
+            c->current_edges.clear();
+            c->candidate_edge_count = 0U;
+        }, part::SelectedEdgeEndStatus::edge_missing);
+        withCatalogEdit([&](auto& cat) {
+            auto c = findSourceCurve(cat);
+            const auto other = std::find_if(
+                cat.edges.begin(), cat.edges.end(),
+                [current_edge](const auto& item) {
+                    return item.runtime_token != current_edge;
+                });
+            CHECK(other != cat.edges.end());
+            c->current_edges.push_back(other->runtime_token);
+            c->candidate_edge_count = c->current_edges.size();
+            c->strict_edge_status = kernel::ReferenceStatus::ambiguous;
+        }, part::SelectedEdgeEndStatus::edge_ambiguous);
+        withCatalogEdit([&](auto& cat) {
+            const auto e = std::find_if(
+                cat.edges.begin(), cat.edges.end(),
+                [current_edge](const auto& item) {
+                    return item.runtime_token == current_edge;
+                });
+            CHECK(e != cat.edges.end());
+            e->accounting_class =
+                part::TopologyAccountingClass::semantically_unsupported;
+            e->referenceability = kernel::ReferenceStatus::unsupported;
+            e->curve_kind = kernel::CurveKind::other;
+            e->curve_candidates.clear();
+        }, part::SelectedEdgeEndStatus::edge_unsupported);
+        withCatalogEdit([&](auto& cat) {
+            const auto p = std::find_if(
+                cat.points.begin(), cat.points.end(),
+                [&source](const auto& item) {
+                    return item.address ==
+                        source.terminal.certified_semantic_point;
+                });
+            CHECK(p != cat.points.end());
+            cat.points.erase(p);
+        }, part::SelectedEdgeEndStatus::terminal_missing);
+        withCatalogEdit([&](auto& cat) {
+            const auto p = std::find_if(
+                cat.points.begin(), cat.points.end(),
+                [&source](const auto& item) {
+                    return item.address ==
+                        source.terminal.certified_semantic_point;
+                });
+            CHECK(p != cat.points.end());
+            p->status = kernel::ReferenceStatus::unsupported;
+            p->current_vertices.clear();
+            p->candidate_vertex_count = 0U;
+        }, part::SelectedEdgeEndStatus::terminal_unsupported);
+        const auto bad_stage = [&] {
+            auto altered = source;
+            altered.source_edge.stage.kind =
+                part::BodyStageKind::empty_body;
+            return altered;
+        }();
+        assertNoPayload(part::resolveSelectedMaterialEdgeEnd(
+            base_document, bad_stage, base_evaluation, kernel),
+            part::SelectedEdgeEndStatus::invalid_context);
+        const auto& catalog =
+            *base_evaluation.features.front().result_topology;
+        const auto wrong_author = part::authorSelectedMaterialEdgeEnd(
+            base_document, base_evaluation, bad_stage.source_edge.stage,
+            current_edge, current_vertex, kernel);
+        CHECK(!wrong_author.ok());
+        CHECK(!wrong_author.reference);
+        CHECK(wrong_author.status ==
+              part::SelectedEdgeEndStatus::invalid_context);
+        const auto gone_edge = part::authorSelectedMaterialEdgeEnd(
+            base_document, base_evaluation, catalog.stage,
+            kernel::RuntimeEdgeToken{999999999U},
+            current_vertex, kernel);
+        CHECK(!gone_edge.ok());
+        CHECK(!gone_edge.reference);
+        CHECK(gone_edge.status == part::SelectedEdgeEndStatus::edge_missing);
+        kernel_occt::OcctSolidModelingKernel other_provider;
+        assertNoPayload(part::resolveSelectedMaterialEdgeEnd(
+            base_document, source, base_evaluation, other_provider),
+            part::SelectedEdgeEndStatus::native_geometry_unavailable);
+        const auto foreign_native = part::authorSelectedMaterialEdgeEnd(
+            base_document, base_evaluation, catalog.stage,
+            current_edge, current_vertex, other_provider);
+        CHECK(!foreign_native.ok());
+        CHECK(!foreign_native.reference);
+        CHECK(foreign_native.status ==
+              part::SelectedEdgeEndStatus::native_geometry_unavailable);
+    }
     // G0/V11: reconstruct authored Part intent and reevaluate with an
     // independent OCCT provider instance. Only FeaturePointAddress
     // survives semantically; transient runtime tokens are neither
