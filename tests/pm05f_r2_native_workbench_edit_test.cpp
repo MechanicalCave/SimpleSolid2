@@ -37,6 +37,7 @@
 #include <fstream>
 #include <limits>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <string>
@@ -123,10 +124,24 @@ void check(bool ok, const char* expression, int line) {
 loadOwnerFixtureV2ForTest(
     const part::PartDocumentStore& store,
     const std::filesystem::path& source) {
+    // PG-01E/E2: these are ORIGINAL Owner-provided modeling-v1
+    // regression files. Verify exact bytes around the production
+    // typed refusal AND the separate test-only temporary v2 package.
+    // No in-place migration, schema repair or write-back is legal.
+    const auto sourceBytes = [&source]() {
+        std::ifstream in{source, std::ios::binary};
+        CHECK(static_cast<bool>(in));
+        return std::string{
+            std::istreambuf_iterator<char>{in},
+            std::istreambuf_iterator<char>{}};
+    };
+    const auto original_bytes = sourceBytes();
+    CHECK(!original_bytes.empty());
     const auto rejected = store.load(source);
     CHECK(!rejected.ok());
     CHECK(rejected.diagnostic.code ==
           part::PartStoreErrorCode::unsupported_modeling_semantics);
+    CHECK(sourceBytes() == original_bytes);
     const auto native =
         persistence::readNativeDocumentContainer(source);
     CHECK(native.ok());
@@ -166,6 +181,7 @@ loadOwnerFixtureV2ForTest(
     CHECK(loaded.ok());
     CHECK(loaded.document->modelingSemanticsVersion() ==
           part::current_modeling_semantics_version);
+    CHECK(sourceBytes() == original_bytes);
     return loaded;
 }
 
