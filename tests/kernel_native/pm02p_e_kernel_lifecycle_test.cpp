@@ -972,6 +972,21 @@ void verifyRg02b1Q0Exact3dGeometry() {
             const double expected_mid_angle = start + sweep * 0.5;
             CHECK(near(mid.x, 10.0 * std::cos(expected_mid_angle)));
             CHECK(near(mid.y, 10.0 * std::sin(expected_mid_angle)));
+            // Q2-M02: the true bounded 3D MID is half the Edge's
+            // material arclength, not the average of 3D endpoints.
+            // This remains true for both signed sweep orientations
+            // and for the wrapped quarter-circle Arc.
+            const auto& first = g.current_terminal_positions_world[0];
+            const auto& last = g.current_terminal_positions_world[1];
+            const double chord_mid_x = (first.x + last.x)*0.5;
+            const double chord_mid_y = (first.y + last.y)*0.5;
+            const double chord_delta2 =
+                (mid.x - chord_mid_x)*(mid.x - chord_mid_x) +
+                (mid.y - chord_mid_y)*(mid.y - chord_mid_y);
+            CHECK(chord_delta2 > 1.0);
+            CHECK(std::isfinite(g.bounded_length_mm));
+            CHECK(std::abs(g.bounded_length_mm -
+                           10.0 * std::abs(sweep)) < 1.0e-6);
             for (std::size_t i = 0U; i < 2U; ++i) {
                 const auto& endpoint = g.current_terminal_positions_world[i];
                 const auto& tangent = g.terminal_tangent_lines[i].representative;
