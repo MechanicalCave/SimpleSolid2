@@ -16,7 +16,7 @@
 
 **Important distinction:** an Edge may have two current native physical terminal positions, but these two points are **transient geometry data** only. They are NOT a durable `End0/End1` ID and their order from OCCT must never become a semantic source address. Q1 alone decides separately proven Edge-local terminal provenance.
 
-## 2. Proposed public boundary — exact interface principle, signatures pending Owner D2 acceptance
+## 2. Owner-accepted exact 3D interface design — conceptual source alongside accepted §2E text
 
 New standalone `kernel::IExactBoundedEdgeGeometryQuery` (working interface name) in one new neutral header. Keep `ISolidModelingKernel`, existing `IEdgeProjectionQuery` in `edge_projection.hpp` and `IFaceBoundaryQuery` behavior **source-compatible**; no new pure virtual methods on the old base. Production OCCT provider implements the new interface as an additional base, with no OCCT types exposed to callers.
 
@@ -222,7 +222,7 @@ B. **OWNER-ACCEPTED PROVISIONALLY:** E1a-P calls the **same Q0-specific** produc
 
 C. **STILL OPEN:** final exact C++ declarations (including fully defined scoped class and distinct collision-free method names), optional result and sign-invariant tangent implementation, complete six exact production/native-test/DOC-01 writable paths and documented scope feasibility. §2C acceptance did NOT approve the executable contract, specific PR merge or ACTIVE switch.
 
-## 2D. Source-verified final C++ header feasibility — PREPARATION, not accepted executable contract
+## 2D. Owner-accepted scoped Edge interface direction — historical pre-acceptance feasibility audit
 
 **Read-only C++ issue:** the §2A illustrative `class ScopedExactEdge;` declaration alone is NOT a final complete definition. The real existing `edge_projection.hpp` defines a **complete** `ScopedProjectionEdge` value, with default-invalid state, private `RuntimeSolidHandle`+token constructor, friend query interface and protected factory, **before** it returns `std::optional<ScopedProjectionEdge>`. The proposed new neutral `std::optional<ScopedExactEdge>` similarly needs a *complete* scoped type, proper public `valid()/sourceBody()/edge()`, private constructor and a factory accessible only to the new query interface. Do not implement a merely forward-declared class as a finished return-value API.
 
@@ -232,11 +232,11 @@ C. **STILL OPEN:** final exact C++ declarations (including fully defined scoped 
 - `ExactBoundedEdge3d` contains `std::array<Point3,2>` paired native transient terminal positions and `UnorientedUnitTangent3` representatives for each END plus MID. All unit-tangent comparisons must be **sign-insensitive**; the representative's sign is NOT a persistent Frame3 or P4 preview choice. Include the necessary standard headers (`<array>`, `<optional>`, `<utility>`) explicitly.
 - Only one new neutral header is proposed and can be exposed through already existing PUBLIC kernel include directory; existing OCCT .cpp and header must implement the additional interface without CMake/CI/source growth. This is **source inspected, not compiled or tested**. If the exact C++ design cannot be implemented inside six prospective allowed files, STOP for Owner D2 amendment.
 
-**Remaining independent Owner decision:** §2D interface direction and six exact proposed future source/test/docs paths were accepted by Owner **FOR CONTRACT PREPARATION ONLY**. The complete exact-header proposal and integrated executable Q0 Work Contract text still need **independent exact-text acceptance**. Do NOT mark PR #352 Ready just because §2C/§2D directions were accepted; PR-specific exact-HEAD squash merge and dedicated ACTIVE activation remain separate and future.
+**§2D decision now satisfied as full accepted text scope:** Owner accepted §2D scoped Edge direction and six precise prospective code/test/DOC-01 paths as a design gate, then accepted the entire integrated Work Contract including §2E at reviewed PR #352 HEAD `38a8e2e8b6f99c5bf2961f0769488c2c901a8519`. These past-tense proposal notes are preserved as provenance, not grounds for another textual sign-off. No PR merge/ACTIVE authority or compiler/native proof follows.
 
 ## 2E. Owner-accepted exact C++ neutral-header contract text — NOT COMPILED / NOT ACTIVE
 
-This *illustrative complete declaration set* supersedes the incomplete `class ScopedExactEdge;` shorthand in §2A for final interface review. The Owner accepted §2D's **direction** and the six future file paths as a proposed bounded scope, **not this specific API text or the full Work Contract as executable**.
+The following **exact §2E text was Owner-accepted as prospective executable contract scope**, but is **NOT compiled, merged or activated**. It supersedes
 
 ```cpp
 // PROPOSAL ONLY: src/kernel/include/simplesolid2/kernel/exact_bounded_edge_geometry.hpp
@@ -340,7 +340,7 @@ public:
 - Every unsuccessful query returns no geometry, source/Body ownership is current-generation only, and the shared **E1a** guard controls all native exceptions. The direct new-Q0 `Standard_Failure` case remains `NOT DIRECTLY TESTED` unless later actual evidence is obtained; old 2D injection evidence cannot count.
 - This is a **source-grounded declaration proposal, not an actual compiled header**. The six paths remain exactly the accepted prospective set from §3. New Q0 native FOCUSED/FAST/FULL, E1a and N1a measurements, link feasibility and current DOC-01 as-built update are all **NOT RUN**; these occur only after separately approved executable contract merge and ACTIVE activation.
 
-**Next Owner gate is NOT another text sign-off:** Owner accepted §2E exactly as a contract to implement AFTER separately merged activation, notwithstanding pre-existing proposal-era notes. This accepted complete text still requires a separate exact-head PR #352 squash merge decision and a dedicated Owner-authorized and merged Q0 ACTIVE switch. No Q0 source/tests/docs-as-built edits before those independent gates. Earlier phrase “separately accept/revise this exact header proposal”
+**Next Owner gate is NOT another text sign-off:** Owner accepted §2E and the integrated six-file Q0 Work Contract as future scoped execution text. Request only **independent exact-HEAD PR #352 squash merge consent** after Ready and governance checks; a separate approved/merged dedicated Q0 ACTIVE switch must precede ALL code/native tests/as-built edits.
 
 ## 3. Six Owner-accepted prospective future source/test/docs paths — executable Work Contract and ACTIVE still gated
 
@@ -377,7 +377,7 @@ public:
 
 ## 5. Decision chain and hard STOP
 
-**Owner subsequently accepted the COMPLETE INTEGRATED §2E/Q0 Work Contract as prospective executable scope, with §2C test criteria provisional/unrun, on 2026-10-13. Earlier §2A approval was in principle only.
+**Owner subsequently accepted the COMPLETE INTEGRATED §2E/Q0 Work Contract as prospective executable scope, with §2C test criteria provisional/unrun, on 2026-10-13. Earlier §2A, §2C and §2D design gates led to this separate full-text sign-off. No product or native test results exist.**
 
 1. **DONE — full contract TEXT scope accepted by Owner, NOT ACTIVE:** exact §2E API and integrated six-file Q0 contract accepted at original PR #352 head `38a8e2e8b6f99c5bf2961f0769488c2c901a8519` in addition to prior §2C/§2D design approvals. PR #351 planning stays OPEN/DRAFT/UNMERGED; no new native Q0 tests run.
 2. **PENDING distinct PR governance:** reflect Owner exact-text acceptance in this one work-only file; verify fresh exact-head Windows closure and mark PR #352 Ready for Review. This is NOT automatic merge or `ACTIVE.yaml` activation. Preserve the accepted testable provisional N1a/E1a hypotheses and STOP for any required scope addition.
@@ -394,4 +394,4 @@ Internal docs: required
 User/Product docs: not required  
 Reason: **If separately accepted and activated**, Q0 adds a new provider-neutral exact 3D Kernel query boundary, runtime ownership/generation and typed failure semantics; therefore it requires the exact existing `docs/internal/PART_EDGE_PROJECTION_KERNEL.md` current-state update under DOC-01. No user-visible Datum feature, new command, UI, persistence or Product Browser is changed within Q0; paired PL/EN Product updates are deferred to independently approved Q2+ implementation. Documentation verification and as-built current-state accuracy are completion gates, not optional append-only history.
 
-**Next distinct Owner decision: separately authorize squash merge of PR #352 on the verified Ready-for-Review exact HEAD; do NOT re-ask for acceptance of already approved complete Work Contract text. Then, only after actual merge, request a distinct Owner-approved/merged dedicated `ACTIVE.yaml` Q0 activation. No current code mutation is authorized. Prior proposed “accept/revise the COMPLETE exact C++ header” question was answered by Owner on 2026-10-13.
+**Next distinct Owner decision:** grant/decline a **separate exact-head squash merge authorization for PR #352** after confirmed Ready-for-Review governance. The Owner already approved the full Work Contract text; DO NOT infer merge permission. After actual merger only, request a **new independent scope and squash-merge authorization** for the minimal Q0 `work/ACTIVE.yaml` activation; no code mutation beforehand.
