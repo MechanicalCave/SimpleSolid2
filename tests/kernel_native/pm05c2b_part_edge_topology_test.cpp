@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -1199,6 +1200,59 @@ private:
     kernel::IExactBoundedEdgeGeometryQuery& delegate_;
     kernel::RuntimeSolidHandle foreign_body_;
     kernel::RuntimeEdgeToken foreign_edge_;
+};
+
+// Q2-M06: inject native provider failure and malformed exact MID payload.
+// A rejected MID never leaks a current Edge or geometry observation.
+class Q2BadMidQuery final :
+    public kernel::IExactBoundedEdgeGeometryQuery {
+public:
+    enum class Failure {
+        kernel_failure,
+        nonfinite_mid,
+        zero_tangent,
+        zero_length,
+    };
+    Q2BadMidQuery(
+        kernel::IExactBoundedEdgeGeometryQuery& delegate,
+        Failure failure)
+        : delegate_{delegate}, failure_{failure} {}
+
+    [[nodiscard]] std::optional<kernel::ScopedExactEdge>
+    bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle body,
+        kernel::RuntimeEdgeToken edge) noexcept override {
+        return delegate_.bindExactEdgeToBody(std::move(body), edge);
+    }
+
+    [[nodiscard]] kernel::ExactEdge3dResult queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedExactEdge& edge) noexcept override {
+        auto current = delegate_.queryExactBoundedEdge3d(
+            std::move(body), edge);
+        if (!current.ok()) return current;
+        switch (failure_) {
+        case Failure::kernel_failure:
+            current.geometry.reset();
+            current.status = kernel::ExactEdge3dStatus::kernel_failure;
+            break;
+        case Failure::nonfinite_mid:
+            current.geometry->midpoint_at_half_bounded_length_world.x =
+                std::numeric_limits<double>::infinity();
+            break;
+        case Failure::zero_tangent:
+            current.geometry->midpoint_tangent_line.representative =
+                {0.0, 0.0, 0.0};
+            break;
+        case Failure::zero_length:
+            current.geometry->bounded_length_mm = 0.0;
+            break;
+        }
+        return current;
+    }
+private:
+    kernel::IExactBoundedEdgeGeometryQuery& delegate_;
+    Failure failure_;
 };
 
 // Q1-06: real Fillet/Chamfer generated Vertices remain globally
