@@ -1514,6 +1514,45 @@ void verifyQ1RealHalfCylinderAndRevolve(
         }
     }
     CHECK(ambiguous_point_addresses == 2U);
+    // Q2-M07: MID requires strict Edge+exact Q0 evidence, not a terminal
+    // Point. These real ambiguous global Points must remain unchanged.
+    std::size_t q2_checked_edges = 0U;
+    for (const auto& edge : cat.edges) {
+        const auto strict = part::authorMaterialEdgeReference(
+            cat, edge.runtime_token);
+        const auto candidate = part::authorSelectedMaterialEdgeMid(
+            half_document, half_evaluation, cat.stage,
+            edge.runtime_token, kernel);
+        if (strict.ok()) {
+            const auto bound = kernel.bindExactEdgeToBody(
+                half_evaluation.features.back().result_solid,
+                edge.runtime_token);
+            const auto exact = bound
+                ? kernel.queryExactBoundedEdge3d(
+                    half_evaluation.features.back().result_solid, *bound)
+                : kernel::ExactEdge3dResult{};
+            if (exact.ok()) {
+                CHECK(candidate.ok());
+                const auto replay = part::resolveSelectedMaterialEdgeMid(
+                    half_document, *candidate.reference,
+                    half_evaluation, kernel);
+                CHECK(replay.resolved());
+            } else {
+                CHECK(!candidate.ok());
+                CHECK(!candidate.reference);
+            }
+        } else {
+            CHECK(!candidate.ok());
+            CHECK(!candidate.reference);
+        }
+        ++q2_checked_edges;
+    }
+    CHECK(q2_checked_edges == cat.edges.size());
+    for (const auto& point : cat.points) {
+        if (point.status == kernel::ReferenceStatus::ambiguous) {
+            CHECK(point.candidate_vertex_count > 1U);
+        }
+    }
     std::cout << "RG02B1_Q1_REAL_HALF_CYLINDER"
               << " ambiguous_vertices=" << real_ambiguous
               << " unsupported_vertices=" << real_unsupported
@@ -1577,6 +1616,49 @@ void verifyQ1RealHalfCylinderAndRevolve(
     }
     CHECK(line_terminal_uses >= 2U);
     CHECK(arc_terminal_uses >= 2U);
+    // Q2-M02/M07: actual Part Revolve open circular Arc MIDs use
+    // the strict Edge source alone, without choosing an END/Vertex.
+    std::size_t q2_arc_mids = 0U;
+    std::size_t q2_line_mids = 0U;
+    for (const auto& edge : revolved.edges) {
+        const auto mid = part::authorSelectedMaterialEdgeMid(
+            partial, partial_eval, revolved.stage,
+            edge.runtime_token, kernel);
+        if (!mid.ok()) {
+            CHECK(mid.status != part::SelectedEdgeMidStatus::resolved);
+            continue;
+        }
+        const auto current = part::resolveSelectedMaterialEdgeMid(
+            partial, *mid.reference, partial_eval, kernel);
+        CHECK(current.resolved());
+        CHECK(current.current_edge == edge.runtime_token);
+        const auto bound = kernel.bindExactEdgeToBody(
+            partial_eval.features.front().result_solid,
+            edge.runtime_token);
+        CHECK(bound);
+        const auto exact = kernel.queryExactBoundedEdge3d(
+            partial_eval.features.front().result_solid, *bound);
+        CHECK(exact.ok());
+        CHECK(std::abs(
+            current.current_position_world->x -
+            exact.geometry->midpoint_at_half_bounded_length_world.x) <
+            1.0e-9);
+        if (edge.curve_kind == kernel::CurveKind::circle) {
+            CHECK(exact.geometry->kind ==
+                  kernel::ExactEdge3dKind::open_circular_arc);
+            ++q2_arc_mids;
+        } else if (edge.curve_kind == kernel::CurveKind::line) {
+            ++q2_line_mids;
+        } else {
+            CHECK(false);
+        }
+    }
+    CHECK(q2_line_mids >= 1U);
+    CHECK(q2_arc_mids >= 1U);
+    std::cout << "RG02B1_Q2_REAL_REVOLVE_MID"
+              << " supported_line_mids=" << q2_line_mids
+              << " supported_arc_mids=" << q2_arc_mids
+              << " new_global_points=0\n";
     std::cout << "RG02B1_Q1_REAL_PARTIAL_REVOLVE"
               << " certified_line_end_uses=" << line_terminal_uses
               << " certified_arc_end_uses=" << arc_terminal_uses
