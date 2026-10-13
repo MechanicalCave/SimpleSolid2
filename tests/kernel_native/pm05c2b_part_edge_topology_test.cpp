@@ -1473,6 +1473,9 @@ void verifyQ1RealHalfCylinderAndRevolve(
 int main() {
     kernel_occt::OcctSolidModelingKernel kernel;
 
+    // Q1-06: independent real Part/OCCT negative and Revolve witnesses.
+    verifyQ1RealHalfCylinderAndRevolve(kernel);
+
     auto base_document =
         makeBasePart();
     const auto base_evaluation =
