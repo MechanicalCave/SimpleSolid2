@@ -37,6 +37,7 @@
 #include <fstream>
 #include <limits>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <string>
@@ -123,10 +124,24 @@ void check(bool ok, const char* expression, int line) {
 loadOwnerFixtureV2ForTest(
     const part::PartDocumentStore& store,
     const std::filesystem::path& source) {
+    // PG-01E/E2: these are ORIGINAL Owner-provided modeling-v1
+    // regression files. Verify exact bytes around the production
+    // typed refusal AND the separate test-only temporary v2 package.
+    // No in-place migration, schema repair or write-back is legal.
+    const auto sourceBytes = [&source]() {
+        std::ifstream in{source, std::ios::binary};
+        CHECK(static_cast<bool>(in));
+        return std::string{
+            std::istreambuf_iterator<char>{in},
+            std::istreambuf_iterator<char>{}};
+    };
+    const auto original_bytes = sourceBytes();
+    CHECK(!original_bytes.empty());
     const auto rejected = store.load(source);
     CHECK(!rejected.ok());
     CHECK(rejected.diagnostic.code ==
           part::PartStoreErrorCode::unsupported_modeling_semantics);
+    CHECK(sourceBytes() == original_bytes);
     const auto native =
         persistence::readNativeDocumentContainer(source);
     CHECK(native.ok());
@@ -166,6 +181,7 @@ loadOwnerFixtureV2ForTest(
     CHECK(loaded.ok());
     CHECK(loaded.document->modelingSemanticsVersion() ==
           part::current_modeling_semantics_version);
+    CHECK(sourceBytes() == original_bytes);
     return loaded;
 }
 
@@ -3553,6 +3569,111 @@ int main(int argc, char* argv[]) {
                 }
             }
             CHECK(full_face_region);
+
+            // PG-01E/E1-A+B: the SAME native Viewer-acquired mixed
+            // manual Edge + bounded Planar Face links (4 Lines + 2
+            // hole Circles) must drive a real downstream Feature.
+            // The prior PG-01D check stopped after a cold Sketch
+            // projection, without a linked Profile/Feature consumer.
+            const auto region_with_holes = std::find_if(
+                cold_regions.regions.begin(),
+                cold_regions.regions.end(),
+                [](const auto& region) {
+                    return region.holes.size() == 2U;
+                });
+            CHECK(region_with_holes != cold_regions.regions.end());
+            const auto derived_face_intent =
+                part::makeProfileRegionIntent(*region_with_holes);
+            CHECK(derived_face_intent);
+            auto downstream_copy = part::PartDocument::restore(
+                loaded.document->documentId(),
+                loaded.document->state());
+            CHECK(downstream_copy.ok());
+            application::DocumentSession linked_face_session{
+                {}, std::move(*downstream_copy.document)};
+            const auto projected_profile = linked_face_session.execute(
+                application::CreateProfileCommand{
+                    *holed_target.sketch_id,
+                    linked_face_session.document().revision(),
+                    *derived_face_intent},
+                cold_kernel);
+            CHECK(projected_profile.ok() &&
+                  projected_profile.profile_id);
+            const auto dependent_add = linked_face_session.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *projected_profile.profile_id,
+                    linked_face_session.document().revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{23.0}, false},
+                    "PG-01E Native Face-Linked Add"},
+                cold_kernel);
+            CHECK(dependent_add.ok() && dependent_add.feature_id);
+            const auto linked_face_evaluation =
+                part::evaluatePart(
+                    linked_face_session.document(), cold_kernel);
+            CHECK(linked_face_evaluation.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto* linked_face_feature =
+                linked_face_evaluation.findFeature(
+                    *dependent_add.feature_id);
+            CHECK(linked_face_feature &&
+                  linked_face_feature->status ==
+                      part::FeatureEvaluationStatus::up_to_date);
+            const auto downstream_file =
+                std::filesystem::path{
+                    holed_store_dir.path().toStdWString()} /
+                "PG01ENativeFaceLinkedAdd.ss2part";
+            CHECK(store.createNew(
+                downstream_file, linked_face_session.document()).ok());
+            const auto downstream_loaded = store.load(downstream_file);
+            CHECK(downstream_loaded.ok() &&
+                  downstream_loaded.document);
+            CHECK(downstream_loaded.document->state() ==
+                  linked_face_session.document().state());
+            CHECK(downstream_loaded.document->findProfile(
+                *projected_profile.profile_id));
+            CHECK(downstream_loaded.document->findFeature(
+                *dependent_add.feature_id));
+            const auto* downstream_sketch =
+                downstream_loaded.document->findSketch(
+                    *holed_target.sketch_id);
+            CHECK(downstream_sketch &&
+                  downstream_sketch->projection_bindings.size() == 6U);
+            kernel_occt::OcctSolidModelingKernel downstream_fresh_kernel;
+            const auto downstream_evaluation = part::evaluatePart(
+                *downstream_loaded.document, downstream_fresh_kernel);
+            CHECK(downstream_evaluation.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto* downstream_feature =
+                downstream_evaluation.findFeature(
+                    *dependent_add.feature_id);
+            CHECK(downstream_feature &&
+                  downstream_feature->status ==
+                      part::FeatureEvaluationStatus::up_to_date);
+            CHECK(downstream_feature->result_solid);
+            const auto downstream_projection =
+                part::evaluateEffectiveSketchProjection(
+                    *downstream_loaded.document,
+                    *holed_target.sketch_id,
+                    downstream_evaluation,
+                    downstream_fresh_kernel,
+                    *dependent_add.feature_id);
+            CHECK(downstream_projection &&
+                  downstream_projection->allResolved());
+            CHECK(downstream_projection->model.state().lines.size() ==
+                  4U);
+            CHECK(downstream_projection->model.state().circles.size() ==
+                  2U);
+            CHECK(downstream_projection->outcomes.size() == 6U);
+            std::cout << "PG01E_E1_FACE_LINKED_CONSUMER_COLD_PASS"
+                      << " real_occt=1"
+                      << " mixed_manual_planar_face_dedup=1"
+                      << " outer_lines=4"
+                      << " hole_circles=2"
+                      << " stable_profile_and_feature_ids=1"
+                      << " independent_provider_cold_reopen=1\\n";
+
             std::cout << "PG01D_D3_NATIVE_TWO_HOLE_COLD_PASS"
                       << " outer=4"
                       << " inner=2"
@@ -4291,6 +4412,479 @@ int main(int argc, char* argv[]) {
             CHECK(cold_manual_projection->model.state().lines.size() ==
                   5U);
             CHECK(cold_manual_projection->model.state().circles.empty());
+
+            // PG-01E/E1-C: two *manually* picked bounded Faces can
+            // produce five independent strict Edge links whose planar
+            // images overlap. A region must NOT be silently healed by
+            // treating equal coordinates as equal material identity.
+            // A human-authorized explicit Sketch Erase (existing
+            // Command) of ONE precisely identified collocated target
+            // is an allowed repair; the other four strict linked
+            // EntityIds and material sources must survive.
+            const auto unedited_regions =
+                sketch::analyzeRegions(cold_manual_projection->model);
+            CHECK(unedited_regions.regions.empty());
+            CHECK(!unedited_regions.complete());
+            const auto five_lines =
+                cold_manual_projection->model.state().lines;
+            CHECK(five_lines.size() == 5U);
+            const auto point_same = [](sketch::Point2 a,
+                                       sketch::Point2 b) {
+                return std::abs(a.u - b.u) < 1.0e-7 &&
+                       std::abs(a.v - b.v) < 1.0e-7;
+            };
+            std::optional<sketch::EntityId> explicit_erase_id;
+            std::optional<sketch::EntityId> other_overlap_id;
+            std::size_t overlapping_pairs = 0U;
+            for (std::size_t first = 0U;
+                 first < five_lines.size(); ++first) {
+                for (std::size_t second = first + 1U;
+                     second < five_lines.size(); ++second) {
+                    const auto& a = five_lines[first];
+                    const auto& b = five_lines[second];
+                    if ((point_same(a.start, b.start) &&
+                         point_same(a.end, b.end)) ||
+                        (point_same(a.start, b.end) &&
+                         point_same(a.end, b.start))) {
+                        ++overlapping_pairs;
+                        explicit_erase_id = b.id;
+                        other_overlap_id = a.id;
+                    }
+                }
+            }
+            CHECK(overlapping_pairs == 1U);
+            CHECK(explicit_erase_id && other_overlap_id);
+            const auto& original_links =
+                cold_saved->projection_bindings;
+            const auto erase_source = std::find_if(
+                original_links.begin(), original_links.end(),
+                [&explicit_erase_id](const auto& link) {
+                    return link.target_entity == *explicit_erase_id;
+                });
+            const auto preserved_source = std::find_if(
+                original_links.begin(), original_links.end(),
+                [&other_overlap_id](const auto& link) {
+                    return link.target_entity == *other_overlap_id;
+                });
+            CHECK(erase_source != original_links.end());
+            CHECK(preserved_source != original_links.end());
+            CHECK(erase_source->source != preserved_source->source);
+
+            auto repaired_copy = part::PartDocument::restore(
+                manual_loaded.document->documentId(),
+                manual_loaded.document->state());
+            CHECK(repaired_copy.ok());
+            application::DocumentSession repaired_manual{
+                {}, std::move(*repaired_copy.document)};
+            const auto delete_one = repaired_manual.execute(
+                application::EraseSketchEntityCommand{
+                    *manual_target.sketch_id, *explicit_erase_id});
+            CHECK(delete_one.ok() && delete_one.changed);
+            const auto* repaired_sketch =
+                repaired_manual.document().findSketch(
+                    *manual_target.sketch_id);
+            CHECK(repaired_sketch &&
+                  repaired_sketch->projection_bindings.size() == 4U);
+            CHECK(repaired_sketch->model.entityCount() == 4U);
+            CHECK(!repaired_sketch->model.contains(*explicit_erase_id));
+            CHECK(repaired_sketch->model.contains(*other_overlap_id));
+            CHECK(std::none_of(
+                repaired_sketch->projection_bindings.begin(),
+                repaired_sketch->projection_bindings.end(),
+                [&explicit_erase_id](const auto& link) {
+                    return link.target_entity == *explicit_erase_id;
+                }));
+            // New provider, not a cached upstream Face token or seed.
+            kernel_occt::OcctSolidModelingKernel repair_provider;
+            const auto repaired_body = part::evaluatePart(
+                repaired_manual.document(), repair_provider);
+            CHECK(repaired_body.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto repaired_projection =
+                part::evaluateEffectiveSketchProjection(
+                    repaired_manual.document(),
+                    *manual_target.sketch_id,
+                    repaired_body, repair_provider);
+            CHECK(repaired_projection &&
+                  repaired_projection->allResolved());
+            CHECK(repaired_projection->outcomes.size() == 4U);
+            const auto repaired_regions =
+                sketch::analyzeRegions(repaired_projection->model);
+            CHECK(repaired_regions.complete());
+            CHECK(repaired_regions.regions.size() == 1U);
+            const auto repaired_intent = part::makeProfileRegionIntent(
+                repaired_regions.regions.front());
+            CHECK(repaired_intent);
+            const auto repaired_profile = repaired_manual.execute(
+                application::CreateProfileCommand{
+                    *manual_target.sketch_id,
+                    repaired_manual.document().revision(),
+                    *repaired_intent},
+                repair_provider);
+            CHECK(repaired_profile.ok() &&
+                  repaired_profile.profile_id);
+            const auto repaired_add = repaired_manual.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *repaired_profile.profile_id,
+                    repaired_manual.document().revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{25.0}, false},
+                    "PG-01E Explicit Multi-Face Repair Add"},
+                repair_provider);
+            CHECK(repaired_add.ok() && repaired_add.feature_id);
+            const auto multi_feature = part::evaluatePart(
+                repaired_manual.document(), repair_provider);
+            CHECK(multi_feature.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto* accepted_multi_feature =
+                multi_feature.findFeature(*repaired_add.feature_id);
+            CHECK(accepted_multi_feature &&
+                  accepted_multi_feature->status ==
+                      part::FeatureEvaluationStatus::up_to_date);
+            // End-to-end Save/Close/Reopen: original five distinct
+            // material IDs were not silently rebound; only the
+            // explicitly erased ID and its binding were removed.
+            const std::filesystem::path multi_path =
+                std::filesystem::path{
+                    manual_store_dir.path().toStdWString()} /
+                "PG01EManualMultiFaceRepaired.ss2part";
+            CHECK(manual_store.createNew(
+                multi_path, repaired_manual.document()).ok());
+            const auto multi_reopened = manual_store.load(multi_path);
+            CHECK(multi_reopened.ok() && multi_reopened.document);
+            CHECK(multi_reopened.document->state() ==
+                  repaired_manual.document().state());
+            CHECK(multi_reopened.document->findProfile(
+                *repaired_profile.profile_id));
+            CHECK(multi_reopened.document->findFeature(
+                *repaired_add.feature_id));
+            kernel_occt::OcctSolidModelingKernel multi_fresh_provider;
+            const auto multi_cold_body = part::evaluatePart(
+                *multi_reopened.document, multi_fresh_provider);
+            CHECK(multi_cold_body.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(multi_cold_body.findFeature(
+                *repaired_add.feature_id)->status ==
+                part::FeatureEvaluationStatus::up_to_date);
+            const auto multi_cold_projection =
+                part::evaluateEffectiveSketchProjection(
+                    *multi_reopened.document,
+                    *manual_target.sketch_id,
+                    multi_cold_body,
+                    multi_fresh_provider,
+                    *repaired_add.feature_id);
+            CHECK(multi_cold_projection &&
+                  multi_cold_projection->allResolved());
+            CHECK(multi_cold_projection->outcomes.size() == 4U);
+            CHECK(multi_cold_projection->model.entityCount() == 4U);
+            CHECK(multi_reopened.document->modelingSemanticsVersion() ==
+                  part::current_modeling_semantics_version);
+
+            // PG-01E/E1-C: batch Break Link on two of the remaining
+            // four strictly identified manual multi-Face source Edges.
+            // A suppressed earlier material source must refuse the
+            // WHOLE batch without detaching any target or consuming
+            // the old authored 2D seed. The accepted positive branch
+            // must detach both atomically in one Undo/Redo transaction.
+            const auto* multi_linked_sketch =
+                multi_reopened.document->findSketch(
+                    *manual_target.sketch_id);
+            CHECK(multi_linked_sketch &&
+                  multi_linked_sketch->projection_bindings.size() == 4U);
+            const auto pair_first =
+                multi_linked_sketch->projection_bindings.at(0)
+                    .target_entity;
+            const auto pair_second =
+                multi_linked_sketch->projection_bindings.at(1)
+                    .target_entity;
+            CHECK(pair_first != pair_second);
+            auto broken_multi_state =
+                multi_reopened.document->state();
+            CHECK(!broken_multi_state.body.features.empty());
+            broken_multi_state.body.features.front().suppressed = true;
+            auto broken_multi_document =
+                part::PartDocument::restore(
+                    multi_reopened.document->documentId(),
+                    std::move(broken_multi_state));
+            CHECK(broken_multi_document.ok());
+            application::DocumentSession broken_multi_session{
+                {}, std::move(*broken_multi_document.document)};
+            const auto before_refusal =
+                broken_multi_session.document().state();
+            const auto before_refusal_revision =
+                broken_multi_session.document().revision();
+            const auto before_refusal_undo =
+                broken_multi_session.undoDepth();
+            kernel_occt::OcctSolidModelingKernel
+                suppressed_material_provider;
+            const auto denied_batch = broken_multi_session.execute(
+                application::BreakProjectedEdgeLinksCommand{
+                    *manual_target.sketch_id,
+                    {pair_first, pair_second},
+                    before_refusal_revision},
+                suppressed_material_provider);
+            CHECK(!denied_batch.ok() && !denied_batch.changed);
+            CHECK(denied_batch.status ==
+                  application::BreakProjectedEdgeLinkStatus::
+                      source_unavailable);
+            CHECK(broken_multi_session.document().state() ==
+                  before_refusal);
+            CHECK(broken_multi_session.document().revision() ==
+                  before_refusal_revision);
+            CHECK(broken_multi_session.undoDepth() ==
+                  before_refusal_undo);
+            CHECK(broken_multi_session.document()
+                  .findSketch(*manual_target.sketch_id)
+                  ->projection_bindings.size() == 4U);
+
+            auto valid_multi_document =
+                part::PartDocument::restore(
+                    multi_reopened.document->documentId(),
+                    multi_reopened.document->state());
+            CHECK(valid_multi_document.ok());
+            application::DocumentSession detachable_multi_session{
+                {}, std::move(*valid_multi_document.document)};
+            const auto before_detach =
+                detachable_multi_session.document().state();
+            const auto before_detach_undo =
+                detachable_multi_session.undoDepth();
+            kernel_occt::OcctSolidModelingKernel
+                material_detach_provider;
+            const auto detached_pair = detachable_multi_session.execute(
+                application::BreakProjectedEdgeLinksCommand{
+                    *manual_target.sketch_id,
+                    {pair_first, pair_second},
+                    detachable_multi_session.document().revision()},
+                material_detach_provider);
+            CHECK(detached_pair.ok());
+            CHECK(detachable_multi_session.undoDepth() ==
+                  before_detach_undo + 1U);
+            CHECK(detachable_multi_session.document()
+                  .findSketch(*manual_target.sketch_id)
+                  ->projection_bindings.size() == 2U);
+            // Explicit two-target detach must materialize precisely
+            // the CURRENT projected curves, not retained stale seeds.
+            // The two remaining linked targets must still name their
+            // unchanged original material Edge semantic sources.
+            const auto* pair_detached_sketch =
+                detachable_multi_session.document().findSketch(
+                    *manual_target.sketch_id);
+            CHECK(pair_detached_sketch &&
+                  pair_detached_sketch->projection_bindings.size() == 2U);
+            for (const auto id : {pair_first, pair_second}) {
+                CHECK(std::none_of(
+                    pair_detached_sketch->projection_bindings.begin(),
+                    pair_detached_sketch->projection_bindings.end(),
+                    [id](const auto& binding) {
+                        return binding.target_entity == id;
+                    }));
+                const auto* detached_line =
+                    pair_detached_sketch->model.findLine(id);
+                const auto* current_line =
+                    multi_cold_projection->model.findLine(id);
+                CHECK(detached_line && current_line);
+                CHECK(point_same(
+                    detached_line->start(), current_line->start()));
+                CHECK(point_same(
+                    detached_line->end(), current_line->end()));
+            }
+            for (const auto& binding :
+                 pair_detached_sketch->projection_bindings) {
+                const auto original_binding = std::find_if(
+                    multi_linked_sketch->projection_bindings.begin(),
+                    multi_linked_sketch->projection_bindings.end(),
+                    [&binding](const auto& candidate) {
+                        return candidate.target_entity ==
+                               binding.target_entity;
+                    });
+                CHECK(original_binding !=
+                      multi_linked_sketch->projection_bindings.end());
+                CHECK(original_binding->source == binding.source);
+                CHECK(binding.target_entity != pair_first);
+                CHECK(binding.target_entity != pair_second);
+            }
+            CHECK(detachable_multi_session.undo().changed);
+            CHECK(detachable_multi_session.document().state() ==
+                  before_detach);
+            CHECK(detachable_multi_session.redo().changed);
+            CHECK(detachable_multi_session.document()
+                  .findSketch(*manual_target.sketch_id)
+                  ->projection_bindings.size() == 2U);
+            const auto after_detach_eval = part::evaluatePart(
+                detachable_multi_session.document(),
+                material_detach_provider);
+            CHECK(after_detach_eval.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(after_detach_eval.findFeature(
+                *repaired_add.feature_id)->status ==
+                  part::FeatureEvaluationStatus::up_to_date);
+            std::cout
+                << "PG01E_E1_MULTI_FACE_BATCH_BREAK_FAIL_CLOSED_PASS"
+                << " original_material_links=4"
+                << " suppressed_source_batch_refused=1"
+                << " state_revision_undo_unchanged=1"
+                << " positive_pair_atomic=1"
+                << " one_undo_redo=1"
+                << " unaffected_linked_feature_current=1\n";
+
+            // PG-01E/E3 Windows observation on a REAL repaired
+            // two-Face Part/Feature/linked Profile: each iteration
+            // independently loads the SAME immutable native document
+            // and builds a FRESH OCCT provider. Do not infer no leak
+            // from this small bounded sampling window.
+            constexpr std::size_t e3_warmup = 2U;
+            constexpr std::size_t e3_measured = 8U;
+            const auto e3_native_bytes =
+                std::filesystem::file_size(multi_path);
+            const auto e3_private_before =
+                currentProcessPrivateBytes();
+            std::vector<long long> e3_elapsed_microseconds;
+            std::vector<std::optional<std::uint64_t>>
+                e3_private_samples;
+            e3_elapsed_microseconds.reserve(e3_measured);
+            e3_private_samples.reserve(e3_measured);
+            for (std::size_t e3_cycle = 0U;
+                 e3_cycle < e3_warmup + e3_measured;
+                 ++e3_cycle) {
+                const auto started =
+                    std::chrono::steady_clock::now();
+                {
+                    const auto reloaded =
+                        manual_store.load(multi_path);
+                    CHECK(reloaded.ok() && reloaded.document);
+                    CHECK(reloaded.document->state() ==
+                          repaired_manual.document().state());
+                    kernel_occt::OcctSolidModelingKernel
+                        cycle_kernel;
+                    const auto cycle_body = part::evaluatePart(
+                        *reloaded.document, cycle_kernel);
+                    CHECK(cycle_body.body_status ==
+                          part::BodyEvaluationStatus::up_to_date);
+                    const auto* cycle_feature =
+                        cycle_body.findFeature(
+                            *repaired_add.feature_id);
+                    CHECK(cycle_feature &&
+                          cycle_feature->status ==
+                              part::FeatureEvaluationStatus::
+                                  up_to_date);
+                    const auto cycle_projection =
+                        part::evaluateEffectiveSketchProjection(
+                            *reloaded.document,
+                            *manual_target.sketch_id,
+                            cycle_body,
+                            cycle_kernel,
+                            *repaired_add.feature_id);
+                    CHECK(cycle_projection &&
+                          cycle_projection->allResolved());
+                    CHECK(cycle_projection->outcomes.size() == 4U);
+                    CHECK(cycle_projection->model.entityCount() ==
+                          4U);
+                }
+                const auto duration =
+                    std::chrono::duration_cast<
+                        std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() -
+                        started).count();
+                CHECK(duration >= 0);
+                CHECK(std::filesystem::file_size(multi_path) ==
+                      e3_native_bytes);
+                if (e3_cycle >= e3_warmup) {
+                    e3_elapsed_microseconds.push_back(duration);
+                    // Sample after the temporary kernel/provider
+                    // and loaded Part have left their scope.
+                    e3_private_samples.push_back(
+                        currentProcessPrivateBytes());
+                }
+            }
+            CHECK(e3_elapsed_microseconds.size() == e3_measured);
+            CHECK(e3_private_samples.size() == e3_measured);
+            const auto e3_extrema = std::minmax_element(
+                e3_elapsed_microseconds.begin(),
+                e3_elapsed_microseconds.end());
+            long long e3_sum = 0;
+            for (const auto duration : e3_elapsed_microseconds) {
+                e3_sum += duration;
+            }
+            const auto e3_private_after =
+                currentProcessPrivateBytes();
+            const auto format_bytes = [](
+                std::optional<std::uint64_t> value) {
+                return value
+                    ? std::to_string(*value)
+                    : std::string{"UNAVAILABLE"};
+            };
+            std::cerr
+                << "PG01E_E3_WINDOWS_MULTI_FACE_REPLAY"
+                << " warmup=" << e3_warmup
+                << " measured=" << e3_measured
+                << " min_us=" << *e3_extrema.first
+                << " mean_us=" << e3_sum /
+                    static_cast<long long>(e3_measured)
+                << " max_us=" << *e3_extrema.second
+                << " package_bytes=" << e3_native_bytes
+                << " private_before="
+                << format_bytes(e3_private_before)
+                << " private_after="
+                << format_bytes(e3_private_after)
+                << std::endl;
+            if (const char* summary_path =
+                    std::getenv("GITHUB_STEP_SUMMARY")) {
+                std::ofstream e3_summary{
+                    summary_path, std::ios::app};
+                if (e3_summary) {
+                    e3_summary
+                        << "\n### PG-01E/E3 native Qt/OCCT multi-Face "
+                        << "linked Feature cold replay\n"
+                        << "Real bounded two-Face input with explicit "
+                        << "overlap-target deletion; current Part v16/"
+                        << "modeling-v2 linked Profile + Extrude Add. "
+                        << "2 warm-up, 8 measured distinct native "
+                        << "file loads, fresh OCCT providers, and "
+                        << "post-teardown Windows private-byte samples."
+                        << " Not a memory SLA or leak proof.\n\n"
+                        << "| Metric | Observed |\n"
+                        << "| --- | ---: |\n"
+                        << "| min/mean/max cold replay (us) | "
+                        << *e3_extrema.first << " / "
+                        << e3_sum /
+                           static_cast<long long>(e3_measured)
+                        << " / " << *e3_extrema.second
+                        << " |\n"
+                        << "| native package bytes | "
+                        << e3_native_bytes << " (unchanged) |\n"
+                        << "| Windows private bytes before | "
+                        << format_bytes(e3_private_before)
+                        << " |\n"
+                        << "| Windows private bytes after | "
+                        << format_bytes(e3_private_after)
+                        << " |\n"
+                        << "| per-cycle private bytes (post teardown) | ";
+                    for (std::size_t m = 0U;
+                         m < e3_private_samples.size(); ++m) {
+                        if (m) e3_summary << ", ";
+                        e3_summary
+                            << format_bytes(e3_private_samples[m]);
+                    }
+                    e3_summary
+                        << " |\n"
+                        << "One bounded run only, with process-wide "
+                        << "memory affected by Qt, CTest and caches; "
+                        << "no comparative baseline, native handle "
+                        << "series, leak conclusion or budget claim.\n";
+                }
+            }
+            std::cout
+                << "PG01E_E1_MANUAL_MULTI_FACE_EXPLICIT_REPAIR_COLD_PASS"
+                << " two_native_faces=1"
+                << " supported_semantic_links_before=5"
+                << " overlapping_planar_pair=1"
+                << " erased_one_explicit_link=1"
+                << " repaired_linked_profile=1"
+                << " dependent_extrude_add=1"
+                << " fresh_occt_provider=1"
+                << " stable_profile_and_feature_ids=1\n";
+
             std::cout
                 << "PG01D_MANUAL_MULTI_FACE_NATIVE_COLD_V15_PASS"
                 << " unique_links=5"

@@ -6,10 +6,12 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <variant>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <string_view>
@@ -1338,6 +1340,206 @@ void verifyPg01bNativeDerivedProfileExtrude() {
               << " authored_seed_stale=1"
               << " preview_delta=1"
               << " source_unchanged=1\n";
+
+    // PG-01E/E1-B: previous PG-01B native Revolve test ended at
+    // preview. Commit the SAME linked Regular Profile as real OCCT
+    // Revolve Add and reconstruct it with a new independent provider.
+    const auto committed_revolve = revolve_session.execute(
+        application::CreateRevolveFeatureCommand{
+            *profile.profile_id,
+            part::AxisReference{
+                part::BuiltinOriginAxisReference{
+                    core::BuiltinReferenceRole::y_axis}},
+            revolve_session.document().revision(),
+            part::RevolveOperation::add,
+            part::OneSidedRevolveExtent{
+                core::AngleValue{1.5707963267948966}, false},
+            "PG-01E Native Linked Revolve"},
+        revolve_kernel);
+    CHECK(committed_revolve.ok() && committed_revolve.feature_id);
+    const auto revolve_feature_id = *committed_revolve.feature_id;
+    CHECK(revolve_session.document().findProfile(*profile.profile_id));
+    CHECK(revolve_session.document().findFeature(revolve_feature_id));
+    CHECK(revolve_session.document().findSketch(id)
+              ->projection_bindings.size() == 1U);
+    CHECK(revolve_session.document().findSketch(id)
+              ->model.findLine(*sourceLine.entity_id)
+              ->start().v == -8.0);
+    const auto committed_eval = part::evaluatePart(
+        revolve_session.document(), revolve_kernel);
+    CHECK(committed_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(committed_eval.findFeature(revolve_feature_id));
+    CHECK(committed_eval.findFeature(revolve_feature_id)->status ==
+          part::FeatureEvaluationStatus::up_to_date);
+
+    const auto revolve_file =
+        temp.path / "Pg01eNativeLinkedRevolve.ss2part";
+    part::PartDocumentStore revolve_store;
+    CHECK(revolve_store.createNew(
+              revolve_file, revolve_session.document()).ok());
+    const auto persisted_revolve = revolve_store.load(revolve_file);
+    CHECK(persisted_revolve.ok() && persisted_revolve.document);
+    CHECK(persisted_revolve.document->state() ==
+          revolve_session.document().state());
+    CHECK(persisted_revolve.document->modelingSemanticsVersion() ==
+          part::current_modeling_semantics_version);
+    const auto* saved_revolve_sketch =
+        persisted_revolve.document->findSketch(id);
+    CHECK(saved_revolve_sketch);
+    CHECK(saved_revolve_sketch->projection_bindings.size() == 1U);
+    CHECK(saved_revolve_sketch->projection_bindings.front().target_entity ==
+          *sourceLine.entity_id);
+    CHECK(saved_revolve_sketch->projection_bindings.front().source ==
+          *selected);
+    CHECK(saved_revolve_sketch->model.findLine(
+              *sourceLine.entity_id)->start().v == -8.0);
+    CHECK(persisted_revolve.document->findProfile(
+              *profile.profile_id));
+    CHECK(persisted_revolve.document->findFeature(revolve_feature_id));
+    CHECK(!persisted_revolve.document->evaluateProfile(
+          *profile.profile_id));
+
+    kernel_occt::OcctSolidModelingKernel cold_revolve_provider;
+    const auto cold_revolve_eval = part::evaluatePart(
+        *persisted_revolve.document, cold_revolve_provider);
+    CHECK(cold_revolve_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto* current_revolve =
+        cold_revolve_eval.findFeature(revolve_feature_id);
+    CHECK(current_revolve &&
+          current_revolve->status ==
+              part::FeatureEvaluationStatus::up_to_date);
+    CHECK(current_revolve->result_solid);
+    const auto cold_revolve_projection =
+        part::evaluateEffectiveSketchProjection(
+            *persisted_revolve.document, id,
+            cold_revolve_eval, cold_revolve_provider,
+            revolve_feature_id);
+    CHECK(cold_revolve_projection &&
+          cold_revolve_projection->allResolved());
+    const auto* cold_revolve_line =
+        cold_revolve_projection->model.findLine(
+            *sourceLine.entity_id);
+    CHECK(cold_revolve_line);
+    CHECK(close(cold_revolve_line->start().v, 0.0));
+    CHECK(close(cold_revolve_line->end().v, 0.0));
+    CHECK(saved_revolve_sketch->model.findLine(
+              *sourceLine.entity_id)->start().v == -8.0);
+    std::cout << "PG01E_E1_NATIVE_LINKED_REVOLVE_COLD_PASS"
+              << " exact_committed_revolve=1"
+              << " linked_entity_id_preserved=1"
+              << " profile_id_preserved=1"
+              << " revolve_feature_id_preserved=1"
+              << " fresh_occt_reprojection=1"
+              << " stale_authored_seed_rejected=1\n";
+
+    // PG-01E/E3: bounded repeatability probe, not a new product budget.
+    // Two warm-up iterations followed by eight measured independent
+    // disk loads and independent OCCT provider instances. Timer covers
+    // native load + Part evaluation + linked projection, excludes setup,
+    // and does not purport to measure OS working-set/handle counts.
+    constexpr std::size_t warmup_cycles = 2U;
+    constexpr std::size_t measured_cycles = 8U;
+    const auto immutable_native_bytes =
+        std::filesystem::file_size(revolve_file);
+    std::vector<long long> elapsed_microseconds;
+    elapsed_microseconds.reserve(measured_cycles);
+    for (std::size_t cycle = 0U;
+         cycle < warmup_cycles + measured_cycles; ++cycle) {
+        const auto started = std::chrono::steady_clock::now();
+        const auto cycle_loaded = revolve_store.load(revolve_file);
+        CHECK(cycle_loaded.ok() && cycle_loaded.document);
+        CHECK(cycle_loaded.document->state() ==
+              revolve_session.document().state());
+        kernel_occt::OcctSolidModelingKernel cycle_provider;
+        const auto cycle_eval = part::evaluatePart(
+            *cycle_loaded.document, cycle_provider);
+        CHECK(cycle_eval.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto* cycle_revolve =
+            cycle_eval.findFeature(revolve_feature_id);
+        CHECK(cycle_revolve &&
+              cycle_revolve->status ==
+                  part::FeatureEvaluationStatus::up_to_date);
+        CHECK(cycle_revolve->result_solid);
+        const auto cycle_projected =
+            part::evaluateEffectiveSketchProjection(
+                *cycle_loaded.document, id, cycle_eval,
+                cycle_provider, revolve_feature_id);
+        CHECK(cycle_projected && cycle_projected->allResolved());
+        const auto* cycle_line =
+            cycle_projected->model.findLine(*sourceLine.entity_id);
+        CHECK(cycle_line);
+        CHECK(close(cycle_line->start().v, 0.0));
+        CHECK(close(cycle_line->end().v, 0.0));
+        CHECK(cycle_loaded.document->findSketch(id)
+                  ->model.findLine(*sourceLine.entity_id)
+                  ->start().v == -8.0);
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count();
+        CHECK(elapsed >= 0);
+        if (cycle >= warmup_cycles) {
+            elapsed_microseconds.push_back(elapsed);
+        }
+        CHECK(std::filesystem::file_size(revolve_file) ==
+              immutable_native_bytes);
+    }
+    CHECK(elapsed_microseconds.size() == measured_cycles);
+    const auto extrema = std::minmax_element(
+        elapsed_microseconds.begin(), elapsed_microseconds.end());
+    long long duration_sum = 0;
+    for (const auto duration : elapsed_microseconds) {
+        duration_sum += duration;
+    }
+    std::cout << "PG01E_E3_NATIVE_COLD_REPLAY_MEASURED"
+              << " warmup=" << warmup_cycles
+              << " measured=" << measured_cycles
+              << " min_us=" << *extrema.first
+              << " mean_us=" << duration_sum /
+                                    static_cast<long long>(measured_cycles)
+              << " max_us=" << *extrema.second
+              << " package_bytes=" << immutable_native_bytes
+              << " provider_instances=10"
+              << " process_memory=unavailable"
+              << " native_handles=unavailable\n";
+    // Existing SS2 Windows test conventions already publish bounded
+    // measurements to GitHub's step summary. Unlike passing CTest stdout,
+    // this retains actual numeric values without editing CI/workflows.
+    // This test deliberately DOES NOT claim process memory or handle
+    // trends; those cannot be measured by this kernel-only scenario.
+    if (const char* location = std::getenv("GITHUB_STEP_SUMMARY")) {
+        std::ofstream summary{location, std::ios::app};
+        if (summary) {
+            summary << "\n### PG-01E/E3 — native linked Revolve cold replay\n"
+                    << "Exact built source: this run's checkout SHA. "
+                    << "Part schema v16/modeling semantics v2, one "
+                    << "Extrude Add producer and linked Regular Profile "
+                    << "consumed by a committed Revolve Add; exact "
+                    << "fresh independent OCCT kernel per cycle. "
+                    << "2 warm-up and 8 measured cycles; measured "
+                    << "portion is disk load + Part/linked projection, "
+                    << "not UI frame time or an accepted budget.\n\n"
+                    << "| Metric | Actual value |\n"
+                    << "| --- | ---: |\n"
+                    << "| min cold replay | " << *extrema.first
+                    << " us |\n"
+                    << "| mean cold replay | "
+                    << duration_sum /
+                        static_cast<long long>(measured_cycles)
+                    << " us |\n"
+                    << "| max cold replay | " << *extrema.second
+                    << " us |\n"
+                    << "| native package size before/after | "
+                    << immutable_native_bytes << " bytes (unchanged) |\n"
+                    << "| OS private bytes / handle trend | "
+                    << "UNAVAILABLE (not sampled) |\n\n"
+                    << "Finite timing samples are not evidence for a "
+                    << "latency or memory SLA, leak absence or the "
+                    << "other still-open PG-01E Face/Qt E1 branches.\n";
+        }
+    }
 
     // B3 draft regression: Finish already uses the effective source.
     // The live Edit Extrude preview must use it too, not the OPEN
