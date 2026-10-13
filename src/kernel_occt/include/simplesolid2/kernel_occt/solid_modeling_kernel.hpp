@@ -1,16 +1,32 @@
 #pragma once
 
 #include <simplesolid2/kernel/edge_projection.hpp>
+#include <simplesolid2/kernel/exact_bounded_edge_geometry.hpp>
 #include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 
 namespace simplesolid2::kernel_occt {
+
+// The SAME exception-to-typed-failure boundary is used by the production
+// provider query and the Q0 native kernel lifecycle witness.
+namespace detail {
+template <typename Calculate>
+[[nodiscard]] kernel::ExactEdge3dResult
+guardExactBoundedEdge3dResult(Calculate&& calculate) noexcept {
+    try {
+        return std::forward<Calculate>(calculate)();
+    } catch (...) {
+        return {kernel::ExactEdge3dStatus::kernel_failure, std::nullopt};
+    }
+}
+} // namespace detail
 
 // Production OCCT provider for the provider-neutral PM-01 solid-modeling
 // contract. No OCCT handle/type crosses this public header.
 class OcctSolidModelingKernel final
     : public kernel::ISolidModelingKernel,
       public kernel::IEdgeProjectionQuery,
+      public kernel::IExactBoundedEdgeGeometryQuery,
       public kernel::IFaceBoundaryQuery {
 public:
     [[nodiscard]] std::optional<kernel::ScopedBoundaryFace>
@@ -38,6 +54,17 @@ public:
         kernel::RuntimeSolidHandle current_body,
         const kernel::ScopedProjectionEdge& bound_edge,
         const kernel::Frame3& target_frame) noexcept override;
+
+    // Q0: strictly evaluation-local analytic bounded 3D geometry.
+    [[nodiscard]] std::optional<kernel::ScopedExactEdge>
+    bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle source_body,
+        kernel::RuntimeEdgeToken current_edge) noexcept override;
+
+    [[nodiscard]] kernel::ExactEdge3dResult
+    queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedExactEdge& bound_edge) noexcept override;
 
     // D2-R1 production default: history-aware Boolean same-domain Refine
     // for Extrude/Revolve Add. Explicit disabled is for native legacy
