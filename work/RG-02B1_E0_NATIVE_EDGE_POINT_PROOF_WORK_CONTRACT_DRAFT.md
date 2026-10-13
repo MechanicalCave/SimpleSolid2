@@ -85,6 +85,6 @@ Permit **at most these four already registered existing test source files**, wit
 Internal docs: not required  
 User/Product docs: not required  
 Generated Browser: not required  
-**Reason:** this accepted evidence-only Work Contract and proposed activation introduce no product behavior. The later separately activated test-only gate changes only the four allowed tests and specified `work/` evidence. A future shipped Datum Edge + Point feature requires current-state Internal documentation, paired PL/EN Product documentation and deterministic `./ss2.ps1 docs` Browser regeneration.
+Reason: this accepted evidence-only Work Contract and proposed activation introduce no product behavior. The later separately activated test-only gate changes only the four allowed tests and specified `work/` evidence. A future shipped Datum Edge + Point feature requires current-state Internal documentation, paired PL/EN Product documentation and deterministic `./ss2.ps1 docs` Browser regeneration.
 
 **Next narrow Owner decision:** separately accept this dedicated E0 activation proposal after reviewing its two-file governance-only diff; then separately authorize exact-head merge after Windows closure. The prior four-test scope acceptance and contract merge do **not** themselves approve activation, product schema/API, full UI UX or future E0 implementation PR merge.
