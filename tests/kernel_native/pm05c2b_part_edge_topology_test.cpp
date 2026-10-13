@@ -942,6 +942,53 @@ private:
     bool mismatch_;
 };
 
+// Q1-06: real Fillet/Chamfer generated Vertices remain globally
+// Unsupported; incident Edge selection cannot upgrade their Point meaning.
+void verifyQ1NoGlobalPointPromotion(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture) {
+    CHECK(!evaluation.features.empty());
+    CHECK(evaluation.features.back().result_topology);
+    const auto& catalog =
+        *evaluation.features.back().result_topology;
+    CHECK(catalog.complete());
+    std::size_t unsupported_vertices = 0U;
+    std::size_t rejected_end_uses = 0U;
+    for (const auto& vertex : catalog.vertices) {
+        if (vertex.referenceability !=
+                kernel::ReferenceStatus::unsupported &&
+            vertex.referenceability !=
+                kernel::ReferenceStatus::ambiguous) {
+            continue;
+        }
+        ++unsupported_vertices;
+        const auto original_status = vertex.referenceability;
+        for (const auto edge : vertex.incident_material_edges) {
+            const auto attempt = part::authorSelectedMaterialEdgeEnd(
+                document, evaluation, catalog.stage,
+                edge, vertex.runtime_token, provider);
+            CHECK(!attempt.ok());
+            CHECK(!attempt.reference);
+            CHECK(attempt.status !=
+                  part::SelectedEdgeEndStatus::resolved);
+            CHECK(attempt.status !=
+                  part::SelectedEdgeEndStatus::native_geometry_unavailable);
+            CHECK(vertex.referenceability == original_status);
+            ++rejected_end_uses;
+        }
+    }
+    CHECK(unsupported_vertices >= 1U);
+    CHECK(rejected_end_uses >= 1U);
+    std::cout << "RG02B1_Q1_NEGATIVE"
+              << " fixture=" << fixture
+              << " unsupported_or_ambiguous_vertices="
+              << unsupported_vertices
+              << " rejected_edge_terminal_uses=" << rejected_end_uses
+              << " global_point_promotions=0\n";
+}
+
 // Q1-01/Q1-02: real OCCT material Edge selection plus one independently
 // certified current native terminal. This helper never chooses by XYZ/order.
 std::vector<part::SelectedMaterialEdgeEnd>
@@ -1610,6 +1657,9 @@ int main() {
     CHECK(g0_chamfer.unsupported == 3U);
     CHECK(g0_chamfer.ambiguous == 0U);
     CHECK(g0_chamfer.missing == 0U);
+    verifyQ1NoGlobalPointPromotion(
+        trihedral_chamfer_document, trihedral_chamfer, kernel,
+        "Q1-06-real-chamfer");
     CHECK(
         countRole(
             chamfer_feature,
@@ -1706,6 +1756,9 @@ int main() {
     CHECK(g0_fillet.unsupported == 3U);
     CHECK(g0_fillet.ambiguous == 0U);
     CHECK(g0_fillet.missing == 0U);
+    verifyQ1NoGlobalPointPromotion(
+        *fillet_document.document, fillet_evaluation, kernel,
+        "Q1-06-real-fillet");
     CHECK(
         countRole(
             fillet,
