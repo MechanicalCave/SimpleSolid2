@@ -325,6 +325,25 @@ int main() {
               part::SelectedEdgeMidStatus::invalid_context);
     }
 
+
+    // P4-S1 value contracts: default results never claim resolved
+    // or leak a frame, and orientation intent is not an authored source.
+    {
+        const part::SelectedEdgeFrameResult empty;
+        CHECK(empty.status ==
+              part::SelectedEdgeFrameStatus::invalid_context);
+        CHECK(!empty.resolved());
+        CHECK(!empty.frame);
+        CHECK(!empty.initialized_intent);
+        CHECK(!empty.native_error);
+        const part::SelectedEdgeFrameIntent sample{
+            {0.0,0.0,1.0},{1.0,0.0,0.0},false};
+        CHECK(sample == sample);
+        auto reversed = sample;
+        reversed.reverse = true;
+        CHECK(sample != reversed);
+    }
+
     // Singular authored meaning follows strict bounded-Edge survival:
     // 1 -> Resolved, 0 -> Missing, split -> Ambiguous.
     {

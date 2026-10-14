@@ -241,7 +241,8 @@ part::PartDocument makeQ1PartRevolve(
     core::BuiltinReferenceRole axis_role,
     sketch::Point2 first,
     sketch::Point2 opposite,
-    double angle) {
+    double angle,
+    bool reverse = false) {
     auto source =
         part::PartDocument::create(
             core::DocumentId::generate());
@@ -310,7 +311,7 @@ part::PartDocument makeQ1PartRevolve(
                 part::RevolveOperation::add,
                 part::OneSidedRevolveExtent{
                     core::AngleValue{angle},
-                    false}}});
+                    reverse}}});
 
     auto restored =
         part::PartDocument::restore(
@@ -1714,6 +1715,16 @@ void verifyQ1RealHalfCylinderAndRevolve(
             CHECK(resolved.resolved());
             CHECK(resolved.current_edge == edge.runtime_token);
             CHECK(resolved.current_terminal == vertex.runtime_token);
+            const auto s1 = part::initializeSelectedEdgeEndFrame(
+                partial,*authored.reference,partial_eval,kernel);
+            CHECK(s1.resolved());
+            CHECK(s1.initialized_intent);
+            CHECK(s1.frame->valid());
+            const auto s1_replay = part::resolveSelectedEdgeEndFrame(
+                partial,*authored.reference,*s1.initialized_intent,
+                partial_eval,kernel);
+            CHECK(s1_replay.resolved());
+            CHECK(s1_replay.frame->valid());
             switch (edge.curve_kind) {
             case kernel::CurveKind::line:
                 ++line_terminal_uses;
@@ -1744,6 +1755,15 @@ void verifyQ1RealHalfCylinderAndRevolve(
             partial, *mid.reference, partial_eval, kernel);
         CHECK(current.resolved());
         CHECK(current.current_edge == edge.runtime_token);
+        const auto s1 = part::initializeSelectedEdgeMidFrame(
+            partial,*mid.reference,partial_eval,kernel);
+        CHECK(s1.resolved());
+        CHECK(s1.initialized_intent);
+        CHECK(s1.frame->valid());
+        const auto s1_replay = part::resolveSelectedEdgeMidFrame(
+            partial,*mid.reference,*s1.initialized_intent,
+            partial_eval,kernel);
+        CHECK(s1_replay.resolved());
         const auto bound = kernel.bindExactEdgeToBody(
             partial_eval.features.front().result_solid,
             edge.runtime_token);
@@ -1775,7 +1795,356 @@ void verifyQ1RealHalfCylinderAndRevolve(
               << " certified_line_end_uses=" << line_terminal_uses
               << " certified_arc_end_uses=" << arc_terminal_uses
               << " global_point_promotion=0\n";
+
+    // S1-F02: reverse signed sweep is a real Part + OCCT geometry
+    // fixture, not a synthetic perturbation of the tangent.
+    const auto reversed_part = makeQ1PartRevolve(
+        core::BuiltinReferenceRole::x_axis,
+        {10.0, 0.0}, {20.0, 10.0},
+        1.57079632679489661923, true);
+    const auto reverse_eval = part::evaluatePart(reversed_part,kernel);
+    CHECK(reverse_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(reverse_eval.features.size() == 1U);
+    CHECK(reverse_eval.features.front().result_topology);
+    const auto& reverse_catalog =
+        *reverse_eval.features.front().result_topology;
+    CHECK(reverse_catalog.complete());
+    std::size_t reverse_line_frames = 0U;
+    std::size_t reverse_arc_frames = 0U;
+    std::size_t reverse_arc_ends = 0U;
+    for (const auto& edge : reverse_catalog.edges) {
+        const auto mid = part::authorSelectedMaterialEdgeMid(
+            reversed_part,reverse_eval,reverse_catalog.stage,
+            edge.runtime_token,kernel);
+        if (!mid.ok()) continue;
+        const auto frame = part::initializeSelectedEdgeMidFrame(
+            reversed_part,*mid.reference,reverse_eval,kernel);
+        CHECK(frame.resolved());
+        CHECK(frame.initialized_intent);
+        CHECK(frame.frame->valid());
+        const auto replay = part::resolveSelectedEdgeMidFrame(
+            reversed_part,*mid.reference,*frame.initialized_intent,
+            reverse_eval,kernel);
+        CHECK(replay.resolved());
+        CHECK(replay.frame->valid());
+        if (edge.curve_kind == kernel::CurveKind::circle) {
+            ++reverse_arc_frames;
+        } else if (edge.curve_kind == kernel::CurveKind::line) {
+            ++reverse_line_frames;
+        } else {
+            CHECK(false);
+        }
+        for (const auto& vertex : reverse_catalog.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge.runtime_token) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            const auto end = part::authorSelectedMaterialEdgeEnd(
+                reversed_part,reverse_eval,reverse_catalog.stage,
+                edge.runtime_token,vertex.runtime_token,kernel);
+            if (!end.ok()) continue;
+            const auto at_end = part::initializeSelectedEdgeEndFrame(
+                reversed_part,*end.reference,reverse_eval,kernel);
+            CHECK(at_end.resolved());
+            CHECK(at_end.frame->valid());
+            CHECK(at_end.initialized_intent);
+            if (edge.curve_kind == kernel::CurveKind::circle)
+                ++reverse_arc_ends;
+        }
+    }
+    CHECK(reverse_line_frames >= 1U);
+    CHECK(reverse_arc_frames >= 1U);
+    CHECK(reverse_arc_ends >= 2U);
+    std::cout << "RG02B1_P4_S1_REVOLVED_REVERSE_SWEEP"
+              << " line_frames=" << reverse_line_frames
+              << " open_arc_frames=" << reverse_arc_frames
+              << " arc_ends=" << reverse_arc_ends
+              << " viewport_or_authoring_changed=0\n";
 }
+
+
+[[nodiscard]] bool s1Near(double a,double b) {
+    return std::abs(a-b) <= 1.0e-8;
+}
+[[nodiscard]] bool s1Near3(kernel::Point3 a,kernel::Point3 b) {
+    return s1Near(a.x,b.x) && s1Near(a.y,b.y) && s1Near(a.z,b.z);
+}
+
+void checkS1Frame(const part::SelectedEdgeFrameResult& r) {
+    CHECK(r.resolved());
+    CHECK(r.status == part::SelectedEdgeFrameStatus::resolved);
+    CHECK(r.frame.has_value());
+    CHECK(r.frame->valid());
+    CHECK(!r.native_error);
+    const auto& f = *r.frame;
+    const auto dot = [](kernel::Point3 a,kernel::Point3 b) {
+        return a.x*b.x + a.y*b.y + a.z*b.z;
+    };
+    CHECK(s1Near(dot(f.u_axis,f.u_axis),1.0));
+    CHECK(s1Near(dot(f.v_axis,f.v_axis),1.0));
+    CHECK(s1Near(dot(f.normal,f.normal),1.0));
+    CHECK(s1Near(dot(f.u_axis,f.v_axis),0.0));
+    CHECK(s1Near(dot(f.u_axis,f.normal),0.0));
+    CHECK(s1Near(dot(f.v_axis,f.normal),0.0));
+    const kernel::Point3 cross{
+        f.u_axis.y*f.v_axis.z-f.u_axis.z*f.v_axis.y,
+        f.u_axis.z*f.v_axis.x-f.u_axis.x*f.v_axis.z,
+        f.u_axis.x*f.v_axis.y-f.u_axis.y*f.v_axis.x};
+    CHECK(s1Near(dot(cross,f.normal),1.0));
+}
+
+// Test-only provider changes the current exact unit tangent line, not
+// its semantic source, stage, current physical MID or runtime token.
+class S1OverrideMidTangentQuery final :
+    public kernel::IExactBoundedEdgeGeometryQuery {
+public:
+    S1OverrideMidTangentQuery(
+        kernel::IExactBoundedEdgeGeometryQuery& delegate,
+        kernel::Point3 new_representative)
+        : delegate_{delegate}, t_{new_representative} {}
+
+    [[nodiscard]] std::optional<kernel::ScopedExactEdge>
+    bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle body,
+        kernel::RuntimeEdgeToken token) noexcept override {
+        return delegate_.bindExactEdgeToBody(std::move(body),token);
+    }
+
+    [[nodiscard]] kernel::ExactEdge3dResult queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle body,
+        const kernel::ScopedExactEdge& edge) noexcept override {
+        auto r = delegate_.queryExactBoundedEdge3d(std::move(body),edge);
+        if (r.ok())
+            r.geometry->midpoint_tangent_line.representative = t_;
+        return r;
+    }
+private:
+    kernel::IExactBoundedEdgeGeometryQuery& delegate_;
+    kernel::Point3 t_;
+};
+
+void verifyS1SelectedSignedFrames(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const std::vector<part::SelectedMaterialEdgeEnd>& ends,
+    const std::vector<part::SelectedMaterialEdgeMid>& mids) {
+    CHECK(ends.size() == 24U);
+    CHECK(mids.size() == 12U);
+    for (const auto& source : ends) {
+        const auto initial = part::initializeSelectedEdgeEndFrame(
+            document,source,evaluation,provider);
+        checkS1Frame(initial);
+        CHECK(initial.initialized_intent.has_value());
+        const auto replay = part::resolveSelectedEdgeEndFrame(
+            document,source,*initial.initialized_intent,evaluation,provider);
+        checkS1Frame(replay);
+        CHECK(!replay.initialized_intent);
+        CHECK(s1Near3(initial.frame->origin,replay.frame->origin));
+        CHECK(s1Near3(initial.frame->normal,replay.frame->normal));
+        auto reverse = *initial.initialized_intent;
+        reverse.reverse = true;
+        const auto flipped = part::resolveSelectedEdgeEndFrame(
+            document,source,reverse,evaluation,provider);
+        checkS1Frame(flipped);
+        CHECK(s1Near3(flipped.frame->origin,initial.frame->origin));
+        CHECK(s1Near3(flipped.frame->u_axis,initial.frame->u_axis));
+        CHECK(s1Near3(flipped.frame->normal,{
+            -initial.frame->normal.x,
+            -initial.frame->normal.y,
+            -initial.frame->normal.z}));
+        reverse.reverse = false;
+        const auto restored = part::resolveSelectedEdgeEndFrame(
+            document,source,reverse,evaluation,provider);
+        checkS1Frame(restored);
+        CHECK(s1Near3(restored.frame->normal,initial.frame->normal));
+    }
+    for (const auto& source : mids) {
+        const auto initial = part::initializeSelectedEdgeMidFrame(
+            document,source,evaluation,provider);
+        checkS1Frame(initial);
+        CHECK(initial.initialized_intent);
+        const auto replay = part::resolveSelectedEdgeMidFrame(
+            document,source,*initial.initialized_intent,evaluation,provider);
+        checkS1Frame(replay);
+        CHECK(!replay.initialized_intent);
+        CHECK(s1Near3(replay.frame->normal,initial.frame->normal));
+        CHECK(s1Near3(replay.frame->u_axis,initial.frame->u_axis));
+    }
+    const auto& sample = mids.front();
+    const auto initial = part::initializeSelectedEdgeMidFrame(
+        document,sample,evaluation,provider);
+    checkS1Frame(initial);
+    const auto& intent = *initial.initialized_intent;
+    const auto& n = intent.signed_normal_reference_world;
+    const auto& u = intent.u_seed_world;
+    const auto old = part::resolveSelectedMaterialEdgeMid(
+        document,sample,evaluation,provider);
+    CHECK(old.resolved());
+
+    // Q0 ±analytic tangent representative is not an authored sign.
+    const auto& current = old.current_tangent_line->representative;
+    S1OverrideMidTangentQuery negated{provider,{
+        -current.x,-current.y,-current.z}};
+    const auto same = part::initializeSelectedEdgeMidFrame(
+        document,sample,evaluation,negated);
+    checkS1Frame(same);
+    CHECK(s1Near3(same.frame->normal,initial.frame->normal));
+
+    // S1-F05: real Part-certified MID with test-controlled unit
+    // tangent ±representatives and deterministic dominant-axis ties.
+    {
+        const double half_diagonal = std::sqrt(0.5);
+        S1OverrideMidTangentQuery tie{provider,
+            {half_diagonal,half_diagonal,0.0}};
+        S1OverrideMidTangentQuery opposite{provider,
+            {-half_diagonal,-half_diagonal,0.0}};
+        const auto a = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,tie);
+        const auto b = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,opposite);
+        checkS1Frame(a);
+        checkS1Frame(b);
+        CHECK(s1Near3(a.frame->normal,b.frame->normal));
+        CHECK(s1Near3(a.frame->u_axis,b.frame->u_axis));
+        CHECK(a.frame->normal.x > 0.0);
+        CHECK(a.frame->normal.y > 0.0);
+    }
+    // +X first-seed is parallel to an X normal: fallback must use +Y,
+    // independent of the provider's chosen unoriented sign.
+    {
+        S1OverrideMidTangentQuery x{provider,{1.0,0.0,0.0}};
+        S1OverrideMidTangentQuery minus_x{provider,{-1.0,0.0,0.0}};
+        const auto a = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,x);
+        const auto b = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,minus_x);
+        checkS1Frame(a);
+        checkS1Frame(b);
+        CHECK(s1Near3(a.frame->normal,{1.0,0.0,0.0}));
+        CHECK(s1Near3(b.frame->normal,a.frame->normal));
+        CHECK(s1Near3(a.frame->u_axis,{0.0,1.0,0.0}));
+    }
+    // Floating-point neighborhoods of the 1/16 projected seed
+    // threshold: above accepts +X, below must select next +Y.
+    // Exactly 1/16 also resolves deterministically, never silently
+    // substitutes a camera or OCCT-derived seed.
+    for (const double y : {0.249999,0.25,0.250001}) {
+        const double x = std::sqrt(1.0-y*y);
+        S1OverrideMidTangentQuery decorated{provider,{x,y,0.0}};
+        const auto result = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,decorated);
+        checkS1Frame(result);
+        CHECK(result.initialized_intent);
+        if (y < 0.25) CHECK(result.frame->u_axis.x < 0.0);
+        if (y > 0.25) CHECK(result.frame->u_axis.x > 0.0);
+    }
+
+    // Controlled real-Body source with exact test-only orientation
+    // perturbation: 29 degrees accepted; 31/89/90 degrees reviewed.
+    const auto angleProbe = [&](double degrees) {
+        const double radians = degrees*std::acos(-1.0)/180.0;
+        const double a = std::cos(radians),b = std::sin(radians);
+        S1OverrideMidTangentQuery decorated{provider,{
+            a*n.x+b*u.x,a*n.y+b*u.y,a*n.z+b*u.z}};
+        return part::resolveSelectedEdgeMidFrame(
+            document,sample,intent,evaluation,decorated);
+    };
+    checkS1Frame(angleProbe(29.0));
+    // S1-F06 exact 30 degree boundary: compare against the exact
+    // contracted sqrt(3)/2 threshold, not a rounded degree label.
+    {
+        const double c = std::sqrt(3.0)/2.0;
+        S1OverrideMidTangentQuery boundary{provider,{
+            c*n.x+0.5*u.x,c*n.y+0.5*u.y,c*n.z+0.5*u.z}};
+        const auto admitted = part::resolveSelectedEdgeMidFrame(
+            document,sample,intent,evaluation,boundary);
+        checkS1Frame(admitted);
+        CHECK(!admitted.initialized_intent);
+    }
+    for (const double angle : {31.0,89.0,90.0,91.0}) {
+        const auto review = angleProbe(angle);
+        CHECK(review.status ==
+              part::SelectedEdgeFrameStatus::orientation_review_required);
+        CHECK(!review.frame);
+        CHECK(!review.initialized_intent);
+    }
+    const auto badIntent = [&](part::SelectedEdgeFrameIntent bad) {
+        const auto rejected = part::resolveSelectedEdgeMidFrame(
+            document,sample,bad,evaluation,provider);
+        CHECK(rejected.status ==
+              part::SelectedEdgeFrameStatus::invalid_orientation_intent);
+        CHECK(!rejected.frame);
+        CHECK(!rejected.initialized_intent);
+    };
+    auto malformed = intent;
+    malformed.u_seed_world = {0.0,0.0,0.0};
+    badIntent(malformed);
+    malformed = intent;
+    malformed.signed_normal_reference_world.x =
+        std::numeric_limits<double>::quiet_NaN();
+    badIntent(malformed);
+    malformed = intent;
+    malformed.u_seed_world = malformed.signed_normal_reference_world;
+    badIntent(malformed);
+    malformed = intent;
+    malformed.u_seed_world = {
+        intent.u_seed_world.x*1.001,
+        intent.u_seed_world.y*1.001,
+        intent.u_seed_world.z*1.001};
+    badIntent(malformed);
+    malformed = intent;
+    malformed.signed_normal_reference_world.y =
+        std::numeric_limits<double>::infinity();
+    badIntent(malformed);
+
+    auto reversed = intent;
+    reversed.reverse = true;
+    const auto flipped = part::resolveSelectedEdgeMidFrame(
+        document,sample,reversed,evaluation,provider);
+    checkS1Frame(flipped);
+    CHECK(s1Near3(flipped.frame->u_axis,initial.frame->u_axis));
+    CHECK(s1Near3(flipped.frame->origin,initial.frame->origin));
+    CHECK(s1Near3(flipped.frame->v_axis,{
+        -initial.frame->v_axis.x,
+        -initial.frame->v_axis.y,
+        -initial.frame->v_axis.z}));
+    reversed.reverse = false;
+    const auto restored = part::resolveSelectedEdgeMidFrame(
+        document,sample,reversed,evaluation,provider);
+    checkS1Frame(restored);
+    CHECK(s1Near3(restored.frame->normal,initial.frame->normal));
+
+    // The S1 status must not manufacture a frame on wrong owner or
+    // provider failure. Native error metadata is passed through only
+    // from a genuinely failing Q0 geometry query.
+    const auto foreign = makeBasePart();
+    const auto invalid = part::resolveSelectedEdgeMidFrame(
+        foreign,sample,intent,evaluation,provider);
+    CHECK(invalid.status ==
+          part::SelectedEdgeFrameStatus::invalid_context);
+    CHECK(!invalid.resolved() && !invalid.frame && !invalid.native_error);
+    Q2BadMidQuery failing{provider,Q2BadMidQuery::Failure::kernel_failure};
+    const auto failed = part::resolveSelectedEdgeMidFrame(
+        document,sample,intent,evaluation,failing);
+    CHECK(failed.status ==
+          part::SelectedEdgeFrameStatus::native_geometry_unavailable);
+    CHECK(!failed.frame && !failed.initialized_intent);
+    CHECK(failed.native_error == kernel::ExactEdge3dStatus::kernel_failure);
+
+    std::cout << "RG02B1_P4_S1_SIGNED_FRAME"
+              << " real_box_end=" << ends.size()
+              << " real_box_mid=" << mids.size()
+              << " source_derived=1"
+              << " reverse_involution=1"
+              << " orientation_review=1"
+              << " ui_datum_persistence=0\n";
+}
+
 
 } // namespace
 
@@ -1821,6 +2190,8 @@ int main() {
     const auto q2_base_sources = verifyQ2CanonicalSelectedMids(
         base_document, base_evaluation, kernel, "Q2-M01-pristine");
     CHECK(q2_base_sources.size() == 12U);
+    verifyS1SelectedSignedFrames(base_document,base_evaluation,kernel,
+                                 q1_base_sources,q2_base_sources);
     // Q2-M05/06/07: negative semantic and native provider matrix on a
     // REAL OCCT box stage. No failure publishes a partial observation.
     {
@@ -2397,6 +2768,32 @@ int main() {
             fresh_evaluation, separate_kernel);
         CHECK(replay.resolved());
     }
+    // S1-F03: caller-carried intent is replayed against independent
+    // native-provider and cold Part reconstruction, without persisting it.
+    for (const auto& source : q1_base_sources) {
+        const auto initial = part::initializeSelectedEdgeEndFrame(
+            base_document,source,base_evaluation,kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        const auto cold = part::resolveSelectedEdgeEndFrame(
+            *reopened_document.document,source,*initial.initialized_intent,
+            fresh_evaluation,separate_kernel);
+        CHECK(cold.resolved());
+        CHECK(s1Near3(initial.frame->origin,cold.frame->origin));
+        CHECK(s1Near3(initial.frame->u_axis,cold.frame->u_axis));
+        CHECK(s1Near3(initial.frame->normal,cold.frame->normal));
+    }
+    for (const auto& source : q2_base_sources) {
+        const auto initial = part::initializeSelectedEdgeMidFrame(
+            base_document,source,base_evaluation,kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        const auto cold = part::resolveSelectedEdgeMidFrame(
+            *reopened_document.document,source,*initial.initialized_intent,
+            fresh_evaluation,separate_kernel);
+        CHECK(cold.resolved());
+        CHECK(s1Near3(initial.frame->origin,cold.frame->origin));
+        CHECK(s1Near3(initial.frame->u_axis,cold.frame->u_axis));
+        CHECK(s1Near3(initial.frame->normal,cold.frame->normal));
+    }
     // Compare complete semantic identity sets independently of native
     // Edge/Vertex enumeration and fresh OCCT provider generation.
     for (const auto& original : q1_base_sources) {
@@ -2481,6 +2878,28 @@ int main() {
     const auto q2_taller_sources = verifyQ2CanonicalSelectedMids(
         taller_document, taller_evaluation, kernel, "Q2-M04-height-edit");
     CHECK(q2_taller_sources.size() == q2_base_sources.size());
+    // S1-F04: a source-preserving Extrude height edit must retain
+    // the signed orientation through the caller's original intent.
+    for (const auto& source : q1_base_sources) {
+        const auto initial = part::initializeSelectedEdgeEndFrame(
+            base_document,source,base_evaluation,kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        const auto edited = part::resolveSelectedEdgeEndFrame(
+            taller_document,source,*initial.initialized_intent,
+            taller_evaluation,kernel);
+        CHECK(edited.resolved());
+        CHECK(s1Near3(initial.frame->normal,edited.frame->normal));
+    }
+    for (const auto& source : q2_base_sources) {
+        const auto initial = part::initializeSelectedEdgeMidFrame(
+            base_document,source,base_evaluation,kernel);
+        CHECK(initial.resolved() && initial.initialized_intent);
+        const auto edited = part::resolveSelectedEdgeMidFrame(
+            taller_document,source,*initial.initialized_intent,
+            taller_evaluation,kernel);
+        CHECK(edited.resolved());
+        CHECK(s1Near3(initial.frame->normal,edited.frame->normal));
+    }
     std::size_t changed_mid_positions = 0U;
     for (const auto& original : q2_base_sources) {
         CHECK(std::find(q2_taller_sources.begin(),
