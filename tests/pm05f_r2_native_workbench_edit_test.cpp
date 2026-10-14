@@ -17,6 +17,7 @@
 #include <QComboBox>
 #include <QDebug>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QMenu>
 #include <QPushButton>
 #include <QToolButton>
@@ -726,6 +727,19 @@ void verifyUi01FeatureDraftRejectsTreeEdits(
     QApplication::processEvents();
     CHECK(!active_operations->isHidden());
     CHECK(sketch_finish->isHidden());
+}
+
+// The existing SK-04B native suite confirms that QTest::mouseMove
+// can follow the suite-global OS cursor on Windows CI. Dispatch a real
+// synchronous QWidget MouseMove event for deterministic hover authority.
+// Clicks remain actual QTest QWidget mouseClick gestures.
+void sendNativeWorkbenchHover(
+    viewer_qt_occt::QtOcctViewerWidget& viewport,
+    QPoint pixel) {
+    QMouseEvent event{
+        QEvent::MouseMove, QPointF{pixel}, Qt::NoButton,
+        Qt::NoButton, Qt::NoModifier};
+    CHECK(QApplication::sendEvent(&viewport, &event));
 }
 
 bool nativeClick(
@@ -2337,9 +2351,8 @@ int main(int argc, char* argv[]) {
             // Force a fresh per-session hover preselection lease, and
             // deliver the live MID preview to OCCT before clicking it.
             // QTest mouseMove alone may leave the scene update queued.
-            QTest::mouseMove(
-                viewport, viewport->rect().topLeft() + QPoint{3, 3});
-            QApplication::processEvents();
+            sendNativeWorkbenchHover(
+                *viewport, viewport->rect().topLeft() + QPoint{3, 3});
             const auto s3a_edge_probe = viewport->queryBodyTopology(
                 viewer::ViewportPoint2{double(point_edge_pixel->x()),
                                        double(point_edge_pixel->y())},
@@ -2348,11 +2361,8 @@ int main(int argc, char* argv[]) {
                       << " complete=" << s3a_edge_probe.completed
                       << " count=" << s3a_edge_probe.candidates.size()
                       << "\n";
-            QTest::mouseMove(viewport, *point_edge_pixel);
-            QApplication::processEvents();
-            QTest::mouseMove(viewport, *point_mid_pixel);
-            QApplication::processEvents();
-            QTest::qWait(40);
+            sendNativeWorkbenchHover(*viewport, *point_edge_pixel);
+            sendNativeWorkbenchHover(*viewport, *point_mid_pixel);
             QTest::mouseClick(
                 viewport, Qt::LeftButton,
                 Qt::NoModifier, *point_mid_pixel);
@@ -2374,7 +2384,7 @@ int main(int argc, char* argv[]) {
                 workbench.cadInputContextGeneration()).accepted);
             CHECK(s3a_mid_first.document().state() == point_state);
             CHECK(s3a_mid_first.undoDepth() == point_undo);
-            QTest::mouseMove(viewport, *point_edge_pixel);
+            sendNativeWorkbenchHover(*viewport, *point_edge_pixel);
             QTest::mouseClick(
                 viewport, Qt::LeftButton,
                 Qt::NoModifier, *point_edge_pixel);
