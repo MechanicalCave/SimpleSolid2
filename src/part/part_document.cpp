@@ -210,6 +210,22 @@ const OffsetDatumPlane* PartDocument::findDatumPlane(
         : &*found;
 }
 
+const EdgePointDatumPlane* PartDocument::findEdgePointDatumPlane(
+    DatumId id) const noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found = std::find_if(
+        state_.edge_point_datum_planes.begin(),
+        state_.edge_point_datum_planes.end(),
+        [id](const EdgePointDatumPlane& item) {
+            return item.id == id;
+        });
+    return found == state_.edge_point_datum_planes.end()
+        ? nullptr
+        : &*found;
+}
+
 const PartSketch* PartDocument::findSketch(
     const sketch::SketchId& id) const noexcept {
     const auto found = std::find_if(
@@ -447,6 +463,35 @@ bool PartDocument::validAuthoredState(
              previous < index;
              ++previous) {
             if (state.datum_planes[previous].id ==
+                datum.id) {
+                return false;
+            }
+        }
+    }
+
+    // Versioned Edge-local Datum shares the existing global DatumId cursor.
+    // Preserve an authored source even if its upstream feature was deleted:
+    // missing geometry is a derived, repairable evaluation outcome.
+    for (std::size_t index = 0U;
+         index < state.edge_point_datum_planes.size();
+         ++index) {
+        const auto& datum = state.edge_point_datum_planes[index];
+        if (!edgePointDatumPlaneStructurallyValid(datum) ||
+            !state.next_datum_id.containsAllocated(datum.id)) {
+            return false;
+        }
+        if (std::any_of(
+                state.datum_planes.begin(),
+                state.datum_planes.end(),
+                [id = datum.id](const OffsetDatumPlane& offset) {
+                    return offset.id == id;
+                })) {
+            return false;
+        }
+        for (std::size_t previous = 0U;
+             previous < index;
+             ++previous) {
+            if (state.edge_point_datum_planes[previous].id ==
                 datum.id) {
                 return false;
             }

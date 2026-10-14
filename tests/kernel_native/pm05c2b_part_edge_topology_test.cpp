@@ -1,9 +1,12 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -2054,6 +2057,116 @@ void verifyS1SelectedSignedFrames(
         CHECK(invalid.status ==
               part::SelectedEdgeFrameStatus::invalid_context);
         CHECK(!invalid.frame);
+    }
+
+    // P4-S2 exact Save/Reopen: serialize only source+signed orientation;
+    // rebuild a fresh Part/OCCT body and prove equivalent derived frames.
+    {
+        auto authored = document.state();
+        auto cursor = authored.next_datum_id;
+        const auto end_id = cursor.allocate();
+        const auto mid_id = cursor.allocate();
+        CHECK(end_id && mid_id && *end_id != *mid_id);
+        authored.next_datum_id = cursor;
+
+        const auto end = part::initializeSelectedEdgeEndFrame(
+            document, ends.front(), evaluation, provider);
+        const auto mid = part::initializeSelectedEdgeMidFrame(
+            document, mids.front(), evaluation, provider, true);
+        checkS1Frame(end);
+        checkS1Frame(mid);
+        CHECK(end.initialized_intent && mid.initialized_intent);
+        part::EdgePointDatumPlane end_datum{
+            *end_id, ends.front(), *end.initialized_intent, true};
+        part::EdgePointDatumPlane mid_datum{
+            *mid_id, mids.front(), *mid.initialized_intent, false};
+        authored.edge_point_datum_planes.push_back(end_datum);
+        authored.edge_point_datum_planes.push_back(mid_datum);
+
+        const auto created = part::PartDocument::restore(
+            document.documentId(),authored,document.revision());
+        CHECK(created.ok());
+        CHECK(created.document->edgePointDatumPlanes().size() == 2U);
+        CHECK(created.document->findEdgePointDatumPlane(*end_id));
+        CHECK(created.document->findEdgePointDatumPlane(*mid_id));
+
+        // Globally unique DatumIds across legacy Offset and new source kind.
+        auto colliding = authored;
+        colliding.datum_planes.push_back(
+            part::OffsetDatumPlane{
+                *end_id,
+                part::PlaneReference{
+                    part::BuiltinOriginPlaneReference{
+                        core::BuiltinReferenceRole::xy_plane}},
+                core::LengthValue{1.0},true});
+        CHECK(!part::PartDocument::restore(
+            document.documentId(),std::move(colliding),
+            document.revision()).ok());
+        auto invalid_orientation = authored;
+        invalid_orientation.edge_point_datum_planes[0]
+            .orientation.u_seed_world = {};
+        CHECK(!part::PartDocument::restore(
+            document.documentId(),std::move(invalid_orientation),
+            document.revision()).ok());
+
+        const auto filename = std::string{"ss2-s2-datum-"} +
+            std::to_string(
+                std::chrono::steady_clock::now()
+                    .time_since_epoch().count()) +
+            ".ss2part";
+        const auto path =
+            std::filesystem::temp_directory_path() / filename;
+        struct ScopedNativeFile {
+            std::filesystem::path path;
+            ~ScopedNativeFile() {
+                std::error_code ec;
+                std::filesystem::remove(path,ec);
+            }
+        } scratch{path};
+
+        part::PartDocumentStore store;
+        const auto saved = store.createNew(
+            scratch.path,*created.document);
+        CHECK(saved.ok());
+        const auto loaded = store.load(scratch.path);
+        CHECK(loaded.ok());
+        CHECK(loaded.document->edgePointDatumPlanes().size() == 2U);
+        const auto* reopened_end =
+            loaded.document->findEdgePointDatumPlane(*end_id);
+        const auto* reopened_mid =
+            loaded.document->findEdgePointDatumPlane(*mid_id);
+        CHECK(reopened_end && reopened_mid);
+        CHECK(*reopened_end == end_datum);
+        CHECK(*reopened_mid == mid_datum);
+        CHECK(reopened_mid->orientation.reverse);
+        CHECK(!reopened_mid->visible);
+
+        // Provider/body identity changes on cold Part load: no runtime
+        // tokens or cached Frame3 were authored or written to the file.
+        kernel_occt::OcctSolidModelingKernel cold_provider;
+        const auto cold_evaluation =
+            part::evaluatePart(*loaded.document,cold_provider);
+        CHECK(cold_evaluation.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto rebuilt_end = part::resolveEdgePointDatumFrame(
+            *loaded.document,*reopened_end,
+            cold_evaluation,cold_provider);
+        const auto rebuilt_mid = part::resolveEdgePointDatumFrame(
+            *loaded.document,*reopened_mid,
+            cold_evaluation,cold_provider);
+        checkS1Frame(rebuilt_end);
+        checkS1Frame(rebuilt_mid);
+        CHECK(s1Near3(rebuilt_end.frame->origin,end.frame->origin));
+        CHECK(s1Near3(rebuilt_end.frame->u_axis,end.frame->u_axis));
+        CHECK(s1Near3(rebuilt_end.frame->normal,end.frame->normal));
+        CHECK(s1Near3(rebuilt_mid.frame->origin,mid.frame->origin));
+        CHECK(s1Near3(rebuilt_mid.frame->normal,mid.frame->normal));
+        CHECK(s1Near3(rebuilt_mid.frame->u_axis,mid.frame->u_axis));
+
+        std::cout << "RG02B1_P4_S2_DATUM_V17"
+                  << " saved=2 restored=2"
+                  << " cold_rebuild=1 reverse_persisted=1"
+                  << " collisions_rejected=1\n";
     }
 
     const auto& sample = mids.front();
