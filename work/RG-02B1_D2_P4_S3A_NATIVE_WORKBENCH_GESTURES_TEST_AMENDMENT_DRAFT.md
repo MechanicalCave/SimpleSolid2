@@ -1,7 +1,9 @@
 # RG-02B1/P4-S3A — add native Workbench gesture integration test path
 
-**Status: PROPOSED OWNER D2 TEST-ONLY ADDENDUM — NOT ACCEPTED OR ACTIVE.**
+**Status: OWNER D2 TEST-ONLY SCOPE ACCEPTED 2026-10-14 — GOVERNANCE PR OPEN; NOT MERGED OR ACTIVE.**
 **Date:** 2026-10-14.
+**Exact Owner scope decision:** `Akceptuje, kontynuuj pracę` in direct response to PR #387 single-test-file D2 request (2026-10-14). Approval covers ONLY the additive existing test path and the finite isolated test block below. It is NOT independent authorization to merge this governance PR, activate the path, modify product code, or claim S3A FINAL PASS. Windows governance #3009/#3010 PASS applies to the earlier proposal-only SHA `1219347ac21bb08804f5d32ce84f804325224a9c` and does not certify this later evidence-sync revision; obtain fresh exact-head closure.
+
 **Parent executable Work Contract:** `work/RG-02B1_D2_P4_S3A_DATUM_END_MID_GUI_WORK_CONTRACT_DRAFT.md`, explicitly Owner-accepted in #382 with strict UI consistency, identical END/MID hover and existing Command Line, activated separately by #385. Protected-main baseline `311de7859f0e1cbf5ee52e4e6ccf8a364b30c445`.
 **Implementation candidate:** PR #386, isolated clean post-activation S3A implementation. Windows Ready FULL #3007 and #3008 each **199/199 PASS** on distinct exact source SHAs; #3008 at `7a1f8f78702cdfde2e5cc50b94f2313eab9cf923` confirms actual Qt/OCCT MID-over-Edge hit priority and both pointer event orders. This DOES NOT prove end-to-end Part semantics or Owner manual GUI acceptance.
 
@@ -11,7 +13,7 @@ The existing accepted `tests/sk04b_viewer_native_selection_query_test.cpp` alrea
 
 Already registered `tests/pm05f_r2_native_workbench_edit_test.cpp` uniquely offers all the prerequisites **without changing CMake/CI**: a real `QtOcctViewerWidget`, `ui::CadWorkbench`, `kernel_occt::OcctSolidModelingKernel`, Part/Application and `Qt6::Test`, linked in the existing `pm05f_r2.native_workbench_edit` test target (full-only). It already contains real desktop pointer gestures and independent cold persistence witnesses. It is **NOT** currently in the exact accepted S3A §3 allowlist.
 
-## Exactly ONE additive path and finite accepted edits (if Owner approves)
+## Exactly ONE additive path and finite Owner-accepted edits (pending governance merge/activation)
 
 Add to S3A §3 allowlist **only**:
 - `tests/pm05f_r2_native_workbench_edit_test.cpp`.
