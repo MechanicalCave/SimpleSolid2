@@ -2579,6 +2579,11 @@ int main(int argc, char* argv[]) {
                 *dependent_sketch.sketch_id));
             CHECK(s3a_end_session.document().findAxis(
                 *dependent_axis.axis_id));
+            // Headless fixture commands above intentionally bypass the
+            // Workbench UI mutation callbacks. Reopen the session from a
+            // different active Part so the real Tree/Properties rebuilds.
+            CHECK(workbench.activateDocument(&s3a, {}));
+            QApplication::processEvents();
             CHECK(workbench.activateDocument(&s3a_end_session, {}));
             QApplication::processEvents();
             QTreeWidgetItem* native_end_tree_item = nullptr;
@@ -2588,6 +2593,11 @@ int main(int argc, char* argv[]) {
                     native_end_tree_item = *it;
                     break;
                 }
+            }
+            if (!native_end_tree_item) {
+                for (QTreeWidgetItemIterator it(tree); *it; ++it)
+                    std::cerr << "S3A_END_TREE_NODE "
+                              << (*it)->text(0).toStdString() << "\n";
             }
             CHECK(native_end_tree_item);
             auto* end_properties_edit =
