@@ -8,6 +8,7 @@
 #include <numbers>
 #include <set>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace simplesolid2::application {
@@ -33,6 +34,21 @@ DocumentSessionResult failure(
 
 DocumentSessionResult success(bool changed = false) {
     return DocumentSessionResult{changed, DocumentSessionDiagnostic{}};
+}
+
+[[nodiscard]] part::DatumEvaluation evaluateDatumsWithProvider(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (auto* exact =
+            dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+                &modeling_kernel)) {
+        return part::evaluateDatums(document,evaluation,*exact);
+    }
+    // Exact Edge geometry is an optional kernel capability. Old Offset
+    // Datums retain their original behavior when no query is provided,
+    // while new Edge-local Datums fail closed rather than guessing.
+    return part::evaluateDatums(document,evaluation);
 }
 
 part::PartSketch* findSketch(
@@ -287,9 +303,8 @@ part::AxisEvaluation evaluateAxisInDocument(
     if (part::datumPlaneIdForSketchSupport(
             source->support)) {
         const auto datums =
-            part::evaluateDatums(
-                document,
-                evaluation);
+            evaluateDatumsWithProvider(
+                document,evaluation,modeling_kernel);
         return part::resolveAxisReference(
             document,
             reference,
@@ -411,10 +426,12 @@ resolveSupportForMutation(
 
     if (part::datumPlaneIdForSketchSupport(
             support)) {
-        const auto datums =
-            part::evaluateDatums(
-                document,
-                evaluation);
+        auto* exact =
+            dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+                modeling_kernel);
+        const auto datums = exact != nullptr
+            ? part::evaluateDatums(document,evaluation,*exact)
+            : part::evaluateDatums(document,evaluation);
         return part::resolveSketchSupport(
             support,
             nullptr,
@@ -3558,9 +3575,8 @@ DocumentSession::evaluateExtrudeDraft(
                 part::datumPlaneIdForSketchSupport(
                     source->support)) {
                 preview_support_datums =
-                    part::evaluateDatums(
-                        *candidate.document,
-                        evaluation);
+                    evaluateDatumsWithProvider(
+                        *candidate.document,evaluation,modeling_kernel);
             }
         }
     }
@@ -3846,9 +3862,8 @@ DocumentSession::evaluateRevolveDraft(
             }
 
             const auto datums =
-                part::evaluateDatums(
-                    *candidate.document,
-                    prefix_evaluation);
+                evaluateDatumsWithProvider(
+                    *candidate.document,prefix_evaluation,modeling_kernel);
             // Preview uses the identical current effective Sketch as
             // candidate Feature evaluation, never linked authored seeds.
             std::optional<part::EffectiveSketchProjection>
@@ -4362,9 +4377,8 @@ DocumentSession::evaluateDatumPlaneDraft(
             *candidate.document,
             modeling_kernel);
     const auto datum_evaluation =
-        part::evaluateDatums(
-            *candidate.document,
-            part_evaluation);
+        evaluateDatumsWithProvider(
+            *candidate.document,part_evaluation,modeling_kernel);
     const auto* evaluated =
         datum_evaluation.find(target_id);
     if (evaluated == nullptr ||
@@ -4478,9 +4492,8 @@ CreateDatumPlaneResult DocumentSession::execute(
             *candidate.document,
             modeling_kernel);
     const auto datum_evaluation =
-        part::evaluateDatums(
-            *candidate.document,
-            part_evaluation);
+        evaluateDatumsWithProvider(
+            *candidate.document,part_evaluation,modeling_kernel);
     const auto* target =
         datum_evaluation.find(*id);
     if (target == nullptr ||
@@ -4523,6 +4536,261 @@ CreateDatumPlaneResult DocumentSession::execute(
         *id,
         part::DatumPlaneEvaluationDiagnostic::none,
         DocumentSessionDiagnostic{}};
+}
+
+CreateDatumPlaneResult DocumentSession::execute(
+    const CreateEdgePointDatumPlaneCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    const auto reject = [&](DocumentSessionErrorCode code,
+                            const char* message)
+                            -> CreateDatumPlaneResult {
+        const auto failed = failure(code,message,path_);
+        return {false,std::nullopt,std::nullopt,failed.diagnostic};
+    };
+
+    if (document_.revision() != command.expected_revision) {
+        return reject(
+            DocumentSessionErrorCode::revision_diverged,
+            "Create Edge Point Datum was started from a stale revision");
+    }
+    const auto* source_valid = std::visit(
+        [](const auto& source) { return source.valid(); },
+        command.source) ? &command.source : nullptr;
+    auto* query =
+        dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            &modeling_kernel);
+    if (source_valid == nullptr || query == nullptr) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Create Edge Point Datum requires certified END/MID and exact geometry provider");
+    }
+
+    const auto evaluated = part::evaluatePart(document_,modeling_kernel);
+    const auto initial = std::visit(
+        [&](const auto& source) -> part::SelectedEdgeFrameResult {
+            using Source = std::decay_t<decltype(source)>;
+            if constexpr (std::is_same_v<
+                              Source,part::SelectedMaterialEdgeEnd>) {
+                return part::initializeSelectedEdgeEndFrame(
+                    document_,source,evaluated,*query,command.reverse);
+            } else {
+                return part::initializeSelectedEdgeMidFrame(
+                    document_,source,evaluated,*query,command.reverse);
+            }
+        },command.source);
+    if (!initial.resolved() || !initial.initialized_intent) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Create Edge Point Datum source/frame is not currently certified");
+    }
+
+    auto after = document_.state();
+    applyDatumIdCursor(after);
+    const auto id = after.next_datum_id.allocate();
+    if (!id) {
+        return reject(
+            DocumentSessionErrorCode::transaction_failure,
+            "Create Edge Point Datum exhausted DatumId allocation");
+    }
+    after.edge_point_datum_planes.push_back(
+        part::EdgePointDatumPlane{
+            *id,command.source,*initial.initialized_intent,command.visible});
+
+    auto candidate = part::PartDocument::restore(
+        document_.documentId(),after,document_.revision());
+    if (!candidate.ok()) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Create Edge Point Datum violates authored-state invariants");
+    }
+    const auto candidate_body =
+        part::evaluatePart(*candidate.document,modeling_kernel);
+    const auto candidate_datums = part::evaluateDatums(
+        *candidate.document,candidate_body,*query);
+    const auto* current = candidate_datums.find(*id);
+    if (current == nullptr ||
+        current->status != part::DatumPlaneEvaluationStatus::resolved ||
+        !current->frame) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Create Edge Point Datum failed source/frame replay, no mutation",
+            path_);
+        return {
+            false,std::nullopt,
+            current
+                ? std::optional<part::DatumPlaneEvaluationDiagnostic>{
+                    current->diagnostic}
+                : std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed = commitCommandState(
+        std::move(after),
+        "Part transaction failed while creating Edge Point Datum");
+    if (!committed.ok() || !committed.changed) {
+        return {
+            committed.changed,std::nullopt,
+            std::nullopt,committed.diagnostic};
+    }
+    return {
+        true,*id,part::DatumPlaneEvaluationDiagnostic::none,
+        DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EditEdgePointDatumPlaneCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Edit Edge Point Datum was started from stale revision",path_);
+    }
+    auto* query =
+        dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            &modeling_kernel);
+    if (!command.datum_id.valid() || query == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Edge Point Datum requires a valid DatumId and exact geometry provider",path_);
+    }
+
+    auto after = document_.state();
+    const auto found = std::find_if(
+        after.edge_point_datum_planes.begin(),
+        after.edge_point_datum_planes.end(),
+        [id=command.datum_id](const part::EdgePointDatumPlane& item) {
+            return item.id == id;
+        });
+    if (found == after.edge_point_datum_planes.end()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Edge Point Datum target is missing",path_);
+    }
+    if (found->orientation.reverse == command.reverse) {
+        return success(false);
+    }
+    found->orientation.reverse = command.reverse;
+
+    auto candidate = part::PartDocument::restore(
+        document_.documentId(),after,document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Edge Point Datum violates Part authored-state invariants",
+            path_);
+    }
+    const auto body =
+        part::evaluatePart(*candidate.document,modeling_kernel);
+    const auto datums =
+        part::evaluateDatums(*candidate.document,body,*query);
+    const auto* current = datums.find(command.datum_id);
+    if (current == nullptr ||
+        current->status != part::DatumPlaneEvaluationStatus::resolved ||
+        !current->frame) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Edge Point Datum replay is unavailable: no mutation",
+            path_);
+    }
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Edge Point Datum");
+}
+
+
+DocumentSessionResult DocumentSession::execute(
+    const ReplaceEdgePointDatumPlaneSourceCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Replace Edge Point Datum source has a stale revision",path_);
+    }
+    if (!command.datum_id.valid() ||
+        !std::visit([](const auto& source) {
+            return source.valid();
+        },command.source)) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Replace Edge Point Datum requires a valid DatumId and certified semantic END/MID",path_);
+    }
+    auto* query =
+        dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            &modeling_kernel);
+    if (query == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Replace Edge Point Datum requires current exact geometry",path_);
+    }
+
+    auto after = document_.state();
+    const auto found = std::find_if(
+        after.edge_point_datum_planes.begin(),
+        after.edge_point_datum_planes.end(),
+        [id=command.datum_id](const part::EdgePointDatumPlane& item) {
+            return item.id == id;
+        });
+    if (found == after.edge_point_datum_planes.end()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Replace Edge Point Datum target is missing",path_);
+    }
+
+    if (found->source == command.source) {
+        // The existing authored signed normal and U-seed are intentional.
+        // Re-picking the same semantic source must not reset them.
+        if (found->orientation.reverse == command.reverse) {
+            return success(false);
+        }
+        found->orientation.reverse = command.reverse;
+    } else {
+        const auto body = part::evaluatePart(document_,modeling_kernel);
+        const auto initialized = std::visit(
+            [&](const auto& source) -> part::SelectedEdgeFrameResult {
+                using Source = std::decay_t<decltype(source)>;
+                if constexpr (std::is_same_v<
+                                  Source,part::SelectedMaterialEdgeEnd>) {
+                    return part::initializeSelectedEdgeEndFrame(
+                        document_,source,body,*query,command.reverse);
+                } else {
+                    return part::initializeSelectedEdgeMidFrame(
+                        document_,source,body,*query,command.reverse);
+                }
+            },command.source);
+        if (!initialized.resolved() ||
+            !initialized.initialized_intent) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Replace Edge Point Datum source cannot be certified at the current Body stage",path_);
+        }
+        found->source = command.source;
+        found->orientation = *initialized.initialized_intent;
+    }
+
+    // Reconstruct the entire authored graph before committing, including
+    // dependent Sketch/Axis stage legality; never publish last-good frames.
+    auto candidate = part::PartDocument::restore(
+        document_.documentId(),after,document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Replace Edge Point Datum would violate Part dependencies",path_);
+    }
+    const auto current_body =
+        part::evaluatePart(*candidate.document,modeling_kernel);
+    const auto current_datums =
+        part::evaluateDatums(*candidate.document,current_body,*query);
+    const auto* current = current_datums.find(command.datum_id);
+    if (current == nullptr ||
+        current->status != part::DatumPlaneEvaluationStatus::resolved ||
+        !current->frame) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Replace Edge Point Datum source replay is unavailable: no mutation",path_);
+    }
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while replacing Edge Point Datum source");
 }
 
 DocumentSessionResult DocumentSession::execute(
@@ -4584,9 +4852,8 @@ DocumentSessionResult DocumentSession::execute(
             *candidate.document,
             modeling_kernel);
     const auto datum_evaluation =
-        part::evaluateDatums(
-            *candidate.document,
-            part_evaluation);
+        evaluateDatumsWithProvider(
+            *candidate.document,part_evaluation,modeling_kernel);
     const auto* evaluated =
         datum_evaluation.find(
             command.datum_id);
@@ -4621,8 +4888,8 @@ DocumentSessionResult DocumentSession::execute(
     std::set<part::DatumId> unique_targets;
     for (const auto id : command.targets) {
         if (!id.valid() ||
-            document_.findDatumPlane(id) ==
-                nullptr) {
+            (document_.findDatumPlane(id) == nullptr &&
+             document_.findEdgePointDatumPlane(id) == nullptr)) {
             return failure(
                 DocumentSessionErrorCode::
                     invalid_command,
@@ -4637,16 +4904,23 @@ DocumentSessionResult DocumentSession::execute(
 
     auto after = document_.state();
     for (const auto id : unique_targets) {
-        auto* target =
-            findDatumPlane(after, id);
-        if (target == nullptr) {
-            return failure(
-                DocumentSessionErrorCode::
-                    invalid_command,
-                "Datum visibility target disappeared before commit",
-                path_);
+        if (auto* target = findDatumPlane(after,id)) {
+            target->visible = command.visible;
+        } else {
+            const auto edge = std::find_if(
+                after.edge_point_datum_planes.begin(),
+                after.edge_point_datum_planes.end(),
+                [id](const part::EdgePointDatumPlane& value) {
+                    return value.id == id;
+                });
+            if (edge == after.edge_point_datum_planes.end()) {
+                return failure(
+                    DocumentSessionErrorCode::invalid_command,
+                    "Datum visibility target disappeared before commit",
+                    path_);
+            }
+            edge->visible = command.visible;
         }
-        target->visible = command.visible;
     }
 
     return commitCommandState(
@@ -4683,10 +4957,10 @@ DocumentSessionResult DocumentSession::execute(
                 return datum.id ==
                        command.datum_id;
             });
-    if (found == datums.end()) {
+    if (found == datums.end() &&
+        document_.findEdgePointDatumPlane(command.datum_id) == nullptr) {
         return failure(
-            DocumentSessionErrorCode::
-                invalid_command,
+            DocumentSessionErrorCode::invalid_command,
             "Delete Datum Plane target DatumId does not exist",
             path_);
     }
@@ -4733,15 +5007,23 @@ DocumentSessionResult DocumentSession::execute(
                 return datum.id ==
                        command.datum_id;
             });
-    if (erase ==
-        after.datum_planes.end()) {
-        return failure(
-            DocumentSessionErrorCode::
-                invalid_command,
-            "Delete Datum Plane target disappeared before commit",
-            path_);
+    if (erase != after.datum_planes.end()) {
+        after.datum_planes.erase(erase);
+    } else {
+        const auto edge = std::find_if(
+            after.edge_point_datum_planes.begin(),
+            after.edge_point_datum_planes.end(),
+            [&command](const part::EdgePointDatumPlane& item) {
+                return item.id == command.datum_id;
+            });
+        if (edge == after.edge_point_datum_planes.end()) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Delete Datum Plane target disappeared before commit",
+                path_);
+        }
+        after.edge_point_datum_planes.erase(edge);
     }
-    after.datum_planes.erase(erase);
 
     return commitCommandState(
         std::move(after),

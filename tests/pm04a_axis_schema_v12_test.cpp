@@ -98,6 +98,11 @@ std::string schema11FromCurrent(
     CHECK(authored.contains("axes"));
     authored.erase("next_axis_id");
     authored.erase("axes");
+    // v11 has no Edge-local authored Datum collection.
+    CHECK(authored.contains("edge_point_datum_planes"));
+    CHECK(authored.at("edge_point_datum_planes").is_array());
+    CHECK(authored.at("edge_point_datum_planes").empty());
+    authored.erase("edge_point_datum_planes");
     // A historical schema fixture cannot carry v15 projected bindings.
     // Refuse to downgrade a genuinely linked Sketch and never relax the
     // production legacy parser to accommodate current-schema extensions.
@@ -127,7 +132,7 @@ std::string schema11FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        16);
+        17);
 
     part::AxisIdCursor cursor;
     const auto first = cursor.allocate();
@@ -390,7 +395,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 16);
+            .domain_schema_version == 17);
 
     const auto authored =
         nlohmann::json::parse(
@@ -501,7 +506,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 16);
+            .domain_schema_version == 17);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);

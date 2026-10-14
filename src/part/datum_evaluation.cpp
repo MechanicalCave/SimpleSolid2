@@ -486,4 +486,77 @@ DatumEvaluation evaluateDatums(
               {}};
 }
 
+DatumEvaluation evaluateDatums(
+    const PartDocument& document,
+    const PartEvaluation& part_evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) noexcept {
+    // Continue using the existing cycle-safe evaluator for Offset Datums.
+    // Edge-local source Datums have no parent Datum dependency, so they
+    // can be appended after all Offset results without changing legacy
+    // scheduling or relying on cached native geometry.
+    auto result = evaluateDatums(document,part_evaluation);
+    for (const auto& datum : document.edgePointDatumPlanes()) {
+        const BodyStageRef stage = std::visit(
+            [](const auto& source) { return source.source_edge.stage; },
+            datum.source);
+        const auto required = std::optional<BodyStageRef>{stage};
+        const auto frame = resolveEdgePointDatumFrame(
+            document,datum,part_evaluation,provider);
+        if (frame.resolved()) {
+            result.planes.push_back(resolved(
+                datum.id,*frame.frame,required));
+            continue;
+        }
+        DatumPlaneEvaluationStatus status =
+            DatumPlaneEvaluationStatus::blocked;
+        DatumPlaneEvaluationDiagnostic diagnostic =
+            DatumPlaneEvaluationDiagnostic::invalid_datum;
+        switch (frame.status) {
+        case SelectedEdgeFrameStatus::resolved:
+        case SelectedEdgeFrameStatus::invalid_context:
+            break;
+        case SelectedEdgeFrameStatus::source_missing:
+            status = DatumPlaneEvaluationStatus::missing;
+            diagnostic =
+                DatumPlaneEvaluationDiagnostic::edge_source_missing;
+            break;
+        case SelectedEdgeFrameStatus::source_ambiguous:
+            status = DatumPlaneEvaluationStatus::ambiguous;
+            diagnostic =
+                DatumPlaneEvaluationDiagnostic::edge_source_ambiguous;
+            break;
+        case SelectedEdgeFrameStatus::source_unsupported:
+            status = DatumPlaneEvaluationStatus::unsupported;
+            diagnostic =
+                DatumPlaneEvaluationDiagnostic::edge_source_unsupported;
+            break;
+        case SelectedEdgeFrameStatus::native_geometry_unavailable:
+            diagnostic =
+                DatumPlaneEvaluationDiagnostic::
+                    edge_native_geometry_unavailable;
+            break;
+        case SelectedEdgeFrameStatus::invalid_geometry:
+            status = DatumPlaneEvaluationStatus::unsupported;
+            diagnostic = DatumPlaneEvaluationDiagnostic::invalid_frame;
+            break;
+        case SelectedEdgeFrameStatus::invalid_orientation_intent:
+            status = DatumPlaneEvaluationStatus::unsupported;
+            diagnostic =
+                DatumPlaneEvaluationDiagnostic::
+                    invalid_orientation_intent;
+            break;
+        case SelectedEdgeFrameStatus::orientation_review_required:
+            diagnostic =
+                DatumPlaneEvaluationDiagnostic::
+                    orientation_review_required;
+            break;
+        }
+        result.planes.push_back(unresolved(
+            datum.id,status,diagnostic,required));
+    }
+    return result.valid()
+        ? result
+        : DatumEvaluation{document.revision(),{}};
+}
+
 } // namespace simplesolid2::part

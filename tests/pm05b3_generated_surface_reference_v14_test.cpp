@@ -68,6 +68,16 @@ void writeBytes(
 std::string repackage(
     const persistence::NativeDocumentPackage& package,
     std::string authored_json) {
+    auto legacy_json = nlohmann::json::parse(
+        authored_json,nullptr,false);
+    CHECK(legacy_json.is_object());
+    CHECK(legacy_json.contains("edge_point_datum_planes"));
+    CHECK(legacy_json.at("edge_point_datum_planes").is_array());
+    // Native schema v14 could never carry a v17 Edge-local Datum.
+    // Do not silently lose authored intent while constructing negatives.
+    CHECK(legacy_json.at("edge_point_datum_planes").empty());
+    legacy_json.erase("edge_point_datum_planes");
+    authored_json = legacy_json.dump(2) + "\n";
     const auto built =
         persistence::buildNativeDocumentContainer(
             persistence::NativeDocumentDescriptor{
@@ -465,7 +475,7 @@ Fixture makeFixture() {
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        16);
+        17);
 
     const auto fixture =
         makeFixture();
@@ -487,7 +497,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 16);
+            .domain_schema_version == 17);
 
     auto authored =
         nlohmann::json::parse(

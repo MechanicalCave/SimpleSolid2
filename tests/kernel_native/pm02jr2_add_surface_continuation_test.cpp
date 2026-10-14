@@ -1518,7 +1518,7 @@ void verifyPartIntegration() {
                                             path);
                                     CHECK(package.ok());
                                     CHECK(package.package->descriptor
-                                              .domain_schema_version == 16);
+                                              .domain_schema_version == 17);
                                     auto authored = nlohmann::json::parse(
                                         package.package->authored_json);
                                     const auto ref_json =
@@ -1529,6 +1529,17 @@ void verifyPartIntegration() {
                                             int version,
                                             const std::filesystem::path&
                                                 output) {
+                                            auto legacy_json = document_json;
+                                            if (version < 17) {
+                                                CHECK(legacy_json.contains(
+                                                    "edge_point_datum_planes"));
+                                                CHECK(legacy_json.at(
+                                                    "edge_point_datum_planes").is_array());
+                                                CHECK(legacy_json.at(
+                                                    "edge_point_datum_planes").empty());
+                                                legacy_json.erase(
+                                                    "edge_point_datum_planes");
+                                            }
                                             const auto built =
                                                 persistence::
                                                     buildNativeDocumentContainer(
@@ -1539,7 +1550,7 @@ void verifyPartIntegration() {
                                                                     loaded.document->
                                                                         documentId().value()},
                                                                 version},
-                                                        document_json.dump(2));
+                                                        legacy_json.dump(2));
                                             CHECK(built.ok());
                                             std::ofstream stream{
                                                 output, std::ios::binary};

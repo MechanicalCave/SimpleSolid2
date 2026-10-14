@@ -260,6 +260,35 @@ struct CreateDatumPlaneCommand final {
     bool visible{true};
 };
 
+// One atomic Part authoring command: initialize the same signed S1
+// frame policy that preview uses, then store only certified source and
+// orientation intent. Never accept hovered/native topology tokens here.
+struct CreateEdgePointDatumPlaneCommand final {
+    part::EdgePointDatumSource source;
+    core::DocumentRevision expected_revision;
+    bool reverse{false};
+    bool visible{true};
+};
+
+// Reverse changes only authored orientation: Frame3 playback must keep
+// its semantic source, origin and U unchanged after every revision.
+struct EditEdgePointDatumPlaneCommand final {
+    part::DatumId datum_id;
+    core::DocumentRevision expected_revision;
+    bool reverse{false};
+};
+
+
+/** Replace a Datum's certified semantic Edge-local source, preserving its
+ * DatumId and dependent Sketch/Axis identities. Reinitialize authored
+ * orientation only if source identity changes; never carry an old frame. */
+struct ReplaceEdgePointDatumPlaneSourceCommand final {
+    part::DatumId datum_id;
+    part::EdgePointDatumSource source;
+    core::DocumentRevision expected_revision;
+    bool reverse{false};
+};
+
 struct EditDatumPlaneCommand final {
     part::DatumId datum_id;
     part::PlaneReference source;
@@ -740,6 +769,15 @@ public:
 
     [[nodiscard]] CreateDatumPlaneResult execute(
         const CreateDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] CreateDatumPlaneResult execute(
+        const CreateEdgePointDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditEdgePointDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const ReplaceEdgePointDatumPlaneSourceCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const EditDatumPlaneCommand& command,

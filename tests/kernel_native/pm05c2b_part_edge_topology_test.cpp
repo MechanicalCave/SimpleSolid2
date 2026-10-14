@@ -1,9 +1,13 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/datum_evaluation.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -1975,6 +1979,479 @@ void verifyS1SelectedSignedFrames(
         CHECK(s1Near3(replay.frame->normal,initial.frame->normal));
         CHECK(s1Near3(replay.frame->u_axis,initial.frame->u_axis));
     }
+    // P4-S2 implementation lane: the authored Datum value preserves the
+    // independent semantic source and orientation intent, and evaluates
+    // via the certified S1 path (no saved/native Frame).
+    {
+        auto cursor = document.datumIdCursor();
+        const auto first_id = cursor.allocate();
+        const auto second_id = cursor.allocate();
+        CHECK(first_id && second_id && *first_id != *second_id);
+
+        const auto end_initial = part::initializeSelectedEdgeEndFrame(
+            document, ends.front(), evaluation, provider);
+        checkS1Frame(end_initial);
+        CHECK(end_initial.initialized_intent);
+        part::EdgePointDatumPlane end_datum{
+            *first_id, ends.front(), *end_initial.initialized_intent, true};
+        CHECK(part::edgePointDatumPlaneStructurallyValid(end_datum));
+        const auto end_frame = part::resolveEdgePointDatumFrame(
+            document, end_datum, evaluation, provider);
+        checkS1Frame(end_frame);
+        CHECK(s1Near3(end_frame.frame->origin,
+                      end_initial.frame->origin));
+        CHECK(s1Near3(end_frame.frame->u_axis,
+                      end_initial.frame->u_axis));
+        CHECK(s1Near3(end_frame.frame->normal,
+                      end_initial.frame->normal));
+
+        const auto mid_initial = part::initializeSelectedEdgeMidFrame(
+            document, mids.front(), evaluation, provider);
+        checkS1Frame(mid_initial);
+        CHECK(mid_initial.initialized_intent);
+        part::EdgePointDatumPlane mid_datum{
+            *second_id, mids.front(), *mid_initial.initialized_intent, false};
+        CHECK(part::edgePointDatumPlaneStructurallyValid(mid_datum));
+        const auto mid_frame = part::resolveEdgePointDatumFrame(
+            document, mid_datum, evaluation, provider);
+        checkS1Frame(mid_frame);
+        CHECK(s1Near3(mid_frame.frame->origin,
+                      mid_initial.frame->origin));
+        CHECK(s1Near3(mid_frame.frame->normal,
+                      mid_initial.frame->normal));
+
+        // Reverse is an authored choice; it never mutates source or U.
+        mid_datum.orientation.reverse = true;
+        const auto reversed_frame = part::resolveEdgePointDatumFrame(
+            document, mid_datum, evaluation, provider);
+        checkS1Frame(reversed_frame);
+        CHECK(s1Near3(reversed_frame.frame->origin,
+                      mid_frame.frame->origin));
+        CHECK(s1Near3(reversed_frame.frame->u_axis,
+                      mid_frame.frame->u_axis));
+        CHECK(s1Near3(reversed_frame.frame->normal,{
+            -mid_frame.frame->normal.x,
+            -mid_frame.frame->normal.y,
+            -mid_frame.frame->normal.z}));
+        mid_datum.orientation.reverse = false;
+        const auto restored_frame = part::resolveEdgePointDatumFrame(
+            document, mid_datum, evaluation, provider);
+        checkS1Frame(restored_frame);
+        CHECK(s1Near3(restored_frame.frame->normal,
+                      mid_frame.frame->normal));
+
+        auto malformed = mid_datum;
+        malformed.orientation.u_seed_world = {};
+        CHECK(!part::edgePointDatumPlaneStructurallyValid(malformed));
+        const auto rejected = part::resolveEdgePointDatumFrame(
+            document, malformed, evaluation, provider);
+        CHECK(rejected.status ==
+              part::SelectedEdgeFrameStatus::invalid_orientation_intent);
+        CHECK(!rejected.frame && !rejected.initialized_intent);
+        CHECK(!rejected.native_error);
+
+        part::EdgePointDatumPlane missing_id = end_datum;
+        missing_id.id = {};
+        CHECK(!part::edgePointDatumPlaneStructurallyValid(missing_id));
+        const auto invalid = part::resolveEdgePointDatumFrame(
+            document, missing_id, evaluation, provider);
+        CHECK(invalid.status ==
+              part::SelectedEdgeFrameStatus::invalid_context);
+        CHECK(!invalid.frame);
+    }
+
+    // Application command is the real authored creation boundary:
+    // initialize END/MID from certified Part source, atomically store
+    // Reverse and materialize a Sketch using that Datum immediately.
+    {
+        auto copy = part::PartDocument::restore(
+            document.documentId(),document.state(),document.revision());
+        CHECK(copy.ok());
+        application::DocumentSession session{
+            {},std::move(*copy.document)};
+        const auto added = session.execute(
+            application::CreateEdgePointDatumPlaneCommand{
+                part::EdgePointDatumSource{mids.front()},
+                session.document().revision(),true,false},
+            provider);
+        CHECK(added.ok() && added.changed && added.datum_id);
+        CHECK(session.document().edgePointDatumPlanes().size() == 1U);
+        const auto* created = session.document().findEdgePointDatumPlane(
+            *added.datum_id);
+        CHECK(created);
+        CHECK(created->orientation.reverse);
+        CHECK(!created->visible);
+        CHECK(std::get_if<part::SelectedMaterialEdgeMid>(
+            &created->source) != nullptr);
+
+        const auto observed = part::evaluatePart(
+            session.document(),provider);
+        CHECK(observed.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto planes = part::evaluateDatums(
+            session.document(),observed,provider);
+        const auto* plane = planes.find(*added.datum_id);
+        CHECK(plane && plane->frame && plane->valid());
+        const auto source_support =
+            part::partSketchSupportForDatumPlane(*added.datum_id);
+        CHECK(source_support);
+        const auto hosted = session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                *source_support,session.document().revision()},
+            &provider);
+        CHECK(hosted.ok() && hosted.sketch_id);
+        CHECK(session.document().findSketch(*hosted.sketch_id));
+        CHECK(session.document().findSketch(*hosted.sketch_id)
+                  ->support == *source_support);
+
+        // Real downstream Axis command on the newly hosted Sketch must
+        // evaluate its 3D line via current Edge-local Datum Frame3.
+        const auto axis_line = session.execute(
+            application::AddSketchLineCommand{
+                *hosted.sketch_id,{0.0,0.0},{12.0,0.0},
+                sketch::EntityRole::construction});
+        CHECK(axis_line.ok() && axis_line.entity_id);
+        const auto axis = session.execute(
+            application::CreateAxisCommand{
+                part::SketchLineAxisSource{
+                    *hosted.sketch_id,*axis_line.entity_id},
+                session.document().revision(),
+                "Axis on Edge Datum",true},
+            provider);
+        CHECK(axis.ok() && axis.axis_id);
+        CHECK(session.document().findAxis(*axis.axis_id));
+
+        const auto edited = session.execute(
+            application::EditEdgePointDatumPlaneCommand{
+                *added.datum_id,session.document().revision(),false},
+            provider);
+        CHECK(edited.ok() && edited.changed);
+        CHECK(!session.document()
+                  .findEdgePointDatumPlane(*added.datum_id)
+                  ->orientation.reverse);
+        const auto updated_body = part::evaluatePart(
+            session.document(),provider);
+        const auto updated_datums = part::evaluateDatums(
+            session.document(),updated_body,provider);
+        const auto* updated = updated_datums.find(*added.datum_id);
+        CHECK(updated && updated->frame);
+        CHECK(s1Near3(updated->frame->origin,plane->frame->origin));
+        CHECK(s1Near3(updated->frame->u_axis,plane->frame->u_axis));
+        CHECK(s1Near3(updated->frame->normal,{
+            -plane->frame->normal.x,
+            -plane->frame->normal.y,
+            -plane->frame->normal.z}));
+
+
+        // Full semantic Edit: keep the same DatumId and downstream Sketch
+        // and Axis while replacing MID with the certified END of an Edge.
+        // One atomic undo must restore the prior authored source exactly.
+        const auto before_source_replace = session.document().state();
+        const auto undo_before_replace = session.undoDepth();
+        const auto replaced = session.execute(
+            application::ReplaceEdgePointDatumPlaneSourceCommand{
+                *added.datum_id,
+                part::EdgePointDatumSource{ends.front()},
+                session.document().revision(),true},
+            provider);
+        CHECK(replaced.ok() && replaced.changed);
+        CHECK(session.undoDepth() == undo_before_replace + 1U);
+        const auto* source_changed =
+            session.document().findEdgePointDatumPlane(*added.datum_id);
+        CHECK(source_changed);
+        CHECK(source_changed->id == *added.datum_id);
+        CHECK(source_changed->source ==
+              part::EdgePointDatumSource{ends.front()});
+        CHECK(source_changed->orientation.reverse);
+        CHECK(session.document().findSketch(*hosted.sketch_id));
+        CHECK(session.document().findAxis(*axis.axis_id));
+        const auto body_after_replace =
+            part::evaluatePart(session.document(),provider);
+        const auto derived_after_replace =
+            part::evaluateDatums(
+                session.document(),body_after_replace,provider);
+        const auto* frame_after_replace =
+            derived_after_replace.find(*added.datum_id);
+        CHECK(frame_after_replace && frame_after_replace->frame);
+        const auto directly_initialized_end =
+            part::initializeSelectedEdgeEndFrame(
+                session.document(),ends.front(),
+                body_after_replace,provider,true);
+        CHECK(directly_initialized_end.resolved());
+        CHECK(s1Near3(frame_after_replace->frame->origin,
+                      directly_initialized_end.frame->origin));
+        CHECK(s1Near3(frame_after_replace->frame->normal,
+                      directly_initialized_end.frame->normal));
+        const auto after_source_replace = session.document().state();
+
+        const auto undo_before_reject = session.undoDepth();
+        const auto rejected_source = session.execute(
+            application::ReplaceEdgePointDatumPlaneSourceCommand{
+                *added.datum_id,
+                part::EdgePointDatumSource{
+                    part::SelectedMaterialEdgeMid{}},
+                session.document().revision(),false},
+            provider);
+        CHECK(!rejected_source.ok() && !rejected_source.changed);
+        CHECK(session.undoDepth() == undo_before_reject);
+        CHECK(session.document().state() == after_source_replace);
+        const auto stale_source = session.execute(
+            application::ReplaceEdgePointDatumPlaneSourceCommand{
+                *added.datum_id,
+                part::EdgePointDatumSource{mids.front()},
+                document.revision(),false},
+            provider);
+        CHECK(!stale_source.ok() && !stale_source.changed);
+        CHECK(session.document().state() == after_source_replace);
+
+        const auto undone_source = session.undo();
+        CHECK(undone_source.ok() && undone_source.changed);
+        CHECK(session.document().state() == before_source_replace);
+        CHECK(session.document().findEdgePointDatumPlane(*added.datum_id)
+                  ->source == part::EdgePointDatumSource{mids.front()});
+        const auto redone_source = session.redo();
+        CHECK(redone_source.ok() && redone_source.changed);
+        CHECK(session.document().state() == after_source_replace);
+        CHECK(session.document().findEdgePointDatumPlane(*added.datum_id)
+                  ->source == part::EdgePointDatumSource{ends.front()});
+
+        // END -> MID uses the same Datum, reinitializes the signed seed
+        // from the newly certified source, and requires only one Undo.
+        const auto undo_before_mid = session.undoDepth();
+        const auto replaced_with_mid = session.execute(
+            application::ReplaceEdgePointDatumPlaneSourceCommand{
+                *added.datum_id,
+                part::EdgePointDatumSource{mids.front()},
+                session.document().revision(),false},
+            provider);
+        CHECK(replaced_with_mid.ok() && replaced_with_mid.changed);
+        CHECK(session.undoDepth() == undo_before_mid + 1U);
+        CHECK(session.document().findEdgePointDatumPlane(*added.datum_id)
+                  ->source == part::EdgePointDatumSource{mids.front()});
+        CHECK(!session.document().findEdgePointDatumPlane(
+                   *added.datum_id)->orientation.reverse);
+        CHECK(session.document().findSketch(*hosted.sketch_id));
+        CHECK(session.document().findAxis(*axis.axis_id));
+
+        const auto shown = session.execute(
+            application::SetDatumPlaneVisibilityCommand{
+                {*added.datum_id},session.document().revision(),true});
+        CHECK(shown.ok() && shown.changed);
+        CHECK(session.document()
+                  .findEdgePointDatumPlane(*added.datum_id)->visible);
+
+        // A hosted Sketch forbids deleting its Datum source.
+        const auto before_delete = session.document().state();
+        const auto refused = session.execute(
+            application::DeleteDatumPlaneCommand{
+                *added.datum_id,session.document().revision()});
+        CHECK(!refused.ok() && !refused.changed);
+        CHECK(session.document().state() == before_delete);
+
+        const auto source_before = session.document().state();
+        const auto stale = session.execute(
+            application::CreateEdgePointDatumPlaneCommand{
+                part::EdgePointDatumSource{mids.front()},
+                document.revision(),false,true},
+            provider);
+        CHECK(!stale.ok() && !stale.changed && !stale.datum_id);
+        CHECK(session.document().state() == source_before);
+    }
+
+    // P4-S2 exact Save/Reopen: serialize only source+signed orientation;
+    // rebuild a fresh Part/OCCT body and prove equivalent derived frames.
+    {
+        auto authored = document.state();
+        auto cursor = authored.next_datum_id;
+        const auto end_id = cursor.allocate();
+        const auto mid_id = cursor.allocate();
+        CHECK(end_id && mid_id && *end_id != *mid_id);
+        authored.next_datum_id = cursor;
+
+        const auto end = part::initializeSelectedEdgeEndFrame(
+            document, ends.front(), evaluation, provider);
+        const auto mid = part::initializeSelectedEdgeMidFrame(
+            document, mids.front(), evaluation, provider, true);
+        checkS1Frame(end);
+        checkS1Frame(mid);
+        CHECK(end.initialized_intent && mid.initialized_intent);
+        part::EdgePointDatumPlane end_datum{
+            *end_id, ends.front(), *end.initialized_intent, true};
+        part::EdgePointDatumPlane mid_datum{
+            *mid_id, mids.front(), *mid.initialized_intent, false};
+        authored.edge_point_datum_planes.push_back(end_datum);
+        authored.edge_point_datum_planes.push_back(mid_datum);
+
+        const auto created = part::PartDocument::restore(
+            document.documentId(),authored,document.revision());
+        CHECK(created.ok());
+        CHECK(created.document->edgePointDatumPlanes().size() == 2U);
+        CHECK(created.document->findEdgePointDatumPlane(*end_id));
+        CHECK(created.document->findEdgePointDatumPlane(*mid_id));
+
+        // Globally unique DatumIds across legacy Offset and new source kind.
+        auto colliding = authored;
+        colliding.datum_planes.push_back(
+            part::OffsetDatumPlane{
+                *end_id,
+                part::PlaneReference{
+                    part::BuiltinOriginPlaneReference{
+                        core::BuiltinReferenceRole::xy_plane}},
+                core::LengthValue{1.0},true});
+        CHECK(!part::PartDocument::restore(
+            document.documentId(),std::move(colliding),
+            document.revision()).ok());
+        auto invalid_orientation = authored;
+        invalid_orientation.edge_point_datum_planes[0]
+            .orientation.u_seed_world = {};
+        CHECK(!part::PartDocument::restore(
+            document.documentId(),std::move(invalid_orientation),
+            document.revision()).ok());
+
+        const auto filename = std::string{"ss2-s2-datum-"} +
+            std::to_string(
+                std::chrono::steady_clock::now()
+                    .time_since_epoch().count()) +
+            ".ss2part";
+        const auto path =
+            std::filesystem::temp_directory_path() / filename;
+        struct ScopedNativeFile {
+            std::filesystem::path path;
+            ~ScopedNativeFile() {
+                std::error_code ec;
+                std::filesystem::remove(path,ec);
+            }
+        } scratch{path};
+
+        part::PartDocumentStore store;
+        const auto saved = store.createNew(
+            scratch.path,*created.document);
+        CHECK(saved.ok());
+        auto loaded = store.load(scratch.path);
+        CHECK(loaded.ok());
+        CHECK(loaded.document->edgePointDatumPlanes().size() == 2U);
+        const auto* reopened_end =
+            loaded.document->findEdgePointDatumPlane(*end_id);
+        const auto* reopened_mid =
+            loaded.document->findEdgePointDatumPlane(*mid_id);
+        CHECK(reopened_end && reopened_mid);
+        CHECK(*reopened_end == end_datum);
+        CHECK(*reopened_mid == mid_datum);
+        CHECK(reopened_mid->orientation.reverse);
+        CHECK(!reopened_mid->visible);
+
+        // Provider/body identity changes on cold Part load: no runtime
+        // tokens or cached Frame3 were authored or written to the file.
+        kernel_occt::OcctSolidModelingKernel cold_provider;
+        const auto cold_evaluation =
+            part::evaluatePart(*loaded.document,cold_provider);
+        CHECK(cold_evaluation.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto rebuilt_end = part::resolveEdgePointDatumFrame(
+            *loaded.document,*reopened_end,
+            cold_evaluation,cold_provider);
+        const auto rebuilt_mid = part::resolveEdgePointDatumFrame(
+            *loaded.document,*reopened_mid,
+            cold_evaluation,cold_provider);
+        checkS1Frame(rebuilt_end);
+        checkS1Frame(rebuilt_mid);
+        CHECK(s1Near3(rebuilt_end.frame->origin,end.frame->origin));
+        CHECK(s1Near3(rebuilt_end.frame->u_axis,end.frame->u_axis));
+        CHECK(s1Near3(rebuilt_end.frame->normal,end.frame->normal));
+        CHECK(s1Near3(rebuilt_mid.frame->origin,mid.frame->origin));
+        CHECK(s1Near3(rebuilt_mid.frame->normal,mid.frame->normal));
+        CHECK(s1Near3(rebuilt_mid.frame->u_axis,mid.frame->u_axis));
+
+        const auto derived = part::evaluateDatums(
+            *loaded.document,cold_evaluation,cold_provider);
+        CHECK(derived.valid());
+        const auto* evaluated_end = derived.find(*end_id);
+        const auto* evaluated_mid = derived.find(*mid_id);
+        CHECK(evaluated_end && evaluated_mid);
+        CHECK(evaluated_end->status ==
+              part::DatumPlaneEvaluationStatus::resolved);
+        CHECK(evaluated_mid->status ==
+              part::DatumPlaneEvaluationStatus::resolved);
+        CHECK(evaluated_end->required_body_stage ==
+              ends.front().source_edge.stage);
+        CHECK(evaluated_mid->required_body_stage ==
+              mids.front().source_edge.stage);
+        CHECK(evaluated_end->frame && evaluated_mid->frame);
+        CHECK(s1Near3(evaluated_end->frame->normal,
+                      rebuilt_end.frame->normal));
+        CHECK(s1Near3(evaluated_mid->frame->normal,
+                      rebuilt_mid.frame->normal));
+
+        // Real application Sketch creation and a second Save/Reopen
+        // consume the authored Edge-local MID Datum, not a cached plane.
+        const auto support =
+            part::partSketchSupportForDatumPlane(*mid_id);
+        CHECK(support.has_value());
+        const auto current_support = part::resolveSketchSupport(
+            *support,nullptr,&derived);
+        CHECK(current_support.status ==
+              part::SketchSupportResolutionStatus::resolved);
+        CHECK(current_support.frame.has_value());
+
+        application::DocumentSession sketch_session{
+            {},std::move(*loaded.document)};
+        const auto sketch_created = sketch_session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                *support,sketch_session.document().revision()},
+            &cold_provider);
+        CHECK(sketch_created.ok() && sketch_created.sketch_id);
+        const auto* hosted = sketch_session.document().findSketch(
+            *sketch_created.sketch_id);
+        CHECK(hosted && hosted->support == *support);
+
+        const auto again = store.save(
+            scratch.path,sketch_session.document(),
+            *loaded.checkpoint);
+        CHECK(again.ok());
+        const auto reopened_with_sketch = store.load(scratch.path);
+        CHECK(reopened_with_sketch.ok());
+        const auto* restored_sketch =
+            reopened_with_sketch.document->findSketch(
+                *sketch_created.sketch_id);
+        CHECK(restored_sketch);
+        CHECK(restored_sketch->support == *support);
+        kernel_occt::OcctSolidModelingKernel sketch_provider;
+        const auto current_body = part::evaluatePart(
+            *reopened_with_sketch.document,sketch_provider);
+        CHECK(current_body.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto current_datums = part::evaluateDatums(
+            *reopened_with_sketch.document,current_body,sketch_provider);
+        const auto current_frame = part::resolveSketchSupport(
+            restored_sketch->support,nullptr,&current_datums);
+        CHECK(current_frame.status ==
+              part::SketchSupportResolutionStatus::resolved);
+        CHECK(current_frame.frame.has_value());
+        CHECK(s1Near(
+            current_frame.frame->origin[0],
+            rebuilt_mid.frame->origin.x));
+        CHECK(s1Near(
+            current_frame.frame->origin[1],
+            rebuilt_mid.frame->origin.y));
+        CHECK(s1Near(
+            current_frame.frame->origin[2],
+            rebuilt_mid.frame->origin.z));
+
+        // A feature's source Sketch may not depend on its own Edge:
+        // that would create an authored current/future Body-stage cycle.
+        auto cyclic = reopened_with_sketch.document->state();
+        CHECK(!cyclic.sketches.empty());
+        cyclic.sketches.front().support = *support;
+        CHECK(!part::PartDocument::restore(
+            document.documentId(),std::move(cyclic),
+            document.revision()).ok());
+
+        std::cout << "RG02B1_P4_S2_DATUM_V17"
+                  << " saved=2 restored=2"
+                  << " cold_rebuild=1 reverse_persisted=1"
+                  << " collisions_rejected=1\n";
+    }
+
     const auto& sample = mids.front();
     const auto initial = part::initializeSelectedEdgeMidFrame(
         document,sample,evaluation,provider);
