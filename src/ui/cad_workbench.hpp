@@ -217,7 +217,8 @@ private:
     void selectDatumPlaneConstructor(int constructor_index);
     void stageEdgeDatumFromBodyTopology(
         const BodyTopologyInspection& inspection);
-    void confirmEdgeDatumMidPoint();
+    void confirmEdgeDatumMidPoint(
+        std::optional<DatumMidHoverPick> point_first_pick);
     void tryStageDatumPlaneFromDatum(
         std::optional<part::DatumId> datum_id);
     void refreshDatumPlaneEvaluation();
@@ -737,6 +738,7 @@ private:
         edge_datum_create_source_;
     std::optional<kernel::Frame3> edge_datum_create_preview_;
     bool edge_datum_mid_point_confirmed_{false};
+    std::optional<DatumMidHoverPick> edge_datum_mid_first_pick_;
     bool edge_datum_create_reverse_{false};
     std::uint64_t edge_datum_create_context_generation_{1};
     std::optional<
