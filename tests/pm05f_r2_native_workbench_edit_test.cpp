@@ -2326,7 +2326,6 @@ int main(int argc, char* argv[]) {
             // Independent second Part/Workbench session: point-first
             // really means a Qt MID anchor click before an explicit
             // selected material Edge (no implicit source commit).
-            qputenv("SS2_S3A_DIAG", "1");
             auto s3a_mid_first = makeBaseSession(kernel);
             CHECK(workbench.activateDocument(&s3a_mid_first, {}));
             QApplication::processEvents();
@@ -2348,34 +2347,23 @@ int main(int argc, char* argv[]) {
             constructor->setCurrentIndex(1);
             QApplication::processEvents();
             CHECK(constructor->currentIndex() == 1);
-            // Force a fresh per-session hover preselection lease, and
-            // deliver the live MID preview to OCCT before clicking it.
-            // QTest mouseMove alone may leave the scene update queued.
+            // Dispatch synchronous Qt mouseMove to exercise the real
+            // Workbench hover path independently of the global OS cursor.
             sendNativeWorkbenchHover(
                 *viewport, viewport->rect().topLeft() + QPoint{3, 3});
             const auto s3a_edge_probe = viewport->queryBodyTopology(
                 viewer::ViewportPoint2{double(point_edge_pixel->x()),
                                        double(point_edge_pixel->y())},
                 viewer::BodyTopologyPickFilter{false,true,false});
-            std::cerr << "S3A_DBG_TEST_PROBE valid=" << s3a_edge_probe.valid()
-                      << " complete=" << s3a_edge_probe.completed
-                      << " count=" << s3a_edge_probe.candidates.size()
-                      << "\n";
+            CHECK(s3a_edge_probe.valid() &&
+                  s3a_edge_probe.completed &&
+                  !s3a_edge_probe.candidates.empty());
             sendNativeWorkbenchHover(*viewport, *point_edge_pixel);
             sendNativeWorkbenchHover(*viewport, *point_mid_pixel);
             QTest::mouseClick(
                 viewport, Qt::LeftButton,
                 Qt::NoModifier, *point_mid_pixel);
             QApplication::processEvents();
-            std::cerr << "RG02B1_S3A_MID_FIRST_DIAGNOSTIC"
-                      << " label="
-                      << datum_result->text().toStdString()
-                      << " finish_enabled=" << datum_finish->isEnabled()
-                      << " edge_pixel=" << point_edge_pixel->x()
-                      << "," << point_edge_pixel->y()
-                      << " mid_pixel=" << point_mid_pixel->x()
-                      << "," << point_mid_pixel->y()
-                      << std::endl;
             CHECK(datum_result->text().contains(
                 QStringLiteral("MID selected first")));
             CHECK(!datum_finish->isEnabled());
@@ -2402,7 +2390,6 @@ int main(int argc, char* argv[]) {
                       << " same_current_edge=1"
                       << " incomplete_finish_refused=1"
                       << " empty_enter_commits=1\n";
-            qunsetenv("SS2_S3A_DIAG");
             CHECK(workbench.activateDocument(&s3a, {}));
             QApplication::processEvents();
 
