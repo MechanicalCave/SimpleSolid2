@@ -2414,6 +2414,10 @@ int main(int argc, char* argv[]) {
             CHECK(constructor->currentIndex() == 1);
             bool native_end_created = false;
             std::size_t shared_corner_trials = 0U;
+            viewer::Point3 accepted_shared_end_edge{0.0,0.0,0.0};
+            viewer::Point3 accepted_shared_end_corner{0.0,0.0,0.0};
+            auto accepted_shared_end_view =
+                viewer::StandardView::top_front_right;
             for (const auto view : {
                      viewer::StandardView::top_front_right,
                      viewer::StandardView::top_front_left,
@@ -2504,6 +2508,10 @@ int main(int argc, char* argv[]) {
                                 QStringLiteral("Resolved END")) &&
                             datum_finish->isEnabled()) {
                             native_end_created = true;
+                            accepted_shared_end_edge = quarter;
+                            accepted_shared_end_corner = viewer::Point3{
+                                terminal.x,terminal.y,terminal.z};
+                            accepted_shared_end_view = view;
                             break;
                         }
                         // No half-authored attempt may produce a Datum.
@@ -2928,6 +2936,101 @@ int main(int argc, char* argv[]) {
                       << " unchanged_datum_sketch_axis_ids=1"
                       << " one_undo=1"
                       << " cold_v17=1\n";
+            CHECK(workbench.activateDocument(&s3a_end_session, {}));
+            QApplication::processEvents();
+
+
+            // S3A-F03: Point-first END on the *same trihedral* material
+            // corner, then an explicit chosen Edge click. Independent
+            // session ensures no dependent Sketch/Axis overlay intercepts
+            // the point-first gesture, while both clicks still traverse
+            // the real native QWidget/OCCT Workbench route.
+            auto s3a_end_first = makeBaseSession(kernel);
+            CHECK(workbench.activateDocument(&s3a_end_first, {}));
+            QApplication::processEvents();
+            CHECK(workbench.submitCadInput(
+                "DATUM PLANE",
+                workbench.cadInputContextGeneration()).accepted);
+            constructor->setCurrentIndex(1);
+            QApplication::processEvents();
+            CHECK(viewport->setStandardView(
+                accepted_shared_end_view));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto first_corner =
+                choosePixel(accepted_shared_end_corner);
+            const auto second_edge =
+                choosePixel(accepted_shared_end_edge);
+            CHECK(first_corner && second_edge);
+            const auto first_vertex_query =
+                viewport->queryBodyTopology(
+                    viewer::ViewportPoint2{
+                        double(first_corner->x()),
+                        double(first_corner->y())},
+                    viewer::BodyTopologyPickFilter{
+                        false,false,true});
+            const auto second_edge_query =
+                viewport->queryBodyTopology(
+                    viewer::ViewportPoint2{
+                        double(second_edge->x()),
+                        double(second_edge->y())},
+                    viewer::BodyTopologyPickFilter{
+                        false,true,false});
+            CHECK(first_vertex_query.valid() &&
+                  first_vertex_query.completed &&
+                  !first_vertex_query.candidates.empty());
+            CHECK(second_edge_query.valid() &&
+                  second_edge_query.completed &&
+                  !second_edge_query.candidates.empty());
+            const auto point_first_state =
+                s3a_end_first.document().state();
+            const auto point_first_undo =
+                s3a_end_first.undoDepth();
+            sendNativeWorkbenchHover(*viewport,*first_corner);
+            QTest::mouseClick(
+                viewport,Qt::LeftButton,
+                Qt::NoModifier,*first_corner);
+            QApplication::processEvents();
+            CHECK(!datum_finish->isEnabled());
+            CHECK(s3a_end_first.document().state() ==
+                  point_first_state);
+            CHECK(s3a_end_first.undoDepth() ==
+                  point_first_undo);
+            sendNativeWorkbenchHover(*viewport,*second_edge);
+            QTest::mouseClick(
+                viewport,Qt::LeftButton,
+                Qt::NoModifier,*second_edge);
+            QApplication::processEvents();
+            CHECK(datum_result->text().contains(
+                QStringLiteral("Resolved END")));
+            CHECK(datum_finish->isEnabled());
+            CHECK(workbench.submitCadInput(
+                "FINISH",
+                workbench.cadInputContextGeneration()).accepted);
+            CHECK(s3a_end_first.document()
+                      .edgePointDatumPlanes().size()==1U);
+            const auto authored_end_first =
+                s3a_end_first.document()
+                    .edgePointDatumPlanes().front();
+            CHECK(std::holds_alternative<
+                part::SelectedMaterialEdgeEnd>(
+                    authored_end_first.source));
+            CHECK(s3a_end_first.undoDepth() ==
+                  point_first_undo+1U);
+            const auto point_first_body =
+                part::evaluatePart(s3a_end_first.document(),kernel);
+            const auto point_first_datums =
+                part::evaluateDatums(
+                    s3a_end_first.document(),point_first_body,kernel);
+            const auto* point_first_frame =
+                point_first_datums.find(authored_end_first.id);
+            CHECK(point_first_frame &&
+                  point_first_frame->valid() &&
+                  point_first_frame->frame.has_value());
+            std::cout << "RG02B1_S3A_NATIVE_SHARED_END_POINT_FIRST_PASS"
+                      << " current_material_corner=1"
+                      << " real_qt_mouse=1"
+                      << " one_undo=1\n";
             CHECK(workbench.activateDocument(&s3a_end_session, {}));
             QApplication::processEvents();
 
