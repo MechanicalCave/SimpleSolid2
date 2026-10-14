@@ -9,6 +9,11 @@
 - Windows Draft FAST [#3065](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38626713961) **PASS 93/93** on source and registered native test SHA `1f2d3b9c1666e5501cc27aa36c0b1e9333c9f1ee`.
 - This work-ledger-only follow-up requests exact-head FOCUSED for `wb01.viewer_reference_presentation`, `sk04b.viewer_native_selection_query` and the full-only native `pm05f_r2.native_workbench_edit` with the newly required repeated END↔MID click matrix. Successful FAST alone does **not** close either Owner manual defect. FULL and another manual Windows acceptance remain OPEN.
 
+## Final native edge-then-MID hover focused check (2026-10-14)
+
+- Native registered Workbench [#3079](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38638979794) **FOCUSED PASS 1/1** on source/test SHA `b9f7d2d1203cc8105e6baa531f02015970c2a74b`, `pm05f_r2.native_workbench_edit` 39.79 s. Exact native gesture hovers the source Edge to reveal the MID marker, moves onto its actual pixel and clicks to author the same bounded Edge-local semantic MID; earlier real hover→leave→hover and END↔MID cases remain.
+- This ledger-only sync introduces no runtime/test changes. Fresh same-head FAST and Ready FULL remain required, and real Owner manual visual hover consistency remains **PENDING**. The historical identical-SHA #3077 FULL attempt 1 RED vs attempt 2 PASS and #3078 FOCUSED RED are retained, not erased.
+
 ## Native MID hover-before-click integration correction (2026-10-14)
 
 Focused [#3078](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38638645954) failed the same positive re-entry check (`Click the highlighted MID Point to continue.`) despite explicit GUI event processing. This confirms the earlier naive teleport-to-MID synthetic gesture is not a reliable witness for the requirement: the interactive marker is published *by hover over the material Edge*, so a realistic user first hovers a non-MID portion of the chosen Edge (marker becomes visible), then approaches and clicks the MID square. This source/test-only correction uses existing `certified_edge_world` and `certified_mid_pixel` with actual Qt/OCCT mouse events, one true click, no tolerance/rebind/retry and unchanged Finish/Part provenance assertions. A failure of this realistic sequence is a product bug. No Owner visual PASS claimed, and new CI required.
