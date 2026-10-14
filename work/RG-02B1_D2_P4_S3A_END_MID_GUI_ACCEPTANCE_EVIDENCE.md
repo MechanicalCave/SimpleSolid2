@@ -12,7 +12,8 @@
 - [Windows Ready FULL #3018](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38589098637) on `91c2abfa8746025b5d816ce1048f3cc8476272aa`: **FAIL**; one Desktop `pm05f_r2.native_workbench_edit` test fails on newly added **MID→Edge point-first** gesture, while other 198 tests passed.
 - [Windows Ready FULL #3019](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38589899287) on `e10d3f7d57c1c673423f572d0e635ee5e55c14bb`: **FAIL**; same point-first MID gesture, diagnostic label remains “Hover an Edge for MID, or pick END/Edge in either order.” Point pixels `Edge(500,346)`, `MID(522,358)`.
 - [Windows Ready FULL #3021](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38591962643) on `ced69c1c87a17ac154b6ae0df15a424945857c0a`: **FAIL**, same exact point-first MID assertion despite strict current Edge hover query. Not evidence of successful repair.
-- #3023 on `4f752f31c3019e7f18e9ae95c73a9a278f8fbc47` adds strictly test-gated diagnostic traces in the allowed existing source/test files; **result pending at the time of this evidence snapshot**. Never infer a PASS without exact Windows results.
+- [Windows Ready FULL #3023](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38593421853) on `4f752f31c3019e7f18e9ae95c73a9a278f8fbc47`: **FAIL**, exactly one native Workbench gesture test. Instrumentation proves the native strict quarter-Edge query is valid/completed with one current candidate (`valid=1 completed=1 count=1`), but no valid point-first Body hover reaches the Datum controller; the click selects an unrelated Reference token and no MID anchor is installed (`expected=0`). The existing SK-04B real Viewer suite documents Windows QTest::mouseMove global-cursor nondeterminism.
+- Windows Ready FULL #3025 on `5f991be949da39c635e9d2de33d0265bc8328a60` replaces QTest-based point-first hover generation with the established SK-04B synchronous real `QMouseEvent` widget dispatch, retains real QTest mouseClick and all exact native semantic assertions. **PENDING result; do not claim PASS until observed**.
 
 ## S3A acceptance gates (all claims must be firsthand exact-head)
 
@@ -32,3 +33,16 @@
 ## Scope and decision stops
 
 Exactly one native Workbench test path was added to S3A: `tests/pm05f_r2_native_workbench_edit_test.cpp`. The active original S3A UI/Viewer paths, registered tests, internal documentation, both PL/EN product Markdown, generated Browser and this ledger remain the entire allowlist. No CMake, CI, Part schema/public API, independent off-line Point or PM-06 changes are preauthorized. Do not merge implementation PR #386, report final PASS, or close S3A while the point-first native witness fails and the mandatory manual acceptance is outstanding.
+
+## Owner manual Windows checklist (PENDING actual Owner report)
+
+- [ ] Build/open the exact final S3A candidate on Windows and create a real box with bounded material Edges.
+- [ ] Select the existing Datum Plane tool via Operations and `DATUMPLANE` / `DATUM PLANE`; confirm Offset remains default.
+- [ ] Switch to Edge + Point and select Edge→END, END→Edge on distinct terminal roles and a shared three-Edge corner; the chosen Edge must govern source identity.
+- [ ] Select Edge→MID and MID→Edge through the identical END-style live hover marker, with no auto-commit before second click.
+- [ ] Verify default oriented preview, Reverse twice restoration, and no authored mutation from hover/incomplete/Cancel/ESC.
+- [ ] Verify FINISH, owner-context Enter, Command Line focus and Esc with no old-context commit.
+- [ ] Edit an END/MID Datum to another Edge/END/MID; check stable DatumId and dependent Sketch/Axis behavior; Undo/Redo is one transaction.
+- [ ] Save/Close/Reopen with cold kernel and the same DatumId/dependent Sketch; no runtime token/old Frame persisted.
+- [ ] Verify existing Offset constructor/Tree Properties/Show-Hide and ordinary Feature workflows remain intact.
+- [ ] Report explicit **S3A MANUAL PASS** or reproducible failure with candidate SHA; standing approval to continue work is not a substitute for witnessing these clicks.
