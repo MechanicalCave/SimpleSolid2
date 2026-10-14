@@ -336,9 +336,9 @@ int main(int argc, char* argv[]) {
     // S3: the same constructor panel exposes MID/END while preserving
     // legacy Offset if the active kernel cannot certify exact geometry.
     // No half-authored Edge/Vertex pick may mutate the Part/Undo history.
-    CHECK(constructor->count() == 3);
-    CHECK(constructor->itemText(1) == QStringLiteral("Edge MID"));
-    CHECK(constructor->itemText(2) == QStringLiteral("Edge END"));
+    CHECK(constructor->count() == 2);
+    CHECK(constructor->itemText(1) ==
+          QStringLiteral("Edge + Point"));
     const auto revision_before_unsupported =
         session.document().revision();
     const auto undo_before_unsupported = session.undoDepth();

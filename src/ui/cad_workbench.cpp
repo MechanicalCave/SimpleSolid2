@@ -3425,10 +3425,9 @@ void CadWorkbench::buildUi() {
         QStringLiteral("datumPlaneConstructorCombo"));
     datum_plane_constructor_combo_->addItem(
         QStringLiteral("Offset"));
+    // One accepted constructor, not separate END/MID user modes.
     datum_plane_constructor_combo_->addItem(
-        QStringLiteral("Edge MID"));
-    datum_plane_constructor_combo_->addItem(
-        QStringLiteral("Edge END"));
+        QStringLiteral("Edge + Point"));
     datum_plane_constructor_form->addRow(
         QStringLiteral("Constructor"),
         datum_plane_constructor_combo_);
@@ -6587,7 +6586,7 @@ void CadWorkbench::selectDatumPlaneConstructor(
         solid_modeling_kernel_ == nullptr ||
         edge_datum_edit_id_ ||
         (!datum_plane_draft_ && !edge_datum_create_revision_) ||
-        constructor_index < 0 || constructor_index > 2) {
+        constructor_index < 0 || constructor_index > 1) {
         return;
     }
     if (constructor_index == 0) {
@@ -6643,11 +6642,8 @@ void CadWorkbench::selectDatumPlaneConstructor(
     refreshDatumPlaneEvaluation();
     syncActionState();
     notifyCadInputContextChanged();
-    setStatusText(constructor_index == 1
-        ? QStringLiteral(
-            "Edge MID — select one certified material Edge.")
-        : QStringLiteral(
-            "Edge END — select an Edge and its terminal Vertex in either order."));
+    setStatusText(QStringLiteral(
+        "Edge + Point — select the Edge and an endpoint Vertex in either order; Edge-only currently previews strict MID."));
 }
 
 void CadWorkbench::stageEdgeDatumFromBodyTopology(
@@ -6667,7 +6663,7 @@ void CadWorkbench::stageEdgeDatumFromBodyTopology(
     }
     const int constructor_index =
         datum_plane_constructor_combo_->currentIndex();
-    if (constructor_index != 1 && constructor_index != 2)
+    if (constructor_index != 1)
         return;
     const auto address =
         viewport_controller_->primaryBodyTopologySelection();
@@ -6678,9 +6674,8 @@ void CadWorkbench::stageEdgeDatumFromBodyTopology(
         return;
     if (address->kind !=
             viewer::BodyTopologyPresentationKind::edge &&
-        !(constructor_index == 2 &&
-          address->kind ==
-              viewer::BodyTopologyPresentationKind::vertex))
+        address->kind !=
+            viewer::BodyTopologyPresentationKind::vertex)
         return;
 
     // A source is one exact Body-stage and one Viewer generation.
@@ -7081,18 +7076,12 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
             document_session_->document().revision() ==
                 *edge_datum_create_revision_ &&
             datum_plane_constructor_combo_) {
-            const int constructor_index =
-                datum_plane_constructor_combo_->currentIndex();
-            if ((constructor_index == 1) ||
-                (constructor_index == 2 &&
-                 edge_datum_vertex_pick_)) {
+            if (datum_plane_constructor_combo_->currentIndex() == 1) {
                 auto preview =
                     viewport_controller_->previewCurrentEdgeDatum(
                         *edge_datum_pick_stage_,
                         *edge_datum_edge_pick_,
-                        constructor_index == 2
-                            ? edge_datum_vertex_pick_
-                            : std::nullopt,
+                        edge_datum_vertex_pick_,
                         edge_datum_create_reverse_);
                 if (preview) {
                     edge_datum_create_source_ =
@@ -7197,35 +7186,27 @@ void CadWorkbench::syncDatumPlaneUi() {
     syncing_datum_plane_ui_ = true;
 
     if (edge_datum_create_revision_) {
-        const int constructor_index =
-            datum_plane_constructor_combo_
-                ? datum_plane_constructor_combo_->currentIndex()
-                : 0;
         if (datum_plane_constructor_combo_)
             datum_plane_constructor_combo_->setVisible(true);
         if (datum_plane_offset_edit_)
             datum_plane_offset_edit_->setVisible(false);
         if (datum_plane_source_label_) {
             datum_plane_source_label_->setText(
-                constructor_index == 1
-                    ? QStringLiteral(
-                        "Source: select one material Edge for MID")
-                    : QStringLiteral(
-                        "Source: select a material Edge and endpoint Vertex, any order"));
+                QStringLiteral("Source: Edge + Point (END or MID)"));
         }
         if (datum_plane_result_label_) {
+            const bool end = edge_datum_vertex_pick_.has_value();
             const QString status = edge_datum_create_preview_
-                ? QStringLiteral(
-                    "Resolved — signed Edge-local Datum ready to Finish.")
-                : constructor_index == 2 &&
-                  !edge_datum_vertex_pick_
+                ? (end
                     ? QStringLiteral(
-                        "Select Edge and its terminal Vertex.")
-                    : !edge_datum_edge_pick_
-                        ? QStringLiteral(
-                            "Select one certified material Edge.")
-                        : QStringLiteral(
-                            "Source unavailable, unsupported or stale; select valid geometry.");
+                        "Resolved END — selected Edge terminal; Reverse/Finish.")
+                    : QStringLiteral(
+                        "Resolved MID — exact half-Edge length; Reverse/Finish."))
+                : !edge_datum_edge_pick_
+                    ? QStringLiteral(
+                        "Select material Edge and its Point, in either order.")
+                    : QStringLiteral(
+                        "Point is unsupported, missing or stale; reselect current geometry.");
             datum_plane_result_label_->setText(status);
         }
         if (datum_plane_reverse_button_)
