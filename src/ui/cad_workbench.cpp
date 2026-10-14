@@ -4992,7 +4992,7 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
-            if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ ||
+            if (datum_plane_draft_ || edge_datum_edit_id_ ||
                 edge_datum_create_revision_) {
                 cancelDatumPlane();
                 return;
@@ -6743,7 +6743,7 @@ bool CadWorkbench::startDatumPlaneTool() {
                 "Datum Plane requires an active Part and modeling Kernel."));
         return false;
     }
-    if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ ||
+    if (datum_plane_draft_ || edge_datum_edit_id_ ||
         edge_datum_create_revision_) {
         setStatusText(
             QStringLiteral(

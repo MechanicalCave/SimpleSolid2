@@ -1716,9 +1716,11 @@ public:
                 reference_preview_objects_.push_back(
                     plane);
 
-                // Render an explicit transient MID anchor using the same
-                // OCCT point primitive as a body Vertex. Do not register
-                // it as a semantic reference or persistent topology token.
+                // MID uses EXACTLY the existing Body END point-preselection
+                // aspect: same 9px DPR-normalized filled square and cyan
+                // hover cue. Its token is transient, never a Part source.
+                // Keep that match when drawing/refreshing the reference
+                // scene; plain default AIS_Point styling differs from END.
                 if (scene.preview->anchor_point) {
                     Handle(Geom_CartesianPoint) at =
                         new Geom_CartesianPoint(
@@ -1728,9 +1730,20 @@ public:
                         clearReferenceScene();
                         return false;
                     }
+                    double dpr = owner_.devicePixelRatioF();
+                    if (!std::isfinite(dpr) || dpr <= 0.0)
+                        dpr = 1.0;
+                    const int marker_size =
+                        gripMarkerPixelSize(9.0,dpr);
+                    marker->Attributes()->SetPointAspect(
+                        new Prs3d_PointAspect(
+                            Quantity_Color{
+                                0.38,0.78,1.0,Quantity_TOC_RGB},
+                            marker_size,marker_size,
+                            squareMarkerBitmap(marker_size,true)));
                     context_->Display(marker,false);
                     context_->SetColor(marker,Quantity_Color{
-                        0.96,0.80,0.20,Quantity_TOC_RGB},false);
+                        0.38,0.78,1.0,Quantity_TOC_RGB},false);
                     if (scene.preview->anchor_pick_token) {
                         // This scene-local MID click is consumed before
                         // ordinary semantic selection is evaluated.
@@ -6091,7 +6104,7 @@ public:
                               1.0, 0.63, 0.18, Quantity_TOC_RGB}
                         : entry.transient_mid_anchor
                             ? Quantity_Color{
-                                  0.96,0.80,0.20,
+                                  0.38,0.78,1.0,
                                   Quantity_TOC_RGB}
                     : entry.owned_overlay
                             ? Quantity_Color{
