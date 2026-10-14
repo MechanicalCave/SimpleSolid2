@@ -1911,5 +1911,72 @@ int main(int argc, char* argv[]) {
     CHECK(mid_intent->mode ==
           viewer::SelectionIntentMode::clear);
 
+    // S3A positive native Qt gesture routing: END before Edge and
+    // Edge before END must expose the SAME current Body-scene candidate
+    // stack. This proves pointer event dispatch, not yet Part's semantic
+    // source certification or a cold-open CAD workbench workflow.
+    viewer_qt_occt::QtOcctViewerWidget order_widget;
+    order_widget.resize(801, 601);
+    order_widget.show();
+    QApplication::processEvents();
+    CHECK(order_widget.setCameraState(camera));
+    CHECK(order_widget.setBodyScene(body_scene));
+    const auto corner_screen =
+        order_widget.projectWorldPoint({0.0, 0.0, 0.0});
+    const auto edge_screen =
+        order_widget.projectWorldPoint({8.0, 0.0, 0.0});
+    CHECK(corner_screen.has_value());
+    CHECK(edge_screen.has_value());
+    const auto contains_token =
+        [](const viewer::BodyTopologyPickQueryResult& query,
+           viewer::PresentationToken token) {
+            return query.valid() && query.completed &&
+                std::any_of(
+                    query.candidates.begin(),query.candidates.end(),
+                    [token](const auto& candidate) {
+                        return candidate.token == token;
+                    });
+        };
+    CHECK(contains_token(
+        order_widget.queryBodyTopology(*corner_screen),
+        body_vertex_token));
+    CHECK(contains_token(
+        order_widget.queryBodyTopology(*edge_screen),
+        body_edge_token));
+    std::vector<viewer::BodyTopologyPickQueryResult>
+        ordered_picks;
+    order_widget.setBodyTopologySelectionIntentHandler(
+        [&ordered_picks](
+            const viewer::BodyTopologyPickQueryResult& query,
+            viewer::SelectionIntentMode mode) {
+            CHECK(mode == viewer::SelectionIntentMode::replace);
+            CHECK(query.valid() && query.completed);
+            ordered_picks.push_back(query);
+        });
+    const auto click_body_point =
+        [&order_widget](viewer::ViewportPoint2 point) {
+            sendMouseMove(order_widget,point);
+            QTest::mouseClick(
+                &order_widget,Qt::LeftButton,Qt::NoModifier,
+                QPoint{
+                    static_cast<int>(std::lround(point.x)),
+                    static_cast<int>(std::lround(point.y))});
+        };
+    click_body_point(*corner_screen);
+    click_body_point(*edge_screen);
+    CHECK(ordered_picks.size() == 2U);
+    CHECK(contains_token(ordered_picks[0],body_vertex_token));
+    CHECK(contains_token(ordered_picks[1],body_edge_token));
+    CHECK(ordered_picks[0].generation == body_scene.generation);
+    CHECK(ordered_picks[1].generation == body_scene.generation);
+    ordered_picks.clear();
+    click_body_point(*edge_screen);
+    click_body_point(*corner_screen);
+    CHECK(ordered_picks.size() == 2U);
+    CHECK(contains_token(ordered_picks[0],body_edge_token));
+    CHECK(contains_token(ordered_picks[1],body_vertex_token));
+    CHECK(ordered_picks[0].generation == body_scene.generation);
+    CHECK(ordered_picks[1].generation == body_scene.generation);
+
     return EXIT_SUCCESS;
 }
