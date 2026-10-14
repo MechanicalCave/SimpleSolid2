@@ -2008,5 +2008,60 @@ int main(int argc, char* argv[]) {
     CHECK(ordered_picks[0].generation == order_scene.generation);
     CHECK(ordered_picks[1].generation == order_scene.generation);
 
+    // Actual overlapping native Qt+OCCT MID/Edge gestures: the preview
+    // marker at the exact half-length of the RIGHT bounded Edge must
+    // retain its point-like click routing even while the underlying
+    // material Edge is eligible. Both click orders exercise one real
+    // QWidget; this never pretends that screen hits are Part identity.
+    auto overlapping_mid = mid_preview;
+    overlapping_mid.origin =
+        viewer::Point3{10.0, 0.0, 0.0};
+    overlapping_mid.anchor_point = overlapping_mid.origin;
+    viewer::ReferenceScene overlapping_mid_scene;
+    overlapping_mid_scene.preview = overlapping_mid;
+    CHECK(overlapping_mid_scene.valid());
+    CHECK(order_widget.setReferenceScene(overlapping_mid_scene));
+    const auto midpoint_screen =
+        order_widget.projectWorldPoint({10.0, 0.0, 0.0});
+    CHECK(midpoint_screen.has_value());
+    CHECK(contains_token(
+        order_widget.queryBodyTopology(
+            *midpoint_screen,
+            viewer::BodyTopologyPickFilter{
+                false,true,false}),
+        other_edge_token));
+    int overlapping_mid_clicks = 0;
+    order_widget.setSelectionIntentHandler(
+        [&overlapping_mid_clicks, mid_token](
+            const viewer::SelectionIntent& intent) {
+            CHECK(intent.valid());
+            CHECK(intent.token == mid_token);
+            CHECK(intent.mode ==
+                  viewer::SelectionIntentMode::replace);
+            ++overlapping_mid_clicks;
+        });
+    ordered_picks.clear();
+    click_body_point(*right_edge_screen);
+    CHECK(ordered_picks.size() == 1U);
+    CHECK(contains_token(ordered_picks.front(),other_edge_token));
+    CHECK(overlapping_mid_clicks == 0);
+    click_body_point(*midpoint_screen);
+    CHECK(overlapping_mid_clicks == 1);
+    CHECK(ordered_picks.size() == 1U);
+
+    // Point-first MID is a real point click with no implicit edge
+    // selection. Only the second explicit Edge click can author a
+    // source in the higher-level stage-aware Part controller.
+    ordered_picks.clear();
+    overlapping_mid_clicks = 0;
+    click_body_point(*midpoint_screen);
+    CHECK(overlapping_mid_clicks == 1);
+    CHECK(ordered_picks.empty());
+    click_body_point(*right_edge_screen);
+    CHECK(ordered_picks.size() == 1U);
+    CHECK(contains_token(ordered_picks.front(),other_edge_token));
+    CHECK(ordered_picks.front().generation ==
+          order_scene.generation);
+
     return EXIT_SUCCESS;
 }
