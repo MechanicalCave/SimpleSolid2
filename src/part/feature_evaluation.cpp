@@ -5985,10 +5985,16 @@ PartEvaluation evaluatePart(
                 } else if (
                     datumPlaneIdForSketchSupport(
                         source->support)) {
-                    support_datums =
-                        evaluateDatums(
-                            document,
-                            result);
+                    if (auto* exact =
+                            dynamic_cast<
+                                kernel::IExactBoundedEdgeGeometryQuery*>(
+                                    &modeling_kernel)) {
+                        support_datums =
+                            evaluateDatums(document,result,*exact);
+                    } else {
+                        support_datums =
+                            evaluateDatums(document,result);
+                    }
                 }
             }
 
@@ -5997,10 +6003,16 @@ PartEvaluation evaluatePart(
             // evaluates the same-revision Datum prefix unconditionally.
             if (revolve != nullptr &&
                 !support_datums) {
-                support_datums =
-                    evaluateDatums(
-                        document,
-                        result);
+                if (auto* exact =
+                        dynamic_cast<
+                            kernel::IExactBoundedEdgeGeometryQuery*>(
+                                &modeling_kernel)) {
+                    support_datums =
+                        evaluateDatums(document,result,*exact);
+                } else {
+                    support_datums =
+                        evaluateDatums(document,result);
+                }
             }
 
             // PG-01B/B3: only the currently evaluated upstream Feature

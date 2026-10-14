@@ -572,7 +572,20 @@ bool PartDocument::validAuthoredState(
                     });
             if (datum ==
                 state.datum_planes.end()) {
-                return std::nullopt;
+                const auto edge = std::find_if(
+                    state.edge_point_datum_planes.begin(),
+                    state.edge_point_datum_planes.end(),
+                    [datum_id](const EdgePointDatumPlane& item) {
+                        return item.id == *datum_id;
+                    });
+                if (edge == state.edge_point_datum_planes.end()) {
+                    return std::nullopt;
+                }
+                return std::visit(
+                    [](const auto& source)
+                        -> std::optional<BodyStageRef> {
+                        return source.source_edge.stage;
+                    }, edge->source);
             }
 
             if (const auto* surface =
@@ -639,8 +652,13 @@ bool PartDocument::validAuthoredState(
                         const OffsetDatumPlane& item) {
                         return item.id == *datum_id;
                     });
-            if (datum ==
-                state.datum_planes.end()) {
+            if (datum == state.datum_planes.end() &&
+                std::none_of(
+                    state.edge_point_datum_planes.begin(),
+                    state.edge_point_datum_planes.end(),
+                    [datum_id](const EdgePointDatumPlane& item) {
+                        return item.id == *datum_id;
+                    })) {
                 return false;
             }
         }

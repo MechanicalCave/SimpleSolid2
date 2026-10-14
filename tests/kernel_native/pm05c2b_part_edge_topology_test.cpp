@@ -2184,6 +2184,70 @@ void verifyS1SelectedSignedFrames(
         CHECK(s1Near3(evaluated_mid->frame->normal,
                       rebuilt_mid.frame->normal));
 
+        // Real application Sketch creation and a second Save/Reopen
+        // consume the authored Edge-local MID Datum, not a cached plane.
+        const auto support =
+            part::partSketchSupportForDatumPlane(*mid_id);
+        CHECK(support.has_value());
+        const auto current_support = part::resolveSketchSupport(
+            *support,nullptr,&derived);
+        CHECK(current_support.status ==
+              part::SketchSupportResolutionStatus::resolved);
+        CHECK(current_support.frame.has_value());
+
+        application::DocumentSession sketch_session{
+            {},std::move(*loaded.document)};
+        const auto sketch_created = sketch_session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                *support,sketch_session.document().revision()},
+            &cold_provider);
+        CHECK(sketch_created.ok() && sketch_created.sketch_id);
+        const auto* hosted = sketch_session.document().findSketch(
+            *sketch_created.sketch_id);
+        CHECK(hosted && hosted->support == *support);
+
+        const auto again = store.save(
+            scratch.path,sketch_session.document(),
+            *loaded.checkpoint);
+        CHECK(again.ok());
+        const auto reopened_with_sketch = store.load(scratch.path);
+        CHECK(reopened_with_sketch.ok());
+        const auto* restored_sketch =
+            reopened_with_sketch.document->findSketch(
+                *sketch_created.sketch_id);
+        CHECK(restored_sketch);
+        CHECK(restored_sketch->support == *support);
+        kernel_occt::OcctSolidModelingKernel sketch_provider;
+        const auto current_body = part::evaluatePart(
+            *reopened_with_sketch.document,sketch_provider);
+        CHECK(current_body.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto current_datums = part::evaluateDatums(
+            *reopened_with_sketch.document,current_body,sketch_provider);
+        const auto current_frame = part::resolveSketchSupport(
+            restored_sketch->support,nullptr,&current_datums);
+        CHECK(current_frame.status ==
+              part::SketchSupportResolutionStatus::resolved);
+        CHECK(current_frame.frame.has_value());
+        CHECK(s1Near(
+            current_frame.frame->origin[0],
+            rebuilt_mid.frame->origin.x));
+        CHECK(s1Near(
+            current_frame.frame->origin[1],
+            rebuilt_mid.frame->origin.y));
+        CHECK(s1Near(
+            current_frame.frame->origin[2],
+            rebuilt_mid.frame->origin.z));
+
+        // A feature's source Sketch may not depend on its own Edge:
+        // that would create an authored current/future Body-stage cycle.
+        auto cyclic = reopened_with_sketch.document->state();
+        CHECK(!cyclic.sketches.empty());
+        cyclic.sketches.front().support = *support;
+        CHECK(!part::PartDocument::restore(
+            document.documentId(),std::move(cyclic),
+            document.revision()).ok());
+
         std::cout << "RG02B1_P4_S2_DATUM_V17"
                   << " saved=2 restored=2"
                   << " cold_rebuild=1 reverse_persisted=1"

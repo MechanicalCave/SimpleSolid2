@@ -411,10 +411,12 @@ resolveSupportForMutation(
 
     if (part::datumPlaneIdForSketchSupport(
             support)) {
-        const auto datums =
-            part::evaluateDatums(
-                document,
-                evaluation);
+        const auto* exact =
+            dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+                modeling_kernel);
+        const auto datums = exact != nullptr
+            ? part::evaluateDatums(document,evaluation,*exact)
+            : part::evaluateDatums(document,evaluation);
         return part::resolveSketchSupport(
             support,
             nullptr,
