@@ -9,6 +9,12 @@
 - Windows Draft FAST [#3065](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38626713961) **PASS 93/93** on source and registered native test SHA `1f2d3b9c1666e5501cc27aa36c0b1e9333c9f1ee`.
 - This work-ledger-only follow-up requests exact-head FOCUSED for `wb01.viewer_reference_presentation`, `sk04b.viewer_native_selection_query` and the full-only native `pm05f_r2.native_workbench_edit` with the newly required repeated END↔MID click matrix. Successful FAST alone does **not** close either Owner manual defect. FULL and another manual Windows acceptance remain OPEN.
 
+## Repeatability of native hover re-entry in FULL (2026-10-14)
+
+Windows Ready FULL [#3077](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38637137332) used exact source/docs/evidence SHA `32a3e32beae60a659133ca303a23c6d6cc684358`. **Attempt 1 RED**: Core 25/25, kernel-native 57/57, Desktop 116/117; native `pm05f_r2.native_workbench_edit` failed the re-hover positive assertion at line 2291 after 2.55 s. PR was returned Draft; no merge. **Attempt 2 PASS 199/199** on the exact SAME SHA without any code change; native Workbench passed 40.27 s. These conflicting outcomes show an intermittent native hover-reentry integration witness; do not use attempt 2 alone to claim stable acceptance.
+
+Bounded test-only follow-up: allow native UI event processing after each real re-hover move and before mouse press, ensuring the temporary MID marker has been published/rendered as a user would see it. No synthetic Point, no retries, no replacement of mouse gesture and no relaxed assertion. A failure now also records the Operations label. Both the no-Body-candidate off-hover check and the explicit re-hover → native click → MID verification remain. Fresh FAST/FOCUSED/FULL plus Owner visual Windows acceptance required.
+
 ## Final hover-only native FOCUSED verification (2026-10-14)
 
 - Source/native witness `c4b547509805a798e5c9f61d46a6622e55408cc3`: Windows FOCUSED [#3075](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38636516700) **PASS 1/1**; `pm05f_r2.native_workbench_edit` 39.72s. Existing Workbench END/MID real mouse gestures, repeated END↔MID, Edit, lifecycle and new actual Edge-hover → leave → re-hover input run together.

@@ -2280,13 +2280,27 @@ int main(int argc, char* argv[]) {
             CHECK(!datum_finish->isEnabled());
             CHECK(s3a.document().state() == state_before);
             CHECK(s3a.undoDepth() == undo_before);
-            // The same MID is selectable again after a new genuine hover.
+            // The same MID is selectable again after genuine hover.
+            // Publish the OCCT reference marker and allow the GUI event
+            // loop to complete that hover presentation BEFORE the click.
+            // The ordinary mouse move remains part of the test; no
+            // fabricated point, input retry or relaxed assertion.
             sendNativeWorkbenchHover(*viewport,certified_mid_pixel);
-            QTest::mouseMove(viewport, certified_mid_pixel);
-            QTest::mouseClick(
-                viewport, Qt::LeftButton,
-                Qt::NoModifier, certified_mid_pixel);
             QApplication::processEvents();
+            QTest::mouseMove(viewport,certified_mid_pixel);
+            QApplication::processEvents();
+            CHECK(!datum_finish->isEnabled());
+            CHECK(s3a.document().state() == state_before);
+            QTest::mouseClick(
+                viewport,Qt::LeftButton,
+                Qt::NoModifier,certified_mid_pixel);
+            QApplication::processEvents();
+            if (!datum_result->text().contains(
+                    QStringLiteral("Resolved MID"))) {
+                std::cerr << "S3A MID hover re-entry FAILED: "
+                          << datum_result->text().toStdString()
+                          << '\n';
+            }
             CHECK(datum_result->text().contains(
                 QStringLiteral("Resolved MID")));
             CHECK(datum_finish->isEnabled());
