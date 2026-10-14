@@ -2142,6 +2142,97 @@ void verifyS1SelectedSignedFrames(
             -plane->frame->normal.y,
             -plane->frame->normal.z}));
 
+
+        // Full semantic Edit: keep the same DatumId and downstream Sketch
+        // and Axis while replacing MID with the certified END of an Edge.
+        // One atomic undo must restore the prior authored source exactly.
+        const auto before_source_replace = session.document().state();
+        const auto undo_before_replace = session.undoDepth();
+        const auto replaced = session.execute(
+            application::ReplaceEdgePointDatumPlaneSourceCommand{
+                *added.datum_id,
+                part::EdgePointDatumSource{ends.front()},
+                session.document().revision(),true},
+            provider);
+        CHECK(replaced.ok() && replaced.changed);
+        CHECK(session.undoDepth() == undo_before_replace + 1U);
+        const auto* source_changed =
+            session.document().findEdgePointDatumPlane(*added.datum_id);
+        CHECK(source_changed);
+        CHECK(source_changed->id == *added.datum_id);
+        CHECK(source_changed->source ==
+              part::EdgePointDatumSource{ends.front()});
+        CHECK(source_changed->orientation.reverse);
+        CHECK(session.document().findSketch(*hosted.sketch_id));
+        CHECK(session.document().findAxis(*axis.axis_id));
+        const auto body_after_replace =
+            part::evaluatePart(session.document(),provider);
+        const auto derived_after_replace =
+            part::evaluateDatums(
+                session.document(),body_after_replace,provider);
+        const auto* frame_after_replace =
+            derived_after_replace.find(*added.datum_id);
+        CHECK(frame_after_replace && frame_after_replace->frame);
+        const auto directly_initialized_end =
+            part::initializeSelectedEdgeEndFrame(
+                session.document(),ends.front(),
+                body_after_replace,provider,true);
+        CHECK(directly_initialized_end.resolved());
+        CHECK(s1Near3(frame_after_replace->frame->origin,
+                      directly_initialized_end.frame->origin));
+        CHECK(s1Near3(frame_after_replace->frame->normal,
+                      directly_initialized_end.frame->normal));
+        const auto after_source_replace = session.document().state();
+
+        const auto undo_before_reject = session.undoDepth();
+        const auto rejected_source = session.execute(
+            application::ReplaceEdgePointDatumPlaneSourceCommand{
+                *added.datum_id,
+                part::EdgePointDatumSource{
+                    part::SelectedMaterialEdgeMid{}},
+                session.document().revision(),false},
+            provider);
+        CHECK(!rejected_source.ok() && !rejected_source.changed);
+        CHECK(session.undoDepth() == undo_before_reject);
+        CHECK(session.document().state() == after_source_replace);
+        const auto stale_source = session.execute(
+            application::ReplaceEdgePointDatumPlaneSourceCommand{
+                *added.datum_id,
+                part::EdgePointDatumSource{mids.front()},
+                document.revision(),false},
+            provider);
+        CHECK(!stale_source.ok() && !stale_source.changed);
+        CHECK(session.document().state() == after_source_replace);
+
+        const auto undone_source = session.undo();
+        CHECK(undone_source.ok() && undone_source.changed);
+        CHECK(session.document().state() == before_source_replace);
+        CHECK(session.document().findEdgePointDatumPlane(*added.datum_id)
+                  ->source == part::EdgePointDatumSource{mids.front()});
+        const auto redone_source = session.redo();
+        CHECK(redone_source.ok() && redone_source.changed);
+        CHECK(session.document().state() == after_source_replace);
+        CHECK(session.document().findEdgePointDatumPlane(*added.datum_id)
+                  ->source == part::EdgePointDatumSource{ends.front()});
+
+        // END -> MID uses the same Datum, reinitializes the signed seed
+        // from the newly certified source, and requires only one Undo.
+        const auto undo_before_mid = session.undoDepth();
+        const auto replaced_with_mid = session.execute(
+            application::ReplaceEdgePointDatumPlaneSourceCommand{
+                *added.datum_id,
+                part::EdgePointDatumSource{mids.front()},
+                session.document().revision(),false},
+            provider);
+        CHECK(replaced_with_mid.ok() && replaced_with_mid.changed);
+        CHECK(session.undoDepth() == undo_before_mid + 1U);
+        CHECK(session.document().findEdgePointDatumPlane(*added.datum_id)
+                  ->source == part::EdgePointDatumSource{mids.front()});
+        CHECK(!session.document().findEdgePointDatumPlane(
+                   *added.datum_id)->orientation.reverse);
+        CHECK(session.document().findSketch(*hosted.sketch_id));
+        CHECK(session.document().findAxis(*axis.axis_id));
+
         const auto shown = session.execute(
             application::SetDatumPlaneVisibilityCommand{
                 {*added.datum_id},session.document().revision(),true});

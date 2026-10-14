@@ -278,6 +278,17 @@ struct EditEdgePointDatumPlaneCommand final {
     bool reverse{false};
 };
 
+
+/** Replace a Datum's certified semantic Edge-local source, preserving its
+ * DatumId and dependent Sketch/Axis identities. Reinitialize authored
+ * orientation only if source identity changes; never carry an old frame. */
+struct ReplaceEdgePointDatumPlaneSourceCommand final {
+    part::DatumId datum_id;
+    part::EdgePointDatumSource source;
+    core::DocumentRevision expected_revision;
+    bool reverse{false};
+};
+
 struct EditDatumPlaneCommand final {
     part::DatumId datum_id;
     part::PlaneReference source;
@@ -764,6 +775,9 @@ public:
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const EditEdgePointDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const ReplaceEdgePointDatumPlaneSourceCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const EditDatumPlaneCommand& command,
