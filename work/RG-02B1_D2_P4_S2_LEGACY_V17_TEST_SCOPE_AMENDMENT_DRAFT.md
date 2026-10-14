@@ -1,35 +1,30 @@
-# RG-02B1/P4-S2 — legacy PM-02E native schema v17 regression-test allowlist amendment
+# RG-02B1/P4-S2 — bounded legacy native schema v17 regression-test allowlist amendment
 
-**Status:** PROPOSED D2 NARROW SCOPE AMENDMENT — NOT OWNER ACCEPTED, NOT ACTIVE, NO TEST SOURCE MUTATION PERMITTED YET.  
-**Date:** 2026-10-14.  
-**Active parent Work Contract:** `work/RG-02B1_D2_P4_S2_AUTHORED_EDGE_POINT_DATUM_V17_WORK_CONTRACT_DRAFT.md`, D2 accepted in PR #374; contract squash `b824669407bdc1ac64a15311acfa933c17ffbe5f`, separate ACTIVE activation PR #375 squash `168a765133043aae8847fc11696e0e4ff693baa3`. No S3 or PM-06 authority.  
-**Source:** read-only audit of current `main` `168a765133043aae8847fc11696e0e4ff693baa3` and pre-existing test `tests/pm02e_sketch_support_schema_v9_test.cpp`, before S2 product merge.
+**Status:** PROPOSED D2 NARROW TEST-SCOPE AMENDMENT — NOT OWNER ACCEPTED, NOT ACTIVE; NO OUT-OF-ALLOWLIST TEST MUTATION AUTHORIZED YET.
+**Date:** 2026-10-14.
+**Active parent Work Contract:** `work/RG-02B1_D2_P4_S2_AUTHORED_EDGE_POINT_DATUM_V17_WORK_CONTRACT_DRAFT.md`, accepted PR #374 and activated PR #375 (main `168a765133043aae8847fc11696e0e4ff693baa3`). S1 remains CLOSED.
+**Reason for correction from first proposal:** audit of all historical Part-schema test suites found additional exact v16 assertions and downgrade builders beyond PM-02E. Keep one finite, truthful amendment rather than piecemeal broadening during code changes.
 
-## 1. Exact discovered incompatibility
+## 1. Factual compatibility issue
 
-S2's already-accepted v17 writer introduces one additional authored field `edge_point_datum_planes` and sets `PartDocumentStore::current_schema_version=17`. The pre-existing PM-02E full-tier legacy Part test hard-codes the former `domain_schema_version==16` at **three assertions** (test lines 374, 490, 605 of main). More importantly, its authentic-v8/v9 fixture-builder helpers `buildSchema8FromCurrentOriginDocument` and `buildSchema9FromCurrentDocument` each remove historic later fields from the current document **but do not remove `edge_point_datum_planes`**, producing invalid old-schema authored-field counts after a v17 writer. This is a real regression-test compatibility problem, not license to change the v17 schema or make parser lenient.
+Accepted S2 writer changes **current native Part schema 16→17** and adds exactly one semantic authored payload collection, `edge_point_datum_planes`; old v16 Offset-only Part files must still load. Historical tests that inspect the **current writer** still expect v16, while some test-only backward-fixture builders repack current v17 JSON as v8/v9/v11/v14, leaving the new field and thereby generating a malformed old-schema payload. These REDs are regression-fixture maintenance needs, not reasons to relax production native parsers or change accepted v17 semantics. Windows FULL #2972 previously stopped at a separate PM-03A C++ fixture-type compilation error, which has been corrected within the parent S2 allowlist; native full test assertions have not yet been certified.
 
-`tests/pm02e_sketch_support_schema_v9_test.cpp` is NOT currently within S2's exact §4 allowed paths, although `tests/pm03a_datum_schema_v10_test.cpp` and `tests/pm03e_datum_backed_sketch_test.cpp` are. Therefore DO NOT edit PM-02E inside S2 production before the Owner explicitly accepts this one-path amendment and governance activation, even if old assertions fail a FULL build.
+## 2. Exact four-file additive §4 allowlist (test sources ONLY)
 
-## 2. Proposed precise D2 allowance
+Propose allowing modifications only to:
+- `tests/pm02e_sketch_support_schema_v9_test.cpp`: three assertions of a **newly written** Part version 16→17; in `buildSchema8FromCurrentOriginDocument` and `buildSchema9FromCurrentDocument`, require `edge_point_datum_planes` is present and **empty**, then erase it when building an old-schema v8/v9 test fixture.
+- `tests/pm04a_axis_schema_v12_test.cpp`: current writer version assertions (three existing v16 expectations including the initial `current_schema_version`) 16→17; in `schema11FromCurrent` require an empty `edge_point_datum_planes` and remove it before generating an authentic v11 native fixture.
+- `tests/pm04e1_revolve_persistence_test.cpp`: three current writer version assertions 16→17; test-only `repackage` of any **schema_version <17** must assert empty `edge_point_datum_planes`, erase only that additional field, and leave genuine historical records and other fields unchanged. Preserve independent malformed/policy negative witnesses.
+- `tests/pm05b1_edge_feature_schema_v14_test.cpp`: four current writer version assertions 16→17; its test-only `repackage` on schema_version<17 must assert an empty `edge_point_datum_planes` array before erasing it. Maintain existing <15 linked-projection field removal and all v14/v15 legacy-shape and semantic history checks.
 
-Append **only** this exact pre-existing file to the S2 §4 test allowlist, for compatibility-only test source changes:
+These four filenames are additive to, not replacements for, the parent accepted S2 §4 allowlist. No `src/**`, UI, Viewer, kernel, CMake/CI, docs Browser, modeling semantics, existing ABI/public API or unrelated tests are changed by this amendment. It must **never** delete nonempty authored source definitions in a fixture downgrade, auto-interpret unknown v17 types, or make production native parsing more tolerant. Preserve all old actual historical version descriptor values and original negative assertions; update only expectations about **current v17 writer**.
 
-- `tests/pm02e_sketch_support_schema_v9_test.cpp`
+## 3. Formal Owner D2 and Windows gates
 
-Permitted edits within that file **only**:
-1. Update the three assertions that inspect a newly written current Part container's schema from 16 to the accepted 17.
-2. In both historic v8/v9 test-only downgrade helpers, assert that current authored `edge_point_datum_planes` is an **empty** array before erasing it; fail the test if it contains an actual Edge-local Datum, so no real authored source is silently discarded by a fixture helper. Preserve the rest of the valid old-schema bytes/semantics as before.
-3. Keep every legacy v8/v9 migration, document identity, Sketch, Body and native-container negative witness; do not weaken assertions or change production parser/Geometry/Part behavior to get a green suite.
-
-No new product behavior or public API, schema version, other test file, CMake/CI or roadmap change is proposed. S2-F07/F09 actual Windows Ready FULL is still required; no PASS is claimed from this audit.
-
-## 3. Formal gate
-
-Owner D2 exact-text decision -> this one-document work PR governance PASS and separate exact-head squash permission -> accepted main amendment -> separate governance activation referencing this amendment without changing the parent `active_work` scope -> only then permitted PM-02E source edit on the S2 implementation branch. The general Owner permission to continue the existing S2 contract does not silently add a path expressly excluded by its closed §4 allowlist.
+Owner accepts this exact four-path test-only scope and the byte-level empty-array downgrade rule → this work-only governance PR exact-head CI → separate guarded squash into protected main → separately recorded activation entry under `work/ACTIVE.yaml` **without changing the S2 `active_work` pointer** → only then the S2 implementation branch can modify these four tests, with true Windows Ready FULL Core/Kernel/Desktop before final acceptance. Until approved, earlier Owner acceptance of S2 v17 schema does not silently authorize out-of-allowlist test paths. Existing S2 PR #376 is unmerged and any historical FULL RED must remain visible.
 
 ## Documentation impact
 
-Internal docs: not required beyond this proposal.
+Internal docs: not required beyond this scope proposal.
 User/Product docs: not required.
-Reason: only a pre-existing legacy test's fixture construction and expected current-version assertions would change, not shipped behavior or UI.
+Reason: no shipped behavioral change; only fixture generation and expectations of pre-existing native compatibility regressions.
