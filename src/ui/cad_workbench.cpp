@@ -7093,7 +7093,8 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
         }
         if (viewport_controller_)
             viewport_controller_->setDatumPlaneDraftPreview(
-                edge_datum_create_preview_);
+                edge_datum_create_preview_,
+                !edge_datum_vertex_pick_.has_value());
         syncDatumPlaneUi();
         return;
     }

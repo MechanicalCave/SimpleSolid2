@@ -324,7 +324,8 @@ public:
     void clearProfileDraftPreview();
 
     void setDatumPlaneDraftPreview(
-        std::optional<kernel::Frame3> frame);
+        std::optional<kernel::Frame3> frame,
+        bool show_anchor_point = false);
 
     [[nodiscard]] bool setSketchPrimaryPointerRouting(
         viewer::PrimaryPointerRouting routing);
@@ -736,6 +737,7 @@ private:
         datum_evaluation_cache_;
     std::optional<kernel::Frame3>
         datum_plane_draft_preview_frame_;
+    bool datum_plane_draft_preview_anchor_{};
     std::optional<part::BodyStageTopologyCatalog>
         body_topology_catalog_cache_;
     // Runtime-only exact-stage catalogs from the same current PartEvaluation.

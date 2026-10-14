@@ -1509,15 +1509,18 @@ void PartViewportController::clearProfileDraftPreview() {
 }
 
 void PartViewportController::setDatumPlaneDraftPreview(
-    std::optional<kernel::Frame3> frame) {
+    std::optional<kernel::Frame3> frame,
+    bool show_anchor_point) {
     if (frame && !frame->valid()) {
         frame.reset();
     }
-    if (datum_plane_draft_preview_frame_ == frame) {
+    const bool anchor = frame.has_value() && show_anchor_point;
+    if (datum_plane_draft_preview_frame_ == frame &&
+        datum_plane_draft_preview_anchor_ == anchor) {
         return;
     }
-    datum_plane_draft_preview_frame_ =
-        std::move(frame);
+    datum_plane_draft_preview_frame_ = std::move(frame);
+    datum_plane_draft_preview_anchor_ = anchor;
 
     // Datum draft preview changes reference geometry only. Rebuilding
     // the OCCT Body here would reassign the Viewer generation and break
@@ -3876,6 +3879,9 @@ PartViewportController::buildReferenceScene() {
             preview;
         preview.origin =
             viewerPoint(frame.origin);
+        if (datum_plane_draft_preview_anchor_) {
+            preview.anchor_point = preview.origin;
+        }
         preview.u_axis =
             viewerVector(frame.u_axis);
         preview.v_axis =

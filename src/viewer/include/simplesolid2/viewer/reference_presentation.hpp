@@ -125,6 +125,9 @@ struct ReferenceOwnedLineOverlay final {
 // cannot become semantic selection or durable CAD identity.
 struct ReferencePlanePreviewPresentation final {
     Point3 origin{};
+    // Ephemeral visual marker for the exact Edge-local MID/END anchor.
+    // It carries no PresentationToken and is not persistent topology.
+    std::optional<Point3> anchor_point;
     Vec3 u_axis{};
     Vec3 v_axis{};
     double extent{1.0};
@@ -133,6 +136,7 @@ struct ReferencePlanePreviewPresentation final {
 
     [[nodiscard]] bool valid() const noexcept {
         if (!finite(origin) ||
+            (anchor_point && !finite(*anchor_point)) ||
             !finite(u_axis) ||
             !finite(v_axis) ||
             u_axis.squaredLength() <= 1.0e-24 ||

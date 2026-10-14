@@ -1716,6 +1716,25 @@ public:
                 reference_preview_objects_.push_back(
                     plane);
 
+                // Render an explicit transient MID anchor using the same
+                // OCCT point primitive as a body Vertex. Do not register
+                // it as a semantic reference or persistent topology token.
+                if (scene.preview->anchor_point) {
+                    Handle(Geom_CartesianPoint) at =
+                        new Geom_CartesianPoint(
+                            toPoint(*scene.preview->anchor_point));
+                    Handle(AIS_Point) marker = new AIS_Point(at);
+                    if (marker.IsNull()) {
+                        clearReferenceScene();
+                        return false;
+                    }
+                    context_->Display(marker,false);
+                    context_->Deactivate(marker);
+                    context_->SetColor(marker,Quantity_Color{
+                        0.96,0.80,0.20,Quantity_TOC_RGB},false);
+                    reference_preview_objects_.push_back(marker);
+                }
+
                 for (const auto& segment :
                      scene.preview->intersection_segments) {
                     Handle(Geom_CartesianPoint) first =
