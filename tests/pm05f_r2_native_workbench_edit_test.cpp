@@ -2526,8 +2526,6 @@ int main(int argc, char* argv[]) {
                     if (native_end_created) break;
                 }
             }
-            std::cerr << "RG02B1_S3A_SHARED_END_CANDIDATES="
-                      << shared_corner_trials << "\n";
             CHECK(shared_corner_trials>0U);
             CHECK(native_end_created);
             CHECK(s3a_end_session.document().state() == end_original);
@@ -2596,11 +2594,6 @@ int main(int argc, char* argv[]) {
                 part::AxisReference{part::AuthoredAxisReference{
                     *dependent_axis.axis_id}},
                 &source_body_for_axis,&source_datums_for_axis);
-            std::cerr << "S3A_DEPENDENT_AXIS_STATUS="
-                      << static_cast<int>(source_axis_frame.status)
-                      << " diagnostic="
-                      << static_cast<int>(source_axis_frame.diagnostic)
-                      << "\\n";
             CHECK(source_axis_frame.status ==
                   part::AxisEvaluationStatus::resolved);
             // Headless fixture commands above intentionally bypass the
@@ -2835,10 +2828,6 @@ int main(int argc, char* argv[]) {
                           undo_before_repick);
                 }
             }
-            std::cerr << "S3A_NATIVE_RESOURCE_EDGE_PROBES="
-                      << native_repick_probes
-                      << " label=" << datum_result->text().toStdString()
-                      << "\n";
             CHECK(repick_mid_pixel.has_value());
             CHECK(!datum_finish->isEnabled());
             sendNativeWorkbenchHover(*viewport,*repick_mid_pixel);
@@ -3143,8 +3132,6 @@ int main(int argc, char* argv[]) {
                           off_line_undo);
                 }
             }
-            std::cerr << "RG02B1_S3A_OFF_LINE_VERTICES="
-                      << off_line_vertex_probes << "\n";
             CHECK(off_line_vertex_probes>0U);
             CHECK(off_line_rejected);
             CHECK(!workbench.submitCadInput(
