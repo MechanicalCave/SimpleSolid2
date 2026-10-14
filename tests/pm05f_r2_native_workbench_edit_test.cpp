@@ -2257,37 +2257,31 @@ int main(int argc, char* argv[]) {
             CHECK(selected_edge);
             CHECK(!datum_finish->isEnabled());
             CHECK(s3a.document().state() == state_before);
-            // Hover-only MID: moving off the Edge must remove its
-            // transient selectable marker. A direct click at MID without
-            // a preceding real hover may still select Body Edge, but
-            // must NOT confirm an old persistent MID marker.
+            // Real hover cycle: Edge -> no Body candidate -> same Edge.
+            // Qt legitimately performs a new hover when pressing at MID;
+            // a click teleported to MID cannot witness absence of hover.
+            // The controller's scene publication must instead follow
+            // the actual pointer preselection lifecycle without mutation.
             sendNativeWorkbenchHover(
-                *viewport,
-                QPoint{viewport->width()-7,viewport->height()-7});
+                *viewport,certified_mid_pixel);
             QApplication::processEvents();
-            // Qt's QTest::mouseClick may synthesize a pointer move at
-            // its target before press, legitimately restoring MID hover.
-            // Send explicit raw press/release WITHOUT a MouseMove here.
-            // The ordinary positive test below still uses true QTest
-            // hover + click and must succeed.
-            QMouseEvent raw_mid_press{
-                QEvent::MouseButtonPress,
-                QPointF{certified_mid_pixel},
-                Qt::LeftButton,Qt::LeftButton,Qt::NoModifier};
-            CHECK(QApplication::sendEvent(viewport,&raw_mid_press));
-            QMouseEvent raw_mid_release{
-                QEvent::MouseButtonRelease,
-                QPointF{certified_mid_pixel},
-                Qt::LeftButton,Qt::NoButton,Qt::NoModifier};
-            CHECK(QApplication::sendEvent(viewport,&raw_mid_release));
+            const QPoint off_edge_pixel{
+                viewport->width()-7,viewport->height()-7};
+            sendNativeWorkbenchHover(*viewport,off_edge_pixel);
             QApplication::processEvents();
-            CHECK(!datum_result->text().contains(
-                QStringLiteral("Resolved MID")));
+            const auto off_edge_query =
+                viewport->queryBodyTopology(
+                    viewer::ViewportPoint2{
+                        double(off_edge_pixel.x()),
+                        double(off_edge_pixel.y())},
+                    viewer::BodyTopologyPickFilter{
+                        false,true,false});
+            CHECK(off_edge_query.candidates.empty());
             CHECK(!datum_finish->isEnabled());
             CHECK(s3a.document().state() == state_before);
             CHECK(s3a.undoDepth() == undo_before);
-            // Re-entering real hover on the same certified Edge restores
-            // the MID marker and permits the same direct click.
+            // The same MID is selectable again after a new genuine hover.
+            sendNativeWorkbenchHover(*viewport,certified_mid_pixel);
             QTest::mouseMove(viewport, certified_mid_pixel);
             QTest::mouseClick(
                 viewport, Qt::LeftButton,

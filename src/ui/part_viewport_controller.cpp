@@ -5,8 +5,6 @@
 #include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <QPointer>
-#include <QDebug>
-#include <iostream>
 
 #include <algorithm>
 #include <array>
@@ -1542,18 +1540,6 @@ void PartViewportController::setDatumPlaneDraftPreview(
     datum_selected_mid_edge_ = std::move(selected_edge);
     datum_selected_mid_edge_hovered_ =
         selectedDatumMidEdgeHovered();
-    qWarning() << "S3A_DBG setDraft"
-               << "frame" << datum_plane_draft_preview_frame_.has_value()
-               << "anchor" << datum_plane_draft_preview_anchor_
-               << "source" << datum_selected_mid_edge_.has_value()
-               << "hover" << datum_selected_mid_edge_hovered_;
-
-    std::cerr << "S3A_DBG draft source="
-              << datum_selected_mid_edge_.has_value()
-              << " hovered=" << datum_selected_mid_edge_hovered_
-              << " pointFirst=" << datum_point_first_mid_hover_enabled_
-              << " anchor=" << datum_plane_draft_preview_anchor_
-              << '\n';
 
     // The MID acquisition frame produces only a marker. A finished source
     // produces only the plane. Neither intermediate state authors a Datum.
@@ -5743,15 +5729,6 @@ void PartViewportController::clearBodyTopologyPreselection() {
     const bool had_selected_mid_hover =
         datum_selected_mid_edge_hovered_;
     datum_selected_mid_edge_hovered_ = false;
-    qWarning() << "S3A_DBG clearHover"
-               << "wasSelected" << had_selected_mid_hover
-               << "wasPointFirst" << had_hover
-               << "pointFirstEnabled" << datum_point_first_mid_hover_enabled_;
-    std::cerr << "S3A_DBG clear hadSelected="
-              << had_selected_mid_hover
-              << " hadPointFirst=" << had_hover
-              << " enabled=" << datum_point_first_mid_hover_enabled_
-              << '\n';
     if (had_hover && datum_point_first_mid_hover_enabled_)
         setDatumPlaneDraftPreview(std::nullopt);
     else if (had_selected_mid_hover)
@@ -5807,20 +5784,6 @@ bool PartViewportController::selectedDatumMidEdgeHovered() const {
 }
 
 void PartViewportController::refreshSelectedDatumMidMarker() {
-    std::cerr << "S3A_DBG REFRESH marker hover="
-              << datum_selected_mid_edge_hovered_
-              << " part=" << part_evaluation_cache_.has_value()
-              << " datum=" << datum_evaluation_cache_.has_value()
-              << " body=" << body_scene_cache_.has_value()
-              << '\n';
-    qWarning() << "S3A_DBG refreshMarker"
-               << "viewport" << (viewport_ != nullptr)
-               << "session" << (session_ != nullptr)
-               << "bodyRev" << body_scene_revision_.has_value()
-               << "bodyScene" << body_scene_cache_.has_value()
-               << "partEval" << part_evaluation_cache_.has_value()
-               << "datumEval" << datum_evaluation_cache_.has_value()
-               << "hover" << datum_selected_mid_edge_hovered_;
     // Hover may change the reference marker, but must NEVER rebuild
     // the Body or allocate a new Body generation during staged picks.
     if (!viewport_ || !session_ || !body_scene_revision_ ||
@@ -5836,17 +5799,8 @@ void PartViewportController::refreshSelectedDatumMidMarker() {
             session_->document().revision())
         return;
     const auto scene = buildReferenceScene();
-    if (scene) {
-        const bool published = viewport_->setReferenceScene(*scene);
-        std::cerr << "S3A_DBG PUBLISHED "
-                  << published
-                  << " marker=" << scene->mid_anchor.has_value()
-                  << '\n';
-        qWarning() << "S3A_DBG published"
-                   << published << "marker" << scene->mid_anchor.has_value();
-    } else {
-        qWarning() << "S3A_DBG reference scene unavailable";
-    }
+    if (scene)
+        static_cast<void>(viewport_->setReferenceScene(*scene));
 }
 
 void PartViewportController::refreshDatumPointFirstMidHover() {
@@ -5904,12 +5858,6 @@ void PartViewportController::refreshDatumPointFirstMidHover() {
 void PartViewportController::onBodyTopologyPreselectionIntent(
     const viewer::BodyTopologyPickQueryResult& query,
     viewer::ViewportPoint2 point) {
-    std::cerr << "S3A_DBG hoverEvent " << point.x << "," << point.y
-              << " valid=" << query.valid()
-              << " n=" << query.candidates.size() << '\n';
-    qWarning() << "S3A_DBG hoverEvent" << point.x << point.y
-               << "valid" << query.valid()
-               << "candidates" << query.candidates.size();
     if (session_ == nullptr || !point.valid()) {
         clearBodyTopologyPreselection();
         return;
