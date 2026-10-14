@@ -2529,6 +2529,7 @@ int main(int argc, char* argv[]) {
                       .edgePointDatumPlanes().size()==1U);
             const auto& created_end =
                 s3a_end_session.document().edgePointDatumPlanes().front();
+            const auto created_end_id = created_end.id;
             CHECK(std::holds_alternative<
                 part::SelectedMaterialEdgeEnd>(created_end.source));
             CHECK(s3a_end_session.undoDepth()==end_undo_before+1U);
@@ -2545,7 +2546,7 @@ int main(int argc, char* argv[]) {
                       .edgePointDatumPlanes().empty());
             CHECK(s3a_end_session.redo().changed);
             CHECK(s3a_end_session.document()
-                      .findEdgePointDatumPlane(created_end.id));
+                      .findEdgePointDatumPlane(created_end_id));
             std::cout << "RG02B1_S3A_NATIVE_SHARED_END_PASS"
                       << " actual_qt_mouse=1"
                       << " trihedral_corner=1"
