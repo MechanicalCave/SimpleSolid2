@@ -1,6 +1,6 @@
 # RG-02B1/P4-S2 — authored Edge-local END/MID Datum v17 acceptance evidence
 
-**Status: NATIVE TECHNICAL EVIDENCE READY FOR OWNER REVIEW — exact code/docs FULL #2985 PASS; Owner S2 technical FINAL PASS and separate exact-head squash permission NOT YET RECORDED; PR #376 NOT MERGED.**
+**Status: COMPLETED — OWNER MANUAL PASS / TECHNICAL FINAL PASS; PR #376 GUARDED SQUASH MERGED PROTECTED MAIN.**
 **Date:** 2026-10-14. Only exact-SHA test outcomes are counted; FULL REDs and cancellations are retained.
 
 ## Owner-governed authority
@@ -9,7 +9,15 @@
 - Separate ACTIVE activation: PR #375, protected-main merge 168a765133043aae8847fc11696e0e4ff693baa3.
 - Five historical v17 fixture paths: explicit Owner D2 approval PR #377, activation #378, protected-main merge d0cbece7a73b497b551f357c027f07de50bfd599.
 - Sixth historical PM-05B3 path: explicit Owner D2 approval PR #379, activation #380, protected-main merge fb52eda6c888276bfff6b40cec6ea776bdf5dbd5.
-- Implementation: PR #376 clean main-based headless Part/Application/native-test branch; the old stacked mixed S2/S3 PR #372 remains separate WIP and MUST NOT be merged as S2.
+- Implementation: PR #376 clean main-based headless Part/Application/native-test branch squash-MERGED protected main `be5c2eef6fd7ecf1aa5603ccbb56cd3012df0a2a`. Old stacked mixed S2/S3 PR #372 remains Draft WIP and MUST NOT be merged wholesale.
+
+## Final Owner technical decision and protected-main result
+
+Owner's verbatim **"manual test - PASS - kontynuuj pracę"** follows their running PR #376 application manually on supported Windows. It constitutes manual PASS of this running version; it is **not** direct manual certification of S3 Edge+Point mouse gesture UX not implemented under S2. The Owner accepted technical FINAL PASS for the bounded headless S2 contract on this manual smoke plus the recorded real Windows native OCCT evidence (FOCUSED #2969 1/1, FAST #2970 93/93, exact frozen code/docs Ready FULL #2985 199/199 and official DOC-01 parity). Owner FINAL PASS was recorded separately from an explicit exact-head guarded protected-main squash authorization in PR #376 comments [decision #6168508765](https://github.com/MechanicalCave/SimpleSolid2/pull/376#issuecomment-6168508765) and [merge gate #6168517127](https://github.com/MechanicalCave/SimpleSolid2/pull/376#issuecomment-6168517127).
+
+Source/tests/docs frozen at `51fbb02d979652a12638144575e70d17d7fbe30d`. The one-file evidence-ledger-only delta to PR #376 head `711e17cd83e3c7bacda0ff55c124b71a4ec8d31d` passed exact-head Windows governance #2986. GitHub expected-HEAD squash-MERGED PR #376 protected main as `be5c2eef6fd7ecf1aa5603ccbb56cd3012df0a2a`; independently read `main` and PR merged status agree. Earlier REDs #2972/#2974/#2979 and cancelled #2984 remain factual snapshots below, not suppressed.
+
+**S2 CLOSED.** No independent off-edge Point, S3 GUI/Viewer interactive gestures, real positive mouse END/MID tests or PM-06 authority is implied. Next phase requires a separately Owner-accepted bounded S3 Work Contract and separate `ACTIVE.yaml` activation.
 
 ## Exact Windows evidence and failure history
 
