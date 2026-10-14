@@ -107,7 +107,9 @@ public:
 
     bool setBodyScene(
         const viewer::BodyScene& scene) override {
-        return scene.valid();
+        if (!scene.valid()) return false;
+        ++body_scene_set_count;
+        return true;
     }
 
     bool setSolidScene(
@@ -185,6 +187,7 @@ public:
 
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene;
+    std::size_t body_scene_set_count{};
     viewer::SelectionIntentHandler selection_handler;
     viewer::SpatialPointerHandler spatial_handler;
 };
@@ -330,7 +333,32 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.document().datumPlanes().empty());
 
+    // S3: the same constructor panel exposes MID/END while preserving
+    // legacy Offset if the active kernel cannot certify exact geometry.
+    // No half-authored Edge/Vertex pick may mutate the Part/Undo history.
+    CHECK(constructor->count() == 2);
+    CHECK(constructor->itemText(1) ==
+          QStringLiteral("Edge + Point"));
+    const auto revision_before_unsupported =
+        session.document().revision();
+    const auto undo_before_unsupported = session.undoDepth();
+    constructor->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(constructor->currentIndex() == 0);
+    CHECK(session.document().revision() ==
+          revision_before_unsupported);
+    CHECK(session.undoDepth() == undo_before_unsupported);
+    CHECK(session.document().edgePointDatumPlanes().empty());
+    CHECK(session.document().datumPlanes().empty());
+    CHECK(finish->isEnabled());
+
+    // Updating a Datum preview must not recreate the Body scene:
+    // otherwise the first of two END selections would be invalidated.
+    const auto body_sets_before_preview =
+        viewport->body_scene_set_count;
     reverse->click();
+    CHECK(viewport->body_scene_set_count ==
+          body_sets_before_preview);
     CHECK(
         offset->text().contains(
             QStringLiteral("-10")));

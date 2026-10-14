@@ -1509,15 +1509,39 @@ void PartViewportController::clearProfileDraftPreview() {
 }
 
 void PartViewportController::setDatumPlaneDraftPreview(
-    std::optional<kernel::Frame3> frame) {
+    std::optional<kernel::Frame3> frame,
+    bool show_anchor_point) {
     if (frame && !frame->valid()) {
         frame.reset();
     }
-    if (datum_plane_draft_preview_frame_ == frame) {
+    const bool anchor = frame.has_value() && show_anchor_point;
+    if (datum_plane_draft_preview_frame_ == frame &&
+        datum_plane_draft_preview_anchor_ == anchor) {
         return;
     }
-    datum_plane_draft_preview_frame_ =
-        std::move(frame);
+    datum_plane_draft_preview_frame_ = std::move(frame);
+    datum_plane_draft_preview_anchor_ = anchor;
+
+    // Datum draft preview changes reference geometry only. Rebuilding
+    // the OCCT Body here would reassign the Viewer generation and break
+    // the two-stage END selection (Edge then terminal, or the reverse).
+    // Preserve the current revision/generation lease when it is valid;
+    // fall back to full rebuild only for stale/unavailable scene state.
+    if (viewport_ && session_ &&
+        body_scene_revision_ &&
+        *body_scene_revision_ == session_->document().revision() &&
+        body_scene_cache_ &&
+        part_evaluation_cache_ &&
+        part_evaluation_cache_->source_revision ==
+            session_->document().revision() &&
+        datum_evaluation_cache_ &&
+        datum_evaluation_cache_->source_revision ==
+            session_->document().revision()) {
+        const auto references = buildReferenceScene();
+        if (references && viewport_->setReferenceScene(*references)) {
+            return;
+        }
+    }
     refreshPresentation();
 }
 
@@ -2667,6 +2691,137 @@ PartViewportController::primaryBodyTopologySelection() const {
         *selection->primary_body_topology);
 }
 
+bool PartViewportController::bodyTopologySelectionAddressCurrent(
+    const BodyTopologySelectionAddress& address) const noexcept {
+    if (!address.valid() ||
+        session_ == nullptr ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_scene_cache_->generation.valid() ||
+        body_scene_cache_->generation != address.generation ||
+        !body_scene_revision_ ||
+        *body_scene_revision_ != session_->document().revision() ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return false;
+    }
+    return std::any_of(
+        body_topology_bindings_.begin(),
+        body_topology_bindings_.end(),
+        [&address](const auto& entry) {
+            return entry.second.kind == address.kind &&
+                   entry.second.generation == address.generation &&
+                   entry.second.runtime_token_value ==
+                       address.runtime_token_value;
+        });
+}
+
+std::optional<CertifiedEdgeDatumPreview>
+PartViewportController::previewCurrentEdgeDatum(
+    const part::BodyStageRef& stage,
+    const BodyTopologySelectionAddress& edge,
+    const std::optional<BodyTopologySelectionAddress>& terminal,
+    bool reverse) const {
+    if (!session_ || !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !stage.valid() ||
+        stage.kind != part::BodyStageKind::after_feature ||
+        edge.kind != viewer::BodyTopologyPresentationKind::edge ||
+        !bodyTopologySelectionAddressCurrent(edge) ||
+        (terminal &&
+         (terminal->kind !=
+              viewer::BodyTopologyPresentationKind::vertex ||
+          !bodyTopologySelectionAddressCurrent(*terminal) ||
+          edge.generation != terminal->generation))) {
+        return std::nullopt;
+    }
+    auto* exact =
+        dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            solid_modeling_kernel_);
+    if (exact == nullptr) return std::nullopt;
+
+    if (terminal) {
+        // A shared physical corner may be highlighted with a Vertex
+        // candidate belonging to another incident Edge. Resolve the
+        // indicated *location* against the selected Edge's own two
+        // exact bounded native terminals before applying Q1 certified
+        // semantic provenance. The hit Vertex token is NEVER authored.
+        if (!body_topology_catalog_cache_ || !stage.feature_id)
+            return std::nullopt;
+        const auto& catalog = *body_topology_catalog_cache_;
+        const auto hit = std::find_if(
+            catalog.vertices.begin(),catalog.vertices.end(),
+            [&terminal](const auto& item) {
+                return item.runtime_token.value ==
+                    terminal->runtime_token_value;
+            });
+        if (hit == catalog.vertices.end() ||
+            !hit->provider_point)
+            return std::nullopt;
+        const auto* evaluated =
+            part_evaluation_cache_->findFeature(*stage.feature_id);
+        if (!evaluated || !evaluated->result_solid ||
+            !evaluated->result_topology ||
+            evaluated->result_topology->stage != stage)
+            return std::nullopt;
+        const auto token =
+            kernel::RuntimeEdgeToken{edge.runtime_token_value};
+        const auto bound = exact->bindExactEdgeToBody(
+            evaluated->result_solid,token);
+        if (!bound || !bound->valid())
+            return std::nullopt;
+        const auto geometry = exact->queryExactBoundedEdge3d(
+            evaluated->result_solid,*bound);
+        if (!geometry.ok())
+            return std::nullopt;
+
+        // One unique exact-location terminal must match. This is a
+        // transient gesture tolerance (millimetres), not a persistent
+        // source key or a geometric nearest-neighbor reattachment.
+        const auto sameLocation = [](const kernel::Point3& a,
+                                     const kernel::Point3& b) {
+            const double dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z;
+            const double distance2=dx*dx+dy*dy+dz*dz;
+            return std::isfinite(distance2) && distance2 <= 1.0e-14;
+        };
+        const auto& ends =
+            geometry.geometry->current_terminal_positions_world;
+        const bool first = sameLocation(*hit->provider_point,ends[0]);
+        const bool second = sameLocation(*hit->provider_point,ends[1]);
+        if (first == second)
+            return std::nullopt;
+        const auto own_terminal =
+            geometry.geometry->current_terminal_vertex_tokens[
+                first ? 0U : 1U];
+        if (!own_terminal.valid())
+            return std::nullopt;
+        const auto authored = part::authorSelectedMaterialEdgeEnd(
+            session_->document(),*part_evaluation_cache_,stage,
+            token,own_terminal,*exact);
+        if (!authored.ok()) return std::nullopt;
+        const auto frame = part::initializeSelectedEdgeEndFrame(
+            session_->document(),*authored.reference,
+            *part_evaluation_cache_,*exact,reverse);
+        if (!frame.resolved()) return std::nullopt;
+        return CertifiedEdgeDatumPreview{
+            part::EdgePointDatumSource{*authored.reference},
+            *frame.frame};
+    }
+
+    const auto authored = part::authorSelectedMaterialEdgeMid(
+        session_->document(),*part_evaluation_cache_,stage,
+        kernel::RuntimeEdgeToken{edge.runtime_token_value},*exact);
+    if (!authored.ok()) return std::nullopt;
+    const auto frame = part::initializeSelectedEdgeMidFrame(
+        session_->document(),*authored.reference,
+        *part_evaluation_cache_,*exact,reverse);
+    if (!frame.resolved()) return std::nullopt;
+    return CertifiedEdgeDatumPreview{
+        part::EdgePointDatumSource{*authored.reference},*frame.frame};
+}
+
 std::optional<BodyTopologyInspection>
 PartViewportController::primaryBodyTopologyInspection() const {
     const auto address =
@@ -3505,12 +3660,14 @@ std::optional<viewer::ReferenceScene>
 PartViewportController::buildReferenceScene() {
     datum_bindings_.clear();
     axis_bindings_.clear();
+    datum_mid_anchor_token_.reset();
 
     viewer::ReferenceScene scene;
     const auto fail =
         [this]() -> std::optional<viewer::ReferenceScene> {
             datum_bindings_.clear();
             axis_bindings_.clear();
+            datum_mid_anchor_token_.reset();
             return std::nullopt;
         };
     if (session_ == nullptr) return scene;
@@ -3642,86 +3799,77 @@ PartViewportController::buildReferenceScene() {
         }
     }
 
-    const auto& datums =
-        session_->document().datumPlanes();
+    const auto& datums = session_->document().datumPlanes();
+    const auto& edge_datums =
+        session_->document().edgePointDatumPlanes();
 
-    if (!datums.empty()) {
+    if (!datums.empty() || !edge_datums.empty()) {
         if (!datum_evaluation_cache_ ||
             datum_evaluation_cache_->source_revision !=
                 session_->document().revision() ||
             datum_evaluation_cache_->planes.size() !=
-                datums.size()) {
+                datums.size() + edge_datums.size()) {
             return fail();
         }
 
-        for (const auto& datum : datums) {
+        const auto publish = [&](part::DatumId id,bool visible) -> bool {
             const auto* evaluation =
-                datum_evaluation_cache_->find(
-                    datum.id);
+                datum_evaluation_cache_->find(id);
             if (evaluation == nullptr) {
-                datum_bindings_.clear();
-                return fail();
+                return false;
             }
-
-            if (!datum.visible ||
+            if (!visible ||
                 evaluation->status !=
-                    part::DatumPlaneEvaluationStatus::
-                        resolved ||
+                    part::DatumPlaneEvaluationStatus::resolved ||
                 !evaluation->frame) {
-                continue;
+                return true;
             }
-
-            const auto token =
-                allocatePresentationToken();
+            const auto token = allocatePresentationToken();
             if (!token ||
-                !datum_bindings_
-                     .emplace(
-                         token->value,
-                         datum.id)
-                     .second) {
-                datum_bindings_.clear();
-                return fail();
+                !datum_bindings_.emplace(token->value,id).second) {
+                return false;
             }
 
-            const auto& frame =
-                *evaluation->frame;
-            viewer::ReferencePresentation
-                reference;
+            const auto& frame = *evaluation->frame;
+            viewer::ReferencePresentation reference;
             reference.token = *token;
             reference.kind =
-                viewer::ReferencePresentationKind::
-                    datum_plane;
-            reference.origin =
-                viewerPoint(frame.origin);
-            reference.u_axis =
-                viewerVector(frame.u_axis);
-            reference.v_axis =
-                viewerVector(frame.v_axis);
+                viewer::ReferencePresentationKind::datum_plane;
+            reference.origin = viewerPoint(frame.origin);
+            reference.u_axis = viewerVector(frame.u_axis);
+            reference.v_axis = viewerVector(frame.v_axis);
             reference.extent = planeExtent;
             reference.visible = true;
             if (!reference.valid()) {
-                datum_bindings_.clear();
-                return fail();
+                return false;
             }
-            scene.references.push_back(
-                std::move(reference));
+            scene.references.push_back(std::move(reference));
 
             if (body_scene_cache_ &&
                 body_scene_cache_->purpose ==
-                    viewer::BodyScenePurpose::
-                        current_body &&
+                    viewer::BodyScenePurpose::current_body &&
                 !body_scene_cache_->empty()) {
                 auto segments =
-                    datumBodyIntersection(
-                        *body_scene_cache_,
-                        frame);
+                    datumBodyIntersection(*body_scene_cache_,frame);
                 if (!segments.empty()) {
                     scene.overlays.push_back(
-                        viewer::
-                            ReferenceOwnedLineOverlay{
-                                *token,
-                                std::move(segments)});
+                        viewer::ReferenceOwnedLineOverlay{
+                            *token,std::move(segments)});
                 }
+            }
+            return true;
+        };
+
+        for (const auto& datum : datums) {
+            if (!publish(datum.id,datum.visible)) {
+                datum_bindings_.clear();
+                return fail();
+            }
+        }
+        for (const auto& datum : edge_datums) {
+            if (!publish(datum.id,datum.visible)) {
+                datum_bindings_.clear();
+                return fail();
             }
         }
     }
@@ -3733,6 +3881,13 @@ PartViewportController::buildReferenceScene() {
             preview;
         preview.origin =
             viewerPoint(frame.origin);
+        if (datum_plane_draft_preview_anchor_) {
+            preview.anchor_point = preview.origin;
+            const auto token = allocatePresentationToken();
+            if (!token) return fail();
+            preview.anchor_pick_token = *token;
+            datum_mid_anchor_token_ = *token;
+        }
         preview.u_axis =
             viewerVector(frame.u_axis);
         preview.v_axis =
@@ -3830,16 +3985,17 @@ PartViewportController::buildBodyScene() {
         part::evaluatePart(
             session_->document(),
             *solid_modeling_kernel_);
-    const auto datum_evaluation =
-        part::evaluateDatums(
-            session_->document(),
-            evaluation);
-    if (datum_evaluation.source_revision !=
-            revision ||
+    auto* exact =
+        dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            solid_modeling_kernel_);
+    const auto datum_evaluation = exact != nullptr
+        ? part::evaluateDatums(
+            session_->document(),evaluation,*exact)
+        : part::evaluateDatums(session_->document(),evaluation);
+    if (datum_evaluation.source_revision != revision ||
         datum_evaluation.planes.size() !=
-            session_->document()
-                .datumPlanes()
-                .size()) {
+            session_->document().datumPlanes().size() +
+            session_->document().edgePointDatumPlanes().size()) {
         return fail();
     }
 
@@ -4600,6 +4756,21 @@ void PartViewportController::onViewportIntent(
     const viewer::SelectionIntent& intent) {
     if (session_ == nullptr ||
         !intent.valid()) {
+        return;
+    }
+
+    // The MID Point marker is a gesture token, not semantic topology.
+    // Consume it without mutating Part/Datum/Body selection state.
+    if (datum_mid_anchor_token_ &&
+        intent.token == *datum_mid_anchor_token_) {
+        if (intent.mode != viewer::SelectionIntentMode::clear &&
+            datum_plane_draft_preview_anchor_ &&
+            datum_plane_draft_preview_frame_ &&
+            body_scene_revision_ &&
+            *body_scene_revision_ == session_->document().revision() &&
+            datum_mid_point_pick_handler_) {
+            datum_mid_point_pick_handler_();
+        }
         return;
     }
 

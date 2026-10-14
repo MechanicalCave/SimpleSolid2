@@ -1716,6 +1716,34 @@ public:
                 reference_preview_objects_.push_back(
                     plane);
 
+                // Render an explicit transient MID anchor using the same
+                // OCCT point primitive as a body Vertex. Do not register
+                // it as a semantic reference or persistent topology token.
+                if (scene.preview->anchor_point) {
+                    Handle(Geom_CartesianPoint) at =
+                        new Geom_CartesianPoint(
+                            toPoint(*scene.preview->anchor_point));
+                    Handle(AIS_Point) marker = new AIS_Point(at);
+                    if (marker.IsNull()) {
+                        clearReferenceScene();
+                        return false;
+                    }
+                    context_->Display(marker,false);
+                    context_->SetColor(marker,Quantity_Color{
+                        0.96,0.80,0.20,Quantity_TOC_RGB},false);
+                    if (scene.preview->anchor_pick_token) {
+                        // This scene-local MID click is consumed before
+                        // ordinary semantic selection is evaluated.
+                        reference_objects_.push_back(ReferenceObject{
+                            *scene.preview->anchor_pick_token,
+                            viewer::ReferencePresentationKind::point,
+                            marker,false,true});
+                    } else {
+                        context_->Deactivate(marker);
+                        reference_preview_objects_.push_back(marker);
+                    }
+                }
+
                 for (const auto& segment :
                      scene.preview->intersection_segments) {
                     Handle(Geom_CartesianPoint) first =
@@ -4909,6 +4937,7 @@ public:
         viewer::ReferencePresentationKind kind;
         Handle(AIS_InteractiveObject) object;
         bool owned_overlay{false};
+        bool transient_mid_anchor{false};
     };
 
     struct SketchObject final {
@@ -6060,7 +6089,11 @@ public:
                     : selected
                         ? Quantity_Color{
                               1.0, 0.63, 0.18, Quantity_TOC_RGB}
-                        : entry.owned_overlay
+                        : entry.transient_mid_anchor
+                            ? Quantity_Color{
+                                  0.96,0.80,0.20,
+                                  Quantity_TOC_RGB}
+                    : entry.owned_overlay
                             ? Quantity_Color{
                                   0.18, 0.92, 0.96,
                                   Quantity_TOC_RGB}

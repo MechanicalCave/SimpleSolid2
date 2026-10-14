@@ -379,6 +379,18 @@ QString datumEvaluationDiagnosticText(
         return QStringLiteral("Upstream Datum unavailable");
     case part::DatumPlaneEvaluationDiagnostic::invalid_frame:
         return QStringLiteral("Invalid frame");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_missing:
+        return QStringLiteral("Missing Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_ambiguous:
+        return QStringLiteral("Ambiguous Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_unsupported:
+        return QStringLiteral("Unsupported Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_native_geometry_unavailable:
+        return QStringLiteral("Exact Edge geometry unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_orientation_intent:
+        return QStringLiteral("Invalid orientation");
+    case part::DatumPlaneEvaluationDiagnostic::orientation_review_required:
+        return QStringLiteral("Orientation review required");
     }
     return QStringLiteral("Unknown");
 }
@@ -1835,6 +1847,9 @@ void CadWorkbench::buildUi() {
             tryStageRevolveAxisFromBuiltin(primary);
         });
 
+    viewport_controller_->setDatumMidPointPickHandler([this] {
+        confirmEdgeDatumMidPoint();
+    });
     viewport_controller_->setBodyTopologySelectionChangedHandler(
         [this](std::optional<BodyTopologyInspection> inspection) {
             if (!inspection) {
@@ -3413,6 +3428,9 @@ void CadWorkbench::buildUi() {
         QStringLiteral("datumPlaneConstructorCombo"));
     datum_plane_constructor_combo_->addItem(
         QStringLiteral("Offset"));
+    // One accepted constructor, not separate END/MID user modes.
+    datum_plane_constructor_combo_->addItem(
+        QStringLiteral("Edge + Point"));
     datum_plane_constructor_form->addRow(
         QStringLiteral("Constructor"),
         datum_plane_constructor_combo_);
@@ -4974,12 +4992,21 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
-            if (datum_plane_draft_) {
+            if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ ||
+                edge_datum_create_revision_) {
                 cancelDatumPlane();
                 return;
             }
             static_cast<void>(
                 startDatumPlaneTool());
+        });
+    QObject::connect(
+        datum_plane_constructor_combo_,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int index) {
+            if (!syncing_datum_plane_ui_)
+                selectDatumPlaneConstructor(index);
         });
     QObject::connect(
         datum_plane_offset_edit_,
@@ -5047,6 +5074,22 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
+            if (edge_datum_create_revision_) {
+                edge_datum_create_reverse_ =
+                    !edge_datum_create_reverse_;
+                ++edge_datum_create_context_generation_;
+                refreshDatumPlaneEvaluation();
+                notifyCadInputContextChanged();
+                return;
+            }
+            if (edge_datum_edit_id_) {
+                edge_datum_edit_reverse_ =
+                    !edge_datum_edit_reverse_;
+                ++edge_datum_edit_context_generation_;
+                refreshDatumPlaneEvaluation();
+                notifyCadInputContextChanged();
+                return;
+            }
             if (!datum_plane_draft_) {
                 return;
             }
@@ -6538,6 +6581,158 @@ CadWorkbench::submitAxisCadInput(
     return {true, {}};
 }
 
+void CadWorkbench::selectDatumPlaneConstructor(
+    int constructor_index) {
+    auto* session = activeDocumentSession();
+    ++edge_datum_create_context_generation_;
+    if (session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        edge_datum_edit_id_ ||
+        (!datum_plane_draft_ && !edge_datum_create_revision_) ||
+        constructor_index < 0 || constructor_index > 1) {
+        return;
+    }
+    if (constructor_index == 0) {
+        edge_datum_create_revision_.reset();
+        edge_datum_edge_pick_.reset();
+        edge_datum_vertex_pick_.reset();
+        edge_datum_pick_stage_.reset();
+        edge_datum_create_source_.reset();
+        edge_datum_create_preview_.reset();
+        edge_datum_create_reverse_ = false;
+        datum_plane_draft_ =
+            application::DatumPlaneDraft::beginCreate(*session);
+        datum_plane_offset_input_valid_ = true;
+        if (viewport_controller_)
+            viewport_controller_->setBodyTopologyFacePickOnly(true);
+        refreshDatumPlaneEvaluation();
+        syncActionState();
+        notifyCadInputContextChanged();
+        return;
+    }
+
+    if (dynamic_cast<
+            kernel::IExactBoundedEdgeGeometryQuery*>(
+                solid_modeling_kernel_) == nullptr) {
+        if (datum_plane_constructor_combo_) {
+            const QSignalBlocker blocked{datum_plane_constructor_combo_};
+            datum_plane_constructor_combo_->setCurrentIndex(0);
+        }
+        setStatusText(QStringLiteral(
+            "Edge Datum needs an exact native Edge geometry provider."));
+        return;
+    }
+    datum_plane_draft_.reset();
+    datum_plane_evaluation_.reset();
+    edge_datum_create_revision_ = session->document().revision();
+    edge_datum_edge_pick_.reset();
+    edge_datum_vertex_pick_.reset();
+    edge_datum_pick_stage_.reset();
+    edge_datum_create_source_.reset();
+    edge_datum_create_preview_.reset();
+    edge_datum_mid_point_confirmed_ = false;
+    edge_datum_create_reverse_ = false;
+    if (viewport_controller_) {
+        viewport_controller_->setBodyTopologyFacePickOnly(false);
+        const auto inspection =
+            viewport_controller_->primaryBodyTopologyInspection();
+        if (inspection) {
+            stageEdgeDatumFromBodyTopology(*inspection);
+        }
+    }
+    // Even if the previous selection was a Face (Offset mode), the
+    // constructor panel must immediately switch to the incomplete
+    // END/MID state rather than retaining the old Offset preview.
+    refreshDatumPlaneEvaluation();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(QStringLiteral(
+        "Edge + Point — select the Edge and an endpoint Vertex in either order; Edge-only currently previews strict MID."));
+}
+
+void CadWorkbench::stageEdgeDatumFromBodyTopology(
+    const BodyTopologyInspection& inspection) {
+    if (!edge_datum_create_revision_ ||
+        !viewport_controller_ ||
+        !inspection.valid() ||
+        inspection.diagnostic_prefix ||
+        !inspection.stage.valid() ||
+        inspection.stage.kind !=
+            part::BodyStageKind::after_feature ||
+        !document_session_ ||
+        document_session_->document().revision() !=
+            *edge_datum_create_revision_ ||
+        !datum_plane_constructor_combo_) {
+        return;
+    }
+    const int constructor_index =
+        datum_plane_constructor_combo_->currentIndex();
+    if (constructor_index != 1)
+        return;
+    const auto address =
+        viewport_controller_->primaryBodyTopologySelection();
+    if (!address ||
+        address->kind != inspection.kind ||
+        !viewport_controller_->
+            bodyTopologySelectionAddressCurrent(*address))
+        return;
+    if (address->kind !=
+            viewer::BodyTopologyPresentationKind::edge &&
+        address->kind !=
+            viewer::BodyTopologyPresentationKind::vertex)
+        return;
+
+    // A source is one exact Body-stage and one Viewer generation.
+    // Never join an Edge and a Vertex from different scenes/stages.
+    const bool different_stage =
+        edge_datum_pick_stage_ &&
+        *edge_datum_pick_stage_ != inspection.stage;
+    const bool different_scene =
+        (edge_datum_edge_pick_ &&
+         edge_datum_edge_pick_->generation != address->generation) ||
+        (edge_datum_vertex_pick_ &&
+         edge_datum_vertex_pick_->generation != address->generation);
+    if (different_stage || different_scene) {
+        edge_datum_mid_point_confirmed_ = false;
+        edge_datum_edge_pick_.reset();
+        edge_datum_vertex_pick_.reset();
+        edge_datum_create_source_.reset();
+        edge_datum_create_preview_.reset();
+    }
+    edge_datum_pick_stage_ = inspection.stage;
+    edge_datum_mid_point_confirmed_ = false;
+    ++edge_datum_create_context_generation_;
+    if (address->kind ==
+            viewer::BodyTopologyPresentationKind::edge) {
+        edge_datum_edge_pick_ = *address;
+    } else {
+        edge_datum_vertex_pick_ = *address;
+    }
+    refreshDatumPlaneEvaluation();
+    notifyCadInputContextChanged();
+}
+
+void CadWorkbench::confirmEdgeDatumMidPoint() {
+    if (!edge_datum_create_revision_ || !document_session_ ||
+        !viewport_controller_ || !edge_datum_edge_pick_ ||
+        edge_datum_vertex_pick_ || !edge_datum_pick_stage_ ||
+        !edge_datum_create_source_ || !edge_datum_create_preview_ ||
+        !std::holds_alternative<part::SelectedMaterialEdgeMid>(
+            *edge_datum_create_source_) ||
+        document_session_->document().revision() !=
+            *edge_datum_create_revision_ ||
+        !viewport_controller_->bodyTopologySelectionAddressCurrent(
+            *edge_datum_edge_pick_)) {
+        return;
+    }
+    edge_datum_mid_point_confirmed_ = true;
+    ++edge_datum_create_context_generation_;
+    syncDatumPlaneUi();
+    notifyCadInputContextChanged();
+    setStatusText(QStringLiteral(
+        "MID Point confirmed on this Edge — Reverse or Finish."));
+}
+
 bool CadWorkbench::startDatumPlaneTool() {
     auto* document_session =
         activeDocumentSession();
@@ -6548,7 +6743,8 @@ bool CadWorkbench::startDatumPlaneTool() {
                 "Datum Plane requires an active Part and modeling Kernel."));
         return false;
     }
-    if (datum_plane_draft_) {
+    if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ ||
+        edge_datum_create_revision_) {
         setStatusText(
             QStringLiteral(
                 "A Datum Plane operation is already active."));
@@ -6571,6 +6767,10 @@ bool CadWorkbench::startDatumPlaneTool() {
     datum_plane_draft_ =
         application::DatumPlaneDraft::beginCreate(
             *document_session);
+    if (datum_plane_constructor_combo_) {
+        const QSignalBlocker blocked{datum_plane_constructor_combo_};
+        datum_plane_constructor_combo_->setCurrentIndex(0);
+    }
     datum_plane_evaluation_.reset();
     datum_plane_offset_input_valid_ = true;
 
@@ -6639,6 +6839,8 @@ bool CadWorkbench::startDatumPlaneEdit(
         return false;
     }
     if (datum_plane_draft_ ||
+        edge_datum_edit_id_ ||
+        edge_datum_create_revision_ ||
         axis_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
@@ -6651,6 +6853,31 @@ bool CadWorkbench::startDatumPlaneEdit(
             QStringLiteral(
                 "Finish or cancel the active modeling context before Edit Datum Plane."));
         return false;
+    }
+
+    if (const auto* edge =
+            document_session->document()
+                .findEdgePointDatumPlane(datum_id)) {
+        if (dynamic_cast<
+                kernel::IExactBoundedEdgeGeometryQuery*>(
+                    solid_modeling_kernel_) == nullptr) {
+            setStatusText(QStringLiteral(
+                "Edge Datum edit requires exact native geometry."));
+            return false;
+        }
+        edge_datum_edit_id_ = datum_id;
+        ++edge_datum_edit_context_generation_;
+        edge_datum_edit_revision_ =
+            document_session->document().revision();
+        edge_datum_edit_reverse_ =
+            edge->orientation.reverse;
+        edge_datum_edit_preview_valid_ = false;
+        refreshDatumPlaneEvaluation();
+        syncActionState();
+        notifyCadInputContextChanged();
+        setStatusText(QStringLiteral(
+            "Edit Edge Datum active — Reverse changes orientation; Finish commits, Cancel discards."));
+        return true;
     }
 
     auto draft =
@@ -6718,7 +6945,9 @@ void CadWorkbench::deleteDatumPlane(
         return;
     }
     if (document_session->document()
-            .findDatumPlane(datum_id) == nullptr) {
+            .findDatumPlane(datum_id) == nullptr &&
+        document_session->document()
+            .findEdgePointDatumPlane(datum_id) == nullptr) {
         setStatusText(
             QStringLiteral(
                 "Datum Plane is no longer available."));
@@ -6788,6 +7017,10 @@ void CadWorkbench::tryStageDatumPlaneFromSupport(
 
 void CadWorkbench::tryStageDatumPlaneFromBodyTopology(
     const BodyTopologyInspection& inspection) {
+    if (edge_datum_create_revision_) {
+        stageEdgeDatumFromBodyTopology(inspection);
+        return;
+    }
     if (!datum_plane_draft_ ||
         inspection.diagnostic_prefix ||
         inspection.kind !=
@@ -6860,6 +7093,77 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
     }
     datum_plane_evaluation_.reset();
 
+    if (edge_datum_create_revision_) {
+        edge_datum_create_source_.reset();
+        edge_datum_create_preview_.reset();
+        if (document_session_ &&
+            viewport_controller_ &&
+            edge_datum_pick_stage_ &&
+            edge_datum_edge_pick_ &&
+            document_session_->document().revision() ==
+                *edge_datum_create_revision_ &&
+            datum_plane_constructor_combo_) {
+            if (datum_plane_constructor_combo_->currentIndex() == 1) {
+                auto preview =
+                    viewport_controller_->previewCurrentEdgeDatum(
+                        *edge_datum_pick_stage_,
+                        *edge_datum_edge_pick_,
+                        edge_datum_vertex_pick_,
+                        edge_datum_create_reverse_);
+                if (preview) {
+                    edge_datum_create_source_ =
+                        std::move(preview->source);
+                    edge_datum_create_preview_ =
+                        preview->frame;
+                }
+            }
+        }
+        if (viewport_controller_)
+            viewport_controller_->setDatumPlaneDraftPreview(
+                edge_datum_create_preview_,
+                !edge_datum_vertex_pick_.has_value() &&
+                !edge_datum_mid_point_confirmed_);
+        syncDatumPlaneUi();
+        return;
+    }
+
+    if (edge_datum_edit_id_) {
+        edge_datum_edit_preview_valid_ = false;
+        std::optional<kernel::Frame3> preview;
+        auto* query = dynamic_cast<
+            kernel::IExactBoundedEdgeGeometryQuery*>(
+                solid_modeling_kernel_);
+        if (document_session_ != nullptr &&
+            edge_datum_edit_revision_ &&
+            document_session_->document().revision() ==
+                *edge_datum_edit_revision_ &&
+            query != nullptr) {
+            const auto* datum =
+                document_session_->document()
+                    .findEdgePointDatumPlane(*edge_datum_edit_id_);
+            if (datum != nullptr) {
+                auto changed = *datum;
+                changed.orientation.reverse =
+                    edge_datum_edit_reverse_;
+                const auto part_evaluation = part::evaluatePart(
+                    document_session_->document(),
+                    *solid_modeling_kernel_);
+                const auto frame = part::resolveEdgePointDatumFrame(
+                    document_session_->document(),changed,
+                    part_evaluation,*query);
+                if (frame.resolved()) {
+                    preview = frame.frame;
+                    edge_datum_edit_preview_valid_ = true;
+                }
+            }
+        }
+        if (viewport_controller_ != nullptr) {
+            viewport_controller_->setDatumPlaneDraftPreview(preview);
+        }
+        syncDatumPlaneUi();
+        return;
+    }
+
     if (!datum_plane_draft_ ||
         !datum_plane_offset_input_valid_ ||
         !datum_plane_draft_->source() ||
@@ -6893,7 +7197,9 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
 
 void CadWorkbench::syncDatumPlaneUi() {
     const bool active =
-        datum_plane_draft_.has_value();
+        datum_plane_draft_.has_value() ||
+        edge_datum_edit_id_.has_value() ||
+        edge_datum_create_revision_.has_value();
 
     if (datum_plane_operations_widget_ != nullptr) {
         datum_plane_operations_widget_->
@@ -6907,6 +7213,90 @@ void CadWorkbench::syncDatumPlaneUi() {
     }
 
     syncing_datum_plane_ui_ = true;
+
+    if (edge_datum_create_revision_) {
+        if (datum_plane_constructor_combo_)
+            datum_plane_constructor_combo_->setVisible(true);
+        if (datum_plane_offset_edit_)
+            datum_plane_offset_edit_->setVisible(false);
+        if (datum_plane_source_label_) {
+            datum_plane_source_label_->setText(
+                QStringLiteral("Source: Edge + Point (END or MID)"));
+        }
+        if (datum_plane_result_label_) {
+            const bool end = edge_datum_vertex_pick_.has_value();
+            const QString status = edge_datum_create_preview_
+                ? (end
+                    ? QStringLiteral(
+                        "Resolved END — selected Edge terminal; Reverse/Finish.")
+                    : edge_datum_mid_point_confirmed_
+                        ? QStringLiteral(
+                            "Resolved MID — Point selected; Reverse/Finish.")
+                        : QStringLiteral(
+                            "Click the highlighted MID Point to continue."))
+                : !edge_datum_edge_pick_
+                    ? QStringLiteral(
+                        "Select material Edge and its Point, in either order.")
+                    : QStringLiteral(
+                        "Point is unsupported, missing or stale; reselect current geometry.");
+            datum_plane_result_label_->setText(status);
+        }
+        if (datum_plane_reverse_button_)
+            datum_plane_reverse_button_->setEnabled(true);
+        if (datum_plane_finish_button_)
+            datum_plane_finish_button_->setEnabled(
+                edge_datum_create_source_.has_value() &&
+                edge_datum_create_preview_.has_value() &&
+                (edge_datum_vertex_pick_.has_value() ||
+                 edge_datum_mid_point_confirmed_));
+        if (datum_plane_cancel_button_)
+            datum_plane_cancel_button_->setEnabled(true);
+        syncing_datum_plane_ui_ = false;
+        return;
+    }
+
+    if (edge_datum_edit_id_) {
+        const auto* current = document_session_ != nullptr
+            ? document_session_->document().findEdgePointDatumPlane(
+                *edge_datum_edit_id_)
+            : nullptr;
+        if (datum_plane_constructor_combo_ != nullptr)
+            datum_plane_constructor_combo_->setVisible(false);
+        if (datum_plane_source_label_ != nullptr) {
+            const bool end = current != nullptr &&
+                std::holds_alternative<
+                    part::SelectedMaterialEdgeEnd>(current->source);
+            datum_plane_source_label_->setText(
+                current != nullptr
+                    ? QStringLiteral("Source: certified Edge-local %1")
+                        .arg(end ? QStringLiteral("END")
+                                 : QStringLiteral("MID"))
+                    : QStringLiteral("Source: unavailable"));
+        }
+        if (datum_plane_offset_edit_ != nullptr)
+            datum_plane_offset_edit_->setVisible(false);
+        if (datum_plane_result_label_ != nullptr)
+            datum_plane_result_label_->setText(
+                edge_datum_edit_preview_valid_
+                    ? QStringLiteral(
+                        "Resolved — Reverse affects V and N, not U or source.")
+                    : QStringLiteral(
+                        "Edge Datum orientation is unavailable or stale."));
+        if (datum_plane_reverse_button_ != nullptr)
+            datum_plane_reverse_button_->setEnabled(current != nullptr);
+        if (datum_plane_finish_button_ != nullptr)
+            datum_plane_finish_button_->setEnabled(
+                edge_datum_edit_preview_valid_);
+        if (datum_plane_cancel_button_ != nullptr)
+            datum_plane_cancel_button_->setEnabled(true);
+        syncing_datum_plane_ui_ = false;
+        return;
+    }
+
+    if (datum_plane_constructor_combo_ != nullptr)
+        datum_plane_constructor_combo_->setVisible(true);
+    if (datum_plane_offset_edit_ != nullptr)
+        datum_plane_offset_edit_->setVisible(true);
 
     if (datum_plane_constructor_combo_ != nullptr) {
         datum_plane_constructor_combo_->
@@ -7071,7 +7461,8 @@ void CadWorkbench::syncDatumPlaneUi() {
 }
 
 void CadWorkbench::cancelDatumPlane() {
-    if (!datum_plane_draft_) {
+    if (!datum_plane_draft_ && !edge_datum_edit_id_ &&
+        !edge_datum_create_revision_) {
         return;
     }
 
@@ -7088,6 +7479,79 @@ void CadWorkbench::cancelDatumPlane() {
 }
 
 bool CadWorkbench::finishDatumPlane() {
+    if (edge_datum_create_revision_) {
+        auto* session = activeDocumentSession();
+        if (!session || !solid_modeling_kernel_ ||
+            session->document().revision() !=
+                *edge_datum_create_revision_ ||
+            !edge_datum_create_source_ ||
+            !edge_datum_create_preview_ ||
+            (!edge_datum_vertex_pick_ &&
+             !edge_datum_mid_point_confirmed_)) {
+            setStatusText(QStringLiteral(
+                "Cannot Finish Edge Datum: missing or stale source."));
+            return false;
+        }
+        // Re-query certified source/frame against the current Part;
+        // the staged Viewer Edge/Vertex tokens are never authored.
+        const auto result = session->execute(
+            application::CreateEdgePointDatumPlaneCommand{
+                *edge_datum_create_source_,
+                *edge_datum_create_revision_,
+                edge_datum_create_reverse_,
+                true},
+            *solid_modeling_kernel_);
+        if (!result.ok() || !result.changed || !result.datum_id) {
+            if (!result.ok()) showFailure(result.diagnostic);
+            refreshDatumPlaneEvaluation();
+            return false;
+        }
+        const auto id = *result.datum_id;
+        clearDatumPlaneRuntimeContext();
+        refreshActiveContext();
+        syncActionState();
+        notifyCadInputContextChanged();
+        notifyDocumentStateChanged();
+        setStatusText(
+            QStringLiteral("Edge Datum %1 committed.")
+                .arg(fromUtf8(id.serialized())));
+        return true;
+    }
+
+    if (edge_datum_edit_id_) {
+        auto* document_session = activeDocumentSession();
+        if (document_session == nullptr ||
+            solid_modeling_kernel_ == nullptr ||
+            !edge_datum_edit_revision_ ||
+            document_session->document().revision() !=
+                *edge_datum_edit_revision_ ||
+            !edge_datum_edit_preview_valid_) {
+            setStatusText(QStringLiteral(
+                "Edge Datum edit is stale or orientation is unavailable."));
+            return false;
+        }
+        const auto id = *edge_datum_edit_id_;
+        const auto result = document_session->execute(
+            application::EditEdgePointDatumPlaneCommand{
+                id,*edge_datum_edit_revision_,
+                edge_datum_edit_reverse_},
+            *solid_modeling_kernel_);
+        if (!result.ok()) {
+            showFailure(result.diagnostic);
+            refreshDatumPlaneEvaluation();
+            return false;
+        }
+        clearDatumPlaneRuntimeContext();
+        refreshActiveContext();
+        syncActionState();
+        notifyCadInputContextChanged();
+        if (result.changed) notifyDocumentStateChanged();
+        setStatusText(QStringLiteral(
+            "Edge Datum %1 orientation saved.")
+            .arg(fromUtf8(id.serialized())));
+        return true;
+    }
+
     flushDatumPlaneEvaluation();
 
     auto* document_session =
@@ -7152,6 +7616,20 @@ void CadWorkbench::clearDatumPlaneRuntimeContext() {
     }
     datum_plane_draft_.reset();
     datum_plane_evaluation_.reset();
+    edge_datum_create_revision_.reset();
+    edge_datum_pick_stage_.reset();
+    edge_datum_edge_pick_.reset();
+    edge_datum_vertex_pick_.reset();
+    edge_datum_create_source_.reset();
+    edge_datum_create_preview_.reset();
+    edge_datum_mid_point_confirmed_ = false;
+    edge_datum_create_reverse_ = false;
+    ++edge_datum_create_context_generation_;
+    edge_datum_edit_id_.reset();
+    ++edge_datum_edit_context_generation_;
+    edge_datum_edit_revision_.reset();
+    edge_datum_edit_preview_valid_ = false;
+    edge_datum_edit_reverse_ = false;
     datum_plane_offset_input_valid_ = true;
 
     if (viewport_controller_ != nullptr) {
@@ -12279,6 +12757,18 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (axis_draft_->generation() &
                 (axis_namespace - 1U));
     }
+    if (edge_datum_create_revision_) {
+        constexpr application::CadInputContextGeneration ns{
+            1ULL << 58U};
+        return ns | (edge_datum_create_context_generation_ &
+                     (ns - 1U));
+    }
+    if (edge_datum_edit_id_) {
+        constexpr application::CadInputContextGeneration ns{
+            1ULL << 60U};
+        return ns | (edge_datum_edit_context_generation_ &
+                     (ns - 1U));
+    }
     if (datum_plane_draft_) {
         constexpr application::CadInputContextGeneration
             datum_plane_namespace =
@@ -12580,7 +13070,7 @@ CadWorkbench::submitCadDynamicInputRequest(
                   false,
                   "Axis Finish was rejected."};
     }
-    if (datum_plane_draft_) {
+    if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) {
         return finishDatumPlane()
             ? application::CadInputSubmitResult{
                   true, {}}
@@ -12707,6 +13197,48 @@ CadWorkbench::submitCadInput(
         return result;
     }
 
+    if (edge_datum_create_revision_) {
+        const auto word = upperAsciiTrimmed(text);
+        if (word == "CANCEL" || word == "ESC") {
+            cancelDatumPlane();
+            return {true, {}};
+        }
+        if (word == "REVERSE") {
+            edge_datum_create_reverse_ = !edge_datum_create_reverse_;
+            ++edge_datum_create_context_generation_;
+            refreshDatumPlaneEvaluation();
+            notifyCadInputContextChanged();
+            return {true, {}};
+        }
+        if (word.empty() || word == "FINISH") {
+            return finishDatumPlane()
+                ? application::CadInputSubmitResult{true, {}}
+                : application::CadInputSubmitResult{
+                    false,"Edge Datum source is not certified for Finish."};
+        }
+        return {false,"Use REVERSE, FINISH or CANCEL."};
+    }
+    if (edge_datum_edit_id_) {
+        const auto word = upperAsciiTrimmed(text);
+        if (word == "CANCEL" || word == "ESC") {
+            cancelDatumPlane();
+            return {true, {}};
+        }
+        if (word == "REVERSE") {
+            edge_datum_edit_reverse_ = !edge_datum_edit_reverse_;
+            ++edge_datum_edit_context_generation_;
+            refreshDatumPlaneEvaluation();
+            notifyCadInputContextChanged();
+            return {true, {}};
+        }
+        if (word.empty() || word == "FINISH") {
+            return finishDatumPlane()
+                ? application::CadInputSubmitResult{true, {}}
+                : application::CadInputSubmitResult{
+                    false,"Edge Datum Finish was rejected."};
+        }
+        return {false,"Use REVERSE, FINISH or CANCEL."};
+    }
     if (datum_plane_draft_) {
         auto result =
             submitDatumPlaneCadInput(text);
@@ -12906,6 +13438,14 @@ QString CadWorkbench::cadInputPromptText() const {
                   "Command: AXIS — SOURCE · FINISH/CANCEL")
             : QStringLiteral(
                   "Command: AXIS — Select exactly one Line in an active Sketch · SOURCE · CANCEL/Esc");
+    }
+    if (edge_datum_create_revision_) {
+        return QStringLiteral(
+            "Command: EDGE DATUM — MID Edge or END Edge + terminal Vertex · REVERSE · FINISH/CANCEL");
+    }
+    if (edge_datum_edit_id_) {
+        return QStringLiteral(
+            "Command: EDIT EDGE DATUM — REVERSE · FINISH/CANCEL");
     }
     if (datum_plane_draft_) {
         return datum_plane_draft_->source()
@@ -13410,7 +13950,7 @@ void CadWorkbench::refreshActiveContext() {
     if (axis_draft_) {
         refreshAxisEvaluation();
     }
-    if (datum_plane_draft_) {
+    if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) {
         refreshDatumPlaneEvaluation();
     }
     if (extrude_draft_) {
@@ -14072,6 +14612,7 @@ void CadWorkbench::refreshAxisProperties(
     const bool lifecycle_available =
         !axis_draft_ &&
         !datum_plane_draft_ &&
+        !edge_datum_create_revision_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !active_sketch_id_ &&
@@ -14176,6 +14717,7 @@ void CadWorkbench::refreshDatumProperties(
 
     const bool lifecycle_available =
         !datum_plane_draft_ &&
+        !edge_datum_create_revision_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !active_sketch_id_ &&
@@ -14825,7 +15367,7 @@ bool CadWorkbench::eventFilter(
         }
 
         if (watched == viewport_widget_ &&
-            datum_plane_draft_) {
+            (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_)) {
             if (key_event->key() ==
                 Qt::Key_Escape) {
                 cancelDatumPlane();
@@ -16264,7 +16806,7 @@ void CadWorkbench::syncActionState() {
         !project_edge_active_ &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16275,7 +16817,7 @@ void CadWorkbench::syncActionState() {
         !project_edge_active_ &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16299,7 +16841,7 @@ void CadWorkbench::syncActionState() {
             editing_sketch ||
             sketch_support_pick_active_ ||
             axis_draft_.has_value() ||
-            datum_plane_draft_.has_value() ||
+            (datum_plane_draft_.has_value() || edge_datum_edit_id_.has_value() || edge_datum_create_revision_.has_value()) ||
             extrude_profile_pick_active_ ||
             extrude_draft_.has_value() ||
             revolve_draft_.has_value() ||
@@ -16313,7 +16855,7 @@ void CadWorkbench::syncActionState() {
     if (axis_draft_) {
         footer_mode = QStringLiteral("axis");
         mode_cue = QStringLiteral("Axis operation");
-    } else if (datum_plane_draft_) {
+    } else if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) {
         footer_mode = QStringLiteral("datum");
         mode_cue = QStringLiteral("Datum Plane operation");
     } else if (extrude_draft_) {
@@ -16386,7 +16928,7 @@ void CadWorkbench::syncActionState() {
         !editing_sketch &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16397,7 +16939,7 @@ void CadWorkbench::syncActionState() {
         axis_button_->setEnabled(
             active &&
             !sketch_support_pick_active_ &&
-            !datum_plane_draft_ &&
+            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16421,7 +16963,7 @@ void CadWorkbench::syncActionState() {
         !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         datum_plane_button_->setChecked(
-            datum_plane_draft_.has_value());
+            (datum_plane_draft_.has_value() || edge_datum_edit_id_.has_value() || edge_datum_create_revision_.has_value()));
     }
 
     if (extrude_button_ != nullptr) {
@@ -16432,7 +16974,7 @@ void CadWorkbench::syncActionState() {
             !editing_sketch &&
             !sketch_support_pick_active_ &&
             !axis_draft_ &&
-            !datum_plane_draft_ &&
+            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
             !extrude_draft_ &&
         !revolve_draft_ &&
         !edge_feature_active &&
@@ -16454,7 +16996,7 @@ void CadWorkbench::syncActionState() {
             !editing_sketch &&
             !sketch_support_pick_active_ &&
             !axis_draft_ &&
-            !datum_plane_draft_ &&
+            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
             !revolve_draft_ &&
@@ -16484,7 +17026,7 @@ void CadWorkbench::syncActionState() {
         !editing_sketch &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16587,7 +17129,7 @@ void CadWorkbench::syncActionState() {
         active &&
         selected_axis_id_.has_value() &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16608,7 +17150,7 @@ void CadWorkbench::syncActionState() {
         active &&
         selected_datum_id_.has_value() &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&

@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 
 using namespace simplesolid2::viewer;
 
@@ -94,8 +95,25 @@ int main() {
             {-4.0, 0.0, 10.0},
             {4.0, 0.0, 10.0}});
     CHECK(preview.valid());
+    preview.anchor_point = preview.origin;
+    CHECK(preview.valid());
+    preview.anchor_pick_token = PresentationToken{17U};
+    CHECK(preview.valid());
     scene.preview = preview;
     CHECK(scene.valid());
+
+    auto invalid_token = scene;
+    invalid_token.preview->anchor_pick_token =
+        PresentationToken{};
+    CHECK(!invalid_token.valid());
+    auto missing_anchor = scene;
+    missing_anchor.preview->anchor_point.reset();
+    CHECK(!missing_anchor.valid());
+
+    auto invalid_anchor = scene;
+    invalid_anchor.preview->anchor_point =
+        Point3{std::numeric_limits<double>::infinity(),0.0,10.0};
+    CHECK(!invalid_anchor.valid());
 
     auto invalid_preview = scene;
     invalid_preview.preview->v_axis =
