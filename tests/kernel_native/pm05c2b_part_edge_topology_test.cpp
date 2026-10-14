@@ -1,6 +1,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
@@ -2162,6 +2163,26 @@ void verifyS1SelectedSignedFrames(
         CHECK(s1Near3(rebuilt_mid.frame->origin,mid.frame->origin));
         CHECK(s1Near3(rebuilt_mid.frame->normal,mid.frame->normal));
         CHECK(s1Near3(rebuilt_mid.frame->u_axis,mid.frame->u_axis));
+
+        const auto derived = part::evaluateDatums(
+            *loaded.document,cold_evaluation,cold_provider);
+        CHECK(derived.valid());
+        const auto* evaluated_end = derived.find(*end_id);
+        const auto* evaluated_mid = derived.find(*mid_id);
+        CHECK(evaluated_end && evaluated_mid);
+        CHECK(evaluated_end->status ==
+              part::DatumPlaneEvaluationStatus::resolved);
+        CHECK(evaluated_mid->status ==
+              part::DatumPlaneEvaluationStatus::resolved);
+        CHECK(evaluated_end->required_body_stage ==
+              ends.front().source_edge.stage);
+        CHECK(evaluated_mid->required_body_stage ==
+              mids.front().source_edge.stage);
+        CHECK(evaluated_end->frame && evaluated_mid->frame);
+        CHECK(s1Near3(evaluated_end->frame->normal,
+                      rebuilt_end.frame->normal));
+        CHECK(s1Near3(evaluated_mid->frame->normal,
+                      rebuilt_mid.frame->normal));
 
         std::cout << "RG02B1_P4_S2_DATUM_V17"
                   << " saved=2 restored=2"

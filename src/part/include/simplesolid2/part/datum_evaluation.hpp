@@ -2,6 +2,7 @@
 
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/kernel/profile_input.hpp>
+#include <simplesolid2/kernel/exact_bounded_edge_geometry.hpp>
 #include <simplesolid2/part/datum.hpp>
 #include <simplesolid2/part/semantic_topology_reference.hpp>
 
@@ -34,6 +35,12 @@ enum class DatumPlaneEvaluationDiagnostic {
     cyclic_dependency,
     upstream_datum_unavailable,
     invalid_frame,
+    edge_source_missing,
+    edge_source_ambiguous,
+    edge_source_unsupported,
+    edge_native_geometry_unavailable,
+    invalid_orientation_intent,
+    orientation_review_required,
 };
 
 struct DatumPlaneEvaluation final {
@@ -76,5 +83,13 @@ struct DatumEvaluation final {
 [[nodiscard]] DatumEvaluation evaluateDatums(
     const PartDocument& document,
     const PartEvaluation& part_evaluation) noexcept;
+
+// Provider-aware evaluation can resolve authored Edge-local END/MID Datum
+// definitions from current Part geometry and the saved signed orientation.
+// Existing Offset-only callers keep their original behavior until migrated.
+[[nodiscard]] DatumEvaluation evaluateDatums(
+    const PartDocument& document,
+    const PartEvaluation& part_evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) noexcept;
 
 } // namespace simplesolid2::part
