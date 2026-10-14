@@ -2579,6 +2579,22 @@ int main(int argc, char* argv[]) {
                 *dependent_sketch.sketch_id));
             CHECK(s3a_end_session.document().findAxis(
                 *dependent_axis.axis_id));
+            const auto source_body_for_axis = part::evaluatePart(
+                s3a_end_session.document(),kernel);
+            const auto source_datums_for_axis = part::evaluateDatums(
+                s3a_end_session.document(),source_body_for_axis,kernel);
+            const auto source_axis_frame = part::resolveAxisReference(
+                s3a_end_session.document(),
+                part::AxisReference{part::AuthoredAxisReference{
+                    *dependent_axis.axis_id}},
+                &source_body_for_axis,&source_datums_for_axis);
+            std::cerr << "S3A_DEPENDENT_AXIS_STATUS="
+                      << static_cast<int>(source_axis_frame.status)
+                      << " diagnostic="
+                      << static_cast<int>(source_axis_frame.diagnostic)
+                      << "\\n";
+            CHECK(source_axis_frame.status ==
+                  part::AxisEvaluationStatus::resolved);
             // Headless fixture commands above intentionally bypass the
             // Workbench UI mutation callbacks. Reopen the session from a
             // different active Part so the real Tree/Properties rebuilds.
@@ -2588,8 +2604,8 @@ int main(int argc, char* argv[]) {
             QApplication::processEvents();
             QTreeWidgetItem* native_end_tree_item = nullptr;
             for (QTreeWidgetItemIterator it(tree); *it; ++it) {
-                if ((*it)->text(0) ==
-                        QStringLiteral("Datum Plane 1")) {
+                if ((*it)->text(0).startsWith(
+                        QStringLiteral("Datum Plane 1 (Edge END)"))) {
                     native_end_tree_item = *it;
                     break;
                 }
