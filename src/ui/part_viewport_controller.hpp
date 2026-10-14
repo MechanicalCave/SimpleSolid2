@@ -160,6 +160,14 @@ struct BodyTopologyInspection final {
     }
 };
 
+// Transient preview certified against the current Viewer scene's
+// same-revision, same-generation OCCT body. Only 'source' may be
+// persisted later by a separately revalidated Session command.
+struct CertifiedEdgeDatumPreview final {
+    part::EdgePointDatumSource source;
+    kernel::Frame3 frame;
+};
+
 struct TopologyKindSummary final {
     std::size_t total{};
     std::size_t referenceable{};
@@ -316,7 +324,13 @@ public:
     void clearProfileDraftPreview();
 
     void setDatumPlaneDraftPreview(
-        std::optional<kernel::Frame3> frame);
+        std::optional<kernel::Frame3> frame,
+        bool show_anchor_point = false);
+
+    void setDatumMidPointPickHandler(
+        std::function<void()> handler) {
+        datum_mid_point_pick_handler_ = std::move(handler);
+    }
 
     [[nodiscard]] bool setSketchPrimaryPointerRouting(
         viewer::PrimaryPointerRouting routing);
@@ -533,6 +547,18 @@ public:
     [[nodiscard]] std::optional<BodyTopologyInspection>
     primaryBodyTopologyInspection() const;
 
+    // Authoring-only lease test for staged Edge/Vertex picks. Runtime
+    // tokens are never durable IDs, and must not survive a scene rebuild.
+    [[nodiscard]] bool bodyTopologySelectionAddressCurrent(
+        const BodyTopologySelectionAddress& address) const noexcept;
+
+    [[nodiscard]] std::optional<CertifiedEdgeDatumPreview>
+    previewCurrentEdgeDatum(
+        const part::BodyStageRef& stage,
+        const BodyTopologySelectionAddress& edge,
+        const std::optional<BodyTopologySelectionAddress>& terminal,
+        bool reverse) const;
+
     [[nodiscard]] std::optional<BodyTopologySummary>
     bodyTopologySummary() const;
 
@@ -716,6 +742,9 @@ private:
         datum_evaluation_cache_;
     std::optional<kernel::Frame3>
         datum_plane_draft_preview_frame_;
+    bool datum_plane_draft_preview_anchor_{};
+    std::optional<viewer::PresentationToken> datum_mid_anchor_token_;
+    std::function<void()> datum_mid_point_pick_handler_;
     std::optional<part::BodyStageTopologyCatalog>
         body_topology_catalog_cache_;
     // Runtime-only exact-stage catalogs from the same current PartEvaluation.
