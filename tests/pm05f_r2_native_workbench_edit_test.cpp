@@ -2548,6 +2548,136 @@ int main(int argc, char* argv[]) {
             CHECK(s3a_end_session.redo().changed);
             CHECK(s3a_end_session.document()
                       .findEdgePointDatumPlane(created_end_id));
+
+            // S3A-F06/F07: dependents of a mouse-authored END Datum
+            // must survive the actual Properties Edit operation and
+            // native cold Save/Close/Reopen without new identities.
+            const auto support =
+                part::partSketchSupportForDatumPlane(created_end_id);
+            CHECK(support.has_value());
+            const auto dependent_sketch =
+                s3a_end_session.execute(
+                    application::CreatePartSketchOnSupportCommand{
+                        *support,s3a_end_session.document().revision()},
+                    &kernel);
+            CHECK(dependent_sketch.ok() &&
+                  dependent_sketch.sketch_id.has_value());
+            const auto source_line = s3a_end_session.execute(
+                application::AddSketchLineCommand{
+                    *dependent_sketch.sketch_id,{0.0,0.0},{12.0,0.0},
+                    sketch::EntityRole::construction});
+            CHECK(source_line.ok() && source_line.entity_id);
+            const auto dependent_axis = s3a_end_session.execute(
+                application::CreateAxisCommand{
+                    part::SketchLineAxisSource{
+                        *dependent_sketch.sketch_id,
+                        *source_line.entity_id},
+                    s3a_end_session.document().revision(),
+                    "Axis on native END Datum",true},kernel);
+            CHECK(dependent_axis.ok() && dependent_axis.axis_id);
+            CHECK(s3a_end_session.document().findSketch(
+                *dependent_sketch.sketch_id));
+            CHECK(s3a_end_session.document().findAxis(
+                *dependent_axis.axis_id));
+            CHECK(workbench.activateDocument(&s3a_end_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* native_end_tree_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                        QStringLiteral("Datum Plane 1")) {
+                    native_end_tree_item = *it;
+                    break;
+                }
+            }
+            CHECK(native_end_tree_item);
+            auto* end_properties_edit =
+                workbench.findChild<QPushButton*>(
+                    QStringLiteral("editDatumPlanePropertyButton"));
+            CHECK(end_properties_edit);
+            tree->clearSelection();
+            tree->setCurrentItem(native_end_tree_item);
+            native_end_tree_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(end_properties_edit->isEnabled());
+            const auto original_reverse =
+                s3a_end_session.document()
+                    .findEdgePointDatumPlane(created_end_id)
+                    ->orientation.reverse;
+            const auto edit_undo_before =
+                s3a_end_session.undoDepth();
+            end_properties_edit->click();
+            QApplication::processEvents();
+            CHECK(datum_finish->isEnabled());
+            CHECK(workbench.submitCadInput(
+                "REVERSE",
+                workbench.cadInputContextGeneration()).accepted);
+            CHECK(workbench.submitCadInput(
+                "FINISH",
+                workbench.cadInputContextGeneration()).accepted);
+            CHECK(s3a_end_session.undoDepth() ==
+                  edit_undo_before + 1U);
+            const auto* edited_end =
+                s3a_end_session.document()
+                    .findEdgePointDatumPlane(created_end_id);
+            CHECK(edited_end);
+            CHECK(edited_end->orientation.reverse !=
+                  original_reverse);
+            CHECK(std::holds_alternative<
+                part::SelectedMaterialEdgeEnd>(edited_end->source));
+            CHECK(s3a_end_session.document().findSketch(
+                *dependent_sketch.sketch_id));
+            CHECK(s3a_end_session.document().findAxis(
+                *dependent_axis.axis_id));
+            CHECK(s3a_end_session.undo().changed);
+            CHECK(s3a_end_session.document()
+                      .findEdgePointDatumPlane(created_end_id)
+                      ->orientation.reverse == original_reverse);
+            CHECK(s3a_end_session.redo().changed);
+            CHECK(s3a_end_session.document()
+                      .findEdgePointDatumPlane(created_end_id)
+                      ->orientation.reverse != original_reverse);
+
+            QTemporaryDir dependent_scratch;
+            CHECK(dependent_scratch.isValid());
+            const std::filesystem::path dependent_path =
+                std::filesystem::path{
+                    dependent_scratch.path().toStdWString()} /
+                "s3a-end-sketch-axis-cold.ss2part";
+            part::PartDocumentStore dependent_store;
+            CHECK(dependent_store.createNew(
+                dependent_path,s3a_end_session.document()).ok());
+            const auto reopened_dependent =
+                dependent_store.load(dependent_path);
+            CHECK(reopened_dependent.ok() &&
+                  reopened_dependent.document);
+            CHECK(reopened_dependent.document
+                      ->findEdgePointDatumPlane(created_end_id));
+            CHECK(reopened_dependent.document->findSketch(
+                *dependent_sketch.sketch_id));
+            CHECK(reopened_dependent.document->findAxis(
+                *dependent_axis.axis_id));
+            kernel_occt::OcctSolidModelingKernel dependent_cold;
+            const auto cold_end_part =
+                part::evaluatePart(
+                    *reopened_dependent.document,dependent_cold);
+            CHECK(cold_end_part.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto cold_end_planes =
+                part::evaluateDatums(
+                    *reopened_dependent.document,
+                    cold_end_part,dependent_cold);
+            const auto* cold_end_plane =
+                cold_end_planes.find(created_end_id);
+            CHECK(cold_end_plane && cold_end_plane->valid() &&
+                  cold_end_plane->frame.has_value());
+            std::cout << "RG02B1_S3A_NATIVE_END_DEPENDENT_EDIT_PASS"
+                      << " datum_id_same=1"
+                      << " sketch_axis_id_same=1"
+                      << " edit_undo=1"
+                      << " cold_reopen_v17=1\n";
+            CHECK(workbench.activateDocument(&s3a_end_session, {}));
+            QApplication::processEvents();
+
             std::cout << "RG02B1_S3A_NATIVE_SHARED_END_PASS"
                       << " actual_qt_mouse=1"
                       << " trihedral_corner=1"
