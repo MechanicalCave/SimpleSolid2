@@ -2165,6 +2165,10 @@ int main(int argc, char* argv[]) {
             // away from both terminal vertices and its MID marker.
             bool selected_edge = false;
             QPoint certified_mid_pixel;
+            viewer::Point3 certified_edge_world{0.0, 0.0, 0.0};
+            viewer::Point3 certified_mid_world{0.0, 0.0, 0.0};
+            auto certified_view =
+                viewer::StandardView::top_front_right;
             const auto choosePixel = [viewport](
                 viewer::Point3 world) -> std::optional<QPoint> {
                 const auto projection =
@@ -2224,6 +2228,9 @@ int main(int argc, char* argv[]) {
                             QStringLiteral("Click the highlighted MID"))) {
                         selected_edge = true;
                         certified_mid_pixel = *mid_pixel;
+                        certified_edge_world = quarter;
+                        certified_mid_world = midpoint;
+                        certified_view = view;
                         break;
                     }
                     // Failed native gesture is not an accepted source.
@@ -2301,6 +2308,67 @@ int main(int argc, char* argv[]) {
                 *reopened.document, cold_part, cold_kernel);
             const auto* cold = cold_datums.find(authored.id);
             CHECK(cold && cold->valid() && cold->frame.has_value());
+
+            // Independent second Part/Workbench session: point-first
+            // really means a Qt MID anchor click before an explicit
+            // selected material Edge (no implicit source commit).
+            auto s3a_mid_first = makeBaseSession(kernel);
+            CHECK(workbench.activateDocument(&s3a_mid_first, {}));
+            QApplication::processEvents();
+            CHECK(viewport->setStandardView(certified_view));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto point_edge_pixel =
+                choosePixel(certified_edge_world);
+            const auto point_mid_pixel =
+                choosePixel(certified_mid_world);
+            CHECK(point_edge_pixel && point_mid_pixel);
+            const auto point_state =
+                s3a_mid_first.document().state();
+            const auto point_undo =
+                s3a_mid_first.undoDepth();
+            CHECK(workbench.submitCadInput(
+                "DATUM PLANE",
+                workbench.cadInputContextGeneration()).accepted);
+            constructor->setCurrentIndex(1);
+            QApplication::processEvents();
+            CHECK(constructor->currentIndex() == 1);
+            QTest::mouseMove(viewport, *point_edge_pixel);
+            QApplication::processEvents();
+            QTest::mouseMove(viewport, *point_mid_pixel);
+            QTest::mouseClick(
+                viewport, Qt::LeftButton,
+                Qt::NoModifier, *point_mid_pixel);
+            QApplication::processEvents();
+            CHECK(datum_result->text().contains(
+                QStringLiteral("MID selected first")));
+            CHECK(!datum_finish->isEnabled());
+            CHECK(!workbench.submitCadInput(
+                "FINISH",
+                workbench.cadInputContextGeneration()).accepted);
+            CHECK(s3a_mid_first.document().state() == point_state);
+            CHECK(s3a_mid_first.undoDepth() == point_undo);
+            QTest::mouseMove(viewport, *point_edge_pixel);
+            QTest::mouseClick(
+                viewport, Qt::LeftButton,
+                Qt::NoModifier, *point_edge_pixel);
+            QApplication::processEvents();
+            CHECK(datum_finish->isEnabled());
+            CHECK(workbench.submitCadInput(
+                "", workbench.cadInputContextGeneration()).accepted);
+            CHECK(s3a_mid_first.document().edgePointDatumPlanes().size() ==
+                  1U);
+            CHECK(std::holds_alternative<part::SelectedMaterialEdgeMid>(
+                s3a_mid_first.document()
+                    .edgePointDatumPlanes().front().source));
+            CHECK(s3a_mid_first.undoDepth() == point_undo + 1U);
+            std::cout << "RG02B1_S3A_NATIVE_MID_POINT_FIRST_PASS"
+                      << " same_current_edge=1"
+                      << " incomplete_finish_refused=1"
+                      << " empty_enter_commits=1\n";
+            CHECK(workbench.activateDocument(&s3a, {}));
+            QApplication::processEvents();
+
             std::cout << "RG02B1_S3A_NATIVE_MID_EDGE_FIRST_PASS"
                       << " real_qt_occt_mouse=1"
                       << " part_command_undo=1"
