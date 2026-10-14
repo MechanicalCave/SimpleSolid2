@@ -379,6 +379,18 @@ QString datumEvaluationDiagnosticText(
         return QStringLiteral("Upstream Datum unavailable");
     case part::DatumPlaneEvaluationDiagnostic::invalid_frame:
         return QStringLiteral("Invalid frame");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_missing:
+        return QStringLiteral("Missing Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_ambiguous:
+        return QStringLiteral("Ambiguous Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_unsupported:
+        return QStringLiteral("Unsupported Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_native_geometry_unavailable:
+        return QStringLiteral("Exact Edge geometry unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_orientation_intent:
+        return QStringLiteral("Invalid orientation");
+    case part::DatumPlaneEvaluationDiagnostic::orientation_review_required:
+        return QStringLiteral("Orientation review required");
     }
     return QStringLiteral("Unknown");
 }
@@ -6718,7 +6730,9 @@ void CadWorkbench::deleteDatumPlane(
         return;
     }
     if (document_session->document()
-            .findDatumPlane(datum_id) == nullptr) {
+            .findDatumPlane(datum_id) == nullptr &&
+        document_session->document()
+            .findEdgePointDatumPlane(datum_id) == nullptr) {
         setStatusText(
             QStringLiteral(
                 "Datum Plane is no longer available."));

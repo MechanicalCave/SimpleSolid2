@@ -201,6 +201,18 @@ QString datumDiagnosticText(
         return QStringLiteral("Upstream Datum unavailable");
     case part::DatumPlaneEvaluationDiagnostic::invalid_frame:
         return QStringLiteral("Invalid frame");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_missing:
+        return QStringLiteral("Missing Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_ambiguous:
+        return QStringLiteral("Ambiguous Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_source_unsupported:
+        return QStringLiteral("Unsupported Edge source");
+    case part::DatumPlaneEvaluationDiagnostic::edge_native_geometry_unavailable:
+        return QStringLiteral("Exact Edge geometry unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_orientation_intent:
+        return QStringLiteral("Invalid orientation");
+    case part::DatumPlaneEvaluationDiagnostic::orientation_review_required:
+        return QStringLiteral("Orientation review required");
     }
     return QStringLiteral("Unknown");
 }
@@ -1243,11 +1255,14 @@ selectedDatumVisibilityTargets() const {
 
     if (referenceGeometryGroupSelected()) {
         targets.reserve(
-            session_->document()
-                .datumPlanes()
-                .size());
+            session_->document().datumPlanes().size() +
+            session_->document().edgePointDatumPlanes().size());
         for (const auto& datum :
              session_->document().datumPlanes()) {
+            targets.push_back(datum.id);
+        }
+        for (const auto& datum :
+             session_->document().edgePointDatumPlanes()) {
             targets.push_back(datum.id);
         }
         return targets;
@@ -1715,6 +1730,76 @@ void PartDocumentTreeController::rebuild(
             item->setSelected(was_selected);
         }
     }
+     // P4-S2 authoring: show the new tagged Edge-local Datum alongside
+    // existing Offset planes, preserving the same selection/presentation
+    // DatumId. Hovered/native Edge identity never becomes a tree key.
+    for (const auto& datum :
+         session_->document().edgePointDatumPlanes()) {
+        ++datum_index;
+        const bool end = std::holds_alternative<
+            part::SelectedMaterialEdgeEnd>(datum.source);
+        const auto role = end
+            ? QStringLiteral("END")
+            : QStringLiteral("MID");
+        auto* item = new QTreeWidgetItem(
+            reference_geometry,
+            QStringList{
+                QStringLiteral("Datum Plane %1 (Edge %2)")
+                    .arg(static_cast<qulonglong>(datum_index))
+                    .arg(role)});
+        item->setData(
+            0,datumIdData,fromUtf8(datum.id.serialized()));
+
+        const auto evaluation = std::find_if(
+            datum_evaluations_.begin(),
+            datum_evaluations_.end(),
+            [&datum](const DatumTreeEvaluationEntry& entry) {
+                return entry.datum_id == datum.id;
+            });
+        const bool evaluated =
+            evaluation != datum_evaluations_.end();
+        const bool resolved =
+            evaluated &&
+            evaluation->status ==
+                part::DatumPlaneEvaluationStatus::resolved;
+
+        auto font = item->font(0);
+        font.setItalic(!datum.visible);
+        font.setBold(evaluated && !resolved);
+        item->setFont(0,font);
+        if (evaluated && !resolved) {
+            item->setIcon(
+                0,tree_->style()->standardIcon(
+                    QStyle::SP_MessageBoxWarning));
+        }
+        item->setToolTip(
+            0,
+            QStringLiteral(
+                "DatumId: %1\nSource: Edge-local %2\nReverse: %3\nVisibility: %4\nStatus: %5\nDiagnostic: %6")
+                .arg(
+                    fromUtf8(datum.id.serialized()),
+                    role,
+                    datum.orientation.reverse
+                        ? QStringLiteral("Yes")
+                        : QStringLiteral("No"),
+                    datum.visible
+                        ? QStringLiteral("Shown")
+                        : QStringLiteral("Hidden"),
+                    evaluated
+                        ? datumStatusText(evaluation->status)
+                        : QStringLiteral("Not evaluated"),
+                    evaluated
+                        ? datumDiagnosticText(evaluation->diagnostic)
+                        : QStringLiteral("—")));
+        if (preserve_reference_selection) {
+            const bool was_selected =
+                std::find(
+                    previously_selected_datums.begin(),
+                    previously_selected_datums.end(),
+                    datum.id) != previously_selected_datums.end();
+            item->setSelected(was_selected);
+        }
+    }
     reference_geometry->setExpanded(true);
 
     if (!session_->document().sketches().empty() ||
@@ -2140,13 +2225,16 @@ void PartDocumentTreeController::updateVisibilityActions() {
         const auto targets =
             selectedDatumVisibilityTargets();
         for (const auto id : targets) {
-            const auto* datum =
-                session_->document()
-                    .findDatumPlane(id);
-            if (datum == nullptr) {
+            const auto* offset =
+                session_->document().findDatumPlane(id);
+            const auto* edge =
+                session_->document().findEdgePointDatumPlane(id);
+            if (offset == nullptr && edge == nullptr) {
                 continue;
             }
-            if (datum->visible) {
+            const bool visible = offset != nullptr
+                ? offset->visible : edge->visible;
+            if (visible) {
                 any_visible = true;
             } else {
                 any_hidden = true;

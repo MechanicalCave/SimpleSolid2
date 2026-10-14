@@ -3642,86 +3642,77 @@ PartViewportController::buildReferenceScene() {
         }
     }
 
-    const auto& datums =
-        session_->document().datumPlanes();
+    const auto& datums = session_->document().datumPlanes();
+    const auto& edge_datums =
+        session_->document().edgePointDatumPlanes();
 
-    if (!datums.empty()) {
+    if (!datums.empty() || !edge_datums.empty()) {
         if (!datum_evaluation_cache_ ||
             datum_evaluation_cache_->source_revision !=
                 session_->document().revision() ||
             datum_evaluation_cache_->planes.size() !=
-                datums.size()) {
+                datums.size() + edge_datums.size()) {
             return fail();
         }
 
-        for (const auto& datum : datums) {
+        const auto publish = [&](part::DatumId id,bool visible) -> bool {
             const auto* evaluation =
-                datum_evaluation_cache_->find(
-                    datum.id);
+                datum_evaluation_cache_->find(id);
             if (evaluation == nullptr) {
-                datum_bindings_.clear();
-                return fail();
+                return false;
             }
-
-            if (!datum.visible ||
+            if (!visible ||
                 evaluation->status !=
-                    part::DatumPlaneEvaluationStatus::
-                        resolved ||
+                    part::DatumPlaneEvaluationStatus::resolved ||
                 !evaluation->frame) {
-                continue;
+                return true;
             }
-
-            const auto token =
-                allocatePresentationToken();
+            const auto token = allocatePresentationToken();
             if (!token ||
-                !datum_bindings_
-                     .emplace(
-                         token->value,
-                         datum.id)
-                     .second) {
-                datum_bindings_.clear();
-                return fail();
+                !datum_bindings_.emplace(token->value,id).second) {
+                return false;
             }
 
-            const auto& frame =
-                *evaluation->frame;
-            viewer::ReferencePresentation
-                reference;
+            const auto& frame = *evaluation->frame;
+            viewer::ReferencePresentation reference;
             reference.token = *token;
             reference.kind =
-                viewer::ReferencePresentationKind::
-                    datum_plane;
-            reference.origin =
-                viewerPoint(frame.origin);
-            reference.u_axis =
-                viewerVector(frame.u_axis);
-            reference.v_axis =
-                viewerVector(frame.v_axis);
+                viewer::ReferencePresentationKind::datum_plane;
+            reference.origin = viewerPoint(frame.origin);
+            reference.u_axis = viewerVector(frame.u_axis);
+            reference.v_axis = viewerVector(frame.v_axis);
             reference.extent = planeExtent;
             reference.visible = true;
             if (!reference.valid()) {
-                datum_bindings_.clear();
-                return fail();
+                return false;
             }
-            scene.references.push_back(
-                std::move(reference));
+            scene.references.push_back(std::move(reference));
 
             if (body_scene_cache_ &&
                 body_scene_cache_->purpose ==
-                    viewer::BodyScenePurpose::
-                        current_body &&
+                    viewer::BodyScenePurpose::current_body &&
                 !body_scene_cache_->empty()) {
                 auto segments =
-                    datumBodyIntersection(
-                        *body_scene_cache_,
-                        frame);
+                    datumBodyIntersection(*body_scene_cache_,frame);
                 if (!segments.empty()) {
                     scene.overlays.push_back(
-                        viewer::
-                            ReferenceOwnedLineOverlay{
-                                *token,
-                                std::move(segments)});
+                        viewer::ReferenceOwnedLineOverlay{
+                            *token,std::move(segments)});
                 }
+            }
+            return true;
+        };
+
+        for (const auto& datum : datums) {
+            if (!publish(datum.id,datum.visible)) {
+                datum_bindings_.clear();
+                return fail();
+            }
+        }
+        for (const auto& datum : edge_datums) {
+            if (!publish(datum.id,datum.visible)) {
+                datum_bindings_.clear();
+                return fail();
             }
         }
     }
@@ -3830,16 +3821,17 @@ PartViewportController::buildBodyScene() {
         part::evaluatePart(
             session_->document(),
             *solid_modeling_kernel_);
-    const auto datum_evaluation =
-        part::evaluateDatums(
-            session_->document(),
-            evaluation);
-    if (datum_evaluation.source_revision !=
-            revision ||
+    auto* exact =
+        dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            solid_modeling_kernel_);
+    const auto datum_evaluation = exact != nullptr
+        ? part::evaluateDatums(
+            session_->document(),evaluation,*exact)
+        : part::evaluateDatums(session_->document(),evaluation);
+    if (datum_evaluation.source_revision != revision ||
         datum_evaluation.planes.size() !=
-            session_->document()
-                .datumPlanes()
-                .size()) {
+            session_->document().datumPlanes().size() +
+            session_->document().edgePointDatumPlanes().size()) {
         return fail();
     }
 
