@@ -339,7 +339,8 @@ public:
 
     void setDatumPlaneDraftPreview(
         std::optional<kernel::Frame3> frame,
-        bool show_anchor_point = false);
+        bool show_anchor_point = false,
+        std::optional<kernel::Point3> selected_edge_mid = std::nullopt);
 
     void setDatumMidPointPickHandler(
         std::function<void(std::optional<DatumMidHoverPick>)> handler) {
@@ -763,6 +764,7 @@ private:
     std::optional<kernel::Frame3>
         datum_plane_draft_preview_frame_;
     bool datum_plane_draft_preview_anchor_{};
+    std::optional<kernel::Point3> datum_selected_edge_mid_;
     std::optional<viewer::PresentationToken> datum_mid_anchor_token_;
     std::function<void(std::optional<DatumMidHoverPick>)>
         datum_mid_point_pick_handler_;

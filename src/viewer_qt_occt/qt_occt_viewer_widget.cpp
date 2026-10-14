@@ -1812,9 +1812,8 @@ public:
                             0.38,0.78,1.0,Quantity_TOC_RGB},
                         marker_size,marker_size,
                         squareMarkerBitmap(marker_size,true)));
+                marker->SetZLayer(Graphic3d_ZLayerId_Topmost);
                 context_->Display(marker,false);
-                context_->SetColor(marker,Quantity_Color{
-                    0.38,0.78,1.0,Quantity_TOC_RGB},false);
                 reference_objects_.push_back(ReferenceObject{
                     mid.token,viewer::ReferencePresentationKind::point,
                     marker,false,true});
@@ -6122,6 +6121,11 @@ public:
 
         for (const auto& entry : reference_objects_) {
             if (entry.object.IsNull()) continue;
+            if (entry.transient_mid_anchor) {
+                // Preserve the explicit filled-square point aspect:
+                // generic SetColor/SetWidth can replace its bitmap.
+                continue;
+            }
 
             const bool selected = isSelected(entry.token);
             const bool primary =

@@ -6748,6 +6748,13 @@ void CadWorkbench::stageEdgeDatumFromBodyTopology(
         edge_datum_vertex_pick_ = *address;
     }
     refreshDatumPlaneEvaluation();
+    // Vertex-first END must not disable MID-first hover permanently.
+    if (!edge_datum_edge_pick_) {
+        viewport_controller_->setDatumPointFirstMidHoverEnabled(
+            true,edge_datum_edit_id_
+                ? edge_datum_edit_reverse_
+                : edge_datum_create_reverse_);
+    }
     notifyCadInputContextChanged();
 }
 
@@ -6758,7 +6765,6 @@ void CadWorkbench::confirmEdgeDatumMidPoint(
     // Edge click; this is not yet an authored Datum or committable draft.
     if ((edge_datum_create_revision_ || edge_datum_edit_id_) &&
         !edge_datum_edge_pick_ &&
-        !edge_datum_vertex_pick_ &&
         point_first_pick && point_first_pick->valid() &&
         document_session_ && viewport_controller_ &&
         (edge_datum_create_revision_
@@ -6769,6 +6775,8 @@ void CadWorkbench::confirmEdgeDatumMidPoint(
                   *edge_datum_edit_revision_) &&
         viewport_controller_->bodyTopologySelectionAddressCurrent(
             point_first_pick->edge)) {
+        // MID-first replaces any previously chosen Vertex-first END.
+        edge_datum_vertex_pick_.reset();
         edge_datum_mid_first_pick_ = *point_first_pick;
         edge_datum_pick_stage_ = point_first_pick->stage;
         edge_datum_mid_point_confirmed_ = true;
@@ -6786,11 +6794,7 @@ void CadWorkbench::confirmEdgeDatumMidPoint(
     }
     if ((!edge_datum_create_revision_ && !edge_datum_edit_id_) ||
         !document_session_ || !viewport_controller_ ||
-        !edge_datum_edge_pick_ ||
-        edge_datum_vertex_pick_ || !edge_datum_pick_stage_ ||
-        !edge_datum_create_source_ || !edge_datum_create_preview_ ||
-        !std::holds_alternative<part::SelectedMaterialEdgeMid>(
-            *edge_datum_create_source_) ||
+        !edge_datum_edge_pick_ || !edge_datum_pick_stage_ ||
         (edge_datum_create_revision_
             ? document_session_->document().revision() !=
                   *edge_datum_create_revision_
@@ -6801,6 +6805,19 @@ void CadWorkbench::confirmEdgeDatumMidPoint(
             *edge_datum_edge_pick_)) {
         return;
     }
+    // A MID click re-certifies the exact selected Edge, not the
+    // previous END frame, a nearest location or a stale Viewer token.
+    const auto mid =
+        viewport_controller_->previewCurrentEdgeDatum(
+            *edge_datum_pick_stage_,*edge_datum_edge_pick_,
+            std::nullopt,
+            edge_datum_edit_id_
+                ? edge_datum_edit_reverse_
+                : edge_datum_create_reverse_);
+    if (!mid ||
+        !std::holds_alternative<part::SelectedMaterialEdgeMid>(
+            mid->source)) return;
+    edge_datum_vertex_pick_.reset();
     edge_datum_mid_point_confirmed_ = true;
     if (edge_datum_edit_id_)
         ++edge_datum_edit_context_generation_;
@@ -7189,6 +7206,7 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
     if (edge_datum_create_revision_) {
         edge_datum_create_source_.reset();
         edge_datum_create_preview_.reset();
+        std::optional<kernel::Point3> mid_marker;
         if (document_session_ &&
             viewport_controller_ &&
             edge_datum_pick_stage_ &&
@@ -7197,6 +7215,11 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
                 *edge_datum_create_revision_ &&
             datum_plane_constructor_combo_) {
             if (datum_plane_constructor_combo_->currentIndex() == 1) {
+                const auto mid =
+                    viewport_controller_->previewCurrentEdgeDatum(
+                        *edge_datum_pick_stage_,*edge_datum_edge_pick_,
+                        std::nullopt,edge_datum_create_reverse_);
+                if (mid) mid_marker = mid->frame.origin;
                 auto preview =
                     viewport_controller_->previewCurrentEdgeDatum(
                         *edge_datum_pick_stage_,
@@ -7215,7 +7238,7 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
             viewport_controller_->setDatumPlaneDraftPreview(
                 edge_datum_create_preview_,
                 !edge_datum_vertex_pick_.has_value() &&
-                !edge_datum_mid_point_confirmed_);
+                !edge_datum_mid_point_confirmed_,mid_marker);
         syncDatumPlaneUi();
         return;
     }
@@ -7225,6 +7248,7 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
         edge_datum_create_source_.reset();
         edge_datum_create_preview_.reset();
         std::optional<kernel::Frame3> preview;
+        std::optional<kernel::Point3> mid_marker;
         bool awaiting_mid_click = false;
         auto* query = dynamic_cast<
             kernel::IExactBoundedEdgeGeometryQuery*>(
@@ -7238,6 +7262,11 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
                 // Re-source uses the SAME live END/MID certification as
                 // Create; no delete/create or old-frame reattachment.
                 if (viewport_controller_ && edge_datum_pick_stage_) {
+                    const auto mid =
+                        viewport_controller_->previewCurrentEdgeDatum(
+                            *edge_datum_pick_stage_,*edge_datum_edge_pick_,
+                            std::nullopt,edge_datum_edit_reverse_);
+                    if (mid) mid_marker = mid->frame.origin;
                     auto candidate =
                         viewport_controller_->previewCurrentEdgeDatum(
                             *edge_datum_pick_stage_,
@@ -7281,7 +7310,7 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
         }
         if (viewport_controller_ != nullptr)
             viewport_controller_->setDatumPlaneDraftPreview(
-                preview,awaiting_mid_click);
+                preview,awaiting_mid_click,mid_marker);
         syncDatumPlaneUi();
         return;
     }

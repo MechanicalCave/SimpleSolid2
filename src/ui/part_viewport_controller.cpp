@@ -1510,17 +1510,24 @@ void PartViewportController::clearProfileDraftPreview() {
 
 void PartViewportController::setDatumPlaneDraftPreview(
     std::optional<kernel::Frame3> frame,
-    bool show_anchor_point) {
+    bool show_anchor_point,
+    std::optional<kernel::Point3> selected_edge_mid) {
     if (frame && !frame->valid()) {
         frame.reset();
     }
     const bool anchor = frame.has_value() && show_anchor_point;
+    if (selected_edge_mid &&
+        !viewer::finite(viewerPoint(*selected_edge_mid))) {
+        selected_edge_mid.reset();
+    }
     if (datum_plane_draft_preview_frame_ == frame &&
-        datum_plane_draft_preview_anchor_ == anchor) {
+        datum_plane_draft_preview_anchor_ == anchor &&
+        datum_selected_edge_mid_ == selected_edge_mid) {
         return;
     }
     datum_plane_draft_preview_frame_ = std::move(frame);
     datum_plane_draft_preview_anchor_ = anchor;
+    datum_selected_edge_mid_ = std::move(selected_edge_mid);
 
     // The MID acquisition frame produces only a marker. A finished source
     // produces only the plane. Neither intermediate state authors a Datum.
@@ -3893,34 +3900,41 @@ PartViewportController::buildReferenceScene() {
         }
     }
 
-    if (datum_plane_draft_preview_frame_) {
-        const auto& frame =
-            *datum_plane_draft_preview_frame_;
-        if (datum_plane_draft_preview_anchor_) {
-            // An Edge-only/hovered MID is a pick target, not a plane.
-            // No Datum preview exists until END/MID is confirmed.
-            const auto token = allocatePresentationToken();
-            if (!token) return fail();
-            scene.mid_anchor =
-                viewer::ReferenceMidAnchorPresentation{
-                    viewerPoint(frame.origin),*token};
-            datum_mid_anchor_token_ = *token;
-        } else {
-            viewer::ReferencePlanePreviewPresentation preview;
-            preview.origin = viewerPoint(frame.origin);
-            preview.u_axis = viewerVector(frame.u_axis);
-            preview.v_axis = viewerVector(frame.v_axis);
-            preview.extent = planeExtent;
-            if (body_scene_cache_ &&
-                body_scene_cache_->purpose ==
-                    viewer::BodyScenePurpose::current_body &&
-                !body_scene_cache_->empty()) {
-                preview.intersection_segments =
-                    datumBodyIntersection(*body_scene_cache_,frame);
-            }
-            if (!preview.valid()) return fail();
-            scene.preview = std::move(preview);
+    if (datum_plane_draft_preview_frame_ &&
+        !datum_plane_draft_preview_anchor_) {
+        // Only a complete END/MID source previews a Datum plane.
+        const auto& frame = *datum_plane_draft_preview_frame_;
+        viewer::ReferencePlanePreviewPresentation preview;
+        preview.origin = viewerPoint(frame.origin);
+        preview.u_axis = viewerVector(frame.u_axis);
+        preview.v_axis = viewerVector(frame.v_axis);
+        preview.extent = planeExtent;
+        if (body_scene_cache_ &&
+            body_scene_cache_->purpose ==
+                viewer::BodyScenePurpose::current_body &&
+            !body_scene_cache_->empty()) {
+            preview.intersection_segments =
+                datumBodyIntersection(*body_scene_cache_,frame);
         }
+        if (!preview.valid()) return fail();
+        scene.preview = std::move(preview);
+    }
+    // Keep exact selected Edge MID clickable after END/MID selection.
+    // Point-first mode exposes only the hovered Edge MID.
+    const auto mid = datum_selected_edge_mid_
+        ? datum_selected_edge_mid_
+        : (datum_plane_draft_preview_anchor_ &&
+           datum_plane_draft_preview_frame_
+           ? std::optional<kernel::Point3>{
+                datum_plane_draft_preview_frame_->origin}
+           : std::nullopt);
+    if (mid) {
+        const auto token = allocatePresentationToken();
+        if (!token) return fail();
+        scene.mid_anchor =
+            viewer::ReferenceMidAnchorPresentation{
+                viewerPoint(*mid),*token};
+        datum_mid_anchor_token_ = *token;
     }
 
     if (!scene.valid()) {
@@ -4777,8 +4791,9 @@ void PartViewportController::onViewportIntent(
     if (datum_mid_anchor_token_ &&
         intent.token == *datum_mid_anchor_token_) {
         if (intent.mode != viewer::SelectionIntentMode::clear &&
-            datum_plane_draft_preview_anchor_ &&
-            datum_plane_draft_preview_frame_ &&
+            (datum_selected_edge_mid_ ||
+             (datum_plane_draft_preview_anchor_ &&
+              datum_plane_draft_preview_frame_)) &&
             body_scene_revision_ &&
             *body_scene_revision_ == session_->document().revision() &&
             datum_mid_point_pick_handler_) {

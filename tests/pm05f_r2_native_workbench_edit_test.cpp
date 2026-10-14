@@ -2416,6 +2416,7 @@ int main(int argc, char* argv[]) {
             std::size_t shared_corner_trials = 0U;
             viewer::Point3 accepted_shared_end_edge{0.0,0.0,0.0};
             viewer::Point3 accepted_shared_end_corner{0.0,0.0,0.0};
+            viewer::Point3 accepted_shared_mid{0.0,0.0,0.0};
             auto accepted_shared_end_view =
                 viewer::StandardView::top_front_right;
             for (const auto view : {
@@ -2511,6 +2512,9 @@ int main(int argc, char* argv[]) {
                             accepted_shared_end_edge = quarter;
                             accepted_shared_end_corner = viewer::Point3{
                                 terminal.x,terminal.y,terminal.z};
+                            accepted_shared_mid = viewer::Point3{
+                                0.5*(a.x+b.x),0.5*(a.y+b.y),
+                                0.5*(a.z+b.z)};
                             accepted_shared_end_view = view;
                             break;
                         }
@@ -2528,6 +2532,30 @@ int main(int argc, char* argv[]) {
             }
             CHECK(shared_corner_trials>0U);
             CHECK(native_end_created);
+            // Owner regression: MID stopped responding after switching END.
+            // Run two MID->END round trips in one tool, no reset/restart.
+            const auto mid_switch = choosePixel(accepted_shared_mid);
+            const auto end_switch = choosePixel(accepted_shared_end_corner);
+            CHECK(mid_switch && end_switch);
+            for (int repeat = 0; repeat < 2; ++repeat) {
+                sendNativeWorkbenchHover(*viewport,*mid_switch);
+                QTest::mouseClick(viewport,Qt::LeftButton,
+                    Qt::NoModifier,*mid_switch);
+                QApplication::processEvents();
+                CHECK(datum_result->text().contains(
+                    QStringLiteral("Resolved MID")));
+                CHECK(datum_finish->isEnabled());
+                sendNativeWorkbenchHover(*viewport,*end_switch);
+                QTest::mouseClick(viewport,Qt::LeftButton,
+                    Qt::NoModifier,*end_switch);
+                QApplication::processEvents();
+                CHECK(datum_result->text().contains(
+                    QStringLiteral("Resolved END")));
+                CHECK(datum_finish->isEnabled());
+                CHECK(s3a_end_session.document().state() ==
+                      end_original);
+                CHECK(s3a_end_session.undoDepth() == end_undo_before);
+            }
             CHECK(s3a_end_session.document().state() == end_original);
             CHECK(s3a_end_session.undoDepth() == end_undo_before);
             CHECK(workbench.submitCadInput(
