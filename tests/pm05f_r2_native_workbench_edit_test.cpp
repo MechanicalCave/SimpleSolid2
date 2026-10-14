@@ -2772,29 +2772,66 @@ int main(int argc, char* argv[]) {
             end_properties_edit->click();
             QApplication::processEvents();
             CHECK(datum_finish->isEnabled());
-            CHECK(viewport->setStandardView(certified_view));
-            viewport->fitAll();
-            QApplication::processEvents();
-            const auto repick_edge_pixel =
-                choosePixel(certified_edge_world);
-            const auto repick_mid_pixel =
-                choosePixel(certified_mid_world);
-            CHECK(repick_edge_pixel && repick_mid_pixel);
-            const auto repick_probe = viewport->queryBodyTopology(
-                viewer::ViewportPoint2{
-                    double(repick_edge_pixel->x()),
-                    double(repick_edge_pixel->y())},
-                viewer::BodyTopologyPickFilter{
-                    false,true,false});
-            CHECK(repick_probe.valid() && repick_probe.completed &&
-                  !repick_probe.candidates.empty());
-            sendNativeWorkbenchHover(*viewport,*repick_edge_pixel);
-            QTest::mouseClick(
-                viewport,Qt::LeftButton,
-                Qt::NoModifier,*repick_edge_pixel);
-            QApplication::processEvents();
-            CHECK(datum_result->text().contains(
-                QStringLiteral("Click the highlighted MID")));
+            // A dependent Sketch/Axis can project over one camera's
+            // Edge quarter. Try only actual visible, strict current
+            // Body Edge candidates; a Reference/Sketch click does not
+            // count as re-source evidence and never bypasses Qt routing.
+            std::optional<QPoint> repick_mid_pixel;
+            std::size_t native_repick_probes = 0U;
+            for (const auto view : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::bottom_front_right}) {
+                if (repick_mid_pixel) break;
+                CHECK(viewport->setStandardView(view));
+                viewport->fitAll();
+                QApplication::processEvents();
+                for (const auto& edge : geometry.body.edges) {
+                    if (edge.points.size() < 2U) continue;
+                    const auto& a = edge.points.front();
+                    const auto& b = edge.points.back();
+                    const viewer::Point3 quarter{
+                        0.75*a.x + 0.25*b.x,
+                        0.75*a.y + 0.25*b.y,
+                        0.75*a.z + 0.25*b.z};
+                    const viewer::Point3 midpoint{
+                        0.5*(a.x+b.x),0.5*(a.y+b.y),
+                        0.5*(a.z+b.z)};
+                    const auto edge_pixel = choosePixel(quarter);
+                    const auto mid_pixel = choosePixel(midpoint);
+                    if (!edge_pixel || !mid_pixel ||
+                        (*edge_pixel-*mid_pixel).manhattanLength()<20)
+                        continue;
+                    const auto probe = viewport->queryBodyTopology(
+                        viewer::ViewportPoint2{
+                            double(edge_pixel->x()),
+                            double(edge_pixel->y())},
+                        viewer::BodyTopologyPickFilter{
+                            false,true,false});
+                    if (!probe.valid() || !probe.completed ||
+                        probe.candidates.empty())
+                        continue;
+                    ++native_repick_probes;
+                    sendNativeWorkbenchHover(*viewport,*edge_pixel);
+                    QTest::mouseClick(
+                        viewport,Qt::LeftButton,
+                        Qt::NoModifier,*edge_pixel);
+                    QApplication::processEvents();
+                    if (datum_result->text().contains(
+                            QStringLiteral("Click the highlighted MID"))) {
+                        repick_mid_pixel = *mid_pixel;
+                        break;
+                    }
+                    CHECK(s3a_end_session.undoDepth() ==
+                          undo_before_repick);
+                }
+            }
+            std::cerr << "S3A_NATIVE_RESOURCE_EDGE_PROBES="
+                      << native_repick_probes
+                      << " label=" << datum_result->text().toStdString()
+                      << "\n";
+            CHECK(repick_mid_pixel.has_value());
             CHECK(!datum_finish->isEnabled());
             sendNativeWorkbenchHover(*viewport,*repick_mid_pixel);
             QTest::mouseClick(
