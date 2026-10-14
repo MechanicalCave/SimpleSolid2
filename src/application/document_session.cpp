@@ -36,6 +36,21 @@ DocumentSessionResult success(bool changed = false) {
     return DocumentSessionResult{changed, DocumentSessionDiagnostic{}};
 }
 
+[[nodiscard]] part::DatumEvaluation evaluateDatumsWithProvider(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (auto* exact =
+            dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+                &modeling_kernel)) {
+        return part::evaluateDatums(document,evaluation,*exact);
+    }
+    // Exact Edge geometry is an optional kernel capability. Old Offset
+    // Datums retain their original behavior when no query is provided,
+    // while new Edge-local Datums fail closed rather than guessing.
+    return part::evaluateDatums(document,evaluation);
+}
+
 part::PartSketch* findSketch(
     part::PartAuthoredState& state,
     const sketch::SketchId& id) noexcept {
@@ -288,9 +303,8 @@ part::AxisEvaluation evaluateAxisInDocument(
     if (part::datumPlaneIdForSketchSupport(
             source->support)) {
         const auto datums =
-            part::evaluateDatums(
-                document,
-                evaluation);
+            evaluateDatumsWithProvider(
+                document,evaluation,modeling_kernel);
         return part::resolveAxisReference(
             document,
             reference,
@@ -3561,9 +3575,8 @@ DocumentSession::evaluateExtrudeDraft(
                 part::datumPlaneIdForSketchSupport(
                     source->support)) {
                 preview_support_datums =
-                    part::evaluateDatums(
-                        *candidate.document,
-                        evaluation);
+                    evaluateDatumsWithProvider(
+                        *candidate.document,evaluation,modeling_kernel);
             }
         }
     }
@@ -3849,9 +3862,8 @@ DocumentSession::evaluateRevolveDraft(
             }
 
             const auto datums =
-                part::evaluateDatums(
-                    *candidate.document,
-                    prefix_evaluation);
+                evaluateDatumsWithProvider(
+                    *candidate.document,prefix_evaluation,modeling_kernel);
             // Preview uses the identical current effective Sketch as
             // candidate Feature evaluation, never linked authored seeds.
             std::optional<part::EffectiveSketchProjection>
@@ -4365,9 +4377,8 @@ DocumentSession::evaluateDatumPlaneDraft(
             *candidate.document,
             modeling_kernel);
     const auto datum_evaluation =
-        part::evaluateDatums(
-            *candidate.document,
-            part_evaluation);
+        evaluateDatumsWithProvider(
+            *candidate.document,part_evaluation,modeling_kernel);
     const auto* evaluated =
         datum_evaluation.find(target_id);
     if (evaluated == nullptr ||
@@ -4481,9 +4492,8 @@ CreateDatumPlaneResult DocumentSession::execute(
             *candidate.document,
             modeling_kernel);
     const auto datum_evaluation =
-        part::evaluateDatums(
-            *candidate.document,
-            part_evaluation);
+        evaluateDatumsWithProvider(
+            *candidate.document,part_evaluation,modeling_kernel);
     const auto* target =
         datum_evaluation.find(*id);
     if (target == nullptr ||
@@ -4746,9 +4756,8 @@ DocumentSessionResult DocumentSession::execute(
             *candidate.document,
             modeling_kernel);
     const auto datum_evaluation =
-        part::evaluateDatums(
-            *candidate.document,
-            part_evaluation);
+        evaluateDatumsWithProvider(
+            *candidate.document,part_evaluation,modeling_kernel);
     const auto* evaluated =
         datum_evaluation.find(
             command.datum_id);

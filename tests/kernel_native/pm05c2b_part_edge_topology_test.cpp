@@ -2104,6 +2104,23 @@ void verifyS1SelectedSignedFrames(
         CHECK(session.document().findSketch(*hosted.sketch_id)
                   ->support == *source_support);
 
+        // Real downstream Axis command on the newly hosted Sketch must
+        // evaluate its 3D line via current Edge-local Datum Frame3.
+        const auto axis_line = session.execute(
+            application::AddSketchLineCommand{
+                *hosted.sketch_id,{0.0,0.0},{12.0,0.0},
+                sketch::EntityRole::construction});
+        CHECK(axis_line.ok() && axis_line.entity_id);
+        const auto axis = session.execute(
+            application::CreateAxisCommand{
+                part::SketchLineAxisSource{
+                    *hosted.sketch_id,*axis_line.entity_id},
+                session.document().revision(),
+                "Axis on Edge Datum",true},
+            provider);
+        CHECK(axis.ok() && axis.axis_id);
+        CHECK(session.document().findAxis(*axis.axis_id));
+
         const auto edited = session.execute(
             application::EditEdgePointDatumPlaneCommand{
                 *added.datum_id,session.document().revision(),false},
