@@ -2740,11 +2740,63 @@ PartViewportController::previewCurrentEdgeDatum(
     if (exact == nullptr) return std::nullopt;
 
     if (terminal) {
+        // A shared physical corner may be highlighted with a Vertex
+        // candidate belonging to another incident Edge. Resolve the
+        // indicated *location* against the selected Edge's own two
+        // exact bounded native terminals before applying Q1 certified
+        // semantic provenance. The hit Vertex token is NEVER authored.
+        if (!body_topology_catalog_cache_ || !stage.feature_id)
+            return std::nullopt;
+        const auto& catalog = *body_topology_catalog_cache_;
+        const auto hit = std::find_if(
+            catalog.vertices.begin(),catalog.vertices.end(),
+            [&terminal](const auto& item) {
+                return item.runtime_token.value ==
+                    terminal->runtime_token_value;
+            });
+        if (hit == catalog.vertices.end() ||
+            !hit->provider_point)
+            return std::nullopt;
+        const auto* evaluated =
+            part_evaluation_cache_->findFeature(*stage.feature_id);
+        if (!evaluated || !evaluated->result_solid ||
+            !evaluated->result_topology ||
+            evaluated->result_topology->stage != stage)
+            return std::nullopt;
+        const auto token =
+            kernel::RuntimeEdgeToken{edge.runtime_token_value};
+        const auto bound = exact->bindExactEdgeToBody(
+            evaluated->result_solid,token);
+        if (!bound || !bound->valid())
+            return std::nullopt;
+        const auto geometry = exact->queryExactBoundedEdge3d(
+            evaluated->result_solid,*bound);
+        if (!geometry.ok())
+            return std::nullopt;
+
+        // One unique exact-location terminal must match. This is a
+        // transient gesture tolerance (millimetres), not a persistent
+        // source key or a geometric nearest-neighbor reattachment.
+        const auto sameLocation = [](const kernel::Point3& a,
+                                     const kernel::Point3& b) {
+            const double dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z;
+            const double distance2=dx*dx+dy*dy+dz*dz;
+            return std::isfinite(distance2) && distance2 <= 1.0e-14;
+        };
+        const auto& ends =
+            geometry.geometry->current_terminal_positions_world;
+        const bool first = sameLocation(*hit->provider_point,ends[0]);
+        const bool second = sameLocation(*hit->provider_point,ends[1]);
+        if (first == second)
+            return std::nullopt;
+        const auto own_terminal =
+            geometry.geometry->current_terminal_vertex_tokens[
+                first ? 0U : 1U];
+        if (!own_terminal.valid())
+            return std::nullopt;
         const auto authored = part::authorSelectedMaterialEdgeEnd(
             session_->document(),*part_evaluation_cache_,stage,
-            kernel::RuntimeEdgeToken{edge.runtime_token_value},
-            kernel::RuntimeVertexToken{terminal->runtime_token_value},
-            *exact);
+            token,own_terminal,*exact);
         if (!authored.ok()) return std::nullopt;
         const auto frame = part::initializeSelectedEdgeEndFrame(
             session_->document(),*authored.reference,
