@@ -79,6 +79,6 @@ The later **off-line independent Point** interpretation must join the **same** `
 
 ## Documentation impact
 
-Internal docs: required (current S2→S3A Viewport/Command Line/Edit/semantic source evaluation behavior).
-User/Product PL and EN: required (real one Datum Plane constructor, END/MID gestures, explicit unsupported off-edge interim limitation, Edit and error feedback).
-Browser: regenerate ONLY by `.\\ss2.ps1 docs` on the supported Windows runner and prove exact canonical parity.
+Internal docs: required
+User/Product docs: required
+Reason: current S2→S3A Viewport/Command Line/Edit semantics must be documented internally; the existing one-tool END/MID gestures, identical hover presentation, interim off-edge Unsupported behavior and Edit diagnostics require bilingual PL/EN Product documentation. Regenerate Browser ONLY via `.\\ss2.ps1 docs` on supported Windows and prove exact canonical parity.
