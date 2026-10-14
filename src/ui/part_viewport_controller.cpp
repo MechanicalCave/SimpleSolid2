@@ -5784,18 +5784,16 @@ void PartViewportController::onBodyTopologyPreselectionIntent(
         return;
     }
 
-    // The ordinary Viewer correctly gives a hit on an authored
-    // Reference/Sketch/Profile presentation priority over Body hover.
-    // During the explicitly active Datum *point-first MID* gesture only,
-    // that presentation hit must not prevent strict current Body Edge
-    // hover from showing the exact, separately clickable MID anchor.
-    // Requery ONLY on a suppressed/invalid hover. The native Body query
-    // retains its own occlusion, generation and authorability guards;
-    // it neither changes click routing nor invents a Viewer identity.
+    // The normal Viewer may report an authored Reference/Sketch/Profile
+    // hit, a Body Face, or a Body Vertex even when an exact current
+    // material Edge is independently visible beneath the cursor.
+    // During the *explicitly active* Datum point-first MID hover ONLY,
+    // query real current Body Edges rather than relying on the ordinary
+    // mixed candidate priority. Do not change click routing, source
+    // identity, the ordinary picker or any persisted datum semantics.
     auto hover_query = query;
     if (datum_point_first_mid_hover_enabled_ &&
-        viewport_ != nullptr &&
-        !bodyTopologyQueryCurrent(hover_query)) {
+        viewport_ != nullptr) {
         hover_query = viewport_->queryBodyTopology(
             point,
             viewer::BodyTopologyPickFilter{
