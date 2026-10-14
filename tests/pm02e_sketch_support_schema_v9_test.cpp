@@ -219,6 +219,11 @@ std::string buildSchema8FromCurrentOriginDocument(
     // authored placement.
     authored.erase("next_datum_id");
     authored.erase("datum_planes");
+    // These test-only old-schema fixtures cannot contain v17-only Datums.
+    CHECK(authored.contains("edge_point_datum_planes"));
+    CHECK(authored.at("edge_point_datum_planes").is_array());
+    CHECK(authored.at("edge_point_datum_planes").empty());
+    authored.erase("edge_point_datum_planes");
     authored.erase("next_axis_id");
     authored.erase("axes");
     // A historical schema fixture cannot carry v15 projected bindings.
@@ -267,6 +272,11 @@ std::string buildSchema9FromCurrentDocument(
     CHECK(authored.contains("axes"));
     authored.erase("next_datum_id");
     authored.erase("datum_planes");
+    // These test-only old-schema fixtures cannot contain v17-only Datums.
+    CHECK(authored.contains("edge_point_datum_planes"));
+    CHECK(authored.at("edge_point_datum_planes").is_array());
+    CHECK(authored.at("edge_point_datum_planes").empty());
+    authored.erase("edge_point_datum_planes");
     authored.erase("next_axis_id");
     authored.erase("axes");
     // A historical schema fixture cannot carry v15 projected bindings.
@@ -371,7 +381,7 @@ int main() {
     CHECK(current_package.ok());
     CHECK(
         current_package.package->descriptor
-            .domain_schema_version == 16);
+            .domain_schema_version == 17);
     CHECK(
         current_package.package->authored_json.find(
             "\"placement\"") ==
@@ -487,7 +497,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 16);
+            .domain_schema_version == 17);
     CHECK(
         rewritten.package->authored_json.find(
             "\"placement\"") ==
@@ -602,7 +612,7 @@ int main() {
     CHECK(body_package.ok());
     CHECK(
         body_package.package->descriptor
-            .domain_schema_version == 16);
+            .domain_schema_version == 17);
     CHECK(
         body_package.package->authored_json.find(
             "\"body_planar_surface\"") !=
