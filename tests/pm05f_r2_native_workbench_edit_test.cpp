@@ -5,7 +5,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
-#include <simplesolid2/part/datum.hpp>
+#include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
 #include <simplesolid2/part/profile.hpp>
@@ -2113,6 +2113,8 @@ int main(int argc, char* argv[]) {
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
 
+        if (s3a_only || (!pg01c_only && !pg01d_ui_only &&
+                         !ui01_p0_only)) {
         // RG-02B1 P4-S3A: positive *native* Workbench gesture witness.
         // The camera/world points only aim Qt mouse clicks; they never
         // enter authoring APIs or stand in for semantic Part provenance.
@@ -2305,6 +2307,7 @@ int main(int argc, char* argv[]) {
                       << " cold_provider_save_reopen=1\n";
             CHECK(workbench.activateDocument(&session, {}));
             QApplication::processEvents();
+        }
         }
         if (s3a_only) {
             result = EXIT_SUCCESS;
