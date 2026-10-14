@@ -3932,13 +3932,14 @@ PartViewportController::buildReferenceScene() {
         scene.preview = std::move(preview);
     }
     // MID is a hover cue, not a permanent selected-Edge overlay.
-    // Both MID-first and Edge-first publish it only while hovering
-    // the current exact material Edge. END/Datum selection persists
-    // independently from the temporary marker.
+    // The unconfirmed Edge-only MID frame must NOT publish a marker
+    // after the cursor has left its Edge. Only live source preselection
+    // or a genuine point-first hover authorizes this scene-local cue.
     const auto mid =
         datum_selected_mid_edge_hovered_
             ? datum_selected_edge_mid_
-            : (datum_plane_draft_preview_anchor_ &&
+            : (datum_point_first_mid_hover_enabled_ &&
+               datum_plane_draft_preview_anchor_ &&
                datum_plane_draft_preview_frame_
                 ? std::optional<kernel::Point3>{
                     datum_plane_draft_preview_frame_->origin}
