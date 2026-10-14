@@ -2667,6 +2667,85 @@ PartViewportController::primaryBodyTopologySelection() const {
         *selection->primary_body_topology);
 }
 
+bool PartViewportController::bodyTopologySelectionAddressCurrent(
+    const BodyTopologySelectionAddress& address) const noexcept {
+    if (!address.valid() ||
+        session_ == nullptr ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_scene_cache_->generation.valid() ||
+        body_scene_cache_->generation != address.generation ||
+        !body_scene_revision_ ||
+        *body_scene_revision_ != session_->document().revision() ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return false;
+    }
+    return std::any_of(
+        body_topology_bindings_.begin(),
+        body_topology_bindings_.end(),
+        [&address](const auto& entry) {
+            return entry.second.kind == address.kind &&
+                   entry.second.generation == address.generation &&
+                   entry.second.runtime_token_value ==
+                       address.runtime_token_value;
+        });
+}
+
+std::optional<CertifiedEdgeDatumPreview>
+PartViewportController::previewCurrentEdgeDatum(
+    const part::BodyStageRef& stage,
+    const BodyTopologySelectionAddress& edge,
+    const std::optional<BodyTopologySelectionAddress>& terminal,
+    bool reverse) const {
+    if (!session_ || !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !stage.valid() ||
+        stage.kind != part::BodyStageKind::after_feature ||
+        edge.kind != viewer::BodyTopologyPresentationKind::edge ||
+        !bodyTopologySelectionAddressCurrent(edge) ||
+        (terminal &&
+         (terminal->kind !=
+              viewer::BodyTopologyPresentationKind::vertex ||
+          !bodyTopologySelectionAddressCurrent(*terminal) ||
+          edge.generation != terminal->generation))) {
+        return std::nullopt;
+    }
+    auto* exact =
+        dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            solid_modeling_kernel_);
+    if (exact == nullptr) return std::nullopt;
+
+    if (terminal) {
+        const auto authored = part::authorSelectedMaterialEdgeEnd(
+            session_->document(),*part_evaluation_cache_,stage,
+            kernel::RuntimeEdgeToken{edge.runtime_token_value},
+            kernel::RuntimeVertexToken{terminal->runtime_token_value},
+            *exact);
+        if (!authored.ok()) return std::nullopt;
+        const auto frame = part::initializeSelectedEdgeEndFrame(
+            session_->document(),*authored.reference,
+            *part_evaluation_cache_,*exact,reverse);
+        if (!frame.resolved()) return std::nullopt;
+        return CertifiedEdgeDatumPreview{
+            part::EdgePointDatumSource{*authored.reference},
+            *frame.frame};
+    }
+
+    const auto authored = part::authorSelectedMaterialEdgeMid(
+        session_->document(),*part_evaluation_cache_,stage,
+        kernel::RuntimeEdgeToken{edge.runtime_token_value},*exact);
+    if (!authored.ok()) return std::nullopt;
+    const auto frame = part::initializeSelectedEdgeMidFrame(
+        session_->document(),*authored.reference,
+        *part_evaluation_cache_,*exact,reverse);
+    if (!frame.resolved()) return std::nullopt;
+    return CertifiedEdgeDatumPreview{
+        part::EdgePointDatumSource{*authored.reference},*frame.frame};
+}
+
 std::optional<BodyTopologyInspection>
 PartViewportController::primaryBodyTopologyInspection() const {
     const auto address =

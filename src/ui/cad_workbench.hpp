@@ -151,6 +151,7 @@ public:
                axis_draft_.has_value() ||
                datum_plane_draft_.has_value() ||
                edge_datum_edit_id_.has_value() ||
+               edge_datum_create_revision_.has_value() ||
                extrude_draft_.has_value() ||
                revolve_draft_.has_value() ||
                fillet_draft_.has_value() ||
@@ -212,6 +213,9 @@ private:
     void tryStageDatumPlaneFromSupport(
         std::optional<core::BuiltinReferenceRole> support);
     void tryStageDatumPlaneFromBodyTopology(
+        const BodyTopologyInspection& inspection);
+    void selectDatumPlaneConstructor(int constructor_index);
+    void stageEdgeDatumFromBodyTopology(
         const BodyTopologyInspection& inspection);
     void tryStageDatumPlaneFromDatum(
         std::optional<part::DatumId> datum_id);
@@ -717,6 +721,22 @@ private:
     bool edge_datum_edit_reverse_{false};
     bool edge_datum_edit_preview_valid_{false};
     std::uint64_t edge_datum_edit_context_generation_{1};
+
+    // S3 transient constructor, never persisted. Semantic END/MID source
+    // and signed intent only enter Part via the atomic Session command.
+    // The Viewer token picks are one-revision/one-generation leases.
+    std::optional<core::DocumentRevision>
+        edge_datum_create_revision_;
+    std::optional<part::BodyStageRef> edge_datum_pick_stage_;
+    std::optional<BodyTopologySelectionAddress>
+        edge_datum_edge_pick_;
+    std::optional<BodyTopologySelectionAddress>
+        edge_datum_vertex_pick_;
+    std::optional<part::EdgePointDatumSource>
+        edge_datum_create_source_;
+    std::optional<kernel::Frame3> edge_datum_create_preview_;
+    bool edge_datum_create_reverse_{false};
+    std::uint64_t edge_datum_create_context_generation_{1};
     std::optional<
         application::DatumPlaneDraftEvaluationResult>
         datum_plane_evaluation_;

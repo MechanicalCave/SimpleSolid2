@@ -160,6 +160,14 @@ struct BodyTopologyInspection final {
     }
 };
 
+// Transient preview certified against the current Viewer scene's
+// same-revision, same-generation OCCT body. Only 'source' may be
+// persisted later by a separately revalidated Session command.
+struct CertifiedEdgeDatumPreview final {
+    part::EdgePointDatumSource source;
+    kernel::Frame3 frame;
+};
+
 struct TopologyKindSummary final {
     std::size_t total{};
     std::size_t referenceable{};
@@ -532,6 +540,18 @@ public:
 
     [[nodiscard]] std::optional<BodyTopologyInspection>
     primaryBodyTopologyInspection() const;
+
+    // Authoring-only lease test for staged Edge/Vertex picks. Runtime
+    // tokens are never durable IDs, and must not survive a scene rebuild.
+    [[nodiscard]] bool bodyTopologySelectionAddressCurrent(
+        const BodyTopologySelectionAddress& address) const noexcept;
+
+    [[nodiscard]] std::optional<CertifiedEdgeDatumPreview>
+    previewCurrentEdgeDatum(
+        const part::BodyStageRef& stage,
+        const BodyTopologySelectionAddress& edge,
+        const std::optional<BodyTopologySelectionAddress>& terminal,
+        bool reverse) const;
 
     [[nodiscard]] std::optional<BodyTopologySummary>
     bodyTopologySummary() const;
