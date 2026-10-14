@@ -2739,6 +2739,161 @@ int main(int argc, char* argv[]) {
                       part::AxisEvaluationStatus::resolved &&
                   cold_axis_frame.line &&
                   cold_axis_frame.line->valid());
+
+            // S3A-F06: a *real Workbench Properties Edit* also replaces
+            // the authored END source with a newly certified MID click.
+            // One Edit transaction preserves DatumId, SketchId and
+            // AxisId and the fresh native kernel resolves all of them.
+            CHECK(workbench.activateDocument(&s3a, {}));
+            QApplication::processEvents();
+            CHECK(workbench.activateDocument(&s3a_end_session, {}));
+            QApplication::processEvents();
+            QTreeWidgetItem* end_replacement_item = nullptr;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0).startsWith(
+                        QStringLiteral("Datum Plane 1 (Edge END)"))) {
+                    end_replacement_item = *it;
+                    break;
+                }
+            }
+            CHECK(end_replacement_item);
+            tree->clearSelection();
+            tree->setCurrentItem(end_replacement_item);
+            end_replacement_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(end_properties_edit->isEnabled());
+            const auto source_before_repick =
+                s3a_end_session.document()
+                    .findEdgePointDatumPlane(created_end_id)->source;
+            CHECK(std::holds_alternative<
+                part::SelectedMaterialEdgeEnd>(source_before_repick));
+            const auto undo_before_repick =
+                s3a_end_session.undoDepth();
+            end_properties_edit->click();
+            QApplication::processEvents();
+            CHECK(datum_finish->isEnabled());
+            CHECK(viewport->setStandardView(certified_view));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto repick_edge_pixel =
+                choosePixel(certified_edge_world);
+            const auto repick_mid_pixel =
+                choosePixel(certified_mid_world);
+            CHECK(repick_edge_pixel && repick_mid_pixel);
+            const auto repick_probe = viewport->queryBodyTopology(
+                viewer::ViewportPoint2{
+                    double(repick_edge_pixel->x()),
+                    double(repick_edge_pixel->y())},
+                viewer::BodyTopologyPickFilter{
+                    false,true,false});
+            CHECK(repick_probe.valid() && repick_probe.completed &&
+                  !repick_probe.candidates.empty());
+            sendNativeWorkbenchHover(*viewport,*repick_edge_pixel);
+            QTest::mouseClick(
+                viewport,Qt::LeftButton,
+                Qt::NoModifier,*repick_edge_pixel);
+            QApplication::processEvents();
+            CHECK(datum_result->text().contains(
+                QStringLiteral("Click the highlighted MID")));
+            CHECK(!datum_finish->isEnabled());
+            sendNativeWorkbenchHover(*viewport,*repick_mid_pixel);
+            QTest::mouseClick(
+                viewport,Qt::LeftButton,
+                Qt::NoModifier,*repick_mid_pixel);
+            QApplication::processEvents();
+            CHECK(datum_result->text().contains(
+                QStringLiteral("Resolved replacement END/MID")));
+            CHECK(datum_finish->isEnabled());
+            CHECK(s3a_end_session.undoDepth()==undo_before_repick);
+            CHECK(workbench.submitCadInput(
+                "FINISH",workbench.cadInputContextGeneration()).accepted);
+            CHECK(s3a_end_session.undoDepth()==
+                  undo_before_repick+1U);
+            const auto* repicked =
+                s3a_end_session.document()
+                    .findEdgePointDatumPlane(created_end_id);
+            CHECK(repicked && repicked->id==created_end_id);
+            CHECK(std::holds_alternative<
+                part::SelectedMaterialEdgeMid>(repicked->source));
+            CHECK(repicked->source!=source_before_repick);
+            CHECK(s3a_end_session.document().findSketch(
+                *dependent_sketch.sketch_id));
+            CHECK(s3a_end_session.document().findAxis(
+                *dependent_axis.axis_id));
+            const auto repick_body = part::evaluatePart(
+                s3a_end_session.document(),kernel);
+            const auto repick_datums = part::evaluateDatums(
+                s3a_end_session.document(),repick_body,kernel);
+            const auto* repick_plane =
+                repick_datums.find(created_end_id);
+            CHECK(repick_plane && repick_plane->valid() &&
+                  repick_plane->frame.has_value());
+            const auto repick_axis = part::resolveAxisReference(
+                s3a_end_session.document(),
+                part::AxisReference{part::AuthoredAxisReference{
+                    *dependent_axis.axis_id}},
+                &repick_body,&repick_datums);
+            CHECK(repick_axis.valid() && repick_axis.line);
+            CHECK(s3a_end_session.undo().changed);
+            CHECK(s3a_end_session.document()
+                      .findEdgePointDatumPlane(created_end_id)->source ==
+                  source_before_repick);
+            CHECK(s3a_end_session.redo().changed);
+            CHECK(std::holds_alternative<
+                part::SelectedMaterialEdgeMid>(
+                    s3a_end_session.document()
+                        .findEdgePointDatumPlane(created_end_id)->source));
+
+            QTemporaryDir replacement_scratch;
+            CHECK(replacement_scratch.isValid());
+            const std::filesystem::path replacement_path =
+                std::filesystem::path{
+                    replacement_scratch.path().toStdWString()} /
+                "s3a-end-to-mid-edit-cold.ss2part";
+            part::PartDocumentStore replacement_store;
+            CHECK(replacement_store.createNew(
+                replacement_path,s3a_end_session.document()).ok());
+            const auto reopened_replacement =
+                replacement_store.load(replacement_path);
+            CHECK(reopened_replacement.ok() &&
+                  reopened_replacement.document);
+            const auto* persisted_replacement =
+                reopened_replacement.document
+                    ->findEdgePointDatumPlane(created_end_id);
+            CHECK(persisted_replacement &&
+                  std::holds_alternative<
+                      part::SelectedMaterialEdgeMid>(
+                      persisted_replacement->source));
+            CHECK(reopened_replacement.document->findSketch(
+                *dependent_sketch.sketch_id));
+            CHECK(reopened_replacement.document->findAxis(
+                *dependent_axis.axis_id));
+            kernel_occt::OcctSolidModelingKernel replacement_cold;
+            const auto replacement_part = part::evaluatePart(
+                *reopened_replacement.document,replacement_cold);
+            CHECK(replacement_part.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto replacement_datums = part::evaluateDatums(
+                *reopened_replacement.document,
+                replacement_part,replacement_cold);
+            const auto* replacement_plane =
+                replacement_datums.find(created_end_id);
+            CHECK(replacement_plane && replacement_plane->valid() &&
+                  replacement_plane->frame.has_value());
+            const auto replacement_axis = part::resolveAxisReference(
+                *reopened_replacement.document,
+                part::AxisReference{part::AuthoredAxisReference{
+                    *dependent_axis.axis_id}},
+                &replacement_part,&replacement_datums);
+            CHECK(replacement_axis.valid() && replacement_axis.line);
+            std::cout << "RG02B1_S3A_NATIVE_END_TO_MID_EDIT_PASS"
+                      << " real_qt_occt_clicks=1"
+                      << " unchanged_datum_sketch_axis_ids=1"
+                      << " one_undo=1"
+                      << " cold_v17=1\n";
+            CHECK(workbench.activateDocument(&s3a_end_session, {}));
+            QApplication::processEvents();
+
             std::cout << "RG02B1_S3A_NATIVE_END_DEPENDENT_EDIT_PASS"
                       << " datum_id_same=1"
                       << " sketch_axis_id_same=1"
