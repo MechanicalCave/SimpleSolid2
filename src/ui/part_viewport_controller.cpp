@@ -5779,15 +5779,35 @@ void PartViewportController::refreshDatumPointFirstMidHover() {
 void PartViewportController::onBodyTopologyPreselectionIntent(
     const viewer::BodyTopologyPickQueryResult& query,
     viewer::ViewportPoint2 point) {
-    if (session_ == nullptr ||
-        !point.valid() ||
-        !bodyTopologyQueryCurrent(query)) {
+    if (session_ == nullptr || !point.valid()) {
+        clearBodyTopologyPreselection();
+        return;
+    }
+
+    // The ordinary Viewer correctly gives a hit on an authored
+    // Reference/Sketch/Profile presentation priority over Body hover.
+    // During the explicitly active Datum *point-first MID* gesture only,
+    // that presentation hit must not prevent strict current Body Edge
+    // hover from showing the exact, separately clickable MID anchor.
+    // Requery ONLY on a suppressed/invalid hover. The native Body query
+    // retains its own occlusion, generation and authorability guards;
+    // it neither changes click routing nor invents a Viewer identity.
+    auto hover_query = query;
+    if (datum_point_first_mid_hover_enabled_ &&
+        viewport_ != nullptr &&
+        !bodyTopologyQueryCurrent(hover_query)) {
+        hover_query = viewport_->queryBodyTopology(
+            point,
+            viewer::BodyTopologyPickFilter{
+                false, true, false});
+    }
+    if (!bodyTopologyQueryCurrent(hover_query)) {
         clearBodyTopologyPreselection();
         return;
     }
 
     auto candidates =
-        rankedBodyTopologyCandidates(query);
+        rankedBodyTopologyCandidates(hover_query);
     if (candidates.empty()) {
         clearBodyTopologyPreselection();
         return;
@@ -5801,7 +5821,7 @@ void PartViewportController::onBodyTopologyPreselectionIntent(
     if (body_topology_candidate_stack_ &&
         body_topology_candidate_stack_->valid() &&
         body_topology_candidate_stack_->generation ==
-            query.generation &&
+            hover_query.generation &&
         body_topology_candidate_stack_->candidates.size() ==
             candidates.size()) {
         const double dx =
@@ -5857,7 +5877,7 @@ void PartViewportController::onBodyTopologyPreselectionIntent(
         if (body_topology_candidate_stack_ &&
             body_topology_candidate_stack_->valid() &&
             body_topology_candidate_stack_->generation ==
-                query.generation &&
+                hover_query.generation &&
             candidates.front().kind ==
                 viewer::BodyTopologyPresentationKind::edge) {
             const auto& incumbent =
@@ -5886,7 +5906,7 @@ void PartViewportController::onBodyTopologyPreselectionIntent(
         }
         body_topology_candidate_stack_ =
             BodyTopologyCandidateStack{
-                query.generation,
+                hover_query.generation,
                 point,
                 std::move(candidates),
                 next_index};
