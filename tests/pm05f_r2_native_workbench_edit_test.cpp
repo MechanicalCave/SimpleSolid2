@@ -2393,6 +2393,166 @@ int main(int argc, char* argv[]) {
             CHECK(workbench.activateDocument(&s3a, {}));
             QApplication::processEvents();
 
+
+            // S3A-F01/F03: real native shared-corner END acquisition.
+            // Each chosen box terminal belongs to three incident current
+            // material Edges. The actual first click chooses one Edge;
+            // the second native Qt click supplies that corner, without
+            // authoring whichever incident Vertex happens to hover.
+            auto s3a_end_session = makeBaseSession(kernel);
+            CHECK(workbench.activateDocument(&s3a_end_session, {}));
+            QApplication::processEvents();
+            const auto end_original =
+                s3a_end_session.document().state();
+            const auto end_undo_before =
+                s3a_end_session.undoDepth();
+            CHECK(workbench.submitCadInput(
+                "DATUMPLANE",
+                workbench.cadInputContextGeneration()).accepted);
+            constructor->setCurrentIndex(1);
+            QApplication::processEvents();
+            CHECK(constructor->currentIndex() == 1);
+            bool native_end_created = false;
+            std::size_t shared_corner_trials = 0U;
+            for (const auto view : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::bottom_front_right}) {
+                if (native_end_created) break;
+                CHECK(viewport->setStandardView(view));
+                viewport->fitAll();
+                QApplication::processEvents();
+                for (const auto& edge : geometry.body.edges) {
+                    if (edge.points.size() < 2U) continue;
+                    const auto& a = edge.points.front();
+                    const auto& b = edge.points.back();
+                    const viewer::Point3 quarter{
+                        0.75*a.x + 0.25*b.x,
+                        0.75*a.y + 0.25*b.y,
+                        0.75*a.z + 0.25*b.z};
+                    const auto quarter_pixel = choosePixel(quarter);
+                    if (!quarter_pixel) continue;
+                    const viewer::ViewportPoint2 edge_probe{
+                        double(quarter_pixel->x()),
+                        double(quarter_pixel->y())};
+                    const auto edge_hits =
+                        viewport->queryBodyTopology(
+                            edge_probe,
+                            viewer::BodyTopologyPickFilter{
+                                false,true,false});
+                    if (!edge_hits.valid() || !edge_hits.completed ||
+                        edge_hits.candidates.empty())
+                        continue;
+                    for (const auto& terminal :
+                         {edge.points.front(), edge.points.back()}) {
+                        const auto sameCorner = [&terminal](
+                            const viewer::Point3& point) {
+                            return std::abs(point.x-terminal.x)<1e-7 &&
+                                   std::abs(point.y-terminal.y)<1e-7 &&
+                                   std::abs(point.z-terminal.z)<1e-7;
+                        };
+                        std::size_t incident = 0U;
+                        for (const auto& adjacent : geometry.body.edges) {
+                            if (adjacent.points.size()<2U) continue;
+                            if (sameCorner(adjacent.points.front()) ||
+                                sameCorner(adjacent.points.back()))
+                                ++incident;
+                        }
+                        if (incident!=3U) continue;
+                        const auto corner_pixel =
+                            choosePixel(terminal);
+                        if (!corner_pixel ||
+                            (*quarter_pixel - *corner_pixel)
+                                .manhattanLength()<14)
+                            continue;
+                        const viewer::ViewportPoint2 vertex_probe{
+                            double(corner_pixel->x()),
+                            double(corner_pixel->y())};
+                        const auto vertex_hits =
+                            viewport->queryBodyTopology(
+                                vertex_probe,
+                                viewer::BodyTopologyPickFilter{
+                                    false,false,true});
+                        if (!vertex_hits.valid() ||
+                            !vertex_hits.completed ||
+                            vertex_hits.candidates.empty())
+                            continue;
+                        ++shared_corner_trials;
+                        sendNativeWorkbenchHover(
+                            *viewport,*quarter_pixel);
+                        QTest::mouseClick(
+                            viewport,Qt::LeftButton,
+                            Qt::NoModifier,*quarter_pixel);
+                        QApplication::processEvents();
+                        if (!datum_result->text().contains(
+                                QStringLiteral(
+                                    "Click the highlighted MID"))) {
+                            constructor->setCurrentIndex(0);
+                            constructor->setCurrentIndex(1);
+                            QApplication::processEvents();
+                            continue;
+                        }
+                        sendNativeWorkbenchHover(
+                            *viewport,*corner_pixel);
+                        QTest::mouseClick(
+                            viewport,Qt::LeftButton,
+                            Qt::NoModifier,*corner_pixel);
+                        QApplication::processEvents();
+                        if (datum_result->text().contains(
+                                QStringLiteral("Resolved END")) &&
+                            datum_finish->isEnabled()) {
+                            native_end_created = true;
+                            break;
+                        }
+                        // No half-authored attempt may produce a Datum.
+                        CHECK(s3a_end_session.document().state() ==
+                              end_original);
+                        CHECK(s3a_end_session.undoDepth() ==
+                              end_undo_before);
+                        constructor->setCurrentIndex(0);
+                        constructor->setCurrentIndex(1);
+                        QApplication::processEvents();
+                    }
+                    if (native_end_created) break;
+                }
+            }
+            std::cerr << "RG02B1_S3A_SHARED_END_CANDIDATES="
+                      << shared_corner_trials << "\n";
+            CHECK(shared_corner_trials>0U);
+            CHECK(native_end_created);
+            CHECK(s3a_end_session.document().state() == end_original);
+            CHECK(s3a_end_session.undoDepth() == end_undo_before);
+            CHECK(workbench.submitCadInput(
+                "FINISH",workbench.cadInputContextGeneration()).accepted);
+            CHECK(s3a_end_session.document()
+                      .edgePointDatumPlanes().size()==1U);
+            const auto& created_end =
+                s3a_end_session.document().edgePointDatumPlanes().front();
+            CHECK(std::holds_alternative<
+                part::SelectedMaterialEdgeEnd>(created_end.source));
+            CHECK(s3a_end_session.undoDepth()==end_undo_before+1U);
+            const auto end_evaluation =
+                part::evaluatePart(s3a_end_session.document(),kernel);
+            const auto end_planes = part::evaluateDatums(
+                s3a_end_session.document(),end_evaluation,kernel);
+            const auto* end_resolved =
+                end_planes.find(created_end.id);
+            CHECK(end_resolved && end_resolved->valid() &&
+                  end_resolved->frame.has_value());
+            CHECK(s3a_end_session.undo().changed);
+            CHECK(s3a_end_session.document()
+                      .edgePointDatumPlanes().empty());
+            CHECK(s3a_end_session.redo().changed);
+            CHECK(s3a_end_session.document()
+                      .findEdgePointDatumPlane(created_end.id));
+            std::cout << "RG02B1_S3A_NATIVE_SHARED_END_PASS"
+                      << " actual_qt_mouse=1"
+                      << " trihedral_corner=1"
+                      << " one_undo=1\n";
+            CHECK(workbench.activateDocument(&s3a, {}));
+            QApplication::processEvents();
+
             std::cout << "RG02B1_S3A_NATIVE_MID_EDGE_FIRST_PASS"
                       << " real_qt_occt_mouse=1"
                       << " part_command_undo=1"
