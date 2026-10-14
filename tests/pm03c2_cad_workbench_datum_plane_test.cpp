@@ -907,7 +907,7 @@ int main(int argc, char* argv[]) {
         CHECK(edge_tool->isChecked());
         CHECK(edge_workbench.acceptsEmptyCadInput());
         CHECK(edge_workbench.cadDynamicInputFields().empty());
-        CHECK(edge_workbench.cadInputPrompt().find("EDGE DATUM") !=
+        CHECK(edge_workbench.cadInputPrompt().find("Edge + Point") !=
               std::string::npos);
 
         command = edge_workbench.submitCadInput(
