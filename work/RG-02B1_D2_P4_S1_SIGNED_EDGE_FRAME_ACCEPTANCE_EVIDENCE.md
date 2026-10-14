@@ -1,6 +1,15 @@
-# RG-02B1/D2-P4-S1 — Signed Edge-local Frame3 acceptance evidence (IN PROGRESS)
+# RG-02B1/D2-P4-S1 — Signed Edge-local Frame3 acceptance evidence (COMPLETED — OWNER FINAL PASS)
 
-**State:** FOCUSED/FAST/FULL/DOC-01 native evidence EXECUTED AND GREEN on frozen source/test/docs SHA; Owner **technical FINAL PASS and exact-HEAD production squash authorization NOT YET GIVEN**. Prepared and updated 2026-10-14. Real Windows runs and their exact SHAs are identified below. No S2 persistence, S3 UI/Viewer or Datum functionality is claimed.
+**State:** **COMPLETED — OWNER TECHNICAL FINAL PASS / PR #371 SQUASH MERGED**. The previously recorded evidence/RED history and finite gate assessment below are immutable historical snapshots of pre-acceptance checks; the Owner's final decision and verified merge are recorded in the closeout block immediately below. Prepared and updated 2026-10-14. Real Windows runs and their exact SHAs are identified below. No S2 persistence, S3 UI/Viewer or Datum functionality is claimed.
+
+## Final Owner decision and protected-main closeout — 2026-10-14
+
+- **Owner instruction:** `zamknij formalności S1 - PASS - kontynuuj pracę`, after previously providing consent to finish the bounded current-contract work without repeated intermediate stops. This is recorded as S1 **technical FINAL PASS** on the exact PR #371 head `2ebc5571ae2d48935d8608ad9842b0dde6df34ee`; accepted in [PR #371 Owner-decision record](https://github.com/MechanicalCave/SimpleSolid2/pull/371#issuecomment-6163998817).
+- **Accepted verified runtime/docs tree:** `273a90af36e41fd4ce200bb713c429d2c708c9cc`; Windows FOCUSED #2936 **2/2 PASS**, FAST #2940 **93/93 PASS**, Ready FULL #2941 **25 Core + 57 kernel-native + 117 Desktop = 199/199 PASS**, DOC-01 Browser verified.
+- **Ledger-only final candidate:** `2ebc5571ae2d48935d8608ad9842b0dde6df34ee`; one-file `work/**` diff from tested source/docs SHA, Windows closure #2942 **SUCCESS**, with trusted prior FULL SHA; no claim of repeated native FULL on the ledger-only commit.
+- **Separate squash merge:** Owner instruction to close S1 and continue, plus prior implementation/merge permission, was applied with GitHub's `expected_head_sha` lease; PR #371 **MERGED** on protected `main` as `461daa812470c0615e4d67f7cec97bd7d6d138cf`. GitHub reported merged=true; subsequent `main` branch read confirmed that exact SHA.
+- **D2-F07 limitation remains explicit:** the positive remembered-U projection² `<1/16` replay branch is mathematically non-reachable for valid accepted replay, **not** a fabricated test PASS. The defensive branch, D2 clarification and genuine reachable regressions remain intact.
+- **Authority after completion:** S1 execution authority is closed. Until a separately accepted and activated S2/S3 executable contract is on `main`, `ACTIVE.yaml` may retain S1 as historical pointer **only**, not as permission for new Datum schema/GUI source mutation. Existing Draft PR #372 is working evidence, not silently approved product merge. PM-06 and unrelated scope remain excluded.
 
 ## Authority and exact-source split
 
