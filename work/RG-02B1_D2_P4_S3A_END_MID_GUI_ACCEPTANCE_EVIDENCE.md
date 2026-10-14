@@ -9,6 +9,10 @@
 - Windows Draft FAST [#3065](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38626713961) **PASS 93/93** on source and registered native test SHA `1f2d3b9c1666e5501cc27aa36c0b1e9333c9f1ee`.
 - This work-ledger-only follow-up requests exact-head FOCUSED for `wb01.viewer_reference_presentation`, `sk04b.viewer_native_selection_query` and the full-only native `pm05f_r2.native_workbench_edit` with the newly required repeated END↔MID click matrix. Successful FAST alone does **not** close either Owner manual defect. FULL and another manual Windows acceptance remain OPEN.
 
+## Windows hover-only re-selection CI (2026-10-14)
+
+Source + native test candidate `376bc7fa19191b801a75852ab4639b0d7de0bd8f`: Draft FAST [#3069](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38634482491) **93/93 PASS**. Previous initial code `947e1ea79f8ed5e20eb142638576301de4eb8135` Draft FAST [#3068](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38634031389) **93/93 PASS** but did not include the negative off-hover regression. This work-only successor requests native FOCUSED for precise hover/click lifecycle and unchanged underlying Workbench tests. This is not Owner visual/manual PASS; FULL and Owner re-test remain mandatory.
+
 ## Native hover-only regression and candidate precedence (2026-10-14)
 
 This source-only follow-up after FAST #3068 **PASS 93/93** on `947e1ea79f8ed5e20eb142638576301de4eb8135` constrains MID visibility to the *active* current Body Edge preselection, not merely another Edge in the candidate stack while the user hovers a Vertex. The existing registered real Qt/OCCT Workbench test now moves off the source Edge, clicks the exact MID pixel without a new hover and rejects stale MID confirmation, then performs a true MID hover+click and retains all previous repeated END↔MID and lifecycle tests. This is test/source-only behavior within S3A; the final test result is pending new Windows FOCUSED/FAST/FULL and Owner manual visibility acceptance.
