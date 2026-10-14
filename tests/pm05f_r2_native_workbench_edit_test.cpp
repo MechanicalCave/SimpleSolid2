@@ -2280,11 +2280,18 @@ int main(int argc, char* argv[]) {
             CHECK(!datum_finish->isEnabled());
             CHECK(s3a.document().state() == state_before);
             CHECK(s3a.undoDepth() == undo_before);
-            // The same MID is selectable again after genuine hover.
-            // Publish the OCCT reference marker and allow the GUI event
-            // loop to complete that hover presentation BEFORE the click.
-            // The ordinary mouse move remains part of the test; no
-            // fabricated point, input retry or relaxed assertion.
+            // Realistic pointer re-entry: hover a non-mid portion of
+            // the same Edge so the transient MID square can be painted,
+            // THEN move onto the square and click it. Teleporting the
+            // cursor directly to MID before the marker exists creates a
+            // timing race in native OCCT detection under FULL load.
+            // This is still one Edge hover, one MID hover and one click;
+            // no fallback/retry or relaxed identity/Finish assertion.
+            const auto source_hover_pixel =
+                choosePixel(certified_edge_world);
+            CHECK(source_hover_pixel);
+            sendNativeWorkbenchHover(*viewport,*source_hover_pixel);
+            QApplication::processEvents();
             sendNativeWorkbenchHover(*viewport,certified_mid_pixel);
             QApplication::processEvents();
             QTest::mouseMove(viewport,certified_mid_pixel);
