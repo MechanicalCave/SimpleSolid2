@@ -1,8 +1,19 @@
 # RG-02B1/P4-S3A — Datum END/MID GUI acceptance evidence
 
-**Status: OPEN — WIP, NOT OWNER MANUAL FINAL PASS, NOT PRODUCTION MERGE AUTHORITY.**
+**Status: OWNER MANUAL PASS (accepted candidate `634c8e1a44dcf5ce3e6f5a689c187da743dcf6d4`); AUTOMATED FAST + FULL PASS; PR #386 remains DRAFT, UNMERGED; NO MERGE AUTHORITY.**
 **Date:** 2026-10-14.
 **Authority:** `work/ACTIVE.yaml` points to `work/RG-02B1_D2_P4_S3A_DATUM_END_MID_GUI_WORK_CONTRACT_DRAFT.md`, Owner-accepted and independently activated. The bounded native test-path amendment `work/RG-02B1_D2_P4_S3A_NATIVE_WORKBENCH_GESTURES_TEST_AMENDMENT_DRAFT.md` was Owner-accepted in #387 and separately activated in #388. Owner later granted standing permission to continue gates *within this accepted S3A contract*, not new D2/D3 scope or substitute manual witnessing.
+
+## Final exact-candidate Owner manual acceptance — PASS (2026-10-14)
+
+- **Owner's explicit feedback in the acceptance conversation:** `manual test - PASS` after loading/retesting exact S3A candidate `634c8e1a44dcf5ce3e6f5a689c187da743dcf6d4` and confirming the prior MID hover visual/picking issues resolved. This is **real Owner manual PASS**, not a claim inferred from the automated suite. Owner did not enumerate a separate fresh answer for each checkbox below; no per-item manual witness is invented.
+- **Windows exact-candidate Draft FAST [#3080](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38639283107): PASS 93/93** on `634c8e1a44dcf5ce3e6f5a689c187da743dcf6d4`.
+- **Windows exact-candidate Ready FULL [#3081](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38639489009): PASS 199/199** on exactly the same candidate SHA: Core **25/25**, kernel-native **57/57**, Desktop **117/117**, `pm05f_r2.native_workbench_edit` **41.52 s PASS**, official documentation parity PASS and final Windows aggregate success.
+- **Native FOCUSED [#3079](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38638979794): PASS 1/1**, 39.79 s, at source/tests SHA `b9f7d2d1203cc8105e6baa531f02015970c2a74b` (exactly the same runtime and registered test tree; only this evidence file subsequently changed).
+- **Durable acceptance witness:** [PR #386 conversation comment](https://github.com/MechanicalCave/SimpleSolid2/pull/386#issuecomment-6178979853) records Owner manual PASS tied to the original exact candidate; the PR comment needs no code modification and cannot be mistaken for protected-main merge permission.
+- **Previously recorded manual FAIL and historical RED CI are retained below** as failed earlier iterations. Their WIP/PENDING descriptions are historical snapshots; **they do not override the final evidence section above**.
+- **Gate still separate:** implementation PR #386 stays Draft, unmerged. Owner's manual PASS is not permission for a guarded squash merge to protected main. A final work-only ledger synchronization commit would change the branch commit SHA without changing any executable product/test/docs files; final HEAD validation must be rechecked on that new SHA before technical closure or merge consideration.
+- The approved staged S3A scope remains solely material Edge+END/MID. Off-infinite-line independent Point remains explicitly **Unsupported**, without claiming full P4 or introducing a second Datum tool.
 
 ## MID parity remediation — Windows verification in progress (2026-10-14)
 
@@ -99,14 +110,14 @@ This remediation separates a **scene-local, marker-only MID** from a complete-so
 | F06 Edit source without DatumId/Sketch/Axis changes, one Undo, fail closed | AUTOMATED PASS for real Properties/Edit Reverse and END→MID source replacement #3046/#3050/#3058: same Datum/Sketch/Axis IDs, valid dependency, one Undo/Redo and cold reopen; unsupported Edit repair Owner manual PENDING |
 | F07 dependent Sketch native Save/Close/Reopen on independent provider | AUTOMATED PASS native v17 independent-provider cold reopen with real mouse-authored END→MID Datum, dependent Sketch/Axis IDs and resolved frame/axis #3058; Owner GUI manual PENDING |
 | F08 typed off-infinite-line Point/ambiguous/stale/degenerate/closed Edge refuses mutation | PARTIAL: real Qt/OCCT off-Edge-line Vertex unsupported/no Finish/no mutation/Undo #3058; Kernel Q0/Q1/Q2 stale/ambiguous/unsupported/degenerate provider matrix PASS; real GUI broader negatives and Owner manual PENDING |
-| F09 FOCUSED → FAST → final Ready FULL; internal + PL/EN + official Browser parity | PARTIAL: draft FAST #3057 PASS and Ready FULL #3058 PASS incl official docs; independent FOCUSED job SKIPPED by Windows classifier, final clean ledger HEAD and Owner manual PENDING |
-| Owner real Windows manual clicks, preview, Edit, cold Save/Reopen and Offset regression | **PENDING — no substituted simulation/standing permission counts as manual PASS** |
+| F09 FOCUSED → FAST → final Ready FULL; internal + PL/EN + official Browser parity | FINAL automated evidence: FOCUSED #3079 PASS 1/1 on identical runtime/test tree; exact-candidate FAST #3080 PASS 93/93; exact-candidate Ready FULL #3081 PASS 199/199; DOC-01 parity PASS. An evidence-only successor commit requires its own exact-HEAD check. |
+| Owner real Windows manual clicks, preview, Edit, cold Save/Reopen and Offset regression | **OWNER MANUAL PASS** explicitly reported after retesting candidate `634c8e1a...`. Aggregate Owner PASS accepted; individual per-checkbox observations were not separately re-enumerated in final reply. |
 
 ## Scope and decision stops
 
 Exactly one native Workbench test path was added to S3A: `tests/pm05f_r2_native_workbench_edit_test.cpp`. The active original S3A UI/Viewer paths, registered tests, internal documentation, both PL/EN product Markdown, generated Browser and this ledger remain the entire allowlist. No CMake, CI, Part schema/public API, independent off-line Point or PM-06 changes are preauthorized. Do not merge implementation PR #386, report FINAL S3A PASS, or close S3A before fresh exact clean-head Windows acceptance and a real Owner manual GUI PASS; standing permission to continue work does not impersonate Owner visual witnessing.
 
-## Owner manual Windows checklist (PENDING actual Owner report)
+## Owner manual Windows checklist (aggregate Owner PASS reported; individual confirmations not separately itemized)
 
 - [ ] Build/open the exact final S3A candidate on Windows and create a real box with bounded material Edges.
 - [ ] Select the existing Datum Plane tool via Operations and `DATUMPLANE` / `DATUM PLANE`; confirm Offset remains default.
@@ -117,4 +128,4 @@ Exactly one native Workbench test path was added to S3A: `tests/pm05f_r2_native_
 - [ ] Edit an END/MID Datum to another Edge/END/MID; check stable DatumId and dependent Sketch/Axis behavior; Undo/Redo is one transaction.
 - [ ] Save/Close/Reopen with cold kernel and the same DatumId/dependent Sketch; no runtime token/old Frame persisted.
 - [ ] Verify existing Offset constructor/Tree Properties/Show-Hide and ordinary Feature workflows remain intact.
-- [ ] Report explicit **S3A MANUAL PASS** or reproducible failure with candidate SHA; standing approval to continue work is not a substitute for witnessing these clicks.
+- [x] Report explicit **S3A MANUAL PASS** or reproducible failure with candidate SHA: Owner stated `manual test - PASS` for the tested candidate. Other items remain unchecked solely because no separate per-item attestation was supplied with this final report.
