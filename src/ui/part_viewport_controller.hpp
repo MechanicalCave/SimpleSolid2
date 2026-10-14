@@ -109,6 +109,20 @@ struct BodyTopologySelectionAddress final {
         const BodyTopologySelectionAddress&) = default;
 };
 
+// Hover-first MID selection is a temporary current-stage runtime lease.
+// It NEVER persists a Viewer token, provider ordinal, or screen XYZ.
+struct DatumMidHoverPick final {
+    part::BodyStageRef stage;
+    BodyTopologySelectionAddress edge;
+    [[nodiscard]] bool valid() const noexcept {
+        return stage.valid() && edge.valid() &&
+            edge.kind == viewer::BodyTopologyPresentationKind::edge;
+    }
+    friend bool operator==(
+        const DatumMidHoverPick&,
+        const DatumMidHoverPick&) = default;
+};
+
 enum class SketchSupportInspectionCapability {
     not_applicable,
     supported,
@@ -158,6 +172,14 @@ struct BodyTopologyInspection final {
         return stage.valid() &&
                selection_count > 0U;
     }
+};
+
+// Transient preview certified against the current Viewer scene's
+// same-revision, same-generation OCCT body. Only 'source' may be
+// persisted later by a separately revalidated Session command.
+struct CertifiedEdgeDatumPreview final {
+    part::EdgePointDatumSource source;
+    kernel::Frame3 frame;
 };
 
 struct TopologyKindSummary final {
@@ -316,7 +338,21 @@ public:
     void clearProfileDraftPreview();
 
     void setDatumPlaneDraftPreview(
-        std::optional<kernel::Frame3> frame);
+        std::optional<kernel::Frame3> frame,
+        bool show_anchor_point = false,
+        std::optional<kernel::Point3> selected_edge_mid = std::nullopt,
+        std::optional<BodyTopologySelectionAddress> selected_edge =
+            std::nullopt);
+
+    void setDatumMidPointPickHandler(
+        std::function<void(std::optional<DatumMidHoverPick>)> handler) {
+        datum_mid_point_pick_handler_ = std::move(handler);
+    }
+
+    // Without a selected Edge, show the exact half-length MID marker
+    // on the currently hovered material Edge. No authored source yet.
+    void setDatumPointFirstMidHoverEnabled(
+        bool enabled, bool reverse = false);
 
     [[nodiscard]] bool setSketchPrimaryPointerRouting(
         viewer::PrimaryPointerRouting routing);
@@ -533,6 +569,18 @@ public:
     [[nodiscard]] std::optional<BodyTopologyInspection>
     primaryBodyTopologyInspection() const;
 
+    // Authoring-only lease test for staged Edge/Vertex picks. Runtime
+    // tokens are never durable IDs, and must not survive a scene rebuild.
+    [[nodiscard]] bool bodyTopologySelectionAddressCurrent(
+        const BodyTopologySelectionAddress& address) const noexcept;
+
+    [[nodiscard]] std::optional<CertifiedEdgeDatumPreview>
+    previewCurrentEdgeDatum(
+        const part::BodyStageRef& stage,
+        const BodyTopologySelectionAddress& edge,
+        const std::optional<BodyTopologySelectionAddress>& terminal,
+        bool reverse) const;
+
     [[nodiscard]] std::optional<BodyTopologySummary>
     bodyTopologySummary() const;
 
@@ -671,6 +719,9 @@ private:
         const viewer::BodyTopologyPickQueryResult& query) const noexcept;
 
     void applyBodyTopologyPreselection();
+    void refreshDatumPointFirstMidHover();
+    [[nodiscard]] bool selectedDatumMidEdgeHovered() const;
+    void refreshSelectedDatumMidMarker();
     void clearBodyTopologyPreselection();
 
     [[nodiscard]] std::optional<BodyTopologySelectionAddress>
@@ -716,6 +767,16 @@ private:
         datum_evaluation_cache_;
     std::optional<kernel::Frame3>
         datum_plane_draft_preview_frame_;
+    bool datum_plane_draft_preview_anchor_{};
+    std::optional<kernel::Point3> datum_selected_edge_mid_;
+    std::optional<BodyTopologySelectionAddress> datum_selected_mid_edge_;
+    bool datum_selected_mid_edge_hovered_{false};
+    std::optional<viewer::PresentationToken> datum_mid_anchor_token_;
+    std::function<void(std::optional<DatumMidHoverPick>)>
+        datum_mid_point_pick_handler_;
+    bool datum_point_first_mid_hover_enabled_{false};
+    bool datum_point_first_mid_hover_reverse_{false};
+    std::optional<DatumMidHoverPick> datum_mid_hovered_pick_;
     std::optional<part::BodyStageTopologyCatalog>
         body_topology_catalog_cache_;
     // Runtime-only exact-stage catalogs from the same current PartEvaluation.

@@ -120,11 +120,14 @@ struct ReferenceOwnedLineOverlay final {
         const ReferenceOwnedLineOverlay&) = default;
 };
 
-// Transient, non-pickable Datum Plane draft presentation. Unlike a
-// ReferencePresentation it deliberately has no PresentationToken and therefore
-// cannot become semantic selection or durable CAD identity.
+// Transient Datum Plane draft presentation. Only its optional MID anchor
+// can have a scene-local pick token, consumed by the current tool. Neither
+// the preview plane nor that short-lived token is durable CAD topology.
 struct ReferencePlanePreviewPresentation final {
     Point3 origin{};
+    // Ephemeral marker for the exact source-local MID Point.
+    std::optional<Point3> anchor_point;
+    std::optional<PresentationToken> anchor_pick_token;
     Vec3 u_axis{};
     Vec3 v_axis{};
     double extent{1.0};
@@ -133,6 +136,9 @@ struct ReferencePlanePreviewPresentation final {
 
     [[nodiscard]] bool valid() const noexcept {
         if (!finite(origin) ||
+            (anchor_point && !finite(*anchor_point)) ||
+            (anchor_pick_token &&
+             (!anchor_pick_token->valid() || !anchor_point)) ||
             !finite(u_axis) ||
             !finite(v_axis) ||
             u_axis.squaredLength() <= 1.0e-24 ||
@@ -154,6 +160,21 @@ struct ReferencePlanePreviewPresentation final {
     friend bool operator==(
         const ReferencePlanePreviewPresentation&,
         const ReferencePlanePreviewPresentation&) = default;
+};
+
+// Runtime, pickable MID cue independent of a Datum plane preview.
+// Only the current tool consumes this scene-local token.
+struct ReferenceMidAnchorPresentation final {
+    Point3 point{};
+    PresentationToken token;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(point) && token.valid();
+    }
+
+    friend bool operator==(
+        const ReferenceMidAnchorPresentation&,
+        const ReferenceMidAnchorPresentation&) = default;
 };
 
 struct GridPresentation final {
@@ -185,6 +206,7 @@ struct ReferenceScene final {
     std::vector<ReferencePresentation> references;
     std::vector<ReferenceOwnedLineOverlay> overlays;
     std::optional<ReferencePlanePreviewPresentation> preview;
+    std::optional<ReferenceMidAnchorPresentation> mid_anchor;
     std::optional<GridPresentation> grid;
 
     [[nodiscard]] bool valid() const noexcept {
@@ -192,6 +214,23 @@ struct ReferenceScene final {
             return false;
         }
         if (preview && !preview->valid()) {
+            return false;
+        }
+        if (mid_anchor &&
+            (!mid_anchor->valid() ||
+             (preview && preview->anchor_pick_token &&
+              mid_anchor->token == *preview->anchor_pick_token) ||
+             std::any_of(references.begin(),references.end(),
+                 [this](const auto& item) {
+                     return item.token == mid_anchor->token;
+                 }))) {
+            return false;
+        }
+        if (preview && preview->anchor_pick_token &&
+            std::any_of(references.begin(), references.end(),
+                [this](const ReferencePresentation& item) {
+                    return item.token == *preview->anchor_pick_token;
+                })) {
             return false;
         }
 

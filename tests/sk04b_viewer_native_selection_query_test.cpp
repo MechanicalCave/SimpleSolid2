@@ -1859,5 +1859,204 @@ int main(int argc, char* argv[]) {
     CHECK(widget.setProfilePreviewScene(
         viewer::ProfilePreviewScene{}));
 
+    // S3A: an actual Windows Qt/OCCT pointer must be able to select the
+    // transient exact MID anchor just like an ordinary END point marker.
+    // Hover is merely presentation feedback; only a real click emits
+    // the scene-local gesture token. No semantic Part identity is forged.
+    viewer_qt_occt::QtOcctViewerWidget mid_widget;
+    mid_widget.resize(801, 601);
+    mid_widget.show();
+    QApplication::processEvents();
+    CHECK(mid_widget.setCameraState(camera));
+    const viewer::PresentationToken mid_token{0x7A01U};
+    viewer::ReferenceScene mid_scene;
+    mid_scene.mid_anchor =
+        viewer::ReferenceMidAnchorPresentation{
+            viewer::Point3{0.0,0.0,0.0},mid_token};
+    CHECK(mid_scene.valid());
+    CHECK(!mid_scene.preview.has_value());
+    CHECK(mid_widget.setReferenceScene(mid_scene));
+    int mid_intents = 0;
+    std::optional<viewer::SelectionIntent> mid_intent;
+    mid_widget.setSelectionIntentHandler(
+        [&mid_intents, &mid_intent](
+            const viewer::SelectionIntent& intent) {
+            ++mid_intents;
+            mid_intent = intent;
+        });
+    const QPoint mid_cursor{
+        mid_widget.width() / 2,
+        mid_widget.height() / 2};
+    sendMouseMove(
+        mid_widget,
+        viewer::ViewportPoint2{
+            static_cast<double>(mid_cursor.x()),
+            static_cast<double>(mid_cursor.y())});
+    CHECK(mid_intents == 0);
+    QTest::mouseClick(
+        &mid_widget,Qt::LeftButton,Qt::NoModifier,mid_cursor);
+    CHECK(mid_intents == 1);
+    CHECK(mid_intent.has_value());
+    CHECK(mid_intent->mode ==
+          viewer::SelectionIntentMode::replace);
+    CHECK(mid_intent->token == mid_token);
+    CHECK(mid_widget.setReferenceScene(viewer::ReferenceScene{}));
+    QTest::mouseClick(
+        &mid_widget,Qt::LeftButton,Qt::NoModifier,mid_cursor);
+    CHECK(mid_intents == 2);
+    CHECK(mid_intent->mode ==
+          viewer::SelectionIntentMode::clear);
+
+    // S3A positive native Qt gesture routing: END before Edge and
+    // Edge before END must expose the SAME current Body-scene candidate
+    // stack. This proves pointer event dispatch, not yet Part's semantic
+    // source certification or a cold-open CAD workbench workflow.
+    viewer_qt_occt::QtOcctViewerWidget order_widget;
+    order_widget.resize(801, 601);
+    order_widget.show();
+    QApplication::processEvents();
+    CHECK(order_widget.setCameraState(camera));
+    // Two distinct bounded material Edges share the SAME terminal,
+    // instead of treating an unrelated interior Vertex as an END.
+    // The first gesture can be the corner, then the RIGHT Edge; the
+    // reverse gesture can select the LEFT Edge and then that corner.
+    const viewer::PresentationToken other_edge_token{0x5A22U};
+    auto order_scene = body_scene;
+    order_scene.edges = {
+        {
+            body_edge_token,
+            {{-20.0, 0.0, 0.0}, {0.0, 0.0, 0.0}},
+            true,
+            true},
+        {
+            other_edge_token,
+            {{0.0, 0.0, 0.0}, {20.0, 0.0, 0.0}},
+            true,
+            true},
+    };
+    CHECK(order_scene.valid());
+    CHECK(order_widget.setBodyScene(order_scene));
+    const auto corner_screen =
+        order_widget.projectWorldPoint({0.0, 0.0, 0.0});
+    const auto right_edge_screen =
+        order_widget.projectWorldPoint({8.0, 0.0, 0.0});
+    const auto left_edge_screen =
+        order_widget.projectWorldPoint({-8.0, 0.0, 0.0});
+    CHECK(corner_screen.has_value());
+    CHECK(right_edge_screen.has_value());
+    CHECK(left_edge_screen.has_value());
+    const auto contains_token =
+        [](const viewer::BodyTopologyPickQueryResult& query,
+           viewer::PresentationToken token) {
+            return query.valid() && query.completed &&
+                std::any_of(
+                    query.candidates.begin(),query.candidates.end(),
+                    [token](const auto& candidate) {
+                        return candidate.token == token;
+                    });
+        };
+    CHECK(contains_token(
+        order_widget.queryBodyTopology(*corner_screen),
+        body_vertex_token));
+    CHECK(contains_token(
+        order_widget.queryBodyTopology(*right_edge_screen),
+        other_edge_token));
+    CHECK(contains_token(
+        order_widget.queryBodyTopology(*left_edge_screen),
+        body_edge_token));
+    const auto shared_corner_edges = order_widget.queryBodyTopology(
+        *corner_screen,
+        viewer::BodyTopologyPickFilter{false,true,false});
+    CHECK(contains_token(shared_corner_edges,body_edge_token));
+    CHECK(contains_token(shared_corner_edges,other_edge_token));
+    std::vector<viewer::BodyTopologyPickQueryResult>
+        ordered_picks;
+    order_widget.setBodyTopologySelectionIntentHandler(
+        [&ordered_picks](
+            const viewer::BodyTopologyPickQueryResult& query,
+            viewer::SelectionIntentMode mode) {
+            CHECK(mode == viewer::SelectionIntentMode::replace);
+            CHECK(query.valid() && query.completed);
+            ordered_picks.push_back(query);
+        });
+    const auto click_body_point =
+        [&order_widget](viewer::ViewportPoint2 point) {
+            sendMouseMove(order_widget,point);
+            QTest::mouseClick(
+                &order_widget,Qt::LeftButton,Qt::NoModifier,
+                QPoint{
+                    static_cast<int>(std::lround(point.x)),
+                    static_cast<int>(std::lround(point.y))});
+        };
+    click_body_point(*corner_screen);
+    click_body_point(*right_edge_screen);
+    CHECK(ordered_picks.size() == 2U);
+    CHECK(contains_token(ordered_picks[0],body_vertex_token));
+    CHECK(contains_token(ordered_picks[1],other_edge_token));
+    CHECK(ordered_picks[0].generation == order_scene.generation);
+    CHECK(ordered_picks[1].generation == order_scene.generation);
+    ordered_picks.clear();
+    click_body_point(*left_edge_screen);
+    click_body_point(*corner_screen);
+    CHECK(ordered_picks.size() == 2U);
+    CHECK(contains_token(ordered_picks[0],body_edge_token));
+    CHECK(contains_token(ordered_picks[1],body_vertex_token));
+    CHECK(ordered_picks[0].generation == order_scene.generation);
+    CHECK(ordered_picks[1].generation == order_scene.generation);
+
+    // Actual overlapping native Qt+OCCT MID/Edge gestures: the marker
+    // WITHOUT a Datum plane at the half-length of the RIGHT Edge must
+    // retain its point-like click routing even while the underlying
+    // material Edge is eligible. Both click orders exercise one real
+    // QWidget; this never pretends that screen hits are Part identity.
+    viewer::ReferenceScene overlapping_mid_scene;
+    overlapping_mid_scene.mid_anchor =
+        viewer::ReferenceMidAnchorPresentation{
+            viewer::Point3{10.0,0.0,0.0},mid_token};
+    CHECK(overlapping_mid_scene.valid());
+    CHECK(!overlapping_mid_scene.preview.has_value());
+    CHECK(order_widget.setReferenceScene(overlapping_mid_scene));
+    const auto midpoint_screen =
+        order_widget.projectWorldPoint({10.0, 0.0, 0.0});
+    CHECK(midpoint_screen.has_value());
+    CHECK(contains_token(
+        order_widget.queryBodyTopology(
+            *midpoint_screen,
+            viewer::BodyTopologyPickFilter{
+                false,true,false}),
+        other_edge_token));
+    int overlapping_mid_clicks = 0;
+    order_widget.setSelectionIntentHandler(
+        [&overlapping_mid_clicks, mid_token](
+            const viewer::SelectionIntent& intent) {
+            CHECK(intent.valid());
+            CHECK(intent.token == mid_token);
+            CHECK(intent.mode ==
+                  viewer::SelectionIntentMode::replace);
+            ++overlapping_mid_clicks;
+        });
+    ordered_picks.clear();
+    click_body_point(*right_edge_screen);
+    CHECK(ordered_picks.size() == 1U);
+    CHECK(contains_token(ordered_picks.front(),other_edge_token));
+    CHECK(overlapping_mid_clicks == 0);
+    click_body_point(*midpoint_screen);
+    CHECK(overlapping_mid_clicks == 1);
+    CHECK(ordered_picks.size() == 1U);
+
+    // Point-first MID is a real point click with no implicit edge
+    // selection. Only the second explicit Edge click can author a
+    // source in the higher-level stage-aware Part controller.
+    ordered_picks.clear();
+    overlapping_mid_clicks = 0;
+    click_body_point(*midpoint_screen);
+    CHECK(overlapping_mid_clicks == 1);
+    CHECK(ordered_picks.empty());
+    click_body_point(*right_edge_screen);
+    CHECK(ordered_picks.size() == 1U);
+    CHECK(contains_token(ordered_picks.front(),other_edge_token));
+    CHECK(ordered_picks.front().generation ==
+          order_scene.generation);
+
     return EXIT_SUCCESS;
 }
