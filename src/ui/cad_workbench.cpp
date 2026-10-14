@@ -1847,6 +1847,9 @@ void CadWorkbench::buildUi() {
             tryStageRevolveAxisFromBuiltin(primary);
         });
 
+    viewport_controller_->setDatumMidPointPickHandler([this] {
+        confirmEdgeDatumMidPoint();
+    });
     viewport_controller_->setBodyTopologySelectionChangedHandler(
         [this](std::optional<BodyTopologyInspection> inspection) {
             if (!inspection) {
@@ -6627,6 +6630,7 @@ void CadWorkbench::selectDatumPlaneConstructor(
     edge_datum_pick_stage_.reset();
     edge_datum_create_source_.reset();
     edge_datum_create_preview_.reset();
+    edge_datum_mid_point_confirmed_ = false;
     edge_datum_create_reverse_ = false;
     if (viewport_controller_) {
         viewport_controller_->setBodyTopologyFacePickOnly(false);
@@ -6689,12 +6693,14 @@ void CadWorkbench::stageEdgeDatumFromBodyTopology(
         (edge_datum_vertex_pick_ &&
          edge_datum_vertex_pick_->generation != address->generation);
     if (different_stage || different_scene) {
+        edge_datum_mid_point_confirmed_ = false;
         edge_datum_edge_pick_.reset();
         edge_datum_vertex_pick_.reset();
         edge_datum_create_source_.reset();
         edge_datum_create_preview_.reset();
     }
     edge_datum_pick_stage_ = inspection.stage;
+    edge_datum_mid_point_confirmed_ = false;
     ++edge_datum_create_context_generation_;
     if (address->kind ==
             viewer::BodyTopologyPresentationKind::edge) {
@@ -6704,6 +6710,27 @@ void CadWorkbench::stageEdgeDatumFromBodyTopology(
     }
     refreshDatumPlaneEvaluation();
     notifyCadInputContextChanged();
+}
+
+void CadWorkbench::confirmEdgeDatumMidPoint() {
+    if (!edge_datum_create_revision_ || !document_session_ ||
+        !viewport_controller_ || !edge_datum_edge_pick_ ||
+        edge_datum_vertex_pick_ || !edge_datum_pick_stage_ ||
+        !edge_datum_create_source_ || !edge_datum_create_preview_ ||
+        !std::holds_alternative<part::SelectedMaterialEdgeMid>(
+            *edge_datum_create_source_) ||
+        document_session_->document().revision() !=
+            *edge_datum_create_revision_ ||
+        !viewport_controller_->bodyTopologySelectionAddressCurrent(
+            *edge_datum_edge_pick_)) {
+        return;
+    }
+    edge_datum_mid_point_confirmed_ = true;
+    ++edge_datum_create_context_generation_;
+    syncDatumPlaneUi();
+    notifyCadInputContextChanged();
+    setStatusText(QStringLiteral(
+        "MID Point confirmed on this Edge — Reverse or Finish."));
 }
 
 bool CadWorkbench::startDatumPlaneTool() {
@@ -7094,7 +7121,8 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
         if (viewport_controller_)
             viewport_controller_->setDatumPlaneDraftPreview(
                 edge_datum_create_preview_,
-                !edge_datum_vertex_pick_.has_value());
+                !edge_datum_vertex_pick_.has_value() &&
+                !edge_datum_mid_point_confirmed_);
         syncDatumPlaneUi();
         return;
     }
@@ -7201,8 +7229,11 @@ void CadWorkbench::syncDatumPlaneUi() {
                 ? (end
                     ? QStringLiteral(
                         "Resolved END — selected Edge terminal; Reverse/Finish.")
-                    : QStringLiteral(
-                        "Resolved MID — exact half-Edge length; Reverse/Finish."))
+                    : edge_datum_mid_point_confirmed_
+                        ? QStringLiteral(
+                            "Resolved MID — Point selected; Reverse/Finish.")
+                        : QStringLiteral(
+                            "Click the highlighted MID Point to continue."))
                 : !edge_datum_edge_pick_
                     ? QStringLiteral(
                         "Select material Edge and its Point, in either order.")
@@ -7215,7 +7246,9 @@ void CadWorkbench::syncDatumPlaneUi() {
         if (datum_plane_finish_button_)
             datum_plane_finish_button_->setEnabled(
                 edge_datum_create_source_.has_value() &&
-                edge_datum_create_preview_.has_value());
+                edge_datum_create_preview_.has_value() &&
+                (edge_datum_vertex_pick_.has_value() ||
+                 edge_datum_mid_point_confirmed_));
         if (datum_plane_cancel_button_)
             datum_plane_cancel_button_->setEnabled(true);
         syncing_datum_plane_ui_ = false;
@@ -7452,7 +7485,9 @@ bool CadWorkbench::finishDatumPlane() {
             session->document().revision() !=
                 *edge_datum_create_revision_ ||
             !edge_datum_create_source_ ||
-            !edge_datum_create_preview_) {
+            !edge_datum_create_preview_ ||
+            (!edge_datum_vertex_pick_ &&
+             !edge_datum_mid_point_confirmed_)) {
             setStatusText(QStringLiteral(
                 "Cannot Finish Edge Datum: missing or stale source."));
             return false;
@@ -7587,6 +7622,7 @@ void CadWorkbench::clearDatumPlaneRuntimeContext() {
     edge_datum_vertex_pick_.reset();
     edge_datum_create_source_.reset();
     edge_datum_create_preview_.reset();
+    edge_datum_mid_point_confirmed_ = false;
     edge_datum_create_reverse_ = false;
     ++edge_datum_create_context_generation_;
     edge_datum_edit_id_.reset();

@@ -3660,12 +3660,14 @@ std::optional<viewer::ReferenceScene>
 PartViewportController::buildReferenceScene() {
     datum_bindings_.clear();
     axis_bindings_.clear();
+    datum_mid_anchor_token_.reset();
 
     viewer::ReferenceScene scene;
     const auto fail =
         [this]() -> std::optional<viewer::ReferenceScene> {
             datum_bindings_.clear();
             axis_bindings_.clear();
+            datum_mid_anchor_token_.reset();
             return std::nullopt;
         };
     if (session_ == nullptr) return scene;
@@ -3881,6 +3883,10 @@ PartViewportController::buildReferenceScene() {
             viewerPoint(frame.origin);
         if (datum_plane_draft_preview_anchor_) {
             preview.anchor_point = preview.origin;
+            const auto token = allocatePresentationToken();
+            if (!token) return fail();
+            preview.anchor_pick_token = *token;
+            datum_mid_anchor_token_ = *token;
         }
         preview.u_axis =
             viewerVector(frame.u_axis);
@@ -4750,6 +4756,21 @@ void PartViewportController::onViewportIntent(
     const viewer::SelectionIntent& intent) {
     if (session_ == nullptr ||
         !intent.valid()) {
+        return;
+    }
+
+    // The MID Point marker is a gesture token, not semantic topology.
+    // Consume it without mutating Part/Datum/Body selection state.
+    if (datum_mid_anchor_token_ &&
+        intent.token == *datum_mid_anchor_token_) {
+        if (intent.mode != viewer::SelectionIntentMode::clear &&
+            datum_plane_draft_preview_anchor_ &&
+            datum_plane_draft_preview_frame_ &&
+            body_scene_revision_ &&
+            *body_scene_revision_ == session_->document().revision() &&
+            datum_mid_point_pick_handler_) {
+            datum_mid_point_pick_handler_();
+        }
         return;
     }
 

@@ -120,14 +120,14 @@ struct ReferenceOwnedLineOverlay final {
         const ReferenceOwnedLineOverlay&) = default;
 };
 
-// Transient, non-pickable Datum Plane draft presentation. Unlike a
-// ReferencePresentation it deliberately has no PresentationToken and therefore
-// cannot become semantic selection or durable CAD identity.
+// Transient Datum Plane draft presentation. Only its optional MID anchor
+// can have a scene-local pick token, consumed by the current tool. Neither
+// the preview plane nor that short-lived token is durable CAD topology.
 struct ReferencePlanePreviewPresentation final {
     Point3 origin{};
-    // Ephemeral visual marker for the exact Edge-local MID/END anchor.
-    // It carries no PresentationToken and is not persistent topology.
+    // Ephemeral marker for the exact source-local MID Point.
     std::optional<Point3> anchor_point;
+    std::optional<PresentationToken> anchor_pick_token;
     Vec3 u_axis{};
     Vec3 v_axis{};
     double extent{1.0};
@@ -137,6 +137,8 @@ struct ReferencePlanePreviewPresentation final {
     [[nodiscard]] bool valid() const noexcept {
         if (!finite(origin) ||
             (anchor_point && !finite(*anchor_point)) ||
+            (anchor_pick_token &&
+             (!anchor_pick_token->valid() || !anchor_point)) ||
             !finite(u_axis) ||
             !finite(v_axis) ||
             u_axis.squaredLength() <= 1.0e-24 ||
@@ -196,6 +198,13 @@ struct ReferenceScene final {
             return false;
         }
         if (preview && !preview->valid()) {
+            return false;
+        }
+        if (preview && preview->anchor_pick_token &&
+            std::any_of(references.begin(), references.end(),
+                [this](const ReferencePresentation& item) {
+                    return item.token == *preview->anchor_pick_token;
+                })) {
             return false;
         }
 

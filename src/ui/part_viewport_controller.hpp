@@ -327,6 +327,11 @@ public:
         std::optional<kernel::Frame3> frame,
         bool show_anchor_point = false);
 
+    void setDatumMidPointPickHandler(
+        std::function<void()> handler) {
+        datum_mid_point_pick_handler_ = std::move(handler);
+    }
+
     [[nodiscard]] bool setSketchPrimaryPointerRouting(
         viewer::PrimaryPointerRouting routing);
 
@@ -738,6 +743,8 @@ private:
     std::optional<kernel::Frame3>
         datum_plane_draft_preview_frame_;
     bool datum_plane_draft_preview_anchor_{};
+    std::optional<viewer::PresentationToken> datum_mid_anchor_token_;
+    std::function<void()> datum_mid_point_pick_handler_;
     std::optional<part::BodyStageTopologyCatalog>
         body_topology_catalog_cache_;
     // Runtime-only exact-stage catalogs from the same current PartEvaluation.

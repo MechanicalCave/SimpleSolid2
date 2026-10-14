@@ -97,8 +97,18 @@ int main() {
     CHECK(preview.valid());
     preview.anchor_point = preview.origin;
     CHECK(preview.valid());
+    preview.anchor_pick_token = PresentationToken{17U};
+    CHECK(preview.valid());
     scene.preview = preview;
     CHECK(scene.valid());
+
+    auto invalid_token = scene;
+    invalid_token.preview->anchor_pick_token =
+        PresentationToken{};
+    CHECK(!invalid_token.valid());
+    auto missing_anchor = scene;
+    missing_anchor.preview->anchor_point.reset();
+    CHECK(!missing_anchor.valid());
 
     auto invalid_anchor = scene;
     invalid_anchor.preview->anchor_point =
