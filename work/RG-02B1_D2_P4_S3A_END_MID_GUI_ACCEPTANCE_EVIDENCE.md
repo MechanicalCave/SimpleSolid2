@@ -4,6 +4,11 @@
 **Date:** 2026-10-14.
 **Authority:** `work/ACTIVE.yaml` points to `work/RG-02B1_D2_P4_S3A_DATUM_END_MID_GUI_WORK_CONTRACT_DRAFT.md`, Owner-accepted and independently activated. The bounded native test-path amendment `work/RG-02B1_D2_P4_S3A_NATIVE_WORKBENCH_GESTURES_TEST_AMENDMENT_DRAFT.md` was Owner-accepted in #387 and separately activated in #388. Owner later granted standing permission to continue gates *within this accepted S3A contract*, not new D2/D3 scope or substitute manual witnessing.
 
+## MID parity remediation — Windows verification in progress (2026-10-14)
+
+- Windows Draft FAST [#3065](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38626713961) **PASS 93/93** on source and registered native test SHA `1f2d3b9c1666e5501cc27aa36c0b1e9333c9f1ee`.
+- This work-ledger-only follow-up requests exact-head FOCUSED for `wb01.viewer_reference_presentation`, `sk04b.viewer_native_selection_query` and the full-only native `pm05f_r2.native_workbench_edit` with the newly required repeated END↔MID click matrix. Successful FAST alone does **not** close either Owner manual defect. FULL and another manual Windows acceptance remain OPEN.
+
 ## Owner repeated MID / visibility manual FAIL (2026-10-14)
 
 Owner's second real Windows re-test on `8efee93038c5ff03279cb04963e3b7718da27db6` reported **manual FAIL** despite #3064 FULL 199/199 PASS. MID was pickable only once; choosing END then attempting MID again was ineffective. A screenshot shows an almost invisible tiny cyan cross instead of the required END-equivalent filled-square hover marker. This is not a geometry/Part identity failure. The bounded fix keeps MID available next to a complete END/MID plane, re-certifies its original exact Edge source when switching END -> MID, and excludes transient MID AIS_Point from generic reference recoloring/re-width. It adds two native MID <-> END round trips on one existing Qt/OCCT Workbench session without Part mutation. Tests and new Owner real manual PASS remain mandatory; no release/merge claim.
