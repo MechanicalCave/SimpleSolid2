@@ -5095,6 +5095,13 @@ void CadWorkbench::buildUi() {
                     !edge_datum_edit_reverse_;
                 ++edge_datum_edit_context_generation_;
                 refreshDatumPlaneEvaluation();
+                if (viewport_controller_ &&
+                    !edge_datum_edge_pick_ &&
+                    !edge_datum_vertex_pick_ &&
+                    !edge_datum_mid_first_pick_)
+                    viewport_controller_->
+                        setDatumPointFirstMidHoverEnabled(
+                            true,edge_datum_edit_reverse_);
                 notifyCadInputContextChanged();
                 return;
             }
@@ -6749,19 +6756,26 @@ void CadWorkbench::confirmEdgeDatumMidPoint(
     // The first click can be an exact MID on a hovered Edge. Keep its
     // runtime Edge lease only to certify the user's second explicit
     // Edge click; this is not yet an authored Datum or committable draft.
-    if (edge_datum_create_revision_ &&
+    if ((edge_datum_create_revision_ || edge_datum_edit_id_) &&
         !edge_datum_edge_pick_ &&
         !edge_datum_vertex_pick_ &&
         point_first_pick && point_first_pick->valid() &&
         document_session_ && viewport_controller_ &&
-        document_session_->document().revision() ==
-            *edge_datum_create_revision_ &&
+        (edge_datum_create_revision_
+            ? document_session_->document().revision() ==
+                  *edge_datum_create_revision_
+            : edge_datum_edit_revision_ &&
+              document_session_->document().revision() ==
+                  *edge_datum_edit_revision_) &&
         viewport_controller_->bodyTopologySelectionAddressCurrent(
             point_first_pick->edge)) {
         edge_datum_mid_first_pick_ = *point_first_pick;
         edge_datum_pick_stage_ = point_first_pick->stage;
         edge_datum_mid_point_confirmed_ = true;
-        ++edge_datum_create_context_generation_;
+        if (edge_datum_edit_id_)
+            ++edge_datum_edit_context_generation_;
+        else
+            ++edge_datum_create_context_generation_;
         viewport_controller_->setDatumPointFirstMidHoverEnabled(false);
         refreshDatumPlaneEvaluation();
         notifyCadInputContextChanged();
@@ -6943,10 +6957,14 @@ bool CadWorkbench::startDatumPlaneEdit(
         edge_datum_vertex_pick_.reset();
         edge_datum_create_source_.reset();
         edge_datum_create_preview_.reset();
+        edge_datum_mid_first_pick_.reset();
         edge_datum_mid_point_confirmed_ = false;
         if (viewport_controller_)
             viewport_controller_->setBodyTopologyFacePickOnly(false);
         refreshDatumPlaneEvaluation();
+        if (viewport_controller_)
+            viewport_controller_->setDatumPointFirstMidHoverEnabled(
+                true,edge_datum_edit_reverse_);
         syncActionState();
         notifyCadInputContextChanged();
         setStatusText(QStringLiteral(
@@ -7239,7 +7257,8 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
                             !awaiting_mid_click;
                     }
                 }
-            } else if (!edge_datum_vertex_pick_) {
+            } else if (!edge_datum_vertex_pick_ &&
+                       !edge_datum_mid_first_pick_) {
                 const auto* datum =
                     document_session_->document()
                         .findEdgePointDatumPlane(*edge_datum_edit_id_);
@@ -7389,13 +7408,16 @@ void CadWorkbench::syncDatumPlaneUi() {
                             "Resolved replacement END/MID — Finish keeps DatumId.")
                         : QStringLiteral(
                             "Resolved — Reverse changes orientation, not source.")
-                    : edge_datum_create_preview_ &&
-                      !edge_datum_vertex_pick_ &&
-                      !edge_datum_mid_point_confirmed_
+                    : edge_datum_mid_first_pick_
                         ? QStringLiteral(
-                            "Click the highlighted MID Point to replace source.")
-                        : QStringLiteral(
-                            "Select current Edge and END/MID or repair stale source."));
+                            "MID selected first — choose this Edge to replace source.")
+                        : edge_datum_create_preview_ &&
+                          !edge_datum_vertex_pick_ &&
+                          !edge_datum_mid_point_confirmed_
+                            ? QStringLiteral(
+                                "Click the highlighted MID Point to replace source.")
+                            : QStringLiteral(
+                                "Choose current Edge and END/MID or repair stale source."));
         if (datum_plane_reverse_button_ != nullptr)
             datum_plane_reverse_button_->setEnabled(current != nullptr);
         if (datum_plane_finish_button_ != nullptr)
@@ -13354,6 +13376,12 @@ CadWorkbench::submitCadInput(
             edge_datum_edit_reverse_ = !edge_datum_edit_reverse_;
             ++edge_datum_edit_context_generation_;
             refreshDatumPlaneEvaluation();
+            if (viewport_controller_ &&
+                !edge_datum_edge_pick_ &&
+                !edge_datum_vertex_pick_ &&
+                !edge_datum_mid_first_pick_)
+                viewport_controller_->setDatumPointFirstMidHoverEnabled(
+                    true,edge_datum_edit_reverse_);
             notifyCadInputContextChanged();
             return {true, {}};
         }
