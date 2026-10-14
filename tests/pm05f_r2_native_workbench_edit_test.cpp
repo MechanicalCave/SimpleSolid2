@@ -2625,6 +2625,39 @@ int main(int argc, char* argv[]) {
             native_end_tree_item->setSelected(true);
             QApplication::processEvents();
             CHECK(end_properties_edit->isEnabled());
+            auto* end_properties_constructor =
+                workbench.findChild<QLabel*>(
+                    QStringLiteral("datumPropertyConstructor"));
+            auto* end_properties_source =
+                workbench.findChild<QLabel*>(
+                    QStringLiteral("datumPropertySource"));
+            auto* end_properties_status =
+                workbench.findChild<QLabel*>(
+                    QStringLiteral("datumPropertyStatus"));
+            auto* end_properties_id =
+                workbench.findChild<QLabel*>(
+                    QStringLiteral("datumPropertyIdentity"));
+            CHECK(end_properties_constructor &&
+                  end_properties_source &&
+                  end_properties_status &&
+                  end_properties_id);
+            CHECK(end_properties_constructor->text() ==
+                  QStringLiteral("Edge + Point"));
+            CHECK(end_properties_source->text().contains(
+                  QStringLiteral("Edge END")));
+            CHECK(end_properties_status->text() ==
+                  QStringLiteral("Resolved"));
+            CHECK(end_properties_id->text() ==
+                  QString::fromStdString(created_end_id.serialized()));
+            bool resolved_axis_in_tree = false;
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                        QStringLiteral("Axis on native END Datum")) {
+                    resolved_axis_in_tree = true;
+                    break;
+                }
+            }
+            CHECK(resolved_axis_in_tree);
             const auto original_reverse =
                 s3a_end_session.document()
                     .findEdgePointDatumPlane(created_end_id)
@@ -2696,6 +2729,16 @@ int main(int argc, char* argv[]) {
                 cold_end_planes.find(created_end_id);
             CHECK(cold_end_plane && cold_end_plane->valid() &&
                   cold_end_plane->frame.has_value());
+            const auto cold_axis_frame = part::resolveAxisReference(
+                *reopened_dependent.document,
+                part::AxisReference{part::AuthoredAxisReference{
+                    *dependent_axis.axis_id}},
+                &cold_end_part,&cold_end_planes);
+            CHECK(cold_axis_frame.valid() &&
+                  cold_axis_frame.status ==
+                      part::AxisEvaluationStatus::resolved &&
+                  cold_axis_frame.line &&
+                  cold_axis_frame.line->valid());
             std::cout << "RG02B1_S3A_NATIVE_END_DEPENDENT_EDIT_PASS"
                       << " datum_id_same=1"
                       << " sketch_axis_id_same=1"
