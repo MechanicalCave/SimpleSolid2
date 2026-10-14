@@ -1859,5 +1859,57 @@ int main(int argc, char* argv[]) {
     CHECK(widget.setProfilePreviewScene(
         viewer::ProfilePreviewScene{}));
 
+    // S3A: an actual Windows Qt/OCCT pointer must be able to select the
+    // transient exact MID anchor just like an ordinary END point marker.
+    // Hover is merely presentation feedback; only a real click emits
+    // the scene-local gesture token. No semantic Part identity is forged.
+    viewer_qt_occt::QtOcctViewerWidget mid_widget;
+    mid_widget.resize(801, 601);
+    mid_widget.show();
+    QApplication::processEvents();
+    CHECK(mid_widget.setCameraState(camera));
+    const viewer::PresentationToken mid_token{0x7A01U};
+    viewer::ReferencePlanePreviewPresentation mid_preview;
+    mid_preview.origin = viewer::Point3{0.0, 0.0, 0.0};
+    mid_preview.anchor_point = mid_preview.origin;
+    mid_preview.anchor_pick_token = mid_token;
+    mid_preview.u_axis = viewer::Vec3{1.0, 0.0, 0.0};
+    mid_preview.v_axis = viewer::Vec3{0.0, 1.0, 0.0};
+    mid_preview.extent = 12.0;
+    viewer::ReferenceScene mid_scene;
+    mid_scene.preview = mid_preview;
+    CHECK(mid_scene.valid());
+    CHECK(mid_widget.setReferenceScene(mid_scene));
+    int mid_intents = 0;
+    std::optional<viewer::SelectionIntent> mid_intent;
+    mid_widget.setSelectionIntentHandler(
+        [&mid_intents, &mid_intent](
+            const viewer::SelectionIntent& intent) {
+            ++mid_intents;
+            mid_intent = intent;
+        });
+    const QPoint mid_cursor{
+        mid_widget.width() / 2,
+        mid_widget.height() / 2};
+    sendMouseMove(
+        mid_widget,
+        viewer::ViewportPoint2{
+            static_cast<double>(mid_cursor.x()),
+            static_cast<double>(mid_cursor.y())});
+    CHECK(mid_intents == 0);
+    QTest::mouseClick(
+        &mid_widget,Qt::LeftButton,Qt::NoModifier,mid_cursor);
+    CHECK(mid_intents == 1);
+    CHECK(mid_intent.has_value());
+    CHECK(mid_intent->mode ==
+          viewer::SelectionIntentMode::replace);
+    CHECK(mid_intent->token == mid_token);
+    CHECK(mid_widget.setReferenceScene(viewer::ReferenceScene{}));
+    QTest::mouseClick(
+        &mid_widget,Qt::LeftButton,Qt::NoModifier,mid_cursor);
+    CHECK(mid_intents == 2);
+    CHECK(mid_intent->mode ==
+          viewer::SelectionIntentMode::clear);
+
     return EXIT_SUCCESS;
 }

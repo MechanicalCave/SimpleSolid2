@@ -13508,11 +13508,11 @@ QString CadWorkbench::cadInputPromptText() const {
     }
     if (edge_datum_create_revision_) {
         return QStringLiteral(
-            "Command: EDGE DATUM — MID Edge or END Edge + terminal Vertex · REVERSE · FINISH/CANCEL");
+            "Command: DATUM PLANE — Edge + Point: select Edge and END/MID in either order · REVERSE · FINISH/Enter · CANCEL/Esc");
     }
     if (edge_datum_edit_id_) {
         return QStringLiteral(
-            "Command: EDIT EDGE DATUM — REVERSE · FINISH/CANCEL");
+            "Command: EDIT DATUM PLANE — reselect Edge + END/MID or REVERSE · FINISH/Enter · CANCEL/Esc");
     }
     if (datum_plane_draft_) {
         return datum_plane_draft_->source()
