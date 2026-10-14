@@ -53,6 +53,32 @@ public:
     }
 };
 
+
+class ExactUnavailableKernel final
+    : public kernel::ISolidModelingKernel,
+      public kernel::IExactBoundedEdgeGeometryQuery {
+public:
+    kernel::SolidModelingResult extrude(
+        const kernel::LinearExtrudeInput&,
+        kernel::RuntimeSolidHandle = {}) noexcept override {
+        kernel::SolidModelingResult result;
+        result.status = kernel::SolidModelingStatus::provider_failure;
+        return result;
+    }
+
+    std::optional<kernel::ScopedExactEdge> bindExactEdgeToBody(
+        kernel::RuntimeSolidHandle,
+        kernel::RuntimeEdgeToken) noexcept override {
+        return std::nullopt;
+    }
+
+    kernel::ExactEdge3dResult queryExactBoundedEdge3d(
+        kernel::RuntimeSolidHandle,
+        const kernel::ScopedExactEdge&) noexcept override {
+        return {kernel::ExactEdge3dStatus::edge_unavailable,std::nullopt};
+    }
+};
+
 class TestViewport final
     : public QWidget,
       public viewer::IDocumentViewport {
@@ -842,6 +868,75 @@ int main(int argc, char* argv[]) {
         QStringLiteral("Finish Sketch"));
     finish_sketch->click();
     QApplication::processEvents();
+
+
+    // S3A: even without an eligible geometric source, the Edge + Point
+    // constructor must use the SAME global CAD input context as Offset.
+    // Command-line/Operations Reverse, empty Enter/Finish and Cancel are
+    // shared actions; they must not commit a guessed off-edge Point.
+    {
+        application::DocumentSession edge_session{
+            {},part::PartDocument::create(
+                core::DocumentId::generate())};
+        ExactUnavailableKernel exact_kernel;
+        ui::CadWorkbench edge_workbench{
+            [](QWidget* parent) {
+                auto* created = new TestViewport(parent);
+                return ui::ViewportSurface{created,created};
+            },
+            &exact_kernel};
+        CHECK(edge_workbench.activateDocument(&edge_session,{}));
+        auto* edge_tool = edge_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlaneToolButton"));
+        auto* edge_constructor = edge_workbench.findChild<QComboBox*>(
+            QStringLiteral("datumPlaneConstructorCombo"));
+        auto* edge_reverse = edge_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlaneReverseButton"));
+        auto* edge_finish = edge_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlaneFinishButton"));
+        CHECK(edge_tool && edge_constructor && edge_reverse && edge_finish);
+        const auto before_revision = edge_session.document().revision();
+        const auto before_undo = edge_session.undoDepth();
+
+        auto command = edge_workbench.submitCadInput(
+            "DATUMPLANE",edge_workbench.cadInputContextGeneration());
+        CHECK(command.accepted);
+        edge_constructor->setCurrentIndex(1);
+        QApplication::processEvents();
+        CHECK(edge_constructor->currentIndex() == 1);
+        CHECK(edge_tool->isChecked());
+        CHECK(edge_workbench.acceptsEmptyCadInput());
+        CHECK(edge_workbench.cadDynamicInputFields().empty());
+        CHECK(edge_workbench.cadInputPrompt().find("EDGE DATUM") !=
+              std::string::npos);
+
+        command = edge_workbench.submitCadInput(
+            "REVERSE",edge_workbench.cadInputContextGeneration());
+        CHECK(command.accepted);
+        CHECK(edge_workbench.cadInputPrompt().find("REVERSE") !=
+              std::string::npos);
+        edge_reverse->click();
+        CHECK(!edge_finish->isEnabled());
+
+        // Both direct FINISH and global empty-Enter are the same
+        // fail-closed operation until a certified END/MID is selected.
+        command = edge_workbench.submitCadInput(
+            "FINISH",edge_workbench.cadInputContextGeneration());
+        CHECK(!command.accepted);
+        application::CadInputSession edge_input;
+        edge_input.attachEndpoint(&edge_workbench);
+        CHECK(!edge_input.submit().accepted);
+        CHECK(edge_session.document().revision() == before_revision);
+        CHECK(edge_session.undoDepth() == before_undo);
+        CHECK(edge_session.document().edgePointDatumPlanes().empty());
+
+        command = edge_workbench.submitCadInput(
+            "CANCEL",edge_workbench.cadInputContextGeneration());
+        CHECK(command.accepted);
+        CHECK(!edge_tool->isChecked());
+        CHECK(edge_session.document().revision() == before_revision);
+        CHECK(edge_session.undoDepth() == before_undo);
+    }
 
     std::cout
         << "PM-03C2 / PM-03D2 / PM-03E CadWorkbench Datum Plane parity PASS\n";
