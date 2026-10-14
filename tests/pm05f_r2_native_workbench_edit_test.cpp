@@ -2312,6 +2312,7 @@ int main(int argc, char* argv[]) {
             // Independent second Part/Workbench session: point-first
             // really means a Qt MID anchor click before an explicit
             // selected material Edge (no implicit source commit).
+            qputenv("SS2_S3A_DIAG", "1");
             auto s3a_mid_first = makeBaseSession(kernel);
             CHECK(workbench.activateDocument(&s3a_mid_first, {}));
             QApplication::processEvents();
@@ -2339,6 +2340,14 @@ int main(int argc, char* argv[]) {
             QTest::mouseMove(
                 viewport, viewport->rect().topLeft() + QPoint{3, 3});
             QApplication::processEvents();
+            const auto s3a_edge_probe = viewport->queryBodyTopology(
+                viewer::ViewportPoint2{double(point_edge_pixel->x()),
+                                       double(point_edge_pixel->y())},
+                viewer::BodyTopologyPickFilter{false,true,false});
+            std::cerr << "S3A_DBG_TEST_PROBE valid=" << s3a_edge_probe.valid()
+                      << " complete=" << s3a_edge_probe.completed
+                      << " count=" << s3a_edge_probe.candidates.size()
+                      << "\n";
             QTest::mouseMove(viewport, *point_edge_pixel);
             QApplication::processEvents();
             QTest::mouseMove(viewport, *point_mid_pixel);
@@ -2383,6 +2392,7 @@ int main(int argc, char* argv[]) {
                       << " same_current_edge=1"
                       << " incomplete_finish_refused=1"
                       << " empty_enter_commits=1\n";
+            qunsetenv("SS2_S3A_DIAG");
             CHECK(workbench.activateDocument(&s3a, {}));
             QApplication::processEvents();
 
