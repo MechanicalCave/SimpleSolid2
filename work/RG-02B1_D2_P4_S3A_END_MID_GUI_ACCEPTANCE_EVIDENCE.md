@@ -15,13 +15,17 @@
 - [Windows Ready FULL #3023](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38593421853) on `4f752f31c3019e7f18e9ae95c73a9a278f8fbc47`: **FAIL**, exactly one native Workbench gesture test. Instrumentation proves the native strict quarter-Edge query is valid/completed with one current candidate (`valid=1 completed=1 count=1`), but no valid point-first Body hover reaches the Datum controller; the click selects an unrelated Reference token and no MID anchor is installed (`expected=0`). The existing SK-04B real Viewer suite documents Windows QTest::mouseMove global-cursor nondeterminism.
 - [Windows Ready FULL #3025](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38594540608) on `5f991be949da39c635e9d2de33d0265bc8328a60`: **COMPLETED SUCCESS** — Core **25/25**, Kernel-native **57/57**, Desktop **117/117 = 199/199 PASS**. Existing pre-registered native Workbench suite **PASS (28.76s)**. The repaired test delivers real synchronous QWidget MouseMove events as already used by SK-04B while retaining actual QTest mouseClick; positive integrated **MID→Edge** now certifies real Part, explicitly rejects early FINISH, accepts owner-context empty Enter, creates one Edge-local MID Datum and one Undo. Edge→MID, Undo/Redo and independent-provider cold Save/Reopen also pass. No weakening of assertions, CMake, schema or public API. This SHA still has temporary diagnostic logging; a later clean exact-HEAD FULL is mandatory.
 
+- [Windows Ready FULL #3037](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38596310203) on `de68f7410e10ca7980d4d78e9b5386bf08211a88`: native Windows full job **SUCCESS**, Core **25/25**, Kernel-native **57/57**, Desktop **117/117 = 199/199 PASS**, registered `pm05f_r2.native_workbench_edit` **PASS 30.04 s**. Adds actual Qt/OCCT three-Edge shared-corner Edge→END source and preview/Finish/Undo/Redo, retains two MID directions. Official `.\\ss2.ps1 docs` Browser regeneration and docs verification passed on the canonical internal/PL/EN changes. Still not Owner manual PASS or whole S3A F06 completion.
+- [Windows Draft FAST #3038](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38597181343) on `a7c2bed9afae5e8f6e008c9a77e25c29d8d750a5`: **COMPLETED SUCCESS** after adding dependent Sketch/Axis and real Properties Edit/Undo/cold reopen positive native test. That new native block is FULL-only and was NOT exercised by FAST.
+- [Windows Ready FULL #3039](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38597386858) on the same `a7c2bed9afae5e8f6e008c9a77e25c29d8d750a5`: **PENDING as of this ledger update**; do not infer its result from FAST.
+
 ## S3A acceptance gates (all claims must be firsthand exact-head)
 
 | Gate | Evidence/status |
 | --- | --- |
-| F01 END gesture, both terminal roles, chosen Edge identity on shared corner | PENDING integrated native Workbench proof |
-| F02 exact MID marker, default frame, double Reverse | PARTIAL: Edge→MID native #3017; both orders and double Reverse PENDING |
-| F03 real Edge→END/MID and Point→Edge both orders / shared corner | PARTIAL: Viewer-level #3008; integrated MID→Edge currently FAIL |
+| F01 END gesture, both terminal roles, chosen Edge identity on shared corner | PARTIAL: real Edge→END on 3-Edge corner #3037 PASS; opposite order and both terminal roles still PENDING |
+| F02 exact MID marker, default frame, double Reverse | PARTIAL: actual MID both orders #3025/#3037 PASS; double Reverse restoration PENDING |
+| F03 real Edge→END/MID and Point→Edge both orders / shared corner | PARTIAL: actual MID both orders and shared-corner Edge→END #3037 PASS; END point-first PENDING |
 | F04 one tool, Operations, selection-first, Command Line Enter/ESC/Reverse/focus | PARTIAL: #3011 earlier native FULL and PM03C2 CLI; final complete focus PENDING |
 | F05 provider-certified Qt Workbench positive preview/Finish/Cancel/Undo | PARTIAL: native Edge→MID #3017; broader positive PENDING |
 | F06 Edit source without DatumId/Sketch/Axis changes, one Undo, fail closed | PENDING integrated test |
