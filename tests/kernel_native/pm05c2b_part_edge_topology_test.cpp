@@ -1975,6 +1975,87 @@ void verifyS1SelectedSignedFrames(
         CHECK(s1Near3(replay.frame->normal,initial.frame->normal));
         CHECK(s1Near3(replay.frame->u_axis,initial.frame->u_axis));
     }
+    // P4-S2 implementation lane: the authored Datum value preserves the
+    // independent semantic source and orientation intent, and evaluates
+    // via the certified S1 path (no saved/native Frame).
+    {
+        auto cursor = document.datumIdCursor();
+        const auto first_id = cursor.allocate();
+        const auto second_id = cursor.allocate();
+        CHECK(first_id && second_id && *first_id != *second_id);
+
+        const auto end_initial = part::initializeSelectedEdgeEndFrame(
+            document, ends.front(), evaluation, provider);
+        checkS1Frame(end_initial);
+        CHECK(end_initial.initialized_intent);
+        part::EdgePointDatumPlane end_datum{
+            *first_id, ends.front(), *end_initial.initialized_intent, true};
+        CHECK(part::edgePointDatumPlaneStructurallyValid(end_datum));
+        const auto end_frame = part::resolveEdgePointDatumFrame(
+            document, end_datum, evaluation, provider);
+        checkS1Frame(end_frame);
+        CHECK(s1Near3(end_frame.frame->origin,
+                      end_initial.frame->origin));
+        CHECK(s1Near3(end_frame.frame->u_axis,
+                      end_initial.frame->u_axis));
+        CHECK(s1Near3(end_frame.frame->normal,
+                      end_initial.frame->normal));
+
+        const auto mid_initial = part::initializeSelectedEdgeMidFrame(
+            document, mids.front(), evaluation, provider);
+        checkS1Frame(mid_initial);
+        CHECK(mid_initial.initialized_intent);
+        part::EdgePointDatumPlane mid_datum{
+            *second_id, mids.front(), *mid_initial.initialized_intent, false};
+        CHECK(part::edgePointDatumPlaneStructurallyValid(mid_datum));
+        const auto mid_frame = part::resolveEdgePointDatumFrame(
+            document, mid_datum, evaluation, provider);
+        checkS1Frame(mid_frame);
+        CHECK(s1Near3(mid_frame.frame->origin,
+                      mid_initial.frame->origin));
+        CHECK(s1Near3(mid_frame.frame->normal,
+                      mid_initial.frame->normal));
+
+        // Reverse is an authored choice; it never mutates source or U.
+        mid_datum.orientation.reverse = true;
+        const auto reversed_frame = part::resolveEdgePointDatumFrame(
+            document, mid_datum, evaluation, provider);
+        checkS1Frame(reversed_frame);
+        CHECK(s1Near3(reversed_frame.frame->origin,
+                      mid_frame.frame->origin));
+        CHECK(s1Near3(reversed_frame.frame->u_axis,
+                      mid_frame.frame->u_axis));
+        CHECK(s1Near3(reversed_frame.frame->normal,{
+            -mid_frame.frame->normal.x,
+            -mid_frame.frame->normal.y,
+            -mid_frame.frame->normal.z}));
+        mid_datum.orientation.reverse = false;
+        const auto restored_frame = part::resolveEdgePointDatumFrame(
+            document, mid_datum, evaluation, provider);
+        checkS1Frame(restored_frame);
+        CHECK(s1Near3(restored_frame.frame->normal,
+                      mid_frame.frame->normal));
+
+        auto malformed = mid_datum;
+        malformed.orientation.u_seed_world = {};
+        CHECK(!part::edgePointDatumPlaneStructurallyValid(malformed));
+        const auto rejected = part::resolveEdgePointDatumFrame(
+            document, malformed, evaluation, provider);
+        CHECK(rejected.status ==
+              part::SelectedEdgeFrameStatus::invalid_orientation_intent);
+        CHECK(!rejected.frame && !rejected.initialized_intent);
+        CHECK(!rejected.native_error);
+
+        part::EdgePointDatumPlane missing_id = end_datum;
+        missing_id.id = {};
+        CHECK(!part::edgePointDatumPlaneStructurallyValid(missing_id));
+        const auto invalid = part::resolveEdgePointDatumFrame(
+            document, missing_id, evaluation, provider);
+        CHECK(invalid.status ==
+              part::SelectedEdgeFrameStatus::invalid_context);
+        CHECK(!invalid.frame);
+    }
+
     const auto& sample = mids.front();
     const auto initial = part::initializeSelectedEdgeMidFrame(
         document,sample,evaluation,provider);
