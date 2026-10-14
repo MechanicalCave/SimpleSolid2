@@ -405,7 +405,7 @@ int main() {
     const auto future_bytes =
         persistence::buildNativeDocumentContainer(
             persistence::NativeDocumentDescriptor{
-                "part",document.documentId(),17},future_text);
+                "part",std::string{document.documentId().value()},17},future_text);
     CHECK(future_bytes.ok());
     const auto future_path = temp.path / "UnknownV17Datum.ss2part";
     writeBytes(future_path,*future_bytes.bytes);
