@@ -1522,6 +1522,8 @@ void PartViewportController::setDatumPlaneDraftPreview(
     datum_plane_draft_preview_frame_ = std::move(frame);
     datum_plane_draft_preview_anchor_ = anchor;
 
+    // The MID acquisition frame produces only a marker. A finished source
+    // produces only the plane. Neither intermediate state authors a Datum.
     // Datum draft preview changes reference geometry only. Rebuilding
     // the OCCT Body here would reassign the Viewer generation and break
     // the two-stage END selection (Edge then terminal, or the reverse).
@@ -3894,37 +3896,31 @@ PartViewportController::buildReferenceScene() {
     if (datum_plane_draft_preview_frame_) {
         const auto& frame =
             *datum_plane_draft_preview_frame_;
-        viewer::ReferencePlanePreviewPresentation
-            preview;
-        preview.origin =
-            viewerPoint(frame.origin);
         if (datum_plane_draft_preview_anchor_) {
-            preview.anchor_point = preview.origin;
+            // An Edge-only/hovered MID is a pick target, not a plane.
+            // No Datum preview exists until END/MID is confirmed.
             const auto token = allocatePresentationToken();
             if (!token) return fail();
-            preview.anchor_pick_token = *token;
+            scene.mid_anchor =
+                viewer::ReferenceMidAnchorPresentation{
+                    viewerPoint(frame.origin),*token};
             datum_mid_anchor_token_ = *token;
+        } else {
+            viewer::ReferencePlanePreviewPresentation preview;
+            preview.origin = viewerPoint(frame.origin);
+            preview.u_axis = viewerVector(frame.u_axis);
+            preview.v_axis = viewerVector(frame.v_axis);
+            preview.extent = planeExtent;
+            if (body_scene_cache_ &&
+                body_scene_cache_->purpose ==
+                    viewer::BodyScenePurpose::current_body &&
+                !body_scene_cache_->empty()) {
+                preview.intersection_segments =
+                    datumBodyIntersection(*body_scene_cache_,frame);
+            }
+            if (!preview.valid()) return fail();
+            scene.preview = std::move(preview);
         }
-        preview.u_axis =
-            viewerVector(frame.u_axis);
-        preview.v_axis =
-            viewerVector(frame.v_axis);
-        preview.extent = planeExtent;
-        if (body_scene_cache_ &&
-            body_scene_cache_->purpose ==
-                viewer::BodyScenePurpose::
-                    current_body &&
-            !body_scene_cache_->empty()) {
-            preview.intersection_segments =
-                datumBodyIntersection(
-                    *body_scene_cache_,
-                    frame);
-        }
-        if (!preview.valid()) {
-            return fail();
-        }
-        scene.preview =
-            std::move(preview);
     }
 
     if (!scene.valid()) {

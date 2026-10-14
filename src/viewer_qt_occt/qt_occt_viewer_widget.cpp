@@ -166,6 +166,7 @@ void logProviderFailure(
             right.references.size() ||
         left.overlays != right.overlays ||
         left.preview != right.preview ||
+        left.mid_anchor != right.mid_anchor ||
         left.grid.has_value() !=
             right.grid.has_value()) {
         return false;
@@ -1786,6 +1787,37 @@ public:
                     reference_preview_objects_.push_back(
                         line);
                 }
+            }
+
+            if (scene.mid_anchor) {
+                // Exact current MID acquisition is a standalone point,
+                // without a premature Datum plane. Match the existing
+                // 9px DPR-normalized cyan filled-square END aspect.
+                const auto& mid = *scene.mid_anchor;
+                Handle(Geom_CartesianPoint) at =
+                    new Geom_CartesianPoint(toPoint(mid.point));
+                Handle(AIS_Point) marker = new AIS_Point(at);
+                if (marker.IsNull()) {
+                    clearReferenceScene();
+                    return false;
+                }
+                double dpr = owner_.devicePixelRatioF();
+                if (!std::isfinite(dpr) || dpr <= 0.0)
+                    dpr = 1.0;
+                const int marker_size =
+                    gripMarkerPixelSize(9.0,dpr);
+                marker->Attributes()->SetPointAspect(
+                    new Prs3d_PointAspect(
+                        Quantity_Color{
+                            0.38,0.78,1.0,Quantity_TOC_RGB},
+                        marker_size,marker_size,
+                        squareMarkerBitmap(marker_size,true)));
+                context_->Display(marker,false);
+                context_->SetColor(marker,Quantity_Color{
+                    0.38,0.78,1.0,Quantity_TOC_RGB},false);
+                reference_objects_.push_back(ReferenceObject{
+                    mid.token,viewer::ReferencePresentationKind::point,
+                    marker,false,true});
             }
 
             applySelectionStyles();
@@ -5636,6 +5668,7 @@ public:
         reference_scene_.references.clear();
         reference_scene_.overlays.clear();
         reference_scene_.preview.reset();
+        reference_scene_.mid_anchor.reset();
         reference_scene_.grid.reset();
     }
 

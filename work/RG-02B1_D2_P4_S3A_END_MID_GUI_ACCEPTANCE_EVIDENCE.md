@@ -4,6 +4,12 @@
 **Date:** 2026-10-14.
 **Authority:** `work/ACTIVE.yaml` points to `work/RG-02B1_D2_P4_S3A_DATUM_END_MID_GUI_WORK_CONTRACT_DRAFT.md`, Owner-accepted and independently activated. The bounded native test-path amendment `work/RG-02B1_D2_P4_S3A_NATIVE_WORKBENCH_GESTURES_TEST_AMENDMENT_DRAFT.md` was Owner-accepted in #387 and separately activated in #388. Owner later granted standing permission to continue gates *within this accepted S3A contract*, not new D2/D3 scope or substitute manual witnessing.
 
+## Owner Windows manual FAIL and scoped S3A remediation (2026-10-14)
+
+Owner manually tested candidate `63a1391f4f6935c0eb9b6c264310813a2816977b` after exact-head FAST #3060 PASS 93/93 and Ready FULL #3061 PASS 199/199. **Manual FAIL:** Edge-only displayed a premature MID Datum plane while Finish correctly refused to commit; real MID hover/click could not be found, whereas both Edge END terminal selections and Finish worked. Owner subsequently corrected the Edit report: Datum re-source/Edit works, and only Operations labeling suggested Reverse-only. Owner explicitly authorized bounded continuation (`akceptuje - kontynuuj`) to fix MID hover/picking and Edge-only presentation without architecture, Part v17, Kernel or persistence changes. The full-only native Workbench tests at #3061 clicked known projected MID pixels, which did not independently prove a visually discoverable marker.
+
+This remediation separates a **scene-local, marker-only MID** from a complete-source Datum plane preview. Both use current-stage Part-certified geometry; the token remains transient. Native Viewer regression now demands clicks with **no plane in the scene** and Core presentation regression checks isolated-marker validity and token conflict. The changed code still requires fresh Windows tests and repeat Owner manual acceptance; do not infer any new Owner PASS from prior green CI.
+
 ## Exact historical CI observations — NOT an interchangeable final matrix
 
 - #387 test-only D2 governance: exact-head Windows Ready #3012 SUCCESS on `707b7a84880dfb4f9ea6e105b27955a90e9de192`. Guarded squash main `2a64c584789c0151b6c7181217cd622a092ed7bb`.

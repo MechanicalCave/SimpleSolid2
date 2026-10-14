@@ -1869,16 +1869,12 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(mid_widget.setCameraState(camera));
     const viewer::PresentationToken mid_token{0x7A01U};
-    viewer::ReferencePlanePreviewPresentation mid_preview;
-    mid_preview.origin = viewer::Point3{0.0, 0.0, 0.0};
-    mid_preview.anchor_point = mid_preview.origin;
-    mid_preview.anchor_pick_token = mid_token;
-    mid_preview.u_axis = viewer::Vec3{1.0, 0.0, 0.0};
-    mid_preview.v_axis = viewer::Vec3{0.0, 1.0, 0.0};
-    mid_preview.extent = 12.0;
     viewer::ReferenceScene mid_scene;
-    mid_scene.preview = mid_preview;
+    mid_scene.mid_anchor =
+        viewer::ReferenceMidAnchorPresentation{
+            viewer::Point3{0.0,0.0,0.0},mid_token};
     CHECK(mid_scene.valid());
+    CHECK(!mid_scene.preview.has_value());
     CHECK(mid_widget.setReferenceScene(mid_scene));
     int mid_intents = 0;
     std::optional<viewer::SelectionIntent> mid_intent;
@@ -2008,18 +2004,17 @@ int main(int argc, char* argv[]) {
     CHECK(ordered_picks[0].generation == order_scene.generation);
     CHECK(ordered_picks[1].generation == order_scene.generation);
 
-    // Actual overlapping native Qt+OCCT MID/Edge gestures: the preview
-    // marker at the exact half-length of the RIGHT bounded Edge must
+    // Actual overlapping native Qt+OCCT MID/Edge gestures: the marker
+    // WITHOUT a Datum plane at the half-length of the RIGHT Edge must
     // retain its point-like click routing even while the underlying
     // material Edge is eligible. Both click orders exercise one real
     // QWidget; this never pretends that screen hits are Part identity.
-    auto overlapping_mid = mid_preview;
-    overlapping_mid.origin =
-        viewer::Point3{10.0, 0.0, 0.0};
-    overlapping_mid.anchor_point = overlapping_mid.origin;
     viewer::ReferenceScene overlapping_mid_scene;
-    overlapping_mid_scene.preview = overlapping_mid;
+    overlapping_mid_scene.mid_anchor =
+        viewer::ReferenceMidAnchorPresentation{
+            viewer::Point3{10.0,0.0,0.0},mid_token};
     CHECK(overlapping_mid_scene.valid());
+    CHECK(!overlapping_mid_scene.preview.has_value());
     CHECK(order_widget.setReferenceScene(overlapping_mid_scene));
     const auto midpoint_screen =
         order_widget.projectWorldPoint({10.0, 0.0, 0.0});

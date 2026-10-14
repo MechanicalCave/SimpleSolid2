@@ -162,6 +162,21 @@ struct ReferencePlanePreviewPresentation final {
         const ReferencePlanePreviewPresentation&) = default;
 };
 
+// Runtime, pickable MID cue independent of a Datum plane preview.
+// Only the current tool consumes this scene-local token.
+struct ReferenceMidAnchorPresentation final {
+    Point3 point{};
+    PresentationToken token;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(point) && token.valid();
+    }
+
+    friend bool operator==(
+        const ReferenceMidAnchorPresentation&,
+        const ReferenceMidAnchorPresentation&) = default;
+};
+
 struct GridPresentation final {
     Point3 origin{};
     Vec3 u_axis{1.0, 0.0, 0.0};
@@ -191,6 +206,7 @@ struct ReferenceScene final {
     std::vector<ReferencePresentation> references;
     std::vector<ReferenceOwnedLineOverlay> overlays;
     std::optional<ReferencePlanePreviewPresentation> preview;
+    std::optional<ReferenceMidAnchorPresentation> mid_anchor;
     std::optional<GridPresentation> grid;
 
     [[nodiscard]] bool valid() const noexcept {
@@ -198,6 +214,16 @@ struct ReferenceScene final {
             return false;
         }
         if (preview && !preview->valid()) {
+            return false;
+        }
+        if (mid_anchor &&
+            (!mid_anchor->valid() ||
+             (preview && preview->anchor_pick_token &&
+              mid_anchor->token == *preview->anchor_pick_token) ||
+             std::any_of(references.begin(),references.end(),
+                 [this](const auto& item) {
+                     return item.token == mid_anchor->token;
+                 }))) {
             return false;
         }
         if (preview && preview->anchor_pick_token &&
