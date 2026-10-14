@@ -1518,6 +1518,27 @@ void PartViewportController::setDatumPlaneDraftPreview(
     }
     datum_plane_draft_preview_frame_ =
         std::move(frame);
+
+    // Datum draft preview changes reference geometry only. Rebuilding
+    // the OCCT Body here would reassign the Viewer generation and break
+    // the two-stage END selection (Edge then terminal, or the reverse).
+    // Preserve the current revision/generation lease when it is valid;
+    // fall back to full rebuild only for stale/unavailable scene state.
+    if (viewport_ && session_ &&
+        body_scene_revision_ &&
+        *body_scene_revision_ == session_->document().revision() &&
+        body_scene_cache_ &&
+        part_evaluation_cache_ &&
+        part_evaluation_cache_->source_revision ==
+            session_->document().revision() &&
+        datum_evaluation_cache_ &&
+        datum_evaluation_cache_->source_revision ==
+            session_->document().revision()) {
+        const auto references = buildReferenceScene();
+        if (references && viewport_->setReferenceScene(*references)) {
+            return;
+        }
+    }
     refreshPresentation();
 }
 

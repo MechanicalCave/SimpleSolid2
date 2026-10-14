@@ -107,7 +107,9 @@ public:
 
     bool setBodyScene(
         const viewer::BodyScene& scene) override {
-        return scene.valid();
+        if (!scene.valid()) return false;
+        ++body_scene_set_count;
+        return true;
     }
 
     bool setSolidScene(
@@ -185,6 +187,7 @@ public:
 
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene;
+    std::size_t body_scene_set_count{};
     viewer::SelectionIntentHandler selection_handler;
     viewer::SpatialPointerHandler spatial_handler;
 };
@@ -349,7 +352,13 @@ int main(int argc, char* argv[]) {
     CHECK(session.document().datumPlanes().empty());
     CHECK(finish->isEnabled());
 
+    // Updating a Datum preview must not recreate the Body scene:
+    // otherwise the first of two END selections would be invalidated.
+    const auto body_sets_before_preview =
+        viewport->body_scene_set_count;
     reverse->click();
+    CHECK(viewport->body_scene_set_count ==
+          body_sets_before_preview);
     CHECK(
         offset->text().contains(
             QStringLiteral("-10")));
