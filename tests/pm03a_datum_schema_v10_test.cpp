@@ -107,6 +107,9 @@ std::string schema9FromCurrent(
     authored.erase("datum_planes");
     authored.erase("next_axis_id");
     authored.erase("axes");
+    CHECK(authored.contains("edge_point_datum_planes"));
+    CHECK(authored.at("edge_point_datum_planes").empty());
+    authored.erase("edge_point_datum_planes");
     // A historical schema fixture cannot carry v15 projected bindings.
     // Refuse to downgrade a genuinely linked Sketch and never relax the
     // production legacy parser to accommodate current-schema extensions.
@@ -131,12 +134,29 @@ std::string schema9FromCurrent(
     return *built.bytes;
 }
 
+std::string schema16FromCurrent(
+    const persistence::NativeDocumentPackage& package) {
+    auto authored = nlohmann::json::parse(package.authored_json);
+    CHECK(authored.contains("edge_point_datum_planes"));
+    CHECK(authored.at("edge_point_datum_planes").is_array());
+    // Never downgrade a v17 file with real Edge-local authored intent.
+    CHECK(authored.at("edge_point_datum_planes").empty());
+    authored.erase("edge_point_datum_planes");
+    auto text = authored.dump(2);
+    text.push_back('\n');
+    const auto built = persistence::buildNativeDocumentContainer(
+        persistence::NativeDocumentDescriptor{
+            "part",package.descriptor.document_id,16},text);
+    CHECK(built.ok());
+    return *built.bytes;
+}
+
 } // namespace
 
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        16);
+        17);
 
     // DatumId follows the existing Part-local canonical positive-decimal and
     // high-water allocation rules.
@@ -313,7 +333,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 16);
+            .domain_schema_version == 17);
 
     const auto authored =
         nlohmann::json::parse(
@@ -337,6 +357,9 @@ int main() {
             .get<std::string>() ==
         "datum_plane");
 
+    CHECK(authored.at("edge_point_datum_planes").is_array());
+    CHECK(authored.at("edge_point_datum_planes").empty());
+
     const auto reloaded =
         store.load(current_path);
     CHECK(reloaded.ok());
@@ -347,9 +370,50 @@ int main() {
         reloaded.document->datumIdCursor() ==
         document.datumIdCursor());
 
+    // An authentic Offset-only v16 native package remains readable.
+    // Guarded next save upgrades it to v17 without renumbering DatumIds.
+    const auto legacy_v16_path = temp.path / "LegacyOffsetV16.ss2part";
+    writeBytes(legacy_v16_path,schema16FromCurrent(*package.package));
+    const auto legacy_v16 = store.load(legacy_v16_path);
+    CHECK(legacy_v16.ok());
+    CHECK(legacy_v16.document->datumPlanes() ==
+          document.datumPlanes());
+    CHECK(legacy_v16.document->edgePointDatumPlanes().empty());
+    CHECK(legacy_v16.document->datumIdCursor() ==
+          document.datumIdCursor());
+    CHECK(store.save(legacy_v16_path,*legacy_v16.document,
+                     *legacy_v16.checkpoint).ok());
+    const auto upgraded =
+        persistence::readNativeDocumentContainer(legacy_v16_path);
+    CHECK(upgraded.ok());
+    CHECK(upgraded.package->descriptor.domain_schema_version == 17);
+    const auto upgraded_json =
+        nlohmann::json::parse(upgraded.package->authored_json);
+    CHECK(upgraded_json.at("datum_planes") ==
+          authored.at("datum_planes"));
+    CHECK(upgraded_json.at("edge_point_datum_planes").empty());
+
+    // Unknown future v17 Datum types must be rejected, not skipped.
+    auto future_json = authored;
+    future_json["edge_point_datum_planes"].push_back({
+        {"id","1"},{"kind","future_edge_point_plane"},
+        {"source",nlohmann::json::object()},
+        {"orientation",nlohmann::json::object()},
+        {"visible",true}});
+    auto future_text = future_json.dump(2);
+    future_text.push_back('\n');
+    const auto future_bytes =
+        persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",document.documentId(),17},future_text);
+    CHECK(future_bytes.ok());
+    const auto future_path = temp.path / "UnknownV17Datum.ss2part";
+    writeBytes(future_path,*future_bytes.bytes);
+    CHECK(!store.load(future_path).ok());
+
     // Exact v9 -> v10 migration: v9 has no Datum fields. Loading yields an
     // empty Datum collection/high-water cursor while preserving existing
-    // document/body/sketch identity, then the next save emits schema v10.
+    // document/body/sketch identity, then the next save emits current v17.
     const auto legacy_source_path =
         temp.path / "LegacySourceCurrent.ss2part";
     auto legacy_source =
@@ -430,7 +494,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 16);
+            .domain_schema_version == 17);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);
