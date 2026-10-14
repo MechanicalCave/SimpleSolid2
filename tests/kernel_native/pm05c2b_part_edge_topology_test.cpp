@@ -1925,6 +1925,55 @@ void verifyS1SelectedSignedFrames(
     checkS1Frame(same);
     CHECK(s1Near3(same.frame->normal,initial.frame->normal));
 
+    // S1-F05: real Part-certified MID with test-controlled unit
+    // tangent ±representatives and deterministic dominant-axis ties.
+    {
+        const double half_diagonal = std::sqrt(0.5);
+        S1OverrideMidTangentQuery tie{provider,
+            {half_diagonal,half_diagonal,0.0}};
+        S1OverrideMidTangentQuery opposite{provider,
+            {-half_diagonal,-half_diagonal,0.0}};
+        const auto a = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,tie);
+        const auto b = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,opposite);
+        checkS1Frame(a);
+        checkS1Frame(b);
+        CHECK(s1Near3(a.frame->normal,b.frame->normal));
+        CHECK(s1Near3(a.frame->u_axis,b.frame->u_axis));
+        CHECK(a.frame->normal.x > 0.0);
+        CHECK(a.frame->normal.y > 0.0);
+    }
+    // +X first-seed is parallel to an X normal: fallback must use +Y,
+    // independent of the provider's chosen unoriented sign.
+    {
+        S1OverrideMidTangentQuery x{provider,{1.0,0.0,0.0}};
+        S1OverrideMidTangentQuery minus_x{provider,{-1.0,0.0,0.0}};
+        const auto a = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,x);
+        const auto b = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,minus_x);
+        checkS1Frame(a);
+        checkS1Frame(b);
+        CHECK(s1Near3(a.frame->normal,{1.0,0.0,0.0}));
+        CHECK(s1Near3(b.frame->normal,a.frame->normal));
+        CHECK(s1Near3(a.frame->u_axis,{0.0,1.0,0.0}));
+    }
+    // Floating-point neighborhoods of the 1/16 projected seed
+    // threshold: above accepts +X, below must select next +Y.
+    // Exactly 1/16 also resolves deterministically, never silently
+    // substitutes a camera or OCCT-derived seed.
+    for (const double y : {0.249999,0.25,0.250001}) {
+        const double x = std::sqrt(1.0-y*y);
+        S1OverrideMidTangentQuery decorated{provider,{x,y,0.0}};
+        const auto result = part::initializeSelectedEdgeMidFrame(
+            document,sample,evaluation,decorated);
+        checkS1Frame(result);
+        CHECK(result.initialized_intent);
+        if (y < 0.25) CHECK(result.frame->u_axis.x < 0.0);
+        if (y > 0.25) CHECK(result.frame->u_axis.x > 0.0);
+    }
+
     // Controlled real-Body source with exact test-only orientation
     // perturbation: 29 degrees accepted; 31/89/90 degrees reviewed.
     const auto angleProbe = [&](double degrees) {
@@ -1936,6 +1985,17 @@ void verifyS1SelectedSignedFrames(
             document,sample,intent,evaluation,decorated);
     };
     checkS1Frame(angleProbe(29.0));
+    // S1-F06 exact 30 degree boundary: compare against the exact
+    // contracted sqrt(3)/2 threshold, not a rounded degree label.
+    {
+        const double c = std::sqrt(3.0)/2.0;
+        S1OverrideMidTangentQuery boundary{provider,{
+            c*n.x+0.5*u.x,c*n.y+0.5*u.y,c*n.z+0.5*u.z}};
+        const auto admitted = part::resolveSelectedEdgeMidFrame(
+            document,sample,intent,evaluation,boundary);
+        checkS1Frame(admitted);
+        CHECK(!admitted.initialized_intent);
+    }
     for (const double angle : {31.0,89.0,90.0,91.0}) {
         const auto review = angleProbe(angle);
         CHECK(review.status ==
@@ -1960,6 +2020,16 @@ void verifyS1SelectedSignedFrames(
     badIntent(malformed);
     malformed = intent;
     malformed.u_seed_world = malformed.signed_normal_reference_world;
+    badIntent(malformed);
+    malformed = intent;
+    malformed.u_seed_world = {
+        intent.u_seed_world.x*1.001,
+        intent.u_seed_world.y*1.001,
+        intent.u_seed_world.z*1.001};
+    badIntent(malformed);
+    malformed = intent;
+    malformed.signed_normal_reference_world.y =
+        std::numeric_limits<double>::infinity();
     badIntent(malformed);
 
     auto reversed = intent;
