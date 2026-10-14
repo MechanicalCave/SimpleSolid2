@@ -2991,6 +2991,12 @@ int main(int argc, char* argv[]) {
                 viewport,Qt::LeftButton,
                 Qt::NoModifier,*first_corner);
             QApplication::processEvents();
+            std::cerr << "S3A_NATIVE_END_FIRST_AFTER_CORNER label="
+                      << datum_result->text().toStdString()
+                      << " finish=" << datum_finish->isEnabled()
+                      << " vertex_candidates="
+                      << first_vertex_query.candidates.size()
+                      << "\n";
             CHECK(!datum_finish->isEnabled());
             CHECK(s3a_end_first.document().state() ==
                   point_first_state);
@@ -3001,6 +3007,12 @@ int main(int argc, char* argv[]) {
                 viewport,Qt::LeftButton,
                 Qt::NoModifier,*second_edge);
             QApplication::processEvents();
+            std::cerr << "S3A_NATIVE_END_FIRST_AFTER_EDGE label="
+                      << datum_result->text().toStdString()
+                      << " finish=" << datum_finish->isEnabled()
+                      << " edge_candidates="
+                      << second_edge_query.candidates.size()
+                      << "\n";
             CHECK(datum_result->text().contains(
                 QStringLiteral("Resolved END")));
             CHECK(datum_finish->isEnabled());
