@@ -2991,12 +2991,6 @@ int main(int argc, char* argv[]) {
                 viewport,Qt::LeftButton,
                 Qt::NoModifier,*first_corner);
             QApplication::processEvents();
-            std::cerr << "S3A_NATIVE_END_FIRST_AFTER_CORNER label="
-                      << datum_result->text().toStdString()
-                      << " finish=" << datum_finish->isEnabled()
-                      << " vertex_candidates="
-                      << first_vertex_query.candidates.size()
-                      << "\n";
             CHECK(!datum_finish->isEnabled());
             CHECK(s3a_end_first.document().state() ==
                   point_first_state);
@@ -3007,12 +3001,6 @@ int main(int argc, char* argv[]) {
                 viewport,Qt::LeftButton,
                 Qt::NoModifier,*second_edge);
             QApplication::processEvents();
-            std::cerr << "S3A_NATIVE_END_FIRST_AFTER_EDGE label="
-                      << datum_result->text().toStdString()
-                      << " finish=" << datum_finish->isEnabled()
-                      << " edge_candidates="
-                      << second_edge_query.candidates.size()
-                      << "\n";
             CHECK(datum_result->text().contains(
                 QStringLiteral("Resolved END")));
             CHECK(datum_finish->isEnabled());
@@ -3043,6 +3031,139 @@ int main(int argc, char* argv[]) {
                       << " current_material_corner=1"
                       << " real_qt_mouse=1"
                       << " one_undo=1\n";
+            CHECK(workbench.activateDocument(&s3a_end_session, {}));
+            QApplication::processEvents();
+
+
+            // S3A-F08: another certified, visible material vertex that
+            // is physically OFF the infinite line of the chosen Edge
+            // must NEVER be silently interpreted as its END or MID.
+            // Native click attempts are allowed to fail closed; no
+            // semantic Datum, Undo or persisted screen coordinates.
+            auto s3a_off_line = makeBaseSession(kernel);
+            CHECK(workbench.activateDocument(&s3a_off_line, {}));
+            QApplication::processEvents();
+            CHECK(workbench.submitCadInput(
+                "DATUMPLANE",
+                workbench.cadInputContextGeneration()).accepted);
+            constructor->setCurrentIndex(1);
+            QApplication::processEvents();
+            const auto off_line_initial =
+                s3a_off_line.document().state();
+            const auto off_line_undo =
+                s3a_off_line.undoDepth();
+            CHECK(viewport->setStandardView(
+                accepted_shared_end_view));
+            viewport->fitAll();
+            QApplication::processEvents();
+            const auto source_edge_pixel =
+                choosePixel(accepted_shared_end_edge);
+            CHECK(source_edge_pixel);
+            const viewer::Point3 source_direction{
+                accepted_shared_end_edge.x-
+                    accepted_shared_end_corner.x,
+                accepted_shared_end_edge.y-
+                    accepted_shared_end_corner.y,
+                accepted_shared_end_edge.z-
+                    accepted_shared_end_corner.z};
+            const auto offLine = [&](const auto& p) {
+                const double wx =
+                    p.x-accepted_shared_end_corner.x;
+                const double wy =
+                    p.y-accepted_shared_end_corner.y;
+                const double wz =
+                    p.z-accepted_shared_end_corner.z;
+                const double cx =
+                    wy*source_direction.z-
+                    wz*source_direction.y;
+                const double cy =
+                    wz*source_direction.x-
+                    wx*source_direction.z;
+                const double cz =
+                    wx*source_direction.y-
+                    wy*source_direction.x;
+                return cx*cx+cy*cy+cz*cz>1e-5;
+            };
+            bool off_line_rejected = false;
+            std::size_t off_line_vertex_probes=0U;
+            for (const auto& edge : geometry.body.edges) {
+                if (off_line_rejected) break;
+                if (edge.points.size()<2U) continue;
+                for (const auto& vertex :
+                     {edge.points.front(),edge.points.back()}) {
+                    if (!offLine(vertex)) continue;
+                    const auto vertex_pixel =
+                        choosePixel(viewer::Point3{
+                            vertex.x,vertex.y,vertex.z});
+                    if (!vertex_pixel ||
+                        (*vertex_pixel-*source_edge_pixel)
+                            .manhattanLength()<18)
+                        continue;
+                    const auto vertex_query =
+                        viewport->queryBodyTopology(
+                            viewer::ViewportPoint2{
+                                double(vertex_pixel->x()),
+                                double(vertex_pixel->y())},
+                            viewer::BodyTopologyPickFilter{
+                                false,false,true});
+                    if (!vertex_query.valid() ||
+                        !vertex_query.completed ||
+                        vertex_query.candidates.empty())
+                        continue;
+                    ++off_line_vertex_probes;
+                    // A rejected attempt must not leave an authored draft
+                    // or an implicit source; reset only the UI draft.
+                    constructor->setCurrentIndex(0);
+                    constructor->setCurrentIndex(1);
+                    QApplication::processEvents();
+                    sendNativeWorkbenchHover(
+                        *viewport,*source_edge_pixel);
+                    QTest::mouseClick(
+                        viewport,Qt::LeftButton,
+                        Qt::NoModifier,*source_edge_pixel);
+                    QApplication::processEvents();
+                    if (!datum_result->text().contains(
+                            QStringLiteral("Click the highlighted MID")))
+                        continue;
+                    CHECK(!datum_finish->isEnabled());
+                    sendNativeWorkbenchHover(*viewport,*vertex_pixel);
+                    QTest::mouseClick(
+                        viewport,Qt::LeftButton,
+                        Qt::NoModifier,*vertex_pixel);
+                    QApplication::processEvents();
+                    if (datum_result->text().contains(
+                            QStringLiteral("unsupported")) &&
+                        !datum_finish->isEnabled()) {
+                        off_line_rejected = true;
+                        break;
+                    }
+                    CHECK(s3a_off_line.document().state() ==
+                          off_line_initial);
+                    CHECK(s3a_off_line.undoDepth() ==
+                          off_line_undo);
+                }
+            }
+            std::cerr << "RG02B1_S3A_OFF_LINE_VERTICES="
+                      << off_line_vertex_probes << "\n";
+            CHECK(off_line_vertex_probes>0U);
+            CHECK(off_line_rejected);
+            CHECK(!workbench.submitCadInput(
+                "FINISH",
+                workbench.cadInputContextGeneration()).accepted);
+            CHECK(s3a_off_line.document().state() ==
+                  off_line_initial);
+            CHECK(s3a_off_line.undoDepth() ==
+                  off_line_undo);
+            CHECK(s3a_off_line.document()
+                      .edgePointDatumPlanes().empty());
+            CHECK(workbench.submitCadInput(
+                "CANCEL",
+                workbench.cadInputContextGeneration()).accepted);
+            CHECK(s3a_off_line.document().state() ==
+                  off_line_initial);
+            std::cout << "RG02B1_S3A_NATIVE_OFF_LINE_FAIL_CLOSED_PASS"
+                      << " real_qt_occt_vertex=1"
+                      << " no_finish_undo_or_datum=1\n";
             CHECK(workbench.activateDocument(&s3a_end_session, {}));
             QApplication::processEvents();
 
