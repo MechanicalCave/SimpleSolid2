@@ -14546,8 +14546,18 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                     feature.status,
                     feature.diagnostic});
         }
-        const auto datums =
-            part::evaluateDatums(
+        // S3A: the Workbench evaluation snapshot must use the same
+        // exact provider as authored Edge-local Datum validation.
+        // Provider-free evaluation would mark a genuinely resolved
+        // Datum-backed Sketch-Line Axis as Missing in Tree/Properties.
+        auto* exact_edge_provider = dynamic_cast<
+            kernel::IExactBoundedEdgeGeometryQuery*>(
+                solid_modeling_kernel_);
+        const auto datums = exact_edge_provider != nullptr
+            ? part::evaluateDatums(
+                document_session_->document(),
+                evaluation,*exact_edge_provider)
+            : part::evaluateDatums(
                 document_session_->document(),
                 evaluation);
         if (datums.source_revision ==
@@ -14555,8 +14565,9 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                     .revision() &&
             datums.planes.size() ==
                 document_session_->document()
-                    .datumPlanes()
-                    .size()) {
+                    .datumPlanes().size() +
+                document_session_->document()
+                    .edgePointDatumPlanes().size()) {
             datum_evaluation_statuses_.reserve(
                 datums.planes.size());
             for (const auto& datum :
@@ -14789,17 +14800,21 @@ void CadWorkbench::refreshDatumProperties(
         return;
     }
 
-    const auto& datums =
-        document_session_->document()
-            .datumPlanes();
-    const auto found =
-        std::find_if(
-            datums.begin(),
-            datums.end(),
-            [datum_id](const auto& datum) {
-                return datum.id == datum_id;
-            });
-    if (found == datums.end()) {
+    const auto& authored = document_session_->document();
+    const auto& offset_datums = authored.datumPlanes();
+    const auto offset_found = std::find_if(
+        offset_datums.begin(),offset_datums.end(),
+        [datum_id](const auto& datum) {
+            return datum.id == datum_id;
+        });
+    const auto& edge_datums = authored.edgePointDatumPlanes();
+    const auto edge_found = std::find_if(
+        edge_datums.begin(),edge_datums.end(),
+        [datum_id](const auto& datum) {
+            return datum.id == datum_id;
+        });
+    if (offset_found == offset_datums.end() &&
+        edge_found == edge_datums.end()) {
         selected_datum_id_.reset();
         properties_stack_->setCurrentWidget(
             document_properties_page_);
@@ -14807,32 +14822,54 @@ void CadWorkbench::refreshDatumProperties(
     }
 
     selected_datum_id_ = datum_id;
-    const auto ordinal =
-        static_cast<qulonglong>(
+    if (edge_found != edge_datums.end()) {
+        // Edge-local S3A Datums share the same DatumId cursor as
+        // Offset Datums but have no signed Offset field.
+        const auto ordinal = static_cast<qulonglong>(
+            offset_datums.size() +
+            std::distance(edge_datums.begin(),edge_found) + 1U);
+        const bool end = std::holds_alternative<
+            part::SelectedMaterialEdgeEnd>(edge_found->source);
+        datum_name_->setText(
+            QStringLiteral("Datum Plane %1").arg(ordinal));
+        datum_identity_->setText(
+            fromUtf8(edge_found->id.serialized()));
+        datum_constructor_->setText(
+            QStringLiteral("Edge + Point"));
+        datum_source_->setText(
+            QStringLiteral("Current material Edge %1 (%2)")
+                .arg(end
+                         ? QStringLiteral("END")
+                         : QStringLiteral("MID"),
+                     edge_found->orientation.reverse
+                         ? QStringLiteral("Reverse")
+                         : QStringLiteral("Forward")));
+        datum_offset_->setText(
+            QStringLiteral("Not applicable"));
+        datum_visibility_->setText(
+            edge_found->visible
+                ? QStringLiteral("Shown")
+                : QStringLiteral("Hidden"));
+    } else {
+        const auto ordinal = static_cast<qulonglong>(
             std::distance(
-                datums.begin(),
-                found) +
-            1);
-    datum_name_->setText(
-        QStringLiteral("Datum Plane %1")
-            .arg(ordinal));
-    datum_identity_->setText(
-        fromUtf8(
-            found->id.serialized()));
-    datum_constructor_->setText(
-        QStringLiteral("Offset"));
-    datum_source_->setText(
-        datumPlaneSourceText(
-            found->source));
-    datum_offset_->setText(
-        formatLengthForPart(
-            found->offset,
-            document_session_->document()
-                .lengthUnit()));
-    datum_visibility_->setText(
-        found->visible
-            ? QStringLiteral("Shown")
-            : QStringLiteral("Hidden"));
+                offset_datums.begin(),offset_found) + 1U);
+        datum_name_->setText(
+            QStringLiteral("Datum Plane %1").arg(ordinal));
+        datum_identity_->setText(
+            fromUtf8(offset_found->id.serialized()));
+        datum_constructor_->setText(
+            QStringLiteral("Offset"));
+        datum_source_->setText(
+            datumPlaneSourceText(offset_found->source));
+        datum_offset_->setText(
+            formatLengthForPart(
+                offset_found->offset,authored.lengthUnit()));
+        datum_visibility_->setText(
+            offset_found->visible
+                ? QStringLiteral("Shown")
+                : QStringLiteral("Hidden"));
+    }
 
     const auto revision =
         document_session_->document()
