@@ -2333,13 +2333,30 @@ int main(int argc, char* argv[]) {
             constructor->setCurrentIndex(1);
             QApplication::processEvents();
             CHECK(constructor->currentIndex() == 1);
+            // Force a fresh per-session hover preselection lease, and
+            // deliver the live MID preview to OCCT before clicking it.
+            // QTest mouseMove alone may leave the scene update queued.
+            QTest::mouseMove(
+                viewport, viewport->rect().topLeft() + QPoint{3, 3});
+            QApplication::processEvents();
             QTest::mouseMove(viewport, *point_edge_pixel);
             QApplication::processEvents();
             QTest::mouseMove(viewport, *point_mid_pixel);
+            QApplication::processEvents();
+            QTest::qWait(40);
             QTest::mouseClick(
                 viewport, Qt::LeftButton,
                 Qt::NoModifier, *point_mid_pixel);
             QApplication::processEvents();
+            std::cerr << "RG02B1_S3A_MID_FIRST_DIAGNOSTIC"
+                      << " label="
+                      << datum_result->text().toStdString()
+                      << " finish_enabled=" << datum_finish->isEnabled()
+                      << " edge_pixel=" << point_edge_pixel->x()
+                      << "," << point_edge_pixel->y()
+                      << " mid_pixel=" << point_mid_pixel->x()
+                      << "," << point_mid_pixel->y()
+                      << std::endl;
             CHECK(datum_result->text().contains(
                 QStringLiteral("MID selected first")));
             CHECK(!datum_finish->isEnabled());
