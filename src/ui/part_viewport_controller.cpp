@@ -5,7 +5,6 @@
 #include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <QPointer>
-#include <iostream>
 
 #include <algorithm>
 #include <array>
@@ -3921,12 +3920,6 @@ PartViewportController::buildReferenceScene() {
                     *body_scene_cache_,
                     frame);
         }
-        if (qEnvironmentVariableIsSet("SS2_S3A_DIAG")) {
-            std::cerr << "S3A_DBG_REF anchor=" << datum_plane_draft_preview_anchor_
-                      << " token=" << (datum_mid_anchor_token_ ? datum_mid_anchor_token_->value : 0U)
-                      << " origin=" << preview.origin.x << "," << preview.origin.y << "," << preview.origin.z
-                      << "\n";
-        }
         if (!preview.valid()) {
             return fail();
         }
@@ -4785,13 +4778,6 @@ void PartViewportController::onViewportIntent(
 
     // The MID Point marker is a gesture token, not semantic topology.
     // Consume it without mutating Part/Datum/Body selection state.
-    if (qEnvironmentVariableIsSet("SS2_S3A_DIAG")) {
-        std::cerr << "S3A_DBG_INTENT token=" << intent.token.value
-                  << " expected=" << (datum_mid_anchor_token_ ? datum_mid_anchor_token_->value : 0U)
-                  << " hovered=" << datum_mid_hovered_pick_.has_value()
-                  << " preview_anchor=" << datum_plane_draft_preview_anchor_
-                  << "\n";
-    }
     if (datum_mid_anchor_token_ &&
         intent.token == *datum_mid_anchor_token_) {
         if (intent.mode != viewer::SelectionIntentMode::clear &&
@@ -5782,12 +5768,6 @@ void PartViewportController::refreshDatumPointFirstMidHover() {
             }
         }
     }
-    if (qEnvironmentVariableIsSet("SS2_S3A_DIAG")) {
-        std::cerr << "S3A_DBG_MID_PICK pick=" << pick.has_value()
-                  << " frame=" << frame.has_value()
-                  << " candidate_stack=" << body_topology_candidate_stack_.has_value()
-                  << "\n";
-    }
     const bool had_hover = datum_mid_hovered_pick_.has_value();
     datum_mid_hovered_pick_ = pick;
     if (frame)
@@ -5818,14 +5798,6 @@ void PartViewportController::onBodyTopologyPreselectionIntent(
             point,
             viewer::BodyTopologyPickFilter{
                 false, true, false});
-    }
-    if (qEnvironmentVariableIsSet("SS2_S3A_DIAG")) {
-        std::cerr << "S3A_DBG_HOVER x=" << point.x << " y=" << point.y
-                  << " armed=" << datum_point_first_mid_hover_enabled_
-                  << " raw=" << query.candidates.size()
-                  << " strict=" << hover_query.candidates.size()
-                  << " current=" << bodyTopologyQueryCurrent(hover_query)
-                  << "\n";
     }
     if (!bodyTopologyQueryCurrent(hover_query)) {
         clearBodyTopologyPreselection();
