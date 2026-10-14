@@ -5994,10 +5994,21 @@ void PartViewportController::onBodyTopologyIntent(
                            candidate.kind ==
                                preselected.kind;
                 });
-        if (still_available !=
-            candidates.end()) {
-            chosen =
-                still_available->token;
+        // S3A: at a genuine shared-corner END-first click, the ranked
+        // current Body Vertex must beat an earlier hover-preselected Edge.
+        // Otherwise the first click silently becomes Edge-first and asks
+        // for MID. The hover lease is only visual; it does not own the
+        // user's deliberate vertex click. All ordinary selection tools
+        // retain the existing preselection preservation rule.
+        const bool first_datum_endpoint =
+            datum_point_first_mid_hover_enabled_ &&
+            candidates.front().kind ==
+                viewer::BodyTopologyPresentationKind::vertex &&
+            preselected.kind !=
+                viewer::BodyTopologyPresentationKind::vertex;
+        if (still_available != candidates.end() &&
+            !first_datum_endpoint) {
+            chosen = still_available->token;
         }
     }
     auto& selection = activeSelection();
