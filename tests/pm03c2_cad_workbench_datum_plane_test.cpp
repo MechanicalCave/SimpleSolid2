@@ -330,6 +330,25 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.document().datumPlanes().empty());
 
+    // S3: the same constructor panel exposes MID/END while preserving
+    // legacy Offset if the active kernel cannot certify exact geometry.
+    // No half-authored Edge/Vertex pick may mutate the Part/Undo history.
+    CHECK(constructor->count() == 3);
+    CHECK(constructor->itemText(1) == QStringLiteral("Edge MID"));
+    CHECK(constructor->itemText(2) == QStringLiteral("Edge END"));
+    const auto revision_before_unsupported =
+        session.document().revision();
+    const auto undo_before_unsupported = session.undoDepth();
+    constructor->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(constructor->currentIndex() == 0);
+    CHECK(session.document().revision() ==
+          revision_before_unsupported);
+    CHECK(session.undoDepth() == undo_before_unsupported);
+    CHECK(session.document().edgePointDatumPlanes().empty());
+    CHECK(session.document().datumPlanes().empty());
+    CHECK(finish->isEnabled());
+
     reverse->click();
     CHECK(
         offset->text().contains(

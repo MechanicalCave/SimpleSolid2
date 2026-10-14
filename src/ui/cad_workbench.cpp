@@ -6635,9 +6635,11 @@ void CadWorkbench::selectDatumPlaneConstructor(
             viewport_controller_->primaryBodyTopologyInspection();
         if (inspection) {
             stageEdgeDatumFromBodyTopology(*inspection);
-            return;
         }
     }
+    // Even if the previous selection was a Face (Offset mode), the
+    // constructor panel must immediately switch to the incomplete
+    // END/MID state rather than retaining the old Offset preview.
     refreshDatumPlaneEvaluation();
     syncActionState();
     notifyCadInputContextChanged();
