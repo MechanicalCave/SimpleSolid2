@@ -3901,11 +3901,6 @@ public:
     bool emitBodyTopologyPreselectionAt(
         double logical_x,
         double logical_y) {
-        if (qEnvironmentVariableIsSet("SS2_S3A_DIAG"))
-            qWarning() << "S3A_DBG_EMIT" << logical_x << logical_y
-                       << " routing=" << int(primary_pointer_routing_)
-                       << " handler=" << bool(body_topology_preselection_intent_handler_)
-                       << " clearing=" << body_preselection_clear_active_;
         // OCCT context updates performed while clearing a hover overlay can
         // synchronously pump native mouse/detection work. Such nested hover
         // must not republish Body topology before the authoritative clear
@@ -4030,9 +4025,6 @@ public:
 
     void setPrimaryPointerRouting(
         viewer::PrimaryPointerRouting routing) {
-        if (qEnvironmentVariableIsSet("SS2_S3A_DIAG"))
-            qWarning() << "S3A_DBG_ROUTING set=" << int(routing)
-                       << " prior=" << int(primary_pointer_routing_);
         if (primary_pointer_routing_ == routing) {
             return;
         }
@@ -7399,8 +7391,6 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
 }
 
 void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
-    if (qEnvironmentVariableIsSet("SS2_S3A_DIAG"))
-        qWarning() << "S3A_DBG_MOUSE_MOVE" << event->position();
     if ((event->buttons() & Qt::MiddleButton) != 0) {
         const auto point = event->position().toPoint();
         const bool orbit =
@@ -7431,8 +7421,6 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
                 impl_->clearBodyTopologyPreselectionIntent();
                 return true;
             })) {
-        if (qEnvironmentVariableIsSet("SS2_S3A_DIAG"))
-            qWarning() << "S3A_DBG_MOUSE_HUD_CAPTURE";
         event->accept();
         return;
     }
@@ -7449,8 +7437,6 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
                 }
                 return hovered;
             })) {
-        if (qEnvironmentVariableIsSet("SS2_S3A_DIAG"))
-            qWarning() << "S3A_DBG_MOUSE_CUBE_CAPTURE";
         event->accept();
         return;
     }
