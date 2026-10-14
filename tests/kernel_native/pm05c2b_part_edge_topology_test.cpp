@@ -2060,6 +2060,60 @@ void verifyS1SelectedSignedFrames(
         CHECK(!invalid.frame);
     }
 
+    // Application command is the real authored creation boundary:
+    // initialize END/MID from certified Part source, atomically store
+    // Reverse and materialize a Sketch using that Datum immediately.
+    {
+        auto copy = part::PartDocument::restore(
+            document.documentId(),document.state(),document.revision());
+        CHECK(copy.ok());
+        application::DocumentSession session{
+            {},std::move(*copy.document)};
+        const auto added = session.execute(
+            application::CreateEdgePointDatumPlaneCommand{
+                part::EdgePointDatumSource{mids.front()},
+                session.document().revision(),true,false},
+            provider);
+        CHECK(added.ok() && added.changed && added.datum_id);
+        CHECK(session.document().edgePointDatumPlanes().size() == 1U);
+        const auto* created = session.document().findEdgePointDatumPlane(
+            *added.datum_id);
+        CHECK(created);
+        CHECK(created->orientation.reverse);
+        CHECK(!created->visible);
+        CHECK(std::get_if<part::SelectedMaterialEdgeMid>(
+            &created->source) != nullptr);
+
+        const auto observed = part::evaluatePart(
+            session.document(),provider);
+        CHECK(observed.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        const auto planes = part::evaluateDatums(
+            session.document(),observed,provider);
+        const auto* plane = planes.find(*added.datum_id);
+        CHECK(plane && plane->frame && plane->valid());
+        const auto source_support =
+            part::partSketchSupportForDatumPlane(*added.datum_id);
+        CHECK(source_support);
+        const auto hosted = session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                *source_support,session.document().revision()},
+            &provider);
+        CHECK(hosted.ok() && hosted.sketch_id);
+        CHECK(session.document().findSketch(*hosted.sketch_id));
+        CHECK(session.document().findSketch(*hosted.sketch_id)
+                  ->support == *source_support);
+
+        const auto source_before = session.document().state();
+        const auto stale = session.execute(
+            application::CreateEdgePointDatumPlaneCommand{
+                part::EdgePointDatumSource{mids.front()},
+                document.revision(),false,true},
+            provider);
+        CHECK(!stale.ok() && !stale.changed && !stale.datum_id);
+        CHECK(session.document().state() == source_before);
+    }
+
     // P4-S2 exact Save/Reopen: serialize only source+signed orientation;
     // rebuild a fresh Part/OCCT body and prove equivalent derived frames.
     {

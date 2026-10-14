@@ -260,6 +260,16 @@ struct CreateDatumPlaneCommand final {
     bool visible{true};
 };
 
+// One atomic Part authoring command: initialize the same signed S1
+// frame policy that preview uses, then store only certified source and
+// orientation intent. Never accept hovered/native topology tokens here.
+struct CreateEdgePointDatumPlaneCommand final {
+    part::EdgePointDatumSource source;
+    core::DocumentRevision expected_revision;
+    bool reverse{false};
+    bool visible{true};
+};
+
 struct EditDatumPlaneCommand final {
     part::DatumId datum_id;
     part::PlaneReference source;
@@ -740,6 +750,9 @@ public:
 
     [[nodiscard]] CreateDatumPlaneResult execute(
         const CreateDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] CreateDatumPlaneResult execute(
+        const CreateEdgePointDatumPlaneCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const EditDatumPlaneCommand& command,
