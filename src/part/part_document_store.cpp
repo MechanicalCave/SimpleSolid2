@@ -1199,6 +1199,47 @@ std::string serializeAuthored(
             });
     }
 
+    // v17: a new tagged Datum kind alongside unchanged legacy offsets.
+    nlohmann::json edge_point_datums = nlohmann::json::array();
+    for (const auto& datum : document.edgePointDatumPlanes()) {
+        if (!edgePointDatumPlaneStructurallyValid(datum)) return {};
+        nlohmann::json source;
+        if (const auto* end =
+                std::get_if<SelectedMaterialEdgeEnd>(&datum.source)) {
+            source = {
+                {"kind", "edge_local_end"},
+                {"edge", materialEdgeReferenceJson(end->source_edge)},
+                {"terminal", featurePointAddressJson(
+                    end->terminal.certified_semantic_point)},
+            };
+        } else if (const auto* mid =
+                       std::get_if<SelectedMaterialEdgeMid>(
+                           &datum.source)) {
+            source = {
+                {"kind", "edge_local_mid"},
+                {"edge", materialEdgeReferenceJson(mid->source_edge)},
+            };
+        } else {
+            return {};
+        }
+        const auto n =
+            datum.orientation.signed_normal_reference_world;
+        const auto u = datum.orientation.u_seed_world;
+        edge_point_datums.push_back({
+            {"id", datum.id.serialized()},
+            {"kind", "edge_point_plane"},
+            {"source", std::move(source)},
+            {"orientation", {
+                {"signed_normal_reference_world",
+                    nlohmann::json::array({n.x, n.y, n.z})},
+                {"u_seed_world",
+                    nlohmann::json::array({u.x, u.y, u.z})},
+                {"reverse", datum.orientation.reverse},
+            }},
+            {"visible", datum.visible},
+        });
+    }
+
     nlohmann::json sketches =
         nlohmann::json::array();
     for (const auto& hosted : document.sketches()) {
@@ -1522,6 +1563,8 @@ std::string serializeAuthored(
          document.datumIdCursor().serialized()},
         {"datum_planes",
          std::move(datum_planes)},
+        {"edge_point_datum_planes",
+         std::move(edge_point_datums)},
         {"sketches", std::move(sketches)},
         {"next_axis_id",
          document.axisIdCursor().serialized()},
@@ -2345,6 +2388,115 @@ bool parseDatumPlanesV10(
             std::move(datum));
     }
 
+    return true;
+}
+
+// Schema-v17 Edge Point END/MID: no native provider handles or cached frames.
+bool parseEdgePointDatumsV17(
+    const nlohmann::json& value,
+    DatumIdCursor cursor,
+    FeatureIdCursor feature_cursor,
+    std::vector<EdgePointDatumPlane>& datums,
+    std::string& error) {
+    if (!value.is_array()) {
+        error = "Native Part v17 Edge Point Datum payload must be an array";
+        return false;
+    }
+    datums.clear();
+    datums.reserve(value.size());
+    std::set<std::string> ids;
+    const auto parse_vector = [](
+            const nlohmann::json& data)
+            -> std::optional<kernel::Point3> {
+        if (!data.is_array() || data.size() != 3U ||
+            !data[0].is_number() || !data[1].is_number() ||
+            !data[2].is_number()) return std::nullopt;
+        kernel::Point3 p{
+            data[0].get<double>(),
+            data[1].get<double>(),
+            data[2].get<double>()};
+        if (!std::isfinite(p.x) || !std::isfinite(p.y) ||
+            !std::isfinite(p.z)) return std::nullopt;
+        return p;
+    };
+    for (const auto& item : value) {
+        if (!item.is_object() || item.size() != 5U ||
+            !item.contains("id") || !item["id"].is_string() ||
+            !item.contains("kind") || !item["kind"].is_string() ||
+            item["kind"].get<std::string>() != "edge_point_plane" ||
+            !item.contains("source") || !item["source"].is_object() ||
+            !item.contains("orientation") ||
+            !item["orientation"].is_object() ||
+            !item.contains("visible") || !item["visible"].is_boolean()) {
+            error = "Native Part contains malformed v17 Edge Point Datum";
+            return false;
+        }
+        const std::string serialized_id = item["id"].get<std::string>();
+        const auto id = DatumId::parse(serialized_id);
+        if (!id || !cursor.containsAllocated(*id) ||
+            !ids.insert(serialized_id).second) {
+            error = "Native Part contains invalid v17 Edge Point DatumId";
+            return false;
+        }
+        const auto& source_json = item["source"];
+        if (!source_json.contains("kind") ||
+            !source_json["kind"].is_string() ||
+            !source_json.contains("edge")) {
+            error = "Native Part contains malformed v17 Edge Point source";
+            return false;
+        }
+        const auto kind = source_json["kind"].get<std::string>();
+        if ((kind == "edge_local_end" &&
+             (source_json.size() != 3U ||
+              !source_json.contains("terminal"))) ||
+            (kind == "edge_local_mid" &&
+             source_json.size() != 2U) ||
+            (kind != "edge_local_end" && kind != "edge_local_mid")) {
+            error = "Native Part contains invalid v17 Edge Point source kind";
+            return false;
+        }
+        auto edge = parseMaterialEdgeReferenceV14(
+            source_json["edge"], feature_cursor, 17, error);
+        if (!edge) return false;
+        EdgePointDatumSource source;
+        if (kind == "edge_local_end") {
+            auto terminal = parseFeaturePointAddressV14(
+                source_json["terminal"], feature_cursor, 17, error);
+            if (!terminal) return false;
+            source = SelectedMaterialEdgeEnd{
+                std::move(*edge),
+                StableEdgeLocalTerminalKey{std::move(*terminal)}};
+        } else {
+            source = SelectedMaterialEdgeMid{std::move(*edge)};
+        }
+        const auto& orientation = item["orientation"];
+        if (orientation.size() != 3U ||
+            !orientation.contains("signed_normal_reference_world") ||
+            !orientation.contains("u_seed_world") ||
+            !orientation.contains("reverse") ||
+            !orientation["reverse"].is_boolean()) {
+            error = "Native Part contains malformed v17 Datum orientation";
+            return false;
+        }
+        const auto n = parse_vector(
+            orientation["signed_normal_reference_world"]);
+        const auto u = parse_vector(
+            orientation["u_seed_world"]);
+        if (!n || !u) {
+            error = "Native Part contains invalid v17 Datum unit vectors";
+            return false;
+        }
+        EdgePointDatumPlane datum{
+            *id, std::move(source),
+            SelectedEdgeFrameIntent{
+                *n, *u, orientation["reverse"].get<bool>()},
+            item["visible"].get<bool>()};
+        if (!edgePointDatumPlaneStructurallyValid(datum)) {
+            error = "Native Part contains invalid v17 Datum frame intent";
+            return false;
+        }
+        datums.push_back(std::move(datum));
+    }
     return true;
 }
 
@@ -3371,11 +3523,13 @@ std::optional<PartAuthoredState> parseAuthored(
         schema_version >= 10;
     const bool has_axes =
         schema_version >= 12;
+    const bool has_edge_point_datums =
+        schema_version >= 17;
     const std::size_t expected_fields =
         legacy_v1
             ? 2U
             : (has_axes
-                   ? 13U
+                   ? (has_edge_point_datums ? 14U : 13U)
                    : (has_datums
                    ? 11U
                    : (has_body_features
@@ -3411,7 +3565,10 @@ std::optional<PartAuthoredState> parseAuthored(
          (!authored.contains("next_axis_id") ||
           !authored["next_axis_id"].is_string() ||
           !authored.contains("axes") ||
-          !authored["axes"].is_array()))) {
+          !authored["axes"].is_array())) ||
+        (has_edge_point_datums &&
+         (!authored.contains("edge_point_datum_planes") ||
+          !authored["edge_point_datum_planes"].is_array()))) {
         error =
             "Native Part authored payload has an invalid top-level schema";
         return std::nullopt;
@@ -3624,6 +3781,15 @@ std::optional<PartAuthoredState> parseAuthored(
                 *cursor,
                 state.body.next_feature_id,
                 state.datum_planes,
+                error)) {
+            return std::nullopt;
+        }
+        if (has_edge_point_datums &&
+            !parseEdgePointDatumsV17(
+                authored["edge_point_datum_planes"],
+                *cursor,
+                state.body.next_feature_id,
+                state.edge_point_datum_planes,
                 error)) {
             return std::nullopt;
         }

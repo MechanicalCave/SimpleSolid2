@@ -36,6 +36,7 @@ struct PartAuthoredState final {
     PartPresentationState presentation;
     DatumIdCursor next_datum_id;
     std::vector<OffsetDatumPlane> datum_planes;
+    std::vector<EdgePointDatumPlane> edge_point_datum_planes;
     std::vector<PartSketch> sketches;
     AxisIdCursor next_axis_id;
     std::vector<PartAxis> axes;
@@ -120,6 +121,14 @@ public:
     }
 
     [[nodiscard]] const OffsetDatumPlane* findDatumPlane(
+        DatumId id) const noexcept;
+
+    [[nodiscard]] const std::vector<EdgePointDatumPlane>&
+    edgePointDatumPlanes() const noexcept {
+        return state_.edge_point_datum_planes;
+    }
+
+    [[nodiscard]] const EdgePointDatumPlane* findEdgePointDatumPlane(
         DatumId id) const noexcept;
 
     [[nodiscard]] const std::vector<PartSketch>& sketches() const noexcept {

@@ -3,6 +3,7 @@
 #include <simplesolid2/core/document_reference.hpp>
 #include <simplesolid2/core/units.hpp>
 #include <simplesolid2/part/datum_id.hpp>
+#include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/semantic_topology_reference.hpp>
 
 #include <optional>
@@ -83,6 +84,37 @@ struct OffsetDatumPlane final {
         const OffsetDatumPlane&,
         const OffsetDatumPlane&) = default;
 };
+
+// P4-S2 in-development authored orientation/source value.
+// Unlike S1's caller-carried transient intent, this model owns a DatumId.
+// END/MID are genuine semantic Edge-local references; never native tokens,
+// world XYZ topology keys, a cached frame or a provider-instance handle.
+// The independent off-Edge Point source is a later supported source kind.
+using EdgePointDatumSource = std::variant<
+    SelectedMaterialEdgeEnd,
+    SelectedMaterialEdgeMid>;
+
+struct EdgePointDatumPlane final {
+    DatumId id;
+    EdgePointDatumSource source;
+    SelectedEdgeFrameIntent orientation;
+    bool visible{true};
+
+    friend bool operator==(
+        const EdgePointDatumPlane&,
+        const EdgePointDatumPlane&) = default;
+};
+
+[[nodiscard]] bool edgePointDatumPlaneStructurallyValid(
+    const EdgePointDatumPlane& datum) noexcept;
+
+// Derive the current plane anew from the certified Body stage, preserving
+// the authored pre-Reverse N/U seed. No native handle/frame is retained.
+[[nodiscard]] SelectedEdgeFrameResult resolveEdgePointDatumFrame(
+    const PartDocument& owner,
+    const EdgePointDatumPlane& datum,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider);
 
 [[nodiscard]] bool isDatumOriginPlane(
     core::BuiltinReferenceRole role) noexcept;
