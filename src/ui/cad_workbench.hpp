@@ -708,6 +708,12 @@ private:
     QPushButton* datum_plane_cancel_button_{};
     std::optional<application::DatumPlaneDraft>
         datum_plane_draft_;
+    // Editing an existing S2 signed Edge-local Datum reuses the existing
+    // Datum panel but never co-opts the legacy Offset draft semantics.
+    std::optional<part::DatumId> edge_datum_edit_id_;
+    std::optional<core::DocumentRevision> edge_datum_edit_revision_;
+    bool edge_datum_edit_reverse_{false};
+    bool edge_datum_edit_preview_valid_{false};
     std::optional<
         application::DatumPlaneDraftEvaluationResult>
         datum_plane_evaluation_;
