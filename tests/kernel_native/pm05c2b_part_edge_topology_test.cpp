@@ -2219,7 +2219,7 @@ void verifyS1SelectedSignedFrames(
         const auto saved = store.createNew(
             scratch.path,*created.document);
         CHECK(saved.ok());
-        const auto loaded = store.load(scratch.path);
+        auto loaded = store.load(scratch.path);
         CHECK(loaded.ok());
         CHECK(loaded.document->edgePointDatumPlanes().size() == 2U);
         const auto* reopened_end =
