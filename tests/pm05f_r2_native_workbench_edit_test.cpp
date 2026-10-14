@@ -2447,7 +2447,7 @@ int main(int argc, char* argv[]) {
                     for (const auto& terminal :
                          {edge.points.front(), edge.points.back()}) {
                         const auto sameCorner = [&terminal](
-                            const viewer::Point3& point) {
+                            const auto& point) {
                             return std::abs(point.x-terminal.x)<1e-7 &&
                                    std::abs(point.y-terminal.y)<1e-7 &&
                                    std::abs(point.z-terminal.z)<1e-7;
@@ -2461,7 +2461,8 @@ int main(int argc, char* argv[]) {
                         }
                         if (incident!=3U) continue;
                         const auto corner_pixel =
-                            choosePixel(terminal);
+                            choosePixel(viewer::Point3{
+                                terminal.x,terminal.y,terminal.z});
                         if (!corner_pixel ||
                             (*quarter_pixel - *corner_pixel)
                                 .manhattanLength()<14)
