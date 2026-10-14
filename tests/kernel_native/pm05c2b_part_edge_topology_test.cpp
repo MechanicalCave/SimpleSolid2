@@ -241,7 +241,8 @@ part::PartDocument makeQ1PartRevolve(
     core::BuiltinReferenceRole axis_role,
     sketch::Point2 first,
     sketch::Point2 opposite,
-    double angle) {
+    double angle,
+    bool reverse = false) {
     auto source =
         part::PartDocument::create(
             core::DocumentId::generate());
@@ -310,7 +311,7 @@ part::PartDocument makeQ1PartRevolve(
                 part::RevolveOperation::add,
                 part::OneSidedRevolveExtent{
                     core::AngleValue{angle},
-                    false}}});
+                    reverse}}});
 
     auto restored =
         part::PartDocument::restore(
@@ -1794,6 +1795,75 @@ void verifyQ1RealHalfCylinderAndRevolve(
               << " certified_line_end_uses=" << line_terminal_uses
               << " certified_arc_end_uses=" << arc_terminal_uses
               << " global_point_promotion=0\n";
+
+    // S1-F02: reverse signed sweep is a real Part + OCCT geometry
+    // fixture, not a synthetic perturbation of the tangent.
+    const auto reversed_part = makeQ1PartRevolve(
+        core::BuiltinReferenceRole::x_axis,
+        {10.0, 0.0}, {20.0, 10.0},
+        1.57079632679489661923, true);
+    const auto reverse_eval = part::evaluatePart(reversed_part,kernel);
+    CHECK(reverse_eval.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(reverse_eval.features.size() == 1U);
+    CHECK(reverse_eval.features.front().result_topology);
+    const auto& reverse_catalog =
+        *reverse_eval.features.front().result_topology;
+    CHECK(reverse_catalog.complete());
+    std::size_t reverse_line_frames = 0U;
+    std::size_t reverse_arc_frames = 0U;
+    std::size_t reverse_arc_ends = 0U;
+    for (const auto& edge : reverse_catalog.edges) {
+        const auto mid = part::authorSelectedMaterialEdgeMid(
+            reversed_part,reverse_eval,reverse_catalog.stage,
+            edge.runtime_token,kernel);
+        if (!mid.ok()) continue;
+        const auto frame = part::initializeSelectedEdgeMidFrame(
+            reversed_part,*mid.reference,reverse_eval,kernel);
+        CHECK(frame.resolved());
+        CHECK(frame.initialized_intent);
+        CHECK(frame.frame->valid());
+        const auto replay = part::resolveSelectedEdgeMidFrame(
+            reversed_part,*mid.reference,*frame.initialized_intent,
+            reverse_eval,kernel);
+        CHECK(replay.resolved());
+        CHECK(replay.frame->valid());
+        if (edge.curve_kind == kernel::CurveKind::circle) {
+            ++reverse_arc_frames;
+        } else if (edge.curve_kind == kernel::CurveKind::line) {
+            ++reverse_line_frames;
+        } else {
+            CHECK(false);
+        }
+        for (const auto& vertex : reverse_catalog.vertices) {
+            if (std::find(
+                    vertex.incident_material_edges.begin(),
+                    vertex.incident_material_edges.end(),
+                    edge.runtime_token) ==
+                vertex.incident_material_edges.end()) {
+                continue;
+            }
+            const auto end = part::authorSelectedMaterialEdgeEnd(
+                reversed_part,reverse_eval,reverse_catalog.stage,
+                edge.runtime_token,vertex.runtime_token,kernel);
+            if (!end.ok()) continue;
+            const auto at_end = part::initializeSelectedEdgeEndFrame(
+                reversed_part,*end.reference,reverse_eval,kernel);
+            CHECK(at_end.resolved());
+            CHECK(at_end.frame->valid());
+            CHECK(at_end.initialized_intent);
+            if (edge.curve_kind == kernel::CurveKind::circle)
+                ++reverse_arc_ends;
+        }
+    }
+    CHECK(reverse_line_frames >= 1U);
+    CHECK(reverse_arc_frames >= 1U);
+    CHECK(reverse_arc_ends >= 2U);
+    std::cout << "RG02B1_P4_S1_REVOLVED_REVERSE_SWEEP"
+              << " line_frames=" << reverse_line_frames
+              << " open_arc_frames=" << reverse_arc_frames
+              << " arc_ends=" << reverse_arc_ends
+              << " viewport_or_authoring_changed=0\n";
 }
 
 
