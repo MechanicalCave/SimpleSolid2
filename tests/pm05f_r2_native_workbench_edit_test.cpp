@@ -2257,6 +2257,25 @@ int main(int argc, char* argv[]) {
             CHECK(selected_edge);
             CHECK(!datum_finish->isEnabled());
             CHECK(s3a.document().state() == state_before);
+            // Hover-only MID: moving off the Edge must remove its
+            // transient selectable marker. A direct click at MID without
+            // a preceding real hover may still select Body Edge, but
+            // must NOT confirm an old persistent MID marker.
+            sendNativeWorkbenchHover(
+                *viewport,
+                QPoint{viewport->width()-7,viewport->height()-7});
+            QApplication::processEvents();
+            QTest::mouseClick(
+                viewport,Qt::LeftButton,Qt::NoModifier,
+                certified_mid_pixel);
+            QApplication::processEvents();
+            CHECK(!datum_result->text().contains(
+                QStringLiteral("Resolved MID")));
+            CHECK(!datum_finish->isEnabled());
+            CHECK(s3a.document().state() == state_before);
+            CHECK(s3a.undoDepth() == undo_before);
+            // Re-entering real hover on the same certified Edge restores
+            // the MID marker and permits the same direct click.
             QTest::mouseMove(viewport, certified_mid_pixel);
             QTest::mouseClick(
                 viewport, Qt::LeftButton,

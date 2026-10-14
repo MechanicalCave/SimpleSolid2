@@ -5770,17 +5770,16 @@ bool PartViewportController::selectedDatumMidEdgeHovered() const {
             datum_selected_mid_edge_->generation) {
         return false;
     }
-    // Exactly the selected current Edge, never another Edge's MID.
-    for (const auto& candidate :
-         body_topology_candidate_stack_->candidates) {
-        if (candidate.kind !=
-                viewer::BodyTopologyPresentationKind::edge)
-            continue;
-        const auto edge = bodyTopologyAddressFor(candidate.token);
-        if (edge && *edge == *datum_selected_mid_edge_)
-            return true;
-    }
-    return false;
+    // Hover ownership is the ACTIVE preselection candidate, not
+    // merely another Edge buried under a hovered Vertex/Face.
+    const auto& candidate =
+        body_topology_candidate_stack_->candidates[
+            body_topology_candidate_stack_->active_index];
+    if (candidate.kind !=
+            viewer::BodyTopologyPresentationKind::edge)
+        return false;
+    const auto edge = bodyTopologyAddressFor(candidate.token);
+    return edge && *edge == *datum_selected_mid_edge_;
 }
 
 void PartViewportController::refreshSelectedDatumMidMarker() {
