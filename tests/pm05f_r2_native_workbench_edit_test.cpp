@@ -5,6 +5,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/datum.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
 #include <simplesolid2/part/profile.hpp>
@@ -13,6 +14,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QDebug>
 #include <QLabel>
 #include <QMenu>
@@ -2054,6 +2056,8 @@ void probePg01dChamferedAddFaceAdmission(
 
 int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
+    const bool s3a_only =
+        argc == 2 && std::string_view{argv[1]} == "--s3a";
     const bool pg01c_only =
         argc == 2 && std::string_view{argv[1]} == "--pg01c";
     const bool ui01_p0_only =
@@ -2108,6 +2112,207 @@ int main(int argc, char* argv[]) {
             QStringLiteral("edgeFeatureSelectionLabel"));
         CHECK(tree && finish && cancel && edit && label);
         CHECK(viewport->isVisible());
+
+        // RG-02B1 P4-S3A: positive *native* Workbench gesture witness.
+        // The camera/world points only aim Qt mouse clicks; they never
+        // enter authoring APIs or stand in for semantic Part provenance.
+        // This additive block runs in the registered full-only native
+        // Workbench suite and via --s3a for focused diagnosis.
+        {
+            auto s3a = makeBaseSession(kernel);
+            CHECK(workbench.activateDocument(&s3a, {}));
+            QApplication::processEvents();
+            auto* datum_tool = workbench.findChild<QPushButton*>(
+                QStringLiteral("datumPlaneToolButton"));
+            auto* constructor = workbench.findChild<QComboBox*>(
+                QStringLiteral("datumPlaneConstructorCombo"));
+            auto* datum_result = workbench.findChild<QLabel*>(
+                QStringLiteral("datumPlaneResultLabel"));
+            auto* datum_finish = workbench.findChild<QPushButton*>(
+                QStringLiteral("datumPlaneFinishButton"));
+            auto* datum_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("datumPlaneCancelButton"));
+            CHECK(datum_tool && constructor && datum_result &&
+                  datum_finish && datum_cancel);
+            CHECK(datum_tool->isEnabled());
+            const auto current = part::evaluatePart(
+                s3a.document(), kernel);
+            CHECK(current.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(current.body_solid);
+            CHECK(current.current_topology);
+            CHECK(current.current_topology->complete());
+            const auto geometry =
+                kernel.bodyPresentation(current.body_solid);
+            CHECK(geometry.ok());
+            CHECK(geometry.body.edges.size() >= 4U);
+            const auto revision_before = s3a.document().revision();
+            const auto undo_before = s3a.undoDepth();
+            const auto state_before = s3a.document().state();
+            const auto activate_datum = workbench.submitCadInput(
+                "DATUMPLANE", workbench.cadInputContextGeneration());
+            CHECK(activate_datum.accepted);
+            constructor->setCurrentIndex(1);
+            QApplication::processEvents();
+            CHECK(constructor->currentIndex() == 1);
+            CHECK(!datum_finish->isEnabled());
+            CHECK(s3a.document().state() == state_before);
+            CHECK(s3a.undoDepth() == undo_before);
+
+            // Select an actually projected, queryable current Body Edge
+            // away from both terminal vertices and its MID marker.
+            bool selected_edge = false;
+            QPoint certified_mid_pixel;
+            const auto choosePixel = [viewport](
+                viewer::Point3 world) -> std::optional<QPoint> {
+                const auto projection =
+                    viewport->projectWorldPoint(world);
+                if (!projection || !std::isfinite(projection->x) ||
+                    !std::isfinite(projection->y))
+                    return std::nullopt;
+                const QPoint pixel{
+                    static_cast<int>(std::lround(projection->x)),
+                    static_cast<int>(std::lround(projection->y))};
+                return viewport->rect().contains(pixel)
+                    ? std::optional<QPoint>{pixel}
+                    : std::nullopt;
+            };
+            for (const auto view : {
+                     viewer::StandardView::top_front_right,
+                     viewer::StandardView::top_front_left,
+                     viewer::StandardView::top_back_right,
+                     viewer::StandardView::bottom_front_right}) {
+                if (selected_edge) break;
+                CHECK(viewport->setStandardView(view));
+                viewport->fitAll();
+                QApplication::processEvents();
+                for (const auto& edge : geometry.body.edges) {
+                    if (edge.points.size() < 2U) continue;
+                    const auto& a = edge.points.front();
+                    const auto& b = edge.points.back();
+                    const viewer::Point3 quarter{
+                        0.75 * a.x + 0.25 * b.x,
+                        0.75 * a.y + 0.25 * b.y,
+                        0.75 * a.z + 0.25 * b.z};
+                    const viewer::Point3 midpoint{
+                        0.5 * (a.x + b.x),
+                        0.5 * (a.y + b.y),
+                        0.5 * (a.z + b.z)};
+                    const auto edge_pixel = choosePixel(quarter);
+                    const auto mid_pixel = choosePixel(midpoint);
+                    if (!edge_pixel || !mid_pixel ||
+                        (*edge_pixel - *mid_pixel).manhattanLength() < 20)
+                        continue;
+                    const viewer::ViewportPoint2 probe{
+                        static_cast<double>(edge_pixel->x()),
+                        static_cast<double>(edge_pixel->y())};
+                    const auto hit = viewport->queryBodyTopology(
+                        probe,
+                        viewer::BodyTopologyPickFilter{
+                            false, true, false});
+                    if (!hit.valid() || !hit.completed ||
+                        hit.candidates.empty())
+                        continue;
+                    QTest::mouseMove(viewport, *edge_pixel);
+                    QTest::mouseClick(
+                        viewport, Qt::LeftButton,
+                        Qt::NoModifier, *edge_pixel);
+                    QApplication::processEvents();
+                    if (datum_result->text().contains(
+                            QStringLiteral("Click the highlighted MID"))) {
+                        selected_edge = true;
+                        certified_mid_pixel = *mid_pixel;
+                        break;
+                    }
+                    // Failed native gesture is not an accepted source.
+                    // Reset the incomplete draft, retaining zero changes.
+                    constructor->setCurrentIndex(0);
+                    constructor->setCurrentIndex(1);
+                    QApplication::processEvents();
+                }
+            }
+            CHECK(selected_edge);
+            CHECK(!datum_finish->isEnabled());
+            CHECK(s3a.document().state() == state_before);
+            QTest::mouseMove(viewport, certified_mid_pixel);
+            QTest::mouseClick(
+                viewport, Qt::LeftButton,
+                Qt::NoModifier, certified_mid_pixel);
+            QApplication::processEvents();
+            CHECK(datum_result->text().contains(
+                QStringLiteral("Resolved MID")));
+            CHECK(datum_finish->isEnabled());
+            CHECK(s3a.document().edgePointDatumPlanes().empty());
+            CHECK(s3a.undoDepth() == undo_before);
+            CHECK(workbench.submitCadInput(
+                "REVERSE",
+                workbench.cadInputContextGeneration()).accepted);
+            CHECK(workbench.submitCadInput(
+                "FINISH",
+                workbench.cadInputContextGeneration()).accepted);
+            QApplication::processEvents();
+            CHECK(s3a.document().edgePointDatumPlanes().size() == 1U);
+            CHECK(s3a.document().revision() != revision_before);
+            CHECK(s3a.undoDepth() == undo_before + 1U);
+            const auto authored =
+                s3a.document().edgePointDatumPlanes().front();
+            CHECK(std::holds_alternative<part::SelectedMaterialEdgeMid>(
+                authored.source));
+            CHECK(authored.orientation.reverse);
+            const auto evaluated =
+                part::evaluatePart(s3a.document(), kernel);
+            CHECK(evaluated.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto datums =
+                part::evaluateDatums(s3a.document(), evaluated, kernel);
+            const auto* evaluated_datum = datums.find(authored.id);
+            CHECK(evaluated_datum && evaluated_datum->valid());
+            CHECK(evaluated_datum->frame.has_value());
+
+            CHECK(s3a.undo().changed);
+            CHECK(s3a.document().edgePointDatumPlanes().empty());
+            CHECK(s3a.redo().changed);
+            CHECK(s3a.document().edgePointDatumPlanes().size() == 1U);
+            CHECK(*s3a.document().findEdgePointDatumPlane(authored.id) ==
+                  authored);
+
+            QTemporaryDir s3a_scratch;
+            CHECK(s3a_scratch.isValid());
+            const std::filesystem::path native_path =
+                std::filesystem::path{
+                    s3a_scratch.path().toStdWString()} /
+                "s3a-real-workbench-mid.ss2part";
+            part::PartDocumentStore native_store;
+            CHECK(native_store.createNew(
+                native_path, s3a.document()).ok());
+            const auto reopened = native_store.load(native_path);
+            CHECK(reopened.ok() && reopened.document);
+            const auto* persisted =
+                reopened.document->findEdgePointDatumPlane(authored.id);
+            CHECK(persisted && *persisted == authored);
+            kernel_occt::OcctSolidModelingKernel cold_kernel;
+            const auto cold_part =
+                part::evaluatePart(*reopened.document, cold_kernel);
+            CHECK(cold_part.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto cold_datums = part::evaluateDatums(
+                *reopened.document, cold_part, cold_kernel);
+            const auto* cold = cold_datums.find(authored.id);
+            CHECK(cold && cold->valid() && cold->frame.has_value());
+            std::cout << "RG02B1_S3A_NATIVE_MID_EDGE_FIRST_PASS"
+                      << " real_qt_occt_mouse=1"
+                      << " part_command_undo=1"
+                      << " cold_provider_save_reopen=1\n";
+            CHECK(workbench.activateDocument(&session, {}));
+            QApplication::processEvents();
+        }
+        if (s3a_only) {
+            result = EXIT_SUCCESS;
+            workbench.close();
+            app.quit();
+            return;
+        }
+
         // UI-01 G0 native RED (full-only registered native Qt/OCCT target):
         // an existing Feature Edit draft must refuse Tree Sketch and
         // Profile Edit, without mutating authored CAD.
