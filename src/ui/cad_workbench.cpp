@@ -7238,7 +7238,9 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
             viewport_controller_->setDatumPlaneDraftPreview(
                 edge_datum_create_preview_,
                 !edge_datum_vertex_pick_.has_value() &&
-                !edge_datum_mid_point_confirmed_,mid_marker);
+                !edge_datum_mid_point_confirmed_,mid_marker,
+                mid_marker ? edge_datum_edge_pick_
+                           : std::nullopt);
         syncDatumPlaneUi();
         return;
     }
@@ -7310,7 +7312,9 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
         }
         if (viewport_controller_ != nullptr)
             viewport_controller_->setDatumPlaneDraftPreview(
-                preview,awaiting_mid_click,mid_marker);
+                preview,awaiting_mid_click,mid_marker,
+                mid_marker ? edge_datum_edge_pick_
+                           : std::nullopt);
         syncDatumPlaneUi();
         return;
     }

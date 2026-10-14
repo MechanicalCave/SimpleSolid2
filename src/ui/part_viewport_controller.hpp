@@ -340,7 +340,9 @@ public:
     void setDatumPlaneDraftPreview(
         std::optional<kernel::Frame3> frame,
         bool show_anchor_point = false,
-        std::optional<kernel::Point3> selected_edge_mid = std::nullopt);
+        std::optional<kernel::Point3> selected_edge_mid = std::nullopt,
+        std::optional<BodyTopologySelectionAddress> selected_edge =
+            std::nullopt);
 
     void setDatumMidPointPickHandler(
         std::function<void(std::optional<DatumMidHoverPick>)> handler) {
@@ -718,6 +720,8 @@ private:
 
     void applyBodyTopologyPreselection();
     void refreshDatumPointFirstMidHover();
+    [[nodiscard]] bool selectedDatumMidEdgeHovered() const;
+    void refreshSelectedDatumMidMarker();
     void clearBodyTopologyPreselection();
 
     [[nodiscard]] std::optional<BodyTopologySelectionAddress>
@@ -765,6 +769,8 @@ private:
         datum_plane_draft_preview_frame_;
     bool datum_plane_draft_preview_anchor_{};
     std::optional<kernel::Point3> datum_selected_edge_mid_;
+    std::optional<BodyTopologySelectionAddress> datum_selected_mid_edge_;
+    bool datum_selected_mid_edge_hovered_{false};
     std::optional<viewer::PresentationToken> datum_mid_anchor_token_;
     std::function<void(std::optional<DatumMidHoverPick>)>
         datum_mid_point_pick_handler_;

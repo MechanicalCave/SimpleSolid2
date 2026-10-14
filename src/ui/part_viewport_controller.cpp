@@ -1511,7 +1511,8 @@ void PartViewportController::clearProfileDraftPreview() {
 void PartViewportController::setDatumPlaneDraftPreview(
     std::optional<kernel::Frame3> frame,
     bool show_anchor_point,
-    std::optional<kernel::Point3> selected_edge_mid) {
+    std::optional<kernel::Point3> selected_edge_mid,
+    std::optional<BodyTopologySelectionAddress> selected_edge) {
     if (frame && !frame->valid()) {
         frame.reset();
     }
@@ -1520,14 +1521,25 @@ void PartViewportController::setDatumPlaneDraftPreview(
         !viewer::finite(viewerPoint(*selected_edge_mid))) {
         selected_edge_mid.reset();
     }
+    if (!selected_edge_mid || !selected_edge ||
+        selected_edge->kind !=
+            viewer::BodyTopologyPresentationKind::edge ||
+        !bodyTopologySelectionAddressCurrent(*selected_edge)) {
+        selected_edge.reset();
+        selected_edge_mid.reset();
+    }
     if (datum_plane_draft_preview_frame_ == frame &&
         datum_plane_draft_preview_anchor_ == anchor &&
-        datum_selected_edge_mid_ == selected_edge_mid) {
+        datum_selected_edge_mid_ == selected_edge_mid &&
+        datum_selected_mid_edge_ == selected_edge) {
         return;
     }
     datum_plane_draft_preview_frame_ = std::move(frame);
     datum_plane_draft_preview_anchor_ = anchor;
     datum_selected_edge_mid_ = std::move(selected_edge_mid);
+    datum_selected_mid_edge_ = std::move(selected_edge);
+    datum_selected_mid_edge_hovered_ =
+        selectedDatumMidEdgeHovered();
 
     // The MID acquisition frame produces only a marker. A finished source
     // produces only the plane. Neither intermediate state authors a Datum.
@@ -3919,15 +3931,18 @@ PartViewportController::buildReferenceScene() {
         if (!preview.valid()) return fail();
         scene.preview = std::move(preview);
     }
-    // Keep exact selected Edge MID clickable after END/MID selection.
-    // Point-first mode exposes only the hovered Edge MID.
-    const auto mid = datum_selected_edge_mid_
-        ? datum_selected_edge_mid_
-        : (datum_plane_draft_preview_anchor_ &&
-           datum_plane_draft_preview_frame_
-           ? std::optional<kernel::Point3>{
-                datum_plane_draft_preview_frame_->origin}
-           : std::nullopt);
+    // MID is a hover cue, not a permanent selected-Edge overlay.
+    // Both MID-first and Edge-first publish it only while hovering
+    // the current exact material Edge. END/Datum selection persists
+    // independently from the temporary marker.
+    const auto mid =
+        datum_selected_mid_edge_hovered_
+            ? datum_selected_edge_mid_
+            : (datum_plane_draft_preview_anchor_ &&
+               datum_plane_draft_preview_frame_
+                ? std::optional<kernel::Point3>{
+                    datum_plane_draft_preview_frame_->origin}
+                : std::nullopt);
     if (mid) {
         const auto token = allocatePresentationToken();
         if (!token) return fail();
@@ -5710,8 +5725,13 @@ void PartViewportController::clearBodyTopologyPreselection() {
     body_topology_candidate_stack_.reset();
     const bool had_hover = datum_mid_hovered_pick_.has_value();
     datum_mid_hovered_pick_.reset();
+    const bool had_selected_mid_hover =
+        datum_selected_mid_edge_hovered_;
+    datum_selected_mid_edge_hovered_ = false;
     if (had_hover && datum_point_first_mid_hover_enabled_)
         setDatumPlaneDraftPreview(std::nullopt);
+    else if (had_selected_mid_hover)
+        refreshSelectedDatumMidMarker();
     if (viewport_ != nullptr) {
         static_cast<void>(
             viewport_->setBodyTopologyPreselection(
@@ -5741,9 +5761,57 @@ void PartViewportController::applyBodyTopologyPreselection() {
     refreshDatumPointFirstMidHover();
 }
 
-void PartViewportController::refreshDatumPointFirstMidHover() {
-    if (!datum_point_first_mid_hover_enabled_)
+bool PartViewportController::selectedDatumMidEdgeHovered() const {
+    if (!datum_selected_edge_mid_ || !datum_selected_mid_edge_ ||
+        !bodyTopologySelectionAddressCurrent(*datum_selected_mid_edge_) ||
+        !body_topology_candidate_stack_ ||
+        !body_topology_candidate_stack_->valid() ||
+        body_topology_candidate_stack_->generation !=
+            datum_selected_mid_edge_->generation) {
+        return false;
+    }
+    // Exactly the selected current Edge, never another Edge's MID.
+    for (const auto& candidate :
+         body_topology_candidate_stack_->candidates) {
+        if (candidate.kind !=
+                viewer::BodyTopologyPresentationKind::edge)
+            continue;
+        const auto edge = bodyTopologyAddressFor(candidate.token);
+        if (edge && *edge == *datum_selected_mid_edge_)
+            return true;
+    }
+    return false;
+}
+
+void PartViewportController::refreshSelectedDatumMidMarker() {
+    // Hover may change the reference marker, but must NEVER rebuild
+    // the Body or allocate a new Body generation during staged picks.
+    if (!viewport_ || !session_ || !body_scene_revision_ ||
+        *body_scene_revision_ != session_->document().revision() ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !datum_evaluation_cache_ ||
+        datum_evaluation_cache_->source_revision !=
+            session_->document().revision())
         return;
+    const auto scene = buildReferenceScene();
+    if (scene)
+        static_cast<void>(viewport_->setReferenceScene(*scene));
+}
+
+void PartViewportController::refreshDatumPointFirstMidHover() {
+    if (!datum_point_first_mid_hover_enabled_) {
+        const bool hovered = selectedDatumMidEdgeHovered();
+        if (datum_selected_mid_edge_hovered_ != hovered) {
+            datum_selected_mid_edge_hovered_ = hovered;
+            refreshSelectedDatumMidMarker();
+        }
+        return;
+    }
 
     std::optional<DatumMidHoverPick> pick;
     std::optional<kernel::Frame3> frame;
@@ -5809,6 +5877,26 @@ void PartViewportController::onBodyTopologyPreselectionIntent(
             point,
             viewer::BodyTopologyPickFilter{
                 false, true, false});
+    } else if (datum_selected_edge_mid_ &&
+               datum_selected_mid_edge_ &&
+               !bodyTopologyQueryCurrent(query) &&
+               viewport_ != nullptr) {
+        // The native selectable MID square can obscure the ordinary
+        // Body hit. Re-query only current Body Edges and accept this
+        // narrow recovery only for the exact selected Edge. Do not
+        // change ordinary Vertex/Edge/Face hover ordering.
+        const auto edge_query = viewport_->queryBodyTopology(
+            point,
+            viewer::BodyTopologyPickFilter{false,true,false});
+        if (bodyTopologyQueryCurrent(edge_query)) {
+            for (const auto& candidate : edge_query.candidates) {
+                const auto edge = bodyTopologyAddressFor(candidate.token);
+                if (edge && *edge == *datum_selected_mid_edge_) {
+                    hover_query = edge_query;
+                    break;
+                }
+            }
+        }
     }
     if (!bodyTopologyQueryCurrent(hover_query)) {
         clearBodyTopologyPreselection();
