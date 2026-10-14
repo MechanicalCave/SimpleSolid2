@@ -10,6 +10,11 @@ Owner manually tested candidate `63a1391f4f6935c0eb9b6c264310813a2816977b` after
 
 This remediation separates a **scene-local, marker-only MID** from a complete-source Datum plane preview. Both use current-stage Part-certified geometry; the token remains transient. Native Viewer regression now demands clicks with **no plane in the scene** and Core presentation regression checks isolated-marker validity and token conflict. The changed code still requires fresh Windows tests and repeat Owner manual acceptance; do not infer any new Owner PASS from prior green CI.
 
+## Post-remediation native verification (same source/test tree)
+
+- Windows Draft FAST [#3062](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38618181817) **93/93 PASS** on source/tests/ledger `f75fd40f92d4b54fd8be30e700314484f21659a9`. Included the updated native `sk04b.viewer_native_selection_query` marker-only MID click and `wb01.viewer_reference_presentation` marker-only presentation validation. This does **not** include the full-only native Part Workbench test, complete Desktop suite or Owner manual repeat; dedicated FOCUSED and FULL remain mandatory.
+- This ledger-only follow-up requests exact-head FOCUSED for the above two tests plus `pm05f_r2.native_workbench_edit`; it changes no runtime, test code or persisted behavior.
+
 ## Exact historical CI observations — NOT an interchangeable final matrix
 
 - #387 test-only D2 governance: exact-head Windows Ready #3012 SUCCESS on `707b7a84880dfb4f9ea6e105b27955a90e9de192`. Guarded squash main `2a64c584789c0151b6c7181217cd622a092ed7bb`.
