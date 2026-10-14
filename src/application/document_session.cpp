@@ -412,7 +412,7 @@ resolveSupportForMutation(
 
     if (part::datumPlaneIdForSketchSupport(
             support)) {
-        const auto* exact =
+        auto* exact =
             dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
                 modeling_kernel);
         const auto datums = exact != nullptr
@@ -4628,6 +4628,66 @@ CreateDatumPlaneResult DocumentSession::execute(
 }
 
 DocumentSessionResult DocumentSession::execute(
+    const EditEdgePointDatumPlaneCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Edit Edge Point Datum was started from stale revision",path_);
+    }
+    auto* query =
+        dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            &modeling_kernel);
+    if (!command.datum_id.valid() || query == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Edge Point Datum requires a valid DatumId and exact geometry provider",path_);
+    }
+
+    auto after = document_.state();
+    const auto found = std::find_if(
+        after.edge_point_datum_planes.begin(),
+        after.edge_point_datum_planes.end(),
+        [id=command.datum_id](const part::EdgePointDatumPlane& item) {
+            return item.id == id;
+        });
+    if (found == after.edge_point_datum_planes.end()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Edge Point Datum target is missing",path_);
+    }
+    if (found->orientation.reverse == command.reverse) {
+        return success(false);
+    }
+    found->orientation.reverse = command.reverse;
+
+    auto candidate = part::PartDocument::restore(
+        document_.documentId(),after,document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Edge Point Datum violates Part authored-state invariants",
+            path_);
+    }
+    const auto body =
+        part::evaluatePart(*candidate.document,modeling_kernel);
+    const auto datums =
+        part::evaluateDatums(*candidate.document,body,*query);
+    const auto* current = datums.find(command.datum_id);
+    if (current == nullptr ||
+        current->status != part::DatumPlaneEvaluationStatus::resolved ||
+        !current->frame) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Edge Point Datum replay is unavailable: no mutation",
+            path_);
+    }
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Edge Point Datum");
+}
+
+DocumentSessionResult DocumentSession::execute(
     const EditDatumPlaneCommand& command,
     kernel::ISolidModelingKernel& modeling_kernel) {
     if (document_.revision() !=
@@ -4723,8 +4783,8 @@ DocumentSessionResult DocumentSession::execute(
     std::set<part::DatumId> unique_targets;
     for (const auto id : command.targets) {
         if (!id.valid() ||
-            document_.findDatumPlane(id) ==
-                nullptr) {
+            (document_.findDatumPlane(id) == nullptr &&
+             document_.findEdgePointDatumPlane(id) == nullptr)) {
             return failure(
                 DocumentSessionErrorCode::
                     invalid_command,
@@ -4739,16 +4799,23 @@ DocumentSessionResult DocumentSession::execute(
 
     auto after = document_.state();
     for (const auto id : unique_targets) {
-        auto* target =
-            findDatumPlane(after, id);
-        if (target == nullptr) {
-            return failure(
-                DocumentSessionErrorCode::
-                    invalid_command,
-                "Datum visibility target disappeared before commit",
-                path_);
+        if (auto* target = findDatumPlane(after,id)) {
+            target->visible = command.visible;
+        } else {
+            const auto edge = std::find_if(
+                after.edge_point_datum_planes.begin(),
+                after.edge_point_datum_planes.end(),
+                [id](const part::EdgePointDatumPlane& value) {
+                    return value.id == id;
+                });
+            if (edge == after.edge_point_datum_planes.end()) {
+                return failure(
+                    DocumentSessionErrorCode::invalid_command,
+                    "Datum visibility target disappeared before commit",
+                    path_);
+            }
+            edge->visible = command.visible;
         }
-        target->visible = command.visible;
     }
 
     return commitCommandState(
@@ -4785,10 +4852,10 @@ DocumentSessionResult DocumentSession::execute(
                 return datum.id ==
                        command.datum_id;
             });
-    if (found == datums.end()) {
+    if (found == datums.end() &&
+        document_.findEdgePointDatumPlane(command.datum_id) == nullptr) {
         return failure(
-            DocumentSessionErrorCode::
-                invalid_command,
+            DocumentSessionErrorCode::invalid_command,
             "Delete Datum Plane target DatumId does not exist",
             path_);
     }
@@ -4835,15 +4902,23 @@ DocumentSessionResult DocumentSession::execute(
                 return datum.id ==
                        command.datum_id;
             });
-    if (erase ==
-        after.datum_planes.end()) {
-        return failure(
-            DocumentSessionErrorCode::
-                invalid_command,
-            "Delete Datum Plane target disappeared before commit",
-            path_);
+    if (erase != after.datum_planes.end()) {
+        after.datum_planes.erase(erase);
+    } else {
+        const auto edge = std::find_if(
+            after.edge_point_datum_planes.begin(),
+            after.edge_point_datum_planes.end(),
+            [&command](const part::EdgePointDatumPlane& item) {
+                return item.id == command.datum_id;
+            });
+        if (edge == after.edge_point_datum_planes.end()) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Delete Datum Plane target disappeared before commit",
+                path_);
+        }
+        after.edge_point_datum_planes.erase(edge);
     }
-    after.datum_planes.erase(erase);
 
     return commitCommandState(
         std::move(after),

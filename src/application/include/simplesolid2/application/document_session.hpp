@@ -270,6 +270,14 @@ struct CreateEdgePointDatumPlaneCommand final {
     bool visible{true};
 };
 
+// Reverse changes only authored orientation: Frame3 playback must keep
+// its semantic source, origin and U unchanged after every revision.
+struct EditEdgePointDatumPlaneCommand final {
+    part::DatumId datum_id;
+    core::DocumentRevision expected_revision;
+    bool reverse{false};
+};
+
 struct EditDatumPlaneCommand final {
     part::DatumId datum_id;
     part::PlaneReference source;
@@ -753,6 +761,9 @@ public:
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] CreateDatumPlaneResult execute(
         const CreateEdgePointDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditEdgePointDatumPlaneCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const EditDatumPlaneCommand& command,

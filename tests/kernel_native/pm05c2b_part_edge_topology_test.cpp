@@ -2104,6 +2104,42 @@ void verifyS1SelectedSignedFrames(
         CHECK(session.document().findSketch(*hosted.sketch_id)
                   ->support == *source_support);
 
+        const auto edited = session.execute(
+            application::EditEdgePointDatumPlaneCommand{
+                *added.datum_id,session.document().revision(),false},
+            provider);
+        CHECK(edited.ok() && edited.changed);
+        CHECK(!session.document()
+                  .findEdgePointDatumPlane(*added.datum_id)
+                  ->orientation.reverse);
+        const auto updated_body = part::evaluatePart(
+            session.document(),provider);
+        const auto updated_datums = part::evaluateDatums(
+            session.document(),updated_body,provider);
+        const auto* updated = updated_datums.find(*added.datum_id);
+        CHECK(updated && updated->frame);
+        CHECK(s1Near3(updated->frame->origin,plane->frame->origin));
+        CHECK(s1Near3(updated->frame->u_axis,plane->frame->u_axis));
+        CHECK(s1Near3(updated->frame->normal,{
+            -plane->frame->normal.x,
+            -plane->frame->normal.y,
+            -plane->frame->normal.z}));
+
+        const auto shown = session.execute(
+            application::SetDatumPlaneVisibilityCommand{
+                {*added.datum_id},session.document().revision(),true});
+        CHECK(shown.ok() && shown.changed);
+        CHECK(session.document()
+                  .findEdgePointDatumPlane(*added.datum_id)->visible);
+
+        // A hosted Sketch forbids deleting its Datum source.
+        const auto before_delete = session.document().state();
+        const auto refused = session.execute(
+            application::DeleteDatumPlaneCommand{
+                *added.datum_id,session.document().revision()});
+        CHECK(!refused.ok() && !refused.changed);
+        CHECK(session.document().state() == before_delete);
+
         const auto source_before = session.document().state();
         const auto stale = session.execute(
             application::CreateEdgePointDatumPlaneCommand{
