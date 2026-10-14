@@ -2265,9 +2265,21 @@ int main(int argc, char* argv[]) {
                 *viewport,
                 QPoint{viewport->width()-7,viewport->height()-7});
             QApplication::processEvents();
-            QTest::mouseClick(
-                viewport,Qt::LeftButton,Qt::NoModifier,
-                certified_mid_pixel);
+            // Qt's QTest::mouseClick may synthesize a pointer move at
+            // its target before press, legitimately restoring MID hover.
+            // Send explicit raw press/release WITHOUT a MouseMove here.
+            // The ordinary positive test below still uses true QTest
+            // hover + click and must succeed.
+            QMouseEvent raw_mid_press{
+                QEvent::MouseButtonPress,
+                QPointF{certified_mid_pixel},
+                Qt::LeftButton,Qt::LeftButton,Qt::NoModifier};
+            CHECK(QApplication::sendEvent(viewport,&raw_mid_press));
+            QMouseEvent raw_mid_release{
+                QEvent::MouseButtonRelease,
+                QPointF{certified_mid_pixel},
+                Qt::LeftButton,Qt::NoButton,Qt::NoModifier};
+            CHECK(QApplication::sendEvent(viewport,&raw_mid_release));
             QApplication::processEvents();
             CHECK(!datum_result->text().contains(
                 QStringLiteral("Resolved MID")));

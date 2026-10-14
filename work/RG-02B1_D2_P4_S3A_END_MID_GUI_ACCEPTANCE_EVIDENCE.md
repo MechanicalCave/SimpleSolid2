@@ -9,6 +9,10 @@
 - Windows Draft FAST [#3065](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38626713961) **PASS 93/93** on source and registered native test SHA `1f2d3b9c1666e5501cc27aa36c0b1e9333c9f1ee`.
 - This work-ledger-only follow-up requests exact-head FOCUSED for `wb01.viewer_reference_presentation`, `sk04b.viewer_native_selection_query` and the full-only native `pm05f_r2.native_workbench_edit` with the newly required repeated END↔MID click matrix. Successful FAST alone does **not** close either Owner manual defect. FULL and another manual Windows acceptance remain OPEN.
 
+## Hover-negative test harness investigation (2026-10-14)
+
+Focused [#3071](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38635111322) **RED 2/3**, again at off-hover negative test. Candidate hypothesis: Qt `QTest::mouseClick` may move the cursor to the click target and legitimately trigger fresh hover, undermining a test specifically designed to prohibit a new hover. The isolated negative witness now uses direct synchronous `QMouseEvent` press/release with **no intervening MouseMove**, while retaining the separate positive real QTest::mouseMove/QTest::mouseClick native MID witness and repeated END↔MID. If this remains RED the product still retains a stale marker and must be fixed rather than relaxing the test. The two historical RED runs are preserved.
+
 ## Focused negative regression exposed stale MID fallback (2026-10-14)
 
 Windows FOCUSED [#3070](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38634724791) **RED 2/3** because the NEW native off-hover assertion failed at test line 2273 in `pm05f_r2.native_workbench_edit`. A genuine presentation fallback retained `datum_plane_draft_preview_anchor_` after selecting an Edge even when the hover candidate disappeared. The narrow correction conditions that fallback on the **actual point-first-hover-enabled state**; Edge-only MID requires same-Edge active preselection. The new negative native test remains intact and must pass on new exact-head FOCUSED/FULL; the RED result is part of historical evidence.
