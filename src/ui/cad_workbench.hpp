@@ -12,6 +12,7 @@
 
 #include <QWidget>
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -149,6 +150,7 @@ public:
         return project_edge_active_ ||
                axis_draft_.has_value() ||
                datum_plane_draft_.has_value() ||
+               edge_datum_edit_id_.has_value() ||
                extrude_draft_.has_value() ||
                revolve_draft_.has_value() ||
                fillet_draft_.has_value() ||
@@ -714,6 +716,7 @@ private:
     std::optional<core::DocumentRevision> edge_datum_edit_revision_;
     bool edge_datum_edit_reverse_{false};
     bool edge_datum_edit_preview_valid_{false};
+    std::uint64_t edge_datum_edit_context_generation_{1};
     std::optional<
         application::DatumPlaneDraftEvaluationResult>
         datum_plane_evaluation_;

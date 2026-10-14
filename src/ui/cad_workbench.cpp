@@ -4986,7 +4986,7 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
-            if (datum_plane_draft_) {
+            if (datum_plane_draft_ || edge_datum_edit_id_) {
                 cancelDatumPlane();
                 return;
             }
@@ -5062,6 +5062,7 @@ void CadWorkbench::buildUi() {
             if (edge_datum_edit_id_) {
                 edge_datum_edit_reverse_ =
                     !edge_datum_edit_reverse_;
+                ++edge_datum_edit_context_generation_;
                 refreshDatumPlaneEvaluation();
                 notifyCadInputContextChanged();
                 return;
@@ -6684,6 +6685,7 @@ bool CadWorkbench::startDatumPlaneEdit(
             return false;
         }
         edge_datum_edit_id_ = datum_id;
+        ++edge_datum_edit_context_generation_;
         edge_datum_edit_revision_ =
             document_session->document().revision();
         edge_datum_edit_reverse_ =
@@ -7314,6 +7316,7 @@ void CadWorkbench::clearDatumPlaneRuntimeContext() {
     datum_plane_draft_.reset();
     datum_plane_evaluation_.reset();
     edge_datum_edit_id_.reset();
+    ++edge_datum_edit_context_generation_;
     edge_datum_edit_revision_.reset();
     edge_datum_edit_preview_valid_ = false;
     edge_datum_edit_reverse_ = false;
@@ -12444,6 +12447,12 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (axis_draft_->generation() &
                 (axis_namespace - 1U));
     }
+    if (edge_datum_edit_id_) {
+        constexpr application::CadInputContextGeneration ns{
+            1ULL << 60U};
+        return ns | (edge_datum_edit_context_generation_ &
+                     (ns - 1U));
+    }
     if (datum_plane_draft_) {
         constexpr application::CadInputContextGeneration
             datum_plane_namespace =
@@ -12745,7 +12754,7 @@ CadWorkbench::submitCadDynamicInputRequest(
                   false,
                   "Axis Finish was rejected."};
     }
-    if (datum_plane_draft_) {
+    if (datum_plane_draft_ || edge_datum_edit_id_) {
         return finishDatumPlane()
             ? application::CadInputSubmitResult{
                   true, {}}
@@ -12872,6 +12881,27 @@ CadWorkbench::submitCadInput(
         return result;
     }
 
+    if (edge_datum_edit_id_) {
+        const auto word = upperAsciiTrimmed(text);
+        if (word == "CANCEL" || word == "ESC") {
+            cancelDatumPlane();
+            return {true, {}};
+        }
+        if (word == "REVERSE") {
+            edge_datum_edit_reverse_ = !edge_datum_edit_reverse_;
+            ++edge_datum_edit_context_generation_;
+            refreshDatumPlaneEvaluation();
+            notifyCadInputContextChanged();
+            return {true, {}};
+        }
+        if (word.empty() || word == "FINISH") {
+            return finishDatumPlane()
+                ? application::CadInputSubmitResult{true, {}}
+                : application::CadInputSubmitResult{
+                    false,"Edge Datum Finish was rejected."};
+        }
+        return {false,"Use REVERSE, FINISH or CANCEL."};
+    }
     if (datum_plane_draft_) {
         auto result =
             submitDatumPlaneCadInput(text);
@@ -13071,6 +13101,14 @@ QString CadWorkbench::cadInputPromptText() const {
                   "Command: AXIS — SOURCE · FINISH/CANCEL")
             : QStringLiteral(
                   "Command: AXIS — Select exactly one Line in an active Sketch · SOURCE · CANCEL/Esc");
+    }
+    if (edge_datum_edit_id_) {
+        return QStringLiteral(
+            "Command: EDIT EDGE DATUM — REVERSE · FINISH/CANCEL");
+    }
+    if (edge_datum_edit_id_) {
+        return QStringLiteral(
+            "Command: EDIT EDGE DATUM — REVERSE · FINISH/CANCEL");
     }
     if (datum_plane_draft_) {
         return datum_plane_draft_->source()
@@ -13575,7 +13613,7 @@ void CadWorkbench::refreshActiveContext() {
     if (axis_draft_) {
         refreshAxisEvaluation();
     }
-    if (datum_plane_draft_) {
+    if (datum_plane_draft_ || edge_datum_edit_id_) {
         refreshDatumPlaneEvaluation();
     }
     if (extrude_draft_) {
@@ -14990,7 +15028,7 @@ bool CadWorkbench::eventFilter(
         }
 
         if (watched == viewport_widget_ &&
-            datum_plane_draft_) {
+            (datum_plane_draft_ || edge_datum_edit_id_)) {
             if (key_event->key() ==
                 Qt::Key_Escape) {
                 cancelDatumPlane();
@@ -16429,7 +16467,7 @@ void CadWorkbench::syncActionState() {
         !project_edge_active_ &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16440,7 +16478,7 @@ void CadWorkbench::syncActionState() {
         !project_edge_active_ &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16464,7 +16502,7 @@ void CadWorkbench::syncActionState() {
             editing_sketch ||
             sketch_support_pick_active_ ||
             axis_draft_.has_value() ||
-            datum_plane_draft_.has_value() ||
+            (datum_plane_draft_.has_value() || edge_datum_edit_id_.has_value()) ||
             extrude_profile_pick_active_ ||
             extrude_draft_.has_value() ||
             revolve_draft_.has_value() ||
@@ -16478,7 +16516,7 @@ void CadWorkbench::syncActionState() {
     if (axis_draft_) {
         footer_mode = QStringLiteral("axis");
         mode_cue = QStringLiteral("Axis operation");
-    } else if (datum_plane_draft_) {
+    } else if (datum_plane_draft_ || edge_datum_edit_id_) {
         footer_mode = QStringLiteral("datum");
         mode_cue = QStringLiteral("Datum Plane operation");
     } else if (extrude_draft_) {
@@ -16551,7 +16589,7 @@ void CadWorkbench::syncActionState() {
         !editing_sketch &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16562,7 +16600,7 @@ void CadWorkbench::syncActionState() {
         axis_button_->setEnabled(
             active &&
             !sketch_support_pick_active_ &&
-            !datum_plane_draft_ &&
+            !(datum_plane_draft_ || edge_datum_edit_id_) &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16586,7 +16624,7 @@ void CadWorkbench::syncActionState() {
         !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         datum_plane_button_->setChecked(
-            datum_plane_draft_.has_value());
+            (datum_plane_draft_.has_value() || edge_datum_edit_id_.has_value()));
     }
 
     if (extrude_button_ != nullptr) {
@@ -16597,7 +16635,7 @@ void CadWorkbench::syncActionState() {
             !editing_sketch &&
             !sketch_support_pick_active_ &&
             !axis_draft_ &&
-            !datum_plane_draft_ &&
+            !(datum_plane_draft_ || edge_datum_edit_id_) &&
             !extrude_draft_ &&
         !revolve_draft_ &&
         !edge_feature_active &&
@@ -16619,7 +16657,7 @@ void CadWorkbench::syncActionState() {
             !editing_sketch &&
             !sketch_support_pick_active_ &&
             !axis_draft_ &&
-            !datum_plane_draft_ &&
+            !(datum_plane_draft_ || edge_datum_edit_id_) &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
             !revolve_draft_ &&
@@ -16649,7 +16687,7 @@ void CadWorkbench::syncActionState() {
         !editing_sketch &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16752,7 +16790,7 @@ void CadWorkbench::syncActionState() {
         active &&
         selected_axis_id_.has_value() &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -16773,7 +16811,7 @@ void CadWorkbench::syncActionState() {
         active &&
         selected_datum_id_.has_value() &&
         !axis_draft_ &&
-        !datum_plane_draft_ &&
+        !(datum_plane_draft_ || edge_datum_edit_id_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
