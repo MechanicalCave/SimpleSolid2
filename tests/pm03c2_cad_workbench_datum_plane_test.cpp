@@ -936,6 +936,33 @@ int main(int argc, char* argv[]) {
         CHECK(!edge_tool->isChecked());
         CHECK(edge_session.document().revision() == before_revision);
         CHECK(edge_session.undoDepth() == before_undo);
+
+        // Command Line alias and explicit ESC are the same single-tool
+        // focus/cancellation contract as toolbar/Operations. Stale
+        // context generations may not Finish a cancelled Datum or
+        // consume an Undo entry, even on an unsupported native source.
+        command = edge_workbench.submitCadInput(
+            "DATUM PLANE",edge_workbench.cadInputContextGeneration());
+        CHECK(command.accepted);
+        CHECK(edge_tool->isChecked());
+        CHECK(edge_constructor->currentIndex() == 0);
+        edge_constructor->setCurrentIndex(1);
+        QApplication::processEvents();
+        CHECK(edge_constructor->currentIndex() == 1);
+        const auto before_esc_context =
+            edge_workbench.cadInputContextGeneration();
+        command = edge_workbench.submitCadInput(
+            "ESC",before_esc_context);
+        CHECK(command.accepted);
+        CHECK(!edge_tool->isChecked());
+        CHECK(edge_workbench.cadInputContextGeneration() !=
+              before_esc_context);
+        command = edge_workbench.submitCadInput(
+            "FINISH",before_esc_context);
+        CHECK(!command.accepted);
+        CHECK(edge_session.document().revision() == before_revision);
+        CHECK(edge_session.undoDepth() == before_undo);
+        CHECK(edge_session.document().edgePointDatumPlanes().empty());
     }
 
     std::cout
