@@ -6,6 +6,7 @@
 
 #include <QPointer>
 #include <QDebug>
+#include <iostream>
 
 #include <algorithm>
 #include <array>
@@ -1546,6 +1547,13 @@ void PartViewportController::setDatumPlaneDraftPreview(
                << "anchor" << datum_plane_draft_preview_anchor_
                << "source" << datum_selected_mid_edge_.has_value()
                << "hover" << datum_selected_mid_edge_hovered_;
+
+    std::cerr << "S3A_DBG draft source="
+              << datum_selected_mid_edge_.has_value()
+              << " hovered=" << datum_selected_mid_edge_hovered_
+              << " pointFirst=" << datum_point_first_mid_hover_enabled_
+              << " anchor=" << datum_plane_draft_preview_anchor_
+              << '\n';
 
     // The MID acquisition frame produces only a marker. A finished source
     // produces only the plane. Neither intermediate state authors a Datum.
@@ -5739,6 +5747,11 @@ void PartViewportController::clearBodyTopologyPreselection() {
                << "wasSelected" << had_selected_mid_hover
                << "wasPointFirst" << had_hover
                << "pointFirstEnabled" << datum_point_first_mid_hover_enabled_;
+    std::cerr << "S3A_DBG clear hadSelected="
+              << had_selected_mid_hover
+              << " hadPointFirst=" << had_hover
+              << " enabled=" << datum_point_first_mid_hover_enabled_
+              << '\n';
     if (had_hover && datum_point_first_mid_hover_enabled_)
         setDatumPlaneDraftPreview(std::nullopt);
     else if (had_selected_mid_hover)
@@ -5794,6 +5807,12 @@ bool PartViewportController::selectedDatumMidEdgeHovered() const {
 }
 
 void PartViewportController::refreshSelectedDatumMidMarker() {
+    std::cerr << "S3A_DBG REFRESH marker hover="
+              << datum_selected_mid_edge_hovered_
+              << " part=" << part_evaluation_cache_.has_value()
+              << " datum=" << datum_evaluation_cache_.has_value()
+              << " body=" << body_scene_cache_.has_value()
+              << '\n';
     qWarning() << "S3A_DBG refreshMarker"
                << "viewport" << (viewport_ != nullptr)
                << "session" << (session_ != nullptr)
@@ -5819,6 +5838,10 @@ void PartViewportController::refreshSelectedDatumMidMarker() {
     const auto scene = buildReferenceScene();
     if (scene) {
         const bool published = viewport_->setReferenceScene(*scene);
+        std::cerr << "S3A_DBG PUBLISHED "
+                  << published
+                  << " marker=" << scene->mid_anchor.has_value()
+                  << '\n';
         qWarning() << "S3A_DBG published"
                    << published << "marker" << scene->mid_anchor.has_value();
     } else {
@@ -5881,6 +5904,9 @@ void PartViewportController::refreshDatumPointFirstMidHover() {
 void PartViewportController::onBodyTopologyPreselectionIntent(
     const viewer::BodyTopologyPickQueryResult& query,
     viewer::ViewportPoint2 point) {
+    std::cerr << "S3A_DBG hoverEvent " << point.x << "," << point.y
+              << " valid=" << query.valid()
+              << " n=" << query.candidates.size() << '\n';
     qWarning() << "S3A_DBG hoverEvent" << point.x << point.y
                << "valid" << query.valid()
                << "candidates" << query.candidates.size();
