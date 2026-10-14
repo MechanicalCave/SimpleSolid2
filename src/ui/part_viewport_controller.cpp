@@ -1545,6 +1545,23 @@ void PartViewportController::setDatumPlaneDraftPreview(
     refreshPresentation();
 }
 
+void PartViewportController::setDatumPointFirstMidHoverEnabled(
+    bool enabled, bool reverse) {
+    if (datum_point_first_mid_hover_enabled_ == enabled &&
+        datum_point_first_mid_hover_reverse_ == reverse)
+        return;
+    const bool had_hover = datum_mid_hovered_pick_.has_value();
+    datum_point_first_mid_hover_enabled_ = enabled;
+    datum_point_first_mid_hover_reverse_ = reverse;
+    datum_mid_hovered_pick_.reset();
+    if (!enabled) {
+        if (had_hover)
+            setDatumPlaneDraftPreview(std::nullopt);
+    } else {
+        refreshDatumPointFirstMidHover();
+    }
+}
+
 bool PartViewportController::setSketchPrimaryPointerRouting(
     viewer::PrimaryPointerRouting routing) {
     if (activeSketch() == nullptr) {
@@ -4769,7 +4786,10 @@ void PartViewportController::onViewportIntent(
             body_scene_revision_ &&
             *body_scene_revision_ == session_->document().revision() &&
             datum_mid_point_pick_handler_) {
-            datum_mid_point_pick_handler_();
+            datum_mid_point_pick_handler_(
+                datum_point_first_mid_hover_enabled_
+                    ? datum_mid_hovered_pick_
+                    : std::nullopt);
         }
         return;
     }
@@ -5677,6 +5697,10 @@ bool PartViewportController::setProjectFaceSourceFeedback(
 
 void PartViewportController::clearBodyTopologyPreselection() {
     body_topology_candidate_stack_.reset();
+    const bool had_hover = datum_mid_hovered_pick_.has_value();
+    datum_mid_hovered_pick_.reset();
+    if (had_hover && datum_point_first_mid_hover_enabled_)
+        setDatumPlaneDraftPreview(std::nullopt);
     if (viewport_ != nullptr) {
         static_cast<void>(
             viewport_->setBodyTopologyPreselection(
@@ -5701,7 +5725,55 @@ void PartViewportController::applyBodyTopologyPreselection() {
     if (!viewport_->setBodyTopologyPreselection(
             token)) {
         clearBodyTopologyPreselection();
+        return;
     }
+    refreshDatumPointFirstMidHover();
+}
+
+void PartViewportController::refreshDatumPointFirstMidHover() {
+    if (!datum_point_first_mid_hover_enabled_)
+        return;
+
+    std::optional<DatumMidHoverPick> pick;
+    std::optional<kernel::Frame3> frame;
+    if (session_ && body_scene_cache_ &&
+        body_scene_cache_->purpose ==
+            viewer::BodyScenePurpose::current_body &&
+        body_topology_catalog_cache_ &&
+        body_topology_candidate_stack_ &&
+        body_topology_candidate_stack_->valid() &&
+        body_topology_candidate_stack_->generation ==
+            body_scene_cache_->generation) {
+        const auto& candidate =
+            body_topology_candidate_stack_->candidates[
+                body_topology_candidate_stack_->active_index];
+        if (candidate.kind ==
+                viewer::BodyTopologyPresentationKind::edge) {
+            const auto edge = bodyTopologyAddressFor(
+                candidate.token);
+            const auto stage =
+                body_topology_catalog_cache_->stage;
+            if (edge && stage.valid() &&
+                bodyTopologySelectionAddressCurrent(*edge)) {
+                pick = DatumMidHoverPick{stage,*edge};
+                if (datum_mid_hovered_pick_ == pick)
+                    return; // moving along the same Edge retains marker
+                const auto preview = previewCurrentEdgeDatum(
+                    stage,*edge,std::nullopt,
+                    datum_point_first_mid_hover_reverse_);
+                if (preview)
+                    frame = preview->frame;
+                else
+                    pick.reset();
+            }
+        }
+    }
+    const bool had_hover = datum_mid_hovered_pick_.has_value();
+    datum_mid_hovered_pick_ = pick;
+    if (frame)
+        setDatumPlaneDraftPreview(*frame,true);
+    else if (had_hover)
+        setDatumPlaneDraftPreview(std::nullopt);
 }
 
 void PartViewportController::onBodyTopologyPreselectionIntent(
