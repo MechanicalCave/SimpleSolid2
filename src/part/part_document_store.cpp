@@ -1357,18 +1357,43 @@ std::string serializeAuthored(
             return {};
         }
 
-        axes.push_back(
-            {
-                {"id", axis.id.serialized()},
-                {"kind", "sketch_line"},
-                {"name", axis.name},
-                {"source_sketch_id",
-                 std::string{
-                     axis.source.sketch_id.value()}},
-                {"source_entity_id",
-                 axis.source.entity_id.serialized()},
-                {"visible", axis.visible},
-            });
+        if (const auto* sketch_source =
+                std::get_if<SketchLineAxisSource>(
+                    &axis.source)) {
+            // Native v19 retains EXACT existing Sketch-Line record shape.
+            axes.push_back(
+                {
+                    {"id", axis.id.serialized()},
+                    {"kind", "sketch_line"},
+                    {"name", axis.name},
+                    {"source_sketch_id",
+                     std::string{
+                         sketch_source->sketch_id.value()}},
+                    {"source_entity_id",
+                     sketch_source->entity_id.serialized()},
+                    {"visible", axis.visible},
+                });
+        } else if (const auto* edge_source =
+                       std::get_if<
+                           StraightMaterialEdgeAxisSource>(
+                           &axis.source)) {
+            const auto encoded =
+                materialEdgeReferenceJson(
+                    edge_source->edge);
+            if (encoded.empty()) {
+                return {};
+            }
+            axes.push_back(
+                {
+                    {"id", axis.id.serialized()},
+                    {"kind", "straight_body_edge"},
+                    {"name", axis.name},
+                    {"source_edge", encoded},
+                    {"visible", axis.visible},
+                });
+        } else {
+            return {};
+        }
     }
 
     nlohmann::json profiles =
@@ -3076,14 +3101,15 @@ parseProfileIntent(
     return result;
 }
 
-bool parseAxesV12(
+bool parseAxes(
     const nlohmann::json& value,
     AxisIdCursor cursor,
+    int schema_version,
+    const FeatureIdCursor* feature_cursor,
     std::vector<PartAxis>& axes,
     std::string& error) {
     if (!value.is_array()) {
-        error =
-            "Native Part Axis payload must be an array";
+        error = "Native Part Axis payload must be an array";
         return false;
     }
 
@@ -3093,68 +3119,93 @@ bool parseAxesV12(
 
     for (const auto& item : value) {
         if (!item.is_object() ||
-            item.size() != 6U ||
             !item.contains("id") ||
             !item.contains("kind") ||
             !item.contains("name") ||
-            !item.contains("source_sketch_id") ||
-            !item.contains("source_entity_id") ||
             !item.contains("visible") ||
             !item["id"].is_string() ||
             !item["kind"].is_string() ||
             !item["name"].is_string() ||
-            !item["source_sketch_id"].is_string() ||
-            !item["source_entity_id"].is_string() ||
-            !item["visible"].is_boolean() ||
-            item["kind"].get<std::string>() !=
-                "sketch_line") {
-            error =
-                "Native Part Axis payload is invalid";
+            !item["visible"].is_boolean()) {
+            error = "Native Part Axis payload is invalid";
             return false;
         }
 
-        const auto id_text =
-            item["id"].get<std::string>();
-        const auto id =
-            AxisId::parse(id_text);
+        const auto id_text = item["id"].get<std::string>();
+        const auto id = AxisId::parse(id_text);
         if (!id ||
             !cursor.containsAllocated(*id) ||
             !ids.insert(id_text).second) {
-            error =
-                "Native Part Axis identity is invalid";
+            error = "Native Part Axis identity is invalid";
             return false;
         }
 
-        const auto sketch_id =
-            sketch::SketchId::parse(
-                item["source_sketch_id"]
-                    .get<std::string>());
-        const auto entity_id =
-            sketch::EntityId::parse(
-                item["source_entity_id"]
-                    .get<std::string>());
-        if (!sketch_id || !entity_id) {
+        const auto kind = item["kind"].get<std::string>();
+        std::optional<PartAxisSource> source;
+        if (kind == "sketch_line") {
+            // Same exact six-field layout in native v12...v19.
+            if (item.size() != 6U ||
+                !item.contains("source_sketch_id") ||
+                !item.contains("source_entity_id") ||
+                !item["source_sketch_id"].is_string() ||
+                !item["source_entity_id"].is_string()) {
+                error =
+                    "Native Part contains malformed Sketch Line Axis source";
+                return false;
+            }
+            const auto sketch_id =
+                sketch::SketchId::parse(
+                    item["source_sketch_id"].get<std::string>());
+            const auto entity_id =
+                sketch::EntityId::parse(
+                    item["source_entity_id"].get<std::string>());
+            if (!sketch_id || !entity_id) {
+                error =
+                    "Native Part Axis source identity is invalid";
+                return false;
+            }
+            source.emplace(SketchLineAxisSource{
+                *sketch_id, *entity_id});
+        } else if (kind == "straight_body_edge" &&
+                   schema_version >= 19 &&
+                   feature_cursor != nullptr) {
+            if (item.size() != 5U ||
+                !item.contains("source_edge") ||
+                !item["source_edge"].is_object()) {
+                error =
+                    "Native Part contains malformed schema-v19 Body Edge Axis";
+                return false;
+            }
+            const auto material =
+                parseMaterialEdgeReferenceV14(
+                    item["source_edge"],
+                    *feature_cursor,
+                    schema_version,
+                    error);
+            if (!material) {
+                return false;
+            }
+            source.emplace(StraightMaterialEdgeAxisSource{
+                *material});
+        } else {
+            // Older version records may never author the new source.
             error =
-                "Native Part Axis source identity is invalid";
+                "Native Part contains unsupported Axis source kind";
             return false;
         }
 
         PartAxis axis{
             *id,
             item["name"].get<std::string>(),
-            SketchLineAxisSource{
-                *sketch_id,
-                *entity_id},
+            std::move(*source),
             item["visible"].get<bool>()};
         if (!partAxisStructurallyValid(axis)) {
             error =
-                "Native Part contains structurally invalid schema-v12 Axis";
+                "Native Part contains structurally invalid Axis source";
             return false;
         }
-
         axes.push_back(std::move(axis));
     }
-
     return true;
 }
 
@@ -3812,9 +3863,13 @@ std::optional<PartAuthoredState> parseAuthored(
             return std::nullopt;
         }
         state.next_axis_id = *cursor;
-        if (!parseAxesV12(
+        if (!parseAxes(
                 authored["axes"],
                 *cursor,
+                schema_version,
+                feature_reference_cursor
+                    ? &*feature_reference_cursor
+                    : nullptr,
                 state.axes,
                 error)) {
             return std::nullopt;

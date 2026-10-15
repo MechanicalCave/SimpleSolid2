@@ -6256,9 +6256,19 @@ bool CadWorkbench::startAxisEdit(
         return false;
     }
 
+    const auto* sketch_axis_source =
+        std::get_if<part::SketchLineAxisSource>(
+            &axis->source);
+    // A stage-qualified Body Edge Axis is never a fake source Sketch.
+    if (sketch_axis_source == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Edge Axis Edit uses the Work Features Edge constructor."));
+        return false;
+    }
     if (active_sketch_id_ &&
         *active_sketch_id_ !=
-            axis->source.sketch_id) {
+            sketch_axis_source->sketch_id) {
         setStatusText(
             QStringLiteral(
                 "Finish the active Sketch before editing an Axis from another Sketch."));
@@ -6278,9 +6288,9 @@ bool CadWorkbench::startAxisEdit(
     if (!active_sketch_id_ &&
         document_session->document()
             .findSketch(
-                axis->source.sketch_id) != nullptr) {
+                sketch_axis_source->sketch_id) != nullptr) {
         requestEditSketch(
-            axis->source.sketch_id);
+            sketch_axis_source->sketch_id);
     }
 
     refreshAxisEvaluation();
@@ -12193,7 +12203,11 @@ void CadWorkbench::setSketchLineAxisDesignation(
     std::vector<part::AxisId> matches;
     for (const auto& axis :
          document_session_->document().axes()) {
-        if (axis.source == source) {
+        if (const auto* sketch_source =
+                            std::get_if<part::SketchLineAxisSource>(
+                                &axis.source);
+                        sketch_source != nullptr &&
+                        *sketch_source == source) {
             matches.push_back(axis.id);
         }
     }
@@ -15069,7 +15083,8 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                     document_session_->document(),
                     reference,
                     &evaluation,
-                    &datums);
+                    &datums,
+                    exact_edge_provider);
             axis_evaluation_statuses_.push_back(
                 AxisEvaluationUiState{
                     axis.id,
@@ -15176,12 +15191,20 @@ void CadWorkbench::refreshAxisProperties(
     axis_identity_->setText(
         fromUtf8(
             axis->id.serialized()));
-    axis_source_sketch_->setText(
-        fromUtf8(
-            axis->source.sketch_id.value()));
-    axis_source_line_->setText(
-        fromUtf8(
-            axis->source.entity_id.serialized()));
+    if (const auto* sketch_source =
+            std::get_if<part::SketchLineAxisSource>(
+                &axis->source)) {
+        axis_source_sketch_->setText(
+            fromUtf8(sketch_source->sketch_id.value()));
+        axis_source_line_->setText(
+            fromUtf8(sketch_source->entity_id.serialized()));
+    } else {
+        // Read-only until the Owner-approved Edge constructor UI runs.
+        axis_source_sketch_->setText(
+            QStringLiteral("Body stage"));
+        axis_source_line_->setText(
+            QStringLiteral("Strict semantic Edge"));
+    }
     axis_visibility_->setText(
         axis->visible
             ? QStringLiteral("Shown")
@@ -17035,7 +17058,11 @@ void CadWorkbench::syncSketchInteractionUi() {
                 for (const auto& axis :
                      document_session_->document()
                          .axes()) {
-                    if (axis.source == source) {
+                    if (const auto* sketch_source =
+                            std::get_if<part::SketchLineAxisSource>(
+                                &axis.source);
+                        sketch_source != nullptr &&
+                        *sketch_source == source) {
                         ++matches;
                     }
                 }

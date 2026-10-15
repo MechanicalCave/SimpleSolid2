@@ -2025,8 +2025,11 @@ void PartDocumentTreeController::rebuild(
 
             for (const auto& axis :
                  session_->document().axes()) {
-                if (axis.source.sketch_id !=
-                    sketch.id) {
+                const auto* sketch_source =
+                    std::get_if<part::SketchLineAxisSource>(
+                        &axis.source);
+                if (sketch_source == nullptr ||
+                    sketch_source->sketch_id != sketch.id) {
                     continue;
                 }
 
@@ -2084,8 +2087,8 @@ void PartDocumentTreeController::rebuild(
                         "AxisId: %1\nSource SketchId: %2\nSource EntityId: %3\nVisibility: %4\nStatus: %5\nDiagnostic: %6")
                         .arg(
                             fromUtf8(axis.id.serialized()),
-                            fromUtf8(axis.source.sketch_id.value()),
-                            fromUtf8(axis.source.entity_id.serialized()),
+                            fromUtf8(sketch_source->sketch_id.value()),
+                            fromUtf8(sketch_source->entity_id.serialized()),
                             axis.visible
                                 ? QStringLiteral("Shown")
                                 : QStringLiteral("Hidden"),
@@ -2116,9 +2119,15 @@ void PartDocumentTreeController::rebuild(
         QTreeWidgetItem* missing_sources = nullptr;
         for (const auto& axis :
              session_->document().axes()) {
+            const auto* sketch_source =
+                std::get_if<part::SketchLineAxisSource>(
+                    &axis.source);
+            if (sketch_source == nullptr) {
+                continue; // future Edge Axis belongs in Reference Geometry
+            }
             const auto* source_sketch =
                 session_->document().findSketch(
-                    axis.source.sketch_id);
+                    sketch_source->sketch_id);
             if (source_sketch != nullptr) {
                 continue;
             }
@@ -2192,9 +2201,9 @@ void PartDocumentTreeController::rebuild(
                     .arg(
                         fromUtf8(axis.id.serialized()),
                         fromUtf8(
-                            axis.source.sketch_id.value()),
+                            sketch_source->sketch_id.value()),
                         fromUtf8(
-                            axis.source.entity_id.serialized()),
+                            sketch_source->entity_id.serialized()),
                         axis.visible
                             ? QStringLiteral("Shown")
                             : QStringLiteral("Hidden"),
