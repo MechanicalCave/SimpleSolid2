@@ -75,7 +75,8 @@ struct AxisEvaluation final {
     const PartDocument& document,
     const AxisReference& reference,
     const PartEvaluation* part_evaluation = nullptr,
-    const DatumEvaluation* datum_evaluation = nullptr) noexcept;
+    const DatumEvaluation* datum_evaluation = nullptr,
+    kernel::IExactBoundedEdgeGeometryQuery* provider = nullptr) noexcept;
 
 // RG-02C/B1 first product seam: a read-only, provider-aware candidate
 // infinite UNORIENTED line from one strict stage-bound material Body Edge.
