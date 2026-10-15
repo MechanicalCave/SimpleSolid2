@@ -3432,6 +3432,8 @@ void CadWorkbench::buildUi() {
     // One accepted constructor, not separate END/MID user modes.
     datum_plane_constructor_combo_->addItem(
         QStringLiteral("Edge + Point"));
+    datum_plane_constructor_combo_->addItem(
+        QStringLiteral("3 Points"));
     datum_plane_constructor_form->addRow(
         QStringLiteral("Constructor"),
         datum_plane_constructor_combo_);
@@ -3447,6 +3449,37 @@ void CadWorkbench::buildUi() {
     datum_plane_source_label_->setWordWrap(true);
     datum_plane_operations_layout->addWidget(
         datum_plane_source_label_);
+    // One Datum Plane Operations panel; each button selects the next strict
+    // semantic END click's slot, never a new independent CAD tool.
+    three_point_datum_slots_widget_ =
+        new QWidget(datum_plane_operations_widget_);
+    three_point_datum_slots_widget_->setObjectName(
+        QStringLiteral("datumPlaneThreePointSlotsWidget"));
+    auto* three_point_slots_layout =
+        new QHBoxLayout(three_point_datum_slots_widget_);
+    three_point_slots_layout->setContentsMargins(0,0,0,0);
+    for (std::size_t index = 0; index < 3U; ++index) {
+        auto* button = new QPushButton(
+            QStringLiteral("P%1: Pick END").arg(
+                static_cast<int>(index+1U)),
+            three_point_datum_slots_widget_);
+        button->setObjectName(QStringLiteral("datumPlanePointP%1")
+            .arg(static_cast<int>(index+1U)));
+        button->setCheckable(true);
+        three_point_datum_slot_buttons_[index] = button;
+        three_point_slots_layout->addWidget(button);
+        QObject::connect(button,&QPushButton::clicked,this,
+            [this,index] {
+                if (!three_point_datum_revision_) return;
+                three_point_datum_active_slot_ = index;
+                ++three_point_datum_context_generation_;
+                syncDatumPlaneUi();
+                notifyCadInputContextChanged();
+            });
+    }
+    three_point_datum_slots_widget_->setVisible(false);
+    datum_plane_operations_layout->addWidget(
+        three_point_datum_slots_widget_);
 
     auto* datum_plane_offset_form =
         new QFormLayout;
@@ -5075,6 +5108,14 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
+            if (three_point_datum_revision_) {
+                three_point_datum_reverse_ =
+                    !three_point_datum_reverse_;
+                ++three_point_datum_context_generation_;
+                refreshDatumPlaneEvaluation();
+                notifyCadInputContextChanged();
+                return;
+            }
             if (edge_datum_create_revision_) {
                 edge_datum_create_reverse_ =
                     !edge_datum_create_reverse_;
@@ -6841,7 +6882,8 @@ bool CadWorkbench::startDatumPlaneTool() {
         return false;
     }
     if (datum_plane_draft_ || edge_datum_edit_id_ ||
-        edge_datum_create_revision_) {
+        edge_datum_create_revision_ ||
+        three_point_datum_revision_) {
         setStatusText(
             QStringLiteral(
                 "A Datum Plane operation is already active."));
@@ -6938,6 +6980,7 @@ bool CadWorkbench::startDatumPlaneEdit(
     if (datum_plane_draft_ ||
         edge_datum_edit_id_ ||
         edge_datum_create_revision_ ||
+        three_point_datum_revision_ ||
         axis_draft_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
