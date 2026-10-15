@@ -1518,7 +1518,7 @@ void verifyPartIntegration() {
                                             path);
                                     CHECK(package.ok());
                                     CHECK(package.package->descriptor
-                                              .domain_schema_version == 17);
+                                              .domain_schema_version == 18);
                                     auto authored = nlohmann::json::parse(
                                         package.package->authored_json);
                                     const auto ref_json =
@@ -1530,6 +1530,16 @@ void verifyPartIntegration() {
                                             const std::filesystem::path&
                                                 output) {
                                             auto legacy_json = document_json;
+                                            if (version < 18) {
+                                                CHECK(legacy_json.contains(
+                                                    "three_point_datum_planes"));
+                                                CHECK(legacy_json.at(
+                                                    "three_point_datum_planes").is_array());
+                                                CHECK(legacy_json.at(
+                                                    "three_point_datum_planes").empty());
+                                                legacy_json.erase(
+                                                    "three_point_datum_planes");
+                                            }
                                             if (version < 17) {
                                                 CHECK(legacy_json.contains(
                                                     "edge_point_datum_planes"));

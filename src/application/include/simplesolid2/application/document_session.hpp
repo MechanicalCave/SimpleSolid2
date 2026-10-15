@@ -13,6 +13,7 @@
 #include <simplesolid2/sketch/structural_edit.hpp>
 #include <simplesolid2/sketch/transform.hpp>
 
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <map>
@@ -285,6 +286,22 @@ struct EditEdgePointDatumPlaneCommand final {
 struct ReplaceEdgePointDatumPlaneSourceCommand final {
     part::DatumId datum_id;
     part::EdgePointDatumSource source;
+    core::DocumentRevision expected_revision;
+    bool reverse{false};
+};
+
+// S4A headless only: source acquisition from the future S4B GUI is not
+// a Part mutation. Commands carry just strict, stage-semantic Point intent.
+struct CreateThreePointDatumPlaneCommand final {
+    std::array<part::StageSemanticPointReference, 3> points;
+    core::DocumentRevision expected_revision;
+    bool reverse{false};
+    bool visible{true};
+};
+
+struct EditThreePointDatumPlaneCommand final {
+    part::DatumId datum_id;
+    std::array<part::StageSemanticPointReference, 3> points;
     core::DocumentRevision expected_revision;
     bool reverse{false};
 };
@@ -778,6 +795,12 @@ public:
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const ReplaceEdgePointDatumPlaneSourceCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] CreateDatumPlaneResult execute(
+        const CreateThreePointDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditThreePointDatumPlaneCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const EditDatumPlaneCommand& command,

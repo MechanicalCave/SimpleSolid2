@@ -41,6 +41,10 @@ enum class DatumPlaneEvaluationDiagnostic {
     edge_native_geometry_unavailable,
     invalid_orientation_intent,
     orientation_review_required,
+    point_source_missing,
+    point_source_ambiguous,
+    point_source_unsupported,
+    point_invalid_geometry,
 };
 
 struct DatumPlaneEvaluation final {

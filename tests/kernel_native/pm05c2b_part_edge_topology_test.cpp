@@ -1685,6 +1685,229 @@ std::vector<S4P0PointKey> verifyS4P0NativeEndPointIdentity(
     return keys;
 }
 
+// Existing S1 helper is defined later in this registered test translation
+// unit; forward declare its exact signature for the additive S4A witness.
+[[nodiscard]] bool s1Near3(kernel::Point3 a,kernel::Point3 b);
+
+// S4A-F01/F02/F04/F06: actual Part-owned v18 ThreePointDatum source,
+// strict geometric frame and Command/Undo/cold provider replay. P0's 24→8
+// stage-qualified semantic keys are the ONLY candidate source identities.
+std::array<part::StageSemanticPointReference,3>
+verifyS4AThreePointDatumLifecycle(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const std::vector<S4P0PointKey>& unique_keys) {
+    CHECK(unique_keys.size() == 8U);
+    CHECK(evaluation.features.front().result_topology);
+    const auto& catalog = *evaluation.features.front().result_topology;
+    const auto positionFor = [&catalog](const S4P0PointKey& key) {
+        const auto it = std::find_if(
+            catalog.vertices.begin(),catalog.vertices.end(),
+            [&key](const auto& v) {
+                return v.referenceability == kernel::ReferenceStatus::resolved &&
+                       v.point_candidates.size() == 1U &&
+                       v.point_candidates.front() == key.second &&
+                       v.provider_point.has_value();
+            });
+        CHECK(it != catalog.vertices.end());
+        return *it->provider_point;
+    };
+    const auto crossNorm2 = [](kernel::Point3 p,
+                               kernel::Point3 q,
+                               kernel::Point3 r) {
+        const kernel::Point3 u{q.x-p.x,q.y-p.y,q.z-p.z};
+        const kernel::Point3 v{r.x-p.x,r.y-p.y,r.z-p.z};
+        const double cx=u.y*v.z-u.z*v.y;
+        const double cy=u.z*v.x-u.x*v.z;
+        const double cz=u.x*v.y-u.y*v.x;
+        return cx*cx+cy*cy+cz*cz;
+    };
+    // Geometry chooses a *test fixture triple* only, never durable identity.
+    std::array<std::size_t,3> sample{};
+    bool sample_found=false;
+    for (std::size_t i=0;i<unique_keys.size() && !sample_found;++i)
+        for (std::size_t j=i+1;j<unique_keys.size() && !sample_found;++j)
+            for (std::size_t k=j+1;k<unique_keys.size() && !sample_found;++k)
+                if (crossNorm2(positionFor(unique_keys[i]),
+                               positionFor(unique_keys[j]),
+                               positionFor(unique_keys[k])) > 1.0e-4) {
+                    sample={i,j,k};
+                    sample_found=true;
+                }
+    CHECK(sample_found);
+    std::array<part::StageSemanticPointReference,3> points{};
+    for (std::size_t i=0;i<3;++i) {
+        const auto& key=unique_keys[sample[i]];
+        points[i]={key.first,key.second};
+    }
+    auto cursor=document.datumIdCursor();
+    const auto prospective_id=cursor.allocate();
+    CHECK(prospective_id.has_value());
+    CHECK(part::threePointDatumPlaneStructurallyValid(
+        part::ThreePointDatumPlane{*prospective_id,points,false,true}));
+
+    auto cloned=part::PartDocument::restore(
+        document.documentId(),document.state(),document.revision());
+    CHECK(cloned.ok());
+    application::DocumentSession session{{},std::move(*cloned.document)};
+    const auto created=session.execute(
+        application::CreateThreePointDatumPlaneCommand{
+            points,session.document().revision(),false,true},provider);
+    CHECK(created.ok() && created.changed && created.datum_id);
+    const auto id=*created.datum_id;
+    CHECK(session.document().threePointDatumPlanes().size()==1U);
+    const auto first=part::evaluateDatums(
+        session.document(),part::evaluatePart(session.document(),provider),
+        provider);
+    const auto* first_frame=first.find(id);
+    CHECK(first_frame && first_frame->status==
+          part::DatumPlaneEvaluationStatus::resolved && first_frame->frame);
+    const auto frame=*first_frame->frame;
+
+    // S4A-F03: synthetic *current evaluation* geometry can be degenerate
+    // even when the authored source is structurally valid. Altering a
+    // disposable stage catalog does not edit the native provider/Part/XYZ.
+    auto geometry_candidate = part::evaluatePart(session.document(),provider);
+    CHECK(geometry_candidate.features.front().result_topology.has_value());
+    auto& candidate_catalog =
+        *geometry_candidate.features.front().result_topology;
+    const auto corner = std::find_if(
+        candidate_catalog.vertices.begin(),candidate_catalog.vertices.end(),
+        [&points](const auto& vertex) {
+            return vertex.point_candidates.size() == 1U &&
+                   vertex.point_candidates.front() == points[2].point;
+        });
+    CHECK(corner != candidate_catalog.vertices.end());
+    CHECK(corner->provider_point.has_value());
+    const auto source0=positionFor(unique_keys[sample[0]]);
+    const auto source1=positionFor(unique_keys[sample[1]]);
+    const kernel::Point3 midpoint{
+        (source0.x+source1.x)*0.5,
+        (source0.y+source1.y)*0.5,
+        (source0.z+source1.z)*0.5};
+    const auto expectInvalidGeometry = [&]() {
+        const auto invalid = part::evaluateDatums(
+            session.document(),geometry_candidate,provider);
+        const auto* result = invalid.find(id);
+        CHECK(result != nullptr);
+        CHECK(result->status != part::DatumPlaneEvaluationStatus::resolved);
+        CHECK(!result->frame.has_value());
+    };
+    corner->provider_point=midpoint;
+    expectInvalidGeometry(); // exactly collinear, all source keys distinct
+    corner->provider_point=kernel::Point3{
+        midpoint.x+frame.normal.x*1.0e-10,
+        midpoint.y+frame.normal.y*1.0e-10,
+        midpoint.z+frame.normal.z*1.0e-10};
+    expectInvalidGeometry(); // numerically unstable near-collinear
+
+    // Same stable DatumId supports genuine Part Sketch and derived Axis.
+    const auto support=part::partSketchSupportForDatumPlane(id);
+    CHECK(support.has_value());
+    const auto hosted=session.execute(
+        application::CreatePartSketchOnSupportCommand{
+            *support,session.document().revision()},&provider);
+    CHECK(hosted.ok() && hosted.sketch_id);
+    const auto line=session.execute(
+        application::AddSketchLineCommand{
+            *hosted.sketch_id,{0.0,0.0},{12.0,0.0},
+            sketch::EntityRole::construction});
+    CHECK(line.ok() && line.entity_id);
+    const auto axis=session.execute(
+        application::CreateAxisCommand{
+            part::SketchLineAxisSource{
+                *hosted.sketch_id,*line.entity_id},
+            session.document().revision(),
+            "Axis on 3-Point Datum",true},
+        provider);
+    CHECK(axis.ok() && axis.axis_id);
+    CHECK(session.document().findSketch(*hosted.sketch_id));
+    CHECK(session.document().findAxis(*axis.axis_id));
+    const auto before_delete=session.document().state();
+    const auto blocked_delete=session.execute(
+        application::DeleteDatumPlaneCommand{
+            id,session.document().revision()});
+    CHECK(!blocked_delete.ok() && !blocked_delete.changed);
+    CHECK(session.document().state()==before_delete);
+
+    const auto before=session.document().state();
+    const auto depth=session.undoDepth();
+    const auto duplicate=points;
+    auto rejected_points=duplicate;
+    rejected_points[2]=rejected_points[0];
+    const auto rejected=session.execute(
+        application::EditThreePointDatumPlaneCommand{
+            id,rejected_points,session.document().revision(),false},provider);
+    CHECK(!rejected.ok() && !rejected.changed);
+    CHECK(session.document().state()==before);
+    CHECK(session.undoDepth()==depth);
+
+    const auto reversed=session.execute(
+        application::EditThreePointDatumPlaneCommand{
+            id,points,session.document().revision(),true},provider);
+    CHECK(reversed.ok() && reversed.changed);
+    CHECK(session.undoDepth()==depth+1U);
+    const auto reversed_eval=part::evaluateDatums(
+        session.document(),part::evaluatePart(session.document(),provider),
+        provider);
+    const auto* reversed_frame=reversed_eval.find(id);
+    CHECK(reversed_frame && reversed_frame->frame);
+    CHECK(s1Near3(reversed_frame->frame->origin,frame.origin));
+    CHECK(s1Near3(reversed_frame->frame->u_axis,frame.u_axis));
+    CHECK(s1Near3(reversed_frame->frame->normal,
+                  {-frame.normal.x,-frame.normal.y,-frame.normal.z}));
+    CHECK(session.undo().ok());
+    CHECK(session.document().state()==before);
+    CHECK(session.redo().ok());
+    CHECK(session.document().findThreePointDatumPlane(id)->reverse);
+    CHECK(session.document().findSketch(*hosted.sketch_id));
+    CHECK(session.document().findAxis(*axis.axis_id));
+
+    const auto filename =
+        "ss2_s4a_three_point_native_" +
+        std::to_string(std::chrono::steady_clock::now()
+                           .time_since_epoch().count()) + ".ss2part";
+    const auto path=std::filesystem::temp_directory_path()/filename;
+    struct NativeCleanup {
+        std::filesystem::path path;
+        ~NativeCleanup() {
+            std::error_code ec;
+            std::filesystem::remove(path,ec);
+        }
+    } cleanup{path};
+    part::PartDocumentStore store;
+    const auto saved=store.createNew(path,session.document());
+    CHECK(saved.ok());
+    auto reopened=store.load(path);
+    CHECK(reopened.ok());
+    CHECK(reopened.document->threePointDatumPlanes().size()==1U);
+    const auto* cold_source=reopened.document->findThreePointDatumPlane(id);
+    CHECK(cold_source && cold_source->points==points);
+    CHECK(cold_source->id==id && cold_source->visible);
+    CHECK(reopened.document->findSketch(*hosted.sketch_id));
+    CHECK(reopened.document->findAxis(*axis.axis_id));
+    CHECK(cold_source->reverse);
+    kernel_occt::OcctSolidModelingKernel separate;
+    const auto body=part::evaluatePart(*reopened.document,separate);
+    const auto cold=part::evaluateDatums(
+        *reopened.document,body,separate);
+    const auto* cold_frame=cold.find(id);
+    CHECK(cold_frame && cold_frame->frame);
+    CHECK(s1Near3(cold_frame->frame->origin,frame.origin));
+    CHECK(s1Near3(cold_frame->frame->normal,
+                  {-frame.normal.x,-frame.normal.y,-frame.normal.z}));
+
+    std::cout << "RG02B1_S4A_NATIVE"
+              << " exact_semantic_points=3"
+              << " independent_provider=1"
+              << " source_edge_durable=0"
+              << " v18_cold_reopen=1"
+              << " reverse_and_undo_redo=1"
+              << " typed_invalid_edit_no_mutation=1\n";
+    return points;
+}
+
 // Q1-06: do not classify an actual half-cylinder cut's ambiguous
 // three-Surface Point as uniquely selected merely because an Edge touches
 // its current native Vertex. Partial Revolve is a distinct real positive
@@ -2811,6 +3034,8 @@ int main() {
     const auto s4p0_base_keys = verifyS4P0NativeEndPointIdentity(
         base_document, base_evaluation, kernel,
         q1_base_sources, "P0-01-pristine");
+    const auto s4a_base_points = verifyS4AThreePointDatumLifecycle(
+        base_document,base_evaluation,kernel,s4p0_base_keys);
     const auto q2_base_sources = verifyQ2CanonicalSelectedMids(
         base_document, base_evaluation, kernel, "Q2-M01-pristine");
     CHECK(q2_base_sources.size() == 12U);
@@ -3509,6 +3734,30 @@ int main() {
         q1_taller_sources, "P0-03-same-feature-height-edit",
         &s4p0_base_keys);
     CHECK(s4p0_edited_keys.size() == s4p0_base_keys.size());
+    // Replay the very same authored semantic P1/P2/P3 keys on the same
+    // FeatureId after its height changes. Never remap by provider XYZ.
+    {
+        auto taller_state = taller_document.state();
+        auto next = taller_state.next_datum_id.allocate();
+        CHECK(next.has_value());
+        taller_state.three_point_datum_planes.push_back(
+            part::ThreePointDatumPlane{
+                *next,s4a_base_points,false,true});
+        const auto restored = part::PartDocument::restore(
+            taller_document.documentId(),taller_state,
+            taller_document.revision());
+        CHECK(restored.ok());
+        const auto refreshed_part=part::evaluatePart(
+            *restored.document,kernel);
+        const auto refreshed_datums=part::evaluateDatums(
+            *restored.document,refreshed_part,kernel);
+        const auto* plane=refreshed_datums.find(*next);
+        CHECK(plane && plane->status ==
+              part::DatumPlaneEvaluationStatus::resolved);
+        CHECK(plane->frame.has_value());
+        CHECK(restored.document->findThreePointDatumPlane(*next));
+    }
+
     const auto q2_taller_sources = verifyQ2CanonicalSelectedMids(
         taller_document, taller_evaluation, kernel, "Q2-M04-height-edit");
     CHECK(q2_taller_sources.size() == q2_base_sources.size());

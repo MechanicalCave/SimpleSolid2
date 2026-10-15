@@ -107,6 +107,10 @@ std::string schema9FromCurrent(
     authored.erase("datum_planes");
     authored.erase("next_axis_id");
     authored.erase("axes");
+    CHECK(authored.contains("three_point_datum_planes"));
+    CHECK(authored.at("three_point_datum_planes").is_array());
+    CHECK(authored.at("three_point_datum_planes").empty());
+    authored.erase("three_point_datum_planes");
     CHECK(authored.contains("edge_point_datum_planes"));
     CHECK(authored.at("edge_point_datum_planes").empty());
     authored.erase("edge_point_datum_planes");
@@ -137,6 +141,12 @@ std::string schema9FromCurrent(
 std::string schema16FromCurrent(
     const persistence::NativeDocumentPackage& package) {
     auto authored = nlohmann::json::parse(package.authored_json);
+    // v16 has neither v17 EdgePoint nor v18 ThreePoint authoring.
+    // Reject a lossy downgrade before removing v18-only payload fields.
+    CHECK(authored.contains("three_point_datum_planes"));
+    CHECK(authored.at("three_point_datum_planes").is_array());
+    CHECK(authored.at("three_point_datum_planes").empty());
+    authored.erase("three_point_datum_planes");
     CHECK(authored.contains("edge_point_datum_planes"));
     CHECK(authored.at("edge_point_datum_planes").is_array());
     // Never downgrade a v17 file with real Edge-local authored intent.
@@ -156,7 +166,7 @@ std::string schema16FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        17);
+        18);
 
     // DatumId follows the existing Part-local canonical positive-decimal and
     // high-water allocation rules.
@@ -333,7 +343,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
 
     const auto authored =
         nlohmann::json::parse(
@@ -359,6 +369,8 @@ int main() {
 
     CHECK(authored.at("edge_point_datum_planes").is_array());
     CHECK(authored.at("edge_point_datum_planes").empty());
+    CHECK(authored.at("three_point_datum_planes").is_array());
+    CHECK(authored.at("three_point_datum_planes").empty());
 
     const auto reloaded =
         store.load(current_path);
@@ -371,7 +383,7 @@ int main() {
         document.datumIdCursor());
 
     // An authentic Offset-only v16 native package remains readable.
-    // Guarded next save upgrades it to v17 without renumbering DatumIds.
+    // Guarded next save upgrades it to v18 without renumbering DatumIds.
     const auto legacy_v16_path = temp.path / "LegacyOffsetV16.ss2part";
     writeBytes(legacy_v16_path,schema16FromCurrent(*package.package));
     const auto legacy_v16 = store.load(legacy_v16_path);
@@ -386,15 +398,139 @@ int main() {
     const auto upgraded =
         persistence::readNativeDocumentContainer(legacy_v16_path);
     CHECK(upgraded.ok());
-    CHECK(upgraded.package->descriptor.domain_schema_version == 17);
+    CHECK(upgraded.package->descriptor.domain_schema_version == 18);
     const auto upgraded_json =
         nlohmann::json::parse(upgraded.package->authored_json);
     CHECK(upgraded_json.at("datum_planes") ==
           authored.at("datum_planes"));
     CHECK(upgraded_json.at("edge_point_datum_planes").empty());
+    CHECK(upgraded_json.at("three_point_datum_planes").empty());
+
+    // Genuine v17 Offset+EdgePoint grammar is backward readable and
+    // next-save upgrade adds only an EMPTY v18 triple-Point collection.
+    auto legacy17_json = authored;
+    CHECK(legacy17_json.at("three_point_datum_planes").empty());
+    legacy17_json.erase("three_point_datum_planes");
+    const auto legacy17_bytes =
+        persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",std::string{document.documentId().value()},17},
+            legacy17_json.dump(2)+"\n");
+    CHECK(legacy17_bytes.ok());
+    const auto legacy17_path = temp.path/"LegacyOffsetV17.ss2part";
+    writeBytes(legacy17_path,*legacy17_bytes.bytes);
+    const auto legacy17 = store.load(legacy17_path);
+    CHECK(legacy17.ok());
+    CHECK(legacy17.document->datumPlanes() == document.datumPlanes());
+    CHECK(legacy17.document->threePointDatumPlanes().empty());
+    CHECK(store.save(legacy17_path,*legacy17.document,
+                     *legacy17.checkpoint).ok());
+    const auto legacy17_upgraded =
+        persistence::readNativeDocumentContainer(legacy17_path);
+    CHECK(legacy17_upgraded.ok());
+    CHECK(legacy17_upgraded.package->descriptor.domain_schema_version==18);
+    CHECK(nlohmann::json::parse(
+        legacy17_upgraded.package->authored_json)
+        .at("three_point_datum_planes").empty());
+
+    // v18 unknown 3-Point kind and malformed payload must fail closed.
+    auto future18_json=authored;
+    future18_json["three_point_datum_planes"].push_back({
+        {"id","1"},{"kind","future_three_point_plane"},
+        {"points",nlohmann::json::array()},
+        {"orientation",{{"reverse",false}}},{"visible",true}});
+    const auto invalid_v18 =
+        persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",std::string{document.documentId().value()},18},
+            future18_json.dump(2)+"\n");
+    CHECK(invalid_v18.ok());
+    const auto invalid_v18_path = temp.path/"UnknownV18ThreePoint.ss2part";
+    writeBytes(invalid_v18_path,*invalid_v18.bytes);
+    CHECK(!store.load(invalid_v18_path).ok());
+
+    // S4A-F07: strict native v18 schema-invalid packages are rejected.
+    // These grammar checks live in the existing JSON-capable core suite;
+    // kernel-native geometry tests remain independent of JSON internals.
+    const auto rejectV18 = [&](const nlohmann::json& state,
+                               const std::string& name) {
+        const auto built = persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",std::string{document.documentId().value()},18},
+            state.dump(2) + "\n");
+        CHECK(built.ok());
+        const auto invalid_path = temp.path / (name + ".ss2part");
+        writeBytes(invalid_path,*built.bytes);
+        CHECK(!store.load(invalid_path).ok());
+    };
+    const nlohmann::json dummy_point_source{
+        {"stage",{{"kind","after_feature"},{"feature_id","1"}}},
+        {"point",{{"producer_feature_id","1"},
+                  {"adjacent_surfaces",nlohmann::json::array()}}}
+    };
+    const nlohmann::json typed_three_point_record{
+        {"id","1"},
+        {"kind","three_point_plane"},
+        {"points",nlohmann::json::array({
+            dummy_point_source,dummy_point_source,dummy_point_source})},
+        {"orientation",{{"reverse",false}}},
+        {"visible",true}
+    };
+    {
+        auto invalid=authored;
+        invalid.erase("three_point_datum_planes");
+        rejectV18(invalid,"MissingV18ThreePointCollection");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"]=nlohmann::json::object();
+        rejectV18(invalid,"WrongV18ThreePointCollectionType");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"][0]["points"].erase(2);
+        rejectV18(invalid,"WrongV18ThreePointCardinality");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"][0]["orientation"]["reverse"] =
+            "yes";
+        rejectV18(invalid,"InvalidV18ThreePointReverse");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"][0]["xyz"] =
+            nlohmann::json::array({0.0,0.0,0.0});
+        rejectV18(invalid,"ForbiddenV18StoredXYZ");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"][0]["points"][0]["stage"]["kind"] =
+            "before_feature";
+        rejectV18(invalid,"InvalidV18StageKind");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        rejectV18(invalid,"DuplicateV18DatumIdentity");
+    }
+
 
     // Unknown future v17 Datum types must be rejected, not skipped.
     auto future_json = authored;
+    CHECK(future_json.at("three_point_datum_planes").empty());
+    future_json.erase("three_point_datum_planes");
     future_json["edge_point_datum_planes"].push_back({
         {"id","1"},{"kind","future_edge_point_plane"},
         {"source",nlohmann::json::object()},
@@ -413,7 +549,7 @@ int main() {
 
     // Exact v9 -> v10 migration: v9 has no Datum fields. Loading yields an
     // empty Datum collection/high-water cursor while preserving existing
-    // document/body/sketch identity, then the next save emits current v17.
+    // document/body/sketch identity, then the next save emits current v18.
     const auto legacy_source_path =
         temp.path / "LegacySourceCurrent.ss2part";
     auto legacy_source =
@@ -494,7 +630,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);

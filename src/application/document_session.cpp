@@ -4793,6 +4793,108 @@ DocumentSessionResult DocumentSession::execute(
         "Part transaction failed while replacing Edge Point Datum source");
 }
 
+// S4A: all mutation is one validated Part snapshot transaction.
+// Re-evaluate semantic Point source at the exact current native stage.
+CreateDatumPlaneResult DocumentSession::execute(
+    const CreateThreePointDatumPlaneCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    const auto reject = [&](DocumentSessionErrorCode code,
+                            const char* message) -> CreateDatumPlaneResult {
+        auto failed = failure(code,message,path_);
+        return {false,std::nullopt,std::nullopt,failed.diagnostic};
+    };
+    if (document_.revision() != command.expected_revision)
+        return reject(DocumentSessionErrorCode::revision_diverged,
+                      "Create Three Point Datum was started from stale revision");
+    if (dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            &modeling_kernel) == nullptr)
+        return reject(DocumentSessionErrorCode::invalid_command,
+                      "Three Point Datum requires current native stage evidence");
+    auto after = document_.state();
+    applyDatumIdCursor(after);
+    const auto id = after.next_datum_id.allocate();
+    if (!id)
+        return reject(DocumentSessionErrorCode::transaction_failure,
+                      "Three Point Datum exhausted DatumId allocation");
+    const part::ThreePointDatumPlane datum{
+        *id,command.points,command.reverse,command.visible};
+    if (!part::threePointDatumPlaneStructurallyValid(datum))
+        return reject(DocumentSessionErrorCode::invalid_command,
+                      "Three Point Datum requires three independent strict same-stage Points");
+    after.three_point_datum_planes.push_back(datum);
+    auto candidate = part::PartDocument::restore(
+        document_.documentId(),after,document_.revision());
+    if (!candidate.ok())
+        return reject(DocumentSessionErrorCode::invalid_command,
+                      "Three Point Datum violates Part dependency or source provenance");
+    const auto body =
+        part::evaluatePart(*candidate.document,modeling_kernel);
+    const auto evaluations = evaluateDatumsWithProvider(
+        *candidate.document,body,modeling_kernel);
+    const auto* current = evaluations.find(*id);
+    if (!current ||
+        current->status != part::DatumPlaneEvaluationStatus::resolved ||
+        !current->frame)
+        return reject(DocumentSessionErrorCode::invalid_command,
+                      "Three Point Datum source does not strictly resolve, no mutation");
+    const auto committed = commitCommandState(
+        std::move(after), "Part transaction failed creating Three Point Datum");
+    if (!committed.ok() || !committed.changed)
+        return {committed.changed,std::nullopt,std::nullopt,committed.diagnostic};
+    return {true,*id,part::DatumPlaneEvaluationDiagnostic::none,
+            DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EditThreePointDatumPlaneCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() != command.expected_revision)
+        return failure(DocumentSessionErrorCode::revision_diverged,
+                       "Three Point Datum edit started from stale revision",path_);
+    if (!command.datum_id.valid())
+        return failure(DocumentSessionErrorCode::invalid_command,
+                       "Three Point Datum edit requires valid DatumId",path_);
+    if (dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
+            &modeling_kernel) == nullptr)
+        return failure(DocumentSessionErrorCode::invalid_command,
+                       "Three Point Datum edit requires current native evidence",path_);
+    auto after = document_.state();
+    const auto found = std::find_if(
+        after.three_point_datum_planes.begin(),
+        after.three_point_datum_planes.end(),
+        [id=command.datum_id](const part::ThreePointDatumPlane& datum) {
+            return datum.id == id;
+        });
+    if (found == after.three_point_datum_planes.end())
+        return failure(DocumentSessionErrorCode::invalid_command,
+                       "Three Point Datum edit target missing",path_);
+    const part::ThreePointDatumPlane replacement{
+        command.datum_id,command.points,command.reverse,found->visible};
+    if (!part::threePointDatumPlaneStructurallyValid(replacement))
+        return failure(DocumentSessionErrorCode::invalid_command,
+                       "Three Point Datum edit source is invalid",path_);
+    if (*found == replacement)
+        return success(false);
+    *found = replacement; // unchanged DatumId and dependent identities
+    auto candidate = part::PartDocument::restore(
+        document_.documentId(),after,document_.revision());
+    if (!candidate.ok())
+        return failure(DocumentSessionErrorCode::invalid_command,
+                       "Three Point Datum edit violates dependencies",path_);
+    const auto body =
+        part::evaluatePart(*candidate.document,modeling_kernel);
+    const auto datums = evaluateDatumsWithProvider(
+        *candidate.document,body,modeling_kernel);
+    const auto* current = datums.find(command.datum_id);
+    if (!current ||
+        current->status != part::DatumPlaneEvaluationStatus::resolved ||
+        !current->frame)
+        return failure(DocumentSessionErrorCode::invalid_command,
+                       "Three Point Datum edit is not currently resolvable",path_);
+    return commitCommandState(
+        std::move(after), "Part transaction failed editing Three Point Datum");
+}
+
 DocumentSessionResult DocumentSession::execute(
     const EditDatumPlaneCommand& command,
     kernel::ISolidModelingKernel& modeling_kernel) {
@@ -4889,7 +4991,8 @@ DocumentSessionResult DocumentSession::execute(
     for (const auto id : command.targets) {
         if (!id.valid() ||
             (document_.findDatumPlane(id) == nullptr &&
-             document_.findEdgePointDatumPlane(id) == nullptr)) {
+             document_.findEdgePointDatumPlane(id) == nullptr &&
+             document_.findThreePointDatumPlane(id) == nullptr)) {
             return failure(
                 DocumentSessionErrorCode::
                     invalid_command,
@@ -4913,13 +5016,21 @@ DocumentSessionResult DocumentSession::execute(
                 [id](const part::EdgePointDatumPlane& value) {
                     return value.id == id;
                 });
-            if (edge == after.edge_point_datum_planes.end()) {
-                return failure(
-                    DocumentSessionErrorCode::invalid_command,
-                    "Datum visibility target disappeared before commit",
-                    path_);
+            if (edge != after.edge_point_datum_planes.end()) {
+                edge->visible = command.visible;
+            } else {
+                const auto point = std::find_if(
+                    after.three_point_datum_planes.begin(),
+                    after.three_point_datum_planes.end(),
+                    [id](const part::ThreePointDatumPlane& value) {
+                        return value.id == id;
+                    });
+                if (point == after.three_point_datum_planes.end())
+                    return failure(
+                        DocumentSessionErrorCode::invalid_command,
+                        "Datum visibility target disappeared before commit",path_);
+                point->visible = command.visible;
             }
-            edge->visible = command.visible;
         }
     }
 
@@ -4958,7 +5069,8 @@ DocumentSessionResult DocumentSession::execute(
                        command.datum_id;
             });
     if (found == datums.end() &&
-        document_.findEdgePointDatumPlane(command.datum_id) == nullptr) {
+        document_.findEdgePointDatumPlane(command.datum_id) == nullptr &&
+        document_.findThreePointDatumPlane(command.datum_id) == nullptr) {
         return failure(
             DocumentSessionErrorCode::invalid_command,
             "Delete Datum Plane target DatumId does not exist",
@@ -5016,13 +5128,21 @@ DocumentSessionResult DocumentSession::execute(
             [&command](const part::EdgePointDatumPlane& item) {
                 return item.id == command.datum_id;
             });
-        if (edge == after.edge_point_datum_planes.end()) {
-            return failure(
-                DocumentSessionErrorCode::invalid_command,
-                "Delete Datum Plane target disappeared before commit",
-                path_);
+        if (edge != after.edge_point_datum_planes.end()) {
+            after.edge_point_datum_planes.erase(edge);
+        } else {
+            const auto point = std::find_if(
+                after.three_point_datum_planes.begin(),
+                after.three_point_datum_planes.end(),
+                [&command](const part::ThreePointDatumPlane& datum) {
+                    return datum.id == command.datum_id;
+                });
+            if (point == after.three_point_datum_planes.end())
+                return failure(
+                    DocumentSessionErrorCode::invalid_command,
+                    "Delete Datum Plane target disappeared before commit",path_);
+            after.three_point_datum_planes.erase(point);
         }
-        after.edge_point_datum_planes.erase(edge);
     }
 
     return commitCommandState(

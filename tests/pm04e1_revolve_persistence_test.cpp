@@ -240,6 +240,17 @@ std::string repackage(
     const persistence::NativeDocumentPackage& package,
     int schema_version,
     std::string authored_json) {
+    if (schema_version < 18) {
+        auto legacy = nlohmann::json::parse(
+            authored_json,nullptr,false);
+        CHECK(legacy.is_object());
+        // No v18 ThreePoint intent may be discarded in legacy fixtures.
+        CHECK(legacy.contains("three_point_datum_planes"));
+        CHECK(legacy.at("three_point_datum_planes").is_array());
+        CHECK(legacy.at("three_point_datum_planes").empty());
+        legacy.erase("three_point_datum_planes");
+        authored_json = legacy.dump(2) + "\n";
+    }
     if (schema_version < 17) {
         auto legacy = nlohmann::json::parse(
             authored_json,nullptr,false);
@@ -267,7 +278,7 @@ std::string repackage(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        17);
+        18);
 
     TempDirectory temp;
     part::PartDocumentStore store;
@@ -287,7 +298,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
 
     const auto authored =
         nlohmann::json::parse(
@@ -503,7 +514,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
 
     // Revolve is a schema-v13 feature kind. Relabeling a v13 Revolve payload
     // as v12 must fail closed rather than silently interpreting future data.

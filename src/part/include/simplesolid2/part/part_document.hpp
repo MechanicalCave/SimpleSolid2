@@ -48,6 +48,8 @@ struct PartAuthoredState final {
         current_modeling_semantics_version};
     BodyIdCursor next_body_id;
     PartBody body;
+    // Append only: preserve all historical aggregate field positions.
+    std::vector<ThreePointDatumPlane> three_point_datum_planes;
 
     friend bool operator==(
         const PartAuthoredState&,
@@ -129,6 +131,14 @@ public:
     }
 
     [[nodiscard]] const EdgePointDatumPlane* findEdgePointDatumPlane(
+        DatumId id) const noexcept;
+
+    [[nodiscard]] const std::vector<ThreePointDatumPlane>&
+    threePointDatumPlanes() const noexcept {
+        return state_.three_point_datum_planes;
+    }
+
+    [[nodiscard]] const ThreePointDatumPlane* findThreePointDatumPlane(
         DatumId id) const noexcept;
 
     [[nodiscard]] const std::vector<PartSketch>& sketches() const noexcept {

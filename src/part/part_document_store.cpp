@@ -1240,6 +1240,33 @@ std::string serializeAuthored(
         });
     }
 
+    // v18: exactly three ordered, stage-qualified semantic END Points.
+    // Source Edge/Vertex/XYZ and cached Frame3 are never persisted.
+    nlohmann::json three_point_datums = nlohmann::json::array();
+    for (const auto& datum : document.threePointDatumPlanes()) {
+        if (!threePointDatumPlaneStructurallyValid(datum)) return {};
+        nlohmann::json points = nlohmann::json::array();
+        for (const auto& source : datum.points) {
+            if (!source.stage.feature_id) return {};
+            auto point = featurePointAddressJson(source.point);
+            if (point.empty()) return {};
+            points.push_back({
+                {"stage", {
+                    {"kind", "after_feature"},
+                    {"feature_id", source.stage.feature_id->serialized()}
+                }},
+                {"point", std::move(point)}
+            });
+        }
+        three_point_datums.push_back({
+            {"id", datum.id.serialized()},
+            {"kind", "three_point_plane"},
+            {"points", std::move(points)},
+            {"orientation", {{"reverse", datum.reverse}}},
+            {"visible", datum.visible}
+        });
+    }
+
     nlohmann::json sketches =
         nlohmann::json::array();
     for (const auto& hosted : document.sketches()) {
@@ -1565,6 +1592,8 @@ std::string serializeAuthored(
          std::move(datum_planes)},
         {"edge_point_datum_planes",
          std::move(edge_point_datums)},
+        {"three_point_datum_planes",
+         std::move(three_point_datums)},
         {"sketches", std::move(sketches)},
         {"next_axis_id",
          document.axisIdCursor().serialized()},
@@ -2493,6 +2522,89 @@ bool parseEdgePointDatumsV17(
             item["visible"].get<bool>()};
         if (!edgePointDatumPlaneStructurallyValid(datum)) {
             error = "Native Part contains invalid v17 Datum frame intent";
+            return false;
+        }
+        datums.push_back(std::move(datum));
+    }
+    return true;
+}
+
+// Strict additive v18 grammar. All historical Datum kinds remain intact.
+bool parseThreePointDatumsV18(
+    const nlohmann::json& value,
+    DatumIdCursor cursor,
+    FeatureIdCursor feature_cursor,
+    std::vector<ThreePointDatumPlane>& datums,
+    std::string& error) {
+    if (!value.is_array()) {
+        error = "Native Part v18 three_point_datum_planes must be an array";
+        return false;
+    }
+    datums.clear();
+    datums.reserve(value.size());
+    std::set<std::string> seen;
+    for (const auto& item : value) {
+        if (!item.is_object() || item.size() != 5U ||
+            !item.contains("id") || !item["id"].is_string() ||
+            !item.contains("kind") || !item["kind"].is_string() ||
+            item["kind"].get<std::string>() != "three_point_plane" ||
+            !item.contains("points") || !item["points"].is_array() ||
+            item["points"].size() != 3U ||
+            !item.contains("orientation") ||
+            !item["orientation"].is_object() ||
+            item["orientation"].size() != 1U ||
+            !item["orientation"].contains("reverse") ||
+            !item["orientation"]["reverse"].is_boolean() ||
+            !item.contains("visible") || !item["visible"].is_boolean()) {
+            error = "Native Part contains malformed v18 ThreePoint Datum";
+            return false;
+        }
+        const auto text_id = item["id"].get<std::string>();
+        const auto id = DatumId::parse(text_id);
+        if (!id || !cursor.containsAllocated(*id) ||
+            !seen.insert(text_id).second) {
+            error = "Native Part contains duplicate or invalid v18 DatumId";
+            return false;
+        }
+        std::array<StageSemanticPointReference, 3> sources{};
+        for (std::size_t i = 0; i < 3U; ++i) {
+            const auto& source = item["points"][i];
+            if (!source.is_object() || source.size() != 2U ||
+                !source.contains("stage") ||
+                !source.contains("point") ||
+                !source["stage"].is_object()) {
+                error = "Native Part contains malformed v18 semantic Point source";
+                return false;
+            }
+            const auto& stage = source["stage"];
+            if (stage.size() != 2U ||
+                !stage.contains("kind") || !stage["kind"].is_string() ||
+                stage["kind"].get<std::string>() != "after_feature" ||
+                !stage.contains("feature_id") ||
+                !stage["feature_id"].is_string()) {
+                error = "Native Part contains malformed v18 Point Body stage";
+                return false;
+            }
+            const auto id_feature = FeatureId::parse(
+                stage["feature_id"].get<std::string>());
+            if (!id_feature ||
+                !feature_cursor.containsAllocated(*id_feature)) {
+                error = "Native Part contains unallocated v18 Point stage";
+                return false;
+            }
+            auto point = parseFeaturePointAddressV14(
+                source["point"], feature_cursor, 18, error);
+            if (!point) return false;
+            sources[i] = StageSemanticPointReference{
+                BodyStageRef{BodyStageKind::after_feature, *id_feature},
+                std::move(*point)};
+        }
+        ThreePointDatumPlane datum{
+            *id, std::move(sources),
+            item["orientation"]["reverse"].get<bool>(),
+            item["visible"].get<bool>()};
+        if (!threePointDatumPlaneStructurallyValid(datum)) {
+            error = "Native Part contains invalid v18 triple semantic Point intent";
             return false;
         }
         datums.push_back(std::move(datum));
@@ -3525,11 +3637,13 @@ std::optional<PartAuthoredState> parseAuthored(
         schema_version >= 12;
     const bool has_edge_point_datums =
         schema_version >= 17;
+    const bool has_three_point_datums =
+        schema_version >= 18;
     const std::size_t expected_fields =
         legacy_v1
             ? 2U
             : (has_axes
-                   ? (has_edge_point_datums ? 14U : 13U)
+                   ? (has_three_point_datums ? 15U : (has_edge_point_datums ? 14U : 13U))
                    : (has_datums
                    ? 11U
                    : (has_body_features
@@ -3568,7 +3682,10 @@ std::optional<PartAuthoredState> parseAuthored(
           !authored["axes"].is_array())) ||
         (has_edge_point_datums &&
          (!authored.contains("edge_point_datum_planes") ||
-          !authored["edge_point_datum_planes"].is_array()))) {
+          !authored["edge_point_datum_planes"].is_array())) ||
+        (has_three_point_datums &&
+         (!authored.contains("three_point_datum_planes") ||
+          !authored["three_point_datum_planes"].is_array()))) {
         error =
             "Native Part authored payload has an invalid top-level schema";
         return std::nullopt;
@@ -3790,6 +3907,15 @@ std::optional<PartAuthoredState> parseAuthored(
                 *cursor,
                 state.body.next_feature_id,
                 state.edge_point_datum_planes,
+                error)) {
+            return std::nullopt;
+        }
+        if (has_three_point_datums &&
+            !parseThreePointDatumsV18(
+                authored["three_point_datum_planes"],
+                *cursor,
+                state.body.next_feature_id,
+                state.three_point_datum_planes,
                 error)) {
             return std::nullopt;
         }

@@ -99,6 +99,11 @@ std::string schema11FromCurrent(
     authored.erase("next_axis_id");
     authored.erase("axes");
     // v11 has no Edge-local authored Datum collection.
+    // Schema v11 cannot carry authored ThreePoint Datum intent.
+    CHECK(authored.contains("three_point_datum_planes"));
+    CHECK(authored.at("three_point_datum_planes").is_array());
+    CHECK(authored.at("three_point_datum_planes").empty());
+    authored.erase("three_point_datum_planes");
     CHECK(authored.contains("edge_point_datum_planes"));
     CHECK(authored.at("edge_point_datum_planes").is_array());
     CHECK(authored.at("edge_point_datum_planes").empty());
@@ -132,7 +137,7 @@ std::string schema11FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        17);
+        18);
 
     part::AxisIdCursor cursor;
     const auto first = cursor.allocate();
@@ -395,7 +400,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
 
     const auto authored =
         nlohmann::json::parse(
@@ -506,7 +511,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);
