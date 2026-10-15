@@ -3,11 +3,14 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/persistence/native_document_container.hpp>
+#include <nlohmann/json.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -1859,13 +1862,95 @@ void verifyS4AThreePointDatumLifecycle(
     CHECK(s1Near3(cold_frame->frame->origin,frame.origin));
     CHECK(s1Near3(cold_frame->frame->normal,
                   {-frame.normal.x,-frame.normal.y,-frame.normal.z}));
+
+    // S4A-F07: generate malformed v18 authored fixtures by mutating the
+    // same actually saved canonical native source, never synthesizing an
+    // OCCT Point from XYZ or deleting historical Q1/Q2/P0 checks.
+    const auto original_package =
+        persistence::readNativeDocumentContainer(path);
+    CHECK(original_package.ok());
+    CHECK(original_package.package->descriptor.domain_schema_version == 18);
+    const auto original_authored = nlohmann::json::parse(
+        original_package.package->authored_json);
+    CHECK(original_authored.at("three_point_datum_planes").size() == 1U);
+    CHECK(original_authored.at("three_point_datum_planes")[0]
+              .at("points").size() == 3U);
+    const auto rejectNativePayload =
+        [&](nlohmann::json payload, const std::string& suffix) {
+            const auto malformed_bytes =
+                persistence::buildNativeDocumentContainer(
+                    persistence::NativeDocumentDescriptor{
+                        "part",
+                        std::string{session.document().documentId().value()},
+                        18},
+                    payload.dump(2) + "\n");
+            CHECK(malformed_bytes.ok());
+            const auto malformed_path = std::filesystem::temp_directory_path() /
+                (filename + suffix + ".ss2part");
+            struct RemoveOnReturn {
+                std::filesystem::path path;
+                ~RemoveOnReturn() {
+                    std::error_code ec;
+                    std::filesystem::remove(path,ec);
+                }
+            } garbage{malformed_path};
+            {
+                std::ofstream out(malformed_path,std::ios::binary);
+                CHECK(static_cast<bool>(out));
+                out.write(malformed_bytes.bytes->data(),
+                          static_cast<std::streamsize>(
+                              malformed_bytes.bytes->size()));
+                CHECK(static_cast<bool>(out));
+            }
+            CHECK(!store.load(malformed_path).ok());
+        };
+    {
+        auto invalid=original_authored;
+        invalid["three_point_datum_planes"][0]["kind"] =
+            "unknown_three_point_plane";
+        rejectNativePayload(std::move(invalid),"_future_kind");
+    }
+    {
+        auto invalid=original_authored;
+        invalid["three_point_datum_planes"][0]["points"].erase(2);
+        rejectNativePayload(std::move(invalid),"_two_points");
+    }
+    {
+        auto invalid=original_authored;
+        invalid["three_point_datum_planes"][0]["points"][2] =
+            invalid["three_point_datum_planes"][0]["points"][0];
+        rejectNativePayload(std::move(invalid),"_duplicate_point");
+    }
+    {
+        auto invalid=original_authored;
+        invalid["three_point_datum_planes"][0]["points"][1]["stage"]["kind"] =
+            "before_feature";
+        rejectNativePayload(std::move(invalid),"_foreign_stage_kind");
+    }
+    {
+        auto invalid=original_authored;
+        invalid["three_point_datum_planes"][0]["provider_xyz"] =
+            nlohmann::json::array({0.0,0.0,0.0});
+        rejectNativePayload(std::move(invalid),"_forbidden_xyz");
+    }
+    {
+        auto invalid=original_authored;
+        invalid["three_point_datum_planes"].push_back(
+            invalid["three_point_datum_planes"][0]);
+        rejectNativePayload(std::move(invalid),"_duplicate_id");
+    }
+    {
+        auto invalid=original_authored;
+        invalid.erase("three_point_datum_planes");
+        rejectNativePayload(std::move(invalid),"_missing_v18_collection");
+    }
     std::cout << "RG02B1_S4A_NATIVE"
               << " exact_semantic_points=3"
               << " independent_provider=1"
               << " source_edge_durable=0"
               << " v18_cold_reopen=1"
               << " reverse_and_undo_redo=1"
-              << " typed_invalid_edit_no_mutation=1\\n";
+              << " typed_invalid_edit_no_mutation=1\n";
 }
 
 // Q1-06: do not classify an actual half-cylinder cut's ambiguous
