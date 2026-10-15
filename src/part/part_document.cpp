@@ -706,6 +706,12 @@ bool PartDocument::validAuthoredState(
                     state.edge_point_datum_planes.end(),
                     [datum_id](const EdgePointDatumPlane& item) {
                         return item.id == *datum_id;
+                    }) &&
+                std::none_of(
+                    state.three_point_datum_planes.begin(),
+                    state.three_point_datum_planes.end(),
+                    [datum_id](const ThreePointDatumPlane& item) {
+                        return item.id == *datum_id;
                     })) {
                 return false;
             }
