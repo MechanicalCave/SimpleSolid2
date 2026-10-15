@@ -1815,6 +1815,7 @@ void verifyS4AThreePointDatumLifecycle(
     CHECK(reopened.document->threePointDatumPlanes().size()==1U);
     const auto* cold_source=reopened.document->findThreePointDatumPlane(id);
     CHECK(cold_source && cold_source->points==points);
+    CHECK(cold_source->id==id && cold_source->visible);
     CHECK(cold_source->reverse);
     kernel_occt::OcctSolidModelingKernel separate;
     const auto body=part::evaluatePart(*reopened.document,separate);
