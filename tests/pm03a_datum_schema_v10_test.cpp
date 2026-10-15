@@ -141,6 +141,12 @@ std::string schema9FromCurrent(
 std::string schema16FromCurrent(
     const persistence::NativeDocumentPackage& package) {
     auto authored = nlohmann::json::parse(package.authored_json);
+    // v16 has neither v17 EdgePoint nor v18 ThreePoint authoring.
+    // Reject a lossy downgrade before removing v18-only payload fields.
+    CHECK(authored.contains("three_point_datum_planes"));
+    CHECK(authored.at("three_point_datum_planes").is_array());
+    CHECK(authored.at("three_point_datum_planes").empty());
+    authored.erase("three_point_datum_planes");
     CHECK(authored.contains("edge_point_datum_planes"));
     CHECK(authored.at("edge_point_datum_planes").is_array());
     // Never downgrade a v17 file with real Edge-local authored intent.
