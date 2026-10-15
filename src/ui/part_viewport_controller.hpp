@@ -337,6 +337,11 @@ public:
             emphasis_region = std::nullopt);
     void clearProfileDraftPreview();
 
+    // One transient, unpickable presentation of an evaluated Edge Axis
+    // draft. Never authors AxisId, provider token, source or Undo state.
+    void setAxisDraftPreview(
+        std::optional<part::ResolvedAxisLine> line);
+
     void setDatumPlaneDraftPreview(
         std::optional<kernel::Frame3> frame,
         bool show_anchor_point = false,
@@ -767,6 +772,8 @@ private:
         datum_evaluation_cache_;
     std::optional<kernel::Frame3>
         datum_plane_draft_preview_frame_;
+    std::optional<part::ResolvedAxisLine>
+        axis_draft_preview_line_;
     bool datum_plane_draft_preview_anchor_{};
     std::optional<kernel::Point3> datum_selected_edge_mid_;
     std::optional<BodyTopologySelectionAddress> datum_selected_mid_edge_;
