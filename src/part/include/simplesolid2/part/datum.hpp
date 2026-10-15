@@ -6,6 +6,7 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/semantic_topology_reference.hpp>
 
+#include <array>
 #include <optional>
 #include <utility>
 #include <variant>
@@ -115,6 +116,39 @@ struct EdgePointDatumPlane final {
     const EdgePointDatumPlane& datum,
     const PartEvaluation& evaluation,
     kernel::IExactBoundedEdgeGeometryQuery& provider);
+
+// S4A: one source-stage semantic Point, never an incident source Edge,
+// current OCCT Vertex, provider position, UI token or cursor coordinate.
+struct StageSemanticPointReference final {
+    BodyStageRef stage;
+    FeaturePointAddress point;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return stage.valid() &&
+               stage.kind == BodyStageKind::after_feature &&
+               stage.feature_id.has_value() &&
+               point.valid() &&
+               point.producer_feature_id <= *stage.feature_id;
+    }
+
+    friend bool operator==(
+        const StageSemanticPointReference&,
+        const StageSemanticPointReference&) = default;
+};
+
+struct ThreePointDatumPlane final {
+    DatumId id;
+    std::array<StageSemanticPointReference, 3> points;
+    bool reverse{false};
+    bool visible{true};
+
+    friend bool operator==(
+        const ThreePointDatumPlane&,
+        const ThreePointDatumPlane&) = default;
+};
+
+[[nodiscard]] bool threePointDatumPlaneStructurallyValid(
+    const ThreePointDatumPlane& datum) noexcept;
 
 [[nodiscard]] bool isDatumOriginPlane(
     core::BuiltinReferenceRole role) noexcept;
