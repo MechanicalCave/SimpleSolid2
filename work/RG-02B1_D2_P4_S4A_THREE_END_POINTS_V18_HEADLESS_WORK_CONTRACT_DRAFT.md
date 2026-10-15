@@ -31,7 +31,26 @@ This proposal is limited to S4A implementation **after** independent Owner appro
 ## 2. Versioned persistence and migration — v18 only
 
 1. Bump `PartDocumentStore::current_schema_version` from v17 to **v18**. Add a **distinct explicit collection** `three_point_datum_planes` to the v18 authored JSON, mandatory even when empty. Preserve existing `datum_planes` and `edge_point_datum_planes` shapes and meanings, no renumber/implicit union reinterpretation.
-2. Each v18 3-Point entry is explicitly kind-tagged (`three_point_plane`), owns one valid `DatumId`, fixed ordered three-point source array with stage/feature/semantic-surface-provenance structure, orientation (`reverse` boolean) and visibility. Define the exact strict JSON grammar against existing native `FeaturePointAddress` serializers/parsers *before implementation* and cover shape, field cardinality and unknown kind errors.
+2. Each v18 3-Point entry has **exactly five keys**: `id` (string DatumId), `kind` (literal `three_point_plane`), `points` (array of exactly three ordered source objects), `orientation` (object containing exactly one boolean `reverse`), `visible` (boolean). Each `points[i]` object contains exactly `stage` and `point`. `stage` is exactly `{"kind":"after_feature","feature_id":"<serialized FeatureId>"}`, matching the accepted stage shape already serialized by MaterialEdgeReference. `point` is precisely the existing `featurePointAddressJson` payload `{"producer_feature_id":"<FeatureId>","adjacent_surfaces":[...three sorted semantic surface addresses...]}`, parsed by the existing `parseFeaturePointAddressV14` grammar with v18 version context; preserve its recursively strict Surface provenance, sorted canonical source and exact field-size validation. Do not add `edge`, `terminal_ordinal`, `vertex_token`, `xyz`, `frame`, `revision` or other data. Structural validation checks stage feature is currently declared in the authored history and point producer belongs to that valid stage or its legal upstream ancestry. Runtime geometric feasibility is separately revalidated on current evaluation. Use existing native JSON `DatumId` and `FeatureId` serializers, never human display names. A schematic full entry:
+
+   ```json
+   {
+     "id": "<DatumId>",
+     "kind": "three_point_plane",
+     "points": [
+       {"stage": {"kind": "after_feature", "feature_id": "<FeatureId>"},
+        "point": {"producer_feature_id": "<FeatureId>", "adjacent_surfaces": ["<existing FeatureSurfaceAddress JSON>", "<...>", "<...>"]}},
+       {"stage": {"kind": "after_feature", "feature_id": "<same FeatureId>"},
+        "point": {"producer_feature_id": "<FeatureId>", "adjacent_surfaces": ["<...>", "<...>", "<...>"]}},
+       {"stage": {"kind": "after_feature", "feature_id": "<same FeatureId>"},
+        "point": {"producer_feature_id": "<FeatureId>", "adjacent_surfaces": ["<...>", "<...>", "<...>"]}}
+     ],
+     "orientation": {"reverse": false},
+     "visible": true
+   }
+   ```
+
+   The placeholder strings in `adjacent_surfaces` above are **diagrammatic only**, not legal JSON values: actual entries must be valid existing `FeatureSurfaceAddress` objects. The parser must reject the example placeholders as invalid. No new version or interpretation of `FeaturePointAddress` is introduced.
 3. v17 and earlier supported legacy native documents load with **empty 3-Point collection** and retain all old meaning, including historical stored EdgePoint END/MID data. v18 serializes all three Datum collections; cold load on independent Part/OCCT re-evaluates from semantic sources. No persisted provider handles, point XYZ, preview frame or viewer click evidence.
 4. Reject malformed v18 triples, unknown source kinds, wrong stage, invalid/duplicate/cross-kind DatumIds, invalid cursors, invalid/cyclic dependencies and unsupported future field layouts instead of silently dropping content. Do not allow a v18→v17 masquerading downgrade, guessed migration or schema version spoof.
 5. Existing guarded Save / atomic replace / file checkpoints and stale transaction invariants (ADR-0012/0013) are unchanged. Failed Save/parse/commit leaves Part/history/file checkpoint unchanged. All legacy native format fixtures remain legitimate regression fixtures; do not weaken assertions to force v18.
