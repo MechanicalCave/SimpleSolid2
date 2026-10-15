@@ -818,7 +818,7 @@ void verifyPg01bB1BindingStructure(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        18);
+        19);
 
     const auto fixture = makeFixture();
     verifyPg01bB1BindingStructure(fixture);
