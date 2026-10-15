@@ -57,6 +57,8 @@
 
 PR #395 was reverted to **Draft** after two FULL-only failures in the unchanged pre-S4A Qt test. The next focused run compiles the exact `pm05f_r2_native_workbench_edit_test` and executes **only** `pm05f_r2.native_workbench_edit`; no source/test-body/Viewer/UI changes or ignored assertions are permitted. An isolated PASS would only support that this test can pass without concurrent native GUI stress; it would not erase #3155/#3156 or count as Ready FULL PASS.
 
+- [Isolated native Qt FOCUSED #3158](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38716199878), exact S4A product/test/doc tree with evidence-only sync at `6300d4c086ba1fbcdc2fb6ebb652d111cdc51fcd`: **PASS 1/1**, unchanged registered `pm05f_r2.native_workbench_edit` built and exercised on real Windows Qt/OCCT in **40.49 s**. Its identical underlying source/test assertions FAILED in FULL #3155 (Operations hidden) and FULL #3156 (END/MID cursor interaction) while CTest launched several other native Qt/OCCT full-only tests in parallel with `SS2_TEST_PARALLELISM=4`. The contrast supports a **native parallel execution interference hypothesis**, **NOT** certainty. The exact existing UI test has not been changed, and all past FULL RED remain. A narrowly scoped separate Owner D2 consent is needed before changing even test CMake scheduling (`tests/CMakeLists.txt` outside active S4A). Do not waive FULL, mark Owner PASS or merge production.
+
 ## Acceptance matrix
 
 | Gate | Actual result |
