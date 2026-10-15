@@ -78,7 +78,7 @@ std::string repackage(
         CHECK(authored.at("three_point_datum_planes").is_array());
         CHECK(authored.at("three_point_datum_planes").empty());
         authored.erase("three_point_datum_planes");
-        authored_json = authored.dump(2) + "\\n";
+        authored_json = authored.dump(2) + "\n";
     }
     if (schema_version < 17) {
         auto authored = nlohmann::json::parse(
