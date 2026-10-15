@@ -189,7 +189,8 @@ AxisEvaluation resolveAxisReference(
     const PartDocument& document,
     const AxisReference& reference,
     const PartEvaluation* part_evaluation,
-    const DatumEvaluation* datum_evaluation) noexcept {
+    const DatumEvaluation* datum_evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery* provider) noexcept {
     if (!reference.valid()) {
         return unresolved(
             AxisEvaluationStatus::unsupported,
@@ -218,8 +219,35 @@ AxisEvaluation resolveAxisReference(
             AxisEvaluationDiagnostic::missing_axis);
     }
 
+    // Only Edge-source Axes are resolved using the real strict native
+    // provider, on the correct Body stage. Legacy Sketch-Line Axis
+    // evaluation follows its original path unchanged.
+    const auto* sketch_source =
+        std::get_if<SketchLineAxisSource>(&axis->source);
+    if (sketch_source == nullptr) {
+        const auto* edge_source =
+            std::get_if<StraightMaterialEdgeAxisSource>(
+                &axis->source);
+        if (edge_source == nullptr) {
+            return unresolved(
+                AxisEvaluationStatus::unsupported,
+                AxisEvaluationDiagnostic::invalid_reference);
+        }
+        if (part_evaluation == nullptr || provider == nullptr) {
+            return unresolved(
+                AxisEvaluationStatus::blocked,
+                AxisEvaluationDiagnostic::
+                    edge_native_geometry_unavailable,
+                edge_source->edge.stage);
+        }
+        return resolveStraightMaterialEdgeAxisLine(
+            document,
+            edge_source->edge,
+            *part_evaluation,
+            *provider);
+    }
     const auto* source =
-        document.findSketch(axis->source.sketch_id);
+        document.findSketch(sketch_source->sketch_id);
     if (source == nullptr) {
         return unresolved(
             AxisEvaluationStatus::missing,
@@ -228,15 +256,15 @@ AxisEvaluation resolveAxisReference(
 
     const auto* line =
         source->model.findLine(
-            axis->source.entity_id);
+            sketch_source->entity_id);
     if (line == nullptr) {
         return unresolved(
             source->model.contains(
-                axis->source.entity_id)
+                sketch_source->entity_id)
                 ? AxisEvaluationStatus::unsupported
                 : AxisEvaluationStatus::missing,
             source->model.contains(
-                axis->source.entity_id)
+                sketch_source->entity_id)
                 ? AxisEvaluationDiagnostic::source_not_line
                 : AxisEvaluationDiagnostic::missing_line);
     }
