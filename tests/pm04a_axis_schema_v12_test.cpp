@@ -335,7 +335,8 @@ int main() {
     // Missing source Sketch is also authored repairable state.
     {
         auto missing = document.state();
-        missing.axes.front().source.sketch_id =
+        std::get<part::SketchLineAxisSource>(
+            missing.axes.front().source).sketch_id =
             sketch::SketchId::generate();
         const auto result =
             replaceState(document, std::move(missing));
@@ -378,7 +379,8 @@ int main() {
     }
     {
         auto invalid = document.state();
-        invalid.axes.front().source.entity_id = {};
+        std::get<part::SketchLineAxisSource>(
+            invalid.axes.front().source).entity_id = {};
         const auto result =
             replaceState(document, std::move(invalid));
         CHECK(!result.ok());
