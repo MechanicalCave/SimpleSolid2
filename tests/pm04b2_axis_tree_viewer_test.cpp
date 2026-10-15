@@ -416,7 +416,8 @@ int main(int argc, char* argv[]) {
         axis_origin && axis_direction &&
         axis_operations &&
         hide && show);
-    CHECK(axis_tool == nullptr);
+    CHECK(axis_tool != nullptr);
+    CHECK(axis_tool->text() == QStringLiteral("Axis"));
 
     // Authored Axis is a Part-owned child of its source Sketch even when the
     // source Sketch itself is hidden.
@@ -590,9 +591,9 @@ int main(int argc, char* argv[]) {
         session.document().axes().size() ==
         axis_count_before_command);
 
-    // Normal GUI creation is contextual to Line. Arming Axis is runtime-only
-    // until a Line successfully commits, and there is no standalone Axis
-    // toolbar action.
+    // Legacy Sketch-Line Axis creation remains contextual to Line.
+    // The newly visible Work Features Axis button authors only a strict
+    // Body-Edge Axis and MUST NOT replace the Sketch checkbox path.
     auto* line_tool =
         workbench.findChild<QPushButton*>(
             QStringLiteral("lineSketchToolButton"));
@@ -602,7 +603,8 @@ int main(int argc, char* argv[]) {
                 "sketchAxisDesignationCheck"));
     CHECK(line_tool != nullptr);
     CHECK(axis_designation != nullptr);
-    CHECK(axis_tool == nullptr);
+    CHECK(axis_tool != nullptr);
+    CHECK(axis_tool->text() == QStringLiteral("Axis"));
     CHECK(!line_tool->isHidden());
     line_tool->click();
     QApplication::processEvents();
