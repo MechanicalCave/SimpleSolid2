@@ -382,8 +382,16 @@ int main(int argc, char* argv[]) {
     // H4 preview scene seam only (NOT native Edge authoring evidence):
     // a valid derived line is one transient unpickable Reference cue.
     // Its removal returns exactly to the original scene/Undo/Part state.
-    auto* axis_view =
-        workbench.findChild<ui::PartViewportController*>();
+    ui::PartViewportController* axis_view = nullptr;
+    // PartViewportController is a QObject child but deliberately does
+    // not declare Q_OBJECT; use C++ RTTI, not Qt's QMetaObject cast.
+    for (auto* child : workbench.children()) {
+        if (auto* controller =
+                dynamic_cast<ui::PartViewportController*>(child)) {
+            axis_view = controller;
+            break;
+        }
+    }
     CHECK(axis_view != nullptr);
     const part::ResolvedAxisLine display_only_line{
         {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}};
