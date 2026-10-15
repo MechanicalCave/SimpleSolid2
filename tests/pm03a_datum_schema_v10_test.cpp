@@ -409,7 +409,7 @@ int main() {
         persistence::buildNativeDocumentContainer(
             persistence::NativeDocumentDescriptor{
                 "part",std::string{document.documentId().value()},17},
-            legacy17_json.dump(2)+"\\n");
+            legacy17_json.dump(2)+"\n");
     CHECK(legacy17_bytes.ok());
     const auto legacy17_path = temp.path/"LegacyOffsetV17.ss2part";
     writeBytes(legacy17_path,*legacy17_bytes.bytes);
@@ -437,7 +437,7 @@ int main() {
         persistence::buildNativeDocumentContainer(
             persistence::NativeDocumentDescriptor{
                 "part",std::string{document.documentId().value()},18},
-            future18_json.dump(2)+"\\n");
+            future18_json.dump(2)+"\n");
     CHECK(invalid_v18.ok());
     const auto invalid_v18_path = temp.path/"UnknownV18ThreePoint.ss2part";
     writeBytes(invalid_v18_path,*invalid_v18.bytes);
