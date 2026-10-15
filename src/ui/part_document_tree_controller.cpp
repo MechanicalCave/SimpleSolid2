@@ -1256,13 +1256,18 @@ selectedDatumVisibilityTargets() const {
     if (referenceGeometryGroupSelected()) {
         targets.reserve(
             session_->document().datumPlanes().size() +
-            session_->document().edgePointDatumPlanes().size());
+            session_->document().edgePointDatumPlanes().size() +
+            session_->document().threePointDatumPlanes().size());
         for (const auto& datum :
              session_->document().datumPlanes()) {
             targets.push_back(datum.id);
         }
         for (const auto& datum :
              session_->document().edgePointDatumPlanes()) {
+            targets.push_back(datum.id);
+        }
+        for (const auto& datum :
+             session_->document().threePointDatumPlanes()) {
             targets.push_back(datum.id);
         }
         return targets;
@@ -1800,6 +1805,58 @@ void PartDocumentTreeController::rebuild(
             item->setSelected(was_selected);
         }
     }
+    // S4B: third constructor lives under the SAME Reference Geometry
+    // group and the SAME global DatumId role as Offset and EdgePoint.
+    for (const auto& datum :
+         session_->document().threePointDatumPlanes()) {
+        ++datum_index;
+        auto* item = new QTreeWidgetItem(
+            reference_geometry,
+            QStringList{
+                QStringLiteral("Datum Plane %1 (3 Points)")
+                    .arg(static_cast<qulonglong>(datum_index))});
+        item->setData(
+            0,datumIdData,fromUtf8(datum.id.serialized()));
+        const auto evaluation = std::find_if(
+            datum_evaluations_.begin(),datum_evaluations_.end(),
+            [&datum](const DatumTreeEvaluationEntry& entry) {
+                return entry.datum_id == datum.id;
+            });
+        const bool evaluated =
+            evaluation != datum_evaluations_.end();
+        const bool resolved = evaluated &&
+            evaluation->status ==
+                part::DatumPlaneEvaluationStatus::resolved;
+        auto font = item->font(0);
+        font.setItalic(!datum.visible);
+        font.setBold(evaluated && !resolved);
+        item->setFont(0,font);
+        if (evaluated && !resolved)
+            item->setIcon(0,tree_->style()->standardIcon(
+                QStyle::SP_MessageBoxWarning));
+        item->setToolTip(
+            0,
+            QStringLiteral(
+                "DatumId: %1\\nSource: Three distinct same-stage END Points"
+                "\\nReverse: %2\\nVisibility: %3\\nStatus: %4\\nDiagnostic: %5")
+                .arg(
+                    fromUtf8(datum.id.serialized()),
+                    datum.reverse ? QStringLiteral("Yes")
+                                  : QStringLiteral("No"),
+                    datum.visible ? QStringLiteral("Shown")
+                                  : QStringLiteral("Hidden"),
+                    evaluated ? datumStatusText(evaluation->status)
+                              : QStringLiteral("Not evaluated"),
+                    evaluated ? datumDiagnosticText(evaluation->diagnostic)
+                              : QStringLiteral("—")));
+        if (preserve_reference_selection) {
+            const bool was_selected = std::find(
+                previously_selected_datums.begin(),
+                previously_selected_datums.end(),datum.id) !=
+                previously_selected_datums.end();
+            item->setSelected(was_selected);
+        }
+    }
     reference_geometry->setExpanded(true);
 
     if (!session_->document().sketches().empty() ||
@@ -2229,11 +2286,15 @@ void PartDocumentTreeController::updateVisibilityActions() {
                 session_->document().findDatumPlane(id);
             const auto* edge =
                 session_->document().findEdgePointDatumPlane(id);
-            if (offset == nullptr && edge == nullptr) {
+            const auto* points =
+                session_->document().findThreePointDatumPlane(id);
+            if (offset == nullptr && edge == nullptr &&
+                points == nullptr) {
                 continue;
             }
             const bool visible = offset != nullptr
-                ? offset->visible : edge->visible;
+                ? offset->visible : edge != nullptr
+                    ? edge->visible : points->visible;
             if (visible) {
                 any_visible = true;
             } else {
