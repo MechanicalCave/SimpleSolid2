@@ -3560,6 +3560,7 @@ int main(int argc, char* argv[]) {
                 CHECK(re_sourced->points[0]==authored.points[0]);
                 CHECK(re_sourced->points[1]==authored.points[1]);
                 CHECK(re_sourced->points[2]!=authored.points[2]);
+                const auto authored_replacement=*re_sourced; // Snapshot before Undo.
                 CHECK(s4b.undoDepth()==undo_before_replacement+1U);
                 CHECK(s4b.undo().changed);
                 CHECK(s4b.document().state()==state_before_replacement);
@@ -3574,7 +3575,7 @@ int main(int argc, char* argv[]) {
                 CHECK(cold_re_sourced.ok() && cold_re_sourced.document);
                 const auto* cold_replaced=cold_re_sourced.document->
                     findThreePointDatumPlane(authored.id);
-                CHECK(cold_replaced && *cold_replaced==*re_sourced);
+                CHECK(cold_replaced && *cold_replaced==authored_replacement);
                 std::cout << "RG02B1_S4B_REAL_QT_REPLACE_P3_PASS"
                           << " actual_end_click=1"
                           << " stable_id=1"
