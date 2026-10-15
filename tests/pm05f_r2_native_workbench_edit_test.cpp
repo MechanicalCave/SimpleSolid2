@@ -3682,6 +3682,51 @@ int main(int argc, char* argv[]) {
                 std::cout << "RG02B1_S4B_NATIVE_QT_THREE_DELETE_PASS"
                           << " shared_properties_action=1"
                           << " stable_undo_redo=1\n";
+
+                // Owner S4B GUI regression: after an accepted 3-Point
+                // Datum, adding a legacy Offset must not invalidate the
+                // whole ReferenceScene. The old two-family completeness
+                // check cleared Origin and every existing Datum overlay.
+                CHECK(s4b.undo().changed); // Restore the same 3-Point Datum.
+                CHECK(s4b.document().findThreePointDatumPlane(authored.id));
+                CHECK(workbench.activateDocument(&s3a, {}));
+                QApplication::processEvents();
+                CHECK(workbench.activateDocument(&s4b, {}));
+                QApplication::processEvents();
+                QTreeWidgetItem* xy_origin=nullptr;
+                for (QTreeWidgetItemIterator it(tree); *it; ++it)
+                    if ((*it)->text(0) == QStringLiteral("XY Plane")) {
+                        xy_origin=*it;
+                        break;
+                    }
+                CHECK(xy_origin);
+                tree->clearSelection();
+                tree->setCurrentItem(xy_origin);
+                xy_origin->setSelected(true);
+                QApplication::processEvents();
+                CHECK(datum_tool->isEnabled());
+                datum_tool->click();
+                QApplication::processEvents();
+                CHECK(constructor->currentIndex()==0);
+                CHECK(datum_finish->isEnabled());
+                datum_finish->click();
+                QApplication::processEvents();
+                CHECK(s4b.document().datumPlanes().size()==1U);
+                CHECK(s4b.document().threePointDatumPlanes().size()==1U);
+                auto* presentation_controller=
+                    workbench.findChild<ui::PartViewportController*>();
+                CHECK(presentation_controller);
+                CHECK(!presentation_controller->presentationDegraded());
+                // Reopening this same document must reconstruct the
+                // mixed-Datum presentation from authored v18 semantics.
+                CHECK(workbench.activateDocument(&s3a, {}));
+                QApplication::processEvents();
+                CHECK(workbench.activateDocument(&s4b, {}));
+                QApplication::processEvents();
+                CHECK(!presentation_controller->presentationDegraded());
+                std::cout << "RG02B1_S4B_MIXED_DATUM_REFERENCE_SCENE_PASS"
+                          << " three_point=1 offset=1"
+                          << " degraded=0 reopened_scene=1\n";
                 CHECK(workbench.activateDocument(&s3a, {}));
                 QApplication::processEvents();
             }
