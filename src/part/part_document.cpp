@@ -171,6 +171,18 @@ struct SemanticProvenanceBounds final {
 
 } // namespace
 
+const ThreePointDatumPlane* PartDocument::findThreePointDatumPlane(
+    DatumId id) const noexcept {
+    const auto found = std::find_if(
+        state_.three_point_datum_planes.begin(),
+        state_.three_point_datum_planes.end(),
+        [id](const ThreePointDatumPlane& item) {
+            return item.id == id;
+        });
+    return found == state_.three_point_datum_planes.end()
+        ? nullptr : &*found;
+}
+
 PartDocument PartDocument::create(core::DocumentId id) {
     return PartDocument{std::move(id), PartAuthoredState{}, core::DocumentRevision{}};
 }
@@ -498,6 +510,34 @@ bool PartDocument::validAuthoredState(
         }
     }
 
+    // S4A: one global DatumId namespace and strict stage-owned semantic
+    // Point provenance, including repairable deleted-source intent.
+    for (std::size_t i = 0; i < state.three_point_datum_planes.size(); ++i) {
+        const auto& datum = state.three_point_datum_planes[i];
+        if (!threePointDatumPlaneStructurallyValid(datum) ||
+            !state.next_datum_id.containsAllocated(datum.id)) return false;
+        for (const auto& point : datum.points) {
+            if (!point.stage.feature_id ||
+                !semanticPointHistoryValid(
+                    point.point,
+                    SemanticProvenanceBounds{
+                        &state, *point.stage.feature_id,
+                        std::nullopt, std::nullopt})) return false;
+        }
+        if (std::any_of(state.datum_planes.begin(), state.datum_planes.end(),
+                        [id = datum.id](const auto& other) {
+                            return other.id == id;
+                        }) ||
+            std::any_of(state.edge_point_datum_planes.begin(),
+                        state.edge_point_datum_planes.end(),
+                        [id = datum.id](const auto& other) {
+                            return other.id == id;
+                        })) return false;
+        for (std::size_t j = 0; j < i; ++j)
+            if (state.three_point_datum_planes[j].id == datum.id)
+                return false;
+    }
+
     // PM-03A bounded Datum dependency invariant. Datum references form a
     // single-parent local graph in this package; cycles fail closed without
     // introducing a universal Part dependency graph.
@@ -579,7 +619,15 @@ bool PartDocument::validAuthoredState(
                         return item.id == *datum_id;
                     });
                 if (edge == state.edge_point_datum_planes.end()) {
-                    return std::nullopt;
+                    const auto point = std::find_if(
+                        state.three_point_datum_planes.begin(),
+                        state.three_point_datum_planes.end(),
+                        [datum_id](const ThreePointDatumPlane& item) {
+                            return item.id == *datum_id;
+                        });
+                    if (point == state.three_point_datum_planes.end())
+                        return std::nullopt;
+                    return point->points[0].stage;
                 }
                 return std::visit(
                     [](const auto& source)
