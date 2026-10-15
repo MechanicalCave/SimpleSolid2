@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/cad_input.hpp>
 #include <simplesolid2/application/document_session.hpp>
@@ -377,6 +378,32 @@ int main(int argc, char* argv[]) {
     CHECK(session.document().revision() == before_axis_revision);
     CHECK(session.undoDepth() == before_axis_undo);
     CHECK(tool->isEnabled());
+
+    // H4 preview scene seam only (NOT native Edge authoring evidence):
+    // a valid derived line is one transient unpickable Reference cue.
+    // Its removal returns exactly to the original scene/Undo/Part state.
+    auto* axis_view =
+        workbench.findChild<ui::PartViewportController*>();
+    CHECK(axis_view != nullptr);
+    const part::ResolvedAxisLine display_only_line{
+        {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}};
+    CHECK(display_only_line.valid());
+    axis_view->setAxisDraftPreview(display_only_line);
+    CHECK(viewport->reference_scene.references.size() ==
+          reference_count_before_axis + 1U);
+    const auto& transient_cue =
+        viewport->reference_scene.references.back();
+    CHECK(transient_cue.kind ==
+          viewer::ReferencePresentationKind::axis);
+    CHECK(transient_cue.role ==
+          viewer::PresentationRole::hover);
+    CHECK(session.document().axes().empty());
+    CHECK(session.document().revision() == before_axis_revision);
+    CHECK(session.undoDepth() == before_axis_undo);
+    axis_view->setAxisDraftPreview(std::nullopt);
+    CHECK(viewport->reference_scene.references.size() ==
+          reference_count_before_axis);
+    CHECK(session.document().axes().empty());
 
     // Selection-first GUI: the one Datum Plane tool acquires the selected
     // Origin plane into the same runtime draft with the accepted 10 mm
