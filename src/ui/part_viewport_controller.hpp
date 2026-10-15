@@ -337,6 +337,11 @@ public:
             emphasis_region = std::nullopt);
     void clearProfileDraftPreview();
 
+    // Non-authored finite cue for one resolved infinite Edge Axis.
+    // No AxisId or token-to-authoring binding is ever created.
+    void setAxisDraftPreview(
+        std::optional<part::ResolvedAxisLine> line);
+
     void setDatumPlaneDraftPreview(
         std::optional<kernel::Frame3> frame,
         bool show_anchor_point = false,
@@ -855,6 +860,8 @@ private:
         transient_profile_hide_;
     std::optional<part::AxisReference>
         transient_axis_emphasis_;
+    std::optional<part::ResolvedAxisLine>
+        axis_draft_preview_line_;
     std::uint64_t next_presentation_token_{
         0x10000U};
     bool sketch_grip_projection_valid_{};
