@@ -84,9 +84,21 @@ part::PartAxis* findAxis(
         : &*found;
 }
 
+// Preserve one native Part Axis source admission path. A legacy
+// Sketch Line and a straight semantic Body Edge share the *same*
+// transaction/Undo identity without any fake source Sketch.
+bool axisSourceValid(
+    const part::PartAxisSource& source) noexcept {
+    return std::visit(
+        [](const auto& candidate) noexcept {
+            return candidate.valid();
+        },
+        source);
+}
+
 bool axisSourceInUse(
     const part::PartAuthoredState& state,
-    const part::SketchLineAxisSource& source,
+    const part::PartAxisSource& source,
     std::optional<part::AxisId> excluded_axis_id =
         std::nullopt) noexcept {
     return std::any_of(
@@ -94,11 +106,7 @@ bool axisSourceInUse(
         state.axes.end(),
         [&source, excluded_axis_id](
             const part::PartAxis& axis) {
-            const auto* sketch_source =
-                std::get_if<part::SketchLineAxisSource>(
-                    &axis.source);
-            return sketch_source != nullptr &&
-                   *sketch_source == source &&
+            return axis.source == source &&
                    (!excluded_axis_id ||
                     axis.id != *excluded_axis_id);
         });
@@ -3073,12 +3081,12 @@ CreateAxisResult DocumentSession::execute(
             std::nullopt,
             failed.diagnostic};
     }
-    if (!command.source.valid()) {
+    if (!axisSourceValid(command.source)) {
         const auto failed =
             failure(
                 DocumentSessionErrorCode::
                     invalid_command,
-                "Create Axis contains an invalid Sketch-Line source",
+                "Create Axis contains an invalid semantic source",
                 path_);
         return {
             false,
@@ -3094,7 +3102,7 @@ CreateAxisResult DocumentSession::execute(
             failure(
                 DocumentSessionErrorCode::
                     invalid_command,
-                "Create Axis source Line is already designated by another authored Axis",
+                "Create Axis source is already designated by another authored Axis",
                 path_);
         return {
             false,
@@ -3205,7 +3213,7 @@ DocumentSessionResult DocumentSession::execute(
             path_);
     }
     if (!command.axis_id.valid() ||
-        !command.source.valid()) {
+        !axisSourceValid(command.source)) {
         return failure(
             DocumentSessionErrorCode::
                 invalid_command,
@@ -3232,7 +3240,7 @@ DocumentSessionResult DocumentSession::execute(
         return failure(
             DocumentSessionErrorCode::
                 invalid_command,
-            "Edit Axis target source Line is already designated by another authored Axis",
+            "Edit Axis target source is already designated by another authored Axis",
             path_);
     }
 
