@@ -6242,6 +6242,11 @@ bool CadWorkbench::startAxisTool(
         return false;
     }
 
+    if (work_features_edge && active_sketch_id_) {
+        setStatusText(QStringLiteral(
+            "Finish the active Sketch before starting Work Features Axis."));
+        return false;
+    }
     axis_draft_ =
         application::AxisDraft::beginCreate(
             *document_session);
@@ -6310,13 +6315,32 @@ bool CadWorkbench::startAxisEdit(
     const auto* sketch_axis_source =
         std::get_if<part::SketchLineAxisSource>(
             &axis->source);
-    // A stage-qualified Body Edge Axis is never a fake source Sketch.
     if (sketch_axis_source == nullptr) {
-        setStatusText(
-            QStringLiteral(
-                "Edge Axis Edit uses the Work Features Edge constructor."));
-        return false;
+        if (!std::holds_alternative<
+                part::StraightMaterialEdgeAxisSource>(
+                axis->source) || active_sketch_id_) {
+            setStatusText(QStringLiteral(
+                "Finish the active Sketch before editing Body Edge Axis."));
+            return false;
+        }
+        auto edge_draft =
+            application::AxisDraft::beginEdit(
+                *document_session, axis_id);
+        if (!edge_draft) {
+            return false;
+        }
+        axis_edge_mode_active_ = true;
+        axis_draft_ = std::move(*edge_draft);
+        axis_evaluation_.reset();
+        refreshAxisEvaluation();
+        syncAxisUi();
+        syncActionState();
+        notifyCadInputContextChanged();
+        setStatusText(QStringLiteral(
+            "Edit Edge Axis — select or replace a strict Body Edge; Finish/Cancel preserve AxisId."));
+        return true;
     }
+    axis_edge_mode_active_ = false;
     if (active_sketch_id_ &&
         *active_sketch_id_ !=
             sketch_axis_source->sketch_id) {
@@ -6465,6 +6489,38 @@ void CadWorkbench::tryStageAxisFromSketchSelection() {
             selected.front()});
 }
 
+// Author the same Q0/Q2 strict current-stage MaterialEdgeReference
+// that existing native Part commands use. Viewport tokens never persist.
+void CadWorkbench::tryStageAxisFromBodyTopology() {
+    if (!axis_edge_mode_active_ || !axis_draft_ ||
+        !document_session_ || !viewport_controller_ ||
+        document_session_->document().revision() !=
+            axis_draft_->sourceRevision()) {
+        return;
+    }
+    const auto candidates =
+        viewport_controller_->selectedMaterialEdgeReferences();
+    if (!candidates || candidates->size() != 1U) {
+        return;
+    }
+    const auto& edge = candidates->front();
+    if (!edge.valid() ||
+        edge.stage.kind !=
+            part::BodyStageKind::after_feature) {
+        return;
+    }
+    if (!axis_draft_->setSource(
+            part::PartAxisSource{
+                part::StraightMaterialEdgeAxisSource{edge}})) {
+        setStatusText(QStringLiteral(
+            "Axis Edge source cannot be staged."));
+        return;
+    }
+    refreshAxisEvaluation();
+    syncAxisUi();
+    notifyCadInputContextChanged();
+}
+
 void CadWorkbench::refreshAxisEvaluation() {
     axis_evaluation_.reset();
     if (!axis_draft_ ||
@@ -6492,30 +6548,52 @@ void CadWorkbench::syncAxisUi() {
         axis_button_->setChecked(active);
     }
 
+    if (axis_constructor_combo_ != nullptr) {
+        axis_constructor_combo_->setVisible(
+            active && axis_edge_mode_active_);
+        axis_constructor_combo_->setCurrentIndex(0);
+    }
     if (axis_source_label_ != nullptr) {
-        if (active &&
-            axis_draft_->source()) {
-            const auto& source =
-                *axis_draft_->source();
-            axis_source_label_->setText(
-                QStringLiteral(
-                    "Sketch %1 / Line %2")
-                    .arg(
-                        fromUtf8(
-                            source.sketch_id.value()),
-                        fromUtf8(
-                            source.entity_id
-                                .serialized())));
+        if (active && axis_draft_->source()) {
+            const auto& source = *axis_draft_->source();
+            if (const auto* sketch =
+                    std::get_if<part::SketchLineAxisSource>(
+                        &source)) {
+                axis_source_label_->setText(
+                    QStringLiteral("Sketch %1 / Line %2")
+                        .arg(fromUtf8(sketch->sketch_id.value()),
+                             fromUtf8(sketch->entity_id.serialized())));
+            } else {
+                axis_source_label_->setText(
+                    QStringLiteral("One strict material Body Edge"));
+            }
         } else {
             axis_source_label_->setText(
-                QStringLiteral(
-                    "<select one Sketch Line>"));
+                axis_edge_mode_active_
+                    ? QStringLiteral("<select one straight Edge>")
+                    : QStringLiteral("<select one Sketch Line>"));
         }
+    }
+    if (axis_stage_label_ != nullptr) {
+        QString stage = QStringLiteral("not set");
+        if (active && axis_draft_->source()) {
+            if (const auto* edge =
+                    std::get_if<part::StraightMaterialEdgeAxisSource>(
+                        &*axis_draft_->source())) {
+                if (edge->edge.stage.feature_id) {
+                    stage = QStringLiteral("after Feature %1")
+                        .arg(fromUtf8(
+                            edge->edge.stage.feature_id->serialized()));
+                }
+            }
+        }
+        axis_stage_label_->setText(stage);
     }
 
     QString result_text =
-        QStringLiteral(
-            "Select exactly one valid Sketch Line.");
+        axis_edge_mode_active_
+            ? QStringLiteral("Select exactly one straight material Body Edge.")
+            : QStringLiteral("Select exactly one valid Sketch Line.");
     if (active &&
         axis_evaluation_) {
         if (axis_evaluation_->committable()) {
@@ -6677,18 +6755,23 @@ CadWorkbench::submitAxisCadInput(
     case application::AxisCadInputAction::none:
         break;
     case application::AxisCadInputAction::acquire_source:
-        tryStageAxisFromSketchSelection();
+        if (axis_edge_mode_active_) {
+            tryStageAxisFromBodyTopology();
+        } else {
+            tryStageAxisFromSketchSelection();
+        }
         if (!axis_draft_->source()) {
             setStatusText(
-                QStringLiteral(
-                    "Axis SOURCE — select exactly one Line in an active Sketch."));
+                axis_edge_mode_active_
+                    ? QStringLiteral("Axis SOURCE — select one straight Body Edge.")
+                    : QStringLiteral("Axis SOURCE — select exactly one Line in an active Sketch."));
         }
         break;
     case application::AxisCadInputAction::finish:
         if (!finishAxis()) {
             return {
                 false,
-                "Axis Finish requires one currently resolved Sketch Line."};
+                "Axis Finish requires one currently resolved semantic source."};
         }
         break;
     case application::AxisCadInputAction::cancel:
@@ -14120,11 +14203,14 @@ QString CadWorkbench::cadInputPromptText() const {
                   "Command: SKETCH — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc");
     }
     if (axis_draft_) {
+        if (axis_edge_mode_active_) {
+            return axis_draft_->source()
+                ? QStringLiteral("Command: AXIS — Edge selected · FINISH/Enter · CANCEL/Esc")
+                : QStringLiteral("Command: AXIS — Constructor Edge · pick one straight material Body Edge · SOURCE · CANCEL/Esc");
+        }
         return axis_draft_->source()
-            ? QStringLiteral(
-                  "Command: AXIS — SOURCE · FINISH/CANCEL")
-            : QStringLiteral(
-                  "Command: AXIS — Select exactly one Line in an active Sketch · SOURCE · CANCEL/Esc");
+            ? QStringLiteral("Command: AXIS — SOURCE · FINISH/CANCEL")
+            : QStringLiteral("Command: AXIS — Select exactly one Line in an active Sketch · SOURCE · CANCEL/Esc");
     }
     if (three_point_datum_revision_) {
         return QStringLiteral(
