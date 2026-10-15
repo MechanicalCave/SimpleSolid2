@@ -94,7 +94,11 @@ bool axisSourceInUse(
         state.axes.end(),
         [&source, excluded_axis_id](
             const part::PartAxis& axis) {
-            return axis.source == source &&
+            const auto* sketch_source =
+                std::get_if<part::SketchLineAxisSource>(
+                    &axis.source);
+            return sketch_source != nullptr &&
+                   *sketch_source == source &&
                    (!excluded_axis_id ||
                     axis.id != *excluded_axis_id);
         });
@@ -284,9 +288,26 @@ part::AxisEvaluation evaluateAxisInDocument(
             reference);
     }
 
-    const auto* source =
-        document.findSketch(
-            axis->source.sketch_id);
+    if (const auto* edge =
+            std::get_if<part::StraightMaterialEdgeAxisSource>(
+                &axis->source)) {
+        (void)edge; // the reference remains authored in PartAxis
+        const auto evaluation =
+            part::evaluatePart(document, modeling_kernel);
+        auto* provider = dynamic_cast<
+            kernel::IExactBoundedEdgeGeometryQuery*>(
+                &modeling_kernel);
+        return part::resolveAxisReference(
+            document, reference, &evaluation,
+            nullptr, provider);
+    }
+
+    const auto* sketch_source =
+        std::get_if<part::SketchLineAxisSource>(
+            &axis->source);
+    const auto* source = sketch_source != nullptr
+        ? document.findSketch(sketch_source->sketch_id)
+        : nullptr;
     if (source == nullptr ||
         part::builtinOriginPlaneForSketchSupport(
             source->support)) {
