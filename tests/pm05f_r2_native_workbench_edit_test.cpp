@@ -3504,15 +3504,15 @@ int main(int argc, char* argv[]) {
                     QApplication::processEvents();
                     for (const auto& corner : corners) {
                         if (p3_replaced_by_mouse) break;
-                        const auto near=[](const viewer::Point3& p,
+                        const auto sameCorner=[](const viewer::Point3& p,
                                            const viewer::Point3& q) {
                             return std::abs(p.x-q.x)<1e-7 &&
                                    std::abs(p.y-q.y)<1e-7 &&
                                    std::abs(p.z-q.z)<1e-7;
                         };
                         if (std::any_of(staged.begin(),staged.end(),
-                                [&corner,&near](const auto& p) {
-                                    return near(p,corner);
+                                [&corner,&sameCorner](const auto& p) {
+                                    return sameCorner(p,corner);
                                 })) continue;
                         const auto& p1=staged[0];
                         const auto& p2=staged[1];
