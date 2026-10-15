@@ -8188,8 +8188,55 @@ void CadWorkbench::clearDatumPlaneRuntimeContext() {
 }
 
 application::CadInputSubmitResult
+CadWorkbench::submitThreePointDatumCadInput(std::string_view text) {
+    if (!three_point_datum_revision_) return {
+        false,"3 Points Datum is not active."};
+    const auto word=upperAsciiTrimmed(text);
+    if (word == "3POINTS" || word == "DATUMPLANE" ||
+        word == "DATUM PLANE") return {true,{}};
+    if ((word == "EDGEPOINT" || word == "OFFSET") &&
+        !three_point_datum_edit_id_) {
+        selectDatumPlaneConstructor(word == "EDGEPOINT" ? 1 : 0);
+        return {true,{}};
+    }
+    if (word == "CANCEL" || word == "ESC") {
+        cancelDatumPlane();
+        return {true,{}};
+    }
+    if (word == "REVERSE") {
+        three_point_datum_reverse_ = !three_point_datum_reverse_;
+        ++three_point_datum_context_generation_;
+        refreshDatumPlaneEvaluation();
+        notifyCadInputContextChanged();
+        return {true,{}};
+    }
+    if (word == "P1" || word == "P2" || word == "P3") {
+        three_point_datum_active_slot_ =
+            static_cast<std::size_t>(word[1]-'1');
+        ++three_point_datum_context_generation_;
+        syncDatumPlaneUi();
+        notifyCadInputContextChanged();
+        return {true,{}};
+    }
+    if (word.empty() || word == "FINISH") {
+        return finishDatumPlane()
+            ? application::CadInputSubmitResult{true,{}}
+            : application::CadInputSubmitResult{
+                false,"3 Points Finish requires three strict current "
+                      "noncollinear END Points."};
+    }
+    return {false,"Use 3POINTS, P1/P2/P3, REVERSE, FINISH "
+                  "or CANCEL; click exact END geometry for sources."};
+}
+
+application::CadInputSubmitResult
 CadWorkbench::submitDatumPlaneCadInput(
     std::string_view text) {
+    const auto keyword=upperAsciiTrimmed(text);
+    if (keyword == "3POINTS" || keyword == "EDGEPOINT") {
+        selectDatumPlaneConstructor(keyword == "3POINTS" ? 2 : 1);
+        return {true,{}};
+    }
     if (!datum_plane_draft_ ||
         document_session_ == nullptr) {
         return {
@@ -13296,6 +13343,12 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (axis_draft_->generation() &
                 (axis_namespace - 1U));
     }
+    if (three_point_datum_revision_) {
+        constexpr application::CadInputContextGeneration ns{
+            1ULL << 57U};
+        return ns | (three_point_datum_context_generation_ &
+                     (ns - 1U));
+    }
     if (edge_datum_create_revision_) {
         constexpr application::CadInputContextGeneration ns{
             1ULL << 58U};
@@ -13609,7 +13662,7 @@ CadWorkbench::submitCadDynamicInputRequest(
                   false,
                   "Axis Finish was rejected."};
     }
-    if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) {
+    if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) {
         return finishDatumPlane()
             ? application::CadInputSubmitResult{
                   true, {}}
@@ -13736,8 +13789,20 @@ CadWorkbench::submitCadInput(
         return result;
     }
 
+    if (three_point_datum_revision_) {
+        auto result=submitThreePointDatumCadInput(text);
+        if (!result.accepted && !result.diagnostic.empty())
+            setStatusText(fromUtf8(result.diagnostic));
+        return result;
+    }
     if (edge_datum_create_revision_) {
         const auto word = upperAsciiTrimmed(text);
+        if (word == "3POINTS" || word == "OFFSET") {
+            selectDatumPlaneConstructor(word == "3POINTS" ? 2 : 0);
+            return {true,{}};
+        }
+        if (word == "EDGEPOINT" || word == "DATUMPLANE" ||
+            word == "DATUM PLANE") return {true,{}};
         if (word == "CANCEL" || word == "ESC") {
             cancelDatumPlane();
             return {true, {}};
@@ -13989,6 +14054,11 @@ QString CadWorkbench::cadInputPromptText() const {
                   "Command: AXIS — SOURCE · FINISH/CANCEL")
             : QStringLiteral(
                   "Command: AXIS — Select exactly one Line in an active Sketch · SOURCE · CANCEL/Esc");
+    }
+    if (three_point_datum_revision_) {
+        return QStringLiteral(
+            "Command: DATUMPLANE — 3POINTS · pick strict END P1/P2/P3"
+            " · P1/P2/P3 replace slot · REVERSE · FINISH/Enter · CANCEL/Esc");
     }
     if (edge_datum_create_revision_) {
         return QStringLiteral(
@@ -14501,7 +14571,7 @@ void CadWorkbench::refreshActiveContext() {
     if (axis_draft_) {
         refreshAxisEvaluation();
     }
-    if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) {
+    if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) {
         refreshDatumPlaneEvaluation();
     }
     if (extrude_draft_) {
@@ -15955,7 +16025,7 @@ bool CadWorkbench::eventFilter(
         }
 
         if (watched == viewport_widget_ &&
-            (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_)) {
+            (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_)) {
             if (key_event->key() ==
                 Qt::Key_Escape) {
                 cancelDatumPlane();
@@ -17394,7 +17464,7 @@ void CadWorkbench::syncActionState() {
         !project_edge_active_ &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -17405,7 +17475,7 @@ void CadWorkbench::syncActionState() {
         !project_edge_active_ &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -17429,7 +17499,7 @@ void CadWorkbench::syncActionState() {
             editing_sketch ||
             sketch_support_pick_active_ ||
             axis_draft_.has_value() ||
-            (datum_plane_draft_.has_value() || edge_datum_edit_id_.has_value() || edge_datum_create_revision_.has_value()) ||
+            (datum_plane_draft_.has_value() || edge_datum_edit_id_.has_value() || edge_datum_create_revision_.has_value() || three_point_datum_revision_.has_value()) ||
             extrude_profile_pick_active_ ||
             extrude_draft_.has_value() ||
             revolve_draft_.has_value() ||
@@ -17443,7 +17513,7 @@ void CadWorkbench::syncActionState() {
     if (axis_draft_) {
         footer_mode = QStringLiteral("axis");
         mode_cue = QStringLiteral("Axis operation");
-    } else if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) {
+    } else if (datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) {
         footer_mode = QStringLiteral("datum");
         mode_cue = QStringLiteral("Datum Plane operation");
     } else if (extrude_draft_) {
@@ -17516,7 +17586,7 @@ void CadWorkbench::syncActionState() {
         !editing_sketch &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -17527,7 +17597,7 @@ void CadWorkbench::syncActionState() {
         axis_button_->setEnabled(
             active &&
             !sketch_support_pick_active_ &&
-            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
         !revolve_draft_ &&
@@ -17551,7 +17621,7 @@ void CadWorkbench::syncActionState() {
         !edge_feature_active &&
             solid_modeling_kernel_ != nullptr);
         datum_plane_button_->setChecked(
-            (datum_plane_draft_.has_value() || edge_datum_edit_id_.has_value() || edge_datum_create_revision_.has_value()));
+            (datum_plane_draft_.has_value() || edge_datum_edit_id_.has_value() || edge_datum_create_revision_.has_value() || three_point_datum_revision_.has_value()));
     }
 
     if (extrude_button_ != nullptr) {
@@ -17562,7 +17632,7 @@ void CadWorkbench::syncActionState() {
             !editing_sketch &&
             !sketch_support_pick_active_ &&
             !axis_draft_ &&
-            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
             !extrude_draft_ &&
         !revolve_draft_ &&
         !edge_feature_active &&
@@ -17584,7 +17654,7 @@ void CadWorkbench::syncActionState() {
             !editing_sketch &&
             !sketch_support_pick_active_ &&
             !axis_draft_ &&
-            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+            !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
             !extrude_profile_pick_active_ &&
             !extrude_draft_ &&
             !revolve_draft_ &&
@@ -17614,7 +17684,7 @@ void CadWorkbench::syncActionState() {
         !editing_sketch &&
         !sketch_support_pick_active_ &&
         !axis_draft_ &&
-        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -17717,7 +17787,7 @@ void CadWorkbench::syncActionState() {
         active &&
         selected_axis_id_.has_value() &&
         !axis_draft_ &&
-        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
@@ -17738,7 +17808,7 @@ void CadWorkbench::syncActionState() {
         active &&
         selected_datum_id_.has_value() &&
         !axis_draft_ &&
-        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_) &&
+        !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !revolve_draft_ &&
