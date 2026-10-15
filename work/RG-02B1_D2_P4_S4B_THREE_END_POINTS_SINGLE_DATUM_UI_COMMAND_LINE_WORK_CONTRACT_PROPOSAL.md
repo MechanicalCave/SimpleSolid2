@@ -1,6 +1,6 @@
 # RG-02B1 / P4-S4B — 3 END Points in the ONE existing Datum Plane tool: GUI / CAD Command Line executable Work Contract proposal
 
-**Status: OWNER D2 REVIEW PROPOSAL — NOT ACCEPTED / NOT ACTIVE / NOT EXECUTABLE.**
+**Status: OWNER D2 CONTRACT SCOPE ACCEPTED (2026-10-15) — governance PR #400 UNMERGED; separate ACTIVE-only activation PENDING; NOT EXECUTABLE until governance merge and ACTIVE activation.**
 **Date:** 2026-10-15.
 **Base protected main:** `30bd70e8d17c90d9c8defd187e240ffb4f321c09`; accepted S4A real native Windows Ready FULL #3166 **199/199**, exact-head Ready CLOSURE #3169 SUCCESS, Owner S4A technical FINAL PASS and separately authorized guarded squash PR #395 MERGED.
 **Original Owner-approved product direction:** `work/RG-02B1_D2_P4_S4_THREE_END_POINTS_DESIGN_PROPOSAL.md`, governance PR #389 MERGED. Preserve exact bounded native precondition P0 PR #392 and S4A headless v18 `ThreePointDatumPlane` PR #395; never redefine durable Point identity.
@@ -70,10 +70,16 @@ Existing `DATUMPLANE` and `DATUM PLANE` still start the **same** tool; `Offset` 
 - **S4B-F09 — Windows evidence / documentation:** registered Windows FOCUSED desktop GUI + native Qt/OCCT; Draft FAST and genuine Ready FULL **Core+Kernel+Desktop**, all existing native Qt `RESOURCE_LOCK` cases executed; official DOC-01 internal + PL/EN Markdown plus regenerated Product Browser parity; exact code/test/docs HEAD with every historical RED recorded, no skipped test mistaken for PASS.
 - **S4B-F10 — Owner manual GUI acceptance + gated merge:** demonstrate one existing Datum Plane tool, 3 END clicks, Reverse, Edit slot, Undo/Redo, Command Line, visibility, Save/Reopen on Windows for Owner. Owner **manual/technical FINAL PASS** of this S4B user-facing scope is separate from S4A headless PASS; guarded exact-head squash requires separate authorization and immutable evidence, not merely passing CI.
 
+## Owner D2 acceptance checkpoint — 2026-10-15
+
+**ACCEPTED:** In direct reply to the precise S4B contract and D2 decision request after governance Draft PR #400 [Windows closure #3170 SUCCESS on original proposal HEAD `1c1a9fd861aa2f87665238901c920cbc231f9992`], Owner said **„akceptuje - kontynuuj”**. This is acceptance of the exact bounded S4B *one existing Datum Plane tool*, 3 ordered strict END Points, P1/P2/P3 replacement slots, transient preview/Reverse, Edit and one S4A semantic transaction, Reference Geometry tree integration, input/keyboard and proposed context-only `3POINTS`, `EDGEPOINT`, `OFFSET`, `P1`, `P2`, `P3` tokens; fixed §2 twelve-file list, F01–F10 native/Windows/manual test obligations, DOC-01. Existing Offset/Edge+Point END/MID must not regress.
+
+**SEPARATE PENDING APPROVALS:** The accepted S4B contract scope does NOT by itself authorize the distinct **guarded squash of PR #400**, a separate `work/ACTIVE.yaml`-only protected-main activation, production source mutations or a protected-main product merge. Require each corresponding Owner action and fresh exact-head CI. Owner S4A FINAL PASS on PR #395 is not transitive to S4B GUI/manual acceptance.
+
 ## 4. Execution gates — all distinct
 
 1. **DONE:** accepted D2 design PR #389, native P0 source proof PR #392, headless S4A v18 PR #395 Owner technical FINAL PASS, guarded squash merged protected main `30bd70e8d17c90d9c8defd187e240ffb4f321c09`; Windows FULL #3166 **199/199**, closure #3169 **SUCCESS**. Do not reinterpret completed S4A as automatically activating GUI/S4B.
-2. **PENDING OWNER D2:** approve/modify the **exact** S4B scope above — particularly the proposed Command Line mode tokens and fixed file/test allowlist. The earlier accepted high-level UX *does not itself* approve these new concrete implementation tokens, writable files or test obligations.
+2. **OWNER D2 ACCEPTED 2026-10-15:** exact §0–§3 S4B scope, Command Line context tokens and bounded file/test allowlist were accepted by **„akceptuje - kontynuuj”** after governance-only PR #400 proposal and #3170 success. This is not source-mutation, activation or production merge authorization.
 3. **PENDING governance-only:** this **one-work-file Draft proposal PR** must pass exact-head Windows governance CI; obtain separate Owner-provided authorization for its guarded protected-main squash; no `src/**` or test code changes on this branch.
 4. **PENDING ACTIVE-only:** after contract merge, a separate, Owner-approved `work/ACTIVE.yaml`-only PR switches the sole active Work Contract from completed S4A to accepted S4B. Require Windows exact-head Ready closure and guarded protected-main squash. Until then no S4B implementation edits.
 5. **PENDING production:** new branch **from activated main**; only §2 allowlist; actual Qt/OCCT FOCUSED→FAST→Ready FULL, DOC-01, test ledger; Owner Windows manual GUI/technical FINAL PASS; separately approved exact-head guarded production squash.
