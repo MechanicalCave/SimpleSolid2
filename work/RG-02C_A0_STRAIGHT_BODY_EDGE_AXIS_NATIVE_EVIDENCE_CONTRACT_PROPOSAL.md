@@ -66,6 +66,12 @@ No additional files, test executable/CTest registration, `src/**`, Kernel/OCCT p
 - **Owner A0 technical PASS** and a separate guarded production-test PR merge are mandatory. No successful A0 evidence automatically creates a usable Axis constructor.
 - **Future production/UX:** only after A0 and a further narrow Owner D2 decision about Axis source grammar, diagnostics, dependency cycle, typed persistence/migration, edit/repair and Revolve consumption can a separate vertical-slice Work Contract be proposed. The Owner-mandated **prior explicit RG-02 Axis UI consultation and approval** remains a hard STOP before any Workbench/Tree/Viewer/hover/Command Line edit.
 
+## 4A. Owner Axis UI consistency directive — future scope only, not A0 UX approval (2026-10-15)
+
+**Owner explicit requirement:** when separately authorizing the guarded squash of this A0 contract, Owner directed: `UI musi byś spójne z aplikacją i istniejącym "datum"`. Any later Axis UI must therefore use the application's existing, shared **Datum Plane and Reference Geometry conventions** for tool entry, right-side Operations/Properties and source controls, viewport hover/selection feedback, preview and signed Reverse (only where semantically applicable), Finish/Cancel/Edit, Undo/Redo, persistent Tree/Properties/visibility and contextual CAD Command Line/keyboard/focus lifecycle. **Reuse established components and logic; do not create parallel UI systems or duplicate tests.** Axis remains a distinct Part-owned semantic object and must not be disguised as a Datum Plane constructor.
+
+This product/interaction consistency is an **approved design constraint, NOT approval of any concrete layout/flow**. Per accepted RG-02 roadmap v1.33, reviewable Axis UX flows must be presented to the Owner and **separately explicitly approved before any UI mutation**. A0 itself is read-only native evidence: NO UI/Viewer/Tree/CAD CLI change, independently of this future requirement.
+
 ## 5. Deliberately excluded or unproven
 
 OUT: Axis through two Points, cylindrical patch Axis, two-plane intersection, curved Edge Axis, a `MID`/CENTER picker, new generic Point meaning, Datum Plane constructor extension, speculative universal Axis framework, solid Mirror/Pattern, Assembly/Drawing, PM-06 and CI #302 remediation. A0 cannot guarantee that a strict Edge survives every upstream edit or that every visually straight edge is admissible; ambiguous/unsupported classification is a valid fail-closed result, not a reason to relax the contract.
@@ -74,7 +80,7 @@ OUT: Axis through two Points, cylindrical patch Axis, two-plane intersection, cu
 
 ## Documentation impact
 
-Internal docs: **not required** for A0 evidence-only tests.  
-User/Product docs: **not required** for A0 evidence-only tests.  
-Generated Browser: **not required** for A0 evidence-only tests.  
+Internal docs: not required  
+User/Product docs: not required  
+Generated Browser: not required for A0 evidence-only tests.  
 Reason: A0 adds read-only native evidence, not new current product semantics or UI. This governance-only D2 proposal itself modifies one `work/**` file. A separately accepted future executable Axis vertical slice must set its own DOC-01 obligations.
