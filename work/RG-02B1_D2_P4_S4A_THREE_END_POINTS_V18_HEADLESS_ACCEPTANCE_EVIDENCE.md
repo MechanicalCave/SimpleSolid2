@@ -43,7 +43,7 @@
 | S4A-F05 downstream Sketch/Axis/Feature dependency | Native dependent Sketch/Axis identity, blocked Delete and same producer FeatureId height-edit replay **FOCUSED #3133 PASS**; independent wider FULL PENDING |
 | S4A-F06 independent real OCCT native v18 Save/Reopen | Native FOCUSED #3115 and #3133 PASS (separate provider and dependent IDs); older fixtures still require FULL |
 | S4A-F07 strict malformed v18 grammar, legacy reads, refusal negatives | Registered `pm03a.datum_schema_v10` Windows FOCUSED #3135 **PASS 1/1** on updated v18 grammar/legacy negative fixtures; five unrelated legacy-file-test allowlist blockers await Owner D2 |
-| S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | Docs/Browser **official Windows #3137 PASS**; FAST #3137 **RED 88/93** on four unallowlisted v17 test assertions plus one Not Run; FULL #3123 **RED 198/199** PM02JR2; final FAST/FULL PENDING five-path D2 allowance |
+| S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | Docs/Browser **official Windows #3137 PASS**; FAST #3137 **RED 88/93** on four unallowlisted v17 test assertions plus one Not Run; FULL #3123 **RED** (Core 25/25; kernel-native 56/57; Desktop NOT RUN) PM02JR2; final FAST/FULL PENDING five-path D2 allowance |
 | S4A-F09 Owner technical final verdict, guarded production merge | PENDING |
 
 All prior RED are preserved; no test deletion/weakening. If an existing registered test *outside the activated allowlist* requires new versioned fixture maintenance, STOP for one precise Owner D2 amendment — do not edit it by inference.
