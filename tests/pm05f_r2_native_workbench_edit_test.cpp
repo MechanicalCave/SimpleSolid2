@@ -2314,6 +2314,52 @@ int main(int argc, char* argv[]) {
             CHECK(kept_axis != nullptr);
             CHECK(kept_axis->source == authored_axis.source);
 
+            // Reuse the original single-Axis Tree visibility actions,
+            // not a second Edge-Axis-only persistent visibility flag.
+            // Each change must be a real Part transaction and preserve
+            // the strict source / AxisId / evaluation independence.
+            auto* hide_edge_axis_action =
+                workbench.findChild<QAction*>(
+                    QStringLiteral("hideBuiltinReferencesAction"));
+            auto* show_edge_axis_action =
+                workbench.findChild<QAction*>(
+                    QStringLiteral("showBuiltinReferencesAction"));
+            CHECK(hide_edge_axis_action != nullptr);
+            CHECK(show_edge_axis_action != nullptr);
+            committed_edge_axis_item = nullptr;
+            for (QTreeWidgetItemIterator it(axis_tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QString::fromStdString(authored_axis.name)) {
+                    committed_edge_axis_item = *it;
+                    break;
+                }
+            }
+            CHECK(committed_edge_axis_item != nullptr);
+            axis_tree->clearSelection();
+            axis_tree->setCurrentItem(committed_edge_axis_item);
+            committed_edge_axis_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(hide_edge_axis_action->isEnabled());
+            const auto before_visibility_undo =
+                b1_axis_session.undoDepth();
+            hide_edge_axis_action->trigger();
+            QApplication::processEvents();
+            const auto* hidden_axis =
+                b1_axis_session.document().findAxis(authored_axis.id);
+            CHECK(hidden_axis != nullptr && !hidden_axis->visible);
+            CHECK(hidden_axis->source == authored_axis.source);
+            CHECK(b1_axis_session.undoDepth() ==
+                  before_visibility_undo + 1U);
+            CHECK(show_edge_axis_action->isEnabled());
+            show_edge_axis_action->trigger();
+            QApplication::processEvents();
+            const auto* shown_axis =
+                b1_axis_session.document().findAxis(authored_axis.id);
+            CHECK(shown_axis != nullptr && shown_axis->visible);
+            CHECK(shown_axis->source == authored_axis.source);
+            CHECK(b1_axis_session.undoDepth() ==
+                  before_visibility_undo + 2U);
+
             // Delete through the original Tree context action, then
             // Undo must restore the SAME durable AxisId/source.
             committed_edge_axis_item = nullptr;
