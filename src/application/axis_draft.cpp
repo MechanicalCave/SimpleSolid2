@@ -85,13 +85,22 @@ std::optional<AxisDraft> AxisDraft::beginEdit(
     if (axis == nullptr) {
         return std::nullopt;
     }
+    // This is the pre-existing Sketch-Line draft. The Edge constructor
+    // will reuse its transactional lifecycle through an independently
+    // guarded source-mode extension, not fabricate a Sketch source.
+    const auto* sketch_source =
+        std::get_if<part::SketchLineAxisSource>(
+            &axis->source);
+    if (sketch_source == nullptr) {
+        return std::nullopt;
+    }
 
     return AxisDraft{
         session.documentId(),
         session.document().revision(),
         AxisDraftMode::edit,
         axis_id,
-        axis->source};
+        *sketch_source};
 }
 
 bool AxisDraft::valid() const noexcept {
