@@ -45,6 +45,12 @@
 
 - [Windows Draft FAST #3153](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38713942791) on exact `6669782a230ade2d0dfd85d8cde8c3bd1859632e`: **PASS 93/93**, after the five desktop targets had genuinely been rebuilt and executed in FOCUSED #3151 and the native PM02JR2 had passed FOCUSED #3152. Official Windows `.\\ss2.ps1 docs` / DOC-01 returned **`SS2 documentation verification PASSED`** on the same revision. Previous FAST #3137/#3150 RED and persistent CI-04 build/CTest discrepancy remain in the historical log; warm-run FAST success is not evidence that a *cold* FAST build automatically rebuilds every labeled target. Genuine independent Ready FULL and Owner FINAL PASS remain pending.
 
+## Ready FULL #3155: honest 198/199 RED — independent legacy Qt UI gate
+
+- [Windows Ready FULL #3155](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38714198601) completed **RED** at exact PR code/test/doc/evidence SHA `a6402068cc5b1f3e7b1150766e31c38def8f547b`: **Core 25/25 PASS**, real **kernel-native 57/57 PASS** (including new P4-S4A + PM02JR2), **Desktop 116/117 PASS**; DOC-01 official **PASS**. Only failed registered `pm05f_r2.native_workbench_edit` (**full-only Qt/OCCT**). At `tests/pm05f_r2_native_workbench_edit_test.cpp:552` it checked `!active_operations->isHidden()` during a pre-existing Feature Edit; the Operations widget was hidden. Existing test source, UI, Viewer and Feature Edit drafts have **not** changed in S4A #395 and are **not** in S4A's exact allowlist. Do not infer a new 3-Point source failure or silently declare Qt failure an intermittent flake; separately reproduce the exact existing GUI test with a full linked native target.
+- The FAIL was after real Qt/OCCT setup, not a compile or mock failure. No weakening/deleting the assertion, no touching non-allowlisted test/UI/Viewer, no GUI mock substituted. A **real isolated FOCUSED test of the unmodified target** is the next evidence gate. If reproducibly RED, STOP for Owner D2 and investigate necessary exact amendment, not an unauthorized UI change.
+- Exact #3155 counts are **25/25 + 57/57 + 116/117 = 198/199**; **not** a FULL PASS. Earlier FAST #3153 **93/93 PASS**, OCCT + schema + five old tests FOCUSED PASS, and docs PASS remain factual independent scope.
+
 ## Acceptance matrix
 
 | Gate | Actual result |
@@ -56,7 +62,7 @@
 | S4A-F05 downstream Sketch/Axis/Feature dependency | Native dependent Sketch/Axis identity, blocked Delete and same producer FeatureId height-edit replay **FOCUSED #3133 PASS**; independent wider FULL PENDING |
 | S4A-F06 independent real OCCT native v18 Save/Reopen | Native FOCUSED #3115 and #3133 PASS (separate provider and dependent IDs); older fixtures still require FULL |
 | S4A-F07 strict malformed v18 grammar, legacy reads, refusal negatives | Registered `pm03a.datum_schema_v10` Windows FOCUSED #3135 **PASS 1/1** on updated v18 grammar/legacy negative fixtures; five unrelated legacy-file-test allowlist blockers await Owner D2 |
-| S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | Docs/Browser **official Windows PASS**; five-test D2/ACTIVE merged; desktop FOCUSED #3151 **5/5 PASS**, kernel FOCUSED #3152 **1/1 PASS**, Draft FAST #3153 **93/93 PASS** on exact recorded SHA. Ready FULL and later exact evidence closure **PENDING**. Historical RED and CI-04 cold-build discrepancy retained. |
+| S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | Docs/Browser **official Windows PASS**; five-test D2/ACTIVE merged; desktop FOCUSED #3151 **5/5 PASS**, kernel FOCUSED #3152 **1/1 PASS**, Draft FAST #3153 **93/93 PASS** on exact recorded SHA. Ready FULL **#3155 RED** (25/25 Core + 57/57 kernel + 116/117 Desktop) at unmodified full-only `pm05f_r2.native_workbench_edit` Operations-visibility invariant; rerun native Qt FOCUSED; later exact evidence closure **PENDING**. Historical RED and CI-04 cold-build discrepancy retained. |
 | S4A-F09 Owner technical final verdict, guarded production merge | PENDING |
 
 All prior RED are preserved; no test deletion/weakening. If an existing registered test *outside the activated allowlist* requires new versioned fixture maintenance, STOP for one precise Owner D2 amendment — do not edit it by inference.
