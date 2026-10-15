@@ -325,6 +325,53 @@ int main(int argc, char* argv[]) {
     CHECK(tool->isEnabled());
     CHECK(!tool->isChecked());
 
+    // RG-02C/B1: the *new* Work Features Axis button reuses the existing
+    // Part Axis draft. Its Constructor combo has ONLY "Edge" today.
+    // Sketch-Line Axis is still authored in Sketch, never offered here.
+    // A missing strict material Edge cannot create a ghost Axis, consume an
+    // AxisId or add an Undo entry. Cancel returns to the unchanged Datum UX.
+    auto* axis_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("axisToolButton"));
+    auto* axis_constructor =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("axisConstructorCombo"));
+    auto* axis_source =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("axisSourceLabel"));
+    auto* axis_finish =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("axisFinishButton"));
+    auto* axis_cancel =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("axisCancelButton"));
+    CHECK(axis_tool && axis_constructor && axis_source &&
+          axis_finish && axis_cancel);
+    CHECK(axis_constructor->count() == 1);
+    CHECK(axis_constructor->itemText(0) == QStringLiteral("Edge"));
+    CHECK(axis_tool->isEnabled());
+    const auto before_axis_revision =
+        session.document().revision();
+    const auto before_axis_undo = session.undoDepth();
+    CHECK(session.document().axes().empty());
+
+    axis_tool->click();
+    QApplication::processEvents();
+    CHECK(axis_tool->isChecked());
+    CHECK(axis_constructor->currentText() == QStringLiteral("Edge"));
+    CHECK(axis_source->text().contains(QStringLiteral("Edge")));
+    CHECK(!axis_finish->isEnabled());
+    CHECK(session.document().axes().empty());
+    CHECK(session.document().revision() == before_axis_revision);
+    CHECK(session.undoDepth() == before_axis_undo);
+    axis_cancel->click();
+    QApplication::processEvents();
+    CHECK(!axis_tool->isChecked());
+    CHECK(session.document().axes().empty());
+    CHECK(session.document().revision() == before_axis_revision);
+    CHECK(session.undoDepth() == before_axis_undo);
+    CHECK(tool->isEnabled());
+
     // Selection-first GUI: the one Datum Plane tool acquires the selected
     // Origin plane into the same runtime draft with the accepted 10 mm
     // default. Reverse changes only the signed value.
