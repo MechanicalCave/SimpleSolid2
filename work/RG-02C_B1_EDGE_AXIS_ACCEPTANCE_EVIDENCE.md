@@ -1,6 +1,6 @@
 # RG-02C/B1 — one straight Body Edge Axis: production implementation evidence ledger
 
-**Status:** INCREMENTAL IMPLEMENTATION IN PROGRESS — H1 product-native read-only line resolver **UNVERIFIED pending real FOCUSED**. NOT a finished durable Axis, no Owner product FINAL PASS or protected-main production merge.
+**Status:** H1 product-native real OCCT FOCUSED **#3247 1/1 PASS** on source/test exact SHA `6081ffb05d6fe9a252757d08ce93c73c37af2e1f`; FAST/FULL/schema/native v19/GUI all PENDING. NOT a finished durable Axis, no Owner technical FINAL PASS or production protected-main merge.
 **Date:** 2026-10-15.
 **Active contract:** `work/RG-02C_B1_SINGLE_STRAIGHT_EDGE_AXIS_LIFECYCLE_D2_WORK_CONTRACT_PROPOSAL.md`, Owner delegated authority to implement; Work Features Axis UX Owner approved (`Edge` ONLY, existing Sketch Axis stays in Sketch, Edge Axis in Reference Geometry); contract PR #411 and ACTIVE PR #412 independently guarded-MERGED protected main `a9cec1d786bede4a4e6af624d5c1bb08eea7e795`.
 **Allowed paths:** exact §0A of contract; this first increment modifies only pre-existing `src/part/include/simplesolid2/part/axis_evaluation.hpp`, `src/part/axis_evaluation.cpp`, `tests/kernel_native/pm05c2b_part_edge_topology_test.cpp` plus this ledger.
@@ -16,7 +16,7 @@
 
 | Gate | Exact SHA/run | Result |
 | --- | --- | --- |
-| Windows native FOCUSED `pm05c2b.part_edge_topology` | PENDING | **NOT YET RUN** |
+| Windows native FOCUSED `pm05c2b.part_edge_topology` | [#3247](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38776602273), SHA `6081ffb05d6fe9a252757d08ce93c73c37af2e1f` | **1/1 PASS — actual Windows MSVC + native OCCT** |
 | Draft FAST (Core + Kernel) | PENDING | **NOT YET RUN** |
 | Ready FULL (Core + native Kernel + Qt/OCCT Desktop) | PENDING | **NOT YET RUN** |
 | DOC-01 internal + PL/EN + generated Browser | PENDING | **NOT YET RUN** |
