@@ -24,6 +24,14 @@
 - [Windows FOCUSED #3133](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38708941986) on exact code+test+docs/evidence HEAD `dc6812401a51a711782f020e37fc8e7462a22e95`: **PASS 1/1** (`pm05c2b.part_edge_topology`, real Windows OCCT, 0.23 sec). This includes the S4A new strict current-stage collinear / near-collinear *transient catalog* negatives, real native 3-Point Frame/Create/Edit/Undo/Redo, dependent Sketch/Axis and blocked Delete, cold independent provider v18 Save/Reopen, plus same FeatureId height-edit re-evaluation. Original Q1/Q2/P0 native assertions also pass. Does NOT turn cancelled or RED FULL into PASS.
 - No new Part/Kernel provider public API, no v19, no GUI/Viewer, no S4B Command Line and no test weakening/deletion.
 
+## Later exact Windows focused and FAST results — do not collapse red history
+
+- [Windows desktop FOCUSED #3134](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38709358572) **RED** at `pm03a.datum_schema_v10`: authentic synthetic v16 fixture converter was still carrying the new mandatory **v18** collection. Corrected by demanding that this collection is **EMPTY** before removing it; old v16 semantics and assertions remain unchanged.
+- [Windows desktop FOCUSED #3135](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38709549805) **PASS 1/1** on exact SHA `1f9e1aa5670e6403ad5d79c0402422a6eb3bb936`; real `pm03a.datum_schema_v10` with current v18 writer, v16/v17/v9 historical reading and authored v18 malformed grammar regressions passed.
+- [Windows Draft FAST #3137](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38709767904), exact HEAD `73f71d0bd5f1dce3d53b0b28edbdd6a6eaea93bb`: **RED 88/93 PASS**, four current-v17 expectation failures in non-allowlisted `pm02e`, `pm04a`, `pm04e1`, `pm05b3`, plus `pm04c1.revolve_semantic_kernel` **Not Run** (NOT a code PASS or a proved logic failure). The native Part loader remains untouched; historical tests must be amended exactly under separate Owner D2 approval.
+- The same Windows FAST #3137 executed the **official** `.\\ss2.ps1 docs` and documentation verification/selftests: **`SS2 documentation verification PASSED`**, regenerated Browser matched the committed result. This certifies DOC-01 source+PL/EN pairing+Browser parity on this exact code/docs HEAD even though the separate FAST test suite remains RED. Do not report an aggregate FAST PASS.
+- Updated governance-only [PR #396](https://github.com/MechanicalCave/SimpleSolid2/pull/396), Draft, exact HEAD `eeaec0fa6e3607b8dd8e6b6c0ad126e3de4adf63`, now requests **exactly five** historical registered test files (PM02JR2 and the four FAST failures), no additional Part/kernel/UI/provider changes. Contract acceptance, exact-head governance squash and separate `ACTIVE.yaml` amendment must precede any mutation of those five paths in PR #395. `pm04c1` is deliberately excluded until real evidence requires it.
+
 ## Acceptance matrix
 
 | Gate | Actual result |
@@ -34,8 +42,8 @@
 | S4A-F04 atomic Command, Undo, invalid no-mutation | Native FOCUSED #3115 PASS (bounded test); more regression PENDING |
 | S4A-F05 downstream Sketch/Axis/Feature dependency | Native dependent Sketch/Axis identity, blocked Delete and same producer FeatureId height-edit replay **FOCUSED #3133 PASS**; independent wider FULL PENDING |
 | S4A-F06 independent real OCCT native v18 Save/Reopen | Native FOCUSED #3115 and #3133 PASS (separate provider and dependent IDs); older fixtures still require FULL |
-| S4A-F07 strict malformed v18 grammar, legacy reads, refusal negatives | Existing permitted v17/v16/v9 fixture and new v18 grammar tests authored; pre-new-tests Core #3123 25/25 PASS, current fixtures PENDING rerun |
-| S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | FULL #3123 RED PM-02JR2 unallowlisted legacy test; FULL #3128 RED additive native JSON header (repaired); canonical docs/browser authored, Windows parity PENDING |
+| S4A-F07 strict malformed v18 grammar, legacy reads, refusal negatives | Registered `pm03a.datum_schema_v10` Windows FOCUSED #3135 **PASS 1/1** on updated v18 grammar/legacy negative fixtures; five unrelated legacy-file-test allowlist blockers await Owner D2 |
+| S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | Docs/Browser **official Windows #3137 PASS**; FAST #3137 **RED 88/93** on four unallowlisted v17 test assertions plus one Not Run; FULL #3123 **RED 198/199** PM02JR2; final FAST/FULL PENDING five-path D2 allowance |
 | S4A-F09 Owner technical final verdict, guarded production merge | PENDING |
 
 All prior RED are preserved; no test deletion/weakening. If an existing registered test *outside the activated allowlist* requires new versioned fixture maintenance, STOP for one precise Owner D2 amendment — do not edit it by inference.
