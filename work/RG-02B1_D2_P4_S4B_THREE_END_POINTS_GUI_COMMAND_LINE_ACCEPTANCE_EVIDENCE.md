@@ -39,6 +39,12 @@
 - **Verified actual source-level root cause, not a flaky click:** `src/ui/part_viewport_controller.cpp::buildBodyScene` still required `DatumEvaluation.planes.size() == datumPlanes.size() + edgePointDatumPlanes.size()`. Following creation of a valid S4A native v18 `ThreePointDatumPlane`, this condition was false by exactly one, and the failure path **cleared the entire current BodyScene**, leaving every projected corner unpickable. The parallel `src/ui/cad_workbench.cpp` UI status-cache guard had the same two-kind omission, suppressing 3-Point diagnostic rows. Both are **inside the exact activated S4B UI allowlist** and are now corrected to count all three typed Datum collections. No Part/kernel/viewer_qt_occt/schema/CMake changes.
 - **Next proof, not yet green:** rebuild and run the *unaltered real mouse test* `pm05f_r2.native_workbench_edit` on Windows FOCUSED with the two precise controller fixes; all existing S3A and previously passing native S4B tests must still execute, including the P3 actual END click, Edit/Undo/Redo and independent cold v18 replay. Do not claim F08 PASS until the GitHub run returns actual PASS.
 
+## Native S4B GUI corrections independently verified on Windows
+
+- [Windows real native Qt FOCUSED #3203](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38735856389), exact `55a7d89f0a099ea1e314534010e6075ba041eda5`: **PASS 1/1** `pm05f_r2.native_workbench_edit` (43.41 s), including actual P3 END Edit source replacement and v18 cold independent OCCT replay. Prior #3200 **RED 0/1** (20 eligible projected corners, zero selectable topology under Edit) was caused by two UI-only two-kind Datum cardinality guards: the BodyScene guard deleted the entire scene after an authored ThreePoint Datum; the Workbench diagnostic collector also omitted the third kind. Both fixed in S4B allowed UI paths without weakening source validity or modifying native Part/Kernel/Viewer.
+- During F06 audit the existing Workbench `deleteDatumPlane` lookup omitted the third kind and rejected S4A ThreePoint Data before the shared Part Delete command. The same allowed `src/ui/cad_workbench.cpp` now admits the third kind, guarding Delete during active 3-Point/EdgePoint drafts. Additive native Qt test clicks the existing Tree Properties Delete button after P3 Edit, verifies deletion and one-step Undo/Redo; existing S3A MID/END assertions remain.
+- [Windows real native Qt FOCUSED #3205](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38736315670), exact `289c3634c6530049e8babedf404fbe266fbae4a1`: **PASS 1/1** `pm05f_r2.native_workbench_edit` (44.32 s), including the newly added GUI Delete/Undo/Redo, strict source replacement, real END clicks and cold v18 Save/Reopen. Not a FAST/FULL PASS.
+
 ## Finite acceptance matrix — current honest status
 
 | Gate | Status |
@@ -47,10 +53,10 @@
 | F02 real distinct material END Qt clicks | Native FOCUSED #3180 PASS |
 | F03 common-corner dedup / stale/unsupported | Shared corner and unavailable native source Qt focused PASS; extended positive/negative pending |
 | F04 geometric invalid / preview / signed Reverse | Headless v18 legacy native S4A PASS, UI no preview until valid from #3180; GUI signed Reverse test pending |
-| F05 UI Properties Edit/slot replacement/Undo | Real native Qt Properties/Edit Reverse FOCUSED #3186 PASS; new actual END-click P3 source replacement authored, native FOCUSED PENDING |
-| F06 shared DatumId Tree/Visibility/Save/Reopen | Native v18 original cold #3180 PASS; new Tree/Properties/Edit Reverse and edited cold replay #3186 PASS; explicit visibility/group and P3 re-source cold PENDING |
+| F05 UI Properties Edit/slot replacement/Undo | Real native Qt #3203/#3205 FOCUSED PASS actual END-click P3 replacement, stable P1/P2/DatumId, atomic Undo/Redo and native v18 cold replay |
+| F06 shared DatumId Tree/Visibility/Save/Reopen | Native Qt #3205 FOCUSED PASS shared Reference Geometry Tree/Properties, P3 Edit, independent native v18 cold replay, shared Properties Delete/Undo/Redo; final FULL PENDING |
 | F07 context-only CLI/Enter/Esc | Qt desktop #3178 PASS (bounded); explicit slot replacement with mouse pending |
-| F08 additive real Qt/OCCT negative and source edit | New registered native test now authored; pending run |
+| F08 additive real Qt/OCCT negative and source edit | Real native Qt #3203 and #3205 FOCUSED PASS strict three END picks, corner dedup, actual mouse P3 replacement and cold Edit replay |
 | F09 Windows FAST + Ready FULL 199/199 + DOC-01 | Draft FAST #3190/#3195 **93/93 PASS**, official DOC-01 internal + PL/EN + generated Browser PASS. New P3 replacement native FOCUSED and Ready FULL 199/199 PENDING |
 | F10 Owner manual Windows GUI technical FINAL PASS, guarded production merge | PENDING separate Owner acceptance and authorization |
 
