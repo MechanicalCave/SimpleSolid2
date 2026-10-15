@@ -3461,6 +3461,126 @@ int main(int argc, char* argv[]) {
                     findThreePointDatumPlane(authored.id);
                 CHECK(cold_edit && cold_edit->reverse &&
                       cold_edit->points==authored.points);
+                // S4B-F05/F08: true mouse replacement of only P3 while
+                // Editing, not merely reversing a preloaded 3-Point Datum.
+                // Rebuild the real GUI Tree from its document and acquire
+                // a *different* native material-END with a live Qt click.
+                const auto state_before_replacement=s4b.document().state();
+                const auto undo_before_replacement=s4b.undoDepth();
+                CHECK(workbench.activateDocument(&s3a,{}));
+                QApplication::processEvents();
+                CHECK(workbench.activateDocument(&s4b,{}));
+                QApplication::processEvents();
+                QTreeWidgetItem* replacement_tree_item=nullptr;
+                for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                    if ((*it)->text(0).contains(
+                            QStringLiteral("Datum Plane 1 (3 Points)"))) {
+                        replacement_tree_item=*it;
+                        break;
+                    }
+                }
+                CHECK(replacement_tree_item);
+                tree->clearSelection();
+                tree->setCurrentItem(replacement_tree_item);
+                replacement_tree_item->setSelected(true);
+                QApplication::processEvents();
+                CHECK(property_edit->isEnabled());
+                property_edit->click();
+                QApplication::processEvents();
+                CHECK(constructor->currentIndex()==2);
+                CHECK(datum_finish->isEnabled());
+                point_slot->click(); // Explicit P3 replacement, never P1/P2.
+                QApplication::processEvents();
+                CHECK(point_slot->isChecked());
+                bool p3_replaced_by_mouse=false;
+                for (const auto view : {
+                         viewer::StandardView::top_front_right,
+                         viewer::StandardView::top_front_left,
+                         viewer::StandardView::top_back_right,
+                         viewer::StandardView::bottom_front_right}) {
+                    if (p3_replaced_by_mouse) break;
+                    CHECK(viewport->setStandardView(view));
+                    viewport->fitAll();
+                    QApplication::processEvents();
+                    for (const auto& corner : corners) {
+                        if (p3_replaced_by_mouse) break;
+                        const auto near=[](const viewer::Point3& p,
+                                           const viewer::Point3& q) {
+                            return std::abs(p.x-q.x)<1e-7 &&
+                                   std::abs(p.y-q.y)<1e-7 &&
+                                   std::abs(p.z-q.z)<1e-7;
+                        };
+                        if (std::any_of(staged.begin(),staged.end(),
+                                [&corner,&near](const auto& p) {
+                                    return near(p,corner);
+                                })) continue;
+                        const auto& p1=staged[0];
+                        const auto& p2=staged[1];
+                        const double ux=p2.x-p1.x,uy=p2.y-p1.y,uz=p2.z-p1.z;
+                        const double vx=corner.x-p1.x;
+                        const double vy=corner.y-p1.y;
+                        const double vz=corner.z-p1.z;
+                        const double cx=uy*vz-uz*vy;
+                        const double cy=uz*vx-ux*vz;
+                        const double cz=ux*vy-uy*vx;
+                        if (cx*cx+cy*cy+cz*cz<1e-5) continue;
+                        const auto pixel=choosePixel(corner);
+                        if (!pixel) continue;
+                        const auto probe=viewport->queryBodyTopology(
+                            viewer::ViewportPoint2{
+                                double(pixel->x()),double(pixel->y())},
+                            viewer::BodyTopologyPickFilter{
+                                false,false,true});
+                        if (!probe.valid() || !probe.completed ||
+                            probe.candidates.empty()) continue;
+                        sendNativeWorkbenchHover(*viewport,*pixel);
+                        QApplication::processEvents();
+                        const auto context_before_click=
+                            workbench.cadInputContextGeneration();
+                        QTest::mouseClick(
+                            viewport,Qt::LeftButton,Qt::NoModifier,*pixel);
+                        QApplication::processEvents();
+                        CHECK(s4b.document().state()==state_before_replacement);
+                        CHECK(s4b.undoDepth()==undo_before_replacement);
+                        if (workbench.cadInputContextGeneration() !=
+                                context_before_click &&
+                            datum_finish->isEnabled() &&
+                            datum_result->text().contains(
+                                QStringLiteral("Resolved 3 Points")))
+                            p3_replaced_by_mouse=true;
+                    }
+                }
+                CHECK(p3_replaced_by_mouse);
+                CHECK(workbench.submitCadInput(
+                    "FINISH",workbench.cadInputContextGeneration()).accepted);
+                const auto* re_sourced=s4b.document().
+                    findThreePointDatumPlane(authored.id);
+                CHECK(re_sourced && re_sourced->id==authored.id);
+                CHECK(re_sourced->reverse); // Reverse survived re-source.
+                CHECK(re_sourced->points[0]==authored.points[0]);
+                CHECK(re_sourced->points[1]==authored.points[1]);
+                CHECK(re_sourced->points[2]!=authored.points[2]);
+                CHECK(s4b.undoDepth()==undo_before_replacement+1U);
+                CHECK(s4b.undo().changed);
+                CHECK(s4b.document().state()==state_before_replacement);
+                CHECK(s4b.redo().changed);
+                CHECK(s4b.document().findThreePointDatumPlane(authored.id)->
+                    points[2]!=authored.points[2]);
+                const auto re_sourced_path=std::filesystem::path{
+                    scratch.path().toStdWString()} /
+                    "s4b-three-replaced-p3-native-v18.ss2part";
+                CHECK(store.createNew(re_sourced_path,s4b.document()).ok());
+                auto cold_re_sourced=store.load(re_sourced_path);
+                CHECK(cold_re_sourced.ok() && cold_re_sourced.document);
+                const auto* cold_replaced=cold_re_sourced.document->
+                    findThreePointDatumPlane(authored.id);
+                CHECK(cold_replaced && *cold_replaced==*re_sourced);
+                std::cout << "RG02B1_S4B_REAL_QT_REPLACE_P3_PASS"
+                          << " actual_end_click=1"
+                          << " stable_id=1"
+                          << " p1_p2_unchanged=1"
+                          << " reverse_undo_redo=1"
+                          << " cold_v18_source_replay=1\n";
                 std::cout << "RG02B1_S4B_REAL_QT_THREE_EDIT_PASS"
                           << " same_datum=1"
                           << " unchanged_points=1"
