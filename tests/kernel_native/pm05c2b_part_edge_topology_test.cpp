@@ -1125,6 +1125,76 @@ std::vector<double> verifyQ0StrictPartStageGeometry(
     return lengths;
 }
 
+// RG-02C/A0: evaluation-only candidate for an infinite, UNORIENTED
+// Axis line. Reuse Q2's existing strict semantic Edge / exact Q0 native
+// resolution; this is NOT a new PartAxis source, persisted value, provider
+// resolver or second implementation of the Q0/Q2 checks.
+struct A0AxisLine final {
+    kernel::Point3 on_line;
+    kernel::Point3 tangent;
+};
+
+std::optional<A0AxisLine> a0StraightEdgeLine(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    const part::MaterialEdgeReference& source,
+    kernel_occt::OcctSolidModelingKernel& provider) {
+    const auto current = part::resolveSelectedMaterialEdgeMid(
+        document, part::SelectedMaterialEdgeMid{source},
+        evaluation, provider);
+    if (!current.resolved()) {
+        return std::nullopt;
+    }
+    // Q2 resolves source and queries the current native geometry, but can
+    // correctly admit circular Arc MID. A0 line-only consumer refuses it.
+    for (const auto& feature : evaluation.features) {
+        if (!feature.result_topology ||
+            feature.result_topology->stage != source.stage) {
+            continue;
+        }
+        const auto& edges = feature.result_topology->edges;
+        const auto found = std::find_if(
+            edges.begin(), edges.end(),
+            [&current](const auto& edge) {
+                return edge.runtime_token == *current.current_edge;
+            });
+        if (found == edges.end() ||
+            found->curve_kind != kernel::CurveKind::line) {
+            return std::nullopt;
+        }
+        return A0AxisLine{
+            *current.current_position_world,
+            current.current_tangent_line->representative};
+    }
+    return std::nullopt;
+}
+
+// A Line is an infinite locus: moving its origin along itself or flipping
+// tangent sign cannot change Axis meaning. This only compares observations;
+// it never picks a positive Revolve direction or authors world XYZ.
+bool a0SameUnorientedLine(
+    const A0AxisLine& first,
+    const A0AxisLine& second) {
+    const auto& d = first.tangent;
+    const auto& e = second.tangent;
+    const double alignment =
+        d.x * e.x + d.y * e.y + d.z * e.z;
+    const kernel::Point3 offset{
+        second.on_line.x - first.on_line.x,
+        second.on_line.y - first.on_line.y,
+        second.on_line.z - first.on_line.z};
+    const kernel::Point3 cross{
+        offset.y * d.z - offset.z * d.y,
+        offset.z * d.x - offset.x * d.z,
+        offset.x * d.y - offset.y * d.x};
+    const double separation2 =
+        cross.x * cross.x + cross.y * cross.y + cross.z * cross.z;
+    return std::isfinite(alignment) &&
+           std::isfinite(separation2) &&
+           std::abs(std::abs(alignment) - 1.0) < 1.0e-7 &&
+           separation2 < 1.0e-10;
+}
+
 // Test-only Q0 decorator: reorders complete native endpoint tuples (or
 // corrupts one tuple's token). Part must join by certified runtime membership,
 // never by OCCT traversal order or a coordinate/first/last heuristic.
@@ -2126,6 +2196,13 @@ void verifyQ1RealHalfCylinderAndRevolve(
             partial, *mid.reference, partial_eval, kernel);
         CHECK(current.resolved());
         CHECK(current.current_edge == edge.runtime_token);
+        // A0 does not promote a legitimate Q2 open circular Arc MID into
+        // a straight infinite Axis line (consumer-level refusal).
+        if (edge.curve_kind == kernel::CurveKind::circle) {
+            CHECK(!a0StraightEdgeLine(
+                partial, partial_eval,
+                mid.reference->source_edge, kernel));
+        }
         const auto s1 = part::initializeSelectedEdgeMidFrame(
             partial,*mid.reference,partial_eval,kernel);
         CHECK(s1.resolved());
@@ -3039,6 +3116,143 @@ int main() {
     const auto q2_base_sources = verifyQ2CanonicalSelectedMids(
         base_document, base_evaluation, kernel, "Q2-M01-pristine");
     CHECK(q2_base_sources.size() == 12U);
+
+    // A0-01/02/03/04/06: new Axis meaning, NOT new Q0/Q2 native logic.
+    // Reuse an already-certified Q2 strict MaterialEdgeReference as the
+    // TEST-ONLY prospective Body-Edge Axis source; no Axis is authored.
+    const auto& a0_source = q2_base_sources.front().source_edge;
+    const auto a0_base = a0StraightEdgeLine(
+        base_document, base_evaluation, a0_source, kernel);
+    CHECK(a0_base.has_value());
+    const A0AxisLine reversed_axis{
+        a0_base->on_line,
+        {-a0_base->tangent.x,
+         -a0_base->tangent.y,
+         -a0_base->tangent.z}};
+    CHECK(a0SameUnorientedLine(*a0_base, reversed_axis));
+    const auto a0_mid = part::resolveSelectedMaterialEdgeMid(
+        base_document, part::SelectedMaterialEdgeMid{a0_source},
+        base_evaluation, kernel);
+    CHECK(a0_mid.resolved());
+    const auto a0_native = kernel.bindExactEdgeToBody(
+        base_evaluation.features.front().result_solid,
+        *a0_mid.current_edge);
+    CHECK(a0_native);
+    const auto a0_exact = kernel.queryExactBoundedEdge3d(
+        base_evaluation.features.front().result_solid, *a0_native);
+    CHECK(a0_exact.ok());
+    CHECK(a0_exact.geometry->kind ==
+          kernel::ExactEdge3dKind::bounded_line);
+    for (std::size_t terminal = 0U; terminal < 2U; ++terminal) {
+        const A0AxisLine from_terminal{
+            a0_exact.geometry->current_terminal_positions_world[terminal],
+            a0_exact.geometry->terminal_tangent_lines[terminal].representative};
+        CHECK(a0SameUnorientedLine(*a0_base, from_terminal));
+    }
+
+    // Reuse G0's existing upstream-edit and replacement-Feature fixtures.
+    // A surviving authored source can update its derived Axis line; a new
+    // producer FeatureId must NEVER be rebound by equal B-Rep geometry.
+    const auto a0_edited_document =
+        withEditedBaseHeight(base_document, 35.0);
+    const auto a0_edited_evaluation =
+        part::evaluatePart(a0_edited_document, kernel);
+    CHECK(a0_edited_evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    std::size_t edited_resolved_lines = 0U;
+    for (const auto& selected : q2_base_sources) {
+        if (a0StraightEdgeLine(
+                a0_edited_document, a0_edited_evaluation,
+                selected.source_edge, kernel)) {
+            ++edited_resolved_lines;
+        }
+    }
+    CHECK(edited_resolved_lines > 0U);
+    const auto a0_replacement_document =
+        withReplacementBaseFeature(base_document);
+    const auto a0_replacement_evaluation =
+        part::evaluatePart(a0_replacement_document, kernel);
+    CHECK(a0_replacement_evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(!a0StraightEdgeLine(
+        a0_replacement_document, a0_replacement_evaluation,
+        a0_source, kernel));
+    auto a0_wrong_revision = part::PartDocument::restore(
+        base_document.documentId(), base_document.state(),
+        core::DocumentRevision{
+            base_document.revision().value() + 1U});
+    CHECK(a0_wrong_revision.ok());
+    CHECK(!a0StraightEdgeLine(
+        *a0_wrong_revision.document, base_evaluation,
+        a0_source, kernel));
+
+    // A0-04: one new Axis-specific fail-closed assertion on the same
+    // strict semantic Curve ambiguity already exercised by Q2. There is
+    // NO last-good Axis line when its exact source stops resolving.
+    auto a0_ambiguous = base_evaluation;
+    auto& a0_catalog =
+        *a0_ambiguous.features.front().result_topology;
+    auto a0_curve = std::find_if(
+        a0_catalog.curves.begin(), a0_catalog.curves.end(),
+        [&a0_source](const auto& curve) {
+            return curve.address == a0_source.curve;
+        });
+    CHECK(a0_curve != a0_catalog.curves.end());
+    const auto different_edge = std::find_if(
+        a0_catalog.edges.begin(), a0_catalog.edges.end(),
+        [&a0_mid](const auto& edge) {
+            return edge.runtime_token != *a0_mid.current_edge;
+        });
+    CHECK(different_edge != a0_catalog.edges.end());
+    a0_curve->current_edges.push_back(different_edge->runtime_token);
+    a0_curve->candidate_edge_count = a0_curve->current_edges.size();
+    a0_curve->strict_edge_status = kernel::ReferenceStatus::ambiguous;
+    CHECK(a0_catalog.complete());
+    CHECK(!a0StraightEdgeLine(
+        base_document, a0_ambiguous, a0_source, kernel));
+
+    // A0-06: real Part v18 disk Save/Close/Reopen, entirely new OCCT
+    // provider; caller retains semantic Edge intent only. No new native
+    // Axis serialization, runtime topology token or endpoint slot.
+    const auto a0_path = std::filesystem::temp_directory_path() /
+        ("ss2_rg02c_a0_native_" +
+         std::to_string(std::chrono::steady_clock::now()
+             .time_since_epoch().count()) + ".ss2part");
+    struct A0Cleanup final {
+        std::filesystem::path file;
+        ~A0Cleanup() {
+            std::error_code ec;
+            std::filesystem::remove(file, ec);
+        }
+    } a0_cleanup{a0_path};
+    part::PartDocumentStore a0_store;
+    CHECK(a0_store.createNew(a0_path, base_document).ok());
+    const auto a0_loaded = a0_store.load(a0_path);
+    CHECK(a0_loaded.ok());
+    kernel_occt::OcctSolidModelingKernel a0_cold_provider;
+    const auto a0_cold_evaluation = part::evaluatePart(
+        *a0_loaded.document, a0_cold_provider);
+    CHECK(a0_cold_evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const auto a0_cold = a0StraightEdgeLine(
+        *a0_loaded.document, a0_cold_evaluation,
+        a0_source, a0_cold_provider);
+    CHECK(a0_cold.has_value());
+    CHECK(a0SameUnorientedLine(*a0_base, *a0_cold));
+    CHECK(a0_source.stage ==
+          a0_cold_evaluation.features.front().result_topology->stage);
+    std::cout << "RG02C_A0_AXIS_LINE_NATIVE"
+              << " strict_source=1"
+              << " terminal_choice_invariant=2"
+              << " opposite_direction_equivalent=1"
+              << " upstream_edit_resolved=" << edited_resolved_lines
+              << " new_feature_not_rebound=1"
+              << " stale_revision_rejected=1"
+              << " ambiguous_line_refused=1"
+              << " cold_saved_reopened_line=1"
+              << " provider_edge_reverse_fixture=GAP"
+              << " durable_new_axis=0 UI=0\\n";
+
     verifyS1SelectedSignedFrames(base_document,base_evaluation,kernel,
                                  q1_base_sources,q2_base_sources);
     // Q2-M05/06/07: negative semantic and native provider matrix on a
