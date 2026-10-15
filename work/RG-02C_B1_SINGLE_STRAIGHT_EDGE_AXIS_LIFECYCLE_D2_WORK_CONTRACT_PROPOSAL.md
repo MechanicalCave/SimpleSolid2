@@ -52,6 +52,7 @@ tests/pm04b2_axis_tree_viewer_ui_test.cpp
 tests/pm03c2_cad_workbench_datum_plane_test.cpp
 tests/pm05f_r2_native_workbench_edit_test.cpp
 tests/kernel_native/pm05c2b_part_edge_topology_test.cpp
+tests/kernel_native/pm02jr2_add_surface_continuation_test.cpp
 docs/internal/PART_DOCUMENTS.md
 docs/product/pl/PARTS.md
 docs/product/en/PARTS.md
@@ -68,6 +69,12 @@ The evidence file is newly created by this implementation only, not a source of 
 **CI:** genuine Windows FOCUSED (already-registered native Axis/schema/test targets) → Draft FAST → Ready FULL Core+native Kernel+real Desktop Qt/OCCT; official DOC-01, exact-head evidence CLOSURE, Owner manual full lifecycle, technical FINAL PASS and guarded production squash only after PASS. Preserve all existing tests and CTest resource locks; no skipped Full counted as completed Full.
 
 **B1 delivery scope remains the Owner-corrected and signed UX on PR #410**. This technical implementation consent does not license `Sketch Line` as a Work Features constructor or moving existing Sketch Axis from its source Sketch. Every new Edge Axis belongs to Reference Geometry. PM-06/G1/other Axis kinds remain inactive.
+
+### B1-D2 current native Part writer compatibility witness — narrow Owner-delegated extension (2026-10-15)
+
+**Reason from real RED (no waived tests):** Windows Ready FULL [#3282](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38790204731) built the entire Desktop graph successfully and Core **25/25 PASS**, but native Kernel **56/57 PASS (1 RED)**: existing registered `pm02jr2.add_surface_continuation` line 1521 asserts that a **newly written** Part package descriptor is exactly native schema `18`. The accepted B1 new writer is explicitly schema **v19**, so the exact current-writer assertion must become `19`. The same test's *separate historic v16 read fixture*, v15/v16 discriminant refusal and all actual legacy negative tests must stay unmodified. This is version consistency, **not** changing old files or disabling tests. Real native B-Rep topological Edge orientation-reversal GAP remains separate.
+
+**Exactly ONE additional executable file to the finite §0A allowlist:** `tests/kernel_native/pm02jr2_add_surface_continuation_test.cpp`, **only** the current Part writer descriptor expected version assertion `18 → 19`. No other source, helper, new target, CMake/CI, new resolver, test deletion or additional constructor is authorized. Owner already expressly delegated continuation through bounded technical corrections; retain exact-head governance and Windows FOCUSED/Ready FULL gates after change.
 
 ## 1. What A0 truly proved and what is still missing
 
