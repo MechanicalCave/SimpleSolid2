@@ -1,8 +1,8 @@
 # RG-02B1 / P4-S4 P0 — Native END-to-Point identity proof (proposed executable Work Contract)
 
-**Status: PROPOSED / NOT OWNER-ACCEPTED AS EXECUTABLE / NOT ACTIVE / NO SOURCE-CODE AUTHORITY.**
+**Status: OWNER D2 EXECUTABLE CONTRACT ACCEPTED (2026-10-15) — exact two-path P0 scope. NOT ACTIVE; test/evidence edits remain forbidden until separate protected-main contract merge and approved ACTIVE-only activation.**
 **Date:** 2026-10-15.
-**Governance baseline:** protected main 615c34e701a9736af695c2190d9b14d189fc2517, after Owner-manual-PASS S3A #386. Parent Owner-accepted D2 design direction is work/RG-02B1_D2_P4_S4_THREE_END_POINTS_DESIGN_PROPOSAL.md (PR #389, still separately gated for protected-main squash). work/ACTIVE.yaml still targets S3A, not P0. The existing Part Modeling v1.33, Foundation 1.0, Constitution, Architecture, ADR-0012/0013/0014/0016/0017, DOC-01 and native Q1/Q2 evidence remain authoritative.
+**Governance baseline:** protected main 615c34e701a9736af695c2190d9b14d189fc2517 at proposal creation, after Owner-manual-PASS S3A #386. Parent Owner-accepted D2 design direction work/RG-02B1_D2_P4_S4_THREE_END_POINTS_DESIGN_PROPOSAL.md was separately authorized and guarded squash-MERGED in PR #389 as 0e202ceff8d8bcc2ae17786684c94df40ce5586f. work/ACTIVE.yaml still targets S3A, not P0. The existing Part Modeling v1.33, Foundation 1.0, Constitution, Architecture, ADR-0012/0013/0014/0016/0017, DOC-01 and native Q1/Q2 evidence remain authoritative.
 
 ## 0. Purpose and precise non-goals
 
@@ -21,7 +21,7 @@ Inside the existing registered real Windows/OCCT Part native test, add one named
 5. **P0-05 bounded supported-coverage report:** name exactly which current visible END families have unique durable Point identity. If a commonplace END cannot become a uniquely certified source, report **P0 FAIL / OWNER D2 STOP** and an evidence-led provenance alternative. Do not silently store three SelectedMaterialEdgeEnd values as edge-dependent point meaning or manufacture XYZ-based identities.
 6. **P0-06 zero product mutation:** all work is an additive registered native test and a written evidence log. Preserve every Q1/Q2 invariant/test. No production Part/UI/Viewer/API, new CMake, schema v18, generated docs, save fixture or modeled Datum change.
 
-## 2. Exact executable file allowlist (pending Owner approval and activation)
+## 2. Exact Owner-accepted executable file allowlist (not activated)
 
 - tests/kernel_native/pm05c2b_part_edge_topology_test.cpp — additive S4-P0 assertions to the existing registered native test.
 - work/RG-02B1_D2_P4_S4_P0_END_POINT_IDENTITY_NATIVE_PROOF_EVIDENCE.md — real fixture/status/identity/CI evidence, including failing classes.
@@ -39,12 +39,18 @@ Everything else is OUT in the implementation PR: src/part, src/application, src/
 
 ## 4. Strict workflow / dependencies
 
-1. Parent accepted-design PR #389 must pass exact-head governance and receive **its own separate explicit Owner authorization** before protected-main merge.
-2. Owner separately reviews and accepts this **exact 2-path native P0 executable contract**. Its governance PR needs verified Windows closure and independently authorized protected-main squash.
+1. **COMPLETED:** parent accepted-design PR #389 passed Ready closure #3086 and was independently Owner-authorized and squash-MERGED to protected main as 0e202ceff8d8bcc2ae17786684c94df40ce5586f.
+2. **OWNER ACCEPTED CONTRACT SCOPE ONLY:** Owner explicitly replied "akceptuję - kontynuuj" after the request to accept this exact P0 native test/evidence two-path contract (2026-10-15). This acceptance is **not separate merge authority** for PR #390. Run final Ready closure on its post-acceptance HEAD, then obtain independent Owner protected-main squash authorization before merge.
 3. Separate **work/ACTIVE.yaml-only activation PR**, explicitly approved and merged, points to the accepted P0 contract. **Before activation, do not edit either allowlisted test or evidence file as P0 production work.**
 4. New proof branch on activated protected main; native FOCUSED → FAST → Ready FULL, exact-HEAD evidence → Owner technical P0 verdict → independent production merge authority.
 5. Only after positive P0, draft new detailed and separately accepted/activated **S4A durable triple-Point/v18 schema** contract, then S4B GUI constructor under another bounded contract. S4A may not simply assume all clickables have a globally valid FeaturePointAddress.
 6. S3A remains closed on main. No automatic work/ACTIVE, broad roadmap, version number or app UI mutation follows from D2 direction approval or this proposed contract.
+
+## Owner D2 executable contract acceptance record
+
+- **Accepted:** P0-01…P0-06 native-only proof, exact two-path implementation allowlist, no production/schema/UI/hover changes, typed fail-closed decision if unique semantic Point identity cannot be proven. The proposed 24→8 result is **a testable hypothesis, NOT a predeclared PASS**.
+- **Not yet authorized:** merge of this contract PR #390, modification of either P0 execution path, work/ACTIVE.yaml transition, persistent 3-Point Datum / v18 schema / GUI, or changing unrelated Part/kernel code. Those remain separately gated.
+- Parent Owner-approved design PR #389 is already merged; previous "pending parent" wording is historical context only.
 
 ## Documentation impact
 
