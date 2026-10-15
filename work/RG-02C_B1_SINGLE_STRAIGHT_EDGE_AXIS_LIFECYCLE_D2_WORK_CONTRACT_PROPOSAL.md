@@ -53,6 +53,9 @@ tests/pm03c2_cad_workbench_datum_plane_test.cpp
 tests/pm05f_r2_native_workbench_edit_test.cpp
 tests/kernel_native/pm05c2b_part_edge_topology_test.cpp
 tests/kernel_native/pm02jr2_add_surface_continuation_test.cpp
+tests/pm03a_datum_schema_v10_test.cpp
+tests/pm03e_datum_backed_sketch_test.cpp
+tests/pm05b1_edge_feature_schema_v14_test.cpp
 docs/internal/PART_DOCUMENTS.md
 docs/product/pl/PARTS.md
 docs/product/en/PARTS.md
@@ -75,6 +78,16 @@ The evidence file is newly created by this implementation only, not a source of 
 **Reason from real RED (no waived tests):** Windows Ready FULL [#3282](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38790204731) built the entire Desktop graph successfully and Core **25/25 PASS**, but native Kernel **56/57 PASS (1 RED)**: existing registered `pm02jr2.add_surface_continuation` line 1521 asserts that a **newly written** Part package descriptor is exactly native schema `18`. The accepted B1 new writer is explicitly schema **v19**, so the exact current-writer assertion must become `19`. The same test's *separate historic v16 read fixture*, v15/v16 discriminant refusal and all actual legacy negative tests must stay unmodified. This is version consistency, **not** changing old files or disabling tests. Real native B-Rep topological Edge orientation-reversal GAP remains separate.
 
 **Exactly ONE additional executable file to the finite §0A allowlist:** `tests/kernel_native/pm02jr2_add_surface_continuation_test.cpp`, **only** the current Part writer descriptor expected version assertion `18 → 19`. No other source, helper, new target, CMake/CI, new resolver, test deletion or additional constructor is authorized. Owner already expressly delegated continuation through bounded technical corrections; retain exact-head governance and Windows FOCUSED/Ready FULL gates after change.
+
+### B1-D2 three existing Desktop native writer-version assertions — RED-driven addendum (2026-10-15)
+
+**Real Windows FULL evidence:** after bounded legacy-axis PM-04 compatibility fixes and single PM-02JR2 current writer `v19` correction, [FULL #3285](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38791599358) compiled the whole Desktop and passed real Core **25/25** and native Kernel **57/57**. Desktop **113/117** with four independent RED: PM-04B2 `axis_tool == nullptr` conflicts with the Owner-approved **new visible Work Features Axis button**, and exactly three existing UI-era test entry guards assert the **CURRENT writer** `PartDocumentStore::current_schema_version == 18` despite accepted writer v19: PM-03A, PM-03E and PM-05B1. PM-04B2 is ALREADY in §0A; do not create a duplicate test or UI implementation.
+
+**ONLY three new exact allowed test paths** are `tests/pm03a_datum_schema_v10_test.cpp`, `tests/pm03e_datum_backed_sketch_test.cpp`, `tests/pm05b1_edge_feature_schema_v14_test.cpp` (already registered and executed). Change ONLY their current-writer top-level `18 → 19` assertion. Keep original v10/v14/older native fixtures, all explicit historical schema values, Datum/Sketch/body semantics, negative validations, CTest registration and full assertions UNCHANGED. Do not downgrade production writer or relabel a historic v18 file as v19.
+
+**Already-authorized PM-04B2 UI compatibility correction:** in `tests/pm04b2_axis_tree_viewer_test.cpp`, replace the obsolete `axis_tool == nullptr` assertion with a positive check for the physical one-row Work Features `Axis` button, retaining the assertion that authored Sketch-Line Axis stays under its source Sketch; no move to Reference Geometry. New `Edge` Axis is placed under Reference Geometry, preserving original PM-04 behavior.
+
+**Governance:** Owner delegated all required RG-02C/B1 implementation decisions, subject to strict scope and real test gates. This addendum changes ONLY this existing `work/**` contract; exact-head Windows governance success and guarded squash first. Then fix only these four source-tested assertions on the product PR branch and rerun Windows FULL. Do not waive genuine regressions, claim product FINAL PASS, or claim the B-Rep native reversed topological Edge fixture as tested.
 
 ## 1. What A0 truly proved and what is still missing
 
