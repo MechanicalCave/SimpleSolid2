@@ -605,6 +605,21 @@ int main(int argc, char* argv[]) {
     CHECK(axis_designation != nullptr);
     CHECK(axis_tool != nullptr);
     CHECK(axis_tool->text() == QStringLiteral("Axis"));
+    // The new Work Features Axis command runs in PART context.
+    // Cancelling it must not silently open Sketch edit mode: enter the
+    // existing Sketch through the real Tree Edit action before testing
+    // the independent Sketch-Line Axis designation/Undo workflow.
+    auto* edit_source_sketch =
+        workbench.findChild<QAction*>(
+            QStringLiteral("editSketchAction"));
+    CHECK(edit_source_sketch != nullptr);
+    auto* source_sketch_item =
+        findItem(*tree, QStringLiteral("Sketch 1"));
+    CHECK(source_sketch_item != nullptr);
+    selectOnly(*tree, source_sketch_item);
+    CHECK(edit_source_sketch->isEnabled());
+    edit_source_sketch->trigger();
+    QApplication::processEvents();
     CHECK(!line_tool->isHidden());
     line_tool->click();
     QApplication::processEvents();
