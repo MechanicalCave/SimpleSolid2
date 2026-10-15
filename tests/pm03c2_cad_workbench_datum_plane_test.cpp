@@ -983,13 +983,13 @@ int main(int argc, char* argv[]) {
             QStringLiteral("datumPlaneToolButton"));
         auto* constructor=point_workbench.findChild<QComboBox*>(
             QStringLiteral("datumPlaneConstructorCombo"));
-        auto* slots=point_workbench.findChild<QWidget*>(
+        auto* slot_widget=point_workbench.findChild<QWidget*>(
             QStringLiteral("datumPlaneThreePointSlotsWidget"));
         auto* finish=point_workbench.findChild<QPushButton*>(
             QStringLiteral("datumPlaneFinishButton"));
         auto* reverse=point_workbench.findChild<QPushButton*>(
             QStringLiteral("datumPlaneReverseButton"));
-        CHECK(tool && constructor && slots && finish && reverse);
+        CHECK(tool && constructor && slot_widget && finish && reverse);
         CHECK(constructor->count()==3);
         CHECK(constructor->itemText(2)==QStringLiteral("3 Points"));
         const auto revision=point_session.document().revision();
@@ -1002,7 +1002,7 @@ int main(int argc, char* argv[]) {
             "3POINTS",point_workbench.cadInputContextGeneration());
         CHECK(r.accepted);
         CHECK(constructor->currentIndex()==2);
-        CHECK(!slots->isHidden());
+        CHECK(!slot_widget->isHidden());
         CHECK(point_workbench.acceptsEmptyCadInput());
         CHECK(!finish->isEnabled());
         CHECK(point_workbench.cadInputPrompt().find("P1/P2/P3") !=
@@ -1035,7 +1035,7 @@ int main(int argc, char* argv[]) {
         r=point_workbench.submitCadInput(
             "OFFSET",point_workbench.cadInputContextGeneration());
         CHECK(r.accepted && constructor->currentIndex()==0);
-        CHECK(slots->isHidden());
+        CHECK(slot_widget->isHidden());
         r=point_workbench.submitCadInput(
             "3POINTS",point_workbench.cadInputContextGeneration());
         CHECK(r.accepted && constructor->currentIndex()==2);
