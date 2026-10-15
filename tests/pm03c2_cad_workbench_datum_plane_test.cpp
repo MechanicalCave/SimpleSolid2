@@ -362,7 +362,7 @@ int main(int argc, char* argv[]) {
     // S3: the same constructor panel exposes MID/END while preserving
     // legacy Offset if the active kernel cannot certify exact geometry.
     // No half-authored Edge/Vertex pick may mutate the Part/Undo history.
-    CHECK(constructor->count() == 2);
+    CHECK(constructor->count() == 3);
     CHECK(constructor->itemText(1) ==
           QStringLiteral("Edge + Point"));
     const auto revision_before_unsupported =
@@ -963,6 +963,90 @@ int main(int argc, char* argv[]) {
         CHECK(edge_session.document().revision() == before_revision);
         CHECK(edge_session.undoDepth() == before_undo);
         CHECK(edge_session.document().edgePointDatumPlanes().empty());
+    }
+
+    // S4B desktop real-Qt controls with unavailable current native
+    // topology: CLI/Operations share ONE tool and NONE of these commands
+    // can create an inferred/unverifiable Point, preview, revision or Undo.
+    {
+        application::DocumentSession point_session{
+            {},part::PartDocument::create(
+                core::DocumentId::generate())};
+        ExactUnavailableKernel exact_kernel;
+        ui::CadWorkbench point_workbench{
+            [](QWidget* parent) {
+                auto* created = new TestViewport(parent);
+                return ui::ViewportSurface{created,created};
+            },&exact_kernel};
+        CHECK(point_workbench.activateDocument(&point_session,{}));
+        auto* tool=point_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlaneToolButton"));
+        auto* constructor=point_workbench.findChild<QComboBox*>(
+            QStringLiteral("datumPlaneConstructorCombo"));
+        auto* slots=point_workbench.findChild<QWidget*>(
+            QStringLiteral("datumPlaneThreePointSlotsWidget"));
+        auto* finish=point_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlaneFinishButton"));
+        auto* reverse=point_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlaneReverseButton"));
+        CHECK(tool && constructor && slots && finish && reverse);
+        CHECK(constructor->count()==3);
+        CHECK(constructor->itemText(2)==QStringLiteral("3 Points"));
+        const auto revision=point_session.document().revision();
+        const auto undo=point_session.undoDepth();
+
+        auto r=point_workbench.submitCadInput(
+            "DATUMPLANE",point_workbench.cadInputContextGeneration());
+        CHECK(r.accepted);
+        r=point_workbench.submitCadInput(
+            "3POINTS",point_workbench.cadInputContextGeneration());
+        CHECK(r.accepted);
+        CHECK(constructor->currentIndex()==2);
+        CHECK(!slots->isHidden());
+        CHECK(point_workbench.acceptsEmptyCadInput());
+        CHECK(!finish->isEnabled());
+        CHECK(point_workbench.cadInputPrompt().find("P1/P2/P3") !=
+              std::string::npos);
+        auto* p1=point_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlanePointP1"));
+        auto* p2=point_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlanePointP2"));
+        auto* p3=point_workbench.findChild<QPushButton*>(
+            QStringLiteral("datumPlanePointP3"));
+        CHECK(p1 && p2 && p3);
+        CHECK(p1->isChecked());
+        r=point_workbench.submitCadInput(
+            "P3",point_workbench.cadInputContextGeneration());
+        CHECK(r.accepted && p3->isChecked());
+        p2->click();
+        CHECK(p2->isChecked());
+        r=point_workbench.submitCadInput(
+            "REVERSE",point_workbench.cadInputContextGeneration());
+        CHECK(r.accepted);
+        reverse->click();
+        CHECK(!finish->isEnabled());
+        r=point_workbench.submitCadInput(
+            "FINISH",point_workbench.cadInputContextGeneration());
+        CHECK(!r.accepted);
+        CHECK(point_session.document().threePointDatumPlanes().empty());
+        CHECK(point_session.document().revision()==revision);
+        CHECK(point_session.undoDepth()==undo);
+
+        r=point_workbench.submitCadInput(
+            "OFFSET",point_workbench.cadInputContextGeneration());
+        CHECK(r.accepted && constructor->currentIndex()==0);
+        CHECK(slots->isHidden());
+        r=point_workbench.submitCadInput(
+            "3POINTS",point_workbench.cadInputContextGeneration());
+        CHECK(r.accepted && constructor->currentIndex()==2);
+        const auto stale=point_workbench.cadInputContextGeneration();
+        r=point_workbench.submitCadInput("CANCEL",stale);
+        CHECK(r.accepted && !tool->isChecked());
+        r=point_workbench.submitCadInput("FINISH",stale);
+        CHECK(!r.accepted);
+        CHECK(point_session.document().threePointDatumPlanes().empty());
+        CHECK(point_session.document().revision()==revision);
+        CHECK(point_session.undoDepth()==undo);
     }
 
     std::cout
