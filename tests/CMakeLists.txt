@@ -1073,6 +1073,20 @@ set_tests_properties(pg01d.native_face_fail_closed PROPERTIES
     LABELS "tier-full-only;subsystem-application;subsystem-part;subsystem-kernel;native"
 )
 
+// S4A D2-approved native Qt/OCCT FULL-only scheduling experiment.
+// Keep all six real tests and assertions enabled. Prevent concurrent
+// Workbench/Viewer native GUI test processes from competing for the
+// same Windows desktop, while leaving unrelated CTest --parallel intact.
+set_tests_properties(
+    wb01a.workbench_native_stress
+    pm05f_r2.native_workbench_edit
+    pg01c.native_project_edge_command
+    pg01d.native_face_boundary_d0
+    pg01d.native_face_ui
+    pg01d.native_face_fail_closed
+    PROPERTIES RESOURCE_LOCK ss2_native_qt_occt_workbench
+)
+
 add_executable(pm05c1_edge_semantic_kernel_test
     pm05c1_edge_semantic_kernel_test.cpp
 )
