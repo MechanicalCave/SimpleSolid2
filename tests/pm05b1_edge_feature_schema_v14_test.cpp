@@ -70,6 +70,16 @@ std::string repackage(
     const persistence::NativeDocumentPackage& package,
     int schema_version,
     std::string authored_json) {
+    if (schema_version < 18) {
+        auto authored = nlohmann::json::parse(
+            authored_json,nullptr,false);
+        CHECK(authored.is_object());
+        CHECK(authored.contains("three_point_datum_planes"));
+        CHECK(authored.at("three_point_datum_planes").is_array());
+        CHECK(authored.at("three_point_datum_planes").empty());
+        authored.erase("three_point_datum_planes");
+        authored_json = authored.dump(2) + "\\n";
+    }
     if (schema_version < 17) {
         auto authored = nlohmann::json::parse(
             authored_json,nullptr,false);
@@ -694,7 +704,7 @@ void verifyPg01bB1BindingStructure(
     const auto native =
         persistence::readNativeDocumentContainer(saved_path);
     CHECK(native.ok());
-    CHECK(native.package->descriptor.domain_schema_version == 17);
+    CHECK(native.package->descriptor.domain_schema_version == 18);
     const auto original_authored =
         nlohmann::json::parse(
             native.package->authored_json);
@@ -808,7 +818,7 @@ void verifyPg01bB1BindingStructure(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        17);
+        18);
 
     const auto fixture = makeFixture();
     verifyPg01bB1BindingStructure(fixture);
@@ -961,7 +971,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
 
     const auto authored =
         nlohmann::json::parse(
@@ -1067,7 +1077,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
 
     // New Edge Feature records are schema-v14-only and must fail closed when
     // deliberately mislabeled as a legacy v13 payload.
