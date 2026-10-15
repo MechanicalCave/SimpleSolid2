@@ -1508,6 +1508,38 @@ void PartViewportController::clearProfileDraftPreview() {
     }
 }
 
+void PartViewportController::setAxisDraftPreview(
+    std::optional<part::ResolvedAxisLine> line) {
+    if (line && !line->valid()) {
+        line.reset();
+    }
+    if (axis_draft_preview_line_ == line) {
+        return;
+    }
+    axis_draft_preview_line_ = std::move(line);
+
+    // Rebuild only the reference scene from immutable cached native
+    // Body/Datum evidence. A full OCCT Body rebuild would change the
+    // Viewer generation and lose the current strict source-Edge pick.
+    if (viewport_ && session_ &&
+        body_scene_revision_ &&
+        *body_scene_revision_ == session_->document().revision() &&
+        body_scene_cache_ &&
+        part_evaluation_cache_ &&
+        part_evaluation_cache_->source_revision ==
+            session_->document().revision() &&
+        datum_evaluation_cache_ &&
+        datum_evaluation_cache_->source_revision ==
+            session_->document().revision()) {
+        const auto references = buildReferenceScene();
+        if (references &&
+            viewport_->setReferenceScene(*references)) {
+            return;
+        }
+    }
+    refreshPresentation();
+}
+
 void PartViewportController::setDatumPlaneDraftPreview(
     std::optional<kernel::Frame3> frame,
     bool show_anchor_point,
@@ -3835,6 +3867,33 @@ PartViewportController::buildReferenceScene() {
             scene.references.push_back(
                 std::move(reference));
         }
+    }
+
+    if (axis_draft_preview_line_) {
+        // Preview is a bounded display cue for an infinite UNORIENTED
+        // line, never an authored AxisId and never a selectable source.
+        const auto token = allocatePresentationToken();
+        if (!token) {
+            return fail();
+        }
+        viewer::ReferencePresentation preview;
+        preview.token = *token;
+        preview.kind =
+            viewer::ReferencePresentationKind::axis;
+        preview.origin =
+            viewerPoint(axis_draft_preview_line_->origin);
+        preview.u_axis =
+            viewerVector(axis_draft_preview_line_->direction);
+        preview.extent = axisExtent;
+        preview.role =
+            viewer::PresentationRole::secondary_selection;
+        preview.visible = true;
+        if (!preview.valid()) {
+            return fail();
+        }
+        scene.references.push_back(std::move(preview));
+        // DO NOT add this token to axis_bindings_: it is a draft
+        // cue, not a selection-authoritative Part Axis entity.
     }
 
     const auto& datums = session_->document().datumPlanes();
