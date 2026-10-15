@@ -1692,7 +1692,8 @@ std::vector<S4P0PointKey> verifyS4P0NativeEndPointIdentity(
 // S4A-F01/F02/F04/F06: actual Part-owned v18 ThreePointDatum source,
 // strict geometric frame and Command/Undo/cold provider replay. P0's 24→8
 // stage-qualified semantic keys are the ONLY candidate source identities.
-void verifyS4AThreePointDatumLifecycle(
+std::array<part::StageSemanticPointReference,3>
+verifyS4AThreePointDatumLifecycle(
     const part::PartDocument& document,
     const part::PartEvaluation& evaluation,
     kernel_occt::OcctSolidModelingKernel& provider,
@@ -1763,6 +1764,43 @@ void verifyS4AThreePointDatumLifecycle(
     CHECK(first_frame && first_frame->status==
           part::DatumPlaneEvaluationStatus::resolved && first_frame->frame);
     const auto frame=*first_frame->frame;
+
+    // S4A-F03: synthetic *current evaluation* geometry can be degenerate
+    // even when the authored source is structurally valid. Altering a
+    // disposable stage catalog does not edit the native provider/Part/XYZ.
+    auto geometry_candidate = part::evaluatePart(session.document(),provider);
+    CHECK(geometry_candidate.features.front().result_topology.has_value());
+    auto& candidate_catalog =
+        *geometry_candidate.features.front().result_topology;
+    const auto corner = std::find_if(
+        candidate_catalog.vertices.begin(),candidate_catalog.vertices.end(),
+        [&points](const auto& vertex) {
+            return vertex.point_candidates.size() == 1U &&
+                   vertex.point_candidates.front() == points[2].point;
+        });
+    CHECK(corner != candidate_catalog.vertices.end());
+    CHECK(corner->provider_point.has_value());
+    const auto source0=positionFor(unique_keys[sample[0]]);
+    const auto source1=positionFor(unique_keys[sample[1]]);
+    const kernel::Point3 midpoint{
+        (source0.x+source1.x)*0.5,
+        (source0.y+source1.y)*0.5,
+        (source0.z+source1.z)*0.5};
+    const auto expectInvalidGeometry = [&]() {
+        const auto invalid = part::evaluateDatums(
+            session.document(),geometry_candidate,provider);
+        const auto* result = invalid.find(id);
+        CHECK(result != nullptr);
+        CHECK(result->status != part::DatumPlaneEvaluationStatus::resolved);
+        CHECK(!result->frame.has_value());
+    };
+    corner->provider_point=midpoint;
+    expectInvalidGeometry(); // exactly collinear, all source keys distinct
+    corner->provider_point=kernel::Point3{
+        midpoint.x+frame.normal.x*1.0e-10,
+        midpoint.y+frame.normal.y*1.0e-10,
+        midpoint.z+frame.normal.z*1.0e-10};
+    expectInvalidGeometry(); // numerically unstable near-collinear
 
     // Same stable DatumId supports genuine Part Sketch and derived Axis.
     const auto support=part::partSketchSupportForDatumPlane(id);
@@ -1867,6 +1905,7 @@ void verifyS4AThreePointDatumLifecycle(
               << " v18_cold_reopen=1"
               << " reverse_and_undo_redo=1"
               << " typed_invalid_edit_no_mutation=1\n";
+    return points;
 }
 
 // Q1-06: do not classify an actual half-cylinder cut's ambiguous
@@ -2995,7 +3034,7 @@ int main() {
     const auto s4p0_base_keys = verifyS4P0NativeEndPointIdentity(
         base_document, base_evaluation, kernel,
         q1_base_sources, "P0-01-pristine");
-    verifyS4AThreePointDatumLifecycle(
+    const auto s4a_base_points = verifyS4AThreePointDatumLifecycle(
         base_document,base_evaluation,kernel,s4p0_base_keys);
     const auto q2_base_sources = verifyQ2CanonicalSelectedMids(
         base_document, base_evaluation, kernel, "Q2-M01-pristine");
@@ -3695,6 +3734,30 @@ int main() {
         q1_taller_sources, "P0-03-same-feature-height-edit",
         &s4p0_base_keys);
     CHECK(s4p0_edited_keys.size() == s4p0_base_keys.size());
+    // Replay the very same authored semantic P1/P2/P3 keys on the same
+    // FeatureId after its height changes. Never remap by provider XYZ.
+    {
+        auto taller_state = taller_document.state();
+        auto next = taller_state.next_datum_id.allocate();
+        CHECK(next.has_value());
+        taller_state.three_point_datum_planes.push_back(
+            part::ThreePointDatumPlane{
+                *next,s4a_base_points,false,true});
+        const auto restored = part::PartDocument::restore(
+            taller_document.documentId(),taller_state,
+            taller_document.revision());
+        CHECK(restored.ok());
+        const auto refreshed_part=part::evaluatePart(
+            *restored.document,kernel);
+        const auto refreshed_datums=part::evaluateDatums(
+            *restored.document,refreshed_part,kernel);
+        const auto* plane=refreshed_datums.find(*next);
+        CHECK(plane && plane->status ==
+              part::DatumPlaneEvaluationStatus::resolved);
+        CHECK(plane->frame.has_value());
+        CHECK(restored.document->findThreePointDatumPlane(*next));
+    }
+
     const auto q2_taller_sources = verifyQ2CanonicalSelectedMids(
         taller_document, taller_evaluation, kernel, "Q2-M04-height-edit");
     CHECK(q2_taller_sources.size() == q2_base_sources.size());
