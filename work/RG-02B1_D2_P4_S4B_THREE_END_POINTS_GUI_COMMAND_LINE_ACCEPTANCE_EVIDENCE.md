@@ -25,6 +25,14 @@
 
 - [Windows native Qt FOCUSED #3184](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38730056916), exact `88e8fd4f9b3d02a199e6755dc453dbf66c08f722`, **RED 0/1** after **2.45 s**: previously existing S3A MID hover re-entry at `tests/pm05f_r2_native_workbench_edit_test.cpp:2312` failed before the new S4B Tree/Properties/Edit witness was reached (`Click the highlighted MID Point to continue.` rather than `Resolved MID`). This is the exact historic native UI scheduling/hover instability seen in S4A FULL #3156, not a new S4B source edit failure; **do not report the unexecuted new S4B Edit assertions as PASS**, do not weaken/skip the S3A test or change CMake beyond activated S4B allowlist. The S4B native source and UI compiled. Retry unchanged code under isolated real Windows FOCUSED; retain RED and escalate if consistently reproducing.
 
+## Subsequent real Windows checkpoints — from MID RED to Edit witness
+
+- [Native Qt/OCCT FOCUSED #3184](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38730056916) **RED 0/1** exact SHA `88e8fd4f9b3d02a199e6755dc453dbf66c08f722`: registered PM05F R2 failed the unchanged S3A MID hover re-entry at line 2312, **before reaching** newly added S4B Tree/Properties/Edit assertions. The same older MID stage had sometimes failed in S4A before CTest native GUI resource isolation and must not be misrepresented as S4B GUI source acceptance.
+- [Native Qt/OCCT FOCUSED #3186](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38730618599) **PASS 1/1** on the same product/test/doc code with evidence-only checkpoint SHA `73da58238c458600407297886a5fa8c3284f1abc` (42.14 s). The unchanged MID stage and the new tree row, Properties 3-Point source text, S4B Edit Reverse, stable `DatumId`, unchanged P1/P2/P3, one Undo/Redo and edited independent v18 cold reopen **all executed in that run**; failure in #3184 remains recorded and cannot be dismissed as proved harmless.
+- [Windows Draft FAST #3190](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38731179908) **PASS 93/93**, official `SS2 documentation verification PASSED` after authoring new as-built S4B Internal, Product PL/EN and regenerated Product Browser. Separate historically known CI-04 FAST target membership issue remains; FAST does **not** prove that the full registered PM05F R2 native Qt/OCCT binary is rebuilt on every changed test.
+- [Windows Draft FAST #3195](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38731778508) **PASS 93/93**, official DOC-01 **PASS** on SHA `fdc4aab7bee985020978d2a9982e41d06eca7268` (post-docs version fix and new S4B native P3 replacement test source). This **did not execute the native PM05F test** because focused target selection was not requested in the latest commit. It is not a green test result for the newly added P3 replacement witness.
+- **Current pending S4B F05/F08:** registered real Qt/OCCT PM05F R2 now contains additional after-Edit **P3 slot replacement by real END pointer click**, with strict P1/P2/`DatumId` preservation, no Part/Undo mutation before Finish, one Edit Undo/Redo, `reverse` preservation and v18 independent cold native reopen. This extension has NOT YET passed native FOCUSED; it must be built and run explicitly, retaining all prior S3A MID↔END assertions and reporting any RED.
+
 ## Finite acceptance matrix — current honest status
 
 | Gate | Status |
@@ -33,11 +41,11 @@
 | F02 real distinct material END Qt clicks | Native FOCUSED #3180 PASS |
 | F03 common-corner dedup / stale/unsupported | Shared corner and unavailable native source Qt focused PASS; extended positive/negative pending |
 | F04 geometric invalid / preview / signed Reverse | Headless v18 legacy native S4A PASS, UI no preview until valid from #3180; GUI signed Reverse test pending |
-| F05 UI Properties Edit/slot replacement/Undo | New real Qt Edit test authored; pending run |
-| F06 shared DatumId Tree/Visibility/Save/Reopen | Native v18 cold original #3180 PASS; new Tree/Edit and group visibility pending |
+| F05 UI Properties Edit/slot replacement/Undo | Real native Qt Properties/Edit Reverse FOCUSED #3186 PASS; new actual END-click P3 source replacement authored, native FOCUSED PENDING |
+| F06 shared DatumId Tree/Visibility/Save/Reopen | Native v18 original cold #3180 PASS; new Tree/Properties/Edit Reverse and edited cold replay #3186 PASS; explicit visibility/group and P3 re-source cold PENDING |
 | F07 context-only CLI/Enter/Esc | Qt desktop #3178 PASS (bounded); explicit slot replacement with mouse pending |
 | F08 additive real Qt/OCCT negative and source edit | New registered native test now authored; pending run |
-| F09 Windows FAST + Ready FULL 199/199 + DOC-01 | PENDING new exact-head tests, source/PL/EN/Browser docs |
+| F09 Windows FAST + Ready FULL 199/199 + DOC-01 | Draft FAST #3190/#3195 **93/93 PASS**, official DOC-01 internal + PL/EN + generated Browser PASS. New P3 replacement native FOCUSED and Ready FULL 199/199 PENDING |
 | F10 Owner manual Windows GUI technical FINAL PASS, guarded production merge | PENDING separate Owner acceptance and authorization |
 
 Prior RED/Cancelled results stay in the audit trail. The six native Qt CTest RESOURCE_LOCK cases remain active; do not modify CMake or skip a single asserted historical test.
