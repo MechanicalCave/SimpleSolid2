@@ -1764,6 +1764,35 @@ void verifyS4AThreePointDatumLifecycle(
           part::DatumPlaneEvaluationStatus::resolved && first_frame->frame);
     const auto frame=*first_frame->frame;
 
+    // Same stable DatumId supports genuine Part Sketch and derived Axis.
+    const auto support=part::partSketchSupportForDatumPlane(id);
+    CHECK(support.has_value());
+    const auto hosted=session.execute(
+        application::CreatePartSketchOnSupportCommand{
+            *support,session.document().revision()},&provider);
+    CHECK(hosted.ok() && hosted.sketch_id);
+    const auto line=session.execute(
+        application::AddSketchLineCommand{
+            *hosted.sketch_id,{0.0,0.0},{12.0,0.0},
+            sketch::EntityRole::construction});
+    CHECK(line.ok() && line.entity_id);
+    const auto axis=session.execute(
+        application::CreateAxisCommand{
+            part::SketchLineAxisSource{
+                *hosted.sketch_id,*line.entity_id},
+            session.document().revision(),
+            "Axis on 3-Point Datum",true},
+        provider);
+    CHECK(axis.ok() && axis.axis_id);
+    CHECK(session.document().findSketch(*hosted.sketch_id));
+    CHECK(session.document().findAxis(*axis.axis_id));
+    const auto before_delete=session.document().state();
+    const auto blocked_delete=session.execute(
+        application::DeleteDatumPlaneCommand{
+            id,session.document().revision()});
+    CHECK(!blocked_delete.ok() && !blocked_delete.changed);
+    CHECK(session.document().state()==before_delete);
+
     const auto before=session.document().state();
     const auto depth=session.undoDepth();
     const auto duplicate=points;
@@ -1794,6 +1823,8 @@ void verifyS4AThreePointDatumLifecycle(
     CHECK(session.document().state()==before);
     CHECK(session.redo().ok());
     CHECK(session.document().findThreePointDatumPlane(id)->reverse);
+    CHECK(session.document().findSketch(*hosted.sketch_id));
+    CHECK(session.document().findAxis(*axis.axis_id));
 
     const auto filename =
         "ss2_s4a_three_point_native_" +
@@ -1816,6 +1847,8 @@ void verifyS4AThreePointDatumLifecycle(
     const auto* cold_source=reopened.document->findThreePointDatumPlane(id);
     CHECK(cold_source && cold_source->points==points);
     CHECK(cold_source->id==id && cold_source->visible);
+    CHECK(reopened.document->findSketch(*hosted.sketch_id));
+    CHECK(reopened.document->findAxis(*axis.axis_id));
     CHECK(cold_source->reverse);
     kernel_occt::OcctSolidModelingKernel separate;
     const auto body=part::evaluatePart(*reopened.document,separate);
