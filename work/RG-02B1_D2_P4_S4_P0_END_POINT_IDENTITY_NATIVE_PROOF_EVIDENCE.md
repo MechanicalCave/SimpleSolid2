@@ -44,7 +44,7 @@ These are existing checks in the test source; **no new CI PASS is claimed merely
 | Gate | Evidence |
 |---|---|
 | Windows native FOCUSED | PENDING |
-| Windows FAST | PENDING |
+| Windows FAST | [#3093](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38695707741) completed SUCCESS on evidence HEAD `669c99ca80dfc246371b1008b8094c0946fcf0bf`; FOCUSED/FULL skipped. This is NOT native proof. |
 | Windows Ready FULL (Core / Kernel / Desktop) | PENDING |
 | Exact source/tests/evidence SHA and red history | PENDING |
 | Owner P0 technical PASS/FAIL | PENDING |
