@@ -5,6 +5,21 @@
 
 namespace simplesolid2::part {
 
+bool threePointDatumPlaneStructurallyValid(
+    const ThreePointDatumPlane& datum) noexcept {
+    if (!datum.id.valid()) return false;
+    const auto& first = datum.points.front().stage;
+    for (std::size_t i = 0; i < datum.points.size(); ++i) {
+        if (!datum.points[i].valid() ||
+            datum.points[i].stage != first) return false;
+        for (std::size_t j = 0; j < i; ++j) {
+            if (datum.points[i].point == datum.points[j].point)
+                return false;
+        }
+    }
+    return true;
+}
+
 bool edgePointDatumPlaneStructurallyValid(
     const EdgePointDatumPlane& datum) noexcept {
     if (!datum.id.valid() ||
