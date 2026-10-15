@@ -15034,7 +15034,9 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                 document_session_->document()
                     .datumPlanes().size() +
                 document_session_->document()
-                    .edgePointDatumPlanes().size()) {
+                    .edgePointDatumPlanes().size() +
+                document_session_->document()
+                    .threePointDatumPlanes().size()) {
             datum_evaluation_statuses_.reserve(
                 datums.planes.size());
             for (const auto& datum :
