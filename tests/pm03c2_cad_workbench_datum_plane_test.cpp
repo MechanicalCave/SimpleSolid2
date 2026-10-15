@@ -11,8 +11,10 @@
 #include <QStackedWidget>
 #include <QComboBox>
 #include <QLabel>
+#include <QMenu>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QWidget>
@@ -351,6 +353,25 @@ int main(int argc, char* argv[]) {
     CHECK(axis_constructor->count() == 1);
     CHECK(axis_constructor->itemText(0) == QStringLiteral("Edge"));
     CHECK(axis_tool->isEnabled());
+
+    // Owner manual B1 regression: Axis must belong to the SAME
+    // responsive Work Features group as Datum Plane. The existing
+    // group registry also assigns both buttons the same baseline height.
+    auto* work_features_dropdown =
+        workbench.findChild<QToolButton*>(QStringLiteral(
+            "workbenchToolbarGroupDropdown_Part_Work Features"));
+    CHECK(work_features_dropdown != nullptr);
+    CHECK(work_features_dropdown->menu() != nullptr);
+    const auto work_features_actions =
+        work_features_dropdown->menu()->actions();
+    CHECK(work_features_actions.size() == 2);
+    CHECK(work_features_actions.at(0)->text() ==
+          QStringLiteral("Datum Plane"));
+    CHECK(work_features_actions.at(1)->text() ==
+          QStringLiteral("Axis"));
+    CHECK(tool->minimumHeight() >= 32);
+    CHECK(axis_tool->minimumHeight() == tool->minimumHeight());
+
     const auto before_axis_revision =
         session.document().revision();
     const auto before_axis_undo = session.undoDepth();
