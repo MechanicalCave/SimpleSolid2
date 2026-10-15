@@ -3645,6 +3645,43 @@ int main(int argc, char* argv[]) {
                           << " distinct_semantic_points=3"
                           << " undo_redo=1"
                           << " cold_v18_provider=1\n";
+                // S4B-F06: same Reference Geometry Properties Delete must
+                // route all three Datum kinds via one Part command. This
+                // particular 3-Point fixture has no consuming Sketch, so
+                // deletion is allowed; Part dependency-blocked delete is
+                // already certified by the real S4A native OCCT test.
+                CHECK(workbench.activateDocument(&s3a, {}));
+                QApplication::processEvents();
+                CHECK(workbench.activateDocument(&s4b, {}));
+                QApplication::processEvents();
+                QTreeWidgetItem* delete_three_point_item=nullptr;
+                for (QTreeWidgetItemIterator it(tree); *it; ++it)
+                    if ((*it)->text(0).contains(
+                            QStringLiteral("Datum Plane 1 (3 Points)"))) {
+                        delete_three_point_item=*it;
+                        break;
+                    }
+                CHECK(delete_three_point_item);
+                tree->clearSelection();
+                tree->setCurrentItem(delete_three_point_item);
+                delete_three_point_item->setSelected(true);
+                QApplication::processEvents();
+                auto* delete_three_point=workbench.findChild<QPushButton*>(
+                    QStringLiteral("deleteDatumPlanePropertyButton"));
+                CHECK(delete_three_point && delete_three_point->isEnabled());
+                const auto before_delete=s4b.document().state();
+                const auto undo_before_delete=s4b.undoDepth();
+                delete_three_point->click();
+                QApplication::processEvents();
+                CHECK(!s4b.document().findThreePointDatumPlane(authored.id));
+                CHECK(s4b.undoDepth()==undo_before_delete+1U);
+                CHECK(s4b.undo().changed);
+                CHECK(s4b.document().state()==before_delete);
+                CHECK(s4b.redo().changed);
+                CHECK(!s4b.document().findThreePointDatumPlane(authored.id));
+                std::cout << "RG02B1_S4B_NATIVE_QT_THREE_DELETE_PASS"
+                          << " shared_properties_action=1"
+                          << " stable_undo_redo=1\n";
                 CHECK(workbench.activateDocument(&s3a, {}));
                 QApplication::processEvents();
             }
