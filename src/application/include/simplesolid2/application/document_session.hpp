@@ -13,6 +13,7 @@
 #include <simplesolid2/sketch/structural_edit.hpp>
 #include <simplesolid2/sketch/transform.hpp>
 
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <map>
