@@ -1041,8 +1041,10 @@ bool PartDocument::validAuthoredState(
         // must be strictly downstream. Missing/deleted Axis remains repairable
         // consumer intent and therefore has no source floor to inspect here.
         for (const auto& axis : state.axes) {
-            if (axis.source.sketch_id !=
-                hosted.id) {
+            const auto* sketch_axis =
+                std::get_if<SketchLineAxisSource>(&axis.source);
+            if (sketch_axis == nullptr ||
+                sketch_axis->sketch_id != hosted.id) {
                 continue;
             }
             for (std::size_t feature_index = 0U;
@@ -1065,6 +1067,50 @@ bool PartDocument::validAuthoredState(
                         feature_index) {
                     return false;
                 }
+            }
+        }
+    }
+
+    // RG-02C/B1: the strict Body Edge producer stage must be strictly
+    // upstream of any Revolve consuming its authored AxisId. Retain
+    // deleted/missing producer intent as repairable, not a guessed Edge.
+    for (const auto& axis : state.axes) {
+        const auto* edge_axis =
+            std::get_if<StraightMaterialEdgeAxisSource>(
+                &axis.source);
+        if (edge_axis == nullptr ||
+            !edge_axis->edge.stage.feature_id) {
+            continue;
+        }
+        const auto producer = std::find_if(
+            state.body.features.begin(),
+            state.body.features.end(),
+            [edge_axis](const PartFeature& feature) {
+                return feature.id ==
+                    *edge_axis->edge.stage.feature_id;
+            });
+        if (producer == state.body.features.end()) {
+            continue; // durable repairable source, no implicit fallback
+        }
+        const auto producer_index =
+            static_cast<std::size_t>(
+                std::distance(
+                    state.body.features.begin(), producer));
+        for (std::size_t feature_index = 0U;
+             feature_index < state.body.features.size();
+             ++feature_index) {
+            const auto* required_axis =
+                sourceAxisReference(
+                    state.body.features[feature_index]);
+            if (required_axis == nullptr) {
+                continue;
+            }
+            const auto consumed_axis =
+                authoredAxisIdForAxisReference(*required_axis);
+            if (consumed_axis &&
+                *consumed_axis == axis.id &&
+                producer_index >= feature_index) {
+                return false;
             }
         }
     }
