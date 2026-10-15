@@ -1,6 +1,6 @@
 # RG-02B1 / P4-S4A — native Qt/OCCT FULL concurrency isolation: test-registration D2 amendment
 
-**Status: OWNER D2 REVIEW PROPOSAL — NOT ACCEPTED / NOT ACTIVE / NOT EXECUTABLE.**
+**Status: OWNER D2 ACCEPTED 2026-10-15 — governance PR #398 UNMERGED, separate ACTIVE-only extension PENDING; not executable until both guarded merges.**
 **Proposed:** 2026-10-15. This file is **governance-only** and is not a change to registered test scheduling.
 **Base active:** `work/RG-02B1_D2_P4_S4A_THREE_END_POINTS_V18_HEADLESS_WORK_CONTRACT_DRAFT.md` (Owner accepted; work #393, ACTIVE #394), plus exact five-file legacy fixture addendum (work #396, ACTIVE #397). Protected `main` prior to this proposal: `6121bcdf527c1384fab2e89d7d231b4f41e57ba7`.
 **Production:** [#395](https://github.com/MechanicalCave/SimpleSolid2/pull/395), Draft/unmerged and **NO Owner technical FINAL PASS**.
@@ -31,6 +31,10 @@ Allow exactly this one behavior change in that file, with *no* other edits: set 
 Using the native CTest `RESOURCE_LOCK` property lets the full Windows CTest tier retain `--parallel 4` for independent work while preventing the above real Qt/OCCT Workbench/Viewer tests from executing simultaneously. Preserve **all** original `add_test` registrations, native test binaries, `LABELS`, timeouts, arguments, counts and source assertions; **no** `RUN_SERIAL` blanket for unrelated targets and no skip/exclude/quarantine/retry/allow-failure. This is a scheduling-isolation **hypothesis to verify**, not a preapproved workaround for red tests. Do not assert it fixes the issue until observed under true independent Ready FULL.
 
 No modifications to `.github/workflows/**`, `scripts/**`, other `tests/**`, `src/**`, native Part format v18, modeling geometry/tolerance, Qt UI/Viewer, kernel provider, DOC-01, Roadmap/ADR, S4B, or new test targets. In particular do not alter `tests/pm05f_r2_native_workbench_edit_test.cpp` or remove/relax the Operations or MID END hover checks. Existing separate CI-04 FAST build-vs-label membership issue is documented but **not** repaired under this narrow authority.
+
+## Owner decision (2026-10-15)
+
+In direct answer to the requested **exact one-file, six-existing-test `RESOURCE_LOCK` amendment #398** and conditional authorization for its guarded squash plus separate ACTIVE-only activation, Owner stated **„akceptuję - kontynuuj”**. This accepts the bounded D2 test-scheduling experiment (not a result or exception to FULL), and conditionally authorizes the two governance merges **only when** their exact-head Windows CI and protected-main preflight checks pass. Does not authorize modifying the Qt/OCCT test body, UI/Viewer, the kernel, the FAST build-target mismatch, or merging S4A product #395 without its own technical FINAL PASS.
 
 ## 3. Finite acceptance — red stays red until proven otherwise
 
