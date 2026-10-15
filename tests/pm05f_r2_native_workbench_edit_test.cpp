@@ -3497,6 +3497,8 @@ int main(int argc, char* argv[]) {
                 std::size_t geometrically_allowed_corners=0U;
                 std::size_t projected_corner_pixels=0U;
                 std::size_t complete_topology_probes=0U;
+                std::size_t face_candidates_at_corner=0U;
+                std::size_t edge_candidates_at_corner=0U;
                 std::size_t eligible_new_corner_pixels=0U;
                 std::size_t native_replacement_clicks=0U;
                 std::size_t click_context_changes=0U;
@@ -3537,9 +3539,20 @@ int main(int argc, char* argv[]) {
                         const auto pixel=choosePixel(corner);
                         if (!pixel) continue;
                         ++projected_corner_pixels;
+                        const viewer::ViewportPoint2 sample_pixel{
+                            double(pixel->x()),double(pixel->y())};
+                        const auto face_probe=viewport->queryBodyTopology(
+                            sample_pixel,
+                            viewer::BodyTopologyPickFilter{
+                                true,false,false});
+                        const auto edge_probe=viewport->queryBodyTopology(
+                            sample_pixel,
+                            viewer::BodyTopologyPickFilter{
+                                false,true,false});
+                        face_candidates_at_corner+=face_probe.candidates.size();
+                        edge_candidates_at_corner+=edge_probe.candidates.size();
                         const auto probe=viewport->queryBodyTopology(
-                            viewer::ViewportPoint2{
-                                double(pixel->x()),double(pixel->y())},
+                            sample_pixel,
                             viewer::BodyTopologyPickFilter{
                                 false,false,true});
                         if (probe.valid() && probe.completed)
@@ -3578,6 +3591,8 @@ int main(int argc, char* argv[]) {
                               << " geometric_ok=" << geometrically_allowed_corners
                               << " on_screen=" << projected_corner_pixels
                               << " topology_queries=" << complete_topology_probes
+                              << " face_candidates=" << face_candidates_at_corner
+                              << " edge_candidates=" << edge_candidates_at_corner
                               << " candidate_pixels=" << eligible_new_corner_pixels
                               << " real_mouse_clicks=" << native_replacement_clicks
                               << " context_changes=" << click_context_changes
