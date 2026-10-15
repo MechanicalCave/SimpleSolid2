@@ -43,6 +43,8 @@
 
 - [Windows kernel-native FOCUSED #3152](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38713497821) on exact `1f04a5503be07f84b742ed7ae22a216b5a78c127`: **PASS 1/1**, real `pm02jr2.add_surface_continuation` 4.51 s, preserving its native real-OCCT continuation, genuine historical v16 and nested provenance regression while correctly handling new-current v18 and lossless v15 synthetic fixture downgrade. This is the previously sole failed native test in earlier FULL #3123, now directly rebuilt and executed successfully, not an inferred result.
 
+- [Windows Draft FAST #3153](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38713942791) on exact `6669782a230ade2d0dfd85d8cde8c3bd1859632e`: **PASS 93/93**, after the five desktop targets had genuinely been rebuilt and executed in FOCUSED #3151 and the native PM02JR2 had passed FOCUSED #3152. Official Windows `.\\ss2.ps1 docs` / DOC-01 returned **`SS2 documentation verification PASSED`** on the same revision. Previous FAST #3137/#3150 RED and persistent CI-04 build/CTest discrepancy remain in the historical log; warm-run FAST success is not evidence that a *cold* FAST build automatically rebuilds every labeled target. Genuine independent Ready FULL and Owner FINAL PASS remain pending.
+
 ## Acceptance matrix
 
 | Gate | Actual result |
@@ -54,7 +56,7 @@
 | S4A-F05 downstream Sketch/Axis/Feature dependency | Native dependent Sketch/Axis identity, blocked Delete and same producer FeatureId height-edit replay **FOCUSED #3133 PASS**; independent wider FULL PENDING |
 | S4A-F06 independent real OCCT native v18 Save/Reopen | Native FOCUSED #3115 and #3133 PASS (separate provider and dependent IDs); older fixtures still require FULL |
 | S4A-F07 strict malformed v18 grammar, legacy reads, refusal negatives | Registered `pm03a.datum_schema_v10` Windows FOCUSED #3135 **PASS 1/1** on updated v18 grammar/legacy negative fixtures; five unrelated legacy-file-test allowlist blockers await Owner D2 |
-| S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | Docs/Browser **official Windows #3137 PASS**; FAST #3137 **RED 88/93** on four unallowlisted v17 test assertions plus one Not Run; FULL #3123 **RED** (Core 25/25; kernel-native 56/57; Desktop NOT RUN) PM02JR2; final FAST/FULL PENDING five-path D2 allowance |
+| S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | Docs/Browser **official Windows PASS**; five-test D2/ACTIVE merged; desktop FOCUSED #3151 **5/5 PASS**, kernel FOCUSED #3152 **1/1 PASS**, Draft FAST #3153 **93/93 PASS** on exact recorded SHA. Ready FULL and later exact evidence closure **PENDING**. Historical RED and CI-04 cold-build discrepancy retained. |
 | S4A-F09 Owner technical final verdict, guarded production merge | PENDING |
 
 All prior RED are preserved; no test deletion/weakening. If an existing registered test *outside the activated allowlist* requires new versioned fixture maintenance, STOP for one precise Owner D2 amendment — do not edit it by inference.
