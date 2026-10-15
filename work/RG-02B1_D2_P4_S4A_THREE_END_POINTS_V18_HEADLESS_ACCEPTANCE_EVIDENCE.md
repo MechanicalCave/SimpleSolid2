@@ -53,6 +53,10 @@
 
 - [Ready FULL #3156](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38715570901) tested the SAME Part/Application/test/docs source tree, differing from #3155 by **only this evidence-ledger synchronization** (SHA `6c3d007ff5031eb2db56660e0ac55687e90a5f93`). **RED 198/199** again: Core **25/25 PASS**, kernel-native **57/57 PASS**, Desktop **116/117 PASS**, DOC-01 **PASS**. The SAME unchanged pre-S4A real Qt/OCCT `pm05f_r2.native_workbench_edit` failed at a **different** UI invariant: line **2312** after a real MID hover re-entry/click, expected `Resolved MID` but panel still displayed `Click the highlighted MID Point to continue.`; prior #3155 failed Operations widget visibility at line **552**. Both failures are factual; differing checkpoints suggest a Qt scheduling/state timing factor but are **not** evidence of a proved flake or permission to skip. FULL runs execute `pm05f_r2` concurrently with other real Qt/OCCT native integration tests (`wb01a.workbench_native_stress`, `pg01d.native_face_ui`, `pg01c.native_project_edge_command`). The existing native GUI source and UI/Viewer code have not changed in the S4A PR. Next: isolate the unmodified target on the same product code with a fresh, exact-head **Draft FOCUSED**; if focused is also RED, STOP for Owner D2.
 
+## Deliberate independent Qt isolation gate
+
+PR #395 was reverted to **Draft** after two FULL-only failures in the unchanged pre-S4A Qt test. The next focused run compiles the exact `pm05f_r2_native_workbench_edit_test` and executes **only** `pm05f_r2.native_workbench_edit`; no source/test-body/Viewer/UI changes or ignored assertions are permitted. An isolated PASS would only support that this test can pass without concurrent native GUI stress; it would not erase #3155/#3156 or count as Ready FULL PASS.
+
 ## Acceptance matrix
 
 | Gate | Actual result |
