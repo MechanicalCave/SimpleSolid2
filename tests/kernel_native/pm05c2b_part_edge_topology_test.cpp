@@ -1685,6 +1685,10 @@ std::vector<S4P0PointKey> verifyS4P0NativeEndPointIdentity(
     return keys;
 }
 
+// Existing S1 helper is defined later in this registered test translation
+// unit; forward declare its exact signature for the additive S4A witness.
+[[nodiscard]] bool s1Near3(kernel::Point3 a,kernel::Point3 b);
+
 // S4A-F01/F02/F04/F06: actual Part-owned v18 ThreePointDatum source,
 // strict geometric frame and Command/Undo/cold provider replay. P0's 24→8
 // stage-qualified semantic keys are the ONLY candidate source identities.
