@@ -1,9 +1,65 @@
 # RG-02C/B1 — single straight Body Edge Axis with full lifecycle: bounded technical D2 Work Contract PROPOSAL
 
-**Status:** PROPOSED / NOT OWNER D2 TECHNICALLY ACCEPTED / NOT MERGED / NOT ACTIVE / NO CODE MUTATION AUTHORITY.
+**Status:** **OWNER DELEGATED AUTHORITY TO START IMPLEMENTATION (2026-10-15)**: `masz wszystkie niezbędne zgody do uruchomienia implementacji - kontynuuj prace i nie zatrzymuj z formalnych powodów`. The bounded, minimal technical architecture and allowed paths in §0A are chosen as a **conservative D2 implementation baseline under that delegation**, with real technical safety gates retained. This governance PR is NOT YET MERGED / NOT YET ACTIVE / source edits must wait for accepted-contract and ACTIVE-only squash to land.
 **Date:** 2026-10-15. **Baseline:** protected main `38b0c8b274d47548647fc7c27e9a7884fd85ff20`, A0 native evidence and Owner A0 technical FINAL PASS merged via PR #408. UX signoff for **one `Edge` constructor** is recorded on separate unmerged UX [PR #410](https://github.com/MechanicalCave/SimpleSolid2/pull/410); this technical D2 planning PR starts from the same pre-UX-merge main and cannot treat PR #410 as already merged/active. Separate A0 historical closeout [PR #409](https://github.com/MechanicalCave/SimpleSolid2/pull/409) remains unmerged until a separate Owner guarded squash.
 **Governing authority:** Constitution → frozen Foundation 1.0 → Architecture/accepted ADRs → `work/ACTIVE.yaml` → Part Modeling v1.33 §6/§20B → RG-02 Owner design §2.3/§3, existing PM-04 Axis+Revolve, A0/Q0/Q2 strict semantic material-Edge evidence, DOC-01. This is the **next one-constructor technical proposal only**, NOT approval of PM-06 or any other Axis source kind.
 **Owner UX decisions already made:** Work Features gets one visible `Axis` button next to `Datum Plane`; right Operations `Constructor` has **ONLY** `Edge`, though the combo is future-extensible; preexisting `Sketch Line` Axis is authored **within Sketch**, stays in the Sketch subtree; only newly Edge-sourced axes appear alongside Datum Planes under `Reference Geometry`. Complete Edge Axis Create/Edit/Replace/Delete/visibility/Undo/Redo/Save/Reopen/repair/Revolve lifecycle; reuse code and tests, no duplicated logic. Exact reviewed proposal: `work/RG-02C_B1_SINGLE_STRAIGHT_BODY_EDGE_AXIS_EXISTING_TOOL_UX_CONSULTATION_PROPOSAL.md`, PR #410, Owner UX signoff 2026-10-15. This signed UX does NOT authorize its implementation until independent technical D2 acceptance + governance + ACTIVE activation.
+
+## 0A. Exact bounded technical decisions and production allowlist under Owner's explicit go-ahead
+
+The Owner first **explicitly accepted** the corrected one-Edge UX on PR #410, and then independently instructed **`masz wszystkie niezbędne zgody do uruchomienia implementacji - kontynuuj prace i nie zatrzymuj z formalnych powodów`**. This is authorization to continue through distinct existing protected-main governance gates **without repeated conversational permission requests**, NOT permission to ignore tests, identity or persistence failure. Record the following smallest conservative choices transparently; code deviations that change semantic meaning or unexpectedly broaden a product boundary require another technical D2.
+
+**First implementation order:** deliver **B1-H1 headless semantic source and durable native persistence + real native test/rebuild**, then integrate the already Owner-approved B1-E1 single `Edge` Work Features UI and full interaction on the same bounded Work Contract **only when** H1 tests have passed. Do not ship H1 as a complete user-visible feature and do not add a placeholder Axis button. No other constructor or work contract becomes active.
+
+**Semantic source:** one `PartAxis` source variant over the unchanged `SketchLineAxisSource` and a **`StraightMaterialEdgeAxisSource` containing exactly existing strict `MaterialEdgeReference` and its BodyStageRef**. Keep `AxisId` and `AxisReference` unchanged, preserve old Sketch-Line authoring inside Sketch and Tree placement. The body-edge constructor is a future `Edge`-only Work Features option. No placeholder fake SketchId/EntityId for Body sources; no persisted provider token, cached coordinate or Axis sign. Existing Q0/Q2 stage-aware semantic resolver plus kernel scoped exact straight-edge geometry are the sole truth; product Axis evaluation will receive a real provider via an approved narrow seam, or fail closed when none exists. No duplicate A0 test helper as product resolver.
+
+**Native schema:** use **explicit new Part native schema v19** for new writer once durable source kind is added, with **v18 and older supported readers** preserving the exact old Sketch Line interpretation; old v18 records are never silently read as material Body Edge Axis. v19 Axis source discrimination must be typed and reject malformed/unknown kinds. No change to Foundation or ModelingSemanticsVersion by assumption; a real test must prove legacy fixtures, roundtrip, cold-provider reproducibility and rejected invalid source. Do not introduce format until the parsing/writing tests can be run. The previous all-sources-exact v18 layout is the compatibility benchmark, not merely a positive load smoke.
+
+**Revolve:** authored `AxisReference` points to a stable AxisId independent of source. Edge Axis geometrically defines **one unoriented infinite line**; its underlying native TopoDS_Edge reversal/order must not author signed direction. Existing Revolve signed-direction controls remain the consumer authority, and existing Sketch-Line Axis direction semantics cannot change. Missing/ambiguous/stale/unsupported/replaced Body Edge disables dependent evaluation, never substitutes a last-good line.
+
+**Native reversal fixture:** treat the A0 untested native B-Rep topological reversal as a **production acceptance requirement to exercise or explicitly report RED/GAP**, not as an already proven PASS; if it cannot be tested inside the explicitly allowed native source using existing provider interfaces, report why and STOP before user-visible completion rather than relaxing evidence or editing `src/kernel_occt/**` without a separate D2.
+
+**Exact allowed production file paths for this ONE B1 contract** (each optional unless necessary; do not modify unrelated files):
+
+```text
+src/part/include/simplesolid2/part/axis.hpp
+src/part/axis.cpp
+src/part/include/simplesolid2/part/axis_evaluation.hpp
+src/part/axis_evaluation.cpp
+src/part/part_document.cpp
+src/part/include/simplesolid2/part/part_document_store.hpp
+src/part/part_document_store.cpp
+src/application/include/simplesolid2/application/document_session.hpp
+src/application/document_session.cpp
+src/application/include/simplesolid2/application/axis_draft.hpp
+src/application/axis_draft.cpp
+src/ui/cad_workbench.hpp
+src/ui/cad_workbench.cpp
+src/ui/part_document_tree_controller.cpp
+src/ui/part_viewport_controller.hpp
+src/ui/part_viewport_controller.cpp
+tests/pm04a_axis_schema_v12_test.cpp
+tests/pm04b_axis_lifecycle_draft_test.cpp
+tests/pm04c1_revolve_semantic_kernel_test.cpp
+tests/pm04e1_revolve_persistence_test.cpp
+tests/pm04e2_revolve_lifecycle_cold_rebuild_test.cpp
+tests/pm04b2_axis_tree_viewer_test.cpp
+tests/pm04b2_axis_tree_viewer_ui_test.cpp
+tests/pm03c2_cad_workbench_datum_plane_test.cpp
+tests/pm05f_r2_native_workbench_edit_test.cpp
+tests/kernel_native/pm05c2b_part_edge_topology_test.cpp
+docs/internal/PART_DOCUMENTS.md
+docs/product/pl/PARTS.md
+docs/product/en/PARTS.md
+docs/browser/index.html
+work/RG-02C_B1_EDGE_AXIS_ACCEPTANCE_EVIDENCE.md
+```
+
+The evidence file is newly created by this implementation only, not a source of invented test results. `docs/browser/index.html` is generated by official DOC-01 procedure, never hand-edited. All other paths, especially `tests/CMakeLists.txt`, `.github/workflows/**`, `src/kernel/**`, `src/kernel_occt/**`, `src/viewer/**`, `src/viewer_qt_occt/**`, remain STOP unless a specific amendment is separately documented. This list is the executable allowlist only **after separate exact-head contract merge and `ACTIVE.yaml` activation**. H1 implementation starts with the narrowest subset; do not write all files just because they appear in the list.
+
+**CI:** genuine Windows FOCUSED (already-registered native Axis/schema/test targets) → Draft FAST → Ready FULL Core+native Kernel+real Desktop Qt/OCCT; official DOC-01, exact-head evidence CLOSURE, Owner manual full lifecycle, technical FINAL PASS and guarded production squash only after PASS. Preserve all existing tests and CTest resource locks; no skipped Full counted as completed Full.
+
+**B1 delivery scope remains the Owner-corrected and signed UX on PR #410**. This technical implementation consent does not license `Sketch Line` as a Work Features constructor or moving existing Sketch Axis from its source Sketch. Every new Edge Axis belongs to Reference Geometry. PM-06/G1/other Axis kinds remain inactive.
 
 ## 1. What A0 truly proved and what is still missing
 
