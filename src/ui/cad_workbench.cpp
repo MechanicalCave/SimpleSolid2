@@ -1537,6 +1537,17 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         2,
         datum_plane_button_);
+    // Owner-approved RG-02C/B1: one NEW visible Axis entry alongside
+    // Datum Plane in the EXISTING Work Features toolbar group.
+    axis_button_ =
+        new QPushButton(QStringLiteral("Axis"), shell_);
+    axis_button_->setObjectName(
+        QStringLiteral("axisToolButton"));
+    axis_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(
+            datum_plane_button_) + 1,
+        axis_button_);
     part_work_features_tools_label_ =
         new QLabel(QStringLiteral("Work Features:"), shell_);
     part_work_features_tools_label_->setObjectName(
@@ -1893,6 +1904,7 @@ void CadWorkbench::buildUi() {
             }
             tryStageDatumPlaneFromBodyTopology(
                 *inspection);
+            tryStageAxisFromBodyTopology();
             syncActionState();
         });
 
@@ -3365,6 +3377,22 @@ void CadWorkbench::buildUi() {
 
     auto* axis_source_form =
         new QFormLayout;
+    axis_constructor_combo_ =
+        new QComboBox(axis_operations_widget_);
+    axis_constructor_combo_->setObjectName(
+        QStringLiteral("axisConstructorCombo"));
+    // Exactly ONE constructor now. Sketch-Line Axis remains authored
+    // directly inside Sketch, not as a Work Features constructor.
+    axis_constructor_combo_->addItem(
+        QStringLiteral("Edge"));
+    axis_source_form->addRow(
+        QStringLiteral("Constructor"),
+        axis_constructor_combo_);
+    axis_stage_label_ =
+        new QLabel(QStringLiteral("not set"),
+                   axis_operations_widget_);
+    axis_stage_label_->setObjectName(
+        QStringLiteral("axisStageLabel"));
     axis_source_label_ =
         new QLabel(
             QStringLiteral("<select one Sketch Line>"),
@@ -3375,6 +3403,8 @@ void CadWorkbench::buildUi() {
     axis_source_form->addRow(
         QStringLiteral("Source"),
         axis_source_label_);
+    axis_source_form->addRow(
+        QStringLiteral("Stage"), axis_stage_label_);
     axis_operations_layout->addLayout(
         axis_source_form);
 
@@ -5006,6 +5036,17 @@ void CadWorkbench::buildUi() {
 
 
     QObject::connect(
+        axis_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (axis_draft_) {
+                cancelAxis();
+            } else {
+                static_cast<void>(startAxisTool(true));
+            }
+        });
+    QObject::connect(
         axis_finish_button_,
         &QPushButton::clicked,
         this,
@@ -6184,7 +6225,8 @@ void CadWorkbench::deleteFeature(
             "Feature deleted — dependents remain authored and are reevaluated from current history."));
 }
 
-bool CadWorkbench::startAxisTool() {
+bool CadWorkbench::startAxisTool(
+    bool work_features_edge) {
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr ||
@@ -6203,9 +6245,11 @@ bool CadWorkbench::startAxisTool() {
     axis_draft_ =
         application::AxisDraft::beginCreate(
             *document_session);
+    axis_edge_mode_active_ = work_features_edge;
     axis_evaluation_.reset();
 
-    if (!active_sketch_id_ &&
+    if (!work_features_edge &&
+        !active_sketch_id_ &&
         tree_controller_ != nullptr) {
         if (const auto sketch_id =
                 tree_controller_->primarySketchId()) {
@@ -6213,7 +6257,11 @@ bool CadWorkbench::startAxisTool() {
         }
     }
 
-    tryStageAxisFromSketchSelection();
+    if (work_features_edge) {
+        tryStageAxisFromBodyTopology();
+    } else {
+        tryStageAxisFromSketchSelection();
+    }
     refreshAxisEvaluation();
     syncAxisUi();
     syncActionState();
@@ -6223,8 +6271,11 @@ bool CadWorkbench::startAxisTool() {
         axis_draft_->source()
             ? QStringLiteral(
                   "Axis source acquired — Finish to create one authored Axis.")
-            : QStringLiteral(
-                  "Axis — select exactly one Line in an active Sketch, then Finish."));
+            : work_features_edge
+                ? QStringLiteral(
+                      "Axis — Constructor Edge: select one strict straight material Body Edge.")
+                : QStringLiteral(
+                      "Axis — select exactly one Line in an active Sketch, then Finish."));
     if (viewport_widget_ != nullptr) {
         viewport_widget_->setFocus(
             Qt::OtherFocusReason);
@@ -6348,7 +6399,7 @@ void CadWorkbench::deleteAxis(
 
 void CadWorkbench::stageAxisSource(
     part::SketchLineAxisSource source) {
-    if (!axis_draft_ ||
+    if (!axis_draft_ || axis_edge_mode_active_ ||
         document_session_ == nullptr ||
         !source.valid()) {
         return;
@@ -6381,7 +6432,7 @@ void CadWorkbench::stageAxisSource(
 }
 
 void CadWorkbench::tryStageAxisFromSketchSelection() {
-    if (!axis_draft_ ||
+    if (axis_edge_mode_active_ || !axis_draft_ ||
         !sketch_interaction_controller_ ||
         !sketch_interaction_controller_->active()) {
         return;
@@ -6595,6 +6646,7 @@ bool CadWorkbench::finishAxis() {
 }
 
 void CadWorkbench::clearAxisRuntimeContext() {
+    axis_edge_mode_active_ = false;
     axis_draft_.reset();
     axis_evaluation_.reset();
     syncAxisUi();
@@ -13932,7 +13984,7 @@ CadWorkbench::submitCadInput(
                 false, "PROJECT could not be activated in the active Sketch."};
     }
     if (top_level_keyword == "AXIS") {
-        return startAxisTool()
+        return startAxisTool(!active_sketch_id_)
             ? application::CadInputSubmitResult{
                   true, {}}
             : application::CadInputSubmitResult{
