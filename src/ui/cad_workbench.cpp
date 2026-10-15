@@ -15280,8 +15280,15 @@ void CadWorkbench::refreshDatumProperties(
         [datum_id](const auto& datum) {
             return datum.id == datum_id;
         });
+    const auto& three_datums = authored.threePointDatumPlanes();
+    const auto three_found = std::find_if(
+        three_datums.begin(),three_datums.end(),
+        [datum_id](const part::ThreePointDatumPlane& datum) {
+            return datum.id == datum_id;
+        });
     if (offset_found == offset_datums.end() &&
-        edge_found == edge_datums.end()) {
+        edge_found == edge_datums.end() &&
+        three_found == three_datums.end()) {
         selected_datum_id_.reset();
         properties_stack_->setCurrentWidget(
             document_properties_page_);
@@ -15289,7 +15296,28 @@ void CadWorkbench::refreshDatumProperties(
     }
 
     selected_datum_id_ = datum_id;
-    if (edge_found != edge_datums.end()) {
+    if (three_found != three_datums.end()) {
+        const auto ordinal = static_cast<qulonglong>(
+            offset_datums.size() + edge_datums.size() +
+            std::distance(three_datums.begin(),three_found) + 1U);
+        datum_name_->setText(
+            QStringLiteral("Datum Plane %1").arg(ordinal));
+        datum_identity_->setText(
+            fromUtf8(three_found->id.serialized()));
+        datum_constructor_->setText(QStringLiteral("3 Points"));
+        datum_source_->setText(
+            QStringLiteral(
+                "Three ordered, distinct current-stage END Points "
+                "P1 / P2 / P3 (%1)")
+                .arg(three_found->reverse
+                    ? QStringLiteral("Reverse")
+                    : QStringLiteral("Forward")));
+        datum_offset_->setText(QStringLiteral("Not applicable"));
+        datum_visibility_->setText(
+            three_found->visible
+                ? QStringLiteral("Shown")
+                : QStringLiteral("Hidden"));
+    } else if (edge_found != edge_datums.end()) {
         // Edge-local S3A Datums share the same DatumId cursor as
         // Offset Datums but have no signed Offset field.
         const auto ordinal = static_cast<qulonglong>(
@@ -15376,6 +15404,8 @@ void CadWorkbench::refreshDatumProperties(
     const bool lifecycle_available =
         !datum_plane_draft_ &&
         !edge_datum_create_revision_ &&
+        !edge_datum_edit_id_ &&
+        !three_point_datum_revision_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !active_sketch_id_ &&
