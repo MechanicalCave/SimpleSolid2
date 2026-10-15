@@ -71,6 +71,11 @@ std::string repackage(
     auto legacy_json = nlohmann::json::parse(
         authored_json,nullptr,false);
     CHECK(legacy_json.is_object());
+    CHECK(legacy_json.contains("three_point_datum_planes"));
+    CHECK(legacy_json.at("three_point_datum_planes").is_array());
+    // Native schema v14 cannot silently inherit v18 authored 3-Point intent.
+    CHECK(legacy_json.at("three_point_datum_planes").empty());
+    legacy_json.erase("three_point_datum_planes");
     CHECK(legacy_json.contains("edge_point_datum_planes"));
     CHECK(legacy_json.at("edge_point_datum_planes").is_array());
     // Native schema v14 could never carry a v17 Edge-local Datum.
@@ -475,7 +480,7 @@ Fixture makeFixture() {
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        17);
+        18);
 
     const auto fixture =
         makeFixture();
@@ -497,7 +502,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 17);
+            .domain_schema_version == 18);
 
     auto authored =
         nlohmann::json::parse(
