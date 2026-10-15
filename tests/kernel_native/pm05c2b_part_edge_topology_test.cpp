@@ -1541,6 +1541,150 @@ verifyQ1CanonicalSelectedEnds(
     return result;
 }
 
+// S4-P0: Q1's 24 Edge-local END identities are NOT, by themselves,
+// proof of eight durable Points. Certify a stage-qualified semantic Point
+// independently for each END against the current real OCCT catalog.
+// Native Vertex tokens only corroborate *same-evaluation* incidence;
+// neither tokens nor XYZ choose or persist a Point identity.
+using S4P0PointKey = std::pair<
+    part::BodyStageRef, part::FeaturePointAddress>;
+
+std::vector<S4P0PointKey> verifyS4P0NativeEndPointIdentity(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const std::vector<part::SelectedMaterialEdgeEnd>& sources,
+    const char* fixture,
+    const std::vector<S4P0PointKey>* expected_keys = nullptr) {
+    CHECK(evaluation.source_document_id.has_value());
+    CHECK(*evaluation.source_document_id == document.documentId());
+    CHECK(evaluation.source_revision == document.revision());
+    CHECK(evaluation.features.size() == 1U);
+    CHECK(evaluation.features.front().result_topology);
+    const auto& catalog = *evaluation.features.front().result_topology;
+    CHECK(catalog.complete());
+    CHECK(catalog.edges.size() == 12U);
+    CHECK(catalog.vertices.size() == 8U);
+    CHECK(sources.size() == 24U);
+
+    std::vector<S4P0PointKey> keys;
+    std::vector<kernel::RuntimeVertexToken> current_vertices;
+    std::vector<kernel::Point3> diagnostic_positions;
+    std::vector<std::size_t> incidence_counts;
+
+    for (const auto& source : sources) {
+        CHECK(source.valid());
+        CHECK(source.source_edge.stage == catalog.stage);
+        const auto resolved = part::resolveSelectedMaterialEdgeEnd(
+            document, source, evaluation, provider);
+        CHECK(resolved.resolved());
+        const auto point_key = S4P0PointKey{
+            source.source_edge.stage,
+            source.terminal.certified_semantic_point};
+        CHECK(point_key.second.valid());
+        const auto native_vertex = *resolved.current_terminal;
+        const auto point = std::find_if(
+            catalog.points.begin(), catalog.points.end(),
+            [&point_key](const auto& entry) {
+                return entry.address == point_key.second;
+            });
+        CHECK(point != catalog.points.end());
+        CHECK(point->status == kernel::ReferenceStatus::resolved);
+        CHECK(point->candidate_vertex_count == 1U);
+        CHECK(point->current_vertices.size() == 1U);
+        CHECK(point->current_vertices.front() == native_vertex);
+
+        const auto vertex = std::find_if(
+            catalog.vertices.begin(), catalog.vertices.end(),
+            [native_vertex](const auto& entry) {
+                return entry.runtime_token == native_vertex;
+            });
+        CHECK(vertex != catalog.vertices.end());
+        CHECK(vertex->referenceability ==
+              kernel::ReferenceStatus::resolved);
+        CHECK(vertex->point_candidates.size() == 1U);
+        CHECK(vertex->point_candidates.front() == point_key.second);
+        CHECK(vertex->provider_point.has_value());
+        CHECK(std::find(vertex->incident_material_edges.begin(),
+                        vertex->incident_material_edges.end(),
+                        *resolved.current_edge) !=
+              vertex->incident_material_edges.end());
+
+        const auto prior = std::find(keys.begin(), keys.end(), point_key);
+        if (prior == keys.end()) {
+            keys.push_back(point_key);
+            current_vertices.push_back(native_vertex);
+            diagnostic_positions.push_back(*vertex->provider_point);
+            incidence_counts.push_back(1U);
+        } else {
+            const auto i = static_cast<std::size_t>(
+                std::distance(keys.begin(), prior));
+            // An identical semantic key cannot identify two distinct
+            // native Vertices in this exact current-stage evaluation.
+            CHECK(current_vertices[i] == native_vertex);
+            ++incidence_counts[i];
+        }
+    }
+
+    CHECK(keys.size() == 8U);
+    CHECK(current_vertices.size() == keys.size());
+    CHECK(diagnostic_positions.size() == keys.size());
+    CHECK(std::all_of(incidence_counts.begin(), incidence_counts.end(),
+                      [](std::size_t n) { return n == 3U; }));
+    if (expected_keys != nullptr) {
+        CHECK(expected_keys->size() == keys.size());
+        for (const auto& key : *expected_keys) {
+            CHECK(std::find(keys.begin(), keys.end(), key) != keys.end());
+        }
+    }
+
+    // P0-02: geometric admissibility observations only, NOT a Datum
+    // frame, modeling-tolerance policy or XYZ-based identity lookup.
+    // Three different box-corner keys are noncollinear; selecting the same
+    // corner via two other incident Edges is a duplicate, not another P.
+    const auto area_squared = [](
+        const kernel::Point3& a,
+        const kernel::Point3& b,
+        const kernel::Point3& c) {
+        const double ux = b.x - a.x;
+        const double uy = b.y - a.y;
+        const double uz = b.z - a.z;
+        const double vx = c.x - a.x;
+        const double vy = c.y - a.y;
+        const double vz = c.z - a.z;
+        const double cx = uy * vz - uz * vy;
+        const double cy = uz * vx - ux * vz;
+        const double cz = ux * vy - uy * vx;
+        return cx * cx + cy * cy + cz * cz;
+    };
+    CHECK(area_squared(diagnostic_positions[0],
+                       diagnostic_positions[1],
+                       diagnostic_positions[2]) > 1.0e-8);
+    CHECK(area_squared(diagnostic_positions[0],
+                       diagnostic_positions[1],
+                       diagnostic_positions[0]) == 0.0);
+    const auto& a = diagnostic_positions[0];
+    const auto& b = diagnostic_positions[1];
+    const kernel::Point3 diagnostic_midpoint{
+        (a.x + b.x) * 0.5,
+        (a.y + b.y) * 0.5,
+        (a.z + b.z) * 0.5};
+    CHECK(area_squared(a, diagnostic_midpoint, b) < 1.0e-16);
+
+    std::cout << "RG02B1_S4_P0_NATIVE"
+              << " fixture=" << fixture
+              << " edge_local_END=" << sources.size()
+              << " uniquely_resolved_stage_points=" << keys.size()
+              << " incident_END_per_point=3"
+              << " independently_certified=1"
+              << " noncollinear_triple=1"
+              << " duplicate_and_collinear_rejected_as_inputs=1"
+              << " native_tokens_durable=0"
+              << " xyz_identity=0"
+              << " authored_Datum=0\n";
+    return keys;
+}
+
 // Q1-06: do not classify an actual half-cylinder cut's ambiguous
 // three-Surface Point as uniquely selected merely because an Edge touches
 // its current native Vertex. Partial Revolve is a distinct real positive
@@ -2664,6 +2808,9 @@ int main() {
     const auto q1_base_sources = verifyQ1CanonicalSelectedEnds(
         base_document, base_evaluation, kernel, "Q1-01-pristine");
     CHECK(q1_base_sources.size() == 24U);
+    const auto s4p0_base_keys = verifyS4P0NativeEndPointIdentity(
+        base_document, base_evaluation, kernel,
+        q1_base_sources, "P0-01-pristine");
     const auto q2_base_sources = verifyQ2CanonicalSelectedMids(
         base_document, base_evaluation, kernel, "Q2-M01-pristine");
     CHECK(q2_base_sources.size() == 12U);
@@ -3233,6 +3380,11 @@ int main() {
         *reopened_document.document, fresh_evaluation,
         separate_kernel, "Q1-03-cold-native");
     CHECK(q1_fresh_sources.size() == 24U);
+    const auto s4p0_cold_keys = verifyS4P0NativeEndPointIdentity(
+        *reopened_document.document, fresh_evaluation,
+        separate_kernel, q1_fresh_sources,
+        "P0-03-independent-OCCT", &s4p0_base_keys);
+    CHECK(s4p0_cold_keys.size() == s4p0_base_keys.size());
     const auto q2_fresh_sources = verifyQ2CanonicalSelectedMids(
         *reopened_document.document, fresh_evaluation,
         separate_kernel, "Q2-M03-cold-native");
@@ -3352,6 +3504,11 @@ int main() {
     const auto q1_taller_sources = verifyQ1CanonicalSelectedEnds(
         taller_document, taller_evaluation, kernel, "Q1-04-height-edit");
     CHECK(q1_taller_sources.size() == 24U);
+    const auto s4p0_edited_keys = verifyS4P0NativeEndPointIdentity(
+        taller_document, taller_evaluation, kernel,
+        q1_taller_sources, "P0-03-same-feature-height-edit",
+        &s4p0_base_keys);
+    CHECK(s4p0_edited_keys.size() == s4p0_base_keys.size());
     const auto q2_taller_sources = verifyQ2CanonicalSelectedMids(
         taller_document, taller_evaluation, kernel, "Q2-M04-height-edit");
     CHECK(q2_taller_sources.size() == q2_base_sources.size());
