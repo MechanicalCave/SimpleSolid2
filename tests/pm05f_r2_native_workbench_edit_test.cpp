@@ -3393,6 +3393,79 @@ int main(int argc, char* argv[]) {
                     *reopened.document,replay,separate);
                 const auto* cold=replay_datums.find(authored.id);
                 CHECK(cold && cold->valid() && cold->frame);
+                // The exact same authored v18 Datum appears in the
+                // pre-existing Reference Geometry tree and Properties.
+                // Edit Reverse uses one S4A transaction, stable DatumId
+                // and preserves all three semantic P sources.
+                CHECK(workbench.activateDocument(&s3a,{}));
+                QApplication::processEvents();
+                CHECK(workbench.activateDocument(&s4b,{}));
+                QApplication::processEvents();
+                QTreeWidgetItem* point_item=nullptr;
+                for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                    if ((*it)->text(0).contains(
+                            QStringLiteral("Datum Plane 1 (3 Points)"))) {
+                        point_item=*it;
+                        break;
+                    }
+                }
+                CHECK(point_item);
+                tree->clearSelection();
+                tree->setCurrentItem(point_item);
+                point_item->setSelected(true);
+                QApplication::processEvents();
+                auto* property_constructor=workbench.findChild<QLabel*>(
+                    QStringLiteral("datumPropertyConstructor"));
+                auto* property_source=workbench.findChild<QLabel*>(
+                    QStringLiteral("datumPropertySource"));
+                auto* property_edit=workbench.findChild<QPushButton*>(
+                    QStringLiteral("editDatumPlanePropertyButton"));
+                auto* datum_reverse=workbench.findChild<QPushButton*>(
+                    QStringLiteral("datumPlaneReverseButton"));
+                CHECK(property_constructor && property_source &&
+                      property_edit && datum_reverse);
+                CHECK(property_constructor->text() ==
+                      QStringLiteral("3 Points"));
+                CHECK(property_source->text().contains(
+                    QStringLiteral("P1 / P2 / P3")));
+                CHECK(property_edit->isEnabled());
+                const auto before_edit=s4b.undoDepth();
+                property_edit->click();
+                QApplication::processEvents();
+                CHECK(datum_finish->isEnabled());
+                CHECK(constructor->currentIndex()==2);
+                CHECK(datum_result->text().contains(
+                    QStringLiteral("Resolved 3 Points")));
+                datum_reverse->click();
+                CHECK(datum_finish->isEnabled());
+                CHECK(workbench.submitCadInput(
+                    "FINISH",workbench.cadInputContextGeneration()).accepted);
+                const auto* reversed=s4b.document().
+                    findThreePointDatumPlane(authored.id);
+                CHECK(reversed && reversed->reverse);
+                CHECK(reversed->points==authored.points);
+                CHECK(s4b.undoDepth()==before_edit+1U);
+                CHECK(s4b.undo().changed);
+                CHECK(!s4b.document().
+                    findThreePointDatumPlane(authored.id)->reverse);
+                CHECK(s4b.redo().changed);
+                CHECK(s4b.document().
+                    findThreePointDatumPlane(authored.id)->reverse);
+                const auto edit_saved=std::filesystem::path{
+                    scratch.path().toStdWString()} /
+                    "s4b-three-edited-native-v18.ss2part";
+                CHECK(store.createNew(edit_saved,s4b.document()).ok());
+                auto reopened_edit=store.load(edit_saved);
+                CHECK(reopened_edit.ok() && reopened_edit.document);
+                const auto* cold_edit=reopened_edit.document->
+                    findThreePointDatumPlane(authored.id);
+                CHECK(cold_edit && cold_edit->reverse &&
+                      cold_edit->points==authored.points);
+                std::cout << "RG02B1_S4B_REAL_QT_THREE_EDIT_PASS"
+                          << " same_datum=1"
+                          << " unchanged_points=1"
+                          << " reverse_undo_redo=1"
+                          << " cold_edit_v18=1\\n";
                 std::cout << "RG02B1_S4B_REAL_QT_THREE_END_PASS"
                           << " mouse_clicks=3"
                           << " distinct_semantic_points=3"
