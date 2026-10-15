@@ -794,7 +794,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 18);
+            .domain_schema_version == 19);
 
     const auto authored =
         nlohmann::json::parse(
