@@ -1,6 +1,6 @@
 # RG-02B1 / P4-S4A — Strict v18 legacy-fixture regression test-only D2 amendment
 
-**Status: OWNER D2 APPROVAL REQUIRED — NOT ACCEPTED / NOT ACTIVE / NOT EXECUTABLE.**
+**Status: OWNER D2 ACCEPTED (2026-10-15) — PR #396 NOT YET MERGED, ACTIVE ADDENDUM NOT YET MERGED; NOT EXECUTABLE UNTIL BOTH GOVERNANCE GATES PASS.**
 **Proposed:** 2026-10-15. This supersedes the earlier one-test draft scope on this same governance PR #396 after Windows FAST #3137 identified additional historical fixture witnesses.
 **Base authority:** Owner D2-accepted `work/RG-02B1_D2_P4_S4A_THREE_END_POINTS_V18_HEADLESS_WORK_CONTRACT_DRAFT.md`, governance PR #393 and ACTIVE-only PR #394 independently guarded squash-MERGED, protected main `3ce618d0045bc6681f501b32db60cc85373cff08`. The original active S4A contract does NOT list any of the five tests below.
 **Production source PR:** [#395](https://github.com/MechanicalCave/SimpleSolid2/pull/395) (Draft/unmerged, no Owner technical FINAL PASS). This D2 proposal changes no code.
@@ -44,9 +44,9 @@ Keep **all genuine historical file schema assertions** and negative witnesses un
 
 ## Required governance before implementation
 
-1. Owner D2 expressly accepts **exactly this five-file native/legacy test-only S4A amendment**.
-2. Governance-only amendment PR #396 passes its exact-HEAD Windows closure and receives separately authorized guarded protected-main squash.
-3. A distinct `work/ACTIVE.yaml`-only history amendment records extension of the current active S4A allowlist; after its own exact-head Ready closure and Owner-authorized guarded squash, and **only then**, production PR #395 may edit these five test sources.
+1. **OWNER D2 ACCEPTED (2026-10-15):** directly responding to the five-file amendment PR #396 and the conditional guarded squash / separate activation question, Owner replied **„akceptuje - kontynuuj”**. This accepts exactly the five existing registered test paths and narrow fixture/version repairs described above. No S4A product Owner FINAL PASS is implied.
+2. **OWNER CONDITIONALLY AUTHORIZED:** governance-only amendment PR #396 must pass exact-HEAD Windows closure, retain its exact one-document allowlist and remain mergeable; then guarded protected-main squash is authorized without repeating the same formality.
+3. **OWNER CONDITIONALLY AUTHORIZED:** a distinct `work/ACTIVE.yaml`-only history amendment records extension of the current active S4A allowlist; after its own exact-head Ready closure and guarded squash, and **only then**, production PR #395 may edit these five test sources. This preserves `active_work` pointing to the original S4A contract.
 4. FOCUSED, FAST and genuine Ready FULL with all affected tests PASS, Owner S4A technical FINAL PASS and separately authorized implementation squash. S4B UI/Command Line remains separately governed.
 5. Any additional non-allowlisted failure is another concrete D2 STOP: do not infer authority from this proposal or silently adjust production semantics.
 
