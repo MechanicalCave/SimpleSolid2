@@ -45,6 +45,11 @@
 - During F06 audit the existing Workbench `deleteDatumPlane` lookup omitted the third kind and rejected S4A ThreePoint Data before the shared Part Delete command. The same allowed `src/ui/cad_workbench.cpp` now admits the third kind, guarding Delete during active 3-Point/EdgePoint drafts. Additive native Qt test clicks the existing Tree Properties Delete button after P3 Edit, verifies deletion and one-step Undo/Redo; existing S3A MID/END assertions remain.
 - [Windows real native Qt FOCUSED #3205](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38736315670), exact `289c3634c6530049e8babedf404fbe266fbae4a1`: **PASS 1/1** `pm05f_r2.native_workbench_edit` (44.32 s), including the newly added GUI Delete/Undo/Redo, strict source replacement, real END clicks and cold v18 Save/Reopen. Not a FAST/FULL PASS.
 
+## Current single-tool CAD Command Line GUI regression
+
+- [Windows desktop Qt FOCUSED #3206](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38736798016) on exact `478c1e3bdaa038ff1f206c6afc3ae0c129fbab4f`: **PASS 1/1** `pm03c2.cad_workbench_datum_plane` (0.89 s), checking existing single Datum tool third mode and context-only P1/P2/P3/REVERSE/3POINTS/OFFSET/EDGEPOINT/FINISH/CANCEL/Enter semantics and refusal without native evidence. Previous native Qt FOCUSED #3203 and #3205 remain independent real OCCT proof for actual END mouse source and lifecycle.
+- **Not yet established:** a new FAST and Ready FULL on the fully updated UI source tree. Original #3195 FAST 93/93 is not the latest and must not be counted as testing the corrected scene/cardinality and Delete paths. Keep PR #402 Draft until aggregate test/doc closure and Owner Windows manual/technical final acceptance.
+
 ## Finite acceptance matrix — current honest status
 
 | Gate | Status |
@@ -57,7 +62,7 @@
 | F06 shared DatumId Tree/Visibility/Save/Reopen | Native Qt #3205 FOCUSED PASS shared Reference Geometry Tree/Properties, P3 Edit, independent native v18 cold replay, shared Properties Delete/Undo/Redo; final FULL PENDING |
 | F07 context-only CLI/Enter/Esc | Qt desktop #3178 PASS (bounded); explicit slot replacement with mouse pending |
 | F08 additive real Qt/OCCT negative and source edit | Real native Qt #3203 and #3205 FOCUSED PASS strict three END picks, corner dedup, actual mouse P3 replacement and cold Edit replay |
-| F09 Windows FAST + Ready FULL 199/199 + DOC-01 | Draft FAST #3190/#3195 **93/93 PASS**, official DOC-01 internal + PL/EN + generated Browser PASS. New P3 replacement native FOCUSED and Ready FULL 199/199 PENDING |
+| F09 Windows FAST + Ready FULL 199/199 + DOC-01 | Historic Draft FAST #3190/#3195 **93/93 PASS** and docs PASS on older code; latest native Qt FOCUSED #3205 and desktop CLI FOCUSED #3206 **PASS**; updated-code FAST, official DOC-01 and genuine Ready FULL **PENDING**. |
 | F10 Owner manual Windows GUI technical FINAL PASS, guarded production merge | PENDING separate Owner acceptance and authorization |
 
 Prior RED/Cancelled results stay in the audit trail. The six native Qt CTest RESOURCE_LOCK cases remain active; do not modify CMake or skip a single asserted historical test.
