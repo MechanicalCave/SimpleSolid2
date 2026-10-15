@@ -1,159 +1,129 @@
-# RG-02C/B1 — Axis along one straight Body Edge: existing-Workbench UX consultation (D2 PROPOSAL)
+# RG-02C/B1 — Axis from one straight Body Edge: Datum-consistent Work Features UX (Owner consultation proposal)
 
-**Status:** **OWNER UX DIRECTION RECORDED FOR WORK FEATURES AXIS BUTTON, OPERATIONS EDGE CONSTRUCTOR, REFERENCE GEOMETRY TREE AND FULL LIFECYCLE (2026-10-15); remaining detailed flows remain PROPOSED FOR EXPLICIT OWNER UX SIGNOFF.** NOT AN EXECUTABLE WORK CONTRACT, NOT ACTIVE, NOT MERGED, NO UI MUTATION AUTHORITY.
+**Status:** **OWNER-DIRECTED UX SCOPE RECORDED, DETAILED UX SIGNOFF STILL PENDING; NOT AN EXECUTABLE WORK CONTRACT, NOT ACTIVE, NOT MERGED, NO UI MUTATION AUTHORITY.**
 **Date:** 2026-10-15.
-**Protected-main baseline:** `38b0c8b274d47548647fc7c27e9a7884fd85ff20` (PR #408 A0 read-only evidence and separate Owner A0 technical FINAL PASS; explicit real-native-Edge topological orientation reversal fixture **GAP**, not retrospectively PASS).
-**Authority:** Constitution + Foundation 1.0 FROZEN, Architecture/accepted ADRs, Part Modeling v1.33 §6/§20B, RG-02 parent Owner-accepted direction `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md` §2.3(1), §3 mandatory prior UX Owner signoff, completed PM-04 Sketch-Line Axis, existing PM-03/S4B single Datum Plane UI, DOC-01.
-**Owner constraints:** `UI musi byś spójne z aplikacją i istniejącym "datum"`; `nie powinnismy duplikować testów i istniejącej logiki`. **Latest Owner UX clarification (2026-10-15, accompanied by screenshots of Work Features and Datum Plane Operations):** `na pasku narzędziowym w kategorii "work features" nowy przycisk Axis. w operations analogicznie lista constructor i pozycja "edge" - pełny "cykl zycia" , w tree umieszczamy w reference geometry`. The visible button, exact **Edge** constructor label, full lifecycle, and canonical Reference Geometry Tree placement are now **Owner-directed design requirements**. Other detailed UX choices still require separate explicit Owner design approval; do not equate authorization to prepare documents with an executable contract.
-**Target:** review the **FIRST** prospective Axis constructor along **one strict, straight material Body Edge at a declared Body history stage**, not all four later RG-02C constructors. This artifact is a design proposal only.
+**Baseline:** protected main `38b0c8b274d47548647fc7c27e9a7884fd85ff20`, Owner-final read-only native A0 evidence PR #408 squash MERGED; A0 true native topological Edge-orientation reversal fixture remains an explicit **GAP**, accepted for A0 only.
+**Authority:** Constitution/Foundation 1.0 FROZEN/Architecture and accepted ADRs; Part Modeling roadmap v1.33 §6/§20B; Owner RG-02 reference geometry design `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md` §2.3(1) and §3 mandatory Owner UX prior approval; existing PM-04 Sketch-Line Axis; Datum S4B tool; DOC-01.
+**Owner principles:** new UI consistent with existing app and Datum Plane; **reuse existing code and tests, no parallel Axis implementation**. This is the **first** prospective Axis constructor, **one straight material Body Edge** only; later Axis constructors require independent decisions.
 
-## 1. Grounded current UI versus Owner-requested UI — avoid pretending it already exists
+## 1. Exact Owner UX direction and corrections — 2026-10-15
 
-- **Real current toolbar:** `src/ui/cad_workbench.cpp` creates `datum_plane_button_` (`datumPlaneToolButton`) and the `Work Features:` group label in Part's one-row toolbar. The screenshot supplied by Owner visibly shows **Datum Plane** there and **no Axis button**. `axis_button_` appears as a field in `cad_workbench.hpp` and in state-sync code, but **a corresponding Part toolbar QPushButton is not created in the inspected `cad_workbench.cpp` path**. The desired Axis toolbar button is therefore **new visible UI**, not an already delivered toolbar control.
-- **Reusable current Axis machinery:** `axisOperationsWidget`, `axisSourceLabel`, `axisResultLabel`, `axisFinishButton`, `axisCancelButton`, `startAxisTool`, `startAxisEdit`, `stageAxisSource`, `refreshAxisEvaluation`, `syncAxisUi`, `finishAxis`, `cancelAxis`, `submitAxisCadInput` and `application::AxisDraft` already exist for authored **Sketch Line** sources. The Axis Finish/Cancel controls already use the **existing sticky Operations footer**. Reuse and extend them — do NOT add a second Axis runtime/draft/commit pipeline.
-- **Real current Datum Plane precedent:** one toolbar `Datum Plane` entry in **Work Features**, a `Constructor` selector (`Offset`, `Edge + Point`, `3 Points`), source/result status, preview, operations footer, Edit, semantic commands, shared Tree selection/Show-Hide. Existing keyboard/Command Line and panel lifecycle are precedent, not a new framework to clone.
-- **Real current Tree:** `Reference Geometry` currently owns **Datum Plane rows**. Existing authored **Sketch-Line Axis rows are currently children of their source Sketch**. `Origin` owns built-in X/Y/Z axes. Owner's new requested canonical Tree layout requires a **UI presentation migration** of authored Sketch-Line Axis rows to `Reference Geometry` alongside new Edge Axis rows, while leaving model identity and sketch-line source references untouched. One AxisId = one Tree row; never show it under both parents.
-- The real right column is **Properties / Operations** with 40/60 split, independently scrolling or tabs on insufficient height; footer buttons remain fixed. Toolbars are single-row and context-safe. Preserve these behaviors for Axis.
+1. Owner illustrated the existing **Work Features → Datum Plane** button and its **Operations → Constructor** selector, and directed a **new visible `Axis` button next to Datum Plane under Work Features**. The right Operations panel is analogous to Datum Plane, but the new Axis tool's constructor dropdown is currently **ONE ITEM ONLY: `Edge`**. The combo is deliberately extensible for possible **future** Axis constructors; neither current Sketch Line Axis nor hypothetical point/cylinder/plane variants are entries.
+2. Owner explicitly corrected the earlier proposal `Constructor: Sketch Line / Edge` as incorrect: **`Sketch Line` Axis is already created directly inside Sketch authoring**, not through the new Work Features Axis constructor selection. Do **not** expose `Sketch Line` in this combo; do not default to it, auto-switch to it, or add a Sketch-Line migration choice. Single `Edge` is selected by default because it is the **only** item.
+3. The newest Owner screenshot shows `Axis001` nested beneath **Sketch 3**, highlighted by the added arrow. Existing Sketch-Line Axes **remain in their source Sketch subtree**. Owner's prior `w tree umieszczamy w reference geometry` applies to **newly created Edge-sourced Axes**, which belong beside Datum Planes under **Reference Geometry**. **No migration/duplication** of existing Sketch-Line Axis rows. Built-in X/Y/Z axes stay under Origin.
+4. **Pełny cykl życia** applies to the new Edge Axis, not just picking one Edge: Create, Edit/reselect, Finish/Cancel, Delete, Show/Hide and group visibility, properties and selection, Undo/Redo, persistence Save/Close/Reopen/cold rebuild, dependency/diagnostic repair and Revolve consumer safety.
+5. These statements are **design direction**, **not** proof that future UX exists or approval to modify code. Remaining preview, command tokens, signed-direction policy and exact technical/persistence design need further Owner UX/D2 decisions before production mutation.
 
-**Evidence boundary:** Owner supplied real screenshots of (a) the Work Features toolbar with `Datum Plane` and (b) Datum Plane's `Operations` constructor dropdown, Offset and Reverse. Those screenshots are a visual UX reference, **not screenshots of an implemented Axis Edge constructor**.
+## 2. Current SS2 application facts — preserve real behavior
 
-## 2. Owner-directed narrow tool interaction; detailed semantics remain proposed for separate UX signoff
+- `src/ui/cad_workbench.cpp` currently physically instantiates the `datumPlaneToolButton` in a one-row **Work Features** toolbar. The screenshot displays that button and no `Axis` button. `axis_button_` is declared and referenced by Workbench state, but no physical Part toolbar Axis button was found in the inspected construction. **Adding a physical button is a new UI change**.
+- The existing `axisOperationsWidget`, `axisSourceLabel`, `axisResultLabel`, `axisFinishButton`, `axisCancelButton`, `startAxisTool`, `startAxisEdit`, `refreshAxisEvaluation`, `syncAxisUi`, `finishAxis`, `cancelAxis`, `submitAxisCadInput` and application `AxisDraft` cover the previous Sketch Line Axis authoring/draft behavior. Reuse appropriate controls, commands and transactional lifecycle, **but do not make the new Work Features Axis tool create Sketch Line axes or clone a second Part-owned Axis machinery**.
+- The current Sketch Line authoring exposes `sketchAxisDesignationCheck` and creates a Part-owned Axis from a selected/current Sketch Line. That workflow is the compatibility baseline; it stays in Sketch, and its `Axis001`-style Tree row remains under its source Sketch. Existing Sketch-Line Axis Edit/Delete and all referenced `AxisId` semantics must keep working.
+- `application::submitAxisCadInput` currently supports `SOURCE`, `FINISH`, `CANCEL`, `ESC` and empty owning Enter for its current Axis draft. This existing parser is **not** proof that future Edge constructor tokens or exact picking dispatch exist.
+- `Reference Geometry` currently contains authored Datum Plane rows. A **new** Edge-sourced Part Axis would appear there once implemented. `Origin` continues to contain builtin X/Y/Z Axis, and Sketch-line Axis remains nested below its Sketch. All rows resolve by semantic `AxisId`/DatumId rather than viewer/toplevel indices.
+- The current right Properties/Operations pane uses the existing independently scrollable 40/60 split with tab fallback at insufficient height, and sticky Finish/Cancel footer. The Part toolbar is one-row, responsive, and tool conflicts fail closed. Copy its **UX grammar**, reuse its **code**, not an unrelated dialog.
 
-**Toolbar — Owner direction confirmed:** Add one **visible `Axis` button immediately alongside `Datum Plane` inside the existing `Work Features` category**, honoring the same toolbar grouping, focus, compact-window and active-tool checked/disabled grammar. This must be a new physical button wired to the **existing** `startAxisTool` / Edit/Finish/Cancel chain (currently no corresponding visible Part toolbar button), not a second independently implemented tool, a new `Datum Axis` command or a Sketch-toolbar duplicate. No other toolbar relocation.
+## 3. Proposed single Work Features Axis tool — one constructor `Edge`
 
-**Operations — Owner direction confirmed:** The **same `axisOperationsWidget`** gains a `Constructor` dropdown analogous to Datum Plane, with precisely `Sketch Line` (existing source, default for compatibility) and **`Edge`** (new straight material Body Edge mode; exact Owner-requested displayed word, **not** `Body Edge` or `Edge + Point`). Switching constructor clears incompatible *transient* pick leases and preview, not existing Part or Undo history; Edit an existing Axis preloads its true constructor. Existing sketch-line designation/check/edit/CLI semantics must remain intact.
+**Entry and Constructor:** Place one `Axis` button adjacent to `Datum Plane` under Work Features. It opens the existing right **Operations / Axis** ownership context with a `Constructor` combo containing **exactly one item `Edge`**, selected by default. The dropdown remains visible (as in Datum Plane) to establish the future multi-constructor UX affordance. No `Sketch Line` option, no conversion between Sketch-Line and Edge modes, no `SKETCHLINE` command token, no separate toolbar `Datum Axis` action. The unchanged Sketch authoring workflow remains the only current `Sketch Line` creation path.
 
-**One Edge source:** With `Constructor: Edge`, click **one** strictly `Resolved` native **straight material Body Edge** at one explicit `BodyStageRef`. Operations shows `Source / Edge` with a replace/select affordance, `Stage`, one status/diagnostic readout. Do not require a second point click, create a generic Datum Point, accept `MID/CENTER`, screen XYZ, tessellated visual straightness, runtime OCCT token, seam/closed edge, a nonmaterial edge or geometrically similar replacement. Reuse `MaterialEdgeReference`, pre-existing Q0/Q2 strict resolver and native exact provider queries, subject to a separately accepted production contract.
+**Source and precise selection:** The Edge constructor asks for exactly one **strictly resolved straight material Edge** from a declared current `BodyStageRef`. A single `Edge` source slot with `Select/Replace`, readable `Stage` and `Status` is sufficient. Hover and click must reuse already proven native material Edge acquisition, `MaterialEdgeReference`, Q0/Q2 strict resolution, exact analytic geometry and existing viewport highlight conventions; no second Point click, generic Datum Point, MID/CENTER, screen XYZ, provider handle, seam/closed Edge, arbitrary approximate line, or nearest-geometry rebind.
 
-**Preview:** Before a strict Edge source, no preview and `Finish Axis` disabled. With source Resolved, preview one **finite line cue of an infinite unoriented Axis** in the viewport and highlight the selected Edge using **existing Axis/Datum presentation grammar**. No Axis-authored `Reverse` for `Edge`; the future Revolve consumer owns signed rotation. Hover alone never authors, and on Missing/Ambiguous/Unsupported/Blocked/Stale, preview disappears immediately (no last-good line).
+**Draft preview:** No source means `Finish Axis` disabled and no viewport Axis preview. Once strictly Resolved, render an ephemeral finite cue for the prospective **infinite unoriented Axis line**, with the source Edge highlighted according to the existing selection grammar. No Axis `Reverse` control for this Edge-sourced unoriented line; signed Revolve direction belongs to the consuming feature. Invalid/missing/stale/ambiguous/unsupported/blocked source immediately refuses Finish and clears preview without showing last-good geometry. Whether an actual native topological reversal fixture is a production precondition remains a separate D2 gate.
 
-**Complete lifecycle — Owner direction confirmed as scope requirement, proposed exact behavior:** `Create`, `Edit/Replace Edge`, `Finish`, `Cancel/Esc`, deletion, visibility `Show/Hide`, selection, inspection in Properties, Undo/Redo, Save/Close/Reopen and cold rebuild, stage/Feature dependency checking, source repair after upstream changes and downstream Revolve failure/recovery **must all be included** in any later bounded production contract and real tests. `Finish` revalidates source, `DocumentRevision` and dependency order through **existing Part commands/transactions** (one commit = one Undo); Cancel, hover and rejected invalid picks create **zero** authored mutation and Undo entries. Edit preserves `AxisId`, authored visibility and dependent `AxisReference` identity; no feature silently rebinds to the closest Edge. Delete follows current dependency-safe existing Axis semantics; dependents retain repairable authored intent, not a guessed replacement.
+**Create/commit/cancel:** `Finish Axis` and owning Enter must recheck current Part document revision, strict Edge reference, stage/dependency order and future accepted persistence contract before committing **one** semantic Part transaction, issuing an authored `AxisId`. `Cancel`/owning Esc/hover/invalid pick create zero model mutations and zero Undo steps, including no consumed AxisId. The transient draft does not persist or become pickable geometry before Finish.
 
-**Tree — Owner direction confirmed:** **All Part-owned authored Axis objects** (both Sketch Line and new Edge constructors) appear **once** under existing `Reference Geometry`, alongside Datum Planes. `Origin X/Y/Z` stay under `Origin`. For Sketch-Line Axis, preserve source `SketchId/EntityId` and native persistence but move the **Tree presentation row** from Sketch to Reference Geometry. Mixed group `Show/Hide` now needs consistent behavior covering Datum and authored Axis through existing transactions, ideally **one atomic Undo**; source Sketch visibility never suppresses Axis evaluation. Tree keyboard/context Edit/Delete/Show/Hide, selection synchronization, warnings/diagnostics, expansion and Properties must remain coherent. Never duplicate AxisId Tree rows.
+**Full lifetime / repair:** Tree/viewport `Edit Axis` reopens the existing Edge Axis with its source and explicit `Replace Edge`, keeping its `AxisId`, visibility and downstream `AxisReference`. Valid Edit is one Undo step; Cancel restores the prior object. `Delete Axis`, Show/Hide (individually and in mixed Datum+Edge Axis Reference Geometry group), Undo/Redo, Save/Close/Reopen, fresh-provider evaluation, missing/ambiguous/stale/unsupported source diagnostics and downstream Revolve block/repair must be validated. No guessed source, stale viewer line, accidental source migration or dependency bypass.
 
-**Stage and dependencies:** A strict Edge source persists an explicit semantic `BodyStageRef`, not the currently visible last Body shape; subsequent Features do not rebind it. UI shows a readable stage label, current status, repair action and dependency blockers. Missing source keeps the authored Axis selectable/editable, but prevents valid evaluation/preview and downstream consumption. Producer Feature replacement with equal geometry must fail closed.
+**Tree ownership/presentation:** **Reference Geometry = all Datums and only new Body-Edge Axes**, each exactly once under that group. **Sketches = existing Sketch-Line Axes**, each exactly once under its source Sketch, as the real screenshot shows. **Origin = built-in X/Y/Z**, never authored copies. Existing Sketch Axis creation and Edit remain intact; Reference Geometry group Show/Hide becomes a mixed Datum+Edge-Axis operation via existing commands/transactions, not a new group persistent flag or a second visibility system.
 
-**Revolve and history:** `AxisReference` to a real `AxisId` remains authoritative for dependent Revolve, regardless of `Sketch Line` vs `Edge` constructor, but **native v18 durable source variant, migration, stage floors, Revolve dependency rules and signed direction treatment are NOT yet specified or authorized by A0**. These need a separate narrow Owner D2 Work Contract before a product code change. The accepted A0 evidence GAP for native topological Edge orientation reversal is **not** proof of product behavior.
+**CAD Command Line parity — design pending:** Work Features `Axis` must use the **same** source/status/draft semantic authority as the GUI, with existing `SOURCE`, `FINISH`, `CANCEL`, owning Enter/Esc behavior preserved where applicable. If an Axis-owned `EDGE` keyword is desired, its only possible meaning is selecting the already sole `Edge` constructor; **no need for a new keyword** just to choose the only mode. The exact root command and any Edge-specific alias need future Owner review, without overriding legacy Sketch Axis creation or global selection.
 
-**CAD Command Line:** Reuse the current Axis input context and `SOURCE`, `FINISH`, `CANCEL` grammar; propose locally-scoped `EDGE` and `SKETCHLINE` mode tokens (exact proposed tokens, **not delivered yet**), consistent with the UI labels. No global `EDGE` shortcut, world XYZ text source, independent CAD CLI draft or ambiguous cross-tool routing. Retain owning Enter/Esc and focus semantics; final token names require distinct Owner UX signoff.
+## 4. Reviewable UX wireframes — not screenshots of implemented behavior
 
-## 3. Reviewable wireframes — proposed UI, aligned with Owner screenshots
-
-### W1 — Part Work Features toolbar and Axis Operations before source
-
-```text
-One-row Part toolbar:
-  Sketch:       Work Features:            Create:             Modify:
-  [Sketch]      [Datum Plane] [Axis]       [Extrude] [Revolve] [Fillet] [Chamfer]
-                                   ^ NEW visible Axis button (existing controller reused)
-
-Document Tree                     Viewport                Right-side Operations
-  Origin                          [current Part Body]     Axis operation
-    X Axis                                             Constructor  [Edge     v]
-    Y Axis                                             Source / Edge  [Select...]
-    Z Axis                                             Stage           [not set]
-  Reference Geometry                                     Select one straight Edge
-    Datum Plane 1                                       No preview; Finish disabled
-    Axis 2  (future)                                    --------------------------
-                                                        [Finish Axis — disabled] [Cancel]
-```
-
-Note: `Sketch Line` is the default Axis constructor for existing documents/selection; `Edge` is chosen explicitly. Property panel and existing responsive sticky footer remain unchanged. The future Axis tree row shown here is not committed at this stage.
-
-### W2 — Constructor Edge, one strict current-stage Body Edge selected
+### W1 — Work Features toolbar / Operations before selection
 
 ```text
-Document Tree                   3D Viewport              Operations > Axis
-  Origin                        [selected material       Constructor  [Edge v]
-  Reference Geometry             straight Edge]          Source Edge  [Extrude001 / Edge ...]
-    Datum Plane 1               [finite Axis cue,        Stage        [after Extrude001]
-                                 no direction arrow]     Status       [Resolved]
-                                                         [Finish Axis] [Cancel]
+Sketch:       Work Features:               Create:              Modify:
+[Sketch]      [Datum Plane] [Axis]          [Extrude] [Revolve]   [Fillet] [Chamfer]
+                            ^ NEW button, existing shared Workbench grammar
+
+Document Tree                 Viewport                Operations — Axis
+  Origin                      [current Body]          Constructor  [Edge   v]
+    X / Y / Z Axis                                    Source Edge  [Select ...]
+  Reference Geometry                                  Stage        [not set]
+    Datum Plane 1                                     Status       Select a straight Edge
+  Sketches                                            ---------------------------
+    Sketch 3                                          [Finish Axis disabled] [Cancel]
+      Axis001  (Sketch Line: unchanged)
 ```
 
-One click stages one semantic straight Edge. The finite cue is a disposable preview of an infinite **unoriented** line. Hover alone, invalid source and Cancel never change Part data or Undo.
+The **only current entry** of the openable Constructor combo is `Edge`. The source Sketch-Line Axis row remains under Sketch 3.
 
-### W3 — After Finish; full Tree/Properties/Edit/repair lifecycle
+### W2 — one strict Edge click, pending Finish
 
 ```text
-Document Tree                   Properties > Axis       Operations > Edit Axis
-  Origin                        Axis 7                  Constructor  [Edge v]
-    X / Y / Z Axis              AxisId [stable]         Edge         [Missing] [Replace Edge]
-  Reference Geometry            Constructor Edge        Stage        [after Extrude001]
-    Datum Plane 1               Source Body/Stage       Status       [Missing — repair]
-    Axis 4 (Sketch Line)        Status Missing          [Finish disabled] [Cancel]
-    Axis 7 (Edge) [Missing]     Visibility Shown
-  Sketch 2
-    ... (NO duplicate Axis 4)
+Tree                          Viewport                    Operations — Axis
+  Reference Geometry          [highlighted real]         Constructor  [Edge v]
+    Datum Plane 1              [straight material Edge]    Edge         [Extrude001 / Edge …]
+  Sketches                    [finite unoriented]         Stage        [after Extrude001]
+    Sketch 3                   [Axis preview cue]          Status       Resolved
+      Axis001                                             [Finish Axis] [Cancel]
 ```
 
-A failed Axis remains authored/editable with one `AxisId`, no stale preview, and downstream failure diagnostics. Tree `Edit Axis`, `Delete Axis`, `Show/Hide`, Undo/Redo, native Save/Reopen, source repair and dependent Revolve are part of the required future vertical-slice lifecycle; this image does **not** claim implementation.
+One genuine current-stage Edge source; no independent Point/MID/CENTER, signed orientation checkbox or authored mutation until Finish.
 
-## 4. Complete Owner walk-through / future automated and manual acceptance
+### W3 — finished Edge Axis and repair, existing Sketch Axis unchanged
 
-| ID | Interaction | Required acceptance behavior |
+```text
+Document Tree                  Properties — Axis         Operations — Edit Axis
+  Origin                       Axis002                   Constructor [Edge v]
+    X / Y / Z Axis             AxisId  [stable]          Edge        [Missing] [Replace]
+  Reference Geometry           Source  [Body stage]      Stage       [after Extrude001]
+    Datum Plane 1              Status  Missing           Status      Missing — repair
+    Axis002 [Missing]          Visible Shown             [Finish disabled] [Cancel]
+  Sketches
+    Sketch 3
+      Axis001 (Sketch Line, stays here)
+```
+
+No duplicate Axis rows, no migration of Sketch-Line Axis, no stale last-good preview. The right panel reuses existing Properties/Operations and lifecycle controls.
+
+## 5. Future acceptance matrix — complete Edge Axis vertical slice, not yet executed
+
+| ID | Requirement | Future native/Qt acceptance |
 | --- | --- | --- |
-| UX-01 toolbar | Part → `Work Features` → visible `Axis` adjacent to `Datum Plane` | One button/handler and original single-row/responsive group behavior; existing Sketch/Datum untouched |
-| UX-02 current constructor | Axis → default `Sketch Line`; select Line | Existing source/draft/Finish/CLI unchanged; AxisId belongs to Part |
-| UX-03 new constructor | Axis → `Constructor: Edge` | One Edge source slot; no second click or separate Datum Plane tool |
-| UX-04 native hover/pick | Hover/click strictly eligible straight material Edge | Hover/marker consistent with Datum/Project Geometry; stage/source/status visible; finite, unoriented preview only after click |
-| UX-05 invalid source | Curved Arc, seam, unsupported/ambiguous/missing/stale/wrong stage Edge | Typed error, no preview/Finish, no fallback, no mutation or Undo |
-| UX-06 create/commit | `Finish Axis`, Enter with valid Edge | Exactly one revision-bound semantic Axis transaction, stable AxisId, Undo one step |
-| UX-07 Cancel/undo/redo | Cancel/Esc during draft; Undo/Redo after Finish | Cancel 0 changes; Undo removes/reverts only that operation, Redo restores stable authored intent |
-| UX-08 Tree canonical placement | New Edge Axis and existing Sketch-Line Axis, plus Datum | **Both** authored Axis classes once under `Reference Geometry`; none duplicated under Sketch; built-in Origin axes stay Origin |
-| UX-09 visibility | Axis row and mixed `Reference Geometry` group Show/Hide | Durable selection-aware visibility, atomic mixed group operation, Undo/Redo and Save/Reopen |
-| UX-10 Edit/re-source | Tree → `Edit Axis` → `Replace Edge` → Finish/Cancel | Preserve AxisId, visibility and consumer links; one Undo on Finish, none on Cancel |
-| UX-11 deletion/repair | Delete Axis used by Revolve; Undo/delete upstream Feature | No silent feature retargeting, dependent Revolve blocked with diagnostic, explicit repair/Undo path |
-| UX-12 independent reopen | Save/Close/Reopen (fresh OCCT provider) | Same AxisId/source stage and display state reconstructed, or typed fail closed; no native token persisted |
-| UX-13 direction | Native Edge orientation representation varies; Revolve reverse | Geometry line still mathematically unoriented; Revolve owns direction. Native topological reversal fixture still an A0 GAP and separate production D2 risk |
-| UX-14 Command Line | `AXIS`, `EDGE`/`SKETCHLINE`, `SOURCE`, `FINISH`, `CANCEL` in Axis context | Same GUI draft and commands, no global grammar diversion, valid focus/Enter/Esc |
-| UX-15 responsive / conflicts | Narrow toolbar/panel, Edit Feature/Sketch collision | Existing Work Features group layout and Properties/Operations sticky footer; incompatible edit fails closed |
+| UX-01 | One Work Features `Axis` button beside `Datum Plane` | Same one-row toolbar/responsive/focus grammar; no second Axis command pipeline |
+| UX-02 | `Constructor` combo with **only `Edge`** now | Default `Edge`, list stays visible and future-extensible; **no Sketch Line item** |
+| UX-03 | Existing Sketch Line → Axis in Sketch | `sketchAxisDesignationCheck` remains working; no regressions in create/edit and source Sketch identity |
+| UX-04 | Tree provenance | **Edge Axis in Reference Geometry; Sketch Line Axis under Sketch 3 (or its source Sketch); Origin X/Y/Z in Origin**, each once |
+| UX-05 | Native straight Edge hover/click | Current-stage precise `MaterialEdgeReference`, exact line only, shared picker/marker behavior |
+| UX-06 | Pre-Finish source/preview | No draft line or enabled Finish before strict Edge source; transient finite unoriented preview only when Resolved |
+| UX-07 | Invalid/seam/curved/ambiguous/stale | Typed refusal, preview cleared, 0 authored mutation, never geometric guess/last-good fallback |
+| UX-08 | Finish/Cancel/Enter/Esc | One revision-bound transaction and one Undo on valid Finish; Cancel/hover 0 Undo |
+| UX-09 | Edit / Replace Edge | Same AxisId, visibility and dependent Revolve AxisReference, one Undo or zero if canceled |
+| UX-10 | Delete and downstream repair | No silent reassignment of source; dependent Revolve diagnostic, Undo restore or explicit repair |
+| UX-11 | Visibility in Tree | Individual Edge Axis/Datum and mixed Reference Geometry Show/Hide with one atomic transaction, Undo/Redo |
+| UX-12 | Save/Close/Reopen/cold provider | Durable semantic Edge + Body stage, stable AxisId/visibility; resolved derived infinite line or typed refusal |
+| UX-13 | GUI/CAD Command Line | Same Axis Edge draft and Finish/Cancel authority; **no `SKETCHLINE`/constructor-toggle token** |
+| UX-14 | Existing behaviors unaffected | Sketch Axis nested row, Datum Plane constructors, Project Geometry and PM-04 Revolve intact |
+| UX-15 | Responsive/edit context | Existing 40/60→tab panel/footer, same one-row toolbar, incompatible edit fails closed |
+| UX-16 | Native direction semantics | Unoriented exact line; no provider orientation as authored sign; A0 actual native edge-reversal fixture **remains GAP** |
 
-**No UX-01–15 manual integration tests have been performed.** These are future acceptance scenarios of an unimplemented UI, **not** proof or current product documentation.
+**No UX-01–16 tests were run for this unimplemented feature.** These are proposed acceptance criteria, not retroactive evidence from A0.
 
-## 5. Proposed Axis-scoped CAD Command Line, not yet approved as concrete tokens
+## 6. Product/architecture STOP boundaries and still-open Owner decisions
 
-Current `application::submitAxisCadInput` already accepts `SOURCE`, `FINISH`, `CANCEL` and owning blank Enter. Preserve these and the existing root `AXIS` tool. Owner selected a **UI constructor label `Edge`**, but has **not explicitly approved command tokens**. Propose only when Axis owns input:
+A0 only proved bounded read-only native **feasibility** for a test-only straight Edge line. It did **not** implement persistent `PartAxis::source` variant, native file migration/versioning, Part `AxisDraft` source semantics, dependency floors and cycle prevention for Revolve, downstream edit/recompute, viewport picker or UI/CLI. A0's genuine native topological orientation reversal fixture remains **GAP**, even though Owner accepted that limitation for A0 technical FINAL PASS.
 
-- `EDGE` → choose constructor `Edge` (strict straight Body material Edge source).
-- `SKETCHLINE` → choose current `Sketch Line` constructor.
-- `SOURCE` → stage current certified selection in the matching mode; never parse arbitrary XYZ.
-- `FINISH` or owning Enter → same semantic validation/transaction as UI; `CANCEL`/owning Esc → discard draft.
+**UX direction now unambiguous:** New Work Features Axis button; Operations Constructor = **Edge only** (future entries deferred); existing Sketch Line Axis **created in Sketch and stays under Sketch**; new Edge Axis under **Reference Geometry**; full lifecycle included, no duplicated code/test systems.
 
-No global `EDGE` command, no second draft/parser subsystem, no automatic selection from nearest visual topology and **no `REVERSE` input for unoriented Edge Axis**. Proposed exact tokens/focus precedence require a separate explicit UX decision.
+**Proposed details needing separate explicit UX signoff:** (1) exact Edge source slot / stage-status phrasing and preview cue; (2) `Replace Edge`, right-panel edit and missing-source handling; (3) grouped Datum+Edge Axis visibility semantics; (4) contextual CAD Command Line behavior without unnecessary one-item mode-switch tokens; (5) treatment of A0 true native topological reversal fixture as an independent D2 production risk; and (6) exact future allowed files/tests/native-schema migration rules.
 
-## 6. Product/architecture STOP conditions — no implementation permission
-
-A0 **did not** define a durable Body-Edge `PartAxis::source` variant, production Edge Axis evaluation, full `AxisDraft` revision-bound model, data-schema migration, dependency floors for Revolve, or a public Viewer acquisition contract. The native B-Rep **topological orientation reversal fixture** remains an explicitly accepted *A0-only* GAP. A future production package must decide whether that is a STOP requiring additional test, not silently treat it as verified.
-
-The visible Work Features Axis button is **new UI**, even though the Axis handlers already exist. Moving existing Sketch-Line Axis **Tree presentation** from Sketch to Reference Geometry is also a user-visible behavior change requiring targeted native Qt regressions (selection, source navigation, Edit, group Show/Hide, stable AxisId, no duplicate row and cold reopen); existing source Sketch ownership and persistence must not change just to make the tree look tidy.
-
-Full-lifecycle delivery must prove one committed transaction/Undo, revert/Redo, Cancel, source repair, Show/Hide mixed group, delete downstream fail-closed, native Save/Close/Reopen with a fresh provider and real viewport hover/click/Command Line behavior. No weakening or duplication of PM-04/Q0/Q2/Datum tests.
-
-If source persistence needs new versioned native schema, Part command/public API, exact provider-neutral reference or extra test paths, STOP for **one narrow independently Owner-approved RG-02C/B1 production Work Contract**, exact allowlist and DOC-01 product/internal PL+EN/Browser updates before any edit.
-
-Out of scope: through two arbitrary Points, cylinder axis, two-plane intersection, new standalone Datum Point, generic VERTEX/MID/CENTER Axis, new independent Axis toolbar controller, modifications to Datum Plane constructor, G1, solid Mirror/Pattern, PM-06 or general UI frameworks.
-
-## 7. Owner UX decisions: recorded direction versus still pending explicit signoff
-
-### Directed by Owner using actual Workbench/Datum screenshots (2026-10-15)
-- **Work Features:** physically visible new **Axis** toolbar button alongside **Datum Plane**, invoking existing Axis tool lifecycle, not a second tool.
-- **Operations:** Datum-consistent **Constructor** dropdown for Axis with the exact new entry **Edge**; preserve legacy **Sketch Line** compatibility/default.
-- **Tree:** authored Axis objects in existing **Reference Geometry** alongside Datum Plane; **one row per AxisId**. The current Sketch-Line Axis rows under Sketch require a bounded presentation migration, no duplicate row or durable model move; built-in axes remain under Origin.
-- **Full lifecycle:** do not ship just "one Edge click": Create, Edit/Replace, Finish/Cancel, Delete, Show/Hide/group actions, Undo/Redo, Save/Close/Reopen/cold rebuild, stale/rejected reference repair and downstream consumer diagnostics must be testable with existing machinery.
-
-### Detailed UX decisions to ratify before first UI implementation
-1. Is `Sketch Line` as constructor **default** for legacy compatibility, with `Edge` as the second entry, acceptable? Should entering Axis with a preselected Body Edge choose `Edge` automatically or require explicit constructor change?
-2. Should the **existing Reference Geometry mixed group Show/Hide** operate atomically on all Datum + authored Axis, while a source Sketch's own Show/Hide does not hide its authored Axis?
-3. Is the proposed finite **unoriented** Axis preview with existing hover/selection cue, typed Stage and status, **without Axis Reverse** correct?
-4. Are `Replace Edge`, one source slot, full repair diagnostics and existing Finish/Cancel/Enter/Esc semantics sufficient, including behavior for a formerly Sketch-Line Axis edited into Edge mode (and vice versa) if conversion is later allowed?
-5. May the Axis-owned Command Line add local `EDGE` and `SKETCHLINE` tokens, while keeping `SOURCE`, `FINISH`, `CANCEL`, avoiding global `EDGE`?
-6. Does the future **production contract** first need a genuine native topological Edge-reversal fixture, since A0 only accepted its GAP for read-only feasibility?
-
-**Nothing in this design document is a new executable Work Contract.** The Owner's specific UI layout requests are recorded above, but broader details require a separately explicit Owner UX design signoff, distinct accepted narrow production D2 contract, governance merge and ACTIVE-only activation. No UI/Viewer/Tree/Operations/CLI/schema/command/test mutations before those independent gates.
+**STOP:** The Owner's screenshot correction and UX direction are not an authorization to implement. Before a first UI/Viewer/Tree/Operations/CAD CLI mutation, obtain explicit approval of reviewable UI flows, then separately accept one narrow RG-02C production D2 Work Contract with exact allowlist, document versioning, FOCUSED/FAST/FULL/native/manual acceptance and DOC-01 internal plus bilingual product and generated Browser impacts; separately authorize governance merge and `ACTIVE.yaml` activation. No PM-06, G1, standalone Point, two-Point Axis, cylinder Axis, two-plane Axis, Mirror/Pattern or new Body is activated.
 
 ## Documentation impact
 
 Internal docs: not required
 User/Product docs: not required
-Reason: This is a one-file proposed future UX consultation artifact under `work/**`, not an as-built user-facing feature or a change to current semantics. Any separately accepted and activated Axis vertical slice must update current internal docs, bilingual product docs and generated Browser under DOC-01.
+Reason: this is a single `work/**` UX consultation design proposal, not a shipping product behavior change. Future Axis production slice requires separate DOC-01 updates for internal as-built, PL/EN product and generated Browser.
