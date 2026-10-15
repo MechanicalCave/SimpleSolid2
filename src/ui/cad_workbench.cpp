@@ -6642,13 +6642,6 @@ void CadWorkbench::beginThreePointDatum(
     std::optional<part::DatumId> edit_id) {
     datum_plane_draft_.reset();
     datum_plane_evaluation_.reset();
-    three_point_datum_revision_.reset();
-    three_point_datum_edit_id_.reset();
-    three_point_datum_slots_ = {};
-    three_point_datum_preview_.reset();
-    three_point_datum_active_slot_ = 0U;
-    three_point_datum_reverse_ = false;
-    ++three_point_datum_context_generation_;
     edge_datum_create_revision_.reset();
     edge_datum_edit_id_.reset();
     edge_datum_create_source_.reset();
@@ -8156,6 +8149,13 @@ void CadWorkbench::clearDatumPlaneRuntimeContext() {
     }
     datum_plane_draft_.reset();
     datum_plane_evaluation_.reset();
+    three_point_datum_revision_.reset();
+    three_point_datum_edit_id_.reset();
+    three_point_datum_slots_ = {};
+    three_point_datum_preview_.reset();
+    three_point_datum_active_slot_ = 0U;
+    three_point_datum_reverse_ = false;
+    ++three_point_datum_context_generation_;
     edge_datum_create_revision_.reset();
     edge_datum_pick_stage_.reset();
     edge_datum_edge_pick_.reset();
