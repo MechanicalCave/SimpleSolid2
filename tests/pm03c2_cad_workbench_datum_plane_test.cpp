@@ -353,6 +353,8 @@ int main(int argc, char* argv[]) {
     const auto before_axis_revision =
         session.document().revision();
     const auto before_axis_undo = session.undoDepth();
+    const auto reference_count_before_axis =
+        viewport->reference_scene.references.size();
     CHECK(session.document().axes().empty());
 
     axis_tool->click();
@@ -361,12 +363,16 @@ int main(int argc, char* argv[]) {
     CHECK(axis_constructor->currentText() == QStringLiteral("Edge"));
     CHECK(axis_source->text().contains(QStringLiteral("Edge")));
     CHECK(!axis_finish->isEnabled());
+    CHECK(viewport->reference_scene.references.size() ==
+          reference_count_before_axis);
     CHECK(session.document().axes().empty());
     CHECK(session.document().revision() == before_axis_revision);
     CHECK(session.undoDepth() == before_axis_undo);
     axis_cancel->click();
     QApplication::processEvents();
     CHECK(!axis_tool->isChecked());
+    CHECK(viewport->reference_scene.references.size() ==
+          reference_count_before_axis);
     CHECK(session.document().axes().empty());
     CHECK(session.document().revision() == before_axis_revision);
     CHECK(session.undoDepth() == before_axis_undo);
