@@ -875,6 +875,22 @@ resolveKernelRevolveInput(
     return result;
 }
 
+// Keep the original five-argument public ABI for all existing
+// DocumentSession Revolve-draft preview callers. Only the actual
+// provider-aware Part feature evaluation uses the six-argument path;
+// with no provider, an Edge Axis fails closed, while legacy Sketch
+// Line / built-in Revolve behavior is unchanged.
+RevolveKernelInputResult resolveKernelRevolveInput(
+    const PartDocument& document,
+    const RevolveFeature& feature,
+    const PartEvaluation* prefix_evaluation,
+    const DatumEvaluation* datum_evaluation,
+    const sketch::SketchModel* effective_sketch) {
+    return resolveKernelRevolveInput(
+        document, feature, prefix_evaluation, datum_evaluation,
+        effective_sketch, nullptr);
+}
+
 namespace {
 
 [[nodiscard]] FeatureFaceRoleKind
