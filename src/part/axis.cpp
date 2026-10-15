@@ -29,7 +29,11 @@ bool isOriginAxis(
 bool partAxisStructurallyValid(
     const PartAxis& axis) noexcept {
     return axis.id.valid() &&
-           axis.source.valid();
+           std::visit(
+               [](const auto& source) noexcept {
+                   return source.valid();
+               },
+               axis.source);
 }
 
 std::optional<core::BuiltinReferenceRole>
