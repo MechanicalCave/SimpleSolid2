@@ -21,6 +21,7 @@
 - [Windows FULL #3128](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38708065538) **RED at native test compilation**, exact `0be0b70e8d4221182adceaf8723496f85299f17e`: an additive schema-negative fixture incorrectly included private `nlohmann/json.hpp` from registered `pm05c2b` native OCCT test (not publicly exported to its CMake target). Removed the forbidden direct JSON dependency without touching CMake/CI; relocated seven malformed v18 schema cases to already permitted JSON-capable `tests/pm03a_datum_schema_v10_test.cpp`. New malformed-fixture tests still require exact native/core rerun.
 - DOC-01 current-state Internal + PL/EN product Markdown updated to describe **headless** 3-Point Datum and v18 while keeping current GUI to Offset/Edge+Point END/MID only. Generated `docs/browser/index.html` from unchanged template and canonical source-block algorithm, with official Windows `.\\ss2.ps1 docs` parity still to be confirmed. No manual product UI claim or generated template change.
 - Pending newer F03 native regression additions: exact collinear and scale-near-collinear current-stage transient evaluations must be Unsupported/Blocked **without Resolved Frame3**; the same stage-qualified semantic P1/P2/P3 source must replay after same producer FeatureId height change. This is new code not covered by earlier #3115 FOCUSED PASS.
+- [Windows FOCUSED #3133](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38708941986) on exact code+test+docs/evidence HEAD `dc6812401a51a711782f020e37fc8e7462a22e95`: **PASS 1/1** (`pm05c2b.part_edge_topology`, real Windows OCCT, 0.23 sec). This includes the S4A new strict current-stage collinear / near-collinear *transient catalog* negatives, real native 3-Point Frame/Create/Edit/Undo/Redo, dependent Sketch/Axis and blocked Delete, cold independent provider v18 Save/Reopen, plus same FeatureId height-edit re-evaluation. Original Q1/Q2/P0 native assertions also pass. Does NOT turn cancelled or RED FULL into PASS.
 - No new Part/Kernel provider public API, no v19, no GUI/Viewer, no S4B Command Line and no test weakening/deletion.
 
 ## Acceptance matrix
@@ -29,10 +30,10 @@
 |---|---|
 | S4A-F01 strict unique Point to signed native Datum | Native FOCUSED #3115 PASS |
 | S4A-F02 Reverse and edit lifecycle | Native FOCUSED #3115 PASS (bounded native test) |
-| S4A-F03 broader unsupported / invalid / near-collinear negatives | Cases now authored; actual focused/FULL rerun PENDING |
+| S4A-F03 broader unsupported / invalid / near-collinear negatives | Real OCCT test + synthetic current-stage collinear / near-collinear invalid Frame **FOCUSED #3133 PASS**; universal Point classes not inferred |
 | S4A-F04 atomic Command, Undo, invalid no-mutation | Native FOCUSED #3115 PASS (bounded test); more regression PENDING |
-| S4A-F05 downstream Sketch/Axis/Feature dependency | Real dependent Sketch + Axis/blocked Delete test passed as part of kernel 56/57 in #3123, but aggregate FULL RED; deeper cases PENDING |
-| S4A-F06 independent real OCCT native v18 Save/Reopen | Native FOCUSED #3115 PASS (bounded test); older fixtures PENDING |
+| S4A-F05 downstream Sketch/Axis/Feature dependency | Native dependent Sketch/Axis identity, blocked Delete and same producer FeatureId height-edit replay **FOCUSED #3133 PASS**; independent wider FULL PENDING |
+| S4A-F06 independent real OCCT native v18 Save/Reopen | Native FOCUSED #3115 and #3133 PASS (separate provider and dependent IDs); older fixtures still require FULL |
 | S4A-F07 strict malformed v18 grammar, legacy reads, refusal negatives | Existing permitted v17/v16/v9 fixture and new v18 grammar tests authored; pre-new-tests Core #3123 25/25 PASS, current fixtures PENDING rerun |
 | S4A-F08 Windows FAST, Ready FULL, DOC-01 Internal+PL/EN/browser | FULL #3123 RED PM-02JR2 unallowlisted legacy test; FULL #3128 RED additive native JSON header (repaired); canonical docs/browser authored, Windows parity PENDING |
 | S4A-F09 Owner technical final verdict, guarded production merge | PENDING |
