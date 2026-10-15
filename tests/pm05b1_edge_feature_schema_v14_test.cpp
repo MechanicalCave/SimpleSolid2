@@ -704,7 +704,7 @@ void verifyPg01bB1BindingStructure(
     const auto native =
         persistence::readNativeDocumentContainer(saved_path);
     CHECK(native.ok());
-    CHECK(native.package->descriptor.domain_schema_version == 18);
+    CHECK(native.package->descriptor.domain_schema_version == 19);
     const auto original_authored =
         nlohmann::json::parse(
             native.package->authored_json);
@@ -971,7 +971,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 18);
+            .domain_schema_version == 19);
 
     const auto authored =
         nlohmann::json::parse(
@@ -1077,7 +1077,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 18);
+            .domain_schema_version == 19);
 
     // New Edge Feature records are schema-v14-only and must fail closed when
     // deliberately mislabeled as a legacy v13 payload.
