@@ -1,10 +1,20 @@
 # RG-02C/B1 — Axis from one straight Body Edge: Datum-consistent Work Features UX (Owner consultation proposal)
 
-**Status:** **OWNER-DIRECTED UX SCOPE RECORDED, DETAILED UX SIGNOFF STILL PENDING; NOT AN EXECUTABLE WORK CONTRACT, NOT ACTIVE, NOT MERGED, NO UI MUTATION AUTHORITY.**
+**Status:** **OWNER UX SIGNOFF ACCEPTED (2026-10-15) for the reviewed single-constructor Edge flows and the existing Sketch Axis separation**, in response to corrected PR #410 UX HEAD `6259c2c7932c5b6766b3b3dfb75b3e3ce1d656ab`. This D2 UX decision is NOT an executable Work Contract; PR #410 is UNMERGED / NOT ACTIVE / no UI mutation authority before separate technical contract acceptance, governance merges and `ACTIVE.yaml` activation.
 **Date:** 2026-10-15.
 **Baseline:** protected main `38b0c8b274d47548647fc7c27e9a7884fd85ff20`, Owner-final read-only native A0 evidence PR #408 squash MERGED; A0 true native topological Edge-orientation reversal fixture remains an explicit **GAP**, accepted for A0 only.
 **Authority:** Constitution/Foundation 1.0 FROZEN/Architecture and accepted ADRs; Part Modeling roadmap v1.33 §6/§20B; Owner RG-02 reference geometry design `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md` §2.3(1) and §3 mandatory Owner UX prior approval; existing PM-04 Sketch-Line Axis; Datum S4B tool; DOC-01.
 **Owner principles:** new UI consistent with existing app and Datum Plane; **reuse existing code and tests, no parallel Axis implementation**. This is the **first** prospective Axis constructor, **one straight material Body Edge** only; later Axis constructors require independent decisions.
+
+## Owner explicit UX approval — scope and limits, 2026-10-15
+
+After being shown the revised proposal with **only `Edge` in the Constructor dropdown**, Sketch Line Axis created **inside Sketch** and preserved under its source Sketch, and Edge Axis under **Reference Geometry**, Owner responded **`akceptuję - kontynuuj`**. This is **separate, explicit Owner UX signoff** for the concrete corrected W1–W3 and bounded UX-01…UX-16 direction in this proposal, not merely the earlier permission to prepare the draft.
+
+**Approved UX contract direction:** visible single Work Features `Axis` beside `Datum Plane`; one existing Workbench-style Operations dialog with `Constructor: Edge` as the **ONLY** current item; one strict straight material Body Edge; reuse existing native/Part semantic and viewport infrastructure; one finite unoriented line preview after resolution; no Axis-level Reverse; Finish/Cancel/Edit/Replace/Delete/visibility/Undo/Redo/Save/Close/Reopen and repair lifecycle; newly Edge-sourced Axis under Reference Geometry; existing authored Sketch Line Axis remains under Sketch; Origin axes stay under Origin. No extra Axis constructor has been approved.
+
+**Not decided by this UX approval:** persistent new `PartAxis::source` representation, native schema/migration, dependency-stage cycles and Revolve consumer semantics, numeric policy for the A0 topological orientation-reversal evidence GAP, exact new public provider/API requirements, executable allowed paths, tests, documentation mutations, and whether an optional Axis-owned CLI alias `EDGE` is needed. Defaults in this document remain proposals where they touch architecture; Owner D2 separately decides before code. Concrete unreviewed interaction changes must return to the Owner instead of expanding this signoff.
+
+**Independent STOP:** PR #410 requires its own exact-head governance checks and **separate Owner consent to guarded squash merge**; this UX acceptance does not itself merge PR #410 or #409, activate a technical Work Contract, or authorize any `src/**`, test, UI, command, schema or product documentation change. PM-06, G1 and later Axis constructors remain inactive.
 
 ## 1. Exact Owner UX direction and corrections — 2026-10-15
 
@@ -118,7 +128,7 @@ A0 only proved bounded read-only native **feasibility** for a test-only straight
 
 **UX direction now unambiguous:** New Work Features Axis button; Operations Constructor = **Edge only** (future entries deferred); existing Sketch Line Axis **created in Sketch and stays under Sketch**; new Edge Axis under **Reference Geometry**; full lifecycle included, no duplicated code/test systems.
 
-**Proposed details needing separate explicit UX signoff:** (1) exact Edge source slot / stage-status phrasing and preview cue; (2) `Replace Edge`, right-panel edit and missing-source handling; (3) grouped Datum+Edge Axis visibility semantics; (4) contextual CAD Command Line behavior without unnecessary one-item mode-switch tokens; (5) treatment of A0 true native topological reversal fixture as an independent D2 production risk; and (6) exact future allowed files/tests/native-schema migration rules.
+**UX now expressly Owner-approved for the reviewed bounded UI flows** (one `Edge` constructor, Work Features Axis button, same app/Datum look, source/preview, lifecycle, and Tree source separation). **Still require independent technical D2/implementation decisions:** (1) precise API and stage-aware durable source and schema versioning, (2) dependency/rebuild/consumer semantics, (3) A0 actual B-Rep topology reversal GAP as a production risk, (4) optional scoped CAD Command Line alias tokens, (5) exact allowed files/test/regression matrix and DOC-01 obligations. Do not infer new UX beyond W1–W3 and this one constructor.
 
 **STOP:** The Owner's screenshot correction and UX direction are not an authorization to implement. Before a first UI/Viewer/Tree/Operations/CAD CLI mutation, obtain explicit approval of reviewable UI flows, then separately accept one narrow RG-02C production D2 Work Contract with exact allowlist, document versioning, FOCUSED/FAST/FULL/native/manual acceptance and DOC-01 internal plus bilingual product and generated Browser impacts; separately authorize governance merge and `ACTIVE.yaml` activation. No PM-06, G1, standalone Point, two-Point Axis, cylinder Axis, two-plane Axis, Mirror/Pattern or new Body is activated.
 
