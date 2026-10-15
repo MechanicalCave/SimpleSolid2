@@ -6526,6 +6526,9 @@ void CadWorkbench::refreshAxisEvaluation() {
     if (!axis_draft_ ||
         document_session_ == nullptr ||
         solid_modeling_kernel_ == nullptr) {
+        if (viewport_controller_) {
+            viewport_controller_->setAxisDraftPreview(std::nullopt);
+        }
         syncAxisUi();
         return;
     }
@@ -6534,6 +6537,16 @@ void CadWorkbench::refreshAxisEvaluation() {
         document_session_->evaluateAxisDraft(
             *axis_draft_,
             *solid_modeling_kernel_);
+    // Only a strictly resolved new Work Features Edge source can draw
+    // a transient infinite (finite-display) Axis cue. The existing
+    // Sketch Line tool and all failed/stale Edge sources publish none.
+    if (viewport_controller_) {
+        viewport_controller_->setAxisDraftPreview(
+            axis_edge_mode_active_ &&
+                    axis_evaluation_->committable()
+                ? axis_evaluation_->line
+                : std::nullopt);
+    }
     syncAxisUi();
 }
 
@@ -6724,6 +6737,9 @@ bool CadWorkbench::finishAxis() {
 }
 
 void CadWorkbench::clearAxisRuntimeContext() {
+    if (viewport_controller_) {
+        viewport_controller_->setAxisDraftPreview(std::nullopt);
+    }
     axis_edge_mode_active_ = false;
     axis_draft_.reset();
     axis_evaluation_.reset();
