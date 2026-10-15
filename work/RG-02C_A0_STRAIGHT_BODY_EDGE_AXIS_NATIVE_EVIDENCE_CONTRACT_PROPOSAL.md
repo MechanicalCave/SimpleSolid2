@@ -1,11 +1,23 @@
 # RG-02C/A0 — straight Body material Edge as a prospective Axis source: native evidence-only Work Contract PROPOSAL
 
-**Status:** PROPOSED FOR SEPARATE OWNER D2 REVIEW — NOT ACCEPTED / NOT MERGED / NOT ACTIVE / NO TEST OR PRODUCT MUTATION AUTHORITY.
+**Status:** **OWNER D2 SCOPE ACCEPTED (2026-10-15), including binding NO-DUPLICATION condition**; governance PR #404 still **OPEN / UNMERGED / NOT ACTIVE**. No code/test mutation authority until separately Owner-authorized governance squash and dedicated ACTIVE-only activation.
 **Date:** 2026-10-15.
-**Baseline:** protected `main` `45cc16afe03692e130076b2d84ae1c2bc68eb595` after S4B Owner technical FINAL PASS and guarded production PR #402 squash. Independent ACTIVE-only S4B historical-closeout Draft PR #403 remains a separate governance gate; neither that PR nor this proposal activates an Axis package.
+**Baseline:** product squash PR #402 merged as `45cc16afe03692e130076b2d84ae1c2bc68eb595`. S4B historical-closeout PR #403 independently passed Windows CLOSURE #3217 and guarded squash-MERGED protected `main` as `d19c5396add2b37a0086d4bd6e2201a7eccaaf10`. `work/ACTIVE.yaml` keeps the completed S4B contract as a history-only pointer; #403 did not activate Axis. This D2 proposal PR #404 was created from the immediately preceding main; its independent exact-head governance and future merge/activation gates remain mandatory.
 **Program:** Owner-accepted Part Modeling roadmap v1.33 §6/§20B, RG-02 Datum Plane + Axis next *contract planning* focus only.
 **Authority:** Constitution → Foundation v1.0 FROZEN / Architecture → accepted ADR-0012/0013/0014/0016/0017 → roadmap v1.33 → active `work/ACTIVE.yaml` (still S4B historical pointer) → accepted bounded contract → tests. PM-04 Axis semantics and native Q0/Q1/Q2 strict material-Edge evidence are relevant precedent, not new Axis implementation authority.
 **Design source:** `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md` §2.3(1): Owner's agreed future constructor “Along one straight Body Edge.” That broad design record is NOT an executable contract.
+
+## Owner D2 acceptance and binding reuse constraint — 2026-10-15
+
+**Exact Owner decision:** In response to the explicit question whether the narrowly revised PR #404 A0 D2 scope was accepted as the basis of the future **read-only native** Axis source evidence contract, Owner stated **`tak, akceptuje - nie powinnismy duplikować testów i istniejącej logiki ..`**. The exact updated proposal at PR #404 HEAD `70233036451874e670f087dd60a5494bb0ea12ff` is therefore **D2 SCOPE ACCEPTED**, with *nonduplication of existing tests and logic* an affirmative acceptance condition, not an optional code-style suggestion.
+
+**Mandatory test/logic reuse:**
+- Reuse existing `verifyQ0StrictPartStageGeometry`, `verifyQ2CanonicalSelectedMids`, production `authorMaterialEdgeReference` / `resolveMaterialEdgeReference`, scoped exact native `IExactBoundedEdgeGeometryQuery`, and existing native test fixtures wherever applicable. Do not copy their line/Edge/MID validation into a parallel test implementation, synthesize a duplicate resolver or reclassify their established PASS as new evidence.
+- Add only assertions for **genuinely missing Axis-specific invariants**: geometry of the infinite **unoriented** line (including physical terminal/direction independence), preservation of same stage-bound semantic source through independent replay, and consumer-level fail-closed behavior for ambiguous/stale/curved material edges.
+- Test setup may minimally invoke existing production APIs and fixtures; do not rebuild a second evaluator, helper library or fixture framework. If the incremental A0 proof cannot be delivered inside the accepted pre-registered test source plus one factual `work/**` report **without duplication**, STOP and request a narrowed Owner D2 amendment rather than creating parallel production logic, new targets, or unverifiable tests.
+- State in A0 acceptance evidence **which checks were pre-existing Q0/Q2 witnesses** and **which new assertions uniquely prove A0**; retained tests must not be weakened, deleted or skipped.
+
+**Consent boundary:** This Owner response accepted this bounded A0 D2 **proposal and reuse constraint only**; it did **not** authorize protected-main squash merge of PR #404, activation via `work/ACTIVE.yaml`, edits to the native test target, new `PartAxis` persistence, or UI/Command Line changes. All those require distinct governance / Owner gates below.
 
 ## 1. Why this one small next slice
 
@@ -15,7 +27,7 @@ Before any such product change, prove **read-only** that the already accepted st
 
 **No new Axis capability is delivered in A0.** This is a proposed feasibility gate, not D2 acceptance of a future Axis persistent source variant.
 
-## 2. Exact prospective A0 evidence scope — subject to Owner acceptance
+## 2. Exact Owner-accepted A0 evidence scope — NOT executable until governance merge + ACTIVE activation
 
 Use one **already registered** real OCCT Part native target `pm05c2b.part_edge_topology`. Add cases to its existing source, preserving every prior test:
 
@@ -29,7 +41,7 @@ Use one **already registered** real OCCT Part native target `pm05c2b.part_edge_t
 
 All measurement is read-only in executable test code. No new `PartAxis`, `AxisReference` alternative, Command/Undo, persistence schema, GUI interaction, or product documentation claim.
 
-## 2A. Existing upstream witnesses and the required NEW delta (review correction 2026-10-15)
+## 2A. Existing upstream witnesses and the required NEW delta (Owner no-duplication constraint, 2026-10-15)
 
 **Do not relabel completed native Q0/Q1/Q2 tests as a new Axis A0 proof.** Source audit of the already registered `tests/kernel_native/pm05c2b_part_edge_topology_test.cpp` shows:
 
@@ -40,7 +52,7 @@ All measurement is read-only in executable test code. No new `PartAxis`, `AxisRe
 
 **Net-new A0 acceptance criterion:** a test-only `MaterialEdgeReference + BodyStageRef` resolves to a precise **infinite unoriented line**, insensitive to native Edge direction/terminal index and reproducible from the same semantic source through provider replacement and authentic upstream edit/cold rebuild; every unavailable/ambiguous source refuses that line without last-good fallback. No A0 PASS is justified merely by Q0 12/12 or Q2 MID results. Prefer calling existing helpers/fixtures in the same registered source to duplicating algorithms; new independent assertions must specifically target this Axis use. The absence of a reproducible reversed-native-edge fixture is an explicit evidence GAP, not silent proof.
 
-## 3. Fixed proposed executable allowlist — NOT usable until separately activated
+## 3. Fixed Owner-accepted executable allowlist — NOT usable until separately activated
 
 1. `tests/kernel_native/pm05c2b_part_edge_topology_test.cpp` — **additive assertions in the pre-registered kernel-native target only**.
 2. `work/RG-02C_A0_STRAIGHT_BODY_EDGE_AXIS_NATIVE_ACCEPTANCE_EVIDENCE.md` — new factual evidence report after tests run.
