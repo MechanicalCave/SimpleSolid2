@@ -15083,7 +15083,8 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                     document_session_->document(),
                     reference,
                     &evaluation,
-                    &datums);
+                    &datums,
+                    exact_edge_provider);
             axis_evaluation_statuses_.push_back(
                 AxisEvaluationUiState{
                     axis.id,
