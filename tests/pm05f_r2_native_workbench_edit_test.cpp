@@ -3493,6 +3493,10 @@ int main(int argc, char* argv[]) {
                 QApplication::processEvents();
                 CHECK(point_slot->isChecked());
                 bool p3_replaced_by_mouse=false;
+                std::size_t eligible_new_corner_pixels=0U;
+                std::size_t native_replacement_clicks=0U;
+                std::size_t click_context_changes=0U;
+                std::size_t resolved_replacement_clicks=0U;
                 for (const auto view : {
                          viewer::StandardView::top_front_right,
                          viewer::StandardView::top_front_left,
@@ -3533,13 +3537,22 @@ int main(int argc, char* argv[]) {
                                 false,false,true});
                         if (!probe.valid() || !probe.completed ||
                             probe.candidates.empty()) continue;
+                        ++eligible_new_corner_pixels;
                         sendNativeWorkbenchHover(*viewport,*pixel);
                         QApplication::processEvents();
                         const auto context_before_click=
                             workbench.cadInputContextGeneration();
+                        ++native_replacement_clicks;
                         QTest::mouseClick(
                             viewport,Qt::LeftButton,Qt::NoModifier,*pixel);
                         QApplication::processEvents();
+                        if (workbench.cadInputContextGeneration() !=
+                                context_before_click)
+                            ++click_context_changes;
+                        if (datum_finish->isEnabled() &&
+                            datum_result->text().contains(
+                                QStringLiteral("Resolved 3 Points")))
+                            ++resolved_replacement_clicks;
                         CHECK(s4b.document().state()==state_before_replacement);
                         CHECK(s4b.undoDepth()==undo_before_replacement);
                         if (workbench.cadInputContextGeneration() !=
@@ -3549,6 +3562,18 @@ int main(int argc, char* argv[]) {
                                 QStringLiteral("Resolved 3 Points")))
                             p3_replaced_by_mouse=true;
                     }
+                }
+                if (!p3_replaced_by_mouse) {
+                    std::cerr << "S4B native P3 replacement not staged"
+                              << " candidate_pixels=" << eligible_new_corner_pixels
+                              << " real_mouse_clicks=" << native_replacement_clicks
+                              << " context_changes=" << click_context_changes
+                              << " resolved_attempts=" << resolved_replacement_clicks
+                              << " constructor=" << constructor->currentIndex()
+                              << " p3_checked=" << point_slot->isChecked()
+                              << " finish=" << datum_finish->isEnabled()
+                              << " status=" << datum_result->text().toStdString()
+                              << '\n';
                 }
                 CHECK(p3_replaced_by_mouse);
                 CHECK(workbench.submitCadInput(
