@@ -51,6 +51,25 @@ struct PartAxis final {
     PartAxisSource source;
     bool visible{true};
 
+    PartAxis() = default;
+
+    // Retain the legacy Sketch Line aggregate source spelling
+    // PartAxis{id, name, {sketch_id, entity_id}, visible} in PM-04
+    // callers/tests without manufacturing a Sketch source for Edge.
+    PartAxis(AxisId id_value, std::string name_value,
+             SketchLineAxisSource source_value, bool visible_value)
+        : id{id_value},
+          name{std::move(name_value)},
+          source{std::move(source_value)},
+          visible{visible_value} {}
+
+    PartAxis(AxisId id_value, std::string name_value,
+             PartAxisSource source_value, bool visible_value)
+        : id{id_value},
+          name{std::move(name_value)},
+          source{std::move(source_value)},
+          visible{visible_value} {}
+
     friend bool operator==(
         const PartAxis&,
         const PartAxis&) = default;
