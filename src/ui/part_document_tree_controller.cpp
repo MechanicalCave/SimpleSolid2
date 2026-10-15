@@ -1837,8 +1837,8 @@ void PartDocumentTreeController::rebuild(
         item->setToolTip(
             0,
             QStringLiteral(
-                "DatumId: %1\\nSource: Three distinct same-stage END Points"
-                "\\nReverse: %2\\nVisibility: %3\\nStatus: %4\\nDiagnostic: %5")
+                "DatumId: %1\nSource: Three distinct same-stage END Points"
+                "\nReverse: %2\nVisibility: %3\nStatus: %4\nDiagnostic: %5")
                 .arg(
                     fromUtf8(datum.id.serialized()),
                     datum.reverse ? QStringLiteral("Yes")
