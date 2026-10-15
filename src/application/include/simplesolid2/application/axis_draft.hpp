@@ -66,7 +66,7 @@ public:
     }
 
     [[nodiscard]] const std::optional<
-        part::SketchLineAxisSource>&
+        part::PartAxisSource>&
     source() const noexcept {
         return source_;
     }
@@ -74,7 +74,7 @@ public:
     [[nodiscard]] bool valid() const noexcept;
 
     [[nodiscard]] bool setSource(
-        part::SketchLineAxisSource source);
+        part::PartAxisSource source);
 
 private:
     AxisDraft(
@@ -82,7 +82,7 @@ private:
         core::DocumentRevision source_revision,
         AxisDraftMode mode,
         std::optional<part::AxisId> axis_id,
-        std::optional<part::SketchLineAxisSource> source);
+        std::optional<part::PartAxisSource> source);
 
     [[nodiscard]] bool canAdvance() const noexcept;
     void advance() noexcept;
@@ -92,7 +92,7 @@ private:
     AxisDraftGeneration generation_{1U};
     AxisDraftMode mode_{AxisDraftMode::create};
     std::optional<part::AxisId> axis_id_;
-    std::optional<part::SketchLineAxisSource> source_;
+    std::optional<part::PartAxisSource> source_;
 };
 
 enum class AxisDraftEvaluationStatus : std::uint8_t {
@@ -116,7 +116,7 @@ struct AxisDraftEvaluationResult final {
     AxisDraftMode mode{AxisDraftMode::create};
     std::optional<part::AxisId> authored_axis_id;
     std::optional<part::AxisId> candidate_axis_id;
-    std::optional<part::SketchLineAxisSource> source;
+    std::optional<part::PartAxisSource> source;
     std::optional<part::ResolvedAxisLine> line;
     std::optional<part::BodyStageRef>
         required_body_stage;
