@@ -3345,6 +3345,88 @@ int main() {
         A0AxisLine{
             b1_reloaded.line->origin,
             b1_reloaded.line->direction}));
+    // B1-H3: exercise the REAL Part transaction/Undo path; do NOT
+    // invent parallel Edge-Axis commands or bypass strict OCCT
+    // resolution. The legacy Sketch-Line draft is unaffected.
+    auto tx_document = part::PartDocument::restore(
+        base_document.documentId(),
+        base_document.state(),
+        base_document.revision());
+    CHECK(tx_document.ok());
+    application::DocumentSession b1_tx{
+        {}, std::move(*tx_document.document)};
+    const auto tx_created = b1_tx.execute(
+        application::CreateAxisCommand{
+            part::PartAxisSource{
+                part::StraightMaterialEdgeAxisSource{a0_source}},
+            b1_tx.document().revision(),
+            "EdgeAxisTx",
+            true},
+        kernel);
+    CHECK(tx_created.ok() && tx_created.axis_id);
+    CHECK(b1_tx.document().axes().size() == 1U);
+    CHECK(std::holds_alternative<
+          part::StraightMaterialEdgeAxisSource>(
+              b1_tx.document().axes().front().source));
+
+    const auto tx_duplicate = b1_tx.execute(
+        application::CreateAxisCommand{
+            part::PartAxisSource{
+                part::StraightMaterialEdgeAxisSource{a0_source}},
+            b1_tx.document().revision(),
+            "DuplicateMustFail",
+            true},
+        kernel);
+    CHECK(!tx_duplicate.ok());
+    CHECK(b1_tx.document().axes().size() == 1U);
+
+    // Edit to another already-certified real straight Body Edge,
+    // preserving AxisId; Undo/Redo restores the authored source.
+    const auto next_edge = q2_base_sources.at(1U).source_edge;
+    CHECK(next_edge != a0_source);
+    const auto tx_edited = b1_tx.execute(
+        application::EditAxisCommand{
+            *tx_created.axis_id,
+            part::PartAxisSource{
+                part::StraightMaterialEdgeAxisSource{next_edge}},
+            b1_tx.document().revision()},
+        kernel);
+    CHECK(tx_edited.ok() && tx_edited.changed);
+    const auto* edited_axis =
+        b1_tx.document().findAxis(*tx_created.axis_id);
+    CHECK(edited_axis != nullptr);
+    CHECK(std::get<
+          part::StraightMaterialEdgeAxisSource>(
+              edited_axis->source).edge == next_edge);
+    CHECK(b1_tx.undo().ok());
+    const auto* undone_axis =
+        b1_tx.document().findAxis(*tx_created.axis_id);
+    CHECK(undone_axis != nullptr);
+    CHECK(std::get<
+          part::StraightMaterialEdgeAxisSource>(
+              undone_axis->source).edge == a0_source);
+    CHECK(b1_tx.redo().ok());
+    const auto* redone_axis =
+        b1_tx.document().findAxis(*tx_created.axis_id);
+    CHECK(redone_axis != nullptr);
+    CHECK(std::get<
+          part::StraightMaterialEdgeAxisSource>(
+              redone_axis->source).edge == next_edge);
+    const auto tx_deleted = b1_tx.execute(
+        application::DeleteAxisCommand{
+            *tx_created.axis_id,
+            b1_tx.document().revision()});
+    CHECK(tx_deleted.ok() && tx_deleted.changed);
+    CHECK(b1_tx.document().findAxis(*tx_created.axis_id) ==
+          nullptr);
+    CHECK(b1_tx.undo().ok());
+    CHECK(b1_tx.document().findAxis(*tx_created.axis_id) !=
+          nullptr);
+    std::cout << "RG02C_B1_EDGE_AXIS_TRANSACTIONS"
+              << " create=1 duplicate_rejected=1"
+              << " edit_id_preserved=1 undo_redo=1"
+              << " delete_undo=1\\n";
+
     std::cout << "RG02C_B1_NATIVE_V19_AUTHORED_AXIS"
               << " schema=19"
               << " source=MaterialEdgeReference"
