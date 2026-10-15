@@ -124,6 +124,15 @@ GUI i Command Line sterują tym samym draftem. `DATUM PLANE` lub `DATUMPLANE` ur
 
 **Ograniczenie S3A:** punkt niezależny, leżący poza nieskończoną prostą Edge, **nie** jest jeszcze obsługiwanym źródłem płaszczyzny przechodzącej przez ten Edge. Taki wybór jest **Unsupported**: bez zatwierdzalnego podglądu, nowego Datum, Undo ani zapisu ekranowych XYZ jako semantyki. Nierozwiązywalny, przestarzały lub niejednoznaczny Edge/END także wymaga ponownego jawnego wskazania, zamiast cichego podłączenia do innej geometrii. **Cancel** albo **ESC** kończy niedokończony draft bez modyfikowania Parta.
 
+<!-- section-id: product.parts.datum-s4a-v18 -->
+### Datum Plane z trzech punktów END — dostępność headless S4A
+
+Model Part obsługuje już trwałą semantykę **`3 Points (END-only)`** przez wewnętrzne komendy i format natywny **v18**. To **nie jest jeszcze pozycja w panelu Operations, wybór myszy ani polecenie Command Line**. Jedno istniejące narzędzie Datum Plane w bieżącym GUI nadal oferuje wyłącznie `Offset` i `Edge + Point (END/MID)`; ich znaczników hover, skrótów, podglądu i obsługi nie zmieniono. Integracja trzeciego konstruktora z tym samym narzędziem, wskaźnikami END i `DATUMPLANE`/`REVERSE`/`FINISH`/`CANCEL`/Enter/Esc będzie osobnym etapem S4B.
+
+Semantyczne źródło to **trzy uporządkowane, różne punkty końcowe P1→P2→P3** bieżącego etapu Body. Wspólny narożnik widziany przez trzy krawędzie nadal stanowi **jeden punkt**, nie trzy. Płaszczyzna przechodzi przez P1, oś U wskazuje P2, a P3 określa stronę normalnej; Reverse odwraca normalną bez zmiany źródła. Duplikaty, współliniowość, niestabilna geometria i źródła Missing/Ambiguous/Unsupported są odrzucane zamiast przyłączania do najbliższych współrzędnych XYZ.
+
+Natywny dokument **v18** zapisuje nową kolekcję `three_point_datum_planes`, `DatumId`, trzy ścisłe `BodyStageRef + FeaturePointAddress`, Reverse i widoczność — **nie** zapisuje uchwytów OCCT, tokenów Viewera, źródłowych Edge ani gotowego Frame3. Wcześniejsze obsługiwane pliki v17/v16 zachowują znaczenie przy odczycie i następnym chronionym Save, a błędny zapis v18 nie jest automatycznie naprawiany. Zaawansowane źródła END, których jednoznaczna tożsamość nie jest certyfikowana, pozostają niedostępne.
+
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
@@ -622,7 +631,7 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes i Edge-local END/MID Datum Planes z `DatumId`, certyfikowanym źródłem, orientacją/Reverse i widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude/Revolve/Fillet/Chamfer Features, ich stabilnymi identyfikatorami, parametrami, ścisłymi semantycznymi zestawami Edge tam, gdzie dotyczą, i stanem Suppressed. Authored Sketch-Line Axes są zapisywane z AxisId, tożsamością źródłowego Sketch/Line i widocznością; Revolve zapisuje ProfileId, AxisReference, Add/Cut oraz parametry kąta OneSide/Midplane.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes, Edge-local END/MID Datum Planes oraz headless 3-Point END-only Datum Planes z `DatumId`, certyfikowanym źródłem, orientacją/Reverse i widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude/Revolve/Fillet/Chamfer Features, ich stabilnymi identyfikatorami, parametrami, ścisłymi semantycznymi zestawami Edge tam, gdzie dotyczą, i stanem Suppressed. Authored Sketch-Line Axes są zapisywane z AxisId, tożsamością źródłowego Sketch/Line i widocznością; Revolve zapisuje ProfileId, AxisReference, Add/Cut oraz parametry kąta OneSide/Midplane.
 
 Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude/Revolve/Fillet/Chamfer preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
@@ -651,11 +660,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i obu rodzajach Datum Planes; konstrukcyjne Offset oraz Edge-local END/MID Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex Part-owned Sketch-Line Axes oraz jeden trwały Body z ordered Extrude/Revolve/Fillet/Chamfer Features.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i wszystkich trzech semantycznych rodzajach Datum Planes (trzeci aktualnie tylko headless); konstrukcyjne Offset oraz Edge-local END/MID Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex Part-owned Sketch-Line Axes oraz jeden trwały Body z ordered Extrude/Revolve/Fillet/Chamfer Features.
 
 Solid modeling obejmuje obecnie **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**, **Revolve Add/Cut** z **One Side/Midplane**, jawnym Origin/Authored AxisReference, zakresem **0 < Angle ≤ 360°** i Reverse dla One Side, a także stałopromieniowy **Fillet** i równodystansowy **Chamfer** na jawnych zestawach co najmniej jednego material Edge. Dostępne są Edit Extrude/Revolve/Fillet/Chamfer, jawny repair Missing/Ambiguous/Unsupported Edge, Axis create/edit/re-source/show/hide/delete/repair, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Nie ma jeszcze Datum Axis, Datum Point, interpretacji niezależnego punktu poza prostą Edge w obecnym `Edge + Point`, dalszych konstruktorów Datum Plane, Body-Edge/Curve ani innych konstruktorów Axis, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, zaawansowanych wariantów Fillet/Chamfer (variable radius, face/full-round, distance-angle/asymmetric), automatycznego tangent-chain authoring, innych operacji bryłowych, dowolnego reorder/insertion Feature, wieloobrotowego (>360°) Revolve, multi-body, Material ani narzędzi Assembly/Drawing.
+Nie ma jeszcze Datum Axis, Datum Point, interpretacji niezależnego punktu poza prostą Edge w obecnym `Edge + Point`, interaktywnego konstruktora `3 Points` w GUI i Command Line oraz dalszych konstruktorów Datum Plane, Body-Edge/Curve ani innych konstruktorów Axis, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, zaawansowanych wariantów Fillet/Chamfer (variable radius, face/full-round, distance-angle/asymmetric), automatycznego tangent-chain authoring, innych operacji bryłowych, dowolnego reorder/insertion Feature, wieloobrotowego (>360°) Revolve, multi-body, Material ani narzędzi Assembly/Drawing.
 
 Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
 
