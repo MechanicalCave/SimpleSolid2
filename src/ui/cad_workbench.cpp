@@ -7276,6 +7276,9 @@ void CadWorkbench::deleteDatumPlane(
         return;
     }
     if (datum_plane_draft_ ||
+        three_point_datum_revision_ ||
+        edge_datum_create_revision_ ||
+        edge_datum_edit_id_ ||
         extrude_profile_pick_active_ ||
         extrude_draft_ ||
         revolve_draft_ ||
@@ -7291,7 +7294,9 @@ void CadWorkbench::deleteDatumPlane(
     if (document_session->document()
             .findDatumPlane(datum_id) == nullptr &&
         document_session->document()
-            .findEdgePointDatumPlane(datum_id) == nullptr) {
+            .findEdgePointDatumPlane(datum_id) == nullptr &&
+        document_session->document()
+            .findThreePointDatumPlane(datum_id) == nullptr) {
         setStatusText(
             QStringLiteral(
                 "Datum Plane is no longer available."));
