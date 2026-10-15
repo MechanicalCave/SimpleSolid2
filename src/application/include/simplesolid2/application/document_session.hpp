@@ -230,8 +230,10 @@ struct DeleteProfileCommand final {
     core::DocumentRevision expected_revision;
 };
 
+// One Part Axis command/transaction for both existing Sketch Line
+// authorship (inside Sketch) and strict Work Features Body Edge source.
 struct CreateAxisCommand final {
-    part::SketchLineAxisSource source;
+    part::PartAxisSource source;
     core::DocumentRevision expected_revision;
     std::string name;
     bool visible{true};
@@ -239,7 +241,7 @@ struct CreateAxisCommand final {
 
 struct EditAxisCommand final {
     part::AxisId axis_id;
-    part::SketchLineAxisSource source;
+    part::PartAxisSource source;
     core::DocumentRevision expected_revision;
 };
 
