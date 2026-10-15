@@ -1,13 +1,13 @@
 # RG-02B1 / P4-S4A — Datum Plane 3 Points (END-only): Part-owned v18 headless executable Work Contract
 
-**Status: D2 OWNER REVIEW PROPOSAL — NOT ACCEPTED, NOT ACTIVE, NOT EXECUTABLE.**
+**Status: OWNER D2 CONTRACT SCOPE ACCEPTED (2026-10-15) — governance PR #393 NOT YET MERGED; `work/ACTIVE.yaml` still targets completed P0; NOT ACTIVE, NOT EXECUTABLE.**
 **Proposed:** 2026-10-15.
 **Parent D2 product/design direction:** `work/RG-02B1_D2_P4_S4_THREE_END_POINTS_DESIGN_PROPOSAL.md` — Owner accepted and merged PR #389.
 **Positive source-identity prerequisite:** `work/RG-02B1_D2_P4_S4_P0_END_POINT_IDENTITY_NATIVE_PROOF_CONTRACT_DRAFT.md` + `work/RG-02B1_D2_P4_S4_P0_END_POINT_IDENTITY_NATIVE_PROOF_EVIDENCE.md`: P0 Owner technical FINAL PASS, real native FOCUSED #3094 1/1, Ready FULL #3095 199/199, closure #3098 SUCCESS, P0 PR #392 squash-MERGED main `1254562132b3c3fe7d39b08c1452afff1135f729`.
 **Normative authorities:** Foundation v1.0, Constitution, Architecture, accepted ADR-0012/0013/0014/0016/0017, Part Modeling roadmap accepted v1.33, DOC-01. `work/ACTIVE.yaml` still points to historical completed P0. No current S4A production mutation authority.
 **Next stage:** separately scoped S4B GUI / CAD Command Line integration of this same constructor. **Do not implement S4B here.**
 
-## 0. Precise Owner D2 decision this proposal needs
+## 0. Owner-accepted exact D2 contract scope — activation remains separate
 
 Accept **headless Part-native production** of `Datum Plane → 3 Points (END-only)` using exactly three ordered **unique strict same-Part, same-Body-stage semantic Point references** proven by P0, together with new additive native Part **schema v18** and semantic create/edit/replace/delete/visibility/dependency/lifecycle tests. This is not a general Point authoring subsystem or a new user tool.
 
@@ -106,11 +106,18 @@ Everything else is **OUT**. In particular no `src/ui/**`, `src/viewer/**`, `src/
 ## 5. Execution / authority gates
 
 1. **COMPLETED:** parent S4 design PR #389 D2 accepted/merged; P0 contract #390 accepted/merged/activated; native P0 PR #392 real Windows FOCUSED+FULL **PASS**, Owner technical PASS and guarded squash-MERGED `main` `1254562132b3c3fe7d39b08c1452afff1135f729`.
-2. **PENDING:** Owner approves this **exact S4A D2 persisted source/v18/Command/test/document allowlist and finite F01–F09 scope**. Do not treat the separate P0 blanket-formality permission as new D2 product/schema approval.
+2. **OWNER D2 APPROVED 2026-10-15:** in direct response to PR #393 scope proposal and its Windows governance #3100 PASS on `10cd5b1fda005393af37db45d978600a8d192808`, Owner replied **„zatwierdzam - kontynuuj pracę”**. This explicitly accepts the exact S4A durable semantic 3-Point/v18 headless scope, ten Part/Application paths, six registered test paths, DOC-01 files and finite F01–F09 obligations; it does **not** certify implementation or independently approve a protected-main merge. Prior P0 blanket formality is not reused as S4A acceptance.
 3. A **work-only contract governance PR** passes its Windows closure and receives guarded squash merge authority; then a **separate `work/ACTIVE.yaml`-only activation PR** sets `active_work` to this accepted S4A contract after its own governance closure and protected-main squash.
 4. Only then a NEW production branch from activated `main` may modify exactly S4A allowlisted files. FOCUSED → FAST → Ready FULL with actual Windows OCCT tests; exact-head evidence + required DOC-01 docs/Browser parity; Owner technical acceptance; guarded merge.
 5. S4A closure does not authorize **S4B UI / Command Line**. Its independent narrow contract must guarantee one existing Datum Plane tool and parity with Offset, Edge+Point END/MID, hover, Operations, global Command Line `DATUMPLANE`/`FINISH`/`CANCEL`/`REVERSE`, owning Enter and physical Esc, Edit, Undo/Redo, cold reopen and actual native Qt mouse test. No new separate Point tool or MID in 3 Points.
 6. **STOP (D2):** Point provenance cannot be uniquely resolved in a supported family; persistence needs a different source identity or new schema rule; tolerance/modeling-semantics version needs change; new Part/kernel public API or file outside allowlist; additional product gesture or UI redesign is needed. Escalate the concrete evidence; never silently widen scope.
+
+
+## Owner D2 acceptance checkpoint
+
+**Accepted:** exact S4A Part-owned v18 `ThreePointDatumPlane` source semantics, strict 3 ordered same-stage `FeaturePointAddress` keys, deterministic Reverse/frame and re-evaluation, one shared DatumId namespace and dependents, atomic Commands and lifecycle, strictly additive v18 file format with v17 legacy reads, fixed allowlist, native acceptance F01–F09 and required DOC-01 Internal + PL/EN Product + generated Browser. Owner approval: 2026-10-15, **„zatwierdzam - kontynuuj pracę”**, responding to this exact contract PR #393 after Windows #3100 PASS on the proposal-only head.
+
+**Not yet granted:** PR #393 protected-main squash by implication of accepting its D2 text, separate `work/ACTIVE.yaml` activation, source/schema/GUI mutation before activation, S4B UX implementation, broader universal Point support, unapproved API/kernel/tolerance edits, production Owner FINAL PASS. Follow precise §5 gates.
 
 ## Documentation impact
 
