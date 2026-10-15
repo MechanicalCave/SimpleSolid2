@@ -443,6 +443,84 @@ int main() {
     writeBytes(invalid_v18_path,*invalid_v18.bytes);
     CHECK(!store.load(invalid_v18_path).ok());
 
+    // S4A-F07: strict native v18 schema-invalid packages are rejected.
+    // These grammar checks live in the existing JSON-capable core suite;
+    // kernel-native geometry tests remain independent of JSON internals.
+    const auto rejectV18 = [&](const nlohmann::json& state,
+                               const std::string& name) {
+        const auto built = persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",std::string{document.documentId().value()},18},
+            state.dump(2) + "\n");
+        CHECK(built.ok());
+        const auto invalid_path = temp.path / (name + ".ss2part");
+        writeBytes(invalid_path,*built.bytes);
+        CHECK(!store.load(invalid_path).ok());
+    };
+    const nlohmann::json dummy_point_source{
+        {"stage",{{"kind","after_feature"},{"feature_id","1"}}},
+        {"point",{{"producer_feature_id","1"},
+                  {"adjacent_surfaces",nlohmann::json::array()}}}
+    };
+    const nlohmann::json typed_three_point_record{
+        {"id","1"},
+        {"kind","three_point_plane"},
+        {"points",nlohmann::json::array({
+            dummy_point_source,dummy_point_source,dummy_point_source})},
+        {"orientation",{{"reverse",false}}},
+        {"visible",true}
+    };
+    {
+        auto invalid=authored;
+        invalid.erase("three_point_datum_planes");
+        rejectV18(invalid,"MissingV18ThreePointCollection");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"]=nlohmann::json::object();
+        rejectV18(invalid,"WrongV18ThreePointCollectionType");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"][0]["points"].erase(2);
+        rejectV18(invalid,"WrongV18ThreePointCardinality");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"][0]["orientation"]["reverse"] =
+            "yes";
+        rejectV18(invalid,"InvalidV18ThreePointReverse");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"][0]["xyz"] =
+            nlohmann::json::array({0.0,0.0,0.0});
+        rejectV18(invalid,"ForbiddenV18StoredXYZ");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"][0]["points"][0]["stage"]["kind"] =
+            "before_feature";
+        rejectV18(invalid,"InvalidV18StageKind");
+    }
+    {
+        auto invalid=authored;
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        invalid["three_point_datum_planes"].push_back(
+            typed_three_point_record);
+        rejectV18(invalid,"DuplicateV18DatumIdentity");
+    }
+
+
     // Unknown future v17 Datum types must be rejected, not skipped.
     auto future_json = authored;
     CHECK(future_json.at("three_point_datum_planes").empty());
