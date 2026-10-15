@@ -4038,7 +4038,8 @@ PartViewportController::buildBodyScene() {
     if (datum_evaluation.source_revision != revision ||
         datum_evaluation.planes.size() !=
             session_->document().datumPlanes().size() +
-            session_->document().edgePointDatumPlanes().size()) {
+            session_->document().edgePointDatumPlanes().size() +
+            session_->document().threePointDatumPlanes().size()) {
         return fail();
     }
 
