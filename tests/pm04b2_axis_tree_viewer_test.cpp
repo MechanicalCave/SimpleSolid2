@@ -694,7 +694,7 @@ int main(int argc, char* argv[]) {
             fixture.line_id};
     CHECK(
         session.document().axes().front().source ==
-        expected_selected_line_source);
+        part::PartAxisSource{expected_selected_line_source});
 
     workbench.requestUndo();
     QApplication::processEvents();
