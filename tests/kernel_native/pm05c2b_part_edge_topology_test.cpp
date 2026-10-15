@@ -3281,6 +3281,79 @@ int main() {
         A0AxisLine{b1_cold.line->origin, b1_cold.line->direction}));
     CHECK(a0_source.stage ==
           a0_cold_evaluation.features.front().result_topology->stage);
+
+    // B1-H1 durable source/identity: author one new PartAxis as a
+    // STRICT semantic current-stage MaterialEdgeReference, not a
+    // provider token, mocked SketchId, XY coordinate or A0 test cache.
+    // Save native Part v19 and independently load/evaluate the authored
+    // AxisId on an entirely new OCCT provider.
+    auto b1_state = base_document.state();
+    const auto b1_axis_id = b1_state.next_axis_id.allocate();
+    CHECK(b1_axis_id.has_value());
+    b1_state.axes.push_back(part::PartAxis{
+        *b1_axis_id,
+        "EdgeAxisNative",
+        part::PartAxisSource{
+            part::StraightMaterialEdgeAxisSource{a0_source}},
+        true});
+    const auto b1_authored = part::PartDocument::restore(
+        base_document.documentId(), std::move(b1_state),
+        base_document.revision());
+    CHECK(b1_authored.ok());
+    CHECK(b1_authored.document->axes().size() == 1U);
+    CHECK(part::PartDocumentStore::current_schema_version == 19);
+    const auto b1_path = std::filesystem::temp_directory_path() /
+        ("ss2_rg02c_b1_axis_v19_" +
+         std::to_string(std::chrono::steady_clock::now()
+             .time_since_epoch().count()) + ".ss2part");
+    A0Cleanup b1_cleanup{b1_path};
+    part::PartDocumentStore b1_store;
+    CHECK(b1_store.createNew(
+        b1_path, *b1_authored.document).ok());
+    const auto b1_loaded = b1_store.load(b1_path);
+    CHECK(b1_loaded.ok());
+    CHECK(b1_loaded.document->axes().size() == 1U);
+    const auto* b1_reloaded_axis =
+        b1_loaded.document->findAxis(*b1_axis_id);
+    CHECK(b1_reloaded_axis != nullptr);
+    const auto* b1_reloaded_edge =
+        std::get_if<part::StraightMaterialEdgeAxisSource>(
+            &b1_reloaded_axis->source);
+    CHECK(b1_reloaded_edge != nullptr);
+    CHECK(b1_reloaded_edge->edge == a0_source);
+    kernel_occt::OcctSolidModelingKernel b1_cold_provider;
+    const auto b1_cold_evaluation = part::evaluatePart(
+        *b1_loaded.document, b1_cold_provider);
+    CHECK(b1_cold_evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    const part::AxisReference b1_ref{
+        part::AuthoredAxisReference{*b1_axis_id}};
+    const auto b1_without_provider = part::resolveAxisReference(
+        *b1_loaded.document, b1_ref, &b1_cold_evaluation);
+    CHECK(b1_without_provider.status ==
+          part::AxisEvaluationStatus::blocked);
+    CHECK(!b1_without_provider.line);
+    const auto b1_reloaded = part::resolveAxisReference(
+        *b1_loaded.document, b1_ref, &b1_cold_evaluation,
+        nullptr, &b1_cold_provider);
+    CHECK(b1_reloaded.status ==
+          part::AxisEvaluationStatus::resolved);
+    CHECK(b1_reloaded.valid() && b1_reloaded.line);
+    CHECK(b1_reloaded.required_body_stage == a0_source.stage);
+    CHECK(a0SameUnorientedLine(
+        *a0_base,
+        A0AxisLine{
+            b1_reloaded.line->origin,
+            b1_reloaded.line->direction}));
+    std::cout << "RG02C_B1_NATIVE_V19_AUTHORED_AXIS"
+              << " schema=19"
+              << " source=MaterialEdgeReference"
+              << " axisid_stable=1"
+              << " cold_provider=1"
+              << " unoriented_line=1"
+              << " no_provider_blocked=1"
+              << " native_edge_topology_reversal=GAP\\n";
+
     std::cout << "RG02C_B1_HEADLESS_PRODUCT_AXIS_LINE"
               << " strict_source=1"
               << " curved_arc_rejected=1"
