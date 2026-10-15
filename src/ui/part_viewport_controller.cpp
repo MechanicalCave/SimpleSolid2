@@ -817,6 +817,7 @@ void PartViewportController::setDocumentSession(
         part_evaluation_cache_.reset();
         datum_evaluation_cache_.reset();
         datum_plane_draft_preview_frame_.reset();
+        axis_draft_preview_line_.reset();
         body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
@@ -1507,6 +1508,36 @@ void PartViewportController::clearProfileDraftPreview() {
             viewport_->setProfilePreviewScene(
                 viewer::ProfilePreviewScene{}));
     }
+}
+
+void PartViewportController::setAxisDraftPreview(
+    std::optional<part::ResolvedAxisLine> line) {
+    if (line && !line->valid()) {
+        line.reset();
+    }
+    if (axis_draft_preview_line_ == line) {
+        return;
+    }
+    axis_draft_preview_line_ = std::move(line);
+    // Like the existing Datum draft reference-only update, changing
+    // a transient Axis cue must NOT rebuild the OCCT Body: a rebuild
+    // would invalidate the current exact Body Edge source/pick lease.
+    if (viewport_ && session_ &&
+        body_scene_revision_ &&
+        *body_scene_revision_ == session_->document().revision() &&
+        body_scene_cache_ &&
+        part_evaluation_cache_ &&
+        part_evaluation_cache_->source_revision ==
+            session_->document().revision() &&
+        datum_evaluation_cache_ &&
+        datum_evaluation_cache_->source_revision ==
+            session_->document().revision()) {
+        const auto references = buildReferenceScene();
+        if (references && viewport_->setReferenceScene(*references)) {
+            return;
+        }
+    }
+    refreshPresentation();
 }
 
 void PartViewportController::setDatumPlaneDraftPreview(
@@ -3843,6 +3874,27 @@ PartViewportController::buildReferenceScene() {
             scene.references.push_back(
                 std::move(reference));
         }
+    }
+
+    // B1 H4: a source-verified draft line is visible only while this
+    // one Axis command owns the preview. It has no AxisId binding, cannot
+    // be selected as authored CAD geometry and does not persist on Save.
+    if (axis_draft_preview_line_ &&
+        axis_draft_preview_line_->valid()) {
+        const auto token = allocatePresentationToken();
+        if (!token) return fail();
+        viewer::ReferencePresentation cue;
+        cue.token = *token;
+        cue.kind = viewer::ReferencePresentationKind::axis;
+        cue.origin = viewerPoint(
+            axis_draft_preview_line_->origin);
+        cue.u_axis = viewerVector(
+            axis_draft_preview_line_->direction);
+        cue.extent = axisExtent;
+        cue.role = viewer::PresentationRole::hover;
+        cue.visible = true;
+        if (!cue.valid()) return fail();
+        scene.references.push_back(std::move(cue));
     }
 
     const auto& datums = session_->document().datumPlanes();
