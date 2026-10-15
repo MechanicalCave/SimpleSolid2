@@ -343,7 +343,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 18);
+            .domain_schema_version == 19);
 
     const auto authored =
         nlohmann::json::parse(
@@ -398,7 +398,7 @@ int main() {
     const auto upgraded =
         persistence::readNativeDocumentContainer(legacy_v16_path);
     CHECK(upgraded.ok());
-    CHECK(upgraded.package->descriptor.domain_schema_version == 18);
+    CHECK(upgraded.package->descriptor.domain_schema_version == 19);
     const auto upgraded_json =
         nlohmann::json::parse(upgraded.package->authored_json);
     CHECK(upgraded_json.at("datum_planes") ==
@@ -428,7 +428,7 @@ int main() {
     const auto legacy17_upgraded =
         persistence::readNativeDocumentContainer(legacy17_path);
     CHECK(legacy17_upgraded.ok());
-    CHECK(legacy17_upgraded.package->descriptor.domain_schema_version==18);
+    CHECK(legacy17_upgraded.package->descriptor.domain_schema_version== 19);
     CHECK(nlohmann::json::parse(
         legacy17_upgraded.package->authored_json)
         .at("three_point_datum_planes").empty());
@@ -630,7 +630,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 18);
+            .domain_schema_version == 19);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);
