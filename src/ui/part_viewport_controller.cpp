@@ -1,6 +1,7 @@
 #include "part_viewport_controller.hpp"
 #include "sketch_viewport_mapping.hpp"
 
+#include <simplesolid2/kernel/exact_bounded_edge_geometry.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/effective_sketch_projection.hpp>
 
@@ -3785,12 +3786,19 @@ PartViewportController::buildReferenceScene() {
             const part::AxisReference semantic{
                 part::AuthoredAxisReference{
                     axis.id}};
+            // Edge-authored Axis needs the same STRICT scoped exact
+            // OCCT provider as Part/Revolve. Without it the semantic
+            // evaluator must fail closed (no stale viewport line).
+            // Sketch Line and Origin Axis behavior is unchanged.
             const auto evaluation =
                 part::resolveAxisReference(
                     session_->document(),
                     semantic,
                     &*part_evaluation_cache_,
-                    &*datum_evaluation_cache_);
+                    &*datum_evaluation_cache_,
+                    dynamic_cast<
+                        kernel::IExactBoundedEdgeGeometryQuery*>(
+                            solid_modeling_kernel_));
 
             if ((!axis.visible &&
                  (!transient_authored_axis ||
