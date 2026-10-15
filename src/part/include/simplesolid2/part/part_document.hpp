@@ -37,7 +37,6 @@ struct PartAuthoredState final {
     DatumIdCursor next_datum_id;
     std::vector<OffsetDatumPlane> datum_planes;
     std::vector<EdgePointDatumPlane> edge_point_datum_planes;
-    std::vector<ThreePointDatumPlane> three_point_datum_planes;
     std::vector<PartSketch> sketches;
     AxisIdCursor next_axis_id;
     std::vector<PartAxis> axes;
@@ -49,6 +48,8 @@ struct PartAuthoredState final {
         current_modeling_semantics_version};
     BodyIdCursor next_body_id;
     PartBody body;
+    // Append only: preserve all historical aggregate field positions.
+    std::vector<ThreePointDatumPlane> three_point_datum_planes;
 
     friend bool operator==(
         const PartAuthoredState&,
