@@ -2264,6 +2264,84 @@ int main(int argc, char* argv[]) {
                   part::AxisEvaluationStatus::resolved);
             CHECK(cold_axis_line.line &&
                   cold_axis_line.line->valid());
+
+            // Real GUI lifecycle, not only headless Part commands:
+            // select the finished Edge Axis in Reference Geometry and
+            // invoke the EXISTING Tree Edit action. Cancelling an
+            // unchanged draft must preserve AxisId, source, revision
+            // and Undo depth. It must not jump to Sketch edit mode.
+            QTreeWidgetItem* committed_edge_axis_item = nullptr;
+            for (QTreeWidgetItemIterator it(axis_tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                        QString::fromStdString(authored_axis.name) &&
+                    (*it)->parent() != nullptr &&
+                    (*it)->parent()->text(0) ==
+                        QStringLiteral("Reference Geometry")) {
+                    committed_edge_axis_item = *it;
+                    break;
+                }
+            }
+            CHECK(committed_edge_axis_item != nullptr);
+            axis_tree->clearSelection();
+            axis_tree->setCurrentItem(committed_edge_axis_item);
+            committed_edge_axis_item->setSelected(true);
+            QApplication::processEvents();
+
+            auto* edit_edge_axis_action =
+                workbench.findChild<QAction*>(
+                    QStringLiteral("editAxisAction"));
+            auto* delete_edge_axis_action =
+                workbench.findChild<QAction*>(
+                    QStringLiteral("deleteAxisAction"));
+            CHECK(edit_edge_axis_action != nullptr);
+            CHECK(delete_edge_axis_action != nullptr);
+            const auto before_edit_revision =
+                b1_axis_session.document().revision();
+            const auto before_edit_undo =
+                b1_axis_session.undoDepth();
+            edit_edge_axis_action->trigger();
+            QApplication::processEvents();
+            CHECK(axis_tool->isChecked());
+            CHECK(axis_cancel->isEnabled());
+            axis_cancel->click();
+            QApplication::processEvents();
+            CHECK(!axis_tool->isChecked());
+            CHECK(b1_axis_session.document().revision() ==
+                  before_edit_revision);
+            CHECK(b1_axis_session.undoDepth() == before_edit_undo);
+            const auto* kept_axis =
+                b1_axis_session.document().findAxis(authored_axis.id);
+            CHECK(kept_axis != nullptr);
+            CHECK(kept_axis->source == authored_axis.source);
+
+            // Delete through the original Tree context action, then
+            // Undo must restore the SAME durable AxisId/source.
+            committed_edge_axis_item = nullptr;
+            for (QTreeWidgetItemIterator it(axis_tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QString::fromStdString(authored_axis.name)) {
+                    committed_edge_axis_item = *it;
+                    break;
+                }
+            }
+            CHECK(committed_edge_axis_item != nullptr);
+            axis_tree->clearSelection();
+            axis_tree->setCurrentItem(committed_edge_axis_item);
+            committed_edge_axis_item->setSelected(true);
+            QApplication::processEvents();
+            const auto before_delete_undo =
+                b1_axis_session.undoDepth();
+            delete_edge_axis_action->trigger();
+            QApplication::processEvents();
+            CHECK(b1_axis_session.document().findAxis(
+                      authored_axis.id) == nullptr);
+            CHECK(b1_axis_session.undoDepth() ==
+                  before_delete_undo + 1U);
+            CHECK(b1_axis_session.undo().changed);
+            const auto* restored_axis =
+                b1_axis_session.document().findAxis(authored_axis.id);
+            CHECK(restored_axis != nullptr);
+            CHECK(restored_axis->source == authored_axis.source);
             std::cout << "RG02C_B1_NATIVE_AXIS_GUI"
                       << " strict_mouse_edge=1"
                       << " constructor_edge_only=1"
