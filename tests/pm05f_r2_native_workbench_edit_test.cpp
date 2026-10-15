@@ -3281,7 +3281,8 @@ int main(int argc, char* argv[]) {
                                        std::abs(p.y-candidate.y)<1e-7 &&
                                        std::abs(p.z-candidate.z)<1e-7;
                             });
-                        if (!already) corners.push_back(candidate);
+                        if (!already) corners.push_back(viewer::Point3{
+                            candidate.x,candidate.y,candidate.z});
                     }
                 }
                 CHECK(corners.size()>=4U);
