@@ -321,6 +321,16 @@ struct SetDatumPlaneVisibilityCommand final {
     bool visible{true};
 };
 
+// One atomic authored transaction for the existing mixed Reference
+// Geometry Tree group. Legacy Sketch-Line Axes stay under Sketches
+// and are NEVER included in its Edge Axis visibility target set.
+struct SetReferenceGeometryVisibilityCommand final {
+    std::vector<part::DatumId> datum_targets;
+    std::vector<part::AxisId> edge_axis_targets;
+    core::DocumentRevision expected_revision;
+    bool visible{true};
+};
+
 struct DeleteDatumPlaneCommand final {
     part::DatumId datum_id;
     core::DocumentRevision expected_revision;
@@ -809,6 +819,8 @@ public:
         kernel::ISolidModelingKernel& modeling_kernel);
     [[nodiscard]] DocumentSessionResult execute(
         const SetDatumPlaneVisibilityCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const SetReferenceGeometryVisibilityCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const DeleteDatumPlaneCommand& command);
 
