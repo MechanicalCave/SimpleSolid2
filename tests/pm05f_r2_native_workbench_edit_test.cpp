@@ -3713,8 +3713,17 @@ int main(int argc, char* argv[]) {
                 QApplication::processEvents();
                 CHECK(s4b.document().datumPlanes().size()==1U);
                 CHECK(s4b.document().threePointDatumPlanes().size()==1U);
-                auto* presentation_controller=
-                    workbench.findChild<ui::PartViewportController*>();
+                // PartViewportController is a QObject child but has no
+                // Q_OBJECT macro. Find QObject children and use C++ RTTI,
+                // not Qt's findChild<T> metatype precondition.
+                ui::PartViewportController* presentation_controller=nullptr;
+                for (QObject* child : workbench.findChildren<QObject*>()) {
+                    if (auto* candidate=
+                            dynamic_cast<ui::PartViewportController*>(child)) {
+                        presentation_controller=candidate;
+                        break;
+                    }
+                }
                 CHECK(presentation_controller);
                 CHECK(!presentation_controller->presentationDegraded());
                 // Reopening this same document must reconstruct the
