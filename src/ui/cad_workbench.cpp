@@ -6526,6 +6526,9 @@ void CadWorkbench::refreshAxisEvaluation() {
     if (!axis_draft_ ||
         document_session_ == nullptr ||
         solid_modeling_kernel_ == nullptr) {
+        if (viewport_controller_ != nullptr) {
+            viewport_controller_->setAxisDraftPreview(std::nullopt);
+        }
         syncAxisUi();
         return;
     }
@@ -6534,6 +6537,15 @@ void CadWorkbench::refreshAxisEvaluation() {
         document_session_->evaluateAxisDraft(
             *axis_draft_,
             *solid_modeling_kernel_);
+    // A validated Edge Axis owns only a disposable viewport cue;
+    // invalid sources have no last-good preview to leak.
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->setAxisDraftPreview(
+            axis_edge_mode_active_ &&
+                    axis_evaluation_->committable()
+                ? axis_evaluation_->line
+                : std::nullopt);
+    }
     syncAxisUi();
 }
 
@@ -6727,6 +6739,9 @@ void CadWorkbench::clearAxisRuntimeContext() {
     axis_edge_mode_active_ = false;
     axis_draft_.reset();
     axis_evaluation_.reset();
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->setAxisDraftPreview(std::nullopt);
+    }
     syncAxisUi();
 }
 
