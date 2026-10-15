@@ -29,6 +29,13 @@
 - Native Part writer changes to **v19** with `straight_body_edge` storing existing strict `MaterialEdgeReference`; old `sketch_line` record format stays unchanged, legacy v18/v14/v9 reader fixtures remain real. The existing PM04A, PM04E1, PM02E and PM05B3 registered tests update only **current-writer expectations**. These changes have **NO PASS until actual re-run**.
 - Owner-approved visual Axis `Constructor: Edge` UI is still **NOT YET IMPLEMENTED**; Sketch-Line Axis under source Sketch remains unchanged; new Edge Axis eventually belongs under Reference Geometry. Native B-Rep actual topological orientation-reversal fixture still a genuine GAP.
 
+## H2 second RED and compatibility fixes — 2026-10-15
+
+- Wider Windows Draft FAST [#3260](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38781068285) on H2 HEAD `f61cfff6611aff0c4a46e85cae30a809cba8e189` **FAILURE**: (a) an existing `application::DocumentSession::evaluateRevolveDraft` still links to the historic **five-argument public** `resolveKernelRevolveInput` symbol, while new Part implementation had only the six-argument provider-aware overload; repeated `LNK2019/LNK1120` reflected this ONE ABI omission, not dozens of unrelated provider errors. (b) existing `tests/sk04c_part_sketch_interaction_controller_test.cpp` accessed `first_axis_source.entity_id` twice on the new source variant, producing MSVC `C2039`.
+- **Fix:** `src/part/feature_evaluation.cpp` now keeps the exact original five-argument public ABI as an overload delegating to the new six-argument path with `provider=nullptr` (legacy Sketch/Origin preserved, future Edge source fail-closed without exact provider). Actual feature replay keeps the real scoped exact provider.
+- **Fix:** the Owner-delegated and independently exact-head Windows Ready #3263 PASS `work/**` addendum [PR #418](https://github.com/MechanicalCave/SimpleSolid2/pull/418) guarded squash-MERGED main `1e1cab2500dc106216cec61579600cc40a194316`, allowing only the pre-registered SK04C test source. Its TWO old assertion sites now access `std::get_if<SketchLineAxisSource>` with a `CHECK` and then exactly the same EntityId of the authored Sketch Line. **No check removed or weakened**; existing Sketch Axis remains in Sketch.
+- Both fixes and the new Part native writer schema v19 are **UNVERIFIED** until a fresh real Windows build/test on their final H2 HEAD. The prior H1 #3249 FULL 199/199 is source-only and cannot be used as H2 evidence.
+
 ## Actual CI witnesses — record only after completion
 
 | Gate | Exact SHA/run | Result |
