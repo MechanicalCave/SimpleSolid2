@@ -1,6 +1,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
@@ -2202,6 +2203,14 @@ void verifyQ1RealHalfCylinderAndRevolve(
             CHECK(!a0StraightEdgeLine(
                 partial, partial_eval,
                 mid.reference->source_edge, kernel));
+            const auto b1_arc = part::resolveStraightMaterialEdgeAxisLine(
+                partial, mid.reference->source_edge,
+                partial_eval, kernel);
+            CHECK(b1_arc.status ==
+                  part::AxisEvaluationStatus::unsupported);
+            CHECK(b1_arc.diagnostic ==
+                  part::AxisEvaluationDiagnostic::edge_not_straight);
+            CHECK(!b1_arc.line);
         }
         const auto s1 = part::initializeSelectedEdgeMidFrame(
             partial,*mid.reference,partial_eval,kernel);
@@ -3124,6 +3133,16 @@ int main() {
     const auto a0_base = a0StraightEdgeLine(
         base_document, base_evaluation, a0_source, kernel);
     CHECK(a0_base.has_value());
+    // B1-H1: the PRODUCT Axis semantic consumer must reuse Q2's real
+    // stage/provider query and agree with the accepted A0 locus. These
+    // are NEW integration assertions, not a second strict resolver.
+    const auto b1_base = part::resolveStraightMaterialEdgeAxisLine(
+        base_document, a0_source, base_evaluation, kernel);
+    CHECK(b1_base.status == part::AxisEvaluationStatus::resolved);
+    CHECK(b1_base.valid() && b1_base.line);
+    CHECK(b1_base.required_body_stage == a0_source.stage);
+    CHECK(a0SameUnorientedLine(*a0_base,
+        A0AxisLine{b1_base.line->origin, b1_base.line->direction}));
     const A0AxisLine reversed_axis{
         a0_base->on_line,
         {-a0_base->tangent.x,
@@ -3177,6 +3196,11 @@ int main() {
     CHECK(!a0StraightEdgeLine(
         a0_replacement_document, a0_replacement_evaluation,
         a0_source, kernel));
+    const auto b1_replaced = part::resolveStraightMaterialEdgeAxisLine(
+        a0_replacement_document, a0_source,
+        a0_replacement_evaluation, kernel);
+    CHECK(b1_replaced.status != part::AxisEvaluationStatus::resolved);
+    CHECK(!b1_replaced.line);
     auto a0_wrong_revision = part::PartDocument::restore(
         base_document.documentId(), base_document.state(),
         core::DocumentRevision{
@@ -3185,6 +3209,10 @@ int main() {
     CHECK(!a0StraightEdgeLine(
         *a0_wrong_revision.document, base_evaluation,
         a0_source, kernel));
+    const auto b1_stale = part::resolveStraightMaterialEdgeAxisLine(
+        *a0_wrong_revision.document, a0_source, base_evaluation, kernel);
+    CHECK(b1_stale.status != part::AxisEvaluationStatus::resolved);
+    CHECK(!b1_stale.line);
 
     // A0-04: one new Axis-specific fail-closed assertion on the same
     // strict semantic Curve ambiguity already exercised by Q2. There is
@@ -3210,6 +3238,10 @@ int main() {
     CHECK(a0_catalog.complete());
     CHECK(!a0StraightEdgeLine(
         base_document, a0_ambiguous, a0_source, kernel));
+    const auto b1_ambiguous = part::resolveStraightMaterialEdgeAxisLine(
+        base_document, a0_source, a0_ambiguous, kernel);
+    CHECK(b1_ambiguous.status != part::AxisEvaluationStatus::resolved);
+    CHECK(!b1_ambiguous.line);
 
     // A0-06: real Part v18 disk Save/Close/Reopen, entirely new OCCT
     // provider; caller retains semantic Edge intent only. No new native
@@ -3239,8 +3271,25 @@ int main() {
         a0_source, a0_cold_provider);
     CHECK(a0_cold.has_value());
     CHECK(a0SameUnorientedLine(*a0_base, *a0_cold));
+    const auto b1_cold = part::resolveStraightMaterialEdgeAxisLine(
+        *a0_loaded.document, a0_source,
+        a0_cold_evaluation, a0_cold_provider);
+    CHECK(b1_cold.status == part::AxisEvaluationStatus::resolved);
+    CHECK(b1_cold.valid() && b1_cold.line);
+    CHECK(a0SameUnorientedLine(
+        *a0_base,
+        A0AxisLine{b1_cold.line->origin, b1_cold.line->direction}));
     CHECK(a0_source.stage ==
           a0_cold_evaluation.features.front().result_topology->stage);
+    std::cout << "RG02C_B1_HEADLESS_PRODUCT_AXIS_LINE"
+              << " strict_source=1"
+              << " curved_arc_rejected=1"
+              << " new_producer_rejected=1"
+              << " stale_revision_rejected=1"
+              << " ambiguous_source_rejected=1"
+              << " cold_reopen_resolved=1"
+              << " persisted_edge_axis=NOT_YET"
+              << " native_edge_topology_reversal=GAP\\n";
     std::cout << "RG02C_A0_AXIS_LINE_NATIVE"
               << " strict_source=1"
               << " terminal_choice_invariant=2"
