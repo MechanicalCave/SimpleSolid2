@@ -5,6 +5,7 @@
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -351,6 +352,101 @@ AxisEvaluation resolveAxisReference(
             start,
             direction},
         stage);
+}
+
+// RG-02C/B1: no independent Edge resolver, no native token authoring and
+// no copy of the A0 test-only line algorithm. Q2 owns strict stage/revision
+// admission and the scoped native MID/tangent observation; the Axis consumer
+// owns only line-kind admission and the Axis-specific typed result.
+AxisEvaluation resolveStraightMaterialEdgeAxisLine(
+    const PartDocument& document,
+    const MaterialEdgeReference& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) noexcept {
+    if (!source.valid()) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::invalid_reference);
+    }
+
+    const auto observation = resolveSelectedMaterialEdgeMid(
+        document,
+        SelectedMaterialEdgeMid{source},
+        evaluation,
+        provider);
+
+    if (!observation.resolved()) {
+        switch (observation.status) {
+        case SelectedEdgeMidStatus::edge_missing:
+            return unresolved(
+                AxisEvaluationStatus::missing,
+                AxisEvaluationDiagnostic::edge_source_missing,
+                source.stage);
+        case SelectedEdgeMidStatus::edge_ambiguous:
+            return unresolved(
+                AxisEvaluationStatus::ambiguous,
+                AxisEvaluationDiagnostic::edge_source_ambiguous,
+                source.stage);
+        case SelectedEdgeMidStatus::edge_unsupported:
+            return unresolved(
+                AxisEvaluationStatus::unsupported,
+                AxisEvaluationDiagnostic::edge_source_unsupported,
+                source.stage);
+        case SelectedEdgeMidStatus::native_geometry_unavailable:
+            return unresolved(
+                AxisEvaluationStatus::blocked,
+                AxisEvaluationDiagnostic::edge_native_geometry_unavailable,
+                source.stage);
+        case SelectedEdgeMidStatus::invalid_context:
+        case SelectedEdgeMidStatus::resolved:
+            return unresolved(
+                AxisEvaluationStatus::blocked,
+                AxisEvaluationDiagnostic::stale_part_evaluation,
+                source.stage);
+        }
+    }
+
+    // Even though Q2 can legitimately observe an open circular Arc MID,
+    // the first Body-Edge Axis constructor is LINE ONLY.
+    const auto* stage = evaluation.findFeature(
+        *source.stage.feature_id);
+    if (stage == nullptr ||
+        !stage->result_topology ||
+        stage->result_topology->stage != source.stage) {
+        return unresolved(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::support_stage_unavailable,
+            source.stage);
+    }
+    const auto& edges = stage->result_topology->edges;
+    const auto current = std::find_if(
+        edges.begin(), edges.end(),
+        [&observation](const auto& edge) {
+            return edge.runtime_token == *observation.current_edge;
+        });
+    if (current == edges.end()) {
+        return unresolved(
+            AxisEvaluationStatus::missing,
+            AxisEvaluationDiagnostic::edge_source_missing,
+            source.stage);
+    }
+    if (current->curve_kind != kernel::CurveKind::line) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::edge_not_straight,
+            source.stage);
+    }
+
+    ResolvedAxisLine line{
+        *observation.current_position_world,
+        observation.current_tangent_line->representative};
+    if (!line.valid()) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::edge_native_geometry_unavailable,
+            source.stage);
+    }
+    return resolved(std::move(line), source.stage);
 }
 
 } // namespace simplesolid2::part
