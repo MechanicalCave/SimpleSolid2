@@ -4,6 +4,8 @@
 #include <simplesolid2/part/part_document.hpp>
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstddef>
 #include <utility>
 #include <vector>
@@ -85,6 +87,120 @@ enum class VisitState {
         DatumPlaneEvaluationDiagnostic::none,
         std::move(frame),
         std::move(required_stage)};
+}
+
+// S4A reads real same-revision OCCT stage catalogs through the owning Part.
+// Runtime tokens are used only to corroborate the uniquely certified current
+// Vertex, never as durable identity or provider-order fallback.
+[[nodiscard]] DatumPlaneEvaluation evaluateThreePointDatum(
+    const PartDocument& document,
+    const PartEvaluation& evaluation,
+    const ThreePointDatumPlane& datum) noexcept {
+    const auto stage = datum.points[0].stage;
+    const auto required = std::optional<BodyStageRef>{stage};
+    const auto fail = [&](DatumPlaneEvaluationStatus status,
+                          DatumPlaneEvaluationDiagnostic diagnostic) {
+        return unresolved(datum.id, status, diagnostic, required);
+    };
+    if (!threePointDatumPlaneStructurallyValid(datum) ||
+        !evaluation.source_document_id ||
+        *evaluation.source_document_id != document.documentId() ||
+        evaluation.source_revision != document.revision())
+        return fail(DatumPlaneEvaluationStatus::blocked,
+                    DatumPlaneEvaluationDiagnostic::stale_part_evaluation);
+
+    const auto feature = std::find_if(
+        evaluation.features.begin(), evaluation.features.end(),
+        [&stage](const FeatureEvaluation& item) {
+            return item.result_topology &&
+                   item.result_topology->stage == stage;
+        });
+    if (feature == evaluation.features.end() ||
+        !feature->result_topology ||
+        !feature->result_topology->complete())
+        return fail(DatumPlaneEvaluationStatus::blocked,
+                    DatumPlaneEvaluationDiagnostic::body_stage_unavailable);
+    const auto& catalog = *feature->result_topology;
+    std::array<kernel::Point3, 3> positions{};
+    for (std::size_t i = 0; i < datum.points.size(); ++i) {
+        const auto& address = datum.points[i].point;
+        const auto candidate = std::find_if(
+            catalog.points.begin(), catalog.points.end(),
+            [&address](const auto& p) { return p.address == address; });
+        if (candidate == catalog.points.end() ||
+            candidate->status == kernel::ReferenceStatus::missing)
+            return fail(DatumPlaneEvaluationStatus::missing,
+                        DatumPlaneEvaluationDiagnostic::point_source_missing);
+        if (candidate->status == kernel::ReferenceStatus::ambiguous ||
+            candidate->candidate_vertex_count > 1U ||
+            candidate->current_vertices.size() > 1U)
+            return fail(DatumPlaneEvaluationStatus::ambiguous,
+                        DatumPlaneEvaluationDiagnostic::point_source_ambiguous);
+        if (candidate->status != kernel::ReferenceStatus::resolved ||
+            candidate->candidate_vertex_count != 1U ||
+            candidate->current_vertices.size() != 1U)
+            return fail(DatumPlaneEvaluationStatus::unsupported,
+                        DatumPlaneEvaluationDiagnostic::point_source_unsupported);
+        const auto token = candidate->current_vertices.front();
+        const auto vertex = std::find_if(
+            catalog.vertices.begin(), catalog.vertices.end(),
+            [&token](const auto& v) { return v.runtime_token == token; });
+        if (vertex == catalog.vertices.end() ||
+            vertex->referenceability != kernel::ReferenceStatus::resolved ||
+            vertex->point_candidates.size() != 1U ||
+            vertex->point_candidates.front() != address ||
+            !vertex->provider_point)
+            return fail(DatumPlaneEvaluationStatus::unsupported,
+                        DatumPlaneEvaluationDiagnostic::point_source_unsupported);
+        positions[i] = *vertex->provider_point;
+        if (!std::isfinite(positions[i].x) ||
+            !std::isfinite(positions[i].y) ||
+            !std::isfinite(positions[i].z))
+            return fail(DatumPlaneEvaluationStatus::unsupported,
+                        DatumPlaneEvaluationDiagnostic::point_invalid_geometry);
+    }
+
+    const auto subtract = [](kernel::Point3 a, kernel::Point3 b) {
+        return kernel::Point3{a.x-b.x,a.y-b.y,a.z-b.z};
+    };
+    const auto cross = [](kernel::Point3 a, kernel::Point3 b) {
+        return kernel::Point3{a.y*b.z-a.z*b.y,
+                              a.z*b.x-a.x*b.z,
+                              a.x*b.y-a.y*b.x};
+    };
+    const auto length = [](kernel::Point3 a) {
+        return std::hypot(a.x,a.y,a.z);
+    };
+    const auto unit = [](kernel::Point3 a, double n) {
+        return kernel::Point3{a.x/n,a.y/n,a.z/n};
+    };
+    const auto a = subtract(positions[1],positions[0]);
+    const auto b = subtract(positions[2],positions[0]);
+    const double alen = length(a);
+    const double blen = length(b);
+    const double scale = std::max({alen,blen,1.0});
+    if (!std::isfinite(alen) || !std::isfinite(blen) ||
+        alen <= scale * 1.0e-9 || blen <= scale * 1.0e-9)
+        return fail(DatumPlaneEvaluationStatus::unsupported,
+                    DatumPlaneEvaluationDiagnostic::point_invalid_geometry);
+    const auto n_cross = cross(a,b);
+    const double clen = length(n_cross);
+    if (!std::isfinite(clen) ||
+        clen <= alen * blen * 1.0e-8)
+        return fail(DatumPlaneEvaluationStatus::unsupported,
+                    DatumPlaneEvaluationDiagnostic::point_invalid_geometry);
+    const auto u = unit(a,alen);
+    auto n = unit(n_cross,clen);
+    auto v = cross(n,u);
+    if (datum.reverse) {
+        n = kernel::Point3{-n.x,-n.y,-n.z};
+        v = kernel::Point3{-v.x,-v.y,-v.z};
+    }
+    const kernel::Frame3 frame{positions[0],u,v,n};
+    if (!frame.valid())
+        return fail(DatumPlaneEvaluationStatus::unsupported,
+                    DatumPlaneEvaluationDiagnostic::point_invalid_geometry);
+    return resolved(datum.id,frame,required);
 }
 
 class Evaluator final {
@@ -553,6 +669,10 @@ DatumEvaluation evaluateDatums(
         }
         result.planes.push_back(unresolved(
             datum.id,status,diagnostic,required));
+    }
+    for (const auto& datum : document.threePointDatumPlanes()) {
+        result.planes.push_back(
+            evaluateThreePointDatum(document,part_evaluation,datum));
     }
     return result.valid()
         ? result
