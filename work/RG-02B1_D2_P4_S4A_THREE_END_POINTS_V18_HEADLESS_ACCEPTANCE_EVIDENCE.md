@@ -41,6 +41,8 @@
 
 - [Windows desktop FOCUSED #3151](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38713240739) on exact `912abecac0de7289f32a5ec3bbc121626ced12e3`: **PASS 5/5**. Explicitly rebuilt and executed four *amended* registered desktop tests `pm02e.sketch_support_schema_v9`, `pm04a.axis_schema_v12`, `pm04e1.revolve_persistence`, `pm05b3.generated_surface_reference_v14` plus unchanged previously Not-Run `pm04c1.revolve_semantic_kernel`. No source edits to PM04C1; its former FAST Not-Run stemmed from absent executable in persistent tier build, not a modeling failure. This FOCUSED validates corrected v18 source assertions and genuine legacy fixture guards, but cannot substitute for new FAST/FULL after the explicit rebuild.
 
+- [Windows kernel-native FOCUSED #3152](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38713497821) on exact `1f04a5503be07f84b742ed7ae22a216b5a78c127`: **PASS 1/1**, real `pm02jr2.add_surface_continuation` 4.51 s, preserving its native real-OCCT continuation, genuine historical v16 and nested provenance regression while correctly handling new-current v18 and lossless v15 synthetic fixture downgrade. This is the previously sole failed native test in earlier FULL #3123, now directly rebuilt and executed successfully, not an inferred result.
+
 ## Acceptance matrix
 
 | Gate | Actual result |
