@@ -3840,13 +3840,17 @@ PartViewportController::buildReferenceScene() {
     const auto& datums = session_->document().datumPlanes();
     const auto& edge_datums =
         session_->document().edgePointDatumPlanes();
+    const auto& three_point_datums =
+        session_->document().threePointDatumPlanes();
 
-    if (!datums.empty() || !edge_datums.empty()) {
+    if (!datums.empty() || !edge_datums.empty() ||
+        !three_point_datums.empty()) {
         if (!datum_evaluation_cache_ ||
             datum_evaluation_cache_->source_revision !=
                 session_->document().revision() ||
             datum_evaluation_cache_->planes.size() !=
-                datums.size() + edge_datums.size()) {
+                datums.size() + edge_datums.size() +
+                three_point_datums.size()) {
             return fail();
         }
 
@@ -3905,6 +3909,12 @@ PartViewportController::buildReferenceScene() {
             }
         }
         for (const auto& datum : edge_datums) {
+            if (!publish(datum.id,datum.visible)) {
+                datum_bindings_.clear();
+                return fail();
+            }
+        }
+        for (const auto& datum : three_point_datums) {
             if (!publish(datum.id,datum.visible)) {
                 datum_bindings_.clear();
                 return fail();
@@ -4038,7 +4048,8 @@ PartViewportController::buildBodyScene() {
     if (datum_evaluation.source_revision != revision ||
         datum_evaluation.planes.size() !=
             session_->document().datumPlanes().size() +
-            session_->document().edgePointDatumPlanes().size()) {
+            session_->document().edgePointDatumPlanes().size() +
+            session_->document().threePointDatumPlanes().size()) {
         return fail();
     }
 

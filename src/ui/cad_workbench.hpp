@@ -12,6 +12,7 @@
 
 #include <QWidget>
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -152,6 +153,7 @@ public:
                datum_plane_draft_.has_value() ||
                edge_datum_edit_id_.has_value() ||
                edge_datum_create_revision_.has_value() ||
+               three_point_datum_revision_.has_value() ||
                extrude_draft_.has_value() ||
                revolve_draft_.has_value() ||
                fillet_draft_.has_value() ||
@@ -215,6 +217,14 @@ private:
     void tryStageDatumPlaneFromBodyTopology(
         const BodyTopologyInspection& inspection);
     void selectDatumPlaneConstructor(int constructor_index);
+    void beginThreePointDatum(
+        application::DocumentSession& session,
+        std::optional<part::DatumId> edit_id = std::nullopt);
+    void stageThreePointDatumFromBodyTopology(
+        const BodyTopologyInspection& inspection);
+    void refreshThreePointDatumPreview();
+    [[nodiscard]] application::CadInputSubmitResult
+    submitThreePointDatumCadInput(std::string_view text);
     void stageEdgeDatumFromBodyTopology(
         const BodyTopologyInspection& inspection);
     void confirmEdgeDatumMidPoint(
@@ -709,6 +719,8 @@ private:
     QComboBox* datum_plane_constructor_combo_{};
     QLabel* datum_plane_source_label_{};
     QLineEdit* datum_plane_offset_edit_{};
+    QWidget* three_point_datum_slots_widget_{};
+    std::array<QPushButton*, 3> three_point_datum_slot_buttons_{};
     QPushButton* datum_plane_reverse_button_{};
     QTimer* datum_plane_preview_timer_{};
     QLabel* datum_plane_result_label_{};
@@ -716,6 +728,16 @@ private:
     QPushButton* datum_plane_cancel_button_{};
     std::optional<application::DatumPlaneDraft>
         datum_plane_draft_;
+    // S4B: only transient strict END source slots. Durable state is the
+    // existing Part S4A ThreePointDatumPlane, never Viewer tokens/XYZ.
+    std::optional<core::DocumentRevision> three_point_datum_revision_;
+    std::optional<part::DatumId> three_point_datum_edit_id_;
+    std::array<std::optional<part::StageSemanticPointReference>, 3>
+        three_point_datum_slots_{};
+    std::size_t three_point_datum_active_slot_{0};
+    std::optional<kernel::Frame3> three_point_datum_preview_;
+    bool three_point_datum_reverse_{false};
+    std::uint64_t three_point_datum_context_generation_{1};
     // Editing an existing S2 signed Edge-local Datum reuses the existing
     // Datum panel but never co-opts the legacy Offset draft semantics.
     std::optional<part::DatumId> edge_datum_edit_id_;
