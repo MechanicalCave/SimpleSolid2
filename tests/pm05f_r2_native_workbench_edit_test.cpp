@@ -2129,6 +2129,151 @@ int main(int argc, char* argv[]) {
 
         if (s3a_only || (!pg01c_only && !pg01d_ui_only &&
                          !ui01_p0_only)) {
+        // RG-02C/B1 H4: one NEW Work Features Axis / Edge constructor
+        // must acquire a real OCCT-presented material edge through Qt
+        // mouse input, not a fabricated presentation token or XYZ.
+        // Reuse the existing R2 authorableEdgeProbes/nativeClick helpers.
+        {
+            auto b1_axis_session = makeBaseSession(kernel);
+            CHECK(workbench.activateDocument(&b1_axis_session, {}));
+            CHECK(b1_axis_session.document().axes().empty());
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top_front_right));
+            viewport->fitAll();
+            QApplication::processEvents();
+
+            auto* axis_tool = workbench.findChild<QPushButton*>(
+                QStringLiteral("axisToolButton"));
+            auto* axis_constructor = workbench.findChild<QComboBox*>(
+                QStringLiteral("axisConstructorCombo"));
+            auto* axis_finish = workbench.findChild<QPushButton*>(
+                QStringLiteral("axisFinishButton"));
+            auto* axis_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("axisCancelButton"));
+            CHECK(axis_tool && axis_constructor &&
+                  axis_finish && axis_cancel);
+            CHECK(axis_tool->isEnabled());
+            CHECK(axis_constructor->count() == 1);
+            CHECK(axis_constructor->itemText(0) ==
+                  QStringLiteral("Edge"));
+
+            const auto before_revision =
+                b1_axis_session.document().revision();
+            const auto before_undo = b1_axis_session.undoDepth();
+            axis_tool->click();
+            QApplication::processEvents();
+            CHECK(axis_tool->isChecked());
+            CHECK(!axis_finish->isEnabled());
+
+            const auto candidates =
+                authorableEdgeProbes(b1_axis_session, kernel);
+            bool acquired_native_edge = false;
+            for (const auto& probe : candidates) {
+                if (!nativeClick(*viewport, probe.world)) {
+                    continue;
+                }
+                QApplication::processEvents();
+                if (axis_finish->isEnabled()) {
+                    acquired_native_edge = true;
+                    break;
+                }
+                // A failed/occluded click cannot commit Axis or Undo.
+                CHECK(b1_axis_session.document().axes().empty());
+                CHECK(b1_axis_session.undoDepth() == before_undo);
+                if (nativeClick(*viewport, probe.world)) {
+                    QApplication::processEvents();
+                }
+            }
+            CHECK(acquired_native_edge);
+            CHECK(b1_axis_session.document().axes().empty());
+            CHECK(b1_axis_session.document().revision() ==
+                  before_revision);
+            CHECK(b1_axis_session.undoDepth() == before_undo);
+
+            axis_finish->click();
+            QApplication::processEvents();
+            CHECK(!axis_tool->isChecked());
+            CHECK(b1_axis_session.document().axes().size() == 1U);
+            CHECK(b1_axis_session.undoDepth() == before_undo + 1U);
+            const auto authored_axis =
+                b1_axis_session.document().axes().front();
+            const auto* edge_source =
+                std::get_if<part::StraightMaterialEdgeAxisSource>(
+                    &authored_axis.source);
+            CHECK(edge_source && edge_source->edge.valid());
+            CHECK(edge_source->edge.stage.valid());
+
+            // Tree placement follows authored source kind: only the
+            // new Edge Axis appears in Reference Geometry, not Sketch.
+            auto* axis_tree =
+                workbench.findChild<QTreeWidget*>();
+            CHECK(axis_tree != nullptr);
+            bool in_reference_geometry = false;
+            std::size_t authored_rows = 0U;
+            for (QTreeWidgetItemIterator it(axis_tree); *it; ++it) {
+                auto* item = *it;
+                if (item->text(0) !=
+                    QString::fromStdString(authored_axis.name)) {
+                    continue;
+                }
+                ++authored_rows;
+                in_reference_geometry =
+                    item->parent() != nullptr &&
+                    item->parent()->text(0) ==
+                        QStringLiteral("Reference Geometry");
+            }
+            CHECK(authored_rows == 1U && in_reference_geometry);
+
+            CHECK(b1_axis_session.undo().changed);
+            CHECK(b1_axis_session.document().axes().empty());
+            CHECK(b1_axis_session.redo().changed);
+            CHECK(b1_axis_session.document().axes().size() == 1U);
+            CHECK(b1_axis_session.document().axes().front().id ==
+                  authored_axis.id);
+
+            // Real native v19 save/cold reopen; only semantic
+            // MaterialEdgeReference is persisted, never a TopoDS token.
+            QTemporaryDir b1_axis_dir;
+            CHECK(b1_axis_dir.isValid());
+            const auto b1_path =
+                std::filesystem::path{
+                    b1_axis_dir.path().toStdWString()} /
+                "NativeEdgeAxisWorkbench.ss2part";
+            part::PartDocumentStore b1_store;
+            CHECK(b1_store.createNew(
+                b1_path, b1_axis_session.document()).ok());
+            const auto reopened = b1_store.load(b1_path);
+            CHECK(reopened.ok());
+            const auto* cold_axis =
+                reopened.document->findAxis(authored_axis.id);
+            CHECK(cold_axis && cold_axis->source ==
+                  authored_axis.source);
+            kernel_occt::OcctSolidModelingKernel cold_kernel;
+            const auto cold_evaluation = part::evaluatePart(
+                *reopened.document, cold_kernel);
+            CHECK(cold_evaluation.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto cold_axis_line = part::resolveAxisReference(
+                *reopened.document,
+                part::AxisReference{
+                    part::AuthoredAxisReference{authored_axis.id}},
+                &cold_evaluation,
+                nullptr,
+                &cold_kernel);
+            CHECK(cold_axis_line.status ==
+                  part::AxisEvaluationStatus::resolved);
+            CHECK(cold_axis_line.line &&
+                  cold_axis_line.line->valid());
+            std::cout << "RG02C_B1_NATIVE_AXIS_GUI"
+                      << " strict_mouse_edge=1"
+                      << " constructor_edge_only=1"
+                      << " reference_geometry_tree=1"
+                      << " finish_one_undo=1"
+                      << " cold_v19_axis=1\\n";
+            CHECK(workbench.activateDocument(&session, {}));
+            QApplication::processEvents();
+        }
+
         // RG-02B1 P4-S3A: positive *native* Workbench gesture witness.
         // The camera/world points only aim Qt mouse clicks; they never
         // enter authoring APIs or stand in for semantic Part provenance.
