@@ -48,26 +48,37 @@
 ## Current single-tool CAD Command Line GUI regression
 
 - [Windows desktop Qt FOCUSED #3206](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38736798016) on exact `478c1e3bdaa038ff1f206c6afc3ae0c129fbab4f`: **PASS 1/1** `pm03c2.cad_workbench_datum_plane` (0.89 s), checking existing single Datum tool third mode and context-only P1/P2/P3/REVERSE/3POINTS/OFFSET/EDGEPOINT/FINISH/CANCEL/Enter semantics and refusal without native evidence. Previous native Qt FOCUSED #3203 and #3205 remain independent real OCCT proof for actual END mouse source and lifecycle.
-- **Not yet established:** a new FAST and Ready FULL on the fully updated UI source tree. Original #3195 FAST 93/93 is not the latest and must not be counted as testing the corrected scene/cardinality and Delete paths. Keep PR #402 Draft until aggregate test/doc closure and Owner Windows manual/technical final acceptance.
+- **Superseded checkpoint:** updated-code FAST #3207 **93/93 PASS** and full three-tier Ready #3209 **199/199 PASS** now supersede this earlier PENDING note. Manual Windows GUI Owner FINAL PASS and separately authorized production squash remain open.
 
 ## Draft FAST after current BodyScene/Delete/GUI source fix
 
 - [Windows Draft FAST #3207](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38737158148) on exact `5318e9d01b5a5707f43f2008970db2059cd9ed7d`: **PASS 93/93**, official DOC-01 `SS2 documentation verification PASSED`. This revision includes repaired v18 three-kind BodyScene and UI status cardinality and shared three-kind Properties Delete plus native GUI regression; it differs from previously focused source only by this Work evidence text. CI-04 known cold FAST build/CTest membership caveat persists (the full native PM05F target is **not** part of FAST); independent real Qt/OCCT FOCUSED #3205 PASS and desktop Workbench FOCUSED #3206 PASS certify those exact registered targets separately.
-- **Next**: change #402 to Ready for actual Windows FULL, preserve 199 existing Core/Kernel/Desktop regressions and the six native GUI RESOURCE_LOCK serializations; no owner S4B manual acceptance or protected product merge has occurred.
+- **Completed next step:** #402 Ready and Windows FULL #3209 **199/199 PASS**, six existing Qt cases serialized. Separate Owner Windows manual/technical FINAL PASS and production squash remain PENDING.
+
+## Windows Ready FULL #3209 — genuine three-tier PASS and unwaived manual Owner gate
+
+- [Windows Ready FULL #3209](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38737610098) at exact source/test/docs/evidence SHA `19e73191c578e6b01d9df73540cf4559227afc82`: **SUCCESS**. Real Windows Core **25/25**, native OCCT kernel **57/57**, Desktop Qt/OCCT **117/117** = **199/199 PASS**, official DOC-01 **`SS2 documentation verification PASSED`**. The already registered native `pm05f_r2.native_workbench_edit` **PASSED 43.27 s** with additive S4B Create/Edit/replace P3/Delete/Undo/Redo/cold native v18 assertions and unmodified S3A END↔MID witnesses.
+- Independently verified actual CTest start/finish boundaries: `wb01a.workbench_native_stress` 12:52:00→12:53:38 PASS (97.70 s); `pm05f_r2.native_workbench_edit` 12:53:38→12:54:21 PASS (43.27 s); `pg01d.native_face_ui` 12:54:21→12:54:31 PASS (9.72 s); `pg01c.native_project_edge_command` 12:54:31→12:54:37 PASS (6.24 s); `pg01d.native_face_boundary_d0` 12:54:37→12:54:37 PASS (0.34 s); `pg01d.native_face_fail_closed` 12:54:37→12:54:37 PASS (0.24 s). All SIX existing UI native Qt `RESOURCE_LOCK` tests ran; intervals were nonoverlapping. No test disabled, ignored or weakened; no CMake change in S4B.
+- An earlier Ready-trigger concurrency run [#3208](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38737489303) on the same HEAD was **CANCELLED** and is not counted as PASS. Separate Draft FAST [#3207](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38737158148) **PASS 93/93** plus DOC-01 PASS; dedicated current native Qt FOCUSED [#3205](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38736315670) **1/1 PASS**, ordinary Qt/CLI FOCUSED [#3206](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38736798016) **1/1 PASS**.
+- **Outstanding honest gates**: this ledger-only final-head update requires an independent exact-HEAD Windows Ready governance closure or applicable gate; **Owner Windows manual user-facing S4B demonstration / technical FINAL PASS and separate guarded product squash are not supplied by CI**. S4A earlier headless FINAL PASS must not be reused. Preserve original native #3200 RED/root cause and all other historical RED in the timeline. S4B `3 Points` ships only after explicitly authorized product squash, never automatically with an unchanged ACTIVE pointer.
+
+### Owner Windows manual GUI acceptance script (pending Owner observation)
+
+Open a native Windows Part with a real solid; use the existing Datum Plane toolbar action. Verify `Offset` and `Edge + Point (END/MID)` still behave unchanged, switch the same Operations constructor to `3 Points`; click three different certified END corners P1→P2→P3. Check no plane or Finish before the third valid point, duplicate-corner refusal, preview/Reverse normal reversal and second Reverse restoration. Finish creates one Datum in the same Reference Geometry tree; select Properties → Edit, choose the P3 slot and replace it with a different real END click, Finish, Undo/Redo; verify P1/P2 and DatumId unchanged and visibility/Delete use the same controls. Save/Close/Reopen v18 and confirm orientation/source intent and Tree. Repeat through Datum-owned Command Line `DATUMPLANE`, `3POINTS`, `P1/P2/P3`, `REVERSE`, `FINISH`, `CANCEL` and owning Enter/Esc without intercepting other tools. Log any UI drift; manual acceptance is **PENDING**, not inferred from automated tests.
 
 ## Finite acceptance matrix — current honest status
 
 | Gate | Status |
 |---|---|
-| F01 single tool / unchanged Offset + EdgePoint | Qt FOCUSED #3178 PASS for 3rd mode, original registered tests retained; FULL pending |
+| F01 single tool / unchanged Offset + EdgePoint | Qt FOCUSED #3178 and #3206 PASS; unchanged Offset/EdgePoint regressions included in Ready FULL #3209 199/199 PASS |
 | F02 real distinct material END Qt clicks | Native FOCUSED #3180 PASS |
 | F03 common-corner dedup / stale/unsupported | Shared corner and unavailable native source Qt focused PASS; extended positive/negative pending |
-| F04 geometric invalid / preview / signed Reverse | Headless v18 legacy native S4A PASS, UI no preview until valid from #3180; GUI signed Reverse test pending |
+| F04 geometric invalid / preview / signed Reverse | Native Qt #3180 and #3186 PASS actual preview/Reverse edit; headless v18 collinear negatives retained; Ready FULL #3209 PASS |
 | F05 UI Properties Edit/slot replacement/Undo | Real native Qt #3203/#3205 FOCUSED PASS actual END-click P3 replacement, stable P1/P2/DatumId, atomic Undo/Redo and native v18 cold replay |
-| F06 shared DatumId Tree/Visibility/Save/Reopen | Native Qt #3205 FOCUSED PASS shared Reference Geometry Tree/Properties, P3 Edit, independent native v18 cold replay, shared Properties Delete/Undo/Redo; final FULL PENDING |
-| F07 context-only CLI/Enter/Esc | Qt desktop #3178 PASS (bounded); explicit slot replacement with mouse pending |
+| F06 shared DatumId Tree/Visibility/Save/Reopen | Native Qt #3205 FOCUSED PASS Tree/Properties/P3 Edit/independent v18 cold replay/shared Properties Delete and Undo/Redo; Ready FULL #3209 PASS |
+| F07 context-only CLI/Enter/Esc | Desktop Qt #3178 and #3206 FOCUSED PASS scoped CLI, Enter/CANCEL and slot selection; real END mouse P3 replacement #3205 PASS; FULL #3209 PASS |
 | F08 additive real Qt/OCCT negative and source edit | Real native Qt #3203 and #3205 FOCUSED PASS strict three END picks, corner dedup, actual mouse P3 replacement and cold Edit replay |
-| F09 Windows FAST + Ready FULL 199/199 + DOC-01 | Updated-code Draft FAST **#3207 PASS 93/93** with official DOC-01 PASS; real Qt/OCCT native #3205 and desktop Qt #3206 FOCUSED PASS 1/1 each. Six real Qt tests must execute under existing RESOURCE_LOCK; independent Ready FULL **PENDING**. CI-04 warm-build issue and prior RED preserved. |
+| F09 Windows FAST + Ready FULL 199/199 + DOC-01 | Actual S4B FOCUSED #3205 native and #3206 desktop PASS; Draft FAST #3207 **93/93 PASS**, official DOC-01 PASS; Ready FULL #3209 **199/199 PASS** Core 25 + Kernel 57 + Desktop 117 with six serialized real Qt tests, official DOC-01 PASS. Exact evidence-only HEAD closure PENDING; CI-04 FAST caveat and prior RED retained. |
 | F10 Owner manual Windows GUI technical FINAL PASS, guarded production merge | PENDING separate Owner acceptance and authorization |
 
 Prior RED/Cancelled results stay in the audit trail. The six native Qt CTest RESOURCE_LOCK cases remain active; do not modify CMake or skip a single asserted historical test.
