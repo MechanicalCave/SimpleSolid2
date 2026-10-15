@@ -6637,6 +6637,162 @@ CadWorkbench::submitAxisCadInput(
     return {true, {}};
 }
 
+void CadWorkbench::beginThreePointDatum(
+    application::DocumentSession& session,
+    std::optional<part::DatumId> edit_id) {
+    datum_plane_draft_.reset();
+    datum_plane_evaluation_.reset();
+    edge_datum_create_revision_.reset();
+    edge_datum_edit_id_.reset();
+    edge_datum_create_source_.reset();
+    edge_datum_create_preview_.reset();
+    edge_datum_edge_pick_.reset();
+    edge_datum_vertex_pick_.reset();
+    edge_datum_mid_first_pick_.reset();
+    edge_datum_pick_stage_.reset();
+    three_point_datum_revision_ = session.document().revision();
+    three_point_datum_edit_id_ = edit_id;
+    three_point_datum_slots_ = {};
+    three_point_datum_preview_.reset();
+    three_point_datum_reverse_ = false;
+    three_point_datum_active_slot_ = 0U;
+    ++three_point_datum_context_generation_;
+    if (edit_id) {
+        const auto* datum =
+            session.document().findThreePointDatumPlane(*edit_id);
+        if (datum != nullptr) {
+            for (std::size_t i = 0; i < 3U; ++i)
+                three_point_datum_slots_[i] = datum->points[i];
+            three_point_datum_reverse_ = datum->reverse;
+        }
+    }
+    if (viewport_controller_) {
+        viewport_controller_->setDatumPointFirstMidHoverEnabled(false);
+        viewport_controller_->setBodyTopologyFacePickOnly(false);
+    }
+    if (datum_plane_constructor_combo_) {
+        const QSignalBlocker blocked{datum_plane_constructor_combo_};
+        datum_plane_constructor_combo_->setCurrentIndex(2);
+    }
+    refreshDatumPlaneEvaluation();
+    syncActionState();
+    notifyCadInputContextChanged();
+}
+
+void CadWorkbench::stageThreePointDatumFromBodyTopology(
+    const BodyTopologyInspection& inspection) {
+    if (!three_point_datum_revision_ || !document_session_ ||
+        !viewport_controller_ ||
+        document_session_->document().revision() !=
+            *three_point_datum_revision_ ||
+        !inspection.valid() || inspection.diagnostic_prefix ||
+        inspection.kind !=
+            viewer::BodyTopologyPresentationKind::vertex ||
+        inspection.strict_referenceability !=
+            kernel::ReferenceStatus::resolved ||
+        inspection.carrier_referenceability !=
+            kernel::ReferenceStatus::resolved ||
+        inspection.semantic_candidate_count != 1U ||
+        !inspection.point_address ||
+        !inspection.provider_point ||
+        !inspection.stage.valid() ||
+        inspection.stage.kind != part::BodyStageKind::after_feature)
+        return;
+    const auto pick =
+        viewport_controller_->primaryBodyTopologySelection();
+    if (!pick ||
+        pick->kind != viewer::BodyTopologyPresentationKind::vertex ||
+        !viewport_controller_->
+            bodyTopologySelectionAddressCurrent(*pick))
+        return;
+    const part::StageSemanticPointReference candidate{
+        inspection.stage,*inspection.point_address};
+    if (!candidate.valid()) return;
+    for (std::size_t i=0; i<3U; ++i) {
+        if (i == three_point_datum_active_slot_) continue;
+        if (three_point_datum_slots_[i] &&
+            (three_point_datum_slots_[i]->stage != candidate.stage ||
+             *three_point_datum_slots_[i] == candidate)) {
+            setStatusText(QStringLiteral(
+                "3 Points requires distinct certified END Points on "
+                "one current Body stage; that pick was not staged."));
+            return;
+        }
+    }
+    three_point_datum_slots_[three_point_datum_active_slot_] = candidate;
+    // Acquire P1 -> P2 -> P3; explicit slot buttons choose replacements.
+    for (std::size_t i=0; i<3U; ++i)
+        if (!three_point_datum_slots_[i]) {
+            three_point_datum_active_slot_ = i;
+            break;
+        }
+    ++three_point_datum_context_generation_;
+    refreshDatumPlaneEvaluation();
+    notifyCadInputContextChanged();
+}
+
+void CadWorkbench::refreshThreePointDatumPreview() {
+    three_point_datum_preview_.reset();
+    if (!three_point_datum_revision_ ||
+        !document_session_ || !solid_modeling_kernel_ ||
+        document_session_->document().revision() !=
+            *three_point_datum_revision_) return;
+    for (const auto& slot : three_point_datum_slots_)
+        if (!slot) return;
+    const std::array<part::StageSemanticPointReference,3> sources{
+        *three_point_datum_slots_[0],
+        *three_point_datum_slots_[1],
+        *three_point_datum_slots_[2]};
+    auto after = document_session_->document().state();
+    part::DatumId id;
+    if (three_point_datum_edit_id_) {
+        id = *three_point_datum_edit_id_;
+        auto found = std::find_if(
+            after.three_point_datum_planes.begin(),
+            after.three_point_datum_planes.end(),
+            [id](const part::ThreePointDatumPlane& datum) {
+                return datum.id == id;
+            });
+        if (found == after.three_point_datum_planes.end()) return;
+        found->points = sources;
+        found->reverse = three_point_datum_reverse_;
+    } else {
+        const auto allocated = after.next_datum_id.allocate();
+        if (!allocated) return;
+        id = *allocated;
+        after.three_point_datum_planes.push_back(
+            part::ThreePointDatumPlane{
+                id,sources,three_point_datum_reverse_,true});
+    }
+    const auto& datum = after.three_point_datum_planes.back();
+    if (!part::threePointDatumPlaneStructurallyValid(
+            three_point_datum_edit_id_
+                ? *std::find_if(
+                    after.three_point_datum_planes.begin(),
+                    after.three_point_datum_planes.end(),
+                    [id](const part::ThreePointDatumPlane& d) {
+                        return d.id == id;
+                    })
+                : datum)) return;
+    auto candidate = part::PartDocument::restore(
+        document_session_->document().documentId(),
+        std::move(after),document_session_->document().revision());
+    if (!candidate.ok()) return;
+    auto* provider = dynamic_cast<
+        kernel::IExactBoundedEdgeGeometryQuery*>(
+            solid_modeling_kernel_);
+    if (!provider) return;
+    const auto body=part::evaluatePart(
+        *candidate.document,*solid_modeling_kernel_);
+    const auto eval=part::evaluateDatums(
+        *candidate.document,body,*provider);
+    const auto* plane=eval.find(id);
+    if (plane && plane->status ==
+            part::DatumPlaneEvaluationStatus::resolved &&
+        plane->frame)
+        three_point_datum_preview_ = *plane->frame;
+}
+
 void CadWorkbench::selectDatumPlaneConstructor(
     int constructor_index) {
     auto* session = activeDocumentSession();
@@ -6644,10 +6800,31 @@ void CadWorkbench::selectDatumPlaneConstructor(
     if (session == nullptr ||
         solid_modeling_kernel_ == nullptr ||
         edge_datum_edit_id_ ||
-        (!datum_plane_draft_ && !edge_datum_create_revision_) ||
-        constructor_index < 0 || constructor_index > 1) {
+        (!datum_plane_draft_ && !edge_datum_create_revision_ &&
+         !three_point_datum_revision_) ||
+        constructor_index < 0 || constructor_index > 2) {
         return;
     }
+    if (constructor_index == 2) {
+        if (dynamic_cast<
+                kernel::IExactBoundedEdgeGeometryQuery*>(
+                    solid_modeling_kernel_) == nullptr) {
+            setStatusText(QStringLiteral(
+                "3 Points needs current exact OCCT END Point evidence."));
+            return;
+        }
+        beginThreePointDatum(*session);
+        setStatusText(QStringLiteral(
+            "3 Points — choose distinct END Points P1, P2, P3; "
+            "no plane until three certified, noncollinear sources."));
+        return;
+    }
+    // Leaving the S4B constructor also removes its transient authoring.
+    three_point_datum_revision_.reset();
+    three_point_datum_edit_id_.reset();
+    three_point_datum_slots_ = {};
+    three_point_datum_preview_.reset();
+    ++three_point_datum_context_generation_;
     if (constructor_index == 0) {
         if (viewport_controller_)
             viewport_controller_->setDatumPointFirstMidHoverEnabled(
