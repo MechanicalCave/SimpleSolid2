@@ -22,6 +22,8 @@
 - [Native Qt/OCCT FOCUSED #3180](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38729365434) **PASS 1/1** exact `a302c53665a42c2dcfbfa432b7464849b02f070f`, real `pm05f_r2.native_workbench_edit` **41.42 s**, preserving original S3A MID↔END and Qt hover checks. The new additive witness uses genuine Qt pointer END hover/click on three distinct real OCCT box corners, rejects a repeated shared corner, confirms non-collinear Frame3 and one S4A Part Create/Undo/Redo, and performs native v18 Save/Close/Reopen with an independent new OCCT provider.
 - **NEW, NOT YET TESTED:** native Qt Tree/Properties/true S4B Edit Reverse, identity-stable Undo/Redo and cold v18 replay additions after #3180. Never cite #3180 as testing these newer assertions.
 
+- [Windows native Qt FOCUSED #3184](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38730056916), exact `88e8fd4f9b3d02a199e6755dc453dbf66c08f722`, **RED 0/1** after **2.45 s**: previously existing S3A MID hover re-entry at `tests/pm05f_r2_native_workbench_edit_test.cpp:2312` failed before the new S4B Tree/Properties/Edit witness was reached (`Click the highlighted MID Point to continue.` rather than `Resolved MID`). This is the exact historic native UI scheduling/hover instability seen in S4A FULL #3156, not a new S4B source edit failure; **do not report the unexecuted new S4B Edit assertions as PASS**, do not weaken/skip the S3A test or change CMake beyond activated S4B allowlist. The S4B native source and UI compiled. Retry unchanged code under isolated real Windows FOCUSED; retain RED and escalate if consistently reproducing.
+
 ## Finite acceptance matrix — current honest status
 
 | Gate | Status |
