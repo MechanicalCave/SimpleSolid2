@@ -3493,6 +3493,10 @@ int main(int argc, char* argv[]) {
                 QApplication::processEvents();
                 CHECK(point_slot->isChecked());
                 bool p3_replaced_by_mouse=false;
+                std::size_t new_corner_coordinates=0U;
+                std::size_t geometrically_allowed_corners=0U;
+                std::size_t projected_corner_pixels=0U;
+                std::size_t complete_topology_probes=0U;
                 std::size_t eligible_new_corner_pixels=0U;
                 std::size_t native_replacement_clicks=0U;
                 std::size_t click_context_changes=0U;
@@ -3518,6 +3522,7 @@ int main(int argc, char* argv[]) {
                                 [&corner,&sameCorner](const auto& p) {
                                     return sameCorner(p,corner);
                                 })) continue;
+                        ++new_corner_coordinates;
                         const auto& p1=staged[0];
                         const auto& p2=staged[1];
                         const double ux=p2.x-p1.x,uy=p2.y-p1.y,uz=p2.z-p1.z;
@@ -3528,13 +3533,17 @@ int main(int argc, char* argv[]) {
                         const double cy=uz*vx-ux*vz;
                         const double cz=ux*vy-uy*vx;
                         if (cx*cx+cy*cy+cz*cz<1e-5) continue;
+                        ++geometrically_allowed_corners;
                         const auto pixel=choosePixel(corner);
                         if (!pixel) continue;
+                        ++projected_corner_pixels;
                         const auto probe=viewport->queryBodyTopology(
                             viewer::ViewportPoint2{
                                 double(pixel->x()),double(pixel->y())},
                             viewer::BodyTopologyPickFilter{
                                 false,false,true});
+                        if (probe.valid() && probe.completed)
+                            ++complete_topology_probes;
                         if (!probe.valid() || !probe.completed ||
                             probe.candidates.empty()) continue;
                         ++eligible_new_corner_pixels;
@@ -3565,6 +3574,10 @@ int main(int argc, char* argv[]) {
                 }
                 if (!p3_replaced_by_mouse) {
                     std::cerr << "S4B native P3 replacement not staged"
+                              << " fresh_corner_coords=" << new_corner_coordinates
+                              << " geometric_ok=" << geometrically_allowed_corners
+                              << " on_screen=" << projected_corner_pixels
+                              << " topology_queries=" << complete_topology_probes
                               << " candidate_pixels=" << eligible_new_corner_pixels
                               << " real_mouse_clicks=" << native_replacement_clicks
                               << " context_changes=" << click_context_changes
