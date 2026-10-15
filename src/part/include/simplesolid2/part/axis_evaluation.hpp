@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/kernel/profile_input.hpp>
+#include <simplesolid2/kernel/exact_bounded_edge_geometry.hpp>
 #include <simplesolid2/part/axis.hpp>
 #include <simplesolid2/part/semantic_topology_reference.hpp>
 
@@ -35,6 +36,13 @@ enum class AxisEvaluationDiagnostic {
     stale_datum_evaluation,
     support_stage_unavailable,
     invalid_frame,
+    // RG-02C/B1 — typed refusal for a candidate straight Body Edge
+    // Axis. No native runtime token or last-good line escapes.
+    edge_source_missing,
+    edge_source_ambiguous,
+    edge_source_unsupported,
+    edge_native_geometry_unavailable,
+    edge_not_straight,
 };
 
 struct ResolvedAxisLine final {
@@ -68,5 +76,15 @@ struct AxisEvaluation final {
     const AxisReference& reference,
     const PartEvaluation* part_evaluation = nullptr,
     const DatumEvaluation* datum_evaluation = nullptr) noexcept;
+
+// RG-02C/B1 first product seam: a read-only, provider-aware candidate
+// infinite UNORIENTED line from one strict stage-bound material Body Edge.
+// Reuses Q2's certified MaterialEdgeReference + scoped native geometry
+// resolver. This does not author/persist a PartAxis or expose a UI command.
+[[nodiscard]] AxisEvaluation resolveStraightMaterialEdgeAxisLine(
+    const PartDocument& document,
+    const MaterialEdgeReference& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) noexcept;
 
 } // namespace simplesolid2::part
