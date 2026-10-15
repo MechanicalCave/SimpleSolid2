@@ -1736,9 +1736,11 @@ void verifyS4AThreePointDatumLifecycle(
         const auto& key=unique_keys[sample[i]];
         points[i]={key.first,key.second};
     }
+    auto cursor=document.datumIdCursor();
+    const auto prospective_id=cursor.allocate();
+    CHECK(prospective_id.has_value());
     CHECK(part::threePointDatumPlaneStructurallyValid(
-        part::ThreePointDatumPlane{part::DatumId{1},points,false,true}) ==
-        part::DatumId{1}.valid()); // structural witness, allocated ID separately
+        part::ThreePointDatumPlane{*prospective_id,points,false,true}));
 
     auto cloned=part::PartDocument::restore(
         document.documentId(),document.state(),document.revision());
