@@ -331,6 +331,24 @@ QString axisEvaluationDiagnosticText(
         return QStringLiteral("Support stage unavailable");
     case part::AxisEvaluationDiagnostic::invalid_frame:
         return QStringLiteral("Invalid frame");
+    case part::AxisEvaluationDiagnostic::edge_source_missing:
+        return QStringLiteral("Missing Body Edge");
+    case part::AxisEvaluationDiagnostic::edge_source_ambiguous:
+        return QStringLiteral("Ambiguous Body Edge");
+    case part::AxisEvaluationDiagnostic::edge_source_unsupported:
+        return QStringLiteral("Unsupported Body Edge");
+    case part::AxisEvaluationDiagnostic::edge_native_geometry_unavailable:
+        return QStringLiteral("Exact Edge geometry unavailable");
+    case part::AxisEvaluationDiagnostic::edge_not_straight:
+        return QStringLiteral("Body Edge is not straight");
+    case part::AxisEvaluationDiagnostic::cylindrical_face_missing:
+        return QStringLiteral("Missing cylindrical Face");
+    case part::AxisEvaluationDiagnostic::cylindrical_face_ambiguous:
+        return QStringLiteral("Ambiguous / partitioned cylindrical Face");
+    case part::AxisEvaluationDiagnostic::cylindrical_face_not_cylinder:
+        return QStringLiteral("Body Face is not an analytic cylinder");
+    case part::AxisEvaluationDiagnostic::cylindrical_face_native_geometry_unavailable:
+        return QStringLiteral("Exact cylindrical Face geometry unavailable");
     }
     return QStringLiteral("Unknown");
 }
@@ -15493,10 +15511,18 @@ void CadWorkbench::refreshAxisProperties(
             fromUtf8(sketch_source->sketch_id.value()));
         axis_source_line_->setText(
             fromUtf8(sketch_source->entity_id.serialized()));
-    } else {
-        // Read-only until the Owner-approved Edge constructor UI runs.
+    } else if (const auto* face_source =
+            std::get_if<part::StrictCylindricalFaceAxisSource>(
+                &axis->source)) {
         axis_source_sketch_->setText(
-            QStringLiteral("Body stage"));
+            face_source->surface.stage.feature_id
+                ? QStringLiteral("After Feature %1").arg(fromUtf8(
+                    face_source->surface.stage.feature_id->serialized()))
+                : QStringLiteral("Body stage unavailable"));
+        axis_source_line_->setText(
+            QStringLiteral("Strict cylindrical Face / semantic Surface"));
+    } else {
+        axis_source_sketch_->setText(QStringLiteral("Body stage"));
         axis_source_line_->setText(
             QStringLiteral("Strict semantic Edge"));
     }
