@@ -516,8 +516,13 @@ AxisEvaluation resolveStrictCylindricalFaceAxisLine(
     }
     const auto face = std::find_if(
         catalog.faces.begin(), catalog.faces.end(), same_face);
-    if (!face->semantic_address ||
-        face->surface_candidates.size() != 1U ||
+    // H2 Owner-approved 19th-path D2 addendum (Fillet R30): a unique
+    // generated Face may have a uniquely resolved semantic Surface
+    // without a separate durable FeatureFaceAddress. Axis persists
+    // SurfaceReference, NOT FeatureFaceAddress. Keep every strict
+    // carrier/one-current-Face constraint checked above, and require
+    // this Face to certify that *one* identical Surface candidate.
+    if (face->surface_candidates.size() != 1U ||
         face->surface_candidates.front() != source.surface) {
         return unresolved(
             AxisEvaluationStatus::ambiguous,
@@ -628,8 +633,11 @@ authorStrictCylindricalFaceAxisSource(
     }
     const auto picked = std::find_if(
         catalog.faces.begin(), catalog.faces.end(), same);
-    if (picked->surface_candidates.size() != 1U ||
-        !picked->semantic_address) {
+    // Fillet's generated bounded Face can have no FeatureFaceAddress
+    // while its single semantic Surface candidate is fully resolved.
+    // The resolver below re-checks unique stage, carrier and one
+    // current native Face; no provider Face token becomes durable.
+    if (picked->surface_candidates.size() != 1U) {
         return fail(
             AxisEvaluationStatus::ambiguous,
             AxisEvaluationDiagnostic::cylindrical_face_ambiguous);
