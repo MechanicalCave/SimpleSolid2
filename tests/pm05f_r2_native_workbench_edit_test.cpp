@@ -10743,6 +10743,49 @@ int main(int argc, char* argv[]) {
                     const auto geometry =
                         kernel.queryExactCylindricalFaceAxis(
                             evaluated.body_solid, *scoped);
+                    const auto direct_resolution =
+                        part::resolveStrictCylindricalFaceAxisLine(
+                            repro.document(),
+                            part::SurfaceReference{
+                                evaluated.current_topology->stage,
+                                carrier.address},
+                            evaluated, kernel);
+                    const auto& all_faces =
+                        evaluated.current_topology->faces;
+                    const auto matching_face_count = std::count_if(
+                        all_faces.begin(), all_faces.end(),
+                        [token](const auto& entry) {
+                            return entry.runtime_token == token;
+                        });
+                    const auto picked = std::find_if(
+                        all_faces.begin(), all_faces.end(),
+                        [token](const auto& entry) {
+                            return entry.runtime_token == token;
+                        });
+                    CHECK(picked != all_faces.end());
+                    const auto same_surface = std::count_if(
+                        evaluated.current_topology->surfaces.begin(),
+                        evaluated.current_topology->surfaces.end(),
+                        [&carrier](const auto& entry) {
+                            return entry.address == carrier.address;
+                        });
+                    std::cerr
+                        << "RG02C_H2_OWNER_PART002_IDENTITY"
+                        << " face_matches=" << matching_face_count
+                        << " has_semantic_face="
+                        << (picked->semantic_address ? 1 : 0)
+                        << " carrier_candidates="
+                        << picked->surface_candidates.size()
+                        << " candidate_matches_carrier="
+                        << (picked->surface_candidates.size() == 1U &&
+                            picked->surface_candidates.front() ==
+                                carrier.address ? 1 : 0)
+                        << " surface_matches=" << same_surface
+                        << " direct_status=" << static_cast<int>(
+                               direct_resolution.status)
+                        << " direct_diagnostic=" << static_cast<int>(
+                               direct_resolution.diagnostic)
+                        << std::endl;
                     const auto admission =
                         part::authorStrictCylindricalFaceAxisSource(
                             repro.document(),
