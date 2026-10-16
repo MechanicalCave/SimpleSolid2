@@ -1115,6 +1115,48 @@ bool PartDocument::validAuthoredState(
         }
     }
 
+    // H1: same existing authored AxisId dependency floor for strict
+    // cylindrical Face sources. An unavailable/deleted source stage remains
+    // authored and repairable, but an existing downstream Revolve may not
+    // consume an Axis created from its own or a future Body result.
+    for (const auto& axis : state.axes) {
+        const auto* face_axis =
+            std::get_if<StrictCylindricalFaceAxisSource>(
+                &axis.source);
+        if (face_axis == nullptr ||
+            !face_axis->surface.stage.feature_id) {
+            continue;
+        }
+        const auto source_stage = std::find_if(
+            state.body.features.begin(),
+            state.body.features.end(),
+            [face_axis](const PartFeature& feature) {
+                return feature.id ==
+                    *face_axis->surface.stage.feature_id;
+            });
+        if (source_stage == state.body.features.end()) {
+            continue; // explicit repair required, never rebind by shape
+        }
+        const auto source_index =
+            static_cast<std::size_t>(std::distance(
+                state.body.features.begin(), source_stage));
+        for (std::size_t feature_index = 0U;
+             feature_index < state.body.features.size();
+             ++feature_index) {
+            const auto* reference = sourceAxisReference(
+                state.body.features[feature_index]);
+            if (reference == nullptr) {
+                continue;
+            }
+            const auto consumed =
+                authoredAxisIdForAxisReference(*reference);
+            if (consumed && *consumed == axis.id &&
+                source_index >= feature_index) {
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
