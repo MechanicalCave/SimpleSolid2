@@ -2,6 +2,7 @@
 
 #include <simplesolid2/kernel/edge_projection.hpp>
 #include <simplesolid2/kernel/exact_bounded_edge_geometry.hpp>
+#include <simplesolid2/kernel/exact_cylindrical_face_axis.hpp>
 #include <simplesolid2/kernel/face_boundary.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 
@@ -27,8 +28,20 @@ class OcctSolidModelingKernel final
     : public kernel::ISolidModelingKernel,
       public kernel::IEdgeProjectionQuery,
       public kernel::IExactBoundedEdgeGeometryQuery,
+      public kernel::IExactCylindricalFaceAxisQuery,
       public kernel::IFaceBoundaryQuery {
 public:
+    // P1-A: exact read-only current native Face analytic cylinder Axis.
+    [[nodiscard]] std::optional<kernel::ScopedExactCylindricalFace>
+    bindExactCylindricalFaceToBody(
+        kernel::RuntimeSolidHandle source_body,
+        kernel::RuntimeFaceToken current_face) noexcept override;
+
+    [[nodiscard]] kernel::ExactCylindricalFaceAxisResult
+    queryExactCylindricalFaceAxis(
+        kernel::RuntimeSolidHandle current_body,
+        const kernel::ScopedExactCylindricalFace& bound_face) noexcept override;
+
     [[nodiscard]] std::optional<kernel::ScopedBoundaryFace>
     bindFaceToBody(
         kernel::RuntimeSolidHandle source_body,

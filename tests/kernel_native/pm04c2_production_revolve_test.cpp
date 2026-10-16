@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstdint>
+#include <limits>
+#include <memory>
 #include <iostream>
 #include <numbers>
 #include <optional>
@@ -530,6 +533,159 @@ C1FaceEvidence observeC1ResultingBodyFaces(
     return counts;
 }
 
+// P1-A: the real OCCT cylinder surface (not the producing operation) owns
+// this infinite UNORIENTED line. Fixture dimensions are independent expected
+// geometry, not passed into the provider's Face query.
+void verifyC1P1NativeCylindricalFaceAxes(
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture,
+    kernel::Point3 expected_axis_direction,
+    bool revolve_radii,
+    bool require_cylinder = true) {
+    using Status = kernel::ExactCylindricalFaceAxisStatus;
+    CHECK(evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluation.body_solid);
+    CHECK(evaluation.current_topology.has_value());
+    CHECK(evaluation.current_topology->complete());
+    const auto& catalog = *evaluation.current_topology;
+    CHECK(!catalog.faces.empty());
+
+    std::size_t cylinders = 0U;
+    std::size_t non_cylinders = 0U;
+    std::size_t semantic_cylinders = 0U;
+    for (const auto& face : catalog.faces) {
+        const auto bound =
+            provider.bindExactCylindricalFaceToBody(
+                evaluation.body_solid,
+                face.runtime_token);
+        CHECK(bound.has_value());
+        CHECK(bound->valid());
+        CHECK(bound->face() == face.runtime_token);
+        CHECK(bound->sourceBody().get() ==
+              evaluation.body_solid.get());
+
+        const auto query = provider.queryExactCylindricalFaceAxis(
+            evaluation.body_solid, *bound);
+        if (query.status == Status::non_cylindrical_surface) {
+            CHECK(!query.geometry.has_value());
+            CHECK(!query.ok());
+            ++non_cylinders;
+            continue;
+        }
+        CHECK(query.status == Status::ok);
+        CHECK(query.ok());
+        CHECK(query.geometry.has_value());
+        const auto& g = *query.geometry;
+        CHECK(g.valid());
+        const auto& d = g.unoriented_unit_direction;
+        // Parallel modulo ± direction; axis location compared modulo
+        // translation along the line, never compared by exact Point3.
+        const kernel::Point3 cross{
+            d.y * expected_axis_direction.z -
+                d.z * expected_axis_direction.y,
+            d.z * expected_axis_direction.x -
+                d.x * expected_axis_direction.z,
+            d.x * expected_axis_direction.y -
+                d.y * expected_axis_direction.x};
+        const double parallel_error =
+            cross.x * cross.x +
+            cross.y * cross.y +
+            cross.z * cross.z;
+        CHECK(parallel_error < 1e-10);
+        const auto& pt = g.point_on_axis_world_mm;
+        const kernel::Point3 radial{
+            pt.y * expected_axis_direction.z -
+                pt.z * expected_axis_direction.y,
+            pt.z * expected_axis_direction.x -
+                pt.x * expected_axis_direction.z,
+            pt.x * expected_axis_direction.y -
+                pt.y * expected_axis_direction.x};
+        CHECK(radial.x * radial.x + radial.y * radial.y +
+              radial.z * radial.z < 1e-8);
+        CHECK(std::abs(g.radius_mm - 10.0) < 1e-6 ||
+              (revolve_radii &&
+               std::abs(g.radius_mm - 20.0) < 1e-6));
+        ++cylinders;
+
+        // A semantic carrier remains distinct from one bounded Face. Only
+        // assert the mapping if Part actually certified ONE carrier.
+        if (face.surface_candidates.size() == 1U) {
+            const auto& address = face.surface_candidates.front();
+            const auto carrier = std::find_if(
+                catalog.surfaces.begin(), catalog.surfaces.end(),
+                [&address](const auto& surface) {
+                    return surface.address == address;
+                });
+            if (carrier != catalog.surfaces.end() &&
+                carrier->status == kernel::ReferenceStatus::resolved) {
+                CHECK(carrier->surface_kind ==
+                      kernel::SurfaceKind::cylinder);
+                ++semantic_cylinders;
+            }
+        }
+    }
+    if (require_cylinder) {
+        CHECK(cylinders > 0U);
+        CHECK(semantic_cylinders > 0U);
+        CHECK(non_cylinders > 0U);
+    }
+    CHECK(!provider.bindExactCylindricalFaceToBody(
+        {}, catalog.faces.front().runtime_token));
+    CHECK(!provider.bindExactCylindricalFaceToBody(
+        evaluation.body_solid, {}));
+    CHECK(!provider.bindExactCylindricalFaceToBody(
+        evaluation.body_solid,
+        kernel::RuntimeFaceToken{
+            std::numeric_limits<std::uint64_t>::max()}));
+    const kernel::ScopedExactCylindricalFace empty;
+    const auto empty_query = provider.queryExactCylindricalFaceAxis(
+        evaluation.body_solid, empty);
+    CHECK(empty_query.status == Status::invalid_input);
+    CHECK(!empty_query.geometry.has_value());
+    CHECK(!provider.queryExactCylindricalFaceAxis({}, empty).ok());
+    std::cout << "RG02C_C1_P1A_NATIVE"
+              << " fixture=" << fixture
+              << " exact_cylinders=" << cylinders
+              << " noncylinders_rejected=" << non_cylinders
+              << " certified_carriers=" << semantic_cylinders
+              << " axis_unoriented=1"
+              << " persisted_axis=NOT_IMPLEMENTED\n";
+}
+
+void verifyC1P1WrongBodyGeneration(
+    const part::PartEvaluation& first,
+    const part::PartEvaluation& second,
+    kernel_occt::OcctSolidModelingKernel& provider) {
+    using Status = kernel::ExactCylindricalFaceAxisStatus;
+    CHECK(first.body_solid && second.body_solid);
+    CHECK(first.body_solid.get() != second.body_solid.get());
+    CHECK(first.current_topology.has_value());
+    CHECK(second.current_topology.has_value());
+    CHECK(!first.current_topology->faces.empty());
+    const auto face = first.current_topology->faces.front().runtime_token;
+    const auto bound = provider.bindExactCylindricalFaceToBody(
+        first.body_solid, face);
+    CHECK(bound.has_value());
+    // The same bare numeric token may be reused in the second evaluation.
+    // Provider body-pointer identity MUST defeat this possible collision.
+    const auto wrong = provider.queryExactCylindricalFaceAxis(
+        second.body_solid, *bound);
+    CHECK(wrong.status == Status::provider_mismatch);
+    CHECK(!wrong.geometry.has_value());
+    CHECK(!wrong.ok());
+
+    const auto invalid_provider_body =
+        std::make_shared<kernel::RuntimeSolid>();
+    CHECK(!provider.bindExactCylindricalFaceToBody(
+        invalid_provider_body, face));
+    const auto foreign = provider.queryExactCylindricalFaceAxis(
+        invalid_provider_body, *bound);
+    CHECK(foreign.status == Status::provider_mismatch);
+    CHECK(!foreign.geometry.has_value());
+}
+
 void verifyCylinderEdgeFeature(
     const part::PartDocument& source,
     const part::MaterialEdgeReference& edge,
@@ -578,6 +734,25 @@ void verifyCylinderEdgeFeature(
         is_fillet ? "circular-rim-fillet"
                   : "circular-rim-chamfer",
         false);
+    // The surviving native cylindrical patch, if any, is read through
+    // current Face geometry. A toroidal round-rim Fillet is never assumed
+    // to be an Axis-eligible cylinder.
+    std::size_t other_native_face_kinds = 0U;
+    for (const auto& face : evaluated.current_topology->faces) {
+        const auto scoped = kernel.bindExactCylindricalFaceToBody(
+            evaluated.body_solid, face.runtime_token);
+        CHECK(scoped.has_value());
+        const auto q = kernel.queryExactCylindricalFaceAxis(
+            evaluated.body_solid, *scoped);
+        CHECK(q.status == kernel::ExactCylindricalFaceAxisStatus::ok ||
+              q.status == kernel::ExactCylindricalFaceAxisStatus::
+                  non_cylindrical_surface);
+        if (!q.ok()) {
+            CHECK(!q.geometry.has_value());
+            ++other_native_face_kinds;
+        }
+    }
+    CHECK(other_native_face_kinds > 0U);
     std::size_t generated_cylinders = 0U;
     std::size_t generated_other = 0U;
     for (const auto& surface :
@@ -1020,6 +1195,8 @@ int main() {
         CHECK(feature.result_topology->complete());
         observeC1ResultingBodyFaces(
             evaluated, "revolve-full-360", true);
+        verifyC1P1NativeCylindricalFaceAxes(
+            evaluated, kernel, "revolve-full-360", {1.0, 0.0, 0.0}, true);
         const auto g0_full_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-full-360-part");
@@ -1126,6 +1303,13 @@ int main() {
         CHECK(evaluated.current_topology->complete());
         observeC1ResultingBodyFaces(
             evaluated, "extrude-circle-full-cylinder", true);
+        verifyC1P1NativeCylindricalFaceAxes(
+            evaluated, kernel, "extrude-circle-full-cylinder",
+            {0.0, 0.0, 1.0}, false);
+        const auto repeated = part::evaluatePart(extrude, kernel);
+        CHECK(repeated.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        verifyC1P1WrongBodyGeneration(evaluated, repeated, kernel);
         // RG-02A/G0 V10: real OCCT cylinder seam Vertices. Ordinary
         // Viewport pick eligibility only excludes integrity failure and
         // representation artifacts; it does not certify a durable Point.
@@ -1174,6 +1358,9 @@ int main() {
             *half_evaluation.features[1].result_topology;
         observeC1ResultingBodyFaces(
             half_evaluation, "extrude-cylinder-half-cut", true);
+        verifyC1P1NativeCylindricalFaceAxes(
+            half_evaluation, kernel, "extrude-cylinder-half-cut",
+            {0.0, 0.0, 1.0}, false);
         const auto half_counts = observeRevolvePartVertices(
             half_catalog, "V08-half-cylinder-cut");
         CHECK(half_counts.native == 6U);
@@ -1291,6 +1478,8 @@ int main() {
         CHECK(feature.result_topology->complete());
         observeC1ResultingBodyFaces(
             evaluated, "revolve-partial-90", true);
+        verifyC1P1NativeCylindricalFaceAxes(
+            evaluated, kernel, "revolve-partial-90", {1.0, 0.0, 0.0}, true);
         const auto g0_partial_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-partial-90-part");
