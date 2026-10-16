@@ -794,8 +794,27 @@ void verifyS0CircleTangentRegionCells() {
         << " region0=" << interior_hist[0]
         << " region1=" << interior_hist[1]
         << " region2=" << interior_hist[2] << '\n';
+    // Independent numerical witness for F3 before changing predicates.
+    // R12 asserts the full Circle->Arc Trim lifecycle in its own CTest.
+    sketch::SketchModel oblique;
+    const auto circle = oblique.addCircle({0.0, 0.0}, 5.0);
+    const auto left = oblique.addLine({-13.0, -9.0}, {-4.0, 3.0});
+    const auto right = oblique.addLine({13.0, -9.0}, {4.0, 3.0});
+    const auto left_contact = sketch::analyzeCurveRelation(
+        oblique, circle, left);
+    const auto right_contact = sketch::analyzeCurveRelation(
+        oblique, circle, right);
+    std::cerr
+        << "SKETCH_S0_B02_F3_RELATION"
+        << " left=" << left_contact.intersections.size()
+        << " right=" << right_contact.intersections.size()
+        << " left_status=" << static_cast<int>(left_contact.status)
+        << " right_status=" << static_cast<int>(right_contact.status)
+        << '\n';
     CHECK(endpoint_correct == 24U);
     CHECK(interior_correct == 24U);
+    CHECK(left_contact.intersections.size() == 1U);
+    CHECK(right_contact.intersections.size() == 1U);
 }
 
 } // namespace
