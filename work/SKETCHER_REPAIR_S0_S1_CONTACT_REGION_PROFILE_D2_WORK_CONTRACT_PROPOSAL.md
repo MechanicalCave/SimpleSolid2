@@ -1,6 +1,6 @@
 # Sketcher Repair S0/S1 — Contact Predicates, Arrangement, Profile Integrity — D2 Work Contract PROPOSAL
 
-**Status: PROPOSED EXECUTABLE CONTRACT; NOT OWNER-APPROVED EXACT D2; NOT ACTIVE; NO PRODUCT MUTATION AUTHORITY.** Prepared 2026-10-16 from protected main \`19d20eb3affb5656950604f8986233866c970012\` (H2 #453 merged). The Owner accepted the **S0–S3 repair program direction and S0/S1 as its first priority** in conversation on 2026-10-16, but had not yet reviewed/accepted *this exact bounded file allowlist and acceptance contract*. Distinguish these decisions.
+**Status: PROPOSED EXECUTABLE CONTRACT; NOT OWNER-APPROVED EXACT D2; NOT ACTIVE; NO PRODUCT MUTATION AUTHORITY.** Prepared 2026-10-16 from protected main `19d20eb3affb5656950604f8986233866c970012` (H2 #453 merged). The Owner accepted the **S0–S3 repair program direction and S0/S1 as its first priority** in conversation on 2026-10-16, but had not yet reviewed/accepted *this exact bounded file allowlist and acceptance contract*. Distinguish these decisions.
 
 **Governing authority:** AGENTS.md; governance/CONSTITUTION.md, FOUNDATION.md, ARCHITECTURE.md, DOCUMENTATION.md; accepted ADR-0008, ADR-0009, ADR-0011, ADR-0012, ADR-0014/-0016/-0017 as applicable; work/SKETCH_ROADMAP.md v1.9 (existing Sketcher semantics), work/F_REGION_PROFILE_SEMANTICS.md (accepted connected material Profile constraints), work/R12_TRIM_EXTEND_MUTUAL_EXTEND.md, and work/PART_MODELING_V1_ROADMAP.md v1.33. Current work/ACTIVE.yaml continues to reference **COMPLETED RG-02C/H2**; it does not authorize this Sketcher work.
 
@@ -12,14 +12,14 @@ Accept or amend this **bounded S0/S1 geometry/profile integrity contract**: §§
 
 ## 1. Evidence, status and defect boundary
 
-Audit supplied by Owner: **SS2_Sketcher_Repair_Guide_LLM(1).md**, dated 2026-10-07, authored against old main \`9547b986ccbd4dc7533c446c797eb5c4886ad0a6\`. It reports Linux GCC13 C++20 core probes, not a contemporary Windows/Qt/OCCT execution. On 2026-10-16, direct repository SHA comparisons prove **identical source blobs** between audit baseline and current main for:
-- \`src/sketch/region_analysis.cpp\` (blob \`76aa2bbe2b1e82bad01bdad597dc70b15d256c67\`),
-- \`src/sketch/structural_edit.cpp\` (\`a064fe0fd2957b8d8840de9c437bbf58cd92a18e\`),
-- \`src/sketch/interaction_state.cpp\` (\`8503af284549cbb67a9025c33f987947fd5b18cf\`).
+Audit supplied by Owner: **SS2_Sketcher_Repair_Guide_LLM(1).md**, dated 2026-10-07, authored against old main `9547b986ccbd4dc7533c446c797eb5c4886ad0a6`. It reports Linux GCC13 C++20 core probes, not a contemporary Windows/Qt/OCCT execution. On 2026-10-16, direct repository SHA comparisons prove **identical source blobs** between audit baseline and current main for:
+- `src/sketch/region_analysis.cpp` (blob `76aa2bbe2b1e82bad01bdad597dc70b15d256c67`),
+- `src/sketch/structural_edit.cpp` (`a064fe0fd2957b8d8840de9c437bbf58cd92a18e`),
+- `src/sketch/interaction_state.cpp` (`8503af284549cbb67a9025c33f987947fd5b18cf`).
 
-**B01 region/profile tangency — audit core reproduction, as-built mechanism corroborated:** \`analyzeRegions\` currently drops a contact with \`CurveContactKind::tangent\` when neither side is an endpoint (interior tangency); \`buildComponentLoops\` sorts outward half-edges by tangent_angle then edge index. The exact geometry's reported 24 permutations yield 12×0 regions and 12×1 region, never the expected 2. Failure is allocation-order dependent. Exact contribution of equal-tangent half-edge face-walk, seam/angle numeric error and connected-component construction remains **TRACE REQUIRED**, not independently established at current HEAD by execution.
+**B01 region/profile tangency — audit core reproduction, as-built mechanism corroborated:** `analyzeRegions` currently drops a contact with `CurveContactKind::tangent` when neither side is an endpoint (interior tangency); `buildComponentLoops` sorts outward half-edges by tangent_angle then edge index. The exact geometry's reported 24 permutations yield 12×0 regions and 12×1 region, never the expected 2. Failure is allocation-order dependent. Exact contribution of equal-tangent half-edge face-walk, seam/angle numeric error and connected-component construction remains **TRACE REQUIRED**, not independently established at current HEAD by execution.
 
-**B02 exact oblique tangency/Trim — audit core reproduction, as-built mechanism corroborated:** current \`lineCircle\` normalizes by hypot and uses sharp \`perpendicular > radius\` / \`perpendicular == radius\` classification. The audit F3 witness computes 5.0000000000000009 for a mathematically exact R=5 tangent, giving disjoint/no_intersection. The same relation is shared by Trim, Snap Intersection and arrangement. This is not a blanket Trim ban: vertical F1 cutters already yield a ready Trim when two distinct contact points exist. Preserve one-cutter refusal.
+**B02 exact oblique tangency/Trim — audit core reproduction, as-built mechanism corroborated:** current `lineCircle` normalizes by hypot and uses sharp `perpendicular > radius` / `perpendicular == radius` classification. The audit F3 witness computes 5.0000000000000009 for a mathematically exact R=5 tangent, giving disjoint/no_intersection. The same relation is shared by Trim, Snap Intersection and arrangement. This is not a blanket Trim ban: vertical F1 cutters already yield a ready Trim when two distinct contact points exist. Preserve one-cutter refusal.
 
 **In S0/S1 scope ONLY:** B01 and B02; correctness of region enumeration, stage-appropriate durable Part Profile RegionIntent, Add/Subtract material composition and current Extrude consumption/cold rebuild. The other four reported issue families B03a/B03b/B04/B05/B06 **remain registered but outside this first contract**.
 
@@ -27,7 +27,7 @@ Audit supplied by Owner: **SS2_Sketcher_Repair_Guide_LLM(1).md**, dated 2026-10-
 
 Register failing **RED** assertions on the actual new implementation branch/HEAD. Preserve original audit numbers separately as historical, not new Windows PASS/RED. Each fixture consists of **Regular**, not Construction, entities:
 
-- **F1:** Circle center (0,0), R=5; left Line (-5,-9)→(-5,0); right (5,-9)→(5,0); base (-5,-9)→(5,-9). Expected **two bounded arrangement cells**: disk \`25π = 78.53981633974483\` and lower pocket \`90 − 12.5π = 50.73009183012759\`; valid shared-edge composition outer area \`90 + 12.5π = 129.26990816987242\`. Assert invariant regions/boundaries for **all 24 creation orders**, not raw EntityId equality.
+- **F1:** Circle center (0,0), R=5; left Line (-5,-9)→(-5,0); right (5,-9)→(5,0); base (-5,-9)→(5,-9). Expected **two bounded arrangement cells**: disk `25π = 78.53981633974483` and lower pocket `90 − 12.5π = 50.73009183012759`; valid shared-edge composition outer area `90 + 12.5π = 129.26990816987242`. Assert invariant regions/boundaries for **all 24 creation orders**, not raw EntityId equality.
 - **F2:** Same Circle and base, extend left/right Line upper ends to (-5,7), (5,7). Both tangent points are interior points on the Lines. Expected **two cells**, excess dangling Line portions do not open the lower pocket.
 - **F2/Arc variant:** analytic Arc with C=(0,0), R=5, start -0.2 rad, sweep 6.0 rad; same base and both variants of tangent Lines. Verify only geometrically closed/legal sweep-bounded regions, with CW/CCW and seam variants and no false closure.
 - **F3:** Circle C=(0,0), R=5, Line left (-13,-9)→(-4,3), right (13,-9)→(4,3), optional base for profile analysis, Circle Trim pick (0,-5). Each end is a tangent and both distinct contacts are classified; expected **Trim READY**, one Circle replaced by one Arc through one legal structural-edit transaction, with original Circle EntityId consumed and fresh Arc EntityId under frozen R12 policy.
@@ -37,7 +37,7 @@ If actual current execution differs from the audit, revise the evidence/diagnosi
 
 ## 3. Bounded S1 implementation semantics
 
-1. **One common line–circle/arc relation:** fix the shared analytical predicate and finite parameter admission rather than adding Trim-only epsilon. F3 integer-vector witness: \`cross(q,d)^2 − R^2*dot(d,d) = 5625 − 5625 = 0\`. Choose an error-bounded stable/arithmetic-robust classification compatible with the supported coordinate domain, including dangerous overflow/underflow and near-tangent distinct secants; an unchanged result under scalar/rotation transforms must be justified by tests. Exact floating-point construction/round-trip policy must be documented; if a user-facing tolerance or uncertain-contact policy is required, **STOP for Owner D2 amendment**. No global epsilon, snap-aperture closure, input perturbation, viewer-point healing or near-contact merger.
+1. **One common line–circle/arc relation:** fix the shared analytical predicate and finite parameter admission rather than adding Trim-only epsilon. F3 integer-vector witness: `cross(q,d)^2 − R^2*dot(d,d) = 5625 − 5625 = 0`. Choose an error-bounded stable/arithmetic-robust classification compatible with the supported coordinate domain, including dangerous overflow/underflow and near-tangent distinct secants; an unchanged result under scalar/rotation transforms must be justified by tests. Exact floating-point construction/round-trip policy must be documented; if a user-facing tolerance or uncertain-contact policy is required, **STOP for Owner D2 amendment**. No global epsilon, snap-aperture closure, input perturbation, viewer-point healing or near-contact merger.
 2. **Semantic tangent topology:** preserve contact kind and endpoint status to arrangement. A tangency may create a graph vertex; it does **not** imply that two point-touching material interiors become one Part Profile. Do not silently change accepted F-region connectedness/holes rules. Support tangent at line endpoint and tangent interior, T-junction, coincident/overlap fail-closed existing behavior.
 3. **Geometric half-edge order:** resolve equal/small first-derivative direction from local analytic side/curvature (or proven equivalent) independent of insertion index, reversed source Line/Arc orientation, CW/CCW, Circle seam and angle wrap. IDs may stabilize otherwise identical data, **never determine geometric side or face topology**. Ensure bridge cancellation, cycle orientation, signed areas, hole containment and open-boundary diagnostics are consistent.
 4. **No authored mutation by analysis:** preserve Sketch entity geometry, roles, EntityIds and storage schema for region detection. Derived fragments/vertices remain disposable. Invalid/coincident/ambiguous/unsupported input fails closed.
@@ -63,28 +63,28 @@ If actual current execution differs from the audit, revise the evidence/diagnosi
 
 Only **after separate contract integration + ACTIVE-only activation**; a path is permitted exclusively for the narrow role below, and is not mandatory to edit. Missing needed path ⇒ STOP and request exact D2 amendment **before** changing it.
 
-1. \`src/sketch/region_analysis.cpp\` — shared analytical relation, tangent topology and half-edge arrangement/face-walk.
-2. \`src/sketch/structural_edit.cpp\` — only legally necessary integration of the corrected shared relation and R12 Trim nonregression.
-3. \`tests/pm02f_stage_aware_profile_evaluation_test.cpp\` — existing registered Core/Part region/Profile fixture: F1/F2, permutations and durable stage intent.
-4. \`tests/r12_structural_edit_core_test.cpp\` — existing registered R12 core F3 exact tangent, bounded-cutter and negative tests.
-5. \`tests/r12_structural_edit_document_session_test.cpp\` — command, fresh IDs and Undo/Redo if affected.
-6. \`tests/r12_structural_edit_persistence_test.cpp\` — Circle→Arc identity, roles and cold reopen.
-7. \`tests/pm02h_face_supported_extrude_workflow_test.cpp\` — Part command/Profile→Extrude integration with its **test WorkflowKernel**; not a substitute for native OCCT.
-8. \`tests/pm02i_face_supported_lifecycle_survival_test.cpp\` — stage, dependent profile and native document lifecycle if required.
-9. \`tests/kernel_native/pm00a_profile_cold_rebuild_test.cpp\` — EXISTING registered real native OCCT Profile Face, fresh-process/cold geometry input verification, corrected tangent input; no new native target.
-10. \`docs/internal/SHARED_2D.md\` — current-state exact relation/arrangement and R12 semantics.
-11. \`docs/internal/PART_DOCUMENTS.md\` — Profile/Feature evaluation and cold-rebuild as-built implications if they change.
-12. \`docs/product/pl/PARTS.md\` — visible current Sketch/Profile/Trim supported outcomes/limits.
-13. \`docs/product/en/PARTS.md\` — equivalent English Product documentation.
-14. \`docs/browser/index.html\` — **generated ONLY** using the unchanged official \`.\ss2.ps1 docs\` generator.
-15. **NEW** \`work/SKETCHER_REPAIR_S0_S1_CONTACT_REGION_PROFILE_ACCEPTANCE_EVIDENCE.md\` — factual native/desktop test IDs/SHA, RED/PASS/GAP, Owner outcome.
+1. `src/sketch/region_analysis.cpp` — shared analytical relation, tangent topology and half-edge arrangement/face-walk.
+2. `src/sketch/structural_edit.cpp` — only legally necessary integration of the corrected shared relation and R12 Trim nonregression.
+3. `tests/pm02f_stage_aware_profile_evaluation_test.cpp` — existing registered Core/Part region/Profile fixture: F1/F2, permutations and durable stage intent.
+4. `tests/r12_structural_edit_core_test.cpp` — existing registered R12 core F3 exact tangent, bounded-cutter and negative tests.
+5. `tests/r12_structural_edit_document_session_test.cpp` — command, fresh IDs and Undo/Redo if affected.
+6. `tests/r12_structural_edit_persistence_test.cpp` — Circle→Arc identity, roles and cold reopen.
+7. `tests/pm02h_face_supported_extrude_workflow_test.cpp` — Part command/Profile→Extrude integration with its **test WorkflowKernel**; not a substitute for native OCCT.
+8. `tests/pm02i_face_supported_lifecycle_survival_test.cpp` — stage, dependent profile and native document lifecycle if required.
+9. `tests/kernel_native/pm00a_profile_cold_rebuild_test.cpp` — EXISTING registered real native OCCT Profile Face, fresh-process/cold geometry input verification, corrected tangent input; no new native target.
+10. `docs/internal/SHARED_2D.md` — current-state exact relation/arrangement and R12 semantics.
+11. `docs/internal/PART_DOCUMENTS.md` — Profile/Feature evaluation and cold-rebuild as-built implications if they change.
+12. `docs/product/pl/PARTS.md` — visible current Sketch/Profile/Trim supported outcomes/limits.
+13. `docs/product/en/PARTS.md` — equivalent English Product documentation.
+14. `docs/browser/index.html` — **generated ONLY** using the unchanged official `.\ss2.ps1 docs` generator.
+15. **NEW** `work/SKETCHER_REPAIR_S0_S1_CONTACT_REGION_PROFILE_ACCEPTANCE_EVIDENCE.md` — factual native/desktop test IDs/SHA, RED/PASS/GAP, Owner outcome.
 
-NO \`tests/CMakeLists.txt\`, \`tests/core_only/CMakeLists.txt\`, new CTest target, \`src/ui/**\`, \`src/application/**\`, \`src/part/**\`, Kernel/OCCT production source or API, \`src/sketch/**\` other than 1–2, new persistence schema/serializer, build scripts, broad CI fixes, Mirror/Copy/Esc, point/grip snapping, PM-06 or other roadmap packages. If the pre-existing native Profile fixture cannot cover a genuine OCCT Extrude end-to-end, report evidence **GAP** or request narrow additional allowlist, **never claim a mocked Extrude test is native OCCT**.
+NO `tests/CMakeLists.txt`, `tests/core_only/CMakeLists.txt`, new CTest target, `src/ui/**`, `src/application/**`, `src/part/**`, Kernel/OCCT production source or API, `src/sketch/**` other than 1–2, new persistence schema/serializer, build scripts, broad CI fixes, Mirror/Copy/Esc, point/grip snapping, PM-06 or other roadmap packages. If the pre-existing native Profile fixture cannot cover a genuine OCCT Extrude end-to-end, report evidence **GAP** or request narrow additional allowlist, **never claim a mocked Extrude test is native OCCT**.
 
 ## 6. Required validation cadence, documentation and decisions
 
 - Initial work branch: preserve immutable base-main SHA and RED diagnostics before S1. No upstream mutated user files; source-based Linux historical reproduction is **not** a current Windows run.
-- Windows **FOCUSED** existing \`pm02f.stage_aware_profile_evaluation\`, \`r12.structural_edit_core\` and \`pm00a.profile_cold_rebuild\` (real OCCT lane; exact names confirmed by CTest), plus lifecycle witnesses under their registered CTest names. For separate native Core/Qt filters use existing project workflow syntax, not invented job flags.
+- Windows **FOCUSED** existing `pm02f.stage_aware_profile_evaluation`, `r12.structural_edit_core` and `pm00a.profile_cold_rebuild` (real OCCT lane; exact names confirmed by CTest), plus lifecycle witnesses under their registered CTest names. For separate native Core/Qt filters use existing project workflow syntax, not invented job flags.
 - Independently run Draft Windows **FAST** (complete supported tier), Ready Windows **FULL** Core-only, OCCT kernel-native and Qt/OCCT Desktop, and official DOC-01 PL+EN/generated Browser freshness; record exact SHA/run IDs/test counts. A source mutation after PASS invalidates the affected prior gate.
 - Final exact-HEAD Windows **CLOSURE** after factual evidence sync; separate Owner Windows **manual F1/F2/F3/Profile/Trim/Extrude** result with PASS/FAIL/GAP. Do not fabricate screenshots or a per-case Owner transcript.
 - Final Owner technical PASS and any GAP disposition **separate from** merge authorization; protected main guarded squash only on verified exact HEAD, independently authorized by Owner; verify resulting main SHA.
