@@ -39,11 +39,28 @@ struct StraightMaterialEdgeAxisSource final {
         const StraightMaterialEdgeAxisSource&) = default;
 };
 
-// One authored Axis identity, two distinct source semantics. Existing
-// Sketch-Line Axis remains authored in Sketch and stays backward compatible.
+// H1 conservative source A: a durable stage-qualified semantic Surface
+// address is admissible ONLY when its current native bounded Face is the
+// unique strictly resolved cylinder realization. A SurfaceReference itself
+// never authorizes a multi-Face carrier or encodes an OCCT Face token.
+struct StrictCylindricalFaceAxisSource final {
+    SurfaceReference surface;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return surface.valid();
+    }
+
+    friend bool operator==(
+        const StrictCylindricalFaceAxisSource&,
+        const StrictCylindricalFaceAxisSource&) = default;
+};
+
+// One authored Axis identity and three distinct source semantics. Sketch
+// Line and straight Body Edge layout and identity remain unchanged.
 using PartAxisSource = std::variant<
     SketchLineAxisSource,
-    StraightMaterialEdgeAxisSource>;
+    StraightMaterialEdgeAxisSource,
+    StrictCylindricalFaceAxisSource>;
 
 struct PartAxis final {
     AxisId id;
