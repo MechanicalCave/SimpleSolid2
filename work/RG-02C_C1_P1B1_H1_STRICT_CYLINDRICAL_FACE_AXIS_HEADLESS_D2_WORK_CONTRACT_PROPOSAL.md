@@ -89,7 +89,6 @@ This list is **Owner-accepted for future H1 implementation**, but **NOT ACTIVE o
 
 ## Documentation impact
 
-Internal docs: **required** for H1's new schema/source evaluation; exact `docs/internal/PART_DOCUMENTS.md` allowlisted.
-User/Product PL+EN: **not changed by this headless H1**; must be handled by separately contracted H2 shipping UI.
-Browser: official DOC-01 generated-only `docs/browser/index.html` if regenerating canonical documentation, no manual edits.
-This proposal PR itself changes **only this one work file** and does **not** satisfy any shipping documentation requirement until actual implementation.
+Internal docs: required
+User/Product docs: not required
+Reason: Activated headless H1 changes durable Axis source identity, stage resolution and native v20 persistence, so update allowlisted `docs/internal/PART_DOCUMENTS.md` before H1 completion. No new user-visible Axis constructor ships in H1: product PL/EN docs are reserved for separately accepted H2 UX implementation. Generate `docs/browser/index.html` only with the official DOC-01 tool when its canonical documentation changes; never hand-edit it. This governance-only DOC-01 syntax remediation implements no product behavior and does not change the Owner-accepted exact 18-path H1 allowlist or native GAP policy.
