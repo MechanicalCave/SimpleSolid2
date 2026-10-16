@@ -2,6 +2,7 @@
 
 #include <simplesolid2/kernel/profile_input.hpp>
 #include <simplesolid2/kernel/exact_bounded_edge_geometry.hpp>
+#include <simplesolid2/kernel/exact_cylindrical_face_axis.hpp>
 #include <simplesolid2/part/axis.hpp>
 #include <simplesolid2/part/semantic_topology_reference.hpp>
 
@@ -43,6 +44,12 @@ enum class AxisEvaluationDiagnostic {
     edge_source_unsupported,
     edge_native_geometry_unavailable,
     edge_not_straight,
+    // H1 strict Face A: a resolved semantic carrier must also have exactly
+    // one current bounded Face and an actual native analytic cylinder.
+    cylindrical_face_missing,
+    cylindrical_face_ambiguous,
+    cylindrical_face_not_cylinder,
+    cylindrical_face_native_geometry_unavailable,
 };
 
 struct ResolvedAxisLine final {
@@ -76,7 +83,8 @@ struct AxisEvaluation final {
     const AxisReference& reference,
     const PartEvaluation* part_evaluation = nullptr,
     const DatumEvaluation* datum_evaluation = nullptr,
-    kernel::IExactBoundedEdgeGeometryQuery* provider = nullptr) noexcept;
+    kernel::IExactBoundedEdgeGeometryQuery* provider = nullptr,
+    kernel::IExactCylindricalFaceAxisQuery* face_provider = nullptr) noexcept;
 
 // RG-02C/B1 first product seam: a read-only, provider-aware candidate
 // infinite UNORIENTED line from one strict stage-bound material Body Edge.
@@ -87,5 +95,41 @@ struct AxisEvaluation final {
     const MaterialEdgeReference& source,
     const PartEvaluation& evaluation,
     kernel::IExactBoundedEdgeGeometryQuery& provider) noexcept;
+
+// H1 current-stage strict Face resolution. `source` is durable provenance,
+// not a claim that all bounded patches of an analytic Surface can identify
+// the same authored Axis. Every query binds one actual native Face to its
+// current Feature-stage Body generation through the existing P1-A provider.
+[[nodiscard]] AxisEvaluation resolveStrictCylindricalFaceAxisLine(
+    const PartDocument& document,
+    const SurfaceReference& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactCylindricalFaceAxisQuery& provider) noexcept;
+
+// H1 read-only authoring admission from one transient actual picked Face
+// to exactly one certified stage-qualified strict semantic Surface source.
+// Never writes native Face tokens, XYZ, native radius or provider direction.
+struct StrictCylindricalFaceAxisAuthoringResult final {
+    AxisEvaluationStatus status{AxisEvaluationStatus::unsupported};
+    AxisEvaluationDiagnostic diagnostic{
+        AxisEvaluationDiagnostic::invalid_reference};
+    std::optional<StrictCylindricalFaceAxisSource> source;
+    std::optional<ResolvedAxisLine> line;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status == AxisEvaluationStatus::resolved &&
+               diagnostic == AxisEvaluationDiagnostic::none &&
+               source.has_value() && source->valid() &&
+               line.has_value() && line->valid();
+    }
+};
+
+[[nodiscard]] StrictCylindricalFaceAxisAuthoringResult
+authorStrictCylindricalFaceAxisSource(
+    const PartDocument& document,
+    BodyStageRef stage,
+    kernel::RuntimeFaceToken picked_face,
+    const PartEvaluation& evaluation,
+    kernel::IExactCylindricalFaceAxisQuery& provider) noexcept;
 
 } // namespace simplesolid2::part
