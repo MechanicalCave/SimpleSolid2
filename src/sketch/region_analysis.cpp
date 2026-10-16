@@ -3771,20 +3771,74 @@ composeRegionCellsImpl(
             std::nullopt};
     }
 
-    std::vector<RegionBoundaryUse2D>
-        boundary;
+    // Material connectivity is NOT the same as topological contact.
+    // Two regular cells touching only at one tangent vertex have no
+    // common positive-length edge and must not become one Profile.
+    // Build connectivity *before* arranging exposed loops: any shared
+    // opposite-oriented derived use is material adjacency; a point
+    // alone cannot unite islands.
+    std::vector<std::vector<RegionBoundaryUse2D>>
+        cell_boundaries;
+    cell_boundaries.reserve(cells.size());
     for (const auto& cell : cells) {
+        std::vector<RegionBoundaryUse2D> uses;
         appendMaterialLoop(
-            boundary,
+            uses,
             cell.outer,
             true);
-        for (const auto& hole :
-             cell.holes) {
+        for (const auto& hole : cell.holes) {
             appendMaterialLoop(
-                boundary,
+                uses,
                 hole,
                 false);
         }
+        cell_boundaries.push_back(std::move(uses));
+    }
+
+    if (cell_boundaries.size() > 1U) {
+        DisjointSet material_sets(cell_boundaries.size());
+        for (std::size_t first = 0U;
+             first < cell_boundaries.size();
+             ++first) {
+            for (std::size_t second = first + 1U;
+                 second < cell_boundaries.size();
+                 ++second) {
+                bool shared_edge = false;
+                for (const auto& use :
+                     cell_boundaries[first]) {
+                    if (std::any_of(
+                            cell_boundaries[second].begin(),
+                            cell_boundaries[second].end(),
+                            [&use](const RegionBoundaryUse2D& other) {
+                                return inverseUses(use, other);
+                            })) {
+                        shared_edge = true;
+                        break;
+                    }
+                }
+                if (shared_edge) {
+                    material_sets.unite(first, second);
+                }
+            }
+        }
+        const auto root = material_sets.find(0U);
+        for (std::size_t index = 1U;
+             index < cell_boundaries.size();
+             ++index) {
+            if (material_sets.find(index) != root) {
+                return {
+                    RegionCompositionStatus::disconnected,
+                    std::nullopt};
+            }
+        }
+    }
+
+    std::vector<RegionBoundaryUse2D> boundary;
+    for (const auto& uses : cell_boundaries) {
+        boundary.insert(
+            boundary.end(),
+            uses.begin(),
+            uses.end());
     }
 
     std::vector<RegionBoundaryUse2D>
