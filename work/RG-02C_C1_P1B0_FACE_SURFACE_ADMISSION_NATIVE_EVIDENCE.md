@@ -1,6 +1,22 @@
 # RG-02C/C1-P1-B0 — native picked-Face / semantic Surface admission evidence
 
-**Status: AUTOMATED NATIVE FOCUSED 1/1, INDEPENDENT FAST 93/93, AND READY FULL 199/199 PASS; FINAL EVIDENCE-ONLY EXACT-HEAD CLOSURE AND OWNER TECHNICAL FINAL PASS STILL PENDING.** This ledger records only actually executed observations and does not establish A/B/C durable Axis source semantics or a Part Axis product. Baseline: protected `main` `6ff550a0b448300a0441954ab67825f7fbecc7c7` after separately Owner-authorized, Windows-CLOSURE-verified ACTIVE-only [PR #437](https://github.com/MechanicalCave/SimpleSolid2/pull/437), which activates the exact already Owner-accepted [P1-B0 D2 evidence contract](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) merged through governance [PR #436](https://github.com/MechanicalCave/SimpleSolid2/pull/436).
+**Status: OWNER TECHNICAL FINAL PASS — ACCEPTED 2026-10-16 WITH EXPLICIT NATIVE GAP DEFERRAL; PR #438 EVIDENCE INTEGRATION SQUASH NOT YET AUTHORIZED.** Genuine Windows native FOCUSED 1/1, independent FAST 93/93, Ready FULL 199/199, and prior exact-head CLOSURE #3357 all PASS. This new Owner-decision-only ledger HEAD requires its own fresh exact-head Windows CLOSURE before any separate protected-main merge authorization. This ledger records only actually executed observations and does not establish A/B/C durable Axis source semantics or a Part Axis product. Baseline: protected `main` `6ff550a0b448300a0441954ab67825f7fbecc7c7` after separately Owner-authorized, Windows-CLOSURE-verified ACTIVE-only [PR #437](https://github.com/MechanicalCave/SimpleSolid2/pull/437), which activates the exact already Owner-accepted [P1-B0 D2 evidence contract](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) merged through governance [PR #436](https://github.com/MechanicalCave/SimpleSolid2/pull/436).
+
+## Owner technical FINAL PASS — exact scope accepted (2026-10-16)
+
+After reviewing the genuine FOCUSED, FAST, FULL and exact-head CLOSURE results and the expressly enumerated native GAPs, the Agent asked the Owner: **“czy akceptujesz P1-B0 technical FINAL PASS z jawnym odroczeniem tych GAP, czy wymagasz dodatkowego, odrębnie ograniczonego dowodu natywnego?”**, and expressly clarified that this was **independent of any later guarded squash of #438 or selection of durable Axis semantics**. The Owner replied **`akceptuje - kontynuuj`**. Thus the Owner **ACCEPTED P1-B0 TECHNICAL FINAL PASS for this bounded evidence-only P1-B0 test scope, with the native GAPs listed below explicitly deferred**.
+
+The acceptance means these P1-B0 observations and run results may be carried forward as bounded native evidence; it **does not** turn missing fixtures into witnessed PASS, and it **does not** decide whether persistent Axis meaning uses (A) one strict bounded Face, (B) a certified entire semantic Surface carrier, or (C) a future patch discriminator. The genuine analytic multi-Face same-cylinder carrier with `strict_face_status=ambiguous` and independently proved all-member axis/radius agreement is still **GAP / NOT PROVEN**. The independent owner/stage/provenance/consistency negative cases not demonstrably exercised remain **NOT TESTED**. Inherited Owner-deferred P1-A native reversed Face, straight-edge Fillet-generated cylinder, and fault/degenerate checks also remain **NOT TESTED**, not newly accepted as executed proof.
+
+**Separate gates still CLOSED:** the Owner's reply did **not** authorize guarded squash of implementation/evidence PR #438 to protected `main`; it did **not** activate or implement Part-owned cylindrical-Face Axis authoring, `AxisReference` changes, versioned schema, UI/Viewer/CLI, Revolve, or P1-B product. After this acceptance-only ledger update, the **new exact PR HEAD needs independent Windows evidence-only CLOSURE SUCCESS** before requesting a **separate** Owner guarded-squash authorization. No new native FOCUSED/FAST/FULL run is claimed for the evidence-only change.
+
+### Accepted technical evidence gates and exact provenance
+
+- Actual native FOCUSED [#3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911057989) at `07efe573b6115cf9b9d40514efd4f1fae10e0c78`: **1/1 PASS**, OCCT Release `pm04c2.production_revolve`.
+- Independent Draft FAST [#3353](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911301976) at `407d94c04fef41ae24d06714ddc0e61324fd7e39`: **93/93 PASS**; DOC-01 PASS.
+- Ready FULL [#3356](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911535845) at `174751b6bde540e87b850afc01658cf017c4218c`: **199/199 PASS** (Core 25, Kernel-native Release 57, Desktop Qt/OCCT 117); DOC-01 PASS. #3355 was **CANCELLED**, never counted as PASS.
+- Prior exact-head CLOSURE [#3357](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38912219024) at `2991283890cb6a2276584f12f61bd027aad56219`: **SUCCESS**. This is CI validation of the previous HEAD, not the post-Owner-acceptance commit.
+- Final post-acceptance exact-head CLOSURE: **PENDING**, with fresh run/commit to be established. Never cite #3357 as validation of the new HEAD.
 
 ## Exact scope and test wiring
 
@@ -43,9 +59,10 @@ The [Windows #3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/
 | Windows native FOCUSED `pm04c2.production_revolve` (real OCCT/MSVC) | [#3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911057989), HEAD `07efe573b6115cf9b9d40514efd4f1fae10e0c78` | **1/1 PASS** — actual Windows/MSVC Release OCCT binary and CTest #35 Passed in 0.11 s; DOC-01 bootstrap PASS |
 | Independent Windows Draft FAST | [#3353](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911301976), HEAD `407d94c04fef41ae24d06714ddc0e61324fd7e39` | **93/93 PASS**, zero failures; official documentation verification PASS |
 | Windows Ready FULL Core-only, Kernel-native, Qt/OCCT Desktop, DOC-01 | [#3356](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911535845), HEAD `174751b6bde540e87b850afc01658cf017c4218c` | **199/199 PASS**: Core-only 25/25, kernel-native Release/OCCT 57/57 (including `pm04c2.production_revolve` Passed 0.09 s), Desktop Qt/OCCT 117/117; official DOC-01 PASS |
-| Final evidence-only exact-head CLOSURE | Not run yet | PENDING |
-| Owner B0 technical FINAL PASS | Not requested | PENDING |
-| Independent guarded squash of evidence PR | Not authorized | NOT AUTHORIZED |
+| Previous evidence-only exact-head CLOSURE | [#3357](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38912219024), HEAD `2991283890cb6a2276584f12f61bd027aad56219` | **SUCCESS** — validates the prior evidence ledger HEAD, not the new Owner-decision HEAD |
+| Post-Owner-decision exact-head CLOSURE | New acceptance-only HEAD — workflow not yet completed | **PENDING** |
+| Owner B0 technical FINAL PASS | Owner `akceptuje - kontynuuj`, 2026-10-16 | **ACCEPTED with explicit native GAP deferrals (limited to B0 evidence only)** |
+| Independent guarded squash of evidence PR #438 | Requires a separate express Owner decision after new exact-head CLOSURE | **NOT AUTHORIZED / NOT MERGED** |
 
 The independent Windows Draft [FAST #3353](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911301976) executed 93/93 tests with zero failures at `407d94c04fef41ae24d06714ddc0e61324fd7e39`; official `SS2 documentation verification PASSED`. This is not substituted for the separate native FOCUSED #3352 or forthcoming complete Ready FULL. All missing per-Face counts and the multi-Face-cylinder-positive requirement remain explicitly GAP/NOT PROVEN.
 
