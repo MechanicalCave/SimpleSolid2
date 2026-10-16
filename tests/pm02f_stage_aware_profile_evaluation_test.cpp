@@ -5,6 +5,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cmath>
 #include <cstdlib>
@@ -727,9 +728,80 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
         << " global_tolerance_unchanged=1\\n";
 }
 
+// S0 baseline witness for B01, enabled before changing region algorithms.
+// Assertions encode corrected geometry, not the historically observed defect.
+// Keep emitted counts visible in genuine Windows RED job logs.
+void verifyS0CircleTangentRegionCells() {
+    const std::array<int, 4> initial{0, 1, 2, 3};
+    constexpr double pi = std::numbers::pi_v<double>;
+    constexpr double disk_area = 25.0 * pi;
+    constexpr double pocket_area = 90.0 - 12.5 * pi;
+    std::size_t endpoint_correct = 0U;
+    std::size_t interior_correct = 0U;
+    std::array<std::size_t, 5> endpoint_hist{};
+    std::array<std::size_t, 5> interior_hist{};
+    std::array<int, 4> order = initial;
+
+    do {
+        const auto evaluate = [&](bool extended) {
+            sketch::SketchModel model;
+            for (int kind : order) {
+                if (kind == 0) {
+                    [[maybe_unused]] const auto circle =
+                        model.addCircle({0.0, 0.0}, 5.0);
+                } else if (kind == 1) {
+                    [[maybe_unused]] const auto left =
+                        model.addLine({-5.0, -9.0},
+                                      {-5.0, extended ? 7.0 : 0.0});
+                } else if (kind == 2) {
+                    [[maybe_unused]] const auto right =
+                        model.addLine({5.0, -9.0},
+                                      {5.0, extended ? 7.0 : 0.0});
+                } else {
+                    [[maybe_unused]] const auto base =
+                        model.addLine({-5.0, -9.0}, {5.0, -9.0});
+                }
+            }
+            const auto analysis = sketch::analyzeRegions(model);
+            std::vector<double> areas;
+            for (const auto& region : analysis.regions) {
+                areas.push_back(region.area);
+            }
+            std::sort(areas.begin(), areas.end());
+            const bool correct =
+                areas.size() == 2U &&
+                std::abs(areas[0] - pocket_area) < 1e-8 &&
+                std::abs(areas[1] - disk_area) < 1e-8;
+            return std::pair<std::size_t, bool>{
+                areas.size(), correct};
+        };
+        const auto [endpoint_count, endpoint_ok] = evaluate(false);
+        const auto [interior_count, interior_ok] = evaluate(true);
+        ++endpoint_hist[std::min(endpoint_count, std::size_t{4})];
+        ++interior_hist[std::min(interior_count, std::size_t{4})];
+        endpoint_correct += static_cast<std::size_t>(endpoint_ok);
+        interior_correct += static_cast<std::size_t>(interior_ok);
+    } while (std::next_permutation(order.begin(), order.end()));
+
+    std::cerr
+        << "SKETCH_S0_B01_ENDPOINT_24"
+        << " correct=" << endpoint_correct
+        << " region0=" << endpoint_hist[0]
+        << " region1=" << endpoint_hist[1]
+        << " region2=" << endpoint_hist[2] << '\n'
+        << "SKETCH_S0_B01_INTERIOR_24"
+        << " correct=" << interior_correct
+        << " region0=" << interior_hist[0]
+        << " region1=" << interior_hist[1]
+        << " region2=" << interior_hist[2] << '\n';
+    CHECK(endpoint_correct == 24U);
+    CHECK(interior_correct == 24U);
+}
+
 } // namespace
 
 int main() {
+    verifyS0CircleTangentRegionCells();
     verifyExactRegionEndpointBoundary();
     verifyProjectedArcDatumProfileEndpointEvidence();
     auto fixture = makeFixture();
