@@ -2034,6 +2034,218 @@ int main() {
         CHECK(cap_side_curves > 0U);
     }
 
+    // H1 positive Edit: two DIFFERENT real current cylindrical Face
+    // carriers from an annular 90-degree native Revolve. No geometric
+    // equality rebinding, provider ordinal or invented Surface identity.
+    {
+        const auto document = makePartRevolve(
+            core::BuiltinReferenceRole::x_axis,
+            {10.0, 3.0}, {20.0, 10.0}, pi / 2.0);
+        const auto evaluated = part::evaluatePart(document, kernel);
+        CHECK(evaluated.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(evaluated.current_topology);
+        CHECK(evaluated.current_topology->complete());
+        const auto stage = evaluated.current_topology->stage;
+        std::vector<part::StrictCylindricalFaceAxisSource> sources;
+        for (const auto& face : evaluated.current_topology->faces) {
+            const auto authored = part::authorStrictCylindricalFaceAxisSource(
+                document, stage, face.runtime_token, evaluated, kernel);
+            if (!authored.ok()) {
+                CHECK(!authored.source);
+                continue;
+            }
+            CHECK(authored.source);
+            CHECK(authored.line && authored.line->valid());
+            if (std::find(sources.begin(), sources.end(),
+                          *authored.source) == sources.end()) {
+                sources.push_back(*authored.source);
+            }
+        }
+        CHECK(sources.size() >= 2U);
+        CHECK(sources[0].surface != sources[1].surface);
+
+        auto copy = part::PartDocument::restore(
+            document.documentId(), document.state(), document.revision());
+        CHECK(copy.ok());
+        application::DocumentSession session{
+            {}, std::move(*copy.document)};
+        const auto created = session.execute(
+            application::CreateAxisCommand{
+                part::PartAxisSource{sources[0]},
+                session.document().revision(),
+                "H1 Face Edit Distinct Carrier", true},
+            kernel);
+        CHECK(created.ok() && created.axis_id);
+        const auto axis_id = *created.axis_id;
+        const auto original_undo = session.undoDepth();
+        const auto original_revision = session.document().revision();
+        const auto edited = session.execute(
+            application::EditAxisCommand{
+                axis_id, part::PartAxisSource{sources[1]},
+                original_revision},
+            kernel);
+        CHECK(edited.ok() && edited.changed);
+        CHECK(session.document().revision() != original_revision);
+        CHECK(session.undoDepth() == original_undo + 1U);
+        CHECK(session.document().findAxis(axis_id));
+        CHECK(session.document().findAxis(axis_id)->source ==
+              part::PartAxisSource{sources[1]});
+        const auto after = part::evaluatePart(session.document(), kernel);
+        const auto resolved = part::resolveAxisReference(
+            session.document(),
+            part::AxisReference{part::AuthoredAxisReference{axis_id}},
+            &after, nullptr, nullptr, &kernel);
+        CHECK(resolved.status == part::AxisEvaluationStatus::resolved);
+        CHECK(resolved.line && resolved.line->valid());
+        CHECK(resolved.required_body_stage ==
+              std::optional<part::BodyStageRef>{stage});
+        CHECK(session.undo().ok());
+        CHECK(session.document().findAxis(axis_id)->source ==
+              part::PartAxisSource{sources[0]});
+        CHECK(session.redo().ok());
+        CHECK(session.document().findAxis(axis_id)->source ==
+              part::PartAxisSource{sources[1]});
+        std::cout << "RG02C_C1_P1B1_H1_EDIT"
+                  << " distinct_strict_face_sources=" << sources.size()
+                  << " axis_id_preserved=1"
+                  << " native_resolved=1 undo_redo=1\n";
+    }
+
+    // H1 actual downstream consumer: a real full cylinder's strict Face
+    // Axis drives a later Revolve CUT, producing a valid different native
+    // Body. Verify v20 Save/Reopen and cold provider recomputation of BOTH
+    // the Axis and its dependent Feature, not only an isolated Axis line.
+    {
+        const auto document = makePartRevolve(
+            core::BuiltinReferenceRole::x_axis,
+            {10.0, 0.0}, {20.0, 10.0}, full_turn);
+        const auto initial = part::evaluatePart(document, kernel);
+        CHECK(initial.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(initial.current_topology);
+        CHECK(initial.current_topology->complete());
+        std::optional<part::StrictCylindricalFaceAxisSource> cylinder;
+        for (const auto& face : initial.current_topology->faces) {
+            const auto selected = part::authorStrictCylindricalFaceAxisSource(
+                document, initial.current_topology->stage,
+                face.runtime_token, initial, kernel);
+            if (selected.ok()) {
+                CHECK(selected.source && selected.line);
+                cylinder = *selected.source;
+                break;
+            }
+        }
+        CHECK(cylinder);
+        const auto source_stage = cylinder->surface.stage;
+        auto copy = part::PartDocument::restore(
+            document.documentId(), document.state(), document.revision());
+        CHECK(copy.ok());
+        application::DocumentSession session{
+            {}, std::move(*copy.document)};
+        const auto axis = session.execute(
+            application::CreateAxisCommand{
+                part::PartAxisSource{*cylinder},
+                session.document().revision(),
+                "H1 Native Face Consumer Axis", true},
+            kernel);
+        CHECK(axis.ok() && axis.axis_id);
+        const auto axis_id = *axis.axis_id;
+        const auto sketch_created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(sketch_created.ok() && sketch_created.sketch_id);
+        const auto sketch_id = *sketch_created.sketch_id;
+        const auto rectangle_created = session.execute(
+            application::AddSketchRectangleCommand{
+                sketch_id, session.document().revision(),
+                {12.0, 0.0}, {18.0, 5.0},
+                sketch::EntityRole::regular, false});
+        CHECK(rectangle_created.ok());
+        const auto* sketch_model = session.document().findSketch(sketch_id);
+        CHECK(sketch_model);
+        const auto regions = sketch::analyzeRegions(sketch_model->model);
+        CHECK(regions.complete() && regions.regions.size() == 1U);
+        const auto intent =
+            part::makeProfileRegionIntent(regions.regions.front());
+        CHECK(intent);
+        const auto profile = session.execute(
+            application::CreateProfileCommand{
+                sketch_id, session.document().revision(), *intent});
+        CHECK(profile.ok() && profile.profile_id);
+
+        auto state = session.document().state();
+        const auto consumer_id = state.body.next_feature_id.allocate();
+        CHECK(consumer_id);
+        state.body.features.push_back(part::PartFeature{
+            *consumer_id, "H1 Face Axis Driven Revolve Cut", false,
+            part::RevolveFeature{
+                *profile.profile_id,
+                part::AxisReference{part::AuthoredAxisReference{axis_id}},
+                part::RevolveOperation::cut,
+                part::OneSidedRevolveExtent{
+                    core::AngleValue{full_turn}, false}}});
+        auto authored = part::PartDocument::restore(
+            session.document().documentId(), std::move(state),
+            session.document().revision());
+        CHECK(authored.ok());
+        const auto evaluated = part::evaluatePart(
+            *authored.document, kernel);
+        CHECK(evaluated.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(evaluated.features.size() == 2U);
+        CHECK(evaluated.features.back().status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(evaluated.features.back().result_topology);
+        CHECK(evaluated.features.back().result_topology->complete());
+        const auto resolved = part::resolveAxisReference(
+            *authored.document,
+            part::AxisReference{part::AuthoredAxisReference{axis_id}},
+            &evaluated, nullptr, nullptr, &kernel);
+        CHECK(resolved.status == part::AxisEvaluationStatus::resolved);
+        CHECK(resolved.line && resolved.line->valid());
+        CHECK(resolved.required_body_stage ==
+              std::optional<part::BodyStageRef>{source_stage});
+
+        const auto native_path =
+            std::filesystem::temp_directory_path() /
+            "ss2_h1_native_face_axis_revolve_consumer_v20.ss2part";
+        part::PartDocumentStore store;
+        const auto saved = store.createNew(native_path, *authored.document);
+        CHECK(saved.ok());
+        const auto native =
+            persistence::readNativeDocumentContainer(native_path);
+        CHECK(native.ok());
+        CHECK(native.package->descriptor.domain_schema_version == 20);
+        const auto reopened = store.load(native_path);
+        CHECK(reopened.ok() && reopened.document);
+        CHECK(reopened.document->findAxis(axis_id));
+        CHECK(reopened.document->findAxis(axis_id)->source ==
+              part::PartAxisSource{*cylinder});
+        const auto cold = part::evaluatePart(*reopened.document, kernel);
+        CHECK(cold.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(cold.features.size() == 2U);
+        CHECK(cold.features.back().status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(cold.features.back().result_topology);
+        CHECK(cold.features.back().result_topology->complete());
+        const auto cold_axis = part::resolveAxisReference(
+            *reopened.document,
+            part::AxisReference{part::AuthoredAxisReference{axis_id}},
+            &cold, nullptr, nullptr, &kernel);
+        CHECK(cold_axis.status == part::AxisEvaluationStatus::resolved);
+        CHECK(cold_axis.line && cold_axis.line->valid());
+        CHECK(cold_axis.required_body_stage ==
+              std::optional<part::BodyStageRef>{source_stage});
+        std::error_code remove_error;
+        CHECK(std::filesystem::remove(native_path, remove_error));
+        CHECK(!remove_error);
+        std::cout << "RG02C_C1_P1B1_H1_CONSUMER"
+                  << " native_face_axis_revolve_cut=1"
+                  << " v20_reopen_cold_revolve=1\n";
+    }
+
     std::cout
         << "PM-04C2 production OCCT Revolve tests passed\n";
     return EXIT_SUCCESS;
