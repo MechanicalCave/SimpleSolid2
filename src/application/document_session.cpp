@@ -3927,7 +3927,10 @@ DocumentSession::evaluateRevolveDraft(
                     &datums,
                     preview_effective_sketch
                         ? &preview_effective_sketch->model
-                        : nullptr);
+                        : nullptr,
+                    dynamic_cast<
+                        kernel::IExactBoundedEdgeGeometryQuery*>(
+                            &modeling_kernel));
             if (resolved.ok() &&
                 preview_upstream_ready) {
                 auto preview =
