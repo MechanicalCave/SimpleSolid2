@@ -941,6 +941,42 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
         CHECK(rechecked.line);
         CHECK(*rechecked.line == *admitted.line);
 
+        // Real-document identity is not borrowed from a similar geometry.
+        // Even the identical semantic source is not current evidence for
+        // a different owning DocumentId; never rebind by Shape equality.
+        auto wrong_document = part::PartDocument::restore(
+            core::DocumentId::generate(),
+            document.state(), document.revision());
+        CHECK(wrong_document.ok());
+        const auto wrong_owner =
+            part::resolveStrictCylindricalFaceAxisLine(
+                *wrong_document.document,
+                admitted.source->surface,
+                evaluation, provider);
+        CHECK(wrong_owner.status ==
+              part::AxisEvaluationStatus::blocked);
+        CHECK(wrong_owner.diagnostic ==
+              part::AxisEvaluationDiagnostic::stale_part_evaluation);
+        CHECK(!wrong_owner.line);
+
+        // Missing source stage never falls back to current/final Body,
+        // despite a true native analytic Face in the same evaluation.
+        auto new_feature_cursor =
+            document.state().body.next_feature_id;
+        const auto absent_feature = new_feature_cursor.allocate();
+        CHECK(absent_feature);
+        auto wrong_stage = admitted.source->surface;
+        wrong_stage.stage.feature_id = *absent_feature;
+        CHECK(wrong_stage.valid());
+        const auto unresolved_stage =
+            part::resolveStrictCylindricalFaceAxisLine(
+                document, wrong_stage, evaluation, provider);
+        CHECK(unresolved_stage.status ==
+              part::AxisEvaluationStatus::blocked);
+        CHECK(unresolved_stage.diagnostic ==
+              part::AxisEvaluationDiagnostic::support_stage_unavailable);
+        CHECK(!unresolved_stage.line);
+
         // Persisted Part Axis value graph is still just AxisId and
         // semantic SurfaceReference, never the picked provider token.
         auto state = document.state();
