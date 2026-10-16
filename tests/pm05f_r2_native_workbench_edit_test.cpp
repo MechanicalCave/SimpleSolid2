@@ -2524,9 +2524,161 @@ int main(int argc, char* argv[]) {
                           << " document_unchanged=1\\n";
             }
 
+            // H2: genuine OCCT Revolve analytic-cylinder Face picked
+            // by real Qt mouse input, not by a fabricated Face token.
+            // Positive Finish reuses H1's same strict semantic admission,
+            // then v20 save/reopen must re-evaluate with a COLD provider.
+            {
+                auto h2_session = makeRevolveSession(
+                    std::acos(-1.0) / 2.0);
+                CHECK(workbench.activateDocument(&h2_session, {}));
+                CHECK(viewport->setStandardView(
+                    viewer::StandardView::top_front_right));
+                viewport->fitAll();
+                QApplication::processEvents();
+                auto* h2_tool = workbench.findChild<QPushButton*>(
+                    QStringLiteral("axisToolButton"));
+                auto* h2_constructor = workbench.findChild<QComboBox*>(
+                    QStringLiteral("axisConstructorCombo"));
+                auto* h2_finish = workbench.findChild<QPushButton*>(
+                    QStringLiteral("axisFinishButton"));
+                auto* h2_cancel = workbench.findChild<QPushButton*>(
+                    QStringLiteral("axisCancelButton"));
+                CHECK(h2_tool && h2_constructor &&
+                      h2_finish && h2_cancel);
+                CHECK(h2_constructor->count() == 2);
+                CHECK(h2_tool->isEnabled());
+                const auto before_revision =
+                    h2_session.document().revision();
+                const auto before_undo = h2_session.undoDepth();
+                h2_tool->click();
+                QApplication::processEvents();
+                CHECK(h2_constructor->currentIndex() == 0);
+                CHECK(!h2_finish->isEnabled());
+                h2_constructor->setCurrentIndex(1);
+                QApplication::processEvents();
+                CHECK(!h2_finish->isEnabled());
+                CHECK(h2_session.document().axes().empty());
+                const auto real_body = part::evaluatePart(
+                    h2_session.document(), kernel);
+                CHECK(real_body.body_status ==
+                      part::BodyEvaluationStatus::up_to_date);
+                CHECK(real_body.current_topology &&
+                      real_body.current_topology->complete());
+                std::size_t strict_native_cylinders = 0U;
+                for (const auto& face :
+                     real_body.current_topology->faces) {
+                    const auto authored =
+                        part::authorStrictCylindricalFaceAxisSource(
+                            h2_session.document(),
+                            real_body.current_topology->stage,
+                            face.runtime_token, real_body, kernel);
+                    if (authored.ok()) ++strict_native_cylinders;
+                }
+                CHECK(strict_native_cylinders > 0U);
+
+                bool picked_native_face = false;
+                for (const double x : {12.0, 15.0, 18.0}) {
+                    if (picked_native_face) break;
+                    for (const double degrees : {25.0, 40.0, 50.0,
+                                                 65.0, 75.0}) {
+                        const double radians =
+                            degrees * std::acos(-1.0) / 180.0;
+                        const viewer::Point3 spot{
+                            x, 10.0 * std::cos(radians),
+                            10.0 * std::sin(radians)};
+                        if (!nativePlanarFaceClick(*viewport, spot))
+                            continue;
+                        QApplication::processEvents();
+                        if (h2_finish->isEnabled()) {
+                            picked_native_face = true;
+                            break;
+                        }
+                    }
+                }
+                CHECK(picked_native_face);
+                CHECK(h2_session.document().revision() ==
+                      before_revision);
+                CHECK(h2_session.undoDepth() == before_undo);
+                CHECK(h2_session.document().axes().empty());
+                h2_finish->click();
+                QApplication::processEvents();
+                CHECK(h2_session.document().axes().size() == 1U);
+                CHECK(h2_session.undoDepth() == before_undo + 1U);
+                const auto face_axis =
+                    h2_session.document().axes().front();
+                CHECK(std::holds_alternative<
+                    part::StrictCylindricalFaceAxisSource>(
+                        face_axis.source));
+                CHECK(face_axis.id.valid());
+                QTemporaryDir h2_dir;
+                CHECK(h2_dir.isValid());
+                const auto path = std::filesystem::path{
+                    h2_dir.path().toStdWString()} /
+                    "NativeCylindricalFaceAxisWorkbench_v20.ss2part";
+                part::PartDocumentStore store;
+                CHECK(store.createNew(path, h2_session.document()).ok());
+                const auto cold = store.load(path);
+                CHECK(cold.ok());
+                CHECK(cold.document->findAxis(face_axis.id));
+                CHECK(cold.document->findAxis(face_axis.id)->source ==
+                      face_axis.source);
+                kernel_occt::OcctSolidModelingKernel cold_kernel;
+                const auto cold_body = part::evaluatePart(
+                    *cold.document, cold_kernel);
+                CHECK(cold_body.body_status ==
+                      part::BodyEvaluationStatus::up_to_date);
+                const auto cold_line = part::resolveAxisReference(
+                    *cold.document,
+                    part::AxisReference{
+                        part::AuthoredAxisReference{face_axis.id}},
+                    &cold_body, nullptr, &cold_kernel, &cold_kernel);
+                CHECK(cold_line.status ==
+                      part::AxisEvaluationStatus::resolved);
+                CHECK(cold_line.line && cold_line.line->valid());
+
+                auto* h2_tree = workbench.findChild<QTreeWidget*>();
+                auto* h2_action = workbench.findChild<QAction*>(
+                    QStringLiteral("editAxisAction"));
+                CHECK(h2_tree && h2_action);
+                QTreeWidgetItem* h2_row = nullptr;
+                for (QTreeWidgetItemIterator it(h2_tree); *it; ++it) {
+                    if ((*it)->text(0) ==
+                            QString::fromStdString(face_axis.name)) {
+                        h2_row = *it;
+                        break;
+                    }
+                }
+                CHECK(h2_row && h2_row->parent());
+                CHECK(h2_row->parent()->text(0) ==
+                      QStringLiteral("Reference Geometry"));
+                h2_tree->clearSelection();
+                h2_tree->setCurrentItem(h2_row);
+                h2_row->setSelected(true);
+                QApplication::processEvents();
+                CHECK(h2_action->isEnabled());
+                const auto before_edit_undo = h2_session.undoDepth();
+                h2_action->trigger();
+                QApplication::processEvents();
+                CHECK(h2_constructor->currentIndex() == 1);
+                CHECK(h2_finish->isEnabled());
+                h2_cancel->click();
+                QApplication::processEvents();
+                CHECK(h2_session.undoDepth() == before_edit_undo);
+                CHECK(h2_session.document().findAxis(face_axis.id));
+                std::cout << "RG02C_H2_NATIVE_AXIS_FACE_GUI"
+                          << " strict_native_cylinders="
+                          << strict_native_cylinders
+                          << " actual_qt_face_pick=1"
+                          << " stage_semantic_axis=1"
+                          << " undo=1"
+                          << " tree_edit_cancel=1"
+                          << " cold_v20=1\\n";
+            }
+
             std::cout << "RG02C_B1_NATIVE_AXIS_GUI"
                       << " strict_mouse_edge=1"
-                      << " constructor_edge_only=1"
+                      << " constructors_edge_and_cylindrical_face=1"
                       << " reference_geometry_tree=1"
                       << " finish_one_undo=1"
                       << " cold_v19_axis=1\\n";
