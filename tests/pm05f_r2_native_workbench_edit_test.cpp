@@ -10629,6 +10629,165 @@ int main(int argc, char* argv[]) {
         CHECK(workbench.findChild<QWidget*>(
             QStringLiteral("edgeFeatureOperationsWidget"))->isHidden());
 
+        // H2 OWNER ACTUAL FILE Part002.ss2part (2026-10-16):
+        // Reconstruct its persisted v20 AUTHORED dimensions and semantic
+        // Fillet source, without committing Owner-private document bytes.
+        // Rectangle XY 0..40 x 0..80, Extrude Add 35, Fillet004 R30 on
+        // Extrude001 side_side Edge between authored Lines 2 and 3.
+        // This diagnoses the genuine current native OCCT Face and the
+        // strict A semantic resolver separately; a native-cylinder
+        // witness is NOT a claim that architecture A can already author it.
+        {
+            auto owner_face_session =
+                makeBaseSession(kernel, 40.0, 80.0, 35.0);
+            const auto extruded = part::evaluatePart(
+                owner_face_session.document(), kernel);
+            CHECK(extruded.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(extruded.current_topology &&
+                  extruded.current_topology->complete());
+            std::optional<part::MaterialEdgeReference>
+                fillet_source;
+            std::size_t match_count = 0U;
+            for (const auto& edge :
+                 extruded.current_topology->edges) {
+                const auto authored =
+                    part::authorMaterialEdgeReference(
+                        *extruded.current_topology,
+                        edge.runtime_token);
+                if (!authored.ok()) continue;
+                const auto& curve = authored.reference->curve;
+                if (curve.role !=
+                        part::FeatureCurveRoleKind::side_side ||
+                    curve.adjacent_surfaces.size() != 2U) {
+                    continue;
+                }
+                bool line2 = false;
+                bool line3 = false;
+                for (const auto& adjacent :
+                     curve.adjacent_surfaces) {
+                    if (adjacent.source_entity) {
+                        line2 |= adjacent.source_entity->serialized() == "2";
+                        line3 |= adjacent.source_entity->serialized() == "3";
+                    }
+                }
+                if (line2 && line3) {
+                    ++match_count;
+                    fillet_source = *authored.reference;
+                }
+            }
+            CHECK(match_count == 1U && fillet_source);
+            auto authored_state = owner_face_session.document().state();
+            // The supplied file has earlier unused FeatureIds 2 and 3,
+            // with Fillet004 at FeatureId 4. Preserve that gap.
+            const auto unused2 =
+                authored_state.body.next_feature_id.allocate();
+            const auto unused3 =
+                authored_state.body.next_feature_id.allocate();
+            const auto fillet4 =
+                authored_state.body.next_feature_id.allocate();
+            CHECK(unused2 && unused3 && fillet4);
+            CHECK(fillet4->serialized() == "4");
+            authored_state.body.features.push_back(
+                part::PartFeature{
+                    *fillet4, "Fillet004", false,
+                    part::FilletFeature{
+                        {*fillet_source}, core::LengthValue{30.0}}});
+            auto fillet_document = part::PartDocument::restore(
+                owner_face_session.document().documentId(),
+                std::move(authored_state),
+                owner_face_session.document().revision());
+            CHECK(fillet_document.ok());
+            application::DocumentSession repro{
+                {}, std::move(*fillet_document.document)};
+            const auto evaluated =
+                part::evaluatePart(repro.document(), kernel);
+            CHECK(evaluated.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(evaluated.current_topology &&
+                  evaluated.current_topology->complete());
+            CHECK(evaluated.current_topology->stage.feature_id &&
+                  *evaluated.current_topology->stage.feature_id == *fillet4);
+            std::size_t carriers = 0U;
+            std::size_t generated_face_tokens = 0U;
+            std::size_t exact_cylinders = 0U;
+            std::size_t strict_axis_resolved = 0U;
+            std::size_t strict_axis_ambiguous = 0U;
+            std::size_t strict_axis_other = 0U;
+            for (const auto& carrier :
+                 evaluated.current_topology->surfaces) {
+                if (carrier.address.producer_feature_id != *fillet4 ||
+                    carrier.address.role !=
+                        part::FeatureSurfaceRoleKind::fillet_surface) {
+                    continue;
+                }
+                ++carriers;
+                std::cerr
+                    << "RG02C_H2_OWNER_PART002_FILLET_CARRIER"
+                    << " surface_kind=" << static_cast<int>(
+                           carrier.surface_kind)
+                    << " surface_status=" << static_cast<int>(
+                           carrier.status)
+                    << " strict_face_status=" << static_cast<int>(
+                           carrier.strict_face_status)
+                    << " candidate_face_count="
+                    << carrier.candidate_face_count
+                    << " current_faces="
+                    << carrier.current_faces.size() << '\\n';
+                for (const auto token : carrier.current_faces) {
+                    ++generated_face_tokens;
+                    const auto scoped =
+                        kernel.bindExactCylindricalFaceToBody(
+                            evaluated.body_solid, token);
+                    CHECK(scoped && scoped->valid());
+                    const auto geometry =
+                        kernel.queryExactCylindricalFaceAxis(
+                            evaluated.body_solid, *scoped);
+                    const auto admission =
+                        part::authorStrictCylindricalFaceAxisSource(
+                            repro.document(),
+                            evaluated.current_topology->stage,
+                            token, evaluated, kernel);
+                    exact_cylinders += geometry.ok() ? 1U : 0U;
+                    strict_axis_resolved += admission.ok() ? 1U : 0U;
+                    strict_axis_ambiguous +=
+                        admission.diagnostic ==
+                            part::AxisEvaluationDiagnostic::
+                                cylindrical_face_ambiguous
+                        ? 1U : 0U;
+                    strict_axis_other +=
+                        !admission.ok() &&
+                        admission.diagnostic !=
+                            part::AxisEvaluationDiagnostic::
+                                cylindrical_face_ambiguous
+                        ? 1U : 0U;
+                    std::cerr
+                        << "RG02C_H2_OWNER_PART002_FACE"
+                        << " exact_status=" << static_cast<int>(
+                               geometry.status)
+                        << " exact_cylinder=" << (geometry.ok() ? 1 : 0)
+                        << " axis_status=" << static_cast<int>(
+                               admission.status)
+                        << " axis_diagnostic=" << static_cast<int>(
+                               admission.diagnostic)
+                        << '\\n';
+                }
+            }
+            std::cerr << "RG02C_H2_OWNER_PART002_SUMMARY"
+                      << " generated_carriers=" << carriers
+                      << " generated_face_tokens="
+                      << generated_face_tokens
+                      << " exact_cylinders=" << exact_cylinders
+                      << " strict_axis_resolved="
+                      << strict_axis_resolved
+                      << " strict_axis_ambiguous="
+                      << strict_axis_ambiguous
+                      << " strict_axis_other="
+                      << strict_axis_other << std::endl;
+            CHECK(carriers > 0U);
+            CHECK(generated_face_tokens > 0U);
+        }
+
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.
         CHECK(workbench.activateDocument(&session, {}));
