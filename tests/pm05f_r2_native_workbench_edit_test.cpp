@@ -10733,7 +10733,7 @@ int main(int argc, char* argv[]) {
                     << " candidate_face_count="
                     << carrier.candidate_face_count
                     << " current_faces="
-                    << carrier.current_faces.size() << '\\n';
+                    << carrier.current_faces.size() << std::endl;
                 for (const auto token : carrier.current_faces) {
                     ++generated_face_tokens;
                     const auto scoped =
@@ -10770,7 +10770,7 @@ int main(int argc, char* argv[]) {
                                admission.status)
                         << " axis_diagnostic=" << static_cast<int>(
                                admission.diagnostic)
-                        << '\\n';
+                        << std::endl;
                 }
             }
             std::cerr << "RG02C_H2_OWNER_PART002_SUMMARY"
