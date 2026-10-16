@@ -1,12 +1,18 @@
 # RG-02C/C1-P1-B1/H2 — existing Work Features Axis: Cylindrical Face constructor D2 Work Contract PROPOSAL
 
-**Status: DRAFT FOR EXACT OWNER D2 REVIEW — NOT OWNER-ACCEPTED, NOT ACTIVE, NOT PRODUCTION MUTATION AUTHORITY.** Date: 2026-10-16.
+**Status: OWNER-ACCEPTED EXACT H2 EXECUTABLE D2 WORK CONTRACT — GOVERNANCE PR #451 NOT MERGED, NOT ACTIVE, NOT PRODUCTION MUTATION AUTHORITY.** Date: 2026-10-16. Separate guarded-squash merge approval for this governance PR, and later separately accepted ACTIVE-only activation, remain required.
 
 **Baseline:** protected `main` after accepted, independently gated and guarded-squash merged H1 [#444](https://github.com/MechanicalCave/SimpleSolid2/pull/444): `e2b4aa3db7026c589052ef2c5789d5b01c2da92e`. The active pointer `work/ACTIVE.yaml` still names completed H1; this H2 governance-only proposal **does not** activate or close it. H1 retains native Part **v20**, durable `StrictCylindricalFaceAxisSource{SurfaceReference}`, strict policy A and the inherited explicit native fixture GAPs.
 
 **Already approved, distinct UX authority:** [#439](https://github.com/MechanicalCave/SimpleSolid2/pull/439), merged `e4fa14e9bd9cdcf02a0951da1f123f152ba75c45`, records the Owner's **separate approval** of its exact W1–W3/UX-01…14 new `Cylindrical Face` existing-tool UX. This is not acceptance of the **executable file scope, testing plan, integration, or activation** below.
 
 **Governing sources:** `AGENTS.md`; `governance/CONSTITUTION.md`, `FOUNDATION.md`, `ARCHITECTURE.md`, `DOCUMENTATION.md`, accepted ADR-0014/-0016/-0017; Part Modeling v1.33 RG-02; `work/RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md` mandatory prior UI signoff; merged #439 UX; activated H1 contract and merged #444 as-built.
+
+## Recorded independent Owner H2 D2 decision — exact reviewed proposal
+
+After receiving this precise one-file executable H2 D2 [Draft PR #451](https://github.com/MechanicalCave/SimpleSolid2/pull/451) at initial HEAD `28cf5699513e8a934d40fc6920853d9eb3068a1a`, the Agent explicitly asked the Owner whether to accept its **exact 18 conditional implementation paths, H2 Workbench scope, genuine native/GUI acceptance conditions and separate activation sequence** as a new D2 decision. On 2026-10-16 the Owner replied **`akceptuje - kontynuuj`**. This is a **separate exact H2 D2 scope ACCEPTANCE**, independently of the earlier #439 UX signoff and H1 #444 acceptance. The decision is recorded at [#451 Owner D2 comment](https://github.com/MechanicalCave/SimpleSolid2/pull/451#issuecomment-6222195435).
+
+**No merge / activation inference:** Owner's acceptance of the executable contract text does **not** grant guarded-squash permission for #451, change the authoritative `work/ACTIVE.yaml`, authorize editing any §3 source/test/doc files before separately authorized active H2 contract integration, authorize changing strict policy A, or give merge authority for an eventual H2 implementation. Record only the D2 decision in this work-only file, run new exact-head Windows governance CLOSURE, then request a distinct Owner permission for guarded-squash governance merge. After that, seek a distinct Owner decision on an ACTIVE-only H2 activation PR.
 
 ## 1. Bounded H2 deliverable and non-goals
 
@@ -26,9 +32,9 @@ A Face gesture selects **exactly one current bounded native Body Face** and reme
 
 **Tree/Properties/Preview:** Face- and Edge-sourced Axes share the **existing** `Reference Geometry` group, once per AxisId. Sketch-Line Axes remain nested under Sketch; Origin XYZ unchanged. Properties show typed Face source, stage and meaningful missing/ambiguous/native diagnostics (no phantom SketchId/Edge label). The existing `setAxisDraftPreview` disposable reference scene and Face highlight are reused without rebuilding Body while previewing. Preserve all existing responsive toolbars, Work Features, Edge/Datum/Sketch/Revolve routes and viewport focus.
 
-## 3. Exact proposed implementation allowlist — CONDITIONAL ONLY
+## 3. Owner-accepted exact H2 implementation allowlist — CONDITIONALLY GATED
 
-These **18 exact paths** would become editable **only after** this precise D2 Work Contract receives separate explicit Owner acceptance, its governance PR is independently Windows-validated and independently authorized for guarded-squash merge, and a separate `work/ACTIVE.yaml` switch to this contract is Owner-approved, Windows-validated and merged. Until then NONE of the following paths are authorized by this proposal:
+Owner has **separately accepted these 18 exact proposed executable H2 paths and their narrow purposes**. They become editable **only after** this governance PR separately passes new exact-head Windows CLOSURE, obtains separate guarded-squash merge authorization and is merged to protected main, and an independent `work/ACTIVE.yaml` switch to the integrated contract is Owner-approved, Windows-validated and separately merged. **None is currently executable.**
 
 1. `src/ui/cad_workbench.cpp` — constructor state, Face acquisition, H1 draft validation, user-facing status/Repair, CAD input routing.
 2. `src/ui/cad_workbench.hpp` — existing-tool bounded state/helper declarations only.
@@ -49,7 +55,7 @@ These **18 exact paths** would become editable **only after** this precise D2 Wo
 17. `docs/browser/index.html` — **generated only** by official `.\ss2.ps1 docs`, never manual HTML editing.
 18. `work/RG-02C_C1_P1B1_H2_CYLINDRICAL_FACE_AXIS_WORKBENCH_ACCEPTANCE_EVIDENCE.md` — factual exact-SHA PASS/RED/GAP ledger and Owner manual result.
 
-No `work/ACTIVE.yaml` alteration is allowed **inside H2 implementation PR**. Activation is a distinct governance-only PR after independently accepted contract integration; the current proposal PR only creates **this single document**. Tests outside the 18 exact paths, changes to v20 fixtures, public kernel/Part source interfaces, CAD grammar, new CMake test registration or new UI are not implicitly authorized.
+No `work/ACTIVE.yaml` alteration is allowed **inside H2 implementation PR**. Activation is a distinct governance-only PR after independently accepted contract integration; this governance PR changes **only this single contract document**, including the factual D2 Owner acceptance record. Tests outside the 18 exact paths, changes to v20 fixtures, public kernel/Part source interfaces, CAD grammar, new CMake test registration or new UI are not implicitly authorized.
 
 ## 4. Native/GUI acceptance and strict STOP conditions
 
@@ -64,8 +70,8 @@ No `work/ACTIVE.yaml` alteration is allowed **inside H2 implementation PR**. Act
 ## 5. Owner decision and activation sequence
 
 1. **CLOSED:** prior exact W1–W3/UX-01…14 product UX accepted and merged through #439; H1 strict Face semantic source and v20 native persistence accepted and merged through #444.
-2. **PENDING:** Owner must explicitly accept/reject **this exact H2 executable Work Contract, 18 paths, tests, documentation and native manual gates** as a separate D2 decision. Creating/reviewing this draft **is not that acceptance**.
-3. **PENDING:** run actual governance Windows CLOSURE for this one-file Draft proposal and secure independently authorized guarded-squash **governance-only** merge.
+2. **CLOSED — OWNER EXPLICIT H2 D2 SCOPE ACCEPTANCE 2026-10-16:** Owner separately accepted the exact proposed H2 executable Work Contract, **all 18 conditional paths**, test, native manual/UX and DOC-01 obligations on reviewable #451 HEAD `28cf5699` and recorded [#451 comment](https://github.com/MechanicalCave/SimpleSolid2/pull/451#issuecomment-6222195435). This does not authorize protected-main merge or activation.
+3. **PENDING:** new exact-head Windows governance CLOSURE after recording the Owner decision in this one-file PR, then **a separate express Owner authorization** for guarded-squash **governance-only** merge of #451; no automatic merge from D2 acceptance.
 4. **PENDING:** separately Owner-authorized `work/ACTIVE.yaml` activation PR, exact-head Windows CLOSURE, guarded squash merge; only then may the H2 implementation branch mutate files in §3.
 5. **PENDING:** independent product Windows FOCUSED/FAST/FULL/DOC-01, Owner manual GUI signoff, exact-head CLOSURE, separate technical FINAL PASS and later independently authorized implementation guarded merge. Earlier H1 acceptance does not substitute for these.
 
