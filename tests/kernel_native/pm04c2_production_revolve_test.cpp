@@ -2,6 +2,7 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/axis_evaluation.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
@@ -865,6 +866,124 @@ void observeC1P1B0NativeFaceSurfaceAdmission(
               << " authored_axis=NOT_IMPLEMENTED\n";
 }
 
+// H1 only: real same-stage native Face -> ONE strict persisted semantic
+// Surface source. This does NOT treat equal cylinders as the same source
+// and does not change the feature evaluator or the existing Axis tool.
+void verifyH1StrictCylindricalFaceAxisAdmission(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture,
+    bool require_a_positive) {
+    CHECK(evaluation.source_revision == document.revision());
+    CHECK(evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluation.current_topology);
+    CHECK(evaluation.current_topology->complete());
+    const auto stage = evaluation.current_topology->stage;
+    CHECK(stage.valid());
+    CHECK(stage.kind == part::BodyStageKind::after_feature);
+
+    std::size_t queried = 0U;
+    std::size_t strict_admitted = 0U;
+    std::size_t rejected = 0U;
+    std::size_t noncylinders = 0U;
+    for (const auto& picked : evaluation.current_topology->faces) {
+        CHECK(picked.runtime_token.valid());
+        const auto bound =
+            provider.bindExactCylindricalFaceToBody(
+                evaluation.body_solid, picked.runtime_token);
+        CHECK(bound);
+        const auto native =
+            provider.queryExactCylindricalFaceAxis(
+                evaluation.body_solid, *bound);
+        CHECK(native.status ==
+                  kernel::ExactCylindricalFaceAxisStatus::ok ||
+              native.status ==
+                  kernel::ExactCylindricalFaceAxisStatus::
+                      non_cylindrical_surface);
+        ++queried;
+        const auto admitted =
+            part::authorStrictCylindricalFaceAxisSource(
+                document, stage, picked.runtime_token,
+                evaluation, provider);
+        if (native.status ==
+                kernel::ExactCylindricalFaceAxisStatus::
+                    non_cylindrical_surface) {
+            ++noncylinders;
+            CHECK(!admitted.ok());
+            CHECK(!admitted.source);
+            CHECK(!admitted.line);
+        }
+        if (!admitted.ok()) {
+            ++rejected;
+            CHECK(!admitted.source.has_value());
+            CHECK(!admitted.line.has_value());
+            continue;
+        }
+
+        CHECK(native.ok());
+        CHECK(admitted.source->surface.stage == stage);
+        CHECK(admitted.source->surface.valid());
+        CHECK(admitted.line->valid());
+        CHECK(admitted.status ==
+              part::AxisEvaluationStatus::resolved);
+        ++strict_admitted;
+
+        const auto rechecked =
+            part::resolveStrictCylindricalFaceAxisLine(
+                document, admitted.source->surface,
+                evaluation, provider);
+        CHECK(rechecked.status ==
+              part::AxisEvaluationStatus::resolved);
+        CHECK(rechecked.valid());
+        CHECK(rechecked.line);
+        CHECK(*rechecked.line == *admitted.line);
+
+        // Persisted Part Axis value graph is still just AxisId and
+        // semantic SurfaceReference, never the picked provider token.
+        auto state = document.state();
+        const auto id = state.next_axis_id.allocate();
+        CHECK(id);
+        state.axes.emplace_back(
+            *id, "H1 Strict Cylindrical Face Native Probe",
+            part::PartAxisSource{*admitted.source}, true);
+        auto restored = part::PartDocument::restore(
+            document.documentId(), std::move(state),
+            document.revision());
+        CHECK(restored.ok());
+        const part::AxisReference authored{
+            part::AuthoredAxisReference{*id}};
+        const auto resolved = part::resolveAxisReference(
+            *restored.document, authored,
+            &evaluation, nullptr, nullptr, &provider);
+        CHECK(resolved.status ==
+              part::AxisEvaluationStatus::resolved);
+        CHECK(resolved.valid());
+        CHECK(resolved.line);
+        CHECK(*resolved.line == *admitted.line);
+        CHECK(resolved.required_body_stage ==
+              std::optional<part::BodyStageRef>{stage});
+    }
+    CHECK(queried == evaluation.current_topology->faces.size());
+    CHECK(queried == strict_admitted + rejected);
+    CHECK(noncylinders <= rejected);
+    if (require_a_positive) {
+        CHECK(strict_admitted > 0U);
+        CHECK(noncylinders > 0U);
+    }
+    std::cout << "RG02C_C1_P1B1_H1_STRICT_FACE"
+              << " fixture=" << fixture
+              << " actual_faces=" << queried
+              << " strict_native_admitted=" << strict_admitted
+              << " refused=" << rejected
+              << " native_noncylinders=" << noncylinders
+              << " multi_face_carrier_accepted=NEVER"
+              << " axis_source=SEMANTIC_ONLY"
+              << " v20_persistence=NOT_YET_EXECUTED"
+              << '\n';
+}
+
 void verifyCylinderEdgeFeature(
     const part::PartDocument& source,
     const part::MaterialEdgeReference& edge,
@@ -915,6 +1034,10 @@ void verifyCylinderEdgeFeature(
         false);
     observeC1P1B0NativeFaceSurfaceAdmission(
         evaluated, kernel,
+        is_fillet ? "circular-rim-fillet" : "circular-rim-chamfer",
+        false);
+    verifyH1StrictCylindricalFaceAxisAdmission(
+        *restored.document, evaluated, kernel,
         is_fillet ? "circular-rim-fillet" : "circular-rim-chamfer",
         false);
     // The surviving native cylindrical patch, if any, is read through
@@ -1382,6 +1505,8 @@ int main() {
             evaluated, kernel, "revolve-full-360", {1.0, 0.0, 0.0}, true);
         observeC1P1B0NativeFaceSurfaceAdmission(
             evaluated, kernel, "revolve-full-360", true);
+        verifyH1StrictCylindricalFaceAxisAdmission(
+            document, evaluated, kernel, "revolve-full-360", true);
         const auto g0_full_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-full-360-part");
@@ -1493,6 +1618,8 @@ int main() {
             {0.0, 0.0, 1.0}, false);
         observeC1P1B0NativeFaceSurfaceAdmission(
             evaluated, kernel, "extrude-circle-full-cylinder", true);
+        verifyH1StrictCylindricalFaceAxisAdmission(
+            extrude, evaluated, kernel, "extrude-circle-full-cylinder", true);
         const auto repeated = part::evaluatePart(extrude, kernel);
         CHECK(repeated.body_status ==
               part::BodyEvaluationStatus::up_to_date);
@@ -1550,6 +1677,9 @@ int main() {
             {0.0, 0.0, 1.0}, false);
         observeC1P1B0NativeFaceSurfaceAdmission(
             half_evaluation, kernel, "extrude-cylinder-half-cut", true);
+        verifyH1StrictCylindricalFaceAxisAdmission(
+            half_document, half_evaluation, kernel,
+            "extrude-cylinder-half-cut", false);
         const auto half_counts = observeRevolvePartVertices(
             half_catalog, "V08-half-cylinder-cut");
         CHECK(half_counts.native == 6U);
@@ -1671,6 +1801,8 @@ int main() {
             evaluated, kernel, "revolve-partial-90", {1.0, 0.0, 0.0}, true);
         observeC1P1B0NativeFaceSurfaceAdmission(
             evaluated, kernel, "revolve-partial-90", true);
+        verifyH1StrictCylindricalFaceAxisAdmission(
+            partial, evaluated, kernel, "revolve-partial-90", true);
         const auto g0_partial_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-partial-90-part");
