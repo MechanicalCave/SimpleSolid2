@@ -815,6 +815,51 @@ void verifyS0CircleTangentRegionCells() {
     CHECK(interior_correct == 24U);
     CHECK(left_contact.intersections.size() == 1U);
     CHECK(right_contact.intersections.size() == 1U);
+
+    // F1/F2 are more than UI polygons. A current accepted Part Profile
+    // RegionIntent must survive exact source-anchored replay. This test
+    // intentionally exposes any pre-existing Part resolver restriction
+    // after Shared-2D begins returning the missing tangent cells.
+    const auto verify_durable = [](bool extended) {
+        sketch::SketchModel model;
+        [[maybe_unused]] const auto circle =
+            model.addCircle({0.0, 0.0}, 5.0);
+        [[maybe_unused]] const auto left =
+            model.addLine({-5.0, -9.0},
+                          {-5.0, extended ? 7.0 : 0.0});
+        [[maybe_unused]] const auto right =
+            model.addLine({5.0, -9.0},
+                          {5.0, extended ? 7.0 : 0.0});
+        [[maybe_unused]] const auto base =
+            model.addLine({-5.0, -9.0}, {5.0, -9.0});
+        const auto analysis = sketch::analyzeRegions(model);
+        CHECK(analysis.regions.size() == 2U);
+        std::size_t resolved = 0U;
+        for (const auto& region : analysis.regions) {
+            const auto intent = part::makeProfileRegionIntent(region);
+            if (!intent) {
+                continue;
+            }
+            const auto replay =
+                part::resolveProfileRegionIntent(model, *intent);
+            if (replay.valid()) {
+                ++resolved;
+            } else {
+                std::cerr << "SKETCH_S0_PROFILE_REPLAY"
+                          << " extended=" << extended
+                          << " region_area=" << region.area
+                          << " status=" << static_cast<int>(replay.status)
+                          << '\n';
+            }
+        }
+        std::cerr << "SKETCH_S0_PROFILE_REPLAY_SUMMARY"
+                  << " extended=" << extended
+                  << " resolved=" << resolved
+                  << " expected=2\n";
+        return resolved == 2U;
+    };
+    CHECK(verify_durable(false));
+    CHECK(verify_durable(true));
 }
 
 } // namespace
