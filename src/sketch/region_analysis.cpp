@@ -520,56 +520,78 @@ struct RawRelation final {
         return {};
     }
 
-    const double length =
-        std::hypot(du, dv);
-    if (!finiteValue(length) ||
-        length == 0.0) {
+    // B02: classify *before* normalizing the direction. The previous
+    // perpendicular = cross(q, d / hypot(d)) test turned an exactly
+    // tangent integer-vector construction into R + 1 ULP (F3).
+    // Power-of-two scaling preserves binary input ratios, unlike division
+    // by an arbitrary hypot/max coordinate, and avoids avoidable square
+    // overflow for very large finite geometry. This is a geometric
+    // predicate, NOT a product snap/gap tolerance.
+    const double magnitude =
+        std::max({std::abs(du), std::abs(dv),
+                  std::abs(rel_u), std::abs(rel_v),
+                  circle.radius});
+    if (!finiteValue(magnitude) || magnitude == 0.0) {
+        return {};
+    }
+    const int exponent = std::ilogb(magnitude);
+    const double nd_u = std::scalbn(du, -exponent);
+    const double nd_v = std::scalbn(dv, -exponent);
+    const double nq_u = std::scalbn(rel_u, -exponent);
+    const double nq_v = std::scalbn(rel_v, -exponent);
+    const double nr = std::scalbn(circle.radius, -exponent);
+    if (!finiteValue(nd_u) || !finiteValue(nd_v) ||
+        !finiteValue(nq_u) || !finiteValue(nq_v) ||
+        !finiteValue(nr) ||
+        (du != 0.0 && nd_u == 0.0) ||
+        (dv != 0.0 && nd_v == 0.0) ||
+        (rel_u != 0.0 && nq_u == 0.0) ||
+        (rel_v != 0.0 && nq_v == 0.0) ||
+        nr == 0.0) {
+        // Dynamic range exceeds safe predicate resolution: fail closed.
         return {};
     }
 
-    const double unit_u = du / length;
-    const double unit_v = dv / length;
-    const double projection =
-        std::fma(rel_u, unit_u, rel_v * unit_v);
-    const double signed_perpendicular =
-        cross(rel_u, rel_v, unit_u, unit_v);
-
-    if (!finiteValue(projection) ||
-        !finiteValue(signed_perpendicular)) {
+    const double direction_squared =
+        std::fma(nd_u, nd_u, nd_v * nd_v);
+    const double signed_cross =
+        cross(nq_u, nq_v, nd_u, nd_v);
+    const double radial_squared = nr * nr;
+    if (!finiteValue(direction_squared) ||
+        !(direction_squared > 0.0) ||
+        !finiteValue(signed_cross) ||
+        !finiteValue(radial_squared) ||
+        !(radial_squared > 0.0)) {
         return {};
     }
 
-    const double perpendicular =
-        std::abs(signed_perpendicular);
-    if (perpendicular > circle.radius) {
+    // Signed power-of-two-scaled discriminant:
+    //     R^2 |d|^2 - cross(q,d)^2.
+    // Its zero is the exact algebraic contact for F3. In particular
+    // there is no global epsilon and two distinct near-secant contacts
+    // are not silently collapsed into a tangent.
+    const double discriminant = std::fma(
+        radial_squared,
+        direction_squared,
+        -(signed_cross * signed_cross));
+    if (!finiteValue(discriminant)) {
+        return {};
+    }
+    if (discriminant < 0.0) {
         return RawRelation{
-            CurveRelationStatus::disjoint,
-            {}};
+            CurveRelationStatus::disjoint, {}};
     }
+    const bool tangent = discriminant == 0.0;
 
-    const bool tangent =
-        perpendicular == circle.radius;
-    double offset = 0.0;
-    if (!tangent) {
-        const double ratio =
-            perpendicular / circle.radius;
-        const double remainder =
-            std::fma(-ratio, ratio, 1.0);
-        if (!finiteValue(remainder) ||
-            remainder < 0.0) {
-            return {};
-        }
-        offset =
-            circle.radius * std::sqrt(remainder);
-        if (!finiteValue(offset)) {
-            return {};
-        }
-    }
-
+    const double projection = std::fma(
+        nq_u, nd_u, nq_v * nd_v);
     const double base_parameter =
-        projection / length;
+        projection / direction_squared;
     const double delta_parameter =
-        offset / length;
+        tangent
+            ? 0.0
+            : std::sqrt(discriminant) /
+                  direction_squared;
     if (!finiteValue(base_parameter) ||
         !finiteValue(delta_parameter)) {
         return {};
@@ -578,6 +600,8 @@ struct RawRelation final {
     std::vector<RawIntersection> intersections;
     const auto append =
         [&](double parameter) {
+            // Finite Line admission is strict: never clamp near a cutter
+            // endpoint or use an infinite-line-only intersection.
             if (parameter < 0.0 ||
                 parameter > 1.0) {
                 return true;
