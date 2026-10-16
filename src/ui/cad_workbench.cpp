@@ -3381,10 +3381,10 @@ void CadWorkbench::buildUi() {
         new QComboBox(axis_operations_widget_);
     axis_constructor_combo_->setObjectName(
         QStringLiteral("axisConstructorCombo"));
-    // Exactly ONE constructor now. Sketch-Line Axis remains authored
-    // directly inside Sketch, not as a Work Features constructor.
-    axis_constructor_combo_->addItem(
-        QStringLiteral("Edge"));
+    // One Work Features Axis tool, two Owner-accepted constructors.
+    // Sketch-Line Axis remains authored inside Sketch, not here.
+    axis_constructor_combo_->addItem(QStringLiteral("Edge"));
+    axis_constructor_combo_->addItem(QStringLiteral("Cylindrical Face"));
     axis_source_form->addRow(
         QStringLiteral("Constructor"),
         axis_constructor_combo_);
@@ -5047,6 +5047,11 @@ void CadWorkbench::buildUi() {
             }
         });
     QObject::connect(
+        axis_constructor_combo_,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int index) { selectAxisConstructor(index); });
+    QObject::connect(
         axis_finish_button_,
         &QPushButton::clicked,
         this,
@@ -6251,7 +6256,14 @@ bool CadWorkbench::startAxisTool(
         application::AxisDraft::beginCreate(
             *document_session);
     axis_edge_mode_active_ = work_features_edge;
+    axis_face_mode_active_ = false;
+    axis_source_requires_pick_ = false;
+    axis_face_pick_diagnostic_.reset();
     axis_evaluation_.reset();
+    if (work_features_edge && viewport_controller_) {
+        viewport_controller_->setBodyTopologyEdgeDraftMode(true);
+        viewport_controller_->setBodyTopologyFacePickOnly(false);
+    }
 
     if (!work_features_edge &&
         !active_sketch_id_ &&
@@ -6316,11 +6328,13 @@ bool CadWorkbench::startAxisEdit(
         std::get_if<part::SketchLineAxisSource>(
             &axis->source);
     if (sketch_axis_source == nullptr) {
-        if (!std::holds_alternative<
-                part::StraightMaterialEdgeAxisSource>(
-                axis->source) || active_sketch_id_) {
+        const bool face_source = std::holds_alternative<
+            part::StrictCylindricalFaceAxisSource>(axis->source);
+        if ((!face_source && !std::holds_alternative<
+                part::StraightMaterialEdgeAxisSource>(axis->source)) ||
+            active_sketch_id_) {
             setStatusText(QStringLiteral(
-                "Finish the active Sketch before editing Body Edge Axis."));
+                "Finish the active Sketch before editing a Body Axis."));
             return false;
         }
         auto edge_draft =
@@ -6330,17 +6344,28 @@ bool CadWorkbench::startAxisEdit(
             return false;
         }
         axis_edge_mode_active_ = true;
+        axis_face_mode_active_ = face_source;
+        axis_source_requires_pick_ = false;
+        axis_face_pick_diagnostic_.reset();
         axis_draft_ = std::move(*edge_draft);
         axis_evaluation_.reset();
+        if (viewport_controller_) {
+            viewport_controller_->setBodyTopologyEdgeDraftMode(true);
+            viewport_controller_->setBodyTopologyFacePickOnly(face_source);
+        }
         refreshAxisEvaluation();
         syncAxisUi();
         syncActionState();
         notifyCadInputContextChanged();
-        setStatusText(QStringLiteral(
-            "Edit Edge Axis — select or replace a strict Body Edge; Finish/Cancel preserve AxisId."));
+        setStatusText(face_source
+            ? QStringLiteral("Edit Cylindrical Face Axis — pick one strict Body Face to replace; Finish/Cancel preserve AxisId.")
+            : QStringLiteral("Edit Edge Axis — select or replace a strict Body Edge; Finish/Cancel preserve AxisId."));
         return true;
     }
     axis_edge_mode_active_ = false;
+    axis_face_mode_active_ = false;
+    axis_source_requires_pick_ = false;
+    axis_face_pick_diagnostic_.reset();
     if (active_sketch_id_ &&
         *active_sketch_id_ !=
             sketch_axis_source->sketch_id) {
@@ -6489,13 +6514,85 @@ void CadWorkbench::tryStageAxisFromSketchSelection() {
             selected.front()});
 }
 
-// Author the same Q0/Q2 strict current-stage MaterialEdgeReference
-// that existing native Part commands use. Viewport tokens never persist.
+bool CadWorkbench::axisDraftSourceMatchesConstructor() const {
+    if (!axis_draft_ || !axis_draft_->source() ||
+        axis_source_requires_pick_) {
+        return false;
+    }
+    const auto& source = *axis_draft_->source();
+    if (!axis_edge_mode_active_) {
+        return std::holds_alternative<part::SketchLineAxisSource>(source);
+    }
+    return axis_face_mode_active_
+        ? std::holds_alternative<
+              part::StrictCylindricalFaceAxisSource>(source)
+        : std::holds_alternative<
+              part::StraightMaterialEdgeAxisSource>(source);
+}
+
+void CadWorkbench::selectAxisConstructor(int index) {
+    if (!axis_draft_ || !axis_edge_mode_active_ ||
+        (index != 0 && index != 1) ||
+        axis_face_mode_active_ == (index == 1)) {
+        return;
+    }
+    axis_face_mode_active_ = index == 1;
+    axis_face_pick_diagnostic_.reset();
+    // The UI never creates an incompatible synthetic PartAxisSource:
+    // an Edit draft can retain its original source only as inactive
+    // uncommittable context until the next explicit matching pick.
+    if (axis_draft_->mode() == application::AxisDraftMode::create &&
+        document_session_) {
+        axis_draft_ = application::AxisDraft::beginCreate(
+            *document_session_);
+        axis_source_requires_pick_ = false;
+    } else {
+        axis_source_requires_pick_ = true;
+    }
+    if (viewport_controller_) {
+        viewport_controller_->clearBodyTopologyToolSelection();
+        viewport_controller_->setBodyTopologyFacePickOnly(
+            axis_face_mode_active_);
+    }
+    axis_evaluation_.reset();
+    refreshAxisEvaluation();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(axis_face_mode_active_
+        ? QStringLiteral("Axis — pick exactly one current analytic cylindrical Body Face.")
+        : QStringLiteral("Axis — pick exactly one strict straight material Body Edge."));
+}
+
+// Author strict current-stage semantic Body sources through existing H1
+// native admission. Viewport tokens never enter an authored Axis.
 void CadWorkbench::tryStageAxisFromBodyTopology() {
     if (!axis_edge_mode_active_ || !axis_draft_ ||
         !document_session_ || !viewport_controller_ ||
         document_session_->document().revision() !=
             axis_draft_->sourceRevision()) {
+        return;
+    }
+    if (axis_face_mode_active_) {
+        const auto candidate =
+            viewport_controller_->selectedStrictCylindricalFaceAxisSource();
+        if (!candidate.ok()) {
+            axis_source_requires_pick_ = true;
+            axis_face_pick_diagnostic_ = candidate.diagnostic;
+            refreshAxisEvaluation();
+            return;
+        }
+        if (!axis_draft_->setSource(part::PartAxisSource{
+                *candidate.source})) {
+            axis_source_requires_pick_ = true;
+            axis_face_pick_diagnostic_ =
+                part::AxisEvaluationDiagnostic::invalid_reference;
+            refreshAxisEvaluation();
+            return;
+        }
+        axis_source_requires_pick_ = false;
+        axis_face_pick_diagnostic_.reset();
+        refreshAxisEvaluation();
+        notifyCadInputContextChanged();
         return;
     }
     const auto candidates =
@@ -6516,6 +6613,8 @@ void CadWorkbench::tryStageAxisFromBodyTopology() {
             "Axis Edge source cannot be staged."));
         return;
     }
+    axis_source_requires_pick_ = false;
+    axis_face_pick_diagnostic_.reset();
     refreshAxisEvaluation();
     syncAxisUi();
     notifyCadInputContextChanged();
@@ -6537,12 +6636,13 @@ void CadWorkbench::refreshAxisEvaluation() {
         document_session_->evaluateAxisDraft(
             *axis_draft_,
             *solid_modeling_kernel_);
-    // Only a strictly resolved new Work Features Edge source can draw
-    // a transient infinite (finite-display) Axis cue. The existing
-    // Sketch Line tool and all failed/stale Edge sources publish none.
+    // One native-strict Work Features Body source (Edge or cylindrical
+    // Face) may present the same disposable infinite-unoriented cue.
+    // A switch, failure or edit mismatch must hide all old previews.
     if (viewport_controller_) {
         viewport_controller_->setAxisDraftPreview(
             axis_edge_mode_active_ &&
+                    axisDraftSourceMatchesConstructor() &&
                     axis_evaluation_->committable()
                 ? axis_evaluation_->line
                 : std::nullopt);
@@ -6562,12 +6662,14 @@ void CadWorkbench::syncAxisUi() {
     }
 
     if (axis_constructor_combo_ != nullptr) {
+        const QSignalBlocker blocked{axis_constructor_combo_};
         axis_constructor_combo_->setVisible(
             active && axis_edge_mode_active_);
-        axis_constructor_combo_->setCurrentIndex(0);
+        axis_constructor_combo_->setCurrentIndex(
+            axis_face_mode_active_ ? 1 : 0);
     }
     if (axis_source_label_ != nullptr) {
-        if (active && axis_draft_->source()) {
+        if (active && axisDraftSourceMatchesConstructor()) {
             const auto& source = *axis_draft_->source();
             if (const auto* sketch =
                     std::get_if<part::SketchLineAxisSource>(
@@ -6576,15 +6678,22 @@ void CadWorkbench::syncAxisUi() {
                     QStringLiteral("Sketch %1 / Line %2")
                         .arg(fromUtf8(sketch->sketch_id.value()),
                              fromUtf8(sketch->entity_id.serialized())));
+            } else if (std::holds_alternative<
+                           part::StrictCylindricalFaceAxisSource>(
+                           source)) {
+                axis_source_label_->setText(
+                    QStringLiteral("One strict analytic cylindrical Body Face"));
             } else {
                 axis_source_label_->setText(
                     QStringLiteral("One strict material Body Edge"));
             }
         } else {
             axis_source_label_->setText(
-                axis_edge_mode_active_
-                    ? QStringLiteral("<select one straight Edge>")
-                    : QStringLiteral("<select one Sketch Line>"));
+                axis_face_mode_active_
+                    ? QStringLiteral("<select one cylindrical Face>")
+                    : axis_edge_mode_active_
+                        ? QStringLiteral("<select one straight Edge>")
+                        : QStringLiteral("<select one Sketch Line>"));
         }
     }
     if (axis_stage_label_ != nullptr) {
@@ -6598,16 +6707,34 @@ void CadWorkbench::syncAxisUi() {
                         .arg(fromUtf8(
                             edge->edge.stage.feature_id->serialized()));
                 }
+            } else if (const auto* face =
+                    std::get_if<part::StrictCylindricalFaceAxisSource>(
+                        &*axis_draft_->source())) {
+                if (face->surface.stage.feature_id) {
+                    stage = QStringLiteral("after Feature %1")
+                        .arg(fromUtf8(
+                            face->surface.stage.feature_id->serialized()));
+                }
             }
         }
         axis_stage_label_->setText(stage);
     }
 
     QString result_text =
-        axis_edge_mode_active_
-            ? QStringLiteral("Select exactly one straight material Body Edge.")
-            : QStringLiteral("Select exactly one valid Sketch Line.");
-    if (active &&
+        axis_face_mode_active_
+            ? QStringLiteral("Select one current strict analytic cylindrical Body Face.")
+            : axis_edge_mode_active_
+                ? QStringLiteral("Select exactly one straight material Body Edge.")
+                : QStringLiteral("Select exactly one valid Sketch Line.");
+    if (axis_source_requires_pick_ && axis_face_pick_diagnostic_) {
+        result_text = QStringLiteral("Rejected — %1; select a new Face.")
+            .arg(axisEvaluationDiagnosticText(
+                *axis_face_pick_diagnostic_));
+    } else if (axis_source_requires_pick_) {
+        result_text = QStringLiteral(
+            "Select a new source for the chosen Axis constructor.");
+    }
+    if (active && axisDraftSourceMatchesConstructor() &&
         axis_evaluation_) {
         if (axis_evaluation_->committable()) {
             result_text =
@@ -6654,7 +6781,7 @@ void CadWorkbench::syncAxisUi() {
     }
     if (axis_finish_button_ != nullptr) {
         axis_finish_button_->setEnabled(
-            active &&
+            active && axisDraftSourceMatchesConstructor() &&
             axis_evaluation_ &&
             axis_evaluation_->committable());
     }
@@ -6688,11 +6815,11 @@ bool CadWorkbench::finishAxis() {
     }
 
     refreshAxisEvaluation();
-    if (!axis_evaluation_ ||
+    if (!axisDraftSourceMatchesConstructor() ||
+        !axis_evaluation_ ||
         !axis_evaluation_->committable()) {
-        setStatusText(
-            QStringLiteral(
-                "Axis Finish requires one currently resolved Sketch Line."));
+        setStatusText(QStringLiteral(
+            "Axis Finish requires one currently resolved source matching its constructor."));
         return false;
     }
 
@@ -6741,6 +6868,13 @@ void CadWorkbench::clearAxisRuntimeContext() {
         viewport_controller_->setAxisDraftPreview(std::nullopt);
     }
     axis_edge_mode_active_ = false;
+    axis_face_mode_active_ = false;
+    axis_source_requires_pick_ = false;
+    axis_face_pick_diagnostic_.reset();
+    if (viewport_controller_) {
+        viewport_controller_->setBodyTopologyFacePickOnly(false);
+        viewport_controller_->setBodyTopologyEdgeDraftMode(false);
+    }
     axis_draft_.reset();
     axis_evaluation_.reset();
     syncAxisUi();
@@ -6776,11 +6910,13 @@ CadWorkbench::submitAxisCadInput(
         } else {
             tryStageAxisFromSketchSelection();
         }
-        if (!axis_draft_->source()) {
+        if (!axisDraftSourceMatchesConstructor()) {
             setStatusText(
-                axis_edge_mode_active_
-                    ? QStringLiteral("Axis SOURCE — select one straight Body Edge.")
-                    : QStringLiteral("Axis SOURCE — select exactly one Line in an active Sketch."));
+                axis_face_mode_active_
+                    ? QStringLiteral("Axis SOURCE — select one strict cylindrical Body Face.")
+                    : axis_edge_mode_active_
+                        ? QStringLiteral("Axis SOURCE — select one straight Body Edge.")
+                        : QStringLiteral("Axis SOURCE — select exactly one Line in an active Sketch."));
         }
         break;
     case application::AxisCadInputAction::finish:
@@ -14220,7 +14356,12 @@ QString CadWorkbench::cadInputPromptText() const {
     }
     if (axis_draft_) {
         if (axis_edge_mode_active_) {
-            return axis_draft_->source()
+            if (axis_face_mode_active_) {
+                return axisDraftSourceMatchesConstructor()
+                    ? QStringLiteral("Command: AXIS — Cylindrical Face selected · FINISH/Enter · CANCEL/Esc")
+                    : QStringLiteral("Command: AXIS — Constructor Cylindrical Face · select one strict current Body Face · SOURCE · CANCEL/Esc");
+            }
+            return axisDraftSourceMatchesConstructor()
                 ? QStringLiteral("Command: AXIS — Edge selected · FINISH/Enter · CANCEL/Esc")
                 : QStringLiteral("Command: AXIS — Constructor Edge · pick one straight material Body Edge · SOURCE · CANCEL/Esc");
         }
