@@ -1,11 +1,17 @@
 # RG-02C/C1-P1-B1 — strict singleton cylindrical Face Axis: existing Work Features UX consultation
 
-**Status: OWNER DIRECTION A ACCEPTED (2026-10-16); NEW CYLINDRICAL-FACE UX DESIGN IS PRESENTED FOR SEPARATE EXPRESS OWNER SIGNOFF — NOT YET UX-ACCEPTED / NOT CODE ACTIVE.**
+**Status: OWNER EXPLICIT UX SIGNOFF ACCEPTED — 2026-10-16 FOR EXACT W1–W3 AND UX-01…14 CYLINDRICAL FACE CONSTRUCTOR DESIGN; UX GOVERNANCE PR #439 STILL OPEN/DRAFT AND NOT MERGED; NO PRODUCT UI CODE ACTIVE.**
 **Baseline:** protected `main` `b14c6821c8707e57f7b9a8ad8cacf348a6a54dba`. Owner expressly said `akceptuje i akceptuje implementację i merge - kontynuuj pracę i nie przerywaj` following the Agent's recommendation of **architecture A**. This establishes Owner direction and delivery intent, **not** prior review of the concrete additional UX below or approval to bypass exact D2, `ACTIVE.yaml`, Windows and protected-main gates.
 **Authority:** Constitution/Foundation/Architecture 1.0, accepted ADR-0014/-0016/-0017, roadmap v1.33 RG-02, [RG-02 product direction](RG-02_REFERENCE_GEOMETRY_EXTENSION_WORK_CONTRACT_DRAFT.md) §2.3 and §3 mandatory **separate prior Owner approval of ANY new RG-02 UI behavior**, [existing Owner-approved Edge UX](RG-02C_B1_SINGLE_STRAIGHT_BODY_EDGE_AXIS_EXISTING_TOOL_UX_CONSULTATION_PROPOSAL.md) (one `Edge` constructor at that stage), accepted [P1-B0 scope](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) and [merged P1-B0 native evidence](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE.md) / #438.
 **Status of B0:** technical FINAL PASS with explicit GAPs and separately Owner-authorized guarded squash, not a demonstrated multi-Face same-cylinder Surface partition-positive. This A proposal **rejects** such a partition rather than presuming B's missing proof.
 
-## 1. Exact new UX review decision — separate from architecture/implementation approval
+## Recorded independent Owner cylindrical-Face UX acceptance — 2026-10-16
+
+The Agent presented this **new** exact existing-tool UX as [Draft PR #439](https://github.com/MechanicalCave/SimpleSolid2/pull/439), separately from [H1 headless contract PR #440](https://github.com/MechanicalCave/SimpleSolid2/pull/440), and explicitly asked whether the Owner **approves UX from #439 and, independently, exact H1 D2 from #440**. The Owner replied **`akceptuję - kontynuuj`**. This is the required **separate express Owner UX design signoff** under RG-02 §3 for the reviewed W1–W3 and UX-01…14 direction below: second Constructor `Cylindrical Face` after existing default `Edge` in one already built Work Features Axis UI, exactly one strict current singleton cylinder Face with existing stage semantic Surface source and P1-A exact geometry, typed refusal and repair, finite unoriented cue, unchanged Sketch-Line Axis, Tree/viewport/CLI lifecycle grammar.
+
+**Not accepted by that answer:** squash merging this governance-only PR #439 (it needs **separate guarded protected-main authorization** after exact-head Windows governance CLOSURE); `work/ACTIVE.yaml` activation; shipping UI/H2 code before independently approved executable H2 Work Contract and activation; modifying anything outside a later exact allowlist; authoring from multi-Face (variant B) or new semantic patch identity (variant C), changing Revolve Reverse, introducing Axis Reverse, schema changes outside accepted H1/H2, or treating P1-B0 native fixture GAPs as PASS. This acceptance does **not** itself prove a manual Windows UX test was performed.
+
+## 1. Owner-accepted new UX design — separate from implementation and merge approvals
 
 Introduce a **second** entry `Cylindrical Face` in the **existing** `Work Features → Axis → Operations → Constructor` dropdown, beside current `Edge`; keep `Edge` the default to preserve prior UX. This does **not** add an Axis button, a second Axis panel or a second draft authority. `Sketch Line` is **NOT** a Work Features constructor — its Axis is still created inside Sketch and nested under that Sketch. Existing Edge-sourced Axes and new Face-sourced Axes both appear under `Reference Geometry`, each once, with unchanged `AxisId` identity/visibility/Tree semantics. Built-in Origin axes remain under Origin.
 
@@ -78,13 +84,13 @@ Tree                       Properties — Axis         Operations — Edit Axis
 
 ## 3. Design alternatives deliberately excluded
 
-No new `Axis from Entire Surface` option (B), no provider-face ordinal/patch discriminator (C), no default to first Face of partition, no `Sketch Line` constructor entry, no new `Axis` toolbar button, no signed native direction or auto-Reverse. Multi-Face cylinder `strict_face_status=ambiguous` is **rejected by direction A**, not treated as a B0 PASS. The Owner acceptance of architecture A and a wish to implement/merge it do **not** constitute having reviewed or expressly accepted W1–W3 and UX-01…14 before they were presented. This separate UX signoff is mandatory under RG-02 §3; the existing Owner acceptance for `Edge` does not silently extend to the new constructor.
+No new `Axis from Entire Surface` option (B), no provider-face ordinal/patch discriminator (C), no default to first Face of partition, no `Sketch Line` constructor entry, no new `Axis` toolbar button, no signed native direction or auto-Reverse. Multi-Face cylinder `strict_face_status=ambiguous` is **rejected by direction A**, not treated as a B0 PASS. The Owner's **earlier** acceptance of architecture A and stated implementation/merge goal was not an approval of then-unshown W1–W3/UX-01…14. The Owner's **later explicit acceptance recorded above** independently approves this exact `Cylindrical Face` UX design under RG-02 §3; it does not itself authorize product UI code, activation, or protected-main merge.
 
 ## 4. Required sequencing — the Draft PR is not an implementation or merge
 
-1. Owner review of **this exact new UX** (Constructor `Edge` + `Cylindrical Face`, stage-scoped strict singleton, preview/repair/Tree/CLI behavior) and separate explicit signoff or correction.
-2. Separate acceptance and governance squash of a narrowly bounded P1-B1-H1 technical Work Contract with exact implementation allowlist, native v20 persistence/legacy v19 plan and native tests; then independent `ACTIVE.yaml` activation.
-3. Headless semantics/schema and native gates before UI mutations; product GUI only **after** UX signoff; exact docs/PL+EN/Browser DOC-01 and owner manual Windows review.
+1. **CLOSED — OWNER UX SIGNOFF ACCEPTED 2026-10-16:** this exact new UX (Constructor `Edge` + `Cylindrical Face`, stage-scoped strict singleton, preview/repair/Tree/CLI behavior). No code or merge consent follows automatically.
+2. **EXACT H1 D2 SCOPE ALSO OWNER-ACCEPTED, SEPARATELY — governance still pending:** [#440](https://github.com/MechanicalCave/SimpleSolid2/pull/440) H1 headless Work Contract with allowlist, native v20 persistence/legacy v19 and native tests; each governance squash independently authorized and then independent `ACTIVE.yaml` activation.
+3. Headless semantics/schema and native gates before UI mutations; product GUI only after **independent H2 executable contract and ACTIVE-only activation**, reusing the approved UX here; exact docs/PL+EN/Browser DOC-01 and owner manual Windows review.
 4. Technical FINAL PASS with honest native gap decisions, then **independent** guarded squash approval on verified exact production HEAD. No auto-merge because Owner previously said `merge` in general.
 
 **This PR is one new `work/**` UX review file only. No `src/**`, tests, schema, product docs, `ACTIVE.yaml` or generated Browser mutations. No product native tests are claimed from governance CLOSURE.**
@@ -93,4 +99,4 @@ No new `Axis from Entire Surface` option (B), no provider-face ordinal/patch dis
 
 Internal docs: not required
 User/Product docs: not required
-Reason: this is a work-only **unapproved UX design review**. A later activated shipping implementation must explicitly update internal as-built, bilingual Axis documentation PL/EN and generated-only DOC-01 Browser, never hand-edit `docs/browser/index.html`.
+Reason: this is a work-only **Owner-accepted UX design record awaiting separate governance merge**, not a shipping implementation. A later activated H2 must explicitly update internal as-built, bilingual Axis documentation PL/EN and generated-only DOC-01 Browser, never hand-edit `docs/browser/index.html`.
