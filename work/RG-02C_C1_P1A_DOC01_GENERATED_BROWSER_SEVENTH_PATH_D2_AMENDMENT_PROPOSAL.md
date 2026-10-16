@@ -1,6 +1,12 @@
 # RG-02C/C1-P1-A — DOC-01 generated Browser seventh-path D2 amendment proposal
 
-**Status: OWNER REVIEW DRAFT ONLY — NOT ACCEPTED, NOT MERGED, NOT ACTIVE.** This is a **strictly one-file addendum proposal** for the accepted and ACTIVE C1-P1-A implementation contract `work/RG-02C_C1_P1A_EXACT_NATIVE_CYLINDRICAL_FACE_AXIS_QUERY_D2_WORK_CONTRACT_PROPOSAL.md`. It requests only the necessary generated `docs/browser/index.html` as a **SEVENTH** allowed file for the existing six-file P1-A branch, without expanding product capabilities or test requirements.
+**Status: OWNER ACCEPTED EXACT SEVENTH-PATH D2 ADDENDUM — 2026-10-16; NOT MERGED, NOT ACTIVATED.** This is a **strictly one-file addendum proposal** for the accepted and ACTIVE C1-P1-A implementation contract `work/RG-02C_C1_P1A_EXACT_NATIVE_CYLINDRICAL_FACE_AXIS_QUERY_D2_WORK_CONTRACT_PROPOSAL.md`. It requests only the necessary generated `docs/browser/index.html` as a **SEVENTH** allowed file for the existing six-file P1-A branch, without expanding product capabilities or test requirements.
+
+## Recorded Owner decision — exact DOC-01 Browser seventh path accepted, integration gated
+
+On 2026-10-16 the Agent asked **“Czy zatwierdzasz dokładny aneks D2 z PR #434, dodający wyłącznie wygenerowany `docs/browser/index.html` jako siódmą dozwoloną ścieżkę?”** The immediately preceding response explicitly said **“Po akceptacji przeprowadzę osobno jego scalenie i aktualizację aktywacji”**, i.e. governance integration and ACTIVE-only amendment remain separate approvals. The Owner answered **`akceptuję kontynuuj`**. The **seventh-path D2 change only** is therefore Owner accepted; that response is **not** protected-main merge permission, ACTIVE-only activation permission, permission to edit the Browser in #433 already, or P1-A technical PASS.
+
+At acceptance, PR #434 was OPEN/DRAFT at `9d632374ee03852637ae62b6906ab9ec1578bf6d`, with genuine [Windows governance CLOSURE #3337](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38894466605) **SUCCESS**, and protected main was `5215817969d1eb83ab9e17a9324a429c9034d637`, still pointing ACTIVE to the original P1-A six-file contract. Recording this decision creates an independent **new PR HEAD requiring its own exact-head CLOSURE**; the earlier implementation [DRAFT FAST #3335](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38893894889) and [#3336](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38894221701) stay **RED at DOC-01 before native C++ compilation**, not retroactive P1-A test PASS.
 
 ## 1. Genuine first RED, not a native compiler/test result
 
@@ -12,7 +18,7 @@ No C++ compile, no P1-A native geometry or CTest PASS happened in that run. The 
 
 Confirmed existing deterministic build pipeline: `scripts/docs/ss2-docs-core.ps1::Get-CanonicalDocPaths` enumerates `docs/internal/*.md`, `New-BrowserHtml` embeds their canonical markdown, and `scripts/docs/ss2-docs-validation.ps1::Test-BrowserFreshness` requires `docs/browser/index.html` equal the generated result. Thus a changed internal canonical source necessarily changes the generated Browser artifact, even though there is **no change to user-visible CAD behavior**.
 
-## 2. Proposed exact Owner D2 change — ONE generated additional path ONLY
+## 2. Owner-accepted exact D2 change — ONE generated additional path ONLY
 
 Extend the existing activated P1-A six-path allowlist by exactly:
 
@@ -24,8 +30,8 @@ Extend the existing activated P1-A six-path allowlist by exactly:
 
 ## 3. Separate gated sequencing — STOP before the seventh-file mutation
 
-1. Owner must **explicitly accept this exact seventh-file D2 addition**; project priority or earlier P1-A acceptance does not imply it.
-2. Record acceptance in this proposal and pass exact-head Windows governance CLOSURE; obtain **separate guarded squash merge authorization** into protected `main`.
+1. **ACCEPTED 2026-10-16:** Owner expressly approved this exact seventh-file generated Browser D2 addition by replying `akceptuję kontynuuj` to the narrow acceptance request. Prior project priority or P1-A approval alone did not grant it. Governance merge and ACTIVE-only amendment have **NOT** been authorized by this acceptance.
+2. The acceptance is recorded in this proposal; verify a **fresh exact-head Windows governance CLOSURE** on the acceptance-ledger HEAD, then request **separate guarded squash merge authorization** into protected `main`. The prior proposal-only CLOSURE #3337 SUCCESS at `9d632374ee03852637ae62b6906ab9ec1578bf6d` is historical evidence, not the new-HEAD check.
 3. Prepare a **separate ACTIVE-only PR** that retains `active_work` pointing at the original C1-P1-A contract but prepends one factual `next:` history addendum to `work/ACTIVE.yaml`, binding the accepted seventh-file exception to P1-A. Require its own exact-head Windows CLOSURE and independent guarded squash Owner authorization. Only **after this ACTIVE-only amendment merges** can #433 update/generated `docs/browser/index.html` as its seventh file. The original six remain frozen.
 4. Re-run genuine P1-A FOCUSED `pm04c2.production_revolve`, separate FAST and Ready FULL Core+Kernel+Qt/OCCT, mandatory DOC-01, final exact-head CLOSURE after factual ledger. The first RED #3335 must remain recorded as RED; passing docs later does not convert an unexecuted native test into PASS. Independent Owner P1-A technical FINAL PASS and subsequent safeguarded production squash remain distinct gates.
 
