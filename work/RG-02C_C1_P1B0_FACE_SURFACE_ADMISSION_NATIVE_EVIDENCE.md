@@ -1,6 +1,6 @@
 # RG-02C/C1-P1-B0 — native picked-Face / semantic Surface admission evidence
 
-**Status: NATIVE FOCUSED 1/1 PASS AND INDEPENDENT DRAFT FAST 93/93 PASS; READY FULL AND FINAL EXACT-HEAD CLOSURE STILL PENDING.** This ledger records only actually executed observations and does not establish A/B/C durable Axis source semantics or a Part Axis product. Baseline: protected `main` `6ff550a0b448300a0441954ab67825f7fbecc7c7` after separately Owner-authorized, Windows-CLOSURE-verified ACTIVE-only [PR #437](https://github.com/MechanicalCave/SimpleSolid2/pull/437), which activates the exact already Owner-accepted [P1-B0 D2 evidence contract](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) merged through governance [PR #436](https://github.com/MechanicalCave/SimpleSolid2/pull/436).
+**Status: AUTOMATED NATIVE FOCUSED 1/1, INDEPENDENT FAST 93/93, AND READY FULL 199/199 PASS; FINAL EVIDENCE-ONLY EXACT-HEAD CLOSURE AND OWNER TECHNICAL FINAL PASS STILL PENDING.** This ledger records only actually executed observations and does not establish A/B/C durable Axis source semantics or a Part Axis product. Baseline: protected `main` `6ff550a0b448300a0441954ab67825f7fbecc7c7` after separately Owner-authorized, Windows-CLOSURE-verified ACTIVE-only [PR #437](https://github.com/MechanicalCave/SimpleSolid2/pull/437), which activates the exact already Owner-accepted [P1-B0 D2 evidence contract](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) merged through governance [PR #436](https://github.com/MechanicalCave/SimpleSolid2/pull/436).
 
 ## Exact scope and test wiring
 
@@ -42,12 +42,18 @@ The [Windows #3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/
 | --- | --- | --- |
 | Windows native FOCUSED `pm04c2.production_revolve` (real OCCT/MSVC) | [#3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911057989), HEAD `07efe573b6115cf9b9d40514efd4f1fae10e0c78` | **1/1 PASS** — actual Windows/MSVC Release OCCT binary and CTest #35 Passed in 0.11 s; DOC-01 bootstrap PASS |
 | Independent Windows Draft FAST | [#3353](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911301976), HEAD `407d94c04fef41ae24d06714ddc0e61324fd7e39` | **93/93 PASS**, zero failures; official documentation verification PASS |
-| Windows Ready FULL Core-only, Kernel-native, Qt/OCCT Desktop, DOC-01 | Not run yet | PENDING |
+| Windows Ready FULL Core-only, Kernel-native, Qt/OCCT Desktop, DOC-01 | [#3356](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911535845), HEAD `174751b6bde540e87b850afc01658cf017c4218c` | **199/199 PASS**: Core-only 25/25, kernel-native Release/OCCT 57/57 (including `pm04c2.production_revolve` Passed 0.09 s), Desktop Qt/OCCT 117/117; official DOC-01 PASS |
 | Final evidence-only exact-head CLOSURE | Not run yet | PENDING |
 | Owner B0 technical FINAL PASS | Not requested | PENDING |
 | Independent guarded squash of evidence PR | Not authorized | NOT AUTHORIZED |
 
 The independent Windows Draft [FAST #3353](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911301976) executed 93/93 tests with zero failures at `407d94c04fef41ae24d06714ddc0e61324fd7e39`; official `SS2 documentation verification PASSED`. This is not substituted for the separate native FOCUSED #3352 or forthcoming complete Ready FULL. All missing per-Face counts and the multi-Face-cylinder-positive requirement remain explicitly GAP/NOT PROVEN.
+
+## Ready FULL — independently executed Windows evidence
+
+The completed independent [Ready FULL #3356](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911535845) on `174751b6bde540e87b850afc01658cf017c4218c` records these **actual Windows job logs**: `SS2 documentation verification PASSED`; `100% tests passed, 0 tests failed out of 25` in Core-only; `16/57 Test #35: pm04c2.production_revolve ... Passed 0.09 sec` and `100% tests passed, 0 tests failed out of 57` in Kernel-native OCCT Release; and `100% tests passed, 0 tests failed out of 117` in Desktop Qt/OCCT. Total: **199/199**. The skipped standalone windows-docs/FAST/FOCUSED branches in the Ready FULL workflow are tier-selected skips, not skipped tests within the three FULL suites. The earlier Windows #3355 at the same SHA was **CANCELLED** during Draft→Ready transition and is not counted as PASS; the actually completed independent #3356 is the authoritative FULL witness.
+
+No normal successful CTest FULL output includes the per-Face `RG02C_C1_P1B0_*` instrumentation, so `partitioned_coaxial_carriers>0` has **NOT** been demonstrated to a reviewer. In particular **do not record variant B's multi-Face partition-positive condition as PASS** merely because FULL is green. Such a missing fixture remains GAP. No product-level Axis authorization, native v20 schema or Face-versus-Surface D2 choice follows from automated PASS.
 
 ## Deliberate STOPs and inherited GAPs
 
