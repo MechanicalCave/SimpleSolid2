@@ -3,6 +3,8 @@
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/axis_evaluation.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/persistence/native_document_container.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
@@ -889,6 +891,7 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
     std::size_t strict_admitted = 0U;
     std::size_t rejected = 0U;
     std::size_t noncylinders = 0U;
+    bool saved_and_reopened_v20 = false;
     for (const auto& picked : evaluation.current_topology->faces) {
         CHECK(picked.runtime_token.valid());
         const auto bound =
@@ -1036,6 +1039,56 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
         CHECK(session.document().findAxis(*created.axis_id)->source ==
               created_value.source);
 
+        // Genuine native v20 Save / Close / Reopen of a real Part-owned
+        // strict Face Axis, on exactly one positive source per fixture.
+        // No native Face token, OCCT shape, radius or cached axis geometry
+        // may appear in the authored serialized source.
+        if (!saved_and_reopened_v20) {
+            static unsigned serial = 0U;
+            const auto native_path =
+                std::filesystem::temp_directory_path() /
+                ("ss2_h1_native_face_v20_" +
+                 std::to_string(++serial) + ".ss2part");
+            part::PartDocumentStore store;
+            const auto saved =
+                store.createNew(native_path, session.document());
+            CHECK(saved.ok());
+            const auto package =
+                persistence::readNativeDocumentContainer(
+                    native_path);
+            CHECK(package.ok());
+            CHECK(package.package->descriptor.domain_schema_version == 20);
+            const auto reopened = store.load(native_path);
+            CHECK(reopened.ok());
+            CHECK(reopened.document);
+            CHECK(reopened.document->documentId() ==
+                  session.document().documentId());
+            const auto* reopened_axis =
+                reopened.document->findAxis(*created.axis_id);
+            CHECK(reopened_axis != nullptr);
+            CHECK(reopened_axis->source == created_value.source);
+            CHECK(reopened_axis->visible == created_value.visible);
+
+            // Cold provider/native Body generation: never use the
+            // pre-save runtime Face handle as a persistent source.
+            const auto rebuilt =
+                part::evaluatePart(*reopened.document, provider);
+            const auto rebuilt_axis = part::resolveAxisReference(
+                *reopened.document,
+                part::AxisReference{
+                    part::AuthoredAxisReference{*created.axis_id}},
+                &rebuilt, nullptr, nullptr, &provider);
+            CHECK(rebuilt_axis.status ==
+                  part::AxisEvaluationStatus::resolved);
+            CHECK(rebuilt_axis.valid());
+            CHECK(rebuilt_axis.line);
+            CHECK(rebuilt_axis.required_body_stage ==
+                  std::optional<part::BodyStageRef>{stage});
+            std::error_code remove_error;
+            CHECK(std::filesystem::remove(native_path, remove_error));
+            CHECK(!remove_error);
+            saved_and_reopened_v20 = true;
+        }
     }
     CHECK(queried == evaluation.current_topology->faces.size());
     CHECK(queried == strict_admitted + rejected);
@@ -1052,7 +1105,7 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
               << " native_noncylinders=" << noncylinders
               << " multi_face_carrier_accepted=NEVER"
               << " axis_source=SEMANTIC_ONLY"
-              << " v20_persistence=NOT_YET_EXECUTED"
+              << " v20_cold_rebuild_reopened=" << saved_and_reopened_v20
               << '\n';
 }
 
