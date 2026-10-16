@@ -3301,7 +3301,7 @@ int main() {
         base_document.revision());
     CHECK(b1_authored.ok());
     CHECK(b1_authored.document->axes().size() == 1U);
-    CHECK(part::PartDocumentStore::current_schema_version == 19);
+    CHECK(part::PartDocumentStore::current_schema_version == 20);
     const auto b1_path = std::filesystem::temp_directory_path() /
         ("ss2_rg02c_b1_axis_v19_" +
          std::to_string(std::chrono::steady_clock::now()
