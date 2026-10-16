@@ -1196,6 +1196,18 @@ QString surfaceRoleText(
         return QStringLiteral("Positive Cap");
     case part::FeatureSurfaceRoleKind::side:
         return QStringLiteral("Side");
+    case part::FeatureSurfaceRoleKind::revolve_start_cap:
+        return QStringLiteral("Revolve Start Cap");
+    case part::FeatureSurfaceRoleKind::revolve_end_cap:
+        return QStringLiteral("Revolve End Cap");
+    case part::FeatureSurfaceRoleKind::revolve_side:
+        return QStringLiteral("Revolve Side");
+    case part::FeatureSurfaceRoleKind::fillet_surface:
+        return QStringLiteral("Fillet Surface");
+    case part::FeatureSurfaceRoleKind::chamfer_surface:
+        return QStringLiteral("Chamfer Surface");
+    case part::FeatureSurfaceRoleKind::corner_transition:
+        return QStringLiteral("Corner Transition");
     }
     return QStringLiteral("Unknown");
 }
