@@ -2163,6 +2163,9 @@ int main(int argc, char* argv[]) {
             axis_tool->click();
             QApplication::processEvents();
             CHECK(axis_tool->isChecked());
+            CHECK(axis_constructor->count() == 2);
+            CHECK(axis_constructor->itemText(1) ==
+                  QStringLiteral("Cylindrical Face"));
             CHECK(!axis_finish->isEnabled());
 
             const auto candidates =
@@ -2522,9 +2525,161 @@ int main(int argc, char* argv[]) {
                           << " document_unchanged=1\\n";
             }
 
+            // H2: genuine OCCT Revolve analytic-cylinder Face picked
+            // by real Qt mouse input, not by a fabricated Face token.
+            // Positive Finish reuses H1's same strict semantic admission,
+            // then v20 save/reopen must re-evaluate with a COLD provider.
+            {
+                auto h2_session = makeRevolveSession(
+                    std::acos(-1.0) / 2.0);
+                CHECK(workbench.activateDocument(&h2_session, {}));
+                CHECK(viewport->setStandardView(
+                    viewer::StandardView::top_front_right));
+                viewport->fitAll();
+                QApplication::processEvents();
+                auto* h2_tool = workbench.findChild<QPushButton*>(
+                    QStringLiteral("axisToolButton"));
+                auto* h2_constructor = workbench.findChild<QComboBox*>(
+                    QStringLiteral("axisConstructorCombo"));
+                auto* h2_finish = workbench.findChild<QPushButton*>(
+                    QStringLiteral("axisFinishButton"));
+                auto* h2_cancel = workbench.findChild<QPushButton*>(
+                    QStringLiteral("axisCancelButton"));
+                CHECK(h2_tool && h2_constructor &&
+                      h2_finish && h2_cancel);
+                CHECK(h2_constructor->count() == 2);
+                CHECK(h2_tool->isEnabled());
+                const auto before_revision =
+                    h2_session.document().revision();
+                const auto before_undo = h2_session.undoDepth();
+                h2_tool->click();
+                QApplication::processEvents();
+                CHECK(h2_constructor->currentIndex() == 0);
+                CHECK(!h2_finish->isEnabled());
+                h2_constructor->setCurrentIndex(1);
+                QApplication::processEvents();
+                CHECK(!h2_finish->isEnabled());
+                CHECK(h2_session.document().axes().empty());
+                const auto real_body = part::evaluatePart(
+                    h2_session.document(), kernel);
+                CHECK(real_body.body_status ==
+                      part::BodyEvaluationStatus::up_to_date);
+                CHECK(real_body.current_topology &&
+                      real_body.current_topology->complete());
+                std::size_t strict_native_cylinders = 0U;
+                for (const auto& face :
+                     real_body.current_topology->faces) {
+                    const auto authored =
+                        part::authorStrictCylindricalFaceAxisSource(
+                            h2_session.document(),
+                            real_body.current_topology->stage,
+                            face.runtime_token, real_body, kernel);
+                    if (authored.ok()) ++strict_native_cylinders;
+                }
+                CHECK(strict_native_cylinders > 0U);
+
+                bool picked_native_face = false;
+                for (const double x : {12.0, 15.0, 18.0}) {
+                    if (picked_native_face) break;
+                    for (const double degrees : {25.0, 40.0, 50.0,
+                                                 65.0, 75.0}) {
+                        const double radians =
+                            degrees * std::acos(-1.0) / 180.0;
+                        const viewer::Point3 spot{
+                            x, 10.0 * std::cos(radians),
+                            10.0 * std::sin(radians)};
+                        if (!nativePlanarFaceClick(*viewport, spot))
+                            continue;
+                        QApplication::processEvents();
+                        if (h2_finish->isEnabled()) {
+                            picked_native_face = true;
+                            break;
+                        }
+                    }
+                }
+                CHECK(picked_native_face);
+                CHECK(h2_session.document().revision() ==
+                      before_revision);
+                CHECK(h2_session.undoDepth() == before_undo);
+                CHECK(h2_session.document().axes().empty());
+                h2_finish->click();
+                QApplication::processEvents();
+                CHECK(h2_session.document().axes().size() == 1U);
+                CHECK(h2_session.undoDepth() == before_undo + 1U);
+                const auto face_axis =
+                    h2_session.document().axes().front();
+                CHECK(std::holds_alternative<
+                    part::StrictCylindricalFaceAxisSource>(
+                        face_axis.source));
+                CHECK(face_axis.id.valid());
+                QTemporaryDir h2_dir;
+                CHECK(h2_dir.isValid());
+                const auto path = std::filesystem::path{
+                    h2_dir.path().toStdWString()} /
+                    "NativeCylindricalFaceAxisWorkbench_v20.ss2part";
+                part::PartDocumentStore store;
+                CHECK(store.createNew(path, h2_session.document()).ok());
+                const auto cold = store.load(path);
+                CHECK(cold.ok());
+                CHECK(cold.document->findAxis(face_axis.id));
+                CHECK(cold.document->findAxis(face_axis.id)->source ==
+                      face_axis.source);
+                kernel_occt::OcctSolidModelingKernel cold_kernel;
+                const auto cold_body = part::evaluatePart(
+                    *cold.document, cold_kernel);
+                CHECK(cold_body.body_status ==
+                      part::BodyEvaluationStatus::up_to_date);
+                const auto cold_line = part::resolveAxisReference(
+                    *cold.document,
+                    part::AxisReference{
+                        part::AuthoredAxisReference{face_axis.id}},
+                    &cold_body, nullptr, &cold_kernel, &cold_kernel);
+                CHECK(cold_line.status ==
+                      part::AxisEvaluationStatus::resolved);
+                CHECK(cold_line.line && cold_line.line->valid());
+
+                auto* h2_tree = workbench.findChild<QTreeWidget*>();
+                auto* h2_action = workbench.findChild<QAction*>(
+                    QStringLiteral("editAxisAction"));
+                CHECK(h2_tree && h2_action);
+                QTreeWidgetItem* h2_row = nullptr;
+                for (QTreeWidgetItemIterator it(h2_tree); *it; ++it) {
+                    if ((*it)->text(0) ==
+                            QString::fromStdString(face_axis.name)) {
+                        h2_row = *it;
+                        break;
+                    }
+                }
+                CHECK(h2_row && h2_row->parent());
+                CHECK(h2_row->parent()->text(0) ==
+                      QStringLiteral("Reference Geometry"));
+                h2_tree->clearSelection();
+                h2_tree->setCurrentItem(h2_row);
+                h2_row->setSelected(true);
+                QApplication::processEvents();
+                CHECK(h2_action->isEnabled());
+                const auto before_edit_undo = h2_session.undoDepth();
+                h2_action->trigger();
+                QApplication::processEvents();
+                CHECK(h2_constructor->currentIndex() == 1);
+                CHECK(h2_finish->isEnabled());
+                h2_cancel->click();
+                QApplication::processEvents();
+                CHECK(h2_session.undoDepth() == before_edit_undo);
+                CHECK(h2_session.document().findAxis(face_axis.id));
+                std::cout << "RG02C_H2_NATIVE_AXIS_FACE_GUI"
+                          << " strict_native_cylinders="
+                          << strict_native_cylinders
+                          << " actual_qt_face_pick=1"
+                          << " stage_semantic_axis=1"
+                          << " undo=1"
+                          << " tree_edit_cancel=1"
+                          << " cold_v20=1\\n";
+            }
+
             std::cout << "RG02C_B1_NATIVE_AXIS_GUI"
                       << " strict_mouse_edge=1"
-                      << " constructor_edge_only=1"
+                      << " constructors_edge_and_cylindrical_face=1"
                       << " reference_geometry_tree=1"
                       << " finish_one_undo=1"
                       << " cold_v19_axis=1\\n";
@@ -10473,6 +10628,287 @@ int main(int argc, char* argv[]) {
         // QPushButton itself need not have QWidget::isHidden() set.
         CHECK(workbench.findChild<QWidget*>(
             QStringLiteral("edgeFeatureOperationsWidget"))->isHidden());
+
+        // H2 OWNER ACTUAL FILE Part002.ss2part (2026-10-16):
+        // Reconstruct its persisted v20 AUTHORED dimensions and semantic
+        // Fillet source, without committing Owner-private document bytes.
+        // Rectangle XY 0..40 x 0..80, Extrude Add 35, Fillet004 R30 on
+        // Extrude001 side_side Edge between authored Lines 2 and 3.
+        // This diagnoses the genuine current native OCCT Face and the
+        // strict A semantic resolver separately; a native-cylinder
+        // witness is NOT a claim that architecture A can already author it.
+        {
+            auto owner_face_session =
+                makeBaseSession(kernel, 40.0, 80.0, 35.0);
+            const auto extruded = part::evaluatePart(
+                owner_face_session.document(), kernel);
+            CHECK(extruded.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(extruded.current_topology &&
+                  extruded.current_topology->complete());
+            std::optional<part::MaterialEdgeReference>
+                fillet_source;
+            std::size_t match_count = 0U;
+            for (const auto& edge :
+                 extruded.current_topology->edges) {
+                const auto authored =
+                    part::authorMaterialEdgeReference(
+                        *extruded.current_topology,
+                        edge.runtime_token);
+                if (!authored.ok()) continue;
+                const auto& curve = authored.reference->curve;
+                if (curve.role !=
+                        part::FeatureCurveRoleKind::side_side ||
+                    curve.adjacent_surfaces.size() != 2U) {
+                    continue;
+                }
+                bool line2 = false;
+                bool line3 = false;
+                for (const auto& adjacent :
+                     curve.adjacent_surfaces) {
+                    if (adjacent.source_entity) {
+                        line2 |= adjacent.source_entity->serialized() == "2";
+                        line3 |= adjacent.source_entity->serialized() == "3";
+                    }
+                }
+                if (line2 && line3) {
+                    ++match_count;
+                    fillet_source = *authored.reference;
+                }
+            }
+            CHECK(match_count == 1U && fillet_source);
+            auto authored_state = owner_face_session.document().state();
+            // The supplied file has earlier unused FeatureIds 2 and 3,
+            // with Fillet004 at FeatureId 4. Preserve that gap.
+            const auto unused2 =
+                authored_state.body.next_feature_id.allocate();
+            const auto unused3 =
+                authored_state.body.next_feature_id.allocate();
+            const auto fillet4 =
+                authored_state.body.next_feature_id.allocate();
+            CHECK(unused2 && unused3 && fillet4);
+            CHECK(fillet4->serialized() == "4");
+            authored_state.body.features.push_back(
+                part::PartFeature{
+                    *fillet4, "Fillet004", false,
+                    part::FilletFeature{
+                        {*fillet_source}, core::LengthValue{30.0}}});
+            auto fillet_document = part::PartDocument::restore(
+                owner_face_session.document().documentId(),
+                std::move(authored_state),
+                owner_face_session.document().revision());
+            CHECK(fillet_document.ok());
+            application::DocumentSession repro{
+                {}, std::move(*fillet_document.document)};
+            const auto evaluated =
+                part::evaluatePart(repro.document(), kernel);
+            CHECK(evaluated.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(evaluated.current_topology &&
+                  evaluated.current_topology->complete());
+            CHECK(evaluated.current_topology->stage.feature_id &&
+                  *evaluated.current_topology->stage.feature_id == *fillet4);
+            std::size_t carriers = 0U;
+            std::size_t generated_face_tokens = 0U;
+            std::size_t exact_cylinders = 0U;
+            std::size_t strict_axis_resolved = 0U;
+            std::size_t strict_axis_ambiguous = 0U;
+            std::size_t strict_axis_other = 0U;
+            std::optional<part::StrictCylindricalFaceAxisSource>
+                valid_fillet_source;
+            for (const auto& carrier :
+                 evaluated.current_topology->surfaces) {
+                if (carrier.address.producer_feature_id != *fillet4 ||
+                    carrier.address.role !=
+                        part::FeatureSurfaceRoleKind::fillet_surface) {
+                    continue;
+                }
+                ++carriers;
+                std::cerr
+                    << "RG02C_H2_OWNER_PART002_FILLET_CARRIER"
+                    << " surface_kind=" << static_cast<int>(
+                           carrier.surface_kind)
+                    << " surface_status=" << static_cast<int>(
+                           carrier.status)
+                    << " strict_face_status=" << static_cast<int>(
+                           carrier.strict_face_status)
+                    << " candidate_face_count="
+                    << carrier.candidate_face_count
+                    << " current_faces="
+                    << carrier.current_faces.size() << std::endl;
+                for (const auto token : carrier.current_faces) {
+                    ++generated_face_tokens;
+                    const auto scoped =
+                        kernel.bindExactCylindricalFaceToBody(
+                            evaluated.body_solid, token);
+                    CHECK(scoped && scoped->valid());
+                    const auto geometry =
+                        kernel.queryExactCylindricalFaceAxis(
+                            evaluated.body_solid, *scoped);
+                    const auto direct_resolution =
+                        part::resolveStrictCylindricalFaceAxisLine(
+                            repro.document(),
+                            part::SurfaceReference{
+                                evaluated.current_topology->stage,
+                                carrier.address},
+                            evaluated, kernel);
+                    const auto& all_faces =
+                        evaluated.current_topology->faces;
+                    const auto matching_face_count = std::count_if(
+                        all_faces.begin(), all_faces.end(),
+                        [token](const auto& entry) {
+                            return entry.runtime_token == token;
+                        });
+                    const auto picked = std::find_if(
+                        all_faces.begin(), all_faces.end(),
+                        [token](const auto& entry) {
+                            return entry.runtime_token == token;
+                        });
+                    CHECK(picked != all_faces.end());
+                    const auto same_surface = std::count_if(
+                        evaluated.current_topology->surfaces.begin(),
+                        evaluated.current_topology->surfaces.end(),
+                        [&carrier](const auto& entry) {
+                            return entry.address == carrier.address;
+                        });
+                    std::cerr
+                        << "RG02C_H2_OWNER_PART002_IDENTITY"
+                        << " face_matches=" << matching_face_count
+                        << " has_semantic_face="
+                        << (picked->semantic_address ? 1 : 0)
+                        << " carrier_candidates="
+                        << picked->surface_candidates.size()
+                        << " candidate_matches_carrier="
+                        << (picked->surface_candidates.size() == 1U &&
+                            picked->surface_candidates.front() ==
+                                carrier.address ? 1 : 0)
+                        << " surface_matches=" << same_surface
+                        << " direct_status=" << static_cast<int>(
+                               direct_resolution.status)
+                        << " direct_diagnostic=" << static_cast<int>(
+                               direct_resolution.diagnostic)
+                        << std::endl;
+                    const auto admission =
+                        part::authorStrictCylindricalFaceAxisSource(
+                            repro.document(),
+                            evaluated.current_topology->stage,
+                            token, evaluated, kernel);
+                    exact_cylinders += geometry.ok() ? 1U : 0U;
+                    strict_axis_resolved += admission.ok() ? 1U : 0U;
+                    if (admission.ok() && geometry.ok()) {
+                        CHECK(!valid_fillet_source);
+                        valid_fillet_source = *admission.source;
+                        CHECK(direct_resolution.status ==
+                              part::AxisEvaluationStatus::resolved);
+                        CHECK(direct_resolution.line &&
+                              direct_resolution.line->valid());
+                    }
+                    strict_axis_ambiguous +=
+                        admission.diagnostic ==
+                            part::AxisEvaluationDiagnostic::
+                                cylindrical_face_ambiguous
+                        ? 1U : 0U;
+                    strict_axis_other +=
+                        !admission.ok() &&
+                        admission.diagnostic !=
+                            part::AxisEvaluationDiagnostic::
+                                cylindrical_face_ambiguous
+                        ? 1U : 0U;
+                    std::cerr
+                        << "RG02C_H2_OWNER_PART002_FACE"
+                        << " exact_status=" << static_cast<int>(
+                               geometry.status)
+                        << " exact_cylinder=" << (geometry.ok() ? 1 : 0)
+                        << " axis_status=" << static_cast<int>(
+                               admission.status)
+                        << " axis_diagnostic=" << static_cast<int>(
+                               admission.diagnostic)
+                        << std::endl;
+                }
+            }
+            std::cerr << "RG02C_H2_OWNER_PART002_SUMMARY"
+                      << " generated_carriers=" << carriers
+                      << " generated_face_tokens="
+                      << generated_face_tokens
+                      << " exact_cylinders=" << exact_cylinders
+                      << " strict_axis_resolved="
+                      << strict_axis_resolved
+                      << " strict_axis_ambiguous="
+                      << strict_axis_ambiguous
+                      << " strict_axis_other="
+                      << strict_axis_other << std::endl;
+            CHECK(carriers > 0U);
+            CHECK(generated_face_tokens > 0U);
+            // Owner requirement: qualify result geometry, not its
+            // creating operation. Deliberately RED if the exact native
+            // cylinder is refused by the current semantic admission.
+            // Never turn the prior FAIL into a false PASS by asserting
+            // current architecture-A rejection instead.
+            CHECK(exact_cylinders > 0U);
+            CHECK(strict_axis_resolved == exact_cylinders);
+            CHECK(strict_axis_ambiguous == 0U);
+            CHECK(strict_axis_other == 0U);
+            CHECK(valid_fillet_source.has_value());
+            const auto before_axis_undo = repro.undoDepth();
+            const auto created_fillet_axis = repro.execute(
+                application::CreateAxisCommand{
+                    *valid_fillet_source,
+                    repro.document().revision(),
+                    "Owner Part002 Fillet R30 Axis", true},
+                kernel);
+            CHECK(created_fillet_axis.ok() &&
+                  created_fillet_axis.axis_id);
+            CHECK(repro.undoDepth() == before_axis_undo + 1U);
+            const auto axis_id = *created_fillet_axis.axis_id;
+            CHECK(repro.document().findAxis(axis_id));
+            CHECK(repro.document().findAxis(axis_id)->source ==
+                  part::PartAxisSource{*valid_fillet_source});
+
+            // Cold v20 Save/Reopen must resolve the SAME durable
+            // stage-qualified semantic Surface with a new OCCT kernel.
+            QTemporaryDir owner_fillet_dir;
+            CHECK(owner_fillet_dir.isValid());
+            const auto owner_fillet_path =
+                std::filesystem::path{
+                    owner_fillet_dir.path().toStdWString()} /
+                "Part002_FilletR30_Axis_v20.ss2part";
+            part::PartDocumentStore owner_fillet_store;
+            CHECK(owner_fillet_store.createNew(
+                owner_fillet_path, repro.document()).ok());
+            const auto cold_fillet =
+                owner_fillet_store.load(owner_fillet_path);
+            CHECK(cold_fillet.ok() && cold_fillet.document);
+            const auto* persisted =
+                cold_fillet.document->findAxis(axis_id);
+            CHECK(persisted &&
+                  persisted->source ==
+                      part::PartAxisSource{*valid_fillet_source});
+            kernel_occt::OcctSolidModelingKernel cold_fillet_kernel;
+            const auto cold_fillet_body = part::evaluatePart(
+                *cold_fillet.document, cold_fillet_kernel);
+            CHECK(cold_fillet_body.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(cold_fillet_body.current_topology &&
+                  cold_fillet_body.current_topology->complete());
+            const auto cold_fillet_axis =
+                part::resolveAxisReference(
+                    *cold_fillet.document,
+                    part::AxisReference{
+                        part::AuthoredAxisReference{axis_id}},
+                    &cold_fillet_body, nullptr,
+                    &cold_fillet_kernel, &cold_fillet_kernel);
+            CHECK(cold_fillet_axis.status ==
+                  part::AxisEvaluationStatus::resolved);
+            CHECK(cold_fillet_axis.line &&
+                  cold_fillet_axis.line->valid());
+            std::cerr << "RG02C_H2_OWNER_PART002_FILLET_AXIS_PASS"
+                      << " native_cylinder=1"
+                      << " single_surface=1"
+                      << " face_address_optional=1"
+                      << " command_undo=1"
+                      << " native_v20_cold_reopen=1"
+                      << std::endl;
+        }
 
         // Restore a known-live session before the temporary Revolve
         // fixtures are destroyed and the Workbench is closed.

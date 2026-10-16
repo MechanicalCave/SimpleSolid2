@@ -9,6 +9,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -862,6 +863,64 @@ int main(int argc, char* argv[]) {
         finish_sketch->click();
         QApplication::processEvents();
     }
+
+    // H2 W1: one existing Work Features Axis entry with exactly two
+    // constructors. Mode changes must never author a Part Axis, append
+    // Undo or leave an incompatible source/Finish/preview behind.
+    auto* constructor = workbench.findChild<QComboBox*>(
+        QStringLiteral("axisConstructorCombo"));
+    auto* axis_finish = workbench.findChild<QPushButton*>(
+        QStringLiteral("axisFinishButton"));
+    auto* axis_cancel = workbench.findChild<QPushButton*>(
+        QStringLiteral("axisCancelButton"));
+    CHECK(constructor && axis_finish && axis_cancel);
+    // This Workbench already opened AXIS earlier in this same fixture.
+    // The lazily installed choice remains available after tool close;
+    // a virgin (not-yet-opened) Workbench retains the legacy one-item
+    // baseline, verified independently by pm03c2.
+    CHECK(constructor->count() == 2);
+    CHECK(constructor->itemText(0) == QStringLiteral("Edge"));
+    CHECK(constructor->itemText(1) ==
+          QStringLiteral("Cylindrical Face"));
+    const auto before_h2_undo = session.undoDepth();
+    const auto before_h2_axes = session.document().axes().size();
+    CHECK(axis_tool->isEnabled());
+    axis_tool->click();
+    QApplication::processEvents();
+    CHECK(!axis_operations->isHidden());
+    CHECK(constructor->count() == 2);
+    CHECK(constructor->itemText(1) ==
+          QStringLiteral("Cylindrical Face"));
+    CHECK(constructor->currentIndex() == 0);
+    CHECK(!axis_finish->isEnabled());
+    constructor->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(!axis_finish->isEnabled());
+    CHECK(workbench.cadInputPrompt().find("Cylindrical Face") !=
+          std::string::npos);
+    auto h2_source = workbench.submitCadInput(
+        "SOURCE", workbench.cadInputContextGeneration());
+    CHECK(h2_source.accepted);
+    CHECK(!axis_finish->isEnabled());
+    constructor->setCurrentIndex(0);
+    QApplication::processEvents();
+    CHECK(!axis_finish->isEnabled());
+    axis_cancel->click();
+    QApplication::processEvents();
+    CHECK(axis_operations->isHidden());
+    CHECK(constructor->count() == 2);
+    // The same widget retains its two accepted choices after Cancel;
+    // a fresh Axis operation must still default to the Edge meaning.
+    axis_tool->click();
+    QApplication::processEvents();
+    CHECK(constructor->count() == 2);
+    CHECK(constructor->currentIndex() == 0);
+    CHECK(!axis_finish->isEnabled());
+    axis_cancel->click();
+    QApplication::processEvents();
+    CHECK(axis_operations->isHidden());
+    CHECK(session.undoDepth() == before_h2_undo);
+    CHECK(session.document().axes().size() == before_h2_axes);
 
     // Source deletion keeps durable Axis intent as Missing and removes any
     // stale successful finite line from the Viewer.

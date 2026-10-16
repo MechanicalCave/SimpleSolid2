@@ -153,6 +153,24 @@ QString axisDiagnosticText(
         return QStringLiteral("Support stage unavailable");
     case part::AxisEvaluationDiagnostic::invalid_frame:
         return QStringLiteral("Invalid frame");
+    case part::AxisEvaluationDiagnostic::edge_source_missing:
+        return QStringLiteral("Missing Body Edge");
+    case part::AxisEvaluationDiagnostic::edge_source_ambiguous:
+        return QStringLiteral("Ambiguous Body Edge");
+    case part::AxisEvaluationDiagnostic::edge_source_unsupported:
+        return QStringLiteral("Unsupported Body Edge");
+    case part::AxisEvaluationDiagnostic::edge_native_geometry_unavailable:
+        return QStringLiteral("Exact Edge geometry unavailable");
+    case part::AxisEvaluationDiagnostic::edge_not_straight:
+        return QStringLiteral("Body Edge is not straight");
+    case part::AxisEvaluationDiagnostic::cylindrical_face_missing:
+        return QStringLiteral("Missing cylindrical Face");
+    case part::AxisEvaluationDiagnostic::cylindrical_face_ambiguous:
+        return QStringLiteral("Ambiguous / partitioned cylindrical Face");
+    case part::AxisEvaluationDiagnostic::cylindrical_face_not_cylinder:
+        return QStringLiteral("Body Face is not an analytic cylinder");
+    case part::AxisEvaluationDiagnostic::cylindrical_face_native_geometry_unavailable:
+        return QStringLiteral("Exact cylindrical Face geometry unavailable");
     }
     return QStringLiteral("Unknown");
 }
@@ -1857,15 +1875,17 @@ void PartDocumentTreeController::rebuild(
             item->setSelected(was_selected);
         }
     }
-    // RG-02C/B1: ONLY the new strict Body-Edge authored Axis sources
-    // live under Reference Geometry, once per AxisId. The already
-    // established Sketch-Line Axis rows remain inside the source Sketch
-    // and built-in XYZ axes stay under Origin.
+    // H2: strict Body-Edge and singleton cylindrical Face Axes share
+    // Reference Geometry, once per AxisId. Sketch Line stays nested
+    // under Sketch; built-in XYZ axes stay under Origin.
     for (const auto& axis : session_->document().axes()) {
         const auto* edge_source =
             std::get_if<part::StraightMaterialEdgeAxisSource>(
                 &axis.source);
-        if (edge_source == nullptr) {
+        const auto* face_source =
+            std::get_if<part::StrictCylindricalFaceAxisSource>(
+                &axis.source);
+        if (edge_source == nullptr && face_source == nullptr) {
             continue;
         }
         const auto evidence = std::find_if(
@@ -1902,18 +1922,22 @@ void PartDocumentTreeController::rebuild(
                 0, tree_->style()->standardIcon(
                     QStyle::SP_MessageBoxWarning));
         }
-        const QString stage =
-            edge_source->edge.stage.feature_id
-            ? fromUtf8(
-                edge_source->edge.stage.feature_id->serialized())
+        const auto stage_ref = edge_source
+            ? edge_source->edge.stage
+            : face_source->surface.stage;
+        const QString stage = stage_ref.feature_id
+            ? fromUtf8(stage_ref.feature_id->serialized())
             : QStringLiteral("unavailable");
         axis_item->setToolTip(
             0,
             QStringLiteral(
-                "AxisId: %1\\nSource: strict Body Edge after Feature %2"
-                "\\nVisibility: %3\\nStatus: %4\\nDiagnostic: %5")
+                "AxisId: %1\\nSource: %2 after Feature %3"
+                "\\nVisibility: %4\\nStatus: %5\\nDiagnostic: %6")
                 .arg(
                     fromUtf8(axis.id.serialized()),
+                    face_source
+                        ? QStringLiteral("strict cylindrical Body Face")
+                        : QStringLiteral("strict Body Edge"),
                     stage,
                     axis.visible
                         ? QStringLiteral("Shown")

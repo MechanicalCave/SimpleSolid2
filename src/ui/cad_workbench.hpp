@@ -197,6 +197,8 @@ private:
     void clearAxisRuntimeContext();
     void tryStageAxisFromSketchSelection();
     void tryStageAxisFromBodyTopology();
+    void selectAxisConstructor(int index);
+    [[nodiscard]] bool axisDraftSourceMatchesConstructor() const;
     void stageAxisSource(
         part::SketchLineAxisSource source);
     void refreshAxisEvaluation();
@@ -709,7 +711,11 @@ private:
     QWidget* axis_operations_widget_{};
     QComboBox* axis_constructor_combo_{};
     QLabel* axis_stage_label_{};
-    bool axis_edge_mode_active_{false};
+    bool axis_edge_mode_active_{false}; // Work Features (Body), not Sketch
+    bool axis_face_mode_active_{false};
+    bool axis_source_requires_pick_{false};
+    std::optional<part::AxisEvaluationDiagnostic>
+        axis_face_pick_diagnostic_;
     QLabel* axis_source_label_{};
     QLabel* axis_result_label_{};
     QPushButton* axis_finish_button_{};
