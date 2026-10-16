@@ -426,6 +426,110 @@ firstAuthorableCircle(
     return std::nullopt;
 }
 
+// C1/P0 is a read-only native Body-catalog witness, NOT a provisional
+// Axis authoring/resolver or a substitute for the absent exact Face-axis API.
+// A selected bounded Face and one semantic Surface carrier are distinct:
+// a carrier can have several current Face realizations after a Boolean.
+// P0 records the source-stage/Face partition as evidence, never a new selector.
+struct C1FaceEvidence final {
+    std::size_t cylindrical_faces{};
+    std::size_t other_faces{};
+    std::size_t nonunique_face_sources{};
+    std::size_t unresolved_face_sources{};
+    std::size_t partitioned_cylindrical_faces{};
+};
+
+C1FaceEvidence observeC1ResultingBodyFaces(
+    const part::PartEvaluation& evaluation,
+    const char* fixture,
+    bool require_cylinder) {
+    CHECK(evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluation.current_topology.has_value());
+    const auto& catalog = *evaluation.current_topology;
+    CHECK(catalog.complete());
+    CHECK(catalog.stage.kind ==
+          part::BodyStageKind::after_feature);
+    CHECK(catalog.stage.feature_id.has_value());
+    CHECK(!catalog.faces.empty());
+
+    C1FaceEvidence counts;
+    for (const auto& face : catalog.faces) {
+        CHECK(face.runtime_token.valid());
+        CHECK(face.accounting_class !=
+              part::TopologyAccountingClass::integrity_failure);
+        if (face.surface_candidates.size() != 1U) {
+            ++counts.nonunique_face_sources;
+            continue;
+        }
+        const auto& address = face.surface_candidates.front();
+        const auto surface = std::find_if(
+            catalog.surfaces.begin(), catalog.surfaces.end(),
+            [&address](const auto& candidate) {
+                return candidate.address == address;
+            });
+        if (surface == catalog.surfaces.end() ||
+            surface->status != kernel::ReferenceStatus::resolved ||
+            std::count(
+                surface->current_faces.begin(),
+                surface->current_faces.end(),
+                face.runtime_token) != 1) {
+            ++counts.unresolved_face_sources;
+            continue;
+        }
+
+        // Existing semantic carrier identity at THIS exact Body stage,
+        // not runtime Face token, OCCT Face, Feature-kind or world XYZ.
+        const part::SurfaceReference semantic{
+            catalog.stage, surface->address};
+        CHECK(semantic.valid());
+        const part::SurfaceReference no_body_stage{
+            part::BodyStageRef{}, surface->address};
+        CHECK(!no_body_stage.valid());
+
+        if (surface->surface_kind !=
+            kernel::SurfaceKind::cylinder) {
+            ++counts.other_faces;
+            continue;
+        }
+        ++counts.cylindrical_faces;
+        if (surface->strict_face_status ==
+            kernel::ReferenceStatus::ambiguous) {
+            CHECK(surface->current_faces.size() > 1U);
+            ++counts.partitioned_cylindrical_faces;
+        } else {
+            CHECK(surface->strict_face_status ==
+                  kernel::ReferenceStatus::resolved);
+            CHECK(surface->current_faces.size() == 1U);
+        }
+        CHECK(!surface->canonical_frame.has_value());
+    }
+    CHECK(
+        counts.cylindrical_faces + counts.other_faces +
+        counts.nonunique_face_sources +
+        counts.unresolved_face_sources == catalog.faces.size());
+    if (require_cylinder) {
+        CHECK(counts.cylindrical_faces > 0U);
+        CHECK(counts.other_faces > 0U);
+    }
+    std::cout
+        << "RG02C_C1_P0_FACE_CATALOG"
+        << " fixture=" << fixture
+        << " native_faces=" << catalog.faces.size()
+        << " uniquely_linked_cylinder_faces="
+        << counts.cylindrical_faces
+        << " noncylindrical_faces=" << counts.other_faces
+        << " nonunique_source_faces="
+        << counts.nonunique_face_sources
+        << " unresolved_source_faces="
+        << counts.unresolved_face_sources
+        << " partitioned_carrier_faces="
+        << counts.partitioned_cylindrical_faces
+        << " analytic_axis_query=NOT_AVAILABLE"
+        << " axis_authoring=NOT_TESTED\\n";
+    return counts;
+}
+
 void verifyCylinderEdgeFeature(
     const part::PartDocument& source,
     const part::MaterialEdgeReference& edge,
@@ -464,6 +568,42 @@ void verifyCylinderEdgeFeature(
         part::FeatureEvaluationStatus::up_to_date);
     CHECK(evaluated.current_topology.has_value());
     CHECK(evaluated.current_topology->complete());
+    // C1-P0: classify actual final Body Faces after an Edge Feature.
+    // Circular-boundary Fillets can create toroidal patches: never assume
+    // that the operation name "Fillet" guarantees a cylinder.
+    const bool is_fillet =
+        operation == kernel::EdgeFeatureOperation::fillet;
+    observeC1ResultingBodyFaces(
+        evaluated,
+        is_fillet ? "circular-rim-fillet"
+                  : "circular-rim-chamfer",
+        false);
+    std::size_t generated_cylinders = 0U;
+    std::size_t generated_other = 0U;
+    for (const auto& surface :
+         evaluated.features.back().produced_surfaces) {
+        if (surface.address.role !=
+                part::FeatureSurfaceRoleKind::fillet_surface &&
+            surface.address.role !=
+                part::FeatureSurfaceRoleKind::chamfer_surface) {
+            continue;
+        }
+        if (surface.status !=
+            kernel::ReferenceStatus::resolved) {
+            continue;
+        }
+        if (surface.surface_kind ==
+            kernel::SurfaceKind::cylinder) {
+            ++generated_cylinders;
+        } else {
+            ++generated_other;
+        }
+    }
+    std::cout << "RG02C_C1_P0_GENERATED_EDGE_SURFACE"
+              << " kind=" << (is_fillet ? "fillet" : "chamfer")
+              << " cylinders=" << generated_cylinders
+              << " other=" << generated_other
+              << " operation_name_not_authority=1\\n";
     // A new evaluation has no authority to rely on a previous provider
     // session/preview identity.
     const auto rebuilt =
@@ -878,6 +1018,8 @@ int main() {
                 up_to_date);
         CHECK(feature.result_topology.has_value());
         CHECK(feature.result_topology->complete());
+        observeC1ResultingBodyFaces(
+            evaluated, "revolve-full-360", true);
         const auto g0_full_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-full-360-part");
@@ -982,6 +1124,8 @@ int main() {
               part::BodyEvaluationStatus::up_to_date);
         CHECK(evaluated.current_topology.has_value());
         CHECK(evaluated.current_topology->complete());
+        observeC1ResultingBodyFaces(
+            evaluated, "extrude-circle-full-cylinder", true);
         // RG-02A/G0 V10: real OCCT cylinder seam Vertices. Ordinary
         // Viewport pick eligibility only excludes integrity failure and
         // representation artifacts; it does not certify a durable Point.
@@ -1028,6 +1172,8 @@ int main() {
             half_evaluation.features[1].result_topology);
         const auto& half_catalog =
             *half_evaluation.features[1].result_topology;
+        observeC1ResultingBodyFaces(
+            half_evaluation, "extrude-cylinder-half-cut", true);
         const auto half_counts = observeRevolvePartVertices(
             half_catalog, "V08-half-cylinder-cut");
         CHECK(half_counts.native == 6U);
@@ -1143,6 +1289,8 @@ int main() {
         const auto& feature = evaluated.features.front();
         CHECK(feature.result_topology.has_value());
         CHECK(feature.result_topology->complete());
+        observeC1ResultingBodyFaces(
+            evaluated, "revolve-partial-90", true);
         const auto g0_partial_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-partial-90-part");
