@@ -1,6 +1,6 @@
 # RG-02C/C1-P1-B0 — native picked-Face / semantic Surface admission evidence
 
-**Status: IMPLEMENTATION EVIDENCE IN PROGRESS — NO NATIVE P1-B0 PASS YET.** This ledger records only actually executed observations and does not establish A/B/C durable Axis source semantics or a Part Axis product. Baseline: protected `main` `6ff550a0b448300a0441954ab67825f7fbecc7c7` after separately Owner-authorized, Windows-CLOSURE-verified ACTIVE-only [PR #437](https://github.com/MechanicalCave/SimpleSolid2/pull/437), which activates the exact already Owner-accepted [P1-B0 D2 evidence contract](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) merged through governance [PR #436](https://github.com/MechanicalCave/SimpleSolid2/pull/436).
+**Status: NATIVE FOCUSED VERIFIED (1/1 PASS); FAST, FULL AND EXACT-HEAD CLOSURE STILL PENDING.** This ledger records only actually executed observations and does not establish A/B/C durable Axis source semantics or a Part Axis product. Baseline: protected `main` `6ff550a0b448300a0441954ab67825f7fbecc7c7` after separately Owner-authorized, Windows-CLOSURE-verified ACTIVE-only [PR #437](https://github.com/MechanicalCave/SimpleSolid2/pull/437), which activates the exact already Owner-accepted [P1-B0 D2 evidence contract](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) merged through governance [PR #436](https://github.com/MechanicalCave/SimpleSolid2/pull/436).
 
 ## Exact scope and test wiring
 
@@ -26,15 +26,21 @@ Existing P1-A tests of invalid/null bound Face and different Body generations ar
 | Half-cylinder Boolean Cut | actual current `after_feature` | same | same | conditional | **PENDING** |
 | Real circular-rim Fillet/Chamfer | actual current `after_feature` | same, no assumed cylinder | classify toroidal/other vs actual native cylinder | conditional | **PENDING** |
 | One semantic carrier with more than one current analytic-cylinder Face | source-stage exact | `resolved` + `strict_face_status=ambiguous` + `current_faces>1` | all-member same axis/radius required | B-only if genuinely witnessed | **GAP / NOT YET WITNESSED** |
-| Wrong Body generation, invalid/null native Face | previous P1-A registered tests | negative provider checks reused | no standalone P1-B0 fixture claimed | neither | **PENDING re-run** |
+| Wrong Body generation, invalid/null native Face | previous P1-A registered tests | negative provider checks reused | no standalone P1-B0 fixture claimed | neither | **Executed again inside #3352 aggregate; not a new independent B0 negative fixture** |
 
 `RG02C_C1_P1B0_FACE` diagnostic lines include per certified native picked cylinder Face: fixture, stage, strict Face status, current member count, all-member geometric consistency and hypothetical A/B predicate. `RG02C_C1_P1B0_SUMMARY` prints per-fixture counts. These are **test instrumentation**, not persisted selections or feature behavior. Successful ordinary non-verbose CTest output may hide these lines; do **not** invent counts merely from a green aggregate test.
+
+## FOCUSED execution observations — actual Windows logs
+
+The [Windows #3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911057989) `windows-msvc-focused` job executed **the new source** at `07efe573b6115cf9b9d40514efd4f1fae10e0c78`: `pm04c2_production_revolve_test.cpp` compiled under MSVC/OCCT Release, `Start 35: pm04c2.production_revolve` → `1/1 ... Passed 0.11 sec`, `100% tests passed, 0 tests failed out of 1`; DOC-01 bootstrap verification also passed. The test calls `observeC1P1B0NativeFaceSurfaceAdmission` on actual resulting-Body circular Extrude, full/partial Revolve, half-cylinder Cut and real circular-rim Fillet/Chamfer evaluations. It asserts the aggregate inventory is accounted for, native cylindrical/noncylindrical classification, all-member query conditionals, safe semantic-source refusals, and nonempty uniquely certified candidate-B observation for each mandatory non-Fillet fixture.
+
+**Count caveat:** successful CTest is non-verbose in this run and does NOT include each printed `RG02C_C1_P1B0_FACE` / `SUMMARY` row. Therefore exact fixture-level Face counts, hypothetical A totals and an actual positive same-carrier partition **are not observable from #3352's logs**. We cannot infer whether `partitioned_coaxial_carriers` was positive merely because the helper contains that branch. Do not promote it to PASS without separately visible native evidence. The B0 test is observational and does not enact any production A/B rule.
 
 ## Real Windows validation — pending
 
 | Gate | Exact source HEAD / run | Result |
 | --- | --- | --- |
-| Windows native FOCUSED `pm04c2.production_revolve` (real OCCT/MSVC) | Not run yet | PENDING |
+| Windows native FOCUSED `pm04c2.production_revolve` (real OCCT/MSVC) | [#3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911057989), HEAD `07efe573b6115cf9b9d40514efd4f1fae10e0c78` | **1/1 PASS** — actual Windows/MSVC Release OCCT binary and CTest #35 Passed in 0.11 s; DOC-01 bootstrap PASS |
 | Independent Windows Draft FAST | Not run yet | PENDING |
 | Windows Ready FULL Core-only, Kernel-native, Qt/OCCT Desktop, DOC-01 | Not run yet | PENDING |
 | Final evidence-only exact-head CLOSURE | Not run yet | PENDING |
