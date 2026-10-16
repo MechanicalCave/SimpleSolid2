@@ -2129,6 +2129,409 @@ int main(int argc, char* argv[]) {
 
         if (s3a_only || (!pg01c_only && !pg01d_ui_only &&
                          !ui01_p0_only)) {
+        // RG-02C/B1 H4: one NEW Work Features Axis / Edge constructor
+        // must acquire a real OCCT-presented material edge through Qt
+        // mouse input, not a fabricated presentation token or XYZ.
+        // Reuse the existing R2 authorableEdgeProbes/nativeClick helpers.
+        {
+            auto b1_axis_session = makeBaseSession(kernel);
+            CHECK(workbench.activateDocument(&b1_axis_session, {}));
+            CHECK(b1_axis_session.document().axes().empty());
+            CHECK(viewport->setStandardView(
+                viewer::StandardView::top_front_right));
+            viewport->fitAll();
+            QApplication::processEvents();
+
+            auto* axis_tool = workbench.findChild<QPushButton*>(
+                QStringLiteral("axisToolButton"));
+            auto* axis_constructor = workbench.findChild<QComboBox*>(
+                QStringLiteral("axisConstructorCombo"));
+            auto* axis_finish = workbench.findChild<QPushButton*>(
+                QStringLiteral("axisFinishButton"));
+            auto* axis_cancel = workbench.findChild<QPushButton*>(
+                QStringLiteral("axisCancelButton"));
+            CHECK(axis_tool && axis_constructor &&
+                  axis_finish && axis_cancel);
+            CHECK(axis_tool->isEnabled());
+            CHECK(axis_constructor->count() == 1);
+            CHECK(axis_constructor->itemText(0) ==
+                  QStringLiteral("Edge"));
+
+            const auto before_revision =
+                b1_axis_session.document().revision();
+            const auto before_undo = b1_axis_session.undoDepth();
+            axis_tool->click();
+            QApplication::processEvents();
+            CHECK(axis_tool->isChecked());
+            CHECK(!axis_finish->isEnabled());
+
+            const auto candidates =
+                authorableEdgeProbes(b1_axis_session, kernel);
+            bool acquired_native_edge = false;
+            for (const auto& probe : candidates) {
+                if (!nativeClick(*viewport, probe.world)) {
+                    continue;
+                }
+                QApplication::processEvents();
+                if (axis_finish->isEnabled()) {
+                    acquired_native_edge = true;
+                    break;
+                }
+                // A failed/occluded click cannot commit Axis or Undo.
+                CHECK(b1_axis_session.document().axes().empty());
+                CHECK(b1_axis_session.undoDepth() == before_undo);
+                if (nativeClick(*viewport, probe.world)) {
+                    QApplication::processEvents();
+                }
+            }
+            CHECK(acquired_native_edge);
+            CHECK(b1_axis_session.document().axes().empty());
+            CHECK(b1_axis_session.document().revision() ==
+                  before_revision);
+            CHECK(b1_axis_session.undoDepth() == before_undo);
+
+            axis_finish->click();
+            QApplication::processEvents();
+            CHECK(!axis_tool->isChecked());
+            CHECK(b1_axis_session.document().axes().size() == 1U);
+            CHECK(b1_axis_session.undoDepth() == before_undo + 1U);
+            const auto authored_axis =
+                b1_axis_session.document().axes().front();
+            const auto* edge_source =
+                std::get_if<part::StraightMaterialEdgeAxisSource>(
+                    &authored_axis.source);
+            CHECK(edge_source && edge_source->edge.valid());
+            CHECK(edge_source->edge.stage.valid());
+
+            // Tree placement follows authored source kind: only the
+            // new Edge Axis appears in Reference Geometry, not Sketch.
+            auto* axis_tree =
+                workbench.findChild<QTreeWidget*>();
+            CHECK(axis_tree != nullptr);
+            bool in_reference_geometry = false;
+            std::size_t authored_rows = 0U;
+            for (QTreeWidgetItemIterator it(axis_tree); *it; ++it) {
+                auto* item = *it;
+                if (item->text(0) !=
+                    QString::fromStdString(authored_axis.name)) {
+                    continue;
+                }
+                ++authored_rows;
+                in_reference_geometry =
+                    item->parent() != nullptr &&
+                    item->parent()->text(0) ==
+                        QStringLiteral("Reference Geometry");
+            }
+            CHECK(authored_rows == 1U && in_reference_geometry);
+
+            CHECK(b1_axis_session.undo().changed);
+            CHECK(b1_axis_session.document().axes().empty());
+            CHECK(b1_axis_session.redo().changed);
+            CHECK(b1_axis_session.document().axes().size() == 1U);
+            CHECK(b1_axis_session.document().axes().front().id ==
+                  authored_axis.id);
+
+            // Real native v19 save/cold reopen; only semantic
+            // MaterialEdgeReference is persisted, never a TopoDS token.
+            QTemporaryDir b1_axis_dir;
+            CHECK(b1_axis_dir.isValid());
+            const auto b1_path =
+                std::filesystem::path{
+                    b1_axis_dir.path().toStdWString()} /
+                "NativeEdgeAxisWorkbench.ss2part";
+            part::PartDocumentStore b1_store;
+            CHECK(b1_store.createNew(
+                b1_path, b1_axis_session.document()).ok());
+            const auto reopened = b1_store.load(b1_path);
+            CHECK(reopened.ok());
+            const auto* cold_axis =
+                reopened.document->findAxis(authored_axis.id);
+            CHECK(cold_axis && cold_axis->source ==
+                  authored_axis.source);
+            kernel_occt::OcctSolidModelingKernel cold_kernel;
+            const auto cold_evaluation = part::evaluatePart(
+                *reopened.document, cold_kernel);
+            CHECK(cold_evaluation.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            const auto cold_axis_line = part::resolveAxisReference(
+                *reopened.document,
+                part::AxisReference{
+                    part::AuthoredAxisReference{authored_axis.id}},
+                &cold_evaluation,
+                nullptr,
+                &cold_kernel);
+            CHECK(cold_axis_line.status ==
+                  part::AxisEvaluationStatus::resolved);
+            CHECK(cold_axis_line.line &&
+                  cold_axis_line.line->valid());
+
+            // Real GUI lifecycle, not only headless Part commands:
+            // select the finished Edge Axis in Reference Geometry and
+            // invoke the EXISTING Tree Edit action. Cancelling an
+            // unchanged draft must preserve AxisId, source, revision
+            // and Undo depth. It must not jump to Sketch edit mode.
+            QTreeWidgetItem* committed_edge_axis_item = nullptr;
+            for (QTreeWidgetItemIterator it(axis_tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                        QString::fromStdString(authored_axis.name) &&
+                    (*it)->parent() != nullptr &&
+                    (*it)->parent()->text(0) ==
+                        QStringLiteral("Reference Geometry")) {
+                    committed_edge_axis_item = *it;
+                    break;
+                }
+            }
+            CHECK(committed_edge_axis_item != nullptr);
+            axis_tree->clearSelection();
+            axis_tree->setCurrentItem(committed_edge_axis_item);
+            committed_edge_axis_item->setSelected(true);
+            QApplication::processEvents();
+
+            auto* edit_edge_axis_action =
+                workbench.findChild<QAction*>(
+                    QStringLiteral("editAxisAction"));
+            auto* delete_edge_axis_action =
+                workbench.findChild<QAction*>(
+                    QStringLiteral("deleteAxisAction"));
+            CHECK(edit_edge_axis_action != nullptr);
+            CHECK(delete_edge_axis_action != nullptr);
+            const auto before_edit_revision =
+                b1_axis_session.document().revision();
+            const auto before_edit_undo =
+                b1_axis_session.undoDepth();
+            edit_edge_axis_action->trigger();
+            QApplication::processEvents();
+            CHECK(axis_tool->isChecked());
+            CHECK(axis_cancel->isEnabled());
+            axis_cancel->click();
+            QApplication::processEvents();
+            CHECK(!axis_tool->isChecked());
+            CHECK(b1_axis_session.document().revision() ==
+                  before_edit_revision);
+            CHECK(b1_axis_session.undoDepth() == before_edit_undo);
+            const auto* kept_axis =
+                b1_axis_session.document().findAxis(authored_axis.id);
+            CHECK(kept_axis != nullptr);
+            CHECK(kept_axis->source == authored_axis.source);
+
+            // Reuse the original single-Axis Tree visibility actions,
+            // not a second Edge-Axis-only persistent visibility flag.
+            // Each change must be a real Part transaction and preserve
+            // the strict source / AxisId / evaluation independence.
+            auto* hide_edge_axis_action =
+                workbench.findChild<QAction*>(
+                    QStringLiteral("hideBuiltinReferencesAction"));
+            auto* show_edge_axis_action =
+                workbench.findChild<QAction*>(
+                    QStringLiteral("showBuiltinReferencesAction"));
+            CHECK(hide_edge_axis_action != nullptr);
+            CHECK(show_edge_axis_action != nullptr);
+            committed_edge_axis_item = nullptr;
+            for (QTreeWidgetItemIterator it(axis_tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QString::fromStdString(authored_axis.name)) {
+                    committed_edge_axis_item = *it;
+                    break;
+                }
+            }
+            CHECK(committed_edge_axis_item != nullptr);
+            axis_tree->clearSelection();
+            axis_tree->setCurrentItem(committed_edge_axis_item);
+            committed_edge_axis_item->setSelected(true);
+            QApplication::processEvents();
+            CHECK(hide_edge_axis_action->isEnabled());
+            const auto before_visibility_undo =
+                b1_axis_session.undoDepth();
+            hide_edge_axis_action->trigger();
+            QApplication::processEvents();
+            const auto* hidden_axis =
+                b1_axis_session.document().findAxis(authored_axis.id);
+            CHECK(hidden_axis != nullptr && !hidden_axis->visible);
+            CHECK(hidden_axis->source == authored_axis.source);
+            CHECK(b1_axis_session.undoDepth() ==
+                  before_visibility_undo + 1U);
+            CHECK(show_edge_axis_action->isEnabled());
+            show_edge_axis_action->trigger();
+            QApplication::processEvents();
+            const auto* shown_axis =
+                b1_axis_session.document().findAxis(authored_axis.id);
+            CHECK(shown_axis != nullptr && shown_axis->visible);
+            CHECK(shown_axis->source == authored_axis.source);
+            CHECK(b1_axis_session.undoDepth() ==
+                  before_visibility_undo + 2U);
+
+            // Delete through the original Tree context action, then
+            // Undo must restore the SAME durable AxisId/source.
+            committed_edge_axis_item = nullptr;
+            for (QTreeWidgetItemIterator it(axis_tree); *it; ++it) {
+                if ((*it)->text(0) ==
+                    QString::fromStdString(authored_axis.name)) {
+                    committed_edge_axis_item = *it;
+                    break;
+                }
+            }
+            CHECK(committed_edge_axis_item != nullptr);
+            axis_tree->clearSelection();
+            axis_tree->setCurrentItem(committed_edge_axis_item);
+            committed_edge_axis_item->setSelected(true);
+            QApplication::processEvents();
+            const auto before_delete_undo =
+                b1_axis_session.undoDepth();
+            delete_edge_axis_action->trigger();
+            QApplication::processEvents();
+            CHECK(b1_axis_session.document().findAxis(
+                      authored_axis.id) == nullptr);
+            CHECK(b1_axis_session.undoDepth() ==
+                  before_delete_undo + 1U);
+            CHECK(b1_axis_session.undo().changed);
+            const auto* restored_axis =
+                b1_axis_session.document().findAxis(authored_axis.id);
+            CHECK(restored_axis != nullptr);
+            CHECK(restored_axis->source == authored_axis.source);
+
+            // B1 Owner manual Revolve preview bug: the complete candidate
+            // already evaluates with the real OCCT Edge Axis provider, but
+            // the preview-only resolver must use the SAME exact provider.
+            // Use a genuine native Body bottom X Edge and a bounded Cut
+            // profile to guarantee a positive, nonempty 90 degree delta.
+            // The existing Qt/OCCT R2 test stays the sole registered target.
+            {
+                auto revolve_preview_session = makeBaseSession(kernel);
+                const auto edge_probes = authorableEdgeProbes(
+                    revolve_preview_session, kernel);
+                const auto bottom_x_edge = std::find_if(
+                    edge_probes.begin(), edge_probes.end(),
+                    [](const WorldEdgeProbe& probe) {
+                        constexpr double tolerance = 1.0e-5;
+                        return std::abs(probe.world.x - 20.0) < tolerance &&
+                               std::abs(probe.world.y) < tolerance &&
+                               std::abs(probe.world.z) < tolerance;
+                    });
+                CHECK(bottom_x_edge != edge_probes.end());
+                const auto created_edge_axis =
+                    revolve_preview_session.execute(
+                        application::CreateAxisCommand{
+                            part::StraightMaterialEdgeAxisSource{
+                                bottom_x_edge->reference},
+                            revolve_preview_session.document().revision(),
+                            "Preview Edge Axis", true},
+                        kernel);
+                CHECK(created_edge_axis.ok() &&
+                      created_edge_axis.axis_id);
+
+                const auto cut_sketch = revolve_preview_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::xy_plane});
+                CHECK(cut_sketch.ok() && cut_sketch.sketch_id);
+                CHECK(revolve_preview_session.execute(
+                    application::AddSketchRectangleCommand{
+                        *cut_sketch.sketch_id,
+                        revolve_preview_session.document().revision(),
+                        {10.0, 5.0}, {20.0, 10.0},
+                        sketch::EntityRole::regular, false}).ok());
+                const auto* cut_model =
+                    revolve_preview_session.document().findSketch(
+                        *cut_sketch.sketch_id);
+                CHECK(cut_model != nullptr);
+                const auto cut_regions =
+                    sketch::analyzeRegions(cut_model->model);
+                CHECK(cut_regions.complete() &&
+                      cut_regions.regions.size() == 1U);
+                const auto cut_intent = part::makeProfileRegionIntent(
+                    cut_regions.regions.front());
+                CHECK(cut_intent.has_value());
+                const auto cut_profile = revolve_preview_session.execute(
+                    application::CreateProfileCommand{
+                        *cut_sketch.sketch_id,
+                        revolve_preview_session.document().revision(),
+                        *cut_intent});
+                CHECK(cut_profile.ok() && cut_profile.profile_id);
+
+                const auto prefix = part::evaluatePart(
+                    revolve_preview_session.document(), kernel);
+                CHECK(prefix.body_status ==
+                      part::BodyEvaluationStatus::up_to_date);
+                const part::AxisReference axis_ref{
+                    part::AuthoredAxisReference{
+                        *created_edge_axis.axis_id}};
+                const auto axis_line = part::resolveAxisReference(
+                    revolve_preview_session.document(), axis_ref,
+                    &prefix, nullptr, &kernel);
+                CHECK(axis_line.status ==
+                      part::AxisEvaluationStatus::resolved);
+                CHECK(axis_line.line && axis_line.line->valid());
+                CHECK(std::abs(axis_line.line->direction.x) > 0.99);
+                const bool reverse_for_positive_z =
+                    axis_line.line->direction.x < 0.0;
+                const core::AngleValue quarter_turn{
+                    std::acos(-1.0) / 2.0};
+                const part::RevolveFeature cut_feature{
+                    *cut_profile.profile_id, axis_ref,
+                    part::RevolveOperation::cut,
+                    part::OneSidedRevolveExtent{
+                        quarter_turn, reverse_for_positive_z}};
+
+                // Provider absent is explicitly unable to resolve the
+                // Edge source; native provider must resolve the SAME
+                // draft using the current exact Body stage.
+                const auto without_provider =
+                    part::resolveKernelRevolveInput(
+                        revolve_preview_session.document(),
+                        cut_feature, &prefix, nullptr, nullptr);
+                CHECK(without_provider.status ==
+                      part::RevolveKernelInputStatus::
+                          axis_unavailable);
+                const auto with_provider =
+                    part::resolveKernelRevolveInput(
+                        revolve_preview_session.document(),
+                        cut_feature, &prefix, nullptr, nullptr, &kernel);
+                CHECK(with_provider.ok());
+
+                auto revolve_draft =
+                    application::RevolveDraft::beginCreate(
+                        revolve_preview_session);
+                CHECK(revolve_draft.setProfile(*cut_profile.profile_id));
+                CHECK(revolve_draft.setAxis(axis_ref));
+                CHECK(revolve_draft.setOperation(
+                    part::RevolveOperation::cut));
+                CHECK(revolve_draft.setAngle(quarter_turn));
+                CHECK(revolve_draft.setReversed(
+                    reverse_for_positive_z));
+                const auto revision_before_preview =
+                    revolve_preview_session.document().revision();
+                const auto undo_before_preview =
+                    revolve_preview_session.undoDepth();
+                const auto preview_result =
+                    revolve_preview_session.evaluateRevolveDraft(
+                        revolve_draft, kernel);
+                CHECK(preview_result.committable());
+                CHECK(preview_result.previewSolidAvailable());
+                CHECK(preview_result.preview_delta_mesh &&
+                      preview_result.preview_delta_mesh->valid());
+                CHECK(revolve_preview_session.document().revision() ==
+                      revision_before_preview);
+                CHECK(revolve_preview_session.undoDepth() ==
+                      undo_before_preview);
+                CHECK(revolve_preview_session.document().body()
+                          .features.size() == 1U);
+                std::cout << "RG02C_B1_EDGE_AXIS_REVOLVE_PREVIEW"
+                          << " native_edge=1"
+                          << " provider_missing_refused=1"
+                          << " candidate_ok=1"
+                          << " preview_delta_nonempty=1"
+                          << " document_unchanged=1\\n";
+            }
+
+            std::cout << "RG02C_B1_NATIVE_AXIS_GUI"
+                      << " strict_mouse_edge=1"
+                      << " constructor_edge_only=1"
+                      << " reference_geometry_tree=1"
+                      << " finish_one_undo=1"
+                      << " cold_v19_axis=1\\n";
+            CHECK(workbench.activateDocument(&session, {}));
+            QApplication::processEvents();
+        }
+
         // RG-02B1 P4-S3A: positive *native* Workbench gesture witness.
         // The camera/world points only aim Qt mouse clicks; they never
         // enter authoring APIs or stand in for semantic Part provenance.

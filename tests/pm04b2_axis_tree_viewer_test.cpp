@@ -416,7 +416,8 @@ int main(int argc, char* argv[]) {
         axis_origin && axis_direction &&
         axis_operations &&
         hide && show);
-    CHECK(axis_tool == nullptr);
+    CHECK(axis_tool != nullptr);
+    CHECK(axis_tool->text() == QStringLiteral("Axis"));
 
     // Authored Axis is a Part-owned child of its source Sketch even when the
     // source Sketch itself is hidden.
@@ -590,9 +591,9 @@ int main(int argc, char* argv[]) {
         session.document().axes().size() ==
         axis_count_before_command);
 
-    // Normal GUI creation is contextual to Line. Arming Axis is runtime-only
-    // until a Line successfully commits, and there is no standalone Axis
-    // toolbar action.
+    // Legacy Sketch-Line Axis creation remains contextual to Line.
+    // The newly visible Work Features Axis button authors only a strict
+    // Body-Edge Axis and MUST NOT replace the Sketch checkbox path.
     auto* line_tool =
         workbench.findChild<QPushButton*>(
             QStringLiteral("lineSketchToolButton"));
@@ -602,7 +603,23 @@ int main(int argc, char* argv[]) {
                 "sketchAxisDesignationCheck"));
     CHECK(line_tool != nullptr);
     CHECK(axis_designation != nullptr);
-    CHECK(axis_tool == nullptr);
+    CHECK(axis_tool != nullptr);
+    CHECK(axis_tool->text() == QStringLiteral("Axis"));
+    // The new Work Features Axis command runs in PART context.
+    // Cancelling it must not silently open Sketch edit mode: enter the
+    // existing Sketch through the real Tree Edit action before testing
+    // the independent Sketch-Line Axis designation/Undo workflow.
+    auto* edit_source_sketch =
+        workbench.findChild<QAction*>(
+            QStringLiteral("editSketchAction"));
+    CHECK(edit_source_sketch != nullptr);
+    auto* source_sketch_item =
+        findItem(*tree, QStringLiteral("Sketch 1"));
+    CHECK(source_sketch_item != nullptr);
+    selectOnly(*tree, source_sketch_item);
+    CHECK(edit_source_sketch->isEnabled());
+    edit_source_sketch->trigger();
+    QApplication::processEvents();
     CHECK(!line_tool->isHidden());
     line_tool->click();
     QApplication::processEvents();
@@ -694,7 +711,7 @@ int main(int argc, char* argv[]) {
             fixture.line_id};
     CHECK(
         session.document().axes().front().source ==
-        expected_selected_line_source);
+        part::PartAxisSource{expected_selected_line_source});
 
     workbench.requestUndo();
     QApplication::processEvents();

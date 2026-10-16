@@ -1517,8 +1517,12 @@ void verifyPartIntegration() {
                                         persistence::readNativeDocumentContainer(
                                             path);
                                     CHECK(package.ok());
+                                    // The current Part writer is explicitly
+                                    // schema v19 for the Edge-Axis source kind.
+                                    // Legacy v15/v16 rejection fixtures below
+                                    // retain their original version semantics.
                                     CHECK(package.package->descriptor
-                                              .domain_schema_version == 18);
+                                              .domain_schema_version == 19);
                                     auto authored = nlohmann::json::parse(
                                         package.package->authored_json);
                                     const auto ref_json =

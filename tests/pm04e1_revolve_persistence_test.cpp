@@ -278,7 +278,7 @@ std::string repackage(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        18);
+        19);
 
     TempDirectory temp;
     part::PartDocumentStore store;
@@ -298,7 +298,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 18);
+            .domain_schema_version == 19);
 
     const auto authored =
         nlohmann::json::parse(
@@ -514,7 +514,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 18);
+            .domain_schema_version == 19);
 
     // Revolve is a schema-v13 feature kind. Relabeling a v13 Revolve payload
     // as v12 must fail closed rather than silently interpreting future data.

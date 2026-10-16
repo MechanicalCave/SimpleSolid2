@@ -285,7 +285,7 @@ AuthoredIds authorRevolve(
     const auto axis =
         session.execute(
             application::CreateAxisCommand{
-                {
+                part::SketchLineAxisSource{
                     *sketch.sketch_id,
                     *axis_line.entity_id,
                 },
@@ -553,7 +553,7 @@ int main() {
         reopened.execute(
             application::EditAxisCommand{
                 ids.axis_id,
-                {
+                part::SketchLineAxisSource{
                     ids.sketch_id,
                     *replacement.entity_id,
                 },

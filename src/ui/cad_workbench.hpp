@@ -187,7 +187,8 @@ private:
     void applyProfileProperties();
     void deleteSelectedProfile();
 
-    [[nodiscard]] bool startAxisTool();
+    [[nodiscard]] bool startAxisTool(
+        bool work_features_edge = false);
     [[nodiscard]] bool startAxisEdit(
         part::AxisId axis_id);
     void deleteAxis(part::AxisId axis_id);
@@ -195,6 +196,7 @@ private:
     [[nodiscard]] bool finishAxis();
     void clearAxisRuntimeContext();
     void tryStageAxisFromSketchSelection();
+    void tryStageAxisFromBodyTopology();
     void stageAxisSource(
         part::SketchLineAxisSource source);
     void refreshAxisEvaluation();
@@ -705,6 +707,9 @@ private:
     QCheckBox* line_axis_designation_check_{};
 
     QWidget* axis_operations_widget_{};
+    QComboBox* axis_constructor_combo_{};
+    QLabel* axis_stage_label_{};
+    bool axis_edge_mode_active_{false};
     QLabel* axis_source_label_{};
     QLabel* axis_result_label_{};
     QPushButton* axis_finish_button_{};

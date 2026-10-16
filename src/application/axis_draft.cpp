@@ -45,7 +45,7 @@ AxisDraft::AxisDraft(
     core::DocumentRevision source_revision,
     AxisDraftMode mode,
     std::optional<part::AxisId> axis_id,
-    std::optional<part::SketchLineAxisSource> source)
+    std::optional<part::PartAxisSource> source)
     : document_id_{std::move(document_id)},
       source_revision_{source_revision},
       mode_{mode},
@@ -85,7 +85,9 @@ std::optional<AxisDraft> AxisDraft::beginEdit(
     if (axis == nullptr) {
         return std::nullopt;
     }
-
+    // One existing AxisDraft/transaction lifecycle for both sources.
+    // The Work Features Edge UI controls what may be selected; model
+    // identity is never fabricated as a legacy Sketch-Line source.
     return AxisDraft{
         session.documentId(),
         session.document().revision(),
@@ -97,7 +99,10 @@ std::optional<AxisDraft> AxisDraft::beginEdit(
 bool AxisDraft::valid() const noexcept {
     if (generation_ == 0U ||
         !source_ ||
-        !source_->valid()) {
+        !std::visit(
+            [](const auto& candidate) noexcept {
+                return candidate.valid();
+            }, *source_)) {
         return false;
     }
 
@@ -119,8 +124,11 @@ void AxisDraft::advance() noexcept {
 }
 
 bool AxisDraft::setSource(
-    part::SketchLineAxisSource source) {
-    if (!source.valid()) {
+    part::PartAxisSource source) {
+    if (!std::visit(
+            [](const auto& candidate) noexcept {
+                return candidate.valid();
+            }, source)) {
         return false;
     }
     if (source_ && *source_ == source) {

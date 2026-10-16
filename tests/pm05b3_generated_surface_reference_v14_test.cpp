@@ -480,7 +480,7 @@ Fixture makeFixture() {
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        18);
+        19);
 
     const auto fixture =
         makeFixture();
@@ -502,7 +502,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 18);
+            .domain_schema_version == 19);
 
     auto authored =
         nlohmann::json::parse(

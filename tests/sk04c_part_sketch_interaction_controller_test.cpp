@@ -1292,12 +1292,19 @@ int main(int argc, char* argv[]) {
         const auto first_axis_source =
             axis_line_session.document()
                 .axes().front().source;
+        // This existing Sketch interaction fixture must continue
+        // observing the real Sketch-Line source after PartAxis gains
+        // the separate, strictly semantic Body Edge source variant.
+        const auto* first_sketch_axis_source =
+            std::get_if<part::SketchLineAxisSource>(
+                &first_axis_source);
+        CHECK(first_sketch_axis_source != nullptr);
         CHECK(
             axis_line_session.document()
                 .findSketch(
                     axis_line_sketch_id)
                 ->model.findLine(
-                    first_axis_source.entity_id)
+                    first_sketch_axis_source->entity_id)
                 ->role() ==
             sketch::EntityRole::construction);
 
@@ -1351,7 +1358,7 @@ int main(int argc, char* argv[]) {
                 .findSketch(
                     axis_line_sketch_id)
                 ->model.findLine(
-                    first_axis_source.entity_id) !=
+                    first_sketch_axis_source->entity_id) !=
             nullptr);
 
         axis_line_interaction.end();

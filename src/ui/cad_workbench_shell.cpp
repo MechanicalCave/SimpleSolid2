@@ -50,7 +50,8 @@ std::vector<ToolbarGroupSpec> toolbarGroups(bool sketch) {
     if (!sketch) {
         return {
             {"Sketch", "partSketchToolsLabel", {"sketchToolButton"}, true},
-            {"Work Features", "partWorkFeaturesToolsLabel", {"datumPlaneToolButton"}, false},
+            {"Work Features", "partWorkFeaturesToolsLabel",
+                {"datumPlaneToolButton", "axisToolButton"}, false},
             {"Create", "partCreateToolsLabel",
                 {"extrudeToolButton", "revolveToolButton"}, true},
             {"Modify", "partModifyToolsLabel",

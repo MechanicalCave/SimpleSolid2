@@ -831,6 +831,19 @@ resolveKernelRevolveInput(
     // curves and Revolve axis checks use the same current profile.
     const sketch::SketchModel* effective_sketch = nullptr);
 
+// B1: the already-implemented six-argument overload must be visible to
+// DocumentSession's transient provider-aware Revolve preview. Preserve
+// the original five-argument overload/ABI for existing callers; missing
+// exact Edge geometry must still fail closed without a preview mesh.
+[[nodiscard]] RevolveKernelInputResult
+resolveKernelRevolveInput(
+    const PartDocument& document,
+    const RevolveFeature& feature,
+    const PartEvaluation* prefix_evaluation,
+    const DatumEvaluation* datum_evaluation,
+    const sketch::SketchModel* effective_sketch,
+    kernel::IExactBoundedEdgeGeometryQuery* exact_edge_provider);
+
 // Builds the exact provider-neutral modeling input for one authored
 // Extrude definition. This is transient derived data shared by evaluation
 // and runtime preview; it is never persisted.

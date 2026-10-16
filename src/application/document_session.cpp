@@ -84,9 +84,21 @@ part::PartAxis* findAxis(
         : &*found;
 }
 
+// Preserve one native Part Axis source admission path. A legacy
+// Sketch Line and a straight semantic Body Edge share the *same*
+// transaction/Undo identity without any fake source Sketch.
+bool axisSourceValid(
+    const part::PartAxisSource& source) noexcept {
+    return std::visit(
+        [](const auto& candidate) noexcept {
+            return candidate.valid();
+        },
+        source);
+}
+
 bool axisSourceInUse(
     const part::PartAuthoredState& state,
-    const part::SketchLineAxisSource& source,
+    const part::PartAxisSource& source,
     std::optional<part::AxisId> excluded_axis_id =
         std::nullopt) noexcept {
     return std::any_of(
@@ -284,9 +296,26 @@ part::AxisEvaluation evaluateAxisInDocument(
             reference);
     }
 
-    const auto* source =
-        document.findSketch(
-            axis->source.sketch_id);
+    if (const auto* edge =
+            std::get_if<part::StraightMaterialEdgeAxisSource>(
+                &axis->source)) {
+        (void)edge; // the reference remains authored in PartAxis
+        const auto evaluation =
+            part::evaluatePart(document, modeling_kernel);
+        auto* provider = dynamic_cast<
+            kernel::IExactBoundedEdgeGeometryQuery*>(
+                &modeling_kernel);
+        return part::resolveAxisReference(
+            document, reference, &evaluation,
+            nullptr, provider);
+    }
+
+    const auto* sketch_source =
+        std::get_if<part::SketchLineAxisSource>(
+            &axis->source);
+    const auto* source = sketch_source != nullptr
+        ? document.findSketch(sketch_source->sketch_id)
+        : nullptr;
     if (source == nullptr ||
         part::builtinOriginPlaneForSketchSupport(
             source->support)) {
@@ -3052,12 +3081,12 @@ CreateAxisResult DocumentSession::execute(
             std::nullopt,
             failed.diagnostic};
     }
-    if (!command.source.valid()) {
+    if (!axisSourceValid(command.source)) {
         const auto failed =
             failure(
                 DocumentSessionErrorCode::
                     invalid_command,
-                "Create Axis contains an invalid Sketch-Line source",
+                "Create Axis contains an invalid semantic source",
                 path_);
         return {
             false,
@@ -3073,7 +3102,7 @@ CreateAxisResult DocumentSession::execute(
             failure(
                 DocumentSessionErrorCode::
                     invalid_command,
-                "Create Axis source Line is already designated by another authored Axis",
+                "Create Axis source is already designated by another authored Axis",
                 path_);
         return {
             false,
@@ -3184,7 +3213,7 @@ DocumentSessionResult DocumentSession::execute(
             path_);
     }
     if (!command.axis_id.valid() ||
-        !command.source.valid()) {
+        !axisSourceValid(command.source)) {
         return failure(
             DocumentSessionErrorCode::
                 invalid_command,
@@ -3211,7 +3240,7 @@ DocumentSessionResult DocumentSession::execute(
         return failure(
             DocumentSessionErrorCode::
                 invalid_command,
-            "Edit Axis target source Line is already designated by another authored Axis",
+            "Edit Axis target source is already designated by another authored Axis",
             path_);
     }
 
@@ -3898,7 +3927,10 @@ DocumentSession::evaluateRevolveDraft(
                     &datums,
                     preview_effective_sketch
                         ? &preview_effective_sketch->model
-                        : nullptr);
+                        : nullptr,
+                    dynamic_cast<
+                        kernel::IExactBoundedEdgeGeometryQuery*>(
+                            &modeling_kernel));
             if (resolved.ok() &&
                 preview_upstream_ready) {
                 auto preview =

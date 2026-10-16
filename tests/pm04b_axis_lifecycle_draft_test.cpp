@@ -137,7 +137,7 @@ int main() {
     const auto first =
         session.execute(
             application::CreateAxisCommand{
-                {fixture.sketch_id, fixture.regular_line},
+                part::SketchLineAxisSource{fixture.sketch_id, fixture.regular_line},
                 session.document().revision(),
                 {},
                 true},
@@ -160,7 +160,7 @@ int main() {
     const auto branched =
         session.execute(
             application::CreateAxisCommand{
-                {fixture.sketch_id, fixture.regular_line},
+                part::SketchLineAxisSource{fixture.sketch_id, fixture.regular_line},
                 session.document().revision(),
                 {},
                 true},
@@ -183,7 +183,7 @@ int main() {
     const auto duplicate_create =
         session.execute(
             application::CreateAxisCommand{
-                {fixture.sketch_id, fixture.regular_line},
+                part::SketchLineAxisSource{fixture.sketch_id, fixture.regular_line},
                 duplicate_create_revision,
                 {},
                 true},
@@ -208,7 +208,7 @@ int main() {
     const auto construction =
         session.execute(
             application::CreateAxisCommand{
-                {fixture.sketch_id, fixture.construction_line},
+                part::SketchLineAxisSource{fixture.sketch_id, fixture.construction_line},
                 session.document().revision(),
                 "Construction Axis",
                 true},
@@ -226,7 +226,7 @@ int main() {
         session.execute(
             application::EditAxisCommand{
                 axis_id,
-                {fixture.sketch_id,
+                part::SketchLineAxisSource{fixture.sketch_id,
                  fixture.construction_line},
                 duplicate_edit_revision},
             kernel);
@@ -248,7 +248,7 @@ int main() {
     CHECK(
         session.document().findAxis(axis_id)
             ->source ==
-        expected_regular_source);
+        part::PartAxisSource{expected_regular_source});
 
     auto duplicate_draft =
         application::AxisDraft::beginCreate(
@@ -293,7 +293,7 @@ int main() {
         session.execute(
             application::EditAxisCommand{
                 axis_id,
-                {fixture.sketch_id,
+                part::SketchLineAxisSource{fixture.sketch_id,
                  fixture.construction_line},
                 edit_revision},
             kernel)
@@ -362,7 +362,7 @@ int main() {
         session.document()
             .findAxis(*atomic_construction.axis_id)
             ->source ==
-        expected_atomic_source);
+        part::PartAxisSource{expected_atomic_source});
 
     const auto atomic_entity_id =
         *atomic_construction.entity_id;
@@ -394,7 +394,7 @@ int main() {
         session.document()
             .findAxis(atomic_axis_id)
             ->source ==
-        expected_redo_source);
+        part::PartAxisSource{expected_redo_source});
 
     // Regular + Axis is the same Part designation, independent of Line role.
     const auto atomic_regular =
@@ -454,7 +454,7 @@ int main() {
         session.execute(
             application::EditAxisCommand{
                 axis_id,
-                {fixture.sketch_id,
+                part::SketchLineAxisSource{fixture.sketch_id,
                  fixture.regular_line},
                 edit_revision},
             kernel);
@@ -491,7 +491,7 @@ int main() {
     const auto invalid_create =
         session.execute(
             application::CreateAxisCommand{
-                {fixture.sketch_id, fixture.circle},
+                part::SketchLineAxisSource{fixture.sketch_id, fixture.circle},
                 session.document().revision(),
                 {},
                 true},
@@ -534,7 +534,7 @@ int main() {
         session.execute(
             application::EditAxisCommand{
                 axis_id,
-                {fixture.sketch_id,
+                part::SketchLineAxisSource{fixture.sketch_id,
                  *replacement.entity_id},
                 session.document().revision()},
             kernel)
@@ -607,8 +607,9 @@ int main() {
             acquire_source);
     CHECK(
         command_first.setSource(
-            {fixture.sketch_id,
-             fixture.regular_line}));
+            part::SketchLineAxisSource{
+                fixture.sketch_id,
+                fixture.regular_line}));
     CHECK(
         application::submitAxisCadInput(
             command_first,

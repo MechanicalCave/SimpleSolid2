@@ -1651,7 +1651,7 @@ void PartDocumentTreeController::rebuild(
     reference_geometry->setToolTip(
         0,
         QStringLiteral(
-            "Authored Datum reference geometry. Show/Hide on this group updates the visibility of all contained Datum objects in one transaction."));
+            "Authored Datum Planes and Edge-sourced Axes. Individual objects keep separate stable semantic identities."));
     if (preserve_reference_selection &&
         reference_geometry_group_selected) {
         reference_geometry->setSelected(true);
@@ -1857,6 +1857,83 @@ void PartDocumentTreeController::rebuild(
             item->setSelected(was_selected);
         }
     }
+    // RG-02C/B1: ONLY the new strict Body-Edge authored Axis sources
+    // live under Reference Geometry, once per AxisId. The already
+    // established Sketch-Line Axis rows remain inside the source Sketch
+    // and built-in XYZ axes stay under Origin.
+    for (const auto& axis : session_->document().axes()) {
+        const auto* edge_source =
+            std::get_if<part::StraightMaterialEdgeAxisSource>(
+                &axis.source);
+        if (edge_source == nullptr) {
+            continue;
+        }
+        const auto evidence = std::find_if(
+            axis_evaluations_.begin(),
+            axis_evaluations_.end(),
+            [&axis](const AxisTreeEvaluationEntry& row) {
+                return row.axis_id == axis.id;
+            });
+        const bool evaluated =
+            evidence != axis_evaluations_.end();
+        const bool resolved = evaluated &&
+            evidence->status ==
+                part::AxisEvaluationStatus::resolved;
+        QString label = axis.name.empty()
+            ? QStringLiteral("Axis %1").arg(
+                fromUtf8(axis.id.serialized()))
+            : fromUtf8(axis.name);
+        if (evaluated && !resolved) {
+            label += QStringLiteral(" [%1]").arg(
+                axisStatusText(evidence->status));
+        }
+        auto* axis_item =
+            new QTreeWidgetItem(
+                reference_geometry, QStringList{label});
+        axis_item->setData(
+            0, axisIdData,
+            fromUtf8(axis.id.serialized()));
+        auto font = axis_item->font(0);
+        font.setItalic(!axis.visible);
+        font.setBold(evaluated && !resolved);
+        axis_item->setFont(0, font);
+        if (evaluated && !resolved) {
+            axis_item->setIcon(
+                0, tree_->style()->standardIcon(
+                    QStyle::SP_MessageBoxWarning));
+        }
+        const QString stage =
+            edge_source->edge.stage.feature_id
+            ? fromUtf8(
+                edge_source->edge.stage.feature_id->serialized())
+            : QStringLiteral("unavailable");
+        axis_item->setToolTip(
+            0,
+            QStringLiteral(
+                "AxisId: %1\\nSource: strict Body Edge after Feature %2"
+                "\\nVisibility: %3\\nStatus: %4\\nDiagnostic: %5")
+                .arg(
+                    fromUtf8(axis.id.serialized()),
+                    stage,
+                    axis.visible
+                        ? QStringLiteral("Shown")
+                        : QStringLiteral("Hidden"),
+                    evaluated
+                        ? axisStatusText(evidence->status)
+                        : QStringLiteral("Not evaluated"),
+                    evaluated
+                        ? axisDiagnosticText(evidence->diagnostic)
+                        : QStringLiteral("—")));
+        if (preserve_reference_selection) {
+            const bool selected =
+                std::find(
+                    previously_selected_axes.begin(),
+                    previously_selected_axes.end(), axis.id) !=
+                previously_selected_axes.end();
+            axis_item->setSelected(selected);
+        }
+    }
+
     reference_geometry->setExpanded(true);
 
     if (!session_->document().sketches().empty() ||
@@ -2025,8 +2102,11 @@ void PartDocumentTreeController::rebuild(
 
             for (const auto& axis :
                  session_->document().axes()) {
-                if (axis.source.sketch_id !=
-                    sketch.id) {
+                const auto* sketch_source =
+                    std::get_if<part::SketchLineAxisSource>(
+                        &axis.source);
+                if (sketch_source == nullptr ||
+                    sketch_source->sketch_id != sketch.id) {
                     continue;
                 }
 
@@ -2084,8 +2164,8 @@ void PartDocumentTreeController::rebuild(
                         "AxisId: %1\nSource SketchId: %2\nSource EntityId: %3\nVisibility: %4\nStatus: %5\nDiagnostic: %6")
                         .arg(
                             fromUtf8(axis.id.serialized()),
-                            fromUtf8(axis.source.sketch_id.value()),
-                            fromUtf8(axis.source.entity_id.serialized()),
+                            fromUtf8(sketch_source->sketch_id.value()),
+                            fromUtf8(sketch_source->entity_id.serialized()),
                             axis.visible
                                 ? QStringLiteral("Shown")
                                 : QStringLiteral("Hidden"),
@@ -2116,9 +2196,15 @@ void PartDocumentTreeController::rebuild(
         QTreeWidgetItem* missing_sources = nullptr;
         for (const auto& axis :
              session_->document().axes()) {
+            const auto* sketch_source =
+                std::get_if<part::SketchLineAxisSource>(
+                    &axis.source);
+            if (sketch_source == nullptr) {
+                continue; // future Edge Axis belongs in Reference Geometry
+            }
             const auto* source_sketch =
                 session_->document().findSketch(
-                    axis.source.sketch_id);
+                    sketch_source->sketch_id);
             if (source_sketch != nullptr) {
                 continue;
             }
@@ -2192,9 +2278,9 @@ void PartDocumentTreeController::rebuild(
                     .arg(
                         fromUtf8(axis.id.serialized()),
                         fromUtf8(
-                            axis.source.sketch_id.value()),
+                            sketch_source->sketch_id.value()),
                         fromUtf8(
-                            axis.source.entity_id.serialized()),
+                            sketch_source->entity_id.serialized()),
                         axis.visible
                             ? QStringLiteral("Shown")
                             : QStringLiteral("Hidden"),

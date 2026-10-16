@@ -638,9 +638,16 @@ coplanarityProvenBySupportIdentity(
     if (axis == nullptr) {
         return false;
     }
+    // Coplanarity is proven by identical Sketch support only for the
+    // legacy Sketch-Line Axis. A Body Edge Axis has no source Sketch;
+    // geometric coplanarity is validated by the existing Revolve input.
+    const auto* sketch_source =
+        std::get_if<SketchLineAxisSource>(&axis->source);
+    if (sketch_source == nullptr) {
+        return false;
+    }
     const auto* axis_sketch =
-        document.findSketch(
-            axis->source.sketch_id);
+        document.findSketch(sketch_source->sketch_id);
     return axis_sketch != nullptr &&
            axis_sketch->support ==
                profile_sketch->support;
@@ -757,7 +764,8 @@ resolveKernelRevolveInput(
     const RevolveFeature& feature,
     const PartEvaluation* prefix_evaluation,
     const DatumEvaluation* datum_evaluation,
-    const sketch::SketchModel* effective_sketch) {
+    const sketch::SketchModel* effective_sketch,
+    kernel::IExactBoundedEdgeGeometryQuery* exact_edge_provider) {
     RevolveKernelInputResult result;
 
     if (!revolveFeatureStructurallyValid(
@@ -807,7 +815,8 @@ resolveKernelRevolveInput(
             document,
             feature.axis,
             prefix_evaluation,
-            datum_evaluation);
+            datum_evaluation,
+            exact_edge_provider);
     result.required_axis_stage =
         axis.required_body_stage;
     if (axis.status !=
@@ -864,6 +873,22 @@ resolveKernelRevolveInput(
     result.input =
         std::move(input);
     return result;
+}
+
+// Keep the original five-argument public ABI for all existing
+// DocumentSession Revolve-draft preview callers. Only the actual
+// provider-aware Part feature evaluation uses the six-argument path;
+// with no provider, an Edge Axis fails closed, while legacy Sketch
+// Line / built-in Revolve behavior is unchanged.
+RevolveKernelInputResult resolveKernelRevolveInput(
+    const PartDocument& document,
+    const RevolveFeature& feature,
+    const PartEvaluation* prefix_evaluation,
+    const DatumEvaluation* datum_evaluation,
+    const sketch::SketchModel* effective_sketch) {
+    return resolveKernelRevolveInput(
+        document, feature, prefix_evaluation, datum_evaluation,
+        effective_sketch, nullptr);
 }
 
 namespace {
@@ -6143,7 +6168,10 @@ PartEvaluation evaluatePart(
                         support_datums
                             ? &*support_datums
                             : nullptr,
-                        evaluated_model);
+                        evaluated_model,
+                        dynamic_cast<
+                            kernel::IExactBoundedEdgeGeometryQuery*>(
+                                &modeling_kernel));
                 if (!resolved.ok()) {
                     evaluated.status =
                         resolved.status ==

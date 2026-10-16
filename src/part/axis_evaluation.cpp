@@ -5,6 +5,7 @@
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -188,7 +189,8 @@ AxisEvaluation resolveAxisReference(
     const PartDocument& document,
     const AxisReference& reference,
     const PartEvaluation* part_evaluation,
-    const DatumEvaluation* datum_evaluation) noexcept {
+    const DatumEvaluation* datum_evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery* provider) noexcept {
     if (!reference.valid()) {
         return unresolved(
             AxisEvaluationStatus::unsupported,
@@ -217,8 +219,35 @@ AxisEvaluation resolveAxisReference(
             AxisEvaluationDiagnostic::missing_axis);
     }
 
+    // Only Edge-source Axes are resolved using the real strict native
+    // provider, on the correct Body stage. Legacy Sketch-Line Axis
+    // evaluation follows its original path unchanged.
+    const auto* sketch_source =
+        std::get_if<SketchLineAxisSource>(&axis->source);
+    if (sketch_source == nullptr) {
+        const auto* edge_source =
+            std::get_if<StraightMaterialEdgeAxisSource>(
+                &axis->source);
+        if (edge_source == nullptr) {
+            return unresolved(
+                AxisEvaluationStatus::unsupported,
+                AxisEvaluationDiagnostic::invalid_reference);
+        }
+        if (part_evaluation == nullptr || provider == nullptr) {
+            return unresolved(
+                AxisEvaluationStatus::blocked,
+                AxisEvaluationDiagnostic::
+                    edge_native_geometry_unavailable,
+                edge_source->edge.stage);
+        }
+        return resolveStraightMaterialEdgeAxisLine(
+            document,
+            edge_source->edge,
+            *part_evaluation,
+            *provider);
+    }
     const auto* source =
-        document.findSketch(axis->source.sketch_id);
+        document.findSketch(sketch_source->sketch_id);
     if (source == nullptr) {
         return unresolved(
             AxisEvaluationStatus::missing,
@@ -227,15 +256,15 @@ AxisEvaluation resolveAxisReference(
 
     const auto* line =
         source->model.findLine(
-            axis->source.entity_id);
+            sketch_source->entity_id);
     if (line == nullptr) {
         return unresolved(
             source->model.contains(
-                axis->source.entity_id)
+                sketch_source->entity_id)
                 ? AxisEvaluationStatus::unsupported
                 : AxisEvaluationStatus::missing,
             source->model.contains(
-                axis->source.entity_id)
+                sketch_source->entity_id)
                 ? AxisEvaluationDiagnostic::source_not_line
                 : AxisEvaluationDiagnostic::missing_line);
     }
@@ -351,6 +380,101 @@ AxisEvaluation resolveAxisReference(
             start,
             direction},
         stage);
+}
+
+// RG-02C/B1: no independent Edge resolver, no native token authoring and
+// no copy of the A0 test-only line algorithm. Q2 owns strict stage/revision
+// admission and the scoped native MID/tangent observation; the Axis consumer
+// owns only line-kind admission and the Axis-specific typed result.
+AxisEvaluation resolveStraightMaterialEdgeAxisLine(
+    const PartDocument& document,
+    const MaterialEdgeReference& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactBoundedEdgeGeometryQuery& provider) noexcept {
+    if (!source.valid()) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::invalid_reference);
+    }
+
+    const auto observation = resolveSelectedMaterialEdgeMid(
+        document,
+        SelectedMaterialEdgeMid{source},
+        evaluation,
+        provider);
+
+    if (!observation.resolved()) {
+        switch (observation.status) {
+        case SelectedEdgeMidStatus::edge_missing:
+            return unresolved(
+                AxisEvaluationStatus::missing,
+                AxisEvaluationDiagnostic::edge_source_missing,
+                source.stage);
+        case SelectedEdgeMidStatus::edge_ambiguous:
+            return unresolved(
+                AxisEvaluationStatus::ambiguous,
+                AxisEvaluationDiagnostic::edge_source_ambiguous,
+                source.stage);
+        case SelectedEdgeMidStatus::edge_unsupported:
+            return unresolved(
+                AxisEvaluationStatus::unsupported,
+                AxisEvaluationDiagnostic::edge_source_unsupported,
+                source.stage);
+        case SelectedEdgeMidStatus::native_geometry_unavailable:
+            return unresolved(
+                AxisEvaluationStatus::blocked,
+                AxisEvaluationDiagnostic::edge_native_geometry_unavailable,
+                source.stage);
+        case SelectedEdgeMidStatus::invalid_context:
+        case SelectedEdgeMidStatus::resolved:
+            return unresolved(
+                AxisEvaluationStatus::blocked,
+                AxisEvaluationDiagnostic::stale_part_evaluation,
+                source.stage);
+        }
+    }
+
+    // Even though Q2 can legitimately observe an open circular Arc MID,
+    // the first Body-Edge Axis constructor is LINE ONLY.
+    const auto* stage = evaluation.findFeature(
+        *source.stage.feature_id);
+    if (stage == nullptr ||
+        !stage->result_topology ||
+        stage->result_topology->stage != source.stage) {
+        return unresolved(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::support_stage_unavailable,
+            source.stage);
+    }
+    const auto& edges = stage->result_topology->edges;
+    const auto current = std::find_if(
+        edges.begin(), edges.end(),
+        [&observation](const auto& edge) {
+            return edge.runtime_token == *observation.current_edge;
+        });
+    if (current == edges.end()) {
+        return unresolved(
+            AxisEvaluationStatus::missing,
+            AxisEvaluationDiagnostic::edge_source_missing,
+            source.stage);
+    }
+    if (current->curve_kind != kernel::CurveKind::line) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::edge_not_straight,
+            source.stage);
+    }
+
+    ResolvedAxisLine line{
+        *observation.current_position_world,
+        observation.current_tangent_line->representative};
+    if (!line.valid()) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::edge_native_geometry_unavailable,
+            source.stage);
+    }
+    return resolved(std::move(line), source.stage);
 }
 
 } // namespace simplesolid2::part

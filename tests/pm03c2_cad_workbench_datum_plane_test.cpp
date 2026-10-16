@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/cad_input.hpp>
 #include <simplesolid2/application/document_session.hpp>
@@ -10,8 +11,10 @@
 #include <QStackedWidget>
 #include <QComboBox>
 #include <QLabel>
+#include <QMenu>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QWidget>
@@ -324,6 +327,112 @@ int main(int argc, char* argv[]) {
         offset && reverse && finish && cancel);
     CHECK(tool->isEnabled());
     CHECK(!tool->isChecked());
+
+    // RG-02C/B1: the *new* Work Features Axis button reuses the existing
+    // Part Axis draft. Its Constructor combo has ONLY "Edge" today.
+    // Sketch-Line Axis is still authored in Sketch, never offered here.
+    // A missing strict material Edge cannot create a ghost Axis, consume an
+    // AxisId or add an Undo entry. Cancel returns to the unchanged Datum UX.
+    auto* axis_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("axisToolButton"));
+    auto* axis_constructor =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("axisConstructorCombo"));
+    auto* axis_source =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("axisSourceLabel"));
+    auto* axis_finish =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("axisFinishButton"));
+    auto* axis_cancel =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("axisCancelButton"));
+    CHECK(axis_tool && axis_constructor && axis_source &&
+          axis_finish && axis_cancel);
+    CHECK(axis_constructor->count() == 1);
+    CHECK(axis_constructor->itemText(0) == QStringLiteral("Edge"));
+    CHECK(axis_tool->isEnabled());
+
+    // Owner manual B1 regression: Axis must belong to the SAME
+    // responsive Work Features group as Datum Plane. The existing
+    // group registry also assigns both buttons the same baseline height.
+    auto* work_features_dropdown =
+        workbench.findChild<QToolButton*>(QStringLiteral(
+            "workbenchToolbarGroupDropdown_Part_Work Features"));
+    CHECK(work_features_dropdown != nullptr);
+    CHECK(work_features_dropdown->menu() != nullptr);
+    const auto work_features_actions =
+        work_features_dropdown->menu()->actions();
+    CHECK(work_features_actions.size() == 2);
+    CHECK(work_features_actions.at(0)->text() ==
+          QStringLiteral("Datum Plane"));
+    CHECK(work_features_actions.at(1)->text() ==
+          QStringLiteral("Axis"));
+    CHECK(tool->minimumHeight() >= 32);
+    CHECK(axis_tool->minimumHeight() == tool->minimumHeight());
+
+    const auto before_axis_revision =
+        session.document().revision();
+    const auto before_axis_undo = session.undoDepth();
+    const auto reference_count_before_axis =
+        viewport->reference_scene.references.size();
+    CHECK(session.document().axes().empty());
+
+    axis_tool->click();
+    QApplication::processEvents();
+    CHECK(axis_tool->isChecked());
+    CHECK(axis_constructor->currentText() == QStringLiteral("Edge"));
+    CHECK(axis_source->text().contains(QStringLiteral("Edge")));
+    CHECK(!axis_finish->isEnabled());
+    CHECK(viewport->reference_scene.references.size() ==
+          reference_count_before_axis);
+    CHECK(session.document().axes().empty());
+    CHECK(session.document().revision() == before_axis_revision);
+    CHECK(session.undoDepth() == before_axis_undo);
+    axis_cancel->click();
+    QApplication::processEvents();
+    CHECK(!axis_tool->isChecked());
+    CHECK(viewport->reference_scene.references.size() ==
+          reference_count_before_axis);
+    CHECK(session.document().axes().empty());
+    CHECK(session.document().revision() == before_axis_revision);
+    CHECK(session.undoDepth() == before_axis_undo);
+    CHECK(tool->isEnabled());
+
+    // H4 preview scene seam only (NOT native Edge authoring evidence):
+    // a valid derived line is one transient unpickable Reference cue.
+    // Its removal returns exactly to the original scene/Undo/Part state.
+    ui::PartViewportController* axis_view = nullptr;
+    // PartViewportController is a QObject child but deliberately does
+    // not declare Q_OBJECT; use C++ RTTI, not Qt's QMetaObject cast.
+    for (auto* child : workbench.children()) {
+        if (auto* controller =
+                dynamic_cast<ui::PartViewportController*>(child)) {
+            axis_view = controller;
+            break;
+        }
+    }
+    CHECK(axis_view != nullptr);
+    const part::ResolvedAxisLine display_only_line{
+        {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}};
+    CHECK(display_only_line.valid());
+    axis_view->setAxisDraftPreview(display_only_line);
+    CHECK(viewport->reference_scene.references.size() ==
+          reference_count_before_axis + 1U);
+    const auto& transient_cue =
+        viewport->reference_scene.references.back();
+    CHECK(transient_cue.kind ==
+          viewer::ReferencePresentationKind::axis);
+    CHECK(transient_cue.role ==
+          viewer::PresentationRole::hover);
+    CHECK(session.document().axes().empty());
+    CHECK(session.document().revision() == before_axis_revision);
+    CHECK(session.undoDepth() == before_axis_undo);
+    axis_view->setAxisDraftPreview(std::nullopt);
+    CHECK(viewport->reference_scene.references.size() ==
+          reference_count_before_axis);
+    CHECK(session.document().axes().empty());
 
     // Selection-first GUI: the one Datum Plane tool acquires the selected
     // Origin plane into the same runtime draft with the accepted 10 mm
