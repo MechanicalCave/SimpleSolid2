@@ -530,6 +530,12 @@ public:
         std::vector<part::MaterialEdgeReference>>
     selectedMaterialEdgeReferences() const;
 
+    // H2: an ephemeral current-Body bounded Face pick is admitted by
+    // H1's native singleton query. Only the returned semantic Surface
+    // source can enter AxisDraft; no runtime token survives authoring.
+    [[nodiscard]] part::StrictCylindricalFaceAxisAuthoringResult
+    selectedStrictCylindricalFaceAxisSource() const;
+
     // PG-01D: read one exact generation-bound bounded Face from the
     // current scene. Wires are transient, never authored Face identity.
     [[nodiscard]] part::MaterialFaceBoundaryAdmission
