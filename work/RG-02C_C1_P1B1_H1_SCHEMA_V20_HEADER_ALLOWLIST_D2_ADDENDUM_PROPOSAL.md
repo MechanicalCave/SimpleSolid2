@@ -1,8 +1,14 @@
 # RG-02C/C1-P1-B1 H1 — native v20 schema header: exact-path D2 addendum proposal
 
-**Status: PROPOSED BOUNDED ONE-PATH D2 AMENDMENT — NOT YET OWNER ACCEPTED; NO PRODUCTION MUTATION AUTHORITY FOR THE EXTRA PATH.**
+**Status: OWNER ACCEPTED EXACT ONE-PATH H1 D2 AMENDMENT (2026-10-16); THIS GOVERNANCE PR IS STILL OPEN/UNMERGED, AND THE ACTIVE H1 WORK CONTRACT STILL NEEDS ITS OWN ONE-PATH AMENDMENT AND PROTECTED-MAIN INTEGRATION BEFORE EDITING THE NEWLY APPROVED HEADER.**
 **Date:** 2026-10-16.
 **Authority:** Constitution/Foundation/Architecture, accepted ADRs, Part Modeling v1.33, Owner-accepted and merged [P1-B1/H1 headless Work Contract](RG-02C_C1_P1B1_H1_STRICT_CYLINDRICAL_FACE_AXIS_HEADLESS_D2_WORK_CONTRACT_PROPOSAL.md) [#440](https://github.com/MechanicalCave/SimpleSolid2/pull/440), correctly activated through [#443](https://github.com/MechanicalCave/SimpleSolid2/pull/443) on main `249d677cdb98213838643a02ca9d045f78e6d6a8`, after prior DOC-01 activation RED #3365 and independently integrated one-file DOC-01 remediation #442. Owner explicitly authorized headless H1 implementation and activation, but **H1 §2 itself explicitly forbids mutating paths outside its 18-file allowlist without Owner-accepted exact D2 addendum**.
+
+## Recorded Owner exact-path D2 acceptance — 2026-10-16
+
+After the Agent explicitly asked: **“czy akceptujesz dodanie `src/part/include/simplesolid2/part/part_document_store.hpp` jako 19. dozwolonej ścieżki H1, wyłącznie w celu aktualizacji wersji schematu z 19 do 20?”**, the Owner answered **`akceptuje - kontynuuj`**. This is an **explicit D2 acceptance of precisely the single additional header path and narrowly defined v19→v20 schema constant edit** below. All other H1 contract and architecture/UX decisions remain unchanged, including legacy reader support, strict singleton Face option A, no B/C fallback, and deferred B0 native GAP.
+
+This acceptance **does not** authorize guarded squash merging PR #445 merely by approving its text; the corrected OWNER-ACCEPTED PR HEAD requires a fresh exact-head Windows governance CLOSURE and **separate protected-main merge authority**. Nor does acceptance by itself mutate the already active H1 contract §2, which must independently be amended and integrated to make the 19th executable path available to implementation PR #444. Until these completed gates, the header remains **NOT MUTABLE**, and writer v20 remains **NOT YET IMPLEMENTED / NOT TESTED**.
 
 ## 1. Actual source discovery: existing v19 constant is outside H1 §2
 
@@ -18,7 +24,7 @@ This is an actual source-path contradiction detected **before** any v20 writer c
 
 ## 2. Requested narrow Owner D2 amendment
 
-**Add precisely ONE executable file to H1 §2** (19 rather than 18), with exact purpose:
+**OWNER ACCEPTED: add precisely ONE executable file to H1 §2** (19 rather than 18), with exact purpose:
 
 ```
 src/part/include/simplesolid2/part/part_document_store.hpp
@@ -32,8 +38,8 @@ src/part/include/simplesolid2/part/part_document_store.hpp
 
 ## 3. Gate order and decision requested
 
-1. Owner **explicitly accepts this one-path D2 amendment** independently of prior broad implementation intent. Without that, the header remains **STOP / NOT AUTHORIZED** and headless H1 cannot be called fully v20-compliant.
-2. Record Owner exact acceptance in this governance-only addendum, pass new exact-head Windows governance CLOSURE, and separately authorize guarded squash of this addendum if required by governance.
+1. **CLOSED — Owner explicitly accepted this exact one-path D2 amendment on 2026-10-16** independently of prior broad implementation intent. The header still remains **STOP / NOT AUTHORIZED FOR CODE MUTATION** until the separately governed contract amendment is on protected main.
+2. **Owner acceptance RECORDED in this governance-only addendum**. **PENDING** fresh exact-head Windows governance CLOSURE on the acceptance-record HEAD, and **separate Owner protected-main guarded squash authority**.
 3. Update the **already active H1 Work Contract** by a separate bounded governance-only exact-path amendment declaring a 19th path; pass exact-head Windows CLOSURE and guarded squash **before editing the newly allowed header**. Do not modify `work/ACTIVE.yaml` since it already references the H1 contract.
 4. Only then change the version in header and actual writer/reader in the activated production H1 implementation PR, with real Windows native FOCUSED / independent FAST / Ready FULL Core+native Kernel+Qt/OCCT Desktop, DOC-01 and final exact-head CLOSURE; any RED requiring more paths → new explicit STOP.
 
