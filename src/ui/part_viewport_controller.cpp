@@ -5550,6 +5550,65 @@ PartViewportController::selectedMaterialEdgeReferences() const {
     return result;
 }
 
+part::StrictCylindricalFaceAxisAuthoringResult
+PartViewportController::selectedStrictCylindricalFaceAxisSource() const {
+    using Status = part::AxisEvaluationStatus;
+    using Diagnostic = part::AxisEvaluationDiagnostic;
+    const auto fail = [](Status status, Diagnostic diagnostic) {
+        part::StrictCylindricalFaceAxisAuthoringResult result;
+        result.status = status;
+        result.diagnostic = diagnostic;
+        return result;
+    };
+    if (session_ == nullptr || solid_modeling_kernel_ == nullptr ||
+        !body_scene_revision_ ||
+        *body_scene_revision_ != session_->document().revision() ||
+        !part_evaluation_cache_ ||
+        part_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_scene_cache_->generation.valid() ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return fail(Status::blocked, Diagnostic::stale_part_evaluation);
+    }
+    const auto picks = bodyTopologySelection();
+    if (picks.size() != 1U) {
+        return fail(
+            picks.size() > 1U ? Status::ambiguous : Status::missing,
+            picks.size() > 1U
+                ? Diagnostic::cylindrical_face_ambiguous
+                : Diagnostic::cylindrical_face_missing);
+    }
+    const auto& picked = picks.front();
+    if (!picked.valid() ||
+        picked.generation != body_scene_cache_->generation ||
+        picked.kind != viewer::BodyTopologyPresentationKind::face) {
+        return fail(Status::unsupported,
+                    Diagnostic::cylindrical_face_not_cylinder);
+    }
+    const auto stage = body_topology_catalog_cache_->stage;
+    if (!stage.valid() ||
+        stage.kind != part::BodyStageKind::after_feature ||
+        !stage.feature_id || !stage.feature_id->valid() ||
+        part_evaluation_cache_->findFeature(*stage.feature_id) == nullptr) {
+        return fail(Status::blocked, Diagnostic::support_stage_unavailable);
+    }
+    auto* provider =
+        dynamic_cast<kernel::IExactCylindricalFaceAxisQuery*>(
+            solid_modeling_kernel_);
+    if (provider == nullptr) {
+        return fail(Status::unsupported,
+                    Diagnostic::cylindrical_face_native_geometry_unavailable);
+    }
+    return part::authorStrictCylindricalFaceAxisSource(
+        session_->document(), stage,
+        kernel::RuntimeFaceToken{picked.runtime_token_value},
+        *part_evaluation_cache_, *provider);
+}
+
 part::MaterialFaceBoundaryAdmission
 PartViewportController::selectedMaterialFaceBoundaryAdmission() const {
     const auto selected = bodyTopologySelection();
