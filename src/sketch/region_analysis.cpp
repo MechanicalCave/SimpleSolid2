@@ -1420,6 +1420,9 @@ struct HalfEdge final {
     std::size_t origin{};
     std::size_t destination{};
     double tangent_angle{};
+    // Signed angular turn for coincident tangent directions. A curved
+    // branch lies to a geometric side of the straight tangent at O(t^2).
+    double curvature_order{};
 };
 
 struct BuiltLoop final {
@@ -1515,43 +1518,6 @@ struct BuiltLoop final {
     return std::nullopt;
 }
 
-[[nodiscard]] std::optional<Point2> sourceDerivative(
-    const CurveView& curve,
-    double parameter) noexcept {
-    if (!finiteValue(parameter)) {
-        return std::nullopt;
-    }
-
-    if (curve.kind == CurveKind::line) {
-        const Point2 result{
-            curve.second.u - curve.first.u,
-            curve.second.v - curve.first.v};
-        return result.finite()
-            ? std::optional<Point2>{result}
-            : std::nullopt;
-    }
-
-    const double angle =
-        curve.kind == CurveKind::circle
-            ? full_turn * parameter
-            : curve.start_angle +
-                  curve.sweep_angle * parameter;
-    const double angular_scale =
-        curve.kind == CurveKind::circle
-            ? full_turn
-            : curve.sweep_angle;
-    const Point2 result{
-        -curve.radius *
-            std::sin(angle) *
-            angular_scale,
-        curve.radius *
-            std::cos(angle) *
-            angular_scale};
-    return result.finite()
-        ? std::optional<Point2>{result}
-        : std::nullopt;
-}
-
 [[nodiscard]] double sourceParameterDelta(
     const DerivedEdge& edge) noexcept {
     if (edge.kind == CurveKind::circle &&
@@ -1563,35 +1529,67 @@ struct BuiltLoop final {
            edge.first_parameter;
 }
 
-[[nodiscard]] std::optional<double> halfEdgeAngle(
+struct OutgoingGeometry final {
+    double angle{};
+    double signed_curvature{};
+};
+
+[[nodiscard]] std::optional<OutgoingGeometry> halfEdgeOrder(
     const CurveView& curve,
     const DerivedEdge& edge,
-    bool forward) noexcept {
-    const double parameter =
-        forward
-            ? edge.first_parameter
-            : edge.second_parameter;
-    const auto derivative =
-        sourceDerivative(curve, parameter);
-    if (!derivative) {
-        return std::nullopt;
+    bool forward,
+    Point2 vertex_point) noexcept {
+    double du{};
+    double dv{};
+    double curvature{};
+
+    if (curve.kind == CurveKind::line) {
+        du = curve.second.u - curve.first.u;
+        dv = curve.second.v - curve.first.v;
+        if (!forward) {
+            du = -du;
+            dv = -dv;
+        }
+    } else {
+        // The analytic shared contact vertex is authoritative for the
+        // outgoing radial direction. Re-evaluating sin(pi), etc. would
+        // manufacture a tiny angular difference between a Circle and a
+        // Line that have exactly the same mathematical tangent.
+        const double radial_u =
+            vertex_point.u - curve.center.u;
+        const double radial_v =
+            vertex_point.v - curve.center.v;
+        const double source_sense =
+            curve.kind == CurveKind::circle
+                ? 1.0
+                : (curve.sweep_angle > 0.0 ? 1.0 : -1.0);
+        const double outgoing_sense =
+            forward ? source_sense : -source_sense;
+        du = -outgoing_sense * radial_v;
+        dv = outgoing_sense * radial_u;
+        curvature = outgoing_sense / curve.radius;
     }
 
-    const double du =
-        forward ? derivative->u : -derivative->u;
-    const double dv =
-        forward ? derivative->v : -derivative->v;
-    if (!finiteValue(du) ||
-        !finiteValue(dv) ||
-        (du == 0.0 && dv == 0.0)) {
+    if (!finiteValue(du) || !finiteValue(dv) ||
+        !finiteValue(curvature)) {
         return std::nullopt;
     }
-
+    const double scale =
+        std::max(std::abs(du), std::abs(dv));
+    if (!(scale > 0.0) || !finiteValue(scale)) {
+        return std::nullopt;
+    }
+    // Normalize only by a common direction scale: tangents (0,9),
+    // (0,5) and proportional oblique integer vectors sort identically.
+    // At equal angle sort by signed curvature, *not* by EntityId/edge
+    // allocation order. Negative turn bends clockwise from tangent;
+    // positive bends counterclockwise. A Line has zero curvature.
     const double angle =
-        std::atan2(dv, du);
-    return finiteValue(angle)
-        ? std::optional<double>{angle}
-        : std::nullopt;
+        normalizedAngle(std::atan2(dv / scale, du / scale));
+    if (!finiteValue(angle)) {
+        return std::nullopt;
+    }
+    return OutgoingGeometry{angle, curvature};
 }
 
 [[nodiscard]] RegionBoundaryUse2D boundaryUse(
@@ -2796,18 +2794,20 @@ buildComponentLoops(
         if (!curve) {
             return std::nullopt;
         }
-        const auto forward_angle =
-            halfEdgeAngle(
+        const auto forward_geometry =
+            halfEdgeOrder(
                 *curve,
                 edge,
-                true);
-        const auto reverse_angle =
-            halfEdgeAngle(
+                true,
+                vertices[edge.first_vertex].point);
+        const auto reverse_geometry =
+            halfEdgeOrder(
                 *curve,
                 edge,
-                false);
-        if (!forward_angle ||
-            !reverse_angle) {
+                false,
+                vertices[edge.second_vertex].point);
+        if (!forward_geometry ||
+            !reverse_geometry) {
             return std::nullopt;
         }
 
@@ -2819,7 +2819,8 @@ buildComponentLoops(
                 true,
                 edge.first_vertex,
                 edge.second_vertex,
-                *forward_angle});
+                forward_geometry->angle,
+                forward_geometry->signed_curvature});
         const auto reverse_index =
             half_edges.size();
         half_edges.push_back(
@@ -2828,7 +2829,8 @@ buildComponentLoops(
                 false,
                 edge.second_vertex,
                 edge.first_vertex,
-                *reverse_angle});
+                reverse_geometry->angle,
+                reverse_geometry->signed_curvature});
 
         vertices[edge.first_vertex]
             .outgoing.push_back(
@@ -2854,6 +2856,14 @@ buildComponentLoops(
                     return first.tangent_angle <
                            second.tangent_angle;
                 }
+                if (first.curvature_order !=
+                    second.curvature_order) {
+                    return first.curvature_order <
+                           second.curvature_order;
+                }
+                // Only geometrically indistinguishable local jets can
+                // now use stable index ordering; indexes never decide
+                // which side of a tangent contains a bounded face.
                 if (first.edge != second.edge) {
                     return first.edge <
                            second.edge;
