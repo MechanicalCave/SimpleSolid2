@@ -3402,7 +3402,9 @@ void CadWorkbench::buildUi() {
     // One Work Features Axis tool, two Owner-accepted constructors.
     // Sketch-Line Axis remains authored inside Sketch, not here.
     axis_constructor_combo_->addItem(QStringLiteral("Edge"));
-    axis_constructor_combo_->addItem(QStringLiteral("Cylindrical Face"));
+    // The second item is installed upon entering the existing Axis tool.
+    // Preserve the established hidden-panel baseline in other Workbench
+    // tools (Datum Plane / Sketch) without hiding any active H2 choice.
     axis_source_form->addRow(
         QStringLiteral("Constructor"),
         axis_constructor_combo_);
@@ -6278,6 +6280,12 @@ bool CadWorkbench::startAxisTool(
     axis_source_requires_pick_ = false;
     axis_face_pick_diagnostic_.reset();
     axis_evaluation_.reset();
+    if (work_features_edge && axis_constructor_combo_ &&
+        axis_constructor_combo_->count() == 1) {
+        const QSignalBlocker blocked{axis_constructor_combo_};
+        axis_constructor_combo_->addItem(
+            QStringLiteral("Cylindrical Face"));
+    }
     if (work_features_edge && viewport_controller_) {
         viewport_controller_->setBodyTopologyEdgeDraftMode(true);
         viewport_controller_->setBodyTopologyFacePickOnly(false);
@@ -6367,6 +6375,12 @@ bool CadWorkbench::startAxisEdit(
         axis_face_pick_diagnostic_.reset();
         axis_draft_ = std::move(*edge_draft);
         axis_evaluation_.reset();
+        if (axis_constructor_combo_ &&
+            axis_constructor_combo_->count() == 1) {
+            const QSignalBlocker blocked{axis_constructor_combo_};
+            axis_constructor_combo_->addItem(
+                QStringLiteral("Cylindrical Face"));
+        }
         if (viewport_controller_) {
             viewport_controller_->setBodyTopologyEdgeDraftMode(true);
             viewport_controller_->setBodyTopologyFacePickOnly(face_source);
