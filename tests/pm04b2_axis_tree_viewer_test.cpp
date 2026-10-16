@@ -908,6 +908,17 @@ int main(int argc, char* argv[]) {
     axis_cancel->click();
     QApplication::processEvents();
     CHECK(axis_operations->isHidden());
+    CHECK(constructor->count() == 2);
+    // The same widget retains its two accepted choices after Cancel;
+    // a fresh Axis operation must still default to the Edge meaning.
+    axis_tool->click();
+    QApplication::processEvents();
+    CHECK(constructor->count() == 2);
+    CHECK(constructor->currentIndex() == 0);
+    CHECK(!axis_finish->isEnabled());
+    axis_cancel->click();
+    QApplication::processEvents();
+    CHECK(axis_operations->isHidden());
     CHECK(session.undoDepth() == before_h2_undo);
     CHECK(session.document().axes().size() == before_h2_axes);
 
