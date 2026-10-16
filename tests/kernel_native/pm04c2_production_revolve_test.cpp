@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -964,6 +965,41 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
         CHECK(*resolved.line == *admitted.line);
         CHECK(resolved.required_body_stage ==
               std::optional<part::BodyStageRef>{stage});
+
+        // Exercise the ACTUAL headless application command/transaction,
+        // not just direct Part authored-state restoration. One create =
+        // one Undo step; a redo restores the identical AxisId/source.
+        auto document_copy = part::PartDocument::restore(
+            document.documentId(), document.state(),
+            document.revision());
+        CHECK(document_copy.ok());
+        application::DocumentSession session{
+            std::filesystem::path{"h1_native_axis_probe.ss2part"},
+            std::move(*document_copy.document)};
+        const auto before_revision = session.document().revision();
+        const auto before_axes = session.document().axes().size();
+        const auto before_undo = session.undoDepth();
+        const auto created = session.execute(
+            application::CreateAxisCommand{
+                part::PartAxisSource{*admitted.source},
+                before_revision, {}, true},
+            provider);
+        CHECK(created.ok());
+        CHECK(created.axis_id);
+        CHECK(session.document().axes().size() == before_axes + 1U);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        CHECK(session.document().findAxis(*created.axis_id));
+        const auto created_value =
+            *session.document().findAxis(*created.axis_id);
+        CHECK(created_value.source ==
+              part::PartAxisSource{*admitted.source});
+        CHECK(session.undo().ok());
+        CHECK(session.document().axes().size() == before_axes);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findAxis(*created.axis_id));
+        CHECK(session.document().findAxis(*created.axis_id)->source ==
+              created_value.source);
+
     }
     CHECK(queried == evaluation.current_topology->faces.size());
     CHECK(queried == strict_admitted + rejected);
