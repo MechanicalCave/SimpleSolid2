@@ -1,0 +1,36 @@
+# RG-02C/C1-P1-B1/H2 — Cylindrical Face Axis Workbench native acceptance evidence
+
+**State: IN PROGRESS — NOT OWNER MANUAL PASS; NOT OWNER TECHNICAL FINAL PASS; NOT IMPLEMENTATION MERGE AUTHORIZATION.** Prepared 2026-10-16. Active exact D2 scope: `work/RG-02C_C1_P1B1_H2_CYLINDRICAL_FACE_AXIS_WORKBENCH_D2_CONTRACT_PROPOSAL.md`. Source PR: [#453](https://github.com/MechanicalCave/SimpleSolid2/pull/453), implementation branch `feat/rg02c-c1-p1b1-h2-cylindrical-face-axis-workbench-20261016`. This is a **factual** evolving ledger; any edited runtime or source HEAD invalidates earlier runtime green and requires matching new checks.
+
+## Authority and isolation
+
+- H1 headless native strict singleton Face Axis and native writer v20: Owner independently signed off and implementation [#444](https://github.com/MechanicalCave/SimpleSolid2/pull/444) separately guarded-squash merged main `e2b4aa3db7026c589052ef2c5789d5b01c2da92e` with retained explicit native evidence gaps.
+- Distinct Workbench H2 design W1–W3 / UX-01…14 Owner accepted via governance [#439](https://github.com/MechanicalCave/SimpleSolid2/pull/439). Exactly 18 executable allowed paths Owner-accepted via [#451](https://github.com/MechanicalCave/SimpleSolid2/pull/451). Active-only [#452](https://github.com/MechanicalCave/SimpleSolid2/pull/452) independently Owner-authorized, CLOSURE #3416/#3417 SUCCESS, squash `e592db030adb88a2c4cf756bf417e7129018a4b2` and `main` authoritative `work/ACTIVE.yaml` points at H2.
+- H2 PR modifies only conditional H2 §3 allowlisted paths. No schema or OCCT provider public API, no H2 source change on protected main before independent Owner technical FINAL PASS and separate merge authorization.
+
+## Windows evidence — DO NOT ERASE RED
+
+| Gate | Exact tested commit | Genuine result | Meaning |
+| --- | --- | --- | --- |
+| Initial Draft FAST [#3425](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38951424049) | `8c636402daf151147fe9598106063846b658c656` | **SUCCESS** | 93/93 draft-tier regression with initial GUI + three canonical docs + generated Browser. Historical only, not enough for final candidate. |
+| Initial Ready FULL [#3426](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38951746722) | `8c636402daf151147fe9598106063846b658c656` | **RED / FAILURE** | Real Windows Core and kernel-native phases completed; Desktop **116/117**, one RED `pm03c2.cad_workbench_datum_plane` at its existing `axis_constructor->count() == 1` assertion when Axis panel not active. Native GUI `pm05f_r2.native_workbench_edit` **PASS** (49.54 s), including newly added actual OCCT Revolve-cylinder Face mouse-pick, Axis authoring, v20 cold Save/Reopen and Edit/Cancel witness in the registered test source. Do not promote FULL to PASS. |
+| Regression remediation code | `302feb015b1757b44dff2846f1b952d79963e3ca` | **UNTESTED at this ledger point** | Existing hidden Axis constructor combo begins with legacy `Edge` only, while the `Cylindrical Face` second choice is lazily added on opening the Work Features Axis tool or Edit Axis. Existing nonallowlisted Datum test remains unchanged; allowlisted Axis GUI/native tests updated to assert both the hidden legacy baseline and active two-choice constructor. |
+| New Draft FAST after ledger | **PENDING** | **NOT TESTED** | Require independent real Windows FAST on final runtime/doc/test SHA. |
+| New Ready FULL after FAST | **PENDING** | **NOT TESTED** | Require actual Core-only, kernel-native OCCT Release and full Qt/OCCT Desktop including `pm03c2` and `pm05f_r2`, then accurate denominators. |
+| Official DOC-01 freshness | **PENDING new FINAL Ready FULL** | **NOT TESTED ON FINAL SHA** | `docs/internal/PART_DOCUMENTS.md`, both `docs/product/{pl,en}/PARTS.md` and generated-only `docs/browser/index.html` must match exact deterministic canonical Source blocks; no hand-edited HTML. |
+| Final exact-head evidence-only CLOSURE | **PENDING** | **NOT TESTED** | Only after runtime/doc/test fixed SHA, factual ledger-only sync and exact-head Windows CLOSURE. |
+| Owner genuine manual Windows W1–W3/UX-01…14 | **PENDING Owner** | **NOT TESTED / NOT ACCEPTED** | No assistant-generated substitute for Owner real GUI review. |
+| Separate Owner technical FINAL PASS and guarded squash merge | **PENDING** | **NOT AUTHORIZED** | Must be decided independently on verified exact SHA. |
+
+## Native positive/negative proof scope (current source + initial FULL)
+
+A registered **real** Qt/OCCT native Workbench test `pm05f_r2.native_workbench_edit` at initial FULL #3426 ran and passed; its new H2 section uses `makeRevolveSession(90°)` with genuine current Part/OCCT native Face data, tests strict H1 semantic source admission, chooses actual cylinder world-surface aim points and calls real `QTest::mouseClick` via current Viewer Face-only query, then requires a committable Axis Finish, one transaction, typed `StrictCylindricalFaceAxisSource`, Tree placement once under Reference Geometry, Edit/Cancel retained AxisId and cold **v20** re-evaluation on a newly constructed native OCCT kernel. This is not a fabricated Face token or positive native fixture assumption; it is a real executed test. More negative native GUI/repair scenarios and exact-same-carrier partition witnesses remain to be verified; do not infer all 14 UX assertions from one native test.
+
+Frontend source acquisition calls **H1's existing** `part::authorStrictCylindricalFaceAxisSource` through current-generation `PartViewportController::selectedStrictCylindricalFaceAxisSource()`. Only durable stage-semantic Surface enters AxisDraft; current provider/generation and strict singleton status are validated, no token persisted. Selection multiplicity and missing/stale/ambiguous source fail closed. Sketch-Line Axis remains under Sketch, Edge constructor remains default, and the user-facing finite cue represents the native infinite **unoriented** Axis. `AxisDraft` / `AxisId` / Revolve consumer and writer v20 are shared with H1; no new schema or native query API.
+
+## Open gaps, explicitly NOT promoted to PASS
+
+- H1 native same-semantic-carrier multi-bounded-Face *positive* witness remains absent; A refuses partitioned carriers, not an implicit B fixture PASS.
+- Native topological Face orientation reversal and inherited straight-edge Fillet-cylinder positive / native fault+degenerate injection remain deferred native fixtures. Do not conflate purely typed/synthetic negative checks with these real OCCT fixtures.
+- Full H2 edit-to-**different** Face with real multiple semantically unique stage-local cylinders and post-edit downstream Revolve consumption, real suppressed producer repair, pointer/stale-generation negative source acquisition, native non-cylinder refusal and Owner full manual W1–W3/UX-01…14 review require further explicit evidence. A passing happy-path mouse pick alone does not satisfy every UX acceptance item.
+- No source code, tests, docs or Browser outside exact 18 H2 paths, no variant B/C, Axis Reverse, new CAD parser token, new native provider or v21 writer.
