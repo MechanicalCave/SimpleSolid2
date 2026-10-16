@@ -874,16 +874,17 @@ int main(int argc, char* argv[]) {
     auto* axis_cancel = workbench.findChild<QPushButton*>(
         QStringLiteral("axisCancelButton"));
     CHECK(constructor && axis_finish && axis_cancel);
-    CHECK(constructor->count() == 2);
+    CHECK(constructor->count() == 1);
     CHECK(constructor->itemText(0) == QStringLiteral("Edge"));
-    CHECK(constructor->itemText(1) ==
-          QStringLiteral("Cylindrical Face"));
     const auto before_h2_undo = session.undoDepth();
     const auto before_h2_axes = session.document().axes().size();
     CHECK(axis_tool->isEnabled());
     axis_tool->click();
     QApplication::processEvents();
     CHECK(!axis_operations->isHidden());
+    CHECK(constructor->count() == 2);
+    CHECK(constructor->itemText(1) ==
+          QStringLiteral("Cylindrical Face"));
     CHECK(constructor->currentIndex() == 0);
     CHECK(!axis_finish->isEnabled());
     constructor->setCurrentIndex(1);
