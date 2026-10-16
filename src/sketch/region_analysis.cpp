@@ -4054,10 +4054,24 @@ RegionAnalysis2D analyzeRegions(
 
             for (const auto& item :
                  relation.intersections) {
-                // Interior tangencies are arrangement vertices, too.
-                // Material regions remain separated by the geometric
-                // order of outgoing half-edges, not by dropping this
-                // contact or treating point-touch as shared material.
+                // Two complete circles in point-only tangency are
+                // independently bounded material islands. Splitting
+                // their whole-closed-curve semantics into intersection
+                // anchors would invent a connected material boundary
+                // and break the existing durable Circle Profile intent.
+                // In contrast an interior Line/Circle tangency may be
+                // a genuine arrangement vertex for another closed
+                // cell (F2): it MUST NOT be dropped.
+                const bool separate_circle_islands =
+                    item.contact ==
+                        CurveContactKind::tangent &&
+                    !item.first_endpoint &&
+                    !item.second_endpoint &&
+                    model.findCircle(ids[first]) != nullptr &&
+                    model.findCircle(ids[second]) != nullptr;
+                if (separate_circle_islands) {
+                    continue;
+                }
                 sets.unite(first, second);
                 intersections.push_back(
                     TopologyIntersection{
