@@ -435,6 +435,66 @@ parseFeatureSurfaceAddressV14(
     return result;
 }
 
+// The strict cylindrical Face Axis persists a stage-qualified semantic
+// SurfaceReference ONLY. The existing FeatureSurfaceAddress codec is the
+// sole provenance encoder; no new Face token, XYZ or radius record exists.
+nlohmann::json strictFaceAxisSurfaceReferenceJson(
+    const SurfaceReference& source) {
+    if (!source.valid() || !source.stage.feature_id) {
+        return nlohmann::json{};
+    }
+    auto surface = featureSurfaceAddressJson(source.surface);
+    if (surface.empty()) {
+        return nlohmann::json{};
+    }
+    return nlohmann::json{
+        {"stage",
+         {
+             {"kind", "after_feature"},
+             {"feature_id", source.stage.feature_id->serialized()},
+         }},
+        {"surface", std::move(surface)},
+    };
+}
+
+std::optional<SurfaceReference> parseStrictFaceAxisSurfaceReferenceV20(
+    const nlohmann::json& value,
+    FeatureIdCursor feature_cursor,
+    std::string& error) {
+    if (!value.is_object() || value.size() != 2U ||
+        !value.contains("stage") || !value.contains("surface") ||
+        !value["stage"].is_object() ||
+        value["stage"].size() != 2U ||
+        !value["stage"].contains("kind") ||
+        !value["stage"].contains("feature_id") ||
+        !value["stage"]["kind"].is_string() ||
+        value["stage"]["kind"].get<std::string>() !=
+            "after_feature" ||
+        !value["stage"]["feature_id"].is_string()) {
+        error = "Native v20 strict Face Axis requires one semantic Body stage and Surface";
+        return std::nullopt;
+    }
+    const auto feature = FeatureId::parse(
+        value["stage"]["feature_id"].get<std::string>());
+    if (!feature || !feature_cursor.containsAllocated(*feature)) {
+        error = "Native v20 strict Face Axis Body stage FeatureId is invalid";
+        return std::nullopt;
+    }
+    auto surface = parseFeatureSurfaceAddressV14(
+        value["surface"], feature_cursor, 20, error);
+    if (!surface) {
+        return std::nullopt;
+    }
+    SurfaceReference source{
+        BodyStageRef{BodyStageKind::after_feature, *feature},
+        std::move(*surface)};
+    if (!source.valid()) {
+        error = "Native v20 strict Face Axis semantic Surface source is invalid";
+        return std::nullopt;
+    }
+    return source;
+}
+
 nlohmann::json featureCurveAddressJson(
     const FeatureCurveAddress& curve) {
     if (!curve.valid()) {
@@ -1389,6 +1449,23 @@ std::string serializeAuthored(
                     {"kind", "straight_body_edge"},
                     {"name", axis.name},
                     {"source_edge", encoded},
+                    {"visible", axis.visible},
+                });
+        } else if (const auto* face_source =
+                       std::get_if<
+                           StrictCylindricalFaceAxisSource>(
+                           &axis.source)) {
+            auto source = strictFaceAxisSurfaceReferenceJson(
+                face_source->surface);
+            if (source.empty()) {
+                return {};
+            }
+            axes.push_back(
+                {
+                    {"id", axis.id.serialized()},
+                    {"kind", "cylindrical_body_face_strict"},
+                    {"name", axis.name},
+                    {"source_surface", std::move(source)},
                     {"visible", axis.visible},
                 });
         } else {
@@ -3187,6 +3264,24 @@ bool parseAxes(
             }
             source.emplace(StraightMaterialEdgeAxisSource{
                 *material});
+        } else if (kind == "cylindrical_body_face_strict" &&
+                   schema_version >= 20 &&
+                   feature_cursor != nullptr) {
+            if (item.size() != 5U ||
+                !item.contains("source_surface") ||
+                !item["source_surface"].is_object()) {
+                error = "Native Part contains malformed v20 strict cylindrical Face Axis";
+                return false;
+            }
+            const auto surface =
+                parseStrictFaceAxisSurfaceReferenceV20(
+                    item["source_surface"], *feature_cursor,
+                    error);
+            if (!surface) {
+                return false;
+            }
+            source.emplace(StrictCylindricalFaceAxisSource{
+                std::move(*surface)});
         } else {
             // Older version records may never author the new source.
             error =
@@ -4023,6 +4118,23 @@ std::optional<std::string> buildPartBytes(
     const std::filesystem::path& path,
     const PartDocument& document,
     PartSaveResult& failure_result) {
+    // Until the separately governed 19th header path is integrated and
+    // current_schema_version is bumped to 20, a new Face source MUST NOT
+    // be mislabeled and serialized as a native v19 document.
+    if (PartDocumentStore::current_schema_version < 20 &&
+        std::any_of(
+            document.axes().begin(), document.axes().end(),
+            [](const PartAxis& axis) {
+                return std::holds_alternative<
+                    StrictCylindricalFaceAxisSource>(
+                    axis.source);
+            })) {
+        failure_result = saveFailure(
+            PartStoreErrorCode::unsupported_schema,
+            "Native strict cylindrical Face Axis requires schema v20",
+            path);
+        return std::nullopt;
+    }
     const auto authored =
         serializeAuthored(document);
     const auto built =

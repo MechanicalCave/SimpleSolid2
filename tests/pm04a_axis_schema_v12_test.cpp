@@ -137,7 +137,7 @@ std::string schema11FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        19);
+        20);
 
     part::AxisIdCursor cursor;
     const auto first = cursor.allocate();
@@ -402,7 +402,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 19);
+            .domain_schema_version == 20);
 
     const auto authored =
         nlohmann::json::parse(
@@ -423,6 +423,74 @@ int main() {
             .at("source_entity_id")
             .get<std::string>() ==
         regular_line.serialized());
+
+    // H1 v20 fail-closed native reader: a new Face source cannot be
+    // smuggled into an older schema or accepted with malformed provenance.
+    // Reuse the REAL current-schema authored Part payload so the negative
+    // reaches the Axis-specific reader rather than a synthetic document.
+    const auto rejectFaceAxisPayload = [&](
+        int schema_version,
+        const nlohmann::json& axis_source,
+        const char* filename) {
+        auto malformed_authored = authored;
+        auto& first_axis = malformed_authored["axes"].at(0);
+        first_axis.erase("source_sketch_id");
+        first_axis.erase("source_entity_id");
+        first_axis["kind"] = "cylindrical_body_face_strict";
+        first_axis["source_surface"] = axis_source;
+        auto text = malformed_authored.dump(2);
+        text.push_back('\n');
+        const auto built =
+            persistence::buildNativeDocumentContainer(
+                persistence::NativeDocumentDescriptor{
+                    "part",
+                    package.package->descriptor.document_id,
+                    schema_version},
+                text);
+        CHECK(built.ok());
+        const auto path = temp.path / filename;
+        writeBytes(path, *built.bytes);
+        const auto refused = store.load(path);
+        CHECK(!refused.ok());
+        CHECK(!refused.document);
+    };
+    rejectFaceAxisPayload(
+        20, nlohmann::json::object(),
+        "H1FaceMissingStageAndSurfaceV20.ss2part");
+    rejectFaceAxisPayload(
+        19, nlohmann::json::object(),
+        "H1FaceSourceIsForbiddenInV19.ss2part");
+
+    // A real v19 native Part with legacy Sketch Line sources must retain
+    // its exact Axis records and stable AxisId under the new v20 reader.
+    // Only the subsequent writer upgrade changes the file descriptor.
+    auto legacy_v19_text = authored.dump(2);
+    legacy_v19_text.push_back('\n');
+    const auto old_container =
+        persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",
+                package.package->descriptor.document_id, 19},
+            legacy_v19_text);
+    CHECK(old_container.ok());
+    const auto old_path = temp.path / "AxisLegacyV19.ss2part";
+    writeBytes(old_path, *old_container.bytes);
+    auto old_loaded = store.load(old_path);
+    CHECK(old_loaded.ok());
+    CHECK(old_loaded.document);
+    CHECK(old_loaded.document->axes() == document.axes());
+    CHECK(old_loaded.document->axisIdCursor() ==
+          document.axisIdCursor());
+    CHECK(store.save(
+        old_path, *old_loaded.document, *old_loaded.checkpoint).ok());
+    const auto rewritten_v19 =
+        persistence::readNativeDocumentContainer(old_path);
+    CHECK(rewritten_v19.ok());
+    CHECK(rewritten_v19.package->descriptor.domain_schema_version == 20);
+    const auto rewritten_v19_authored = nlohmann::json::parse(
+        rewritten_v19.package->authored_json);
+    CHECK(rewritten_v19_authored.at("axes") ==
+          authored.at("axes"));
 
     const auto reloaded =
         store.load(current_path);
@@ -513,7 +581,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 19);
+            .domain_schema_version == 20);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);

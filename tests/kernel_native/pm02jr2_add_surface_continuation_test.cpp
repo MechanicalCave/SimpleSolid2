@@ -1522,7 +1522,7 @@ void verifyPartIntegration() {
                                     // Legacy v15/v16 rejection fixtures below
                                     // retain their original version semantics.
                                     CHECK(package.package->descriptor
-                                              .domain_schema_version == 19);
+                                              .domain_schema_version == 20);
                                     auto authored = nlohmann::json::parse(
                                         package.package->authored_json);
                                     const auto ref_json =

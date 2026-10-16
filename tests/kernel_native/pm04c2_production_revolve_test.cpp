@@ -2,12 +2,16 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/part/axis_evaluation.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/persistence/native_document_container.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -865,6 +869,293 @@ void observeC1P1B0NativeFaceSurfaceAdmission(
               << " authored_axis=NOT_IMPLEMENTED\n";
 }
 
+// H1 only: real same-stage native Face -> ONE strict persisted semantic
+// Surface source. This does NOT treat equal cylinders as the same source
+// and does not change the feature evaluator or the existing Axis tool.
+void verifyH1StrictCylindricalFaceAxisAdmission(
+    const part::PartDocument& document,
+    const part::PartEvaluation& evaluation,
+    kernel_occt::OcctSolidModelingKernel& provider,
+    const char* fixture,
+    bool require_a_positive) {
+    CHECK(evaluation.source_revision == document.revision());
+    CHECK(evaluation.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluation.current_topology);
+    CHECK(evaluation.current_topology->complete());
+    const auto stage = evaluation.current_topology->stage;
+    CHECK(stage.valid());
+    CHECK(stage.kind == part::BodyStageKind::after_feature);
+
+    std::size_t queried = 0U;
+    std::size_t strict_admitted = 0U;
+    std::size_t rejected = 0U;
+    std::size_t noncylinders = 0U;
+    bool saved_and_reopened_v20 = false;
+    for (const auto& picked : evaluation.current_topology->faces) {
+        CHECK(picked.runtime_token.valid());
+        const auto bound =
+            provider.bindExactCylindricalFaceToBody(
+                evaluation.body_solid, picked.runtime_token);
+        CHECK(bound);
+        const auto native =
+            provider.queryExactCylindricalFaceAxis(
+                evaluation.body_solid, *bound);
+        CHECK(native.status ==
+                  kernel::ExactCylindricalFaceAxisStatus::ok ||
+              native.status ==
+                  kernel::ExactCylindricalFaceAxisStatus::
+                      non_cylindrical_surface);
+        ++queried;
+        const auto admitted =
+            part::authorStrictCylindricalFaceAxisSource(
+                document, stage, picked.runtime_token,
+                evaluation, provider);
+        if (native.status ==
+                kernel::ExactCylindricalFaceAxisStatus::
+                    non_cylindrical_surface) {
+            ++noncylinders;
+            CHECK(!admitted.ok());
+            CHECK(!admitted.source);
+            CHECK(!admitted.line);
+        }
+        if (!admitted.ok()) {
+            ++rejected;
+            CHECK(!admitted.source.has_value());
+            CHECK(!admitted.line.has_value());
+            continue;
+        }
+
+        CHECK(native.ok());
+        CHECK(admitted.source->surface.stage == stage);
+        CHECK(admitted.source->surface.valid());
+        CHECK(admitted.line->valid());
+        CHECK(admitted.status ==
+              part::AxisEvaluationStatus::resolved);
+        ++strict_admitted;
+
+        const auto rechecked =
+            part::resolveStrictCylindricalFaceAxisLine(
+                document, admitted.source->surface,
+                evaluation, provider);
+        CHECK(rechecked.status ==
+              part::AxisEvaluationStatus::resolved);
+        CHECK(rechecked.valid());
+        CHECK(rechecked.line);
+        CHECK(*rechecked.line == *admitted.line);
+
+        // Real-document identity is not borrowed from a similar geometry.
+        // Even the identical semantic source is not current evidence for
+        // a different owning DocumentId; never rebind by Shape equality.
+        auto wrong_document = part::PartDocument::restore(
+            core::DocumentId::generate(),
+            document.state(), document.revision());
+        CHECK(wrong_document.ok());
+        const auto wrong_owner =
+            part::resolveStrictCylindricalFaceAxisLine(
+                *wrong_document.document,
+                admitted.source->surface,
+                evaluation, provider);
+        CHECK(wrong_owner.status ==
+              part::AxisEvaluationStatus::blocked);
+        CHECK(wrong_owner.diagnostic ==
+              part::AxisEvaluationDiagnostic::stale_part_evaluation);
+        CHECK(!wrong_owner.line);
+
+        // Missing source stage never falls back to current/final Body,
+        // despite a true native analytic Face in the same evaluation.
+        auto new_feature_cursor =
+            document.state().body.next_feature_id;
+        const auto absent_feature = new_feature_cursor.allocate();
+        CHECK(absent_feature);
+        auto wrong_stage = admitted.source->surface;
+        wrong_stage.stage.feature_id = *absent_feature;
+        CHECK(wrong_stage.valid());
+        const auto unresolved_stage =
+            part::resolveStrictCylindricalFaceAxisLine(
+                document, wrong_stage, evaluation, provider);
+        CHECK(unresolved_stage.status ==
+              part::AxisEvaluationStatus::blocked);
+        CHECK(unresolved_stage.diagnostic ==
+              part::AxisEvaluationDiagnostic::support_stage_unavailable);
+        CHECK(!unresolved_stage.line);
+
+        // Persisted Part Axis value graph is still just AxisId and
+        // semantic SurfaceReference, never the picked provider token.
+        auto state = document.state();
+        const auto id = state.next_axis_id.allocate();
+        CHECK(id);
+        state.axes.emplace_back(
+            *id, "H1 Strict Cylindrical Face Native Probe",
+            part::PartAxisSource{*admitted.source}, true);
+        auto restored = part::PartDocument::restore(
+            document.documentId(), std::move(state),
+            document.revision());
+        CHECK(restored.ok());
+        const part::AxisReference authored{
+            part::AuthoredAxisReference{*id}};
+        const auto resolved = part::resolveAxisReference(
+            *restored.document, authored,
+            &evaluation, nullptr, nullptr, &provider);
+        CHECK(resolved.status ==
+              part::AxisEvaluationStatus::resolved);
+        CHECK(resolved.valid());
+        CHECK(resolved.line);
+        CHECK(*resolved.line == *admitted.line);
+        CHECK(resolved.required_body_stage ==
+              std::optional<part::BodyStageRef>{stage});
+
+        // Exercise the ACTUAL headless application command/transaction,
+        // not just direct Part authored-state restoration. One create =
+        // one Undo step; a redo restores the identical AxisId/source.
+        auto document_copy = part::PartDocument::restore(
+            document.documentId(), document.state(),
+            document.revision());
+        CHECK(document_copy.ok());
+        application::DocumentSession session{
+            std::filesystem::path{"h1_native_axis_probe.ss2part"},
+            std::move(*document_copy.document)};
+        const auto before_revision = session.document().revision();
+        const auto before_axes = session.document().axes().size();
+        const auto before_undo = session.undoDepth();
+        const auto created = session.execute(
+            application::CreateAxisCommand{
+                part::PartAxisSource{*admitted.source},
+                before_revision, {}, true},
+            provider);
+        CHECK(created.ok());
+        CHECK(created.axis_id);
+        CHECK(session.document().axes().size() == before_axes + 1U);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        CHECK(session.document().findAxis(*created.axis_id));
+        const auto created_value =
+            *session.document().findAxis(*created.axis_id);
+        CHECK(created_value.source ==
+              part::PartAxisSource{*admitted.source});
+        CHECK(session.undo().ok());
+        CHECK(session.document().axes().size() == before_axes);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findAxis(*created.axis_id));
+        CHECK(session.document().findAxis(*created.axis_id)->source ==
+              created_value.source);
+
+        // A headless H1 Face source must use the ordinary Axis Edit
+        // command without changing AxisId or adding Undo for a no-op.
+        const auto edit_revision = session.document().revision();
+        const auto edit_undo = session.undoDepth();
+        const auto unchanged_edit = session.execute(
+            application::EditAxisCommand{
+                *created.axis_id,
+                part::PartAxisSource{*admitted.source},
+                edit_revision},
+            provider);
+        CHECK(unchanged_edit.ok());
+        CHECK(!unchanged_edit.changed);
+        CHECK(session.document().revision() == edit_revision);
+        CHECK(session.undoDepth() == edit_undo);
+        CHECK(session.document().findAxis(*created.axis_id)->source ==
+              created_value.source);
+
+        // Re-source to an absent semantic producer stage must not
+        // mutate the existing authored Face Axis or consume history.
+        auto absent_source = *admitted.source;
+        absent_source.surface = wrong_stage;
+        const auto rejected_edit = session.execute(
+            application::EditAxisCommand{
+                *created.axis_id,
+                part::PartAxisSource{absent_source},
+                edit_revision},
+            provider);
+        CHECK(!rejected_edit.ok());
+        CHECK(session.document().revision() == edit_revision);
+        CHECK(session.undoDepth() == edit_undo);
+        CHECK(session.document().findAxis(*created.axis_id)->source ==
+              created_value.source);
+
+        // Even a geometrically valid Face source never rescues an Edit
+        // dispatched against the superseded pre-Create revision.
+        const auto stale_edit = session.execute(
+            application::EditAxisCommand{
+                *created.axis_id,
+                part::PartAxisSource{*admitted.source},
+                before_revision},
+            provider);
+        CHECK(!stale_edit.ok());
+        CHECK(session.document().revision() == edit_revision);
+        CHECK(session.undoDepth() == edit_undo);
+        CHECK(session.document().findAxis(*created.axis_id)->source ==
+              created_value.source);
+
+        // Genuine native v20 Save / Close / Reopen of a real Part-owned
+        // strict Face Axis, on exactly one positive source per fixture.
+        // No native Face token, OCCT shape, radius or cached axis geometry
+        // may appear in the authored serialized source.
+        if (!saved_and_reopened_v20) {
+            static unsigned serial = 0U;
+            const auto native_path =
+                std::filesystem::temp_directory_path() /
+                ("ss2_h1_native_face_v20_" +
+                 std::to_string(++serial) + ".ss2part");
+            part::PartDocumentStore store;
+            const auto saved =
+                store.createNew(native_path, session.document());
+            CHECK(saved.ok());
+            const auto package =
+                persistence::readNativeDocumentContainer(
+                    native_path);
+            CHECK(package.ok());
+            CHECK(package.package->descriptor.domain_schema_version == 20);
+            const auto reopened = store.load(native_path);
+            CHECK(reopened.ok());
+            CHECK(reopened.document);
+            CHECK(reopened.document->documentId() ==
+                  session.document().documentId());
+            const auto* reopened_axis =
+                reopened.document->findAxis(*created.axis_id);
+            CHECK(reopened_axis != nullptr);
+            CHECK(reopened_axis->source == created_value.source);
+            CHECK(reopened_axis->visible == created_value.visible);
+
+            // Cold provider/native Body generation: never use the
+            // pre-save runtime Face handle as a persistent source.
+            const auto rebuilt =
+                part::evaluatePart(*reopened.document, provider);
+            const auto rebuilt_axis = part::resolveAxisReference(
+                *reopened.document,
+                part::AxisReference{
+                    part::AuthoredAxisReference{*created.axis_id}},
+                &rebuilt, nullptr, nullptr, &provider);
+            CHECK(rebuilt_axis.status ==
+                  part::AxisEvaluationStatus::resolved);
+            CHECK(rebuilt_axis.valid());
+            CHECK(rebuilt_axis.line);
+            CHECK(rebuilt_axis.required_body_stage ==
+                  std::optional<part::BodyStageRef>{stage});
+            std::error_code remove_error;
+            CHECK(std::filesystem::remove(native_path, remove_error));
+            CHECK(!remove_error);
+            saved_and_reopened_v20 = true;
+        }
+    }
+    CHECK(queried == evaluation.current_topology->faces.size());
+    CHECK(queried == strict_admitted + rejected);
+    CHECK(noncylinders <= rejected);
+    if (require_a_positive) {
+        CHECK(strict_admitted > 0U);
+        CHECK(noncylinders > 0U);
+    }
+    std::cout << "RG02C_C1_P1B1_H1_STRICT_FACE"
+              << " fixture=" << fixture
+              << " actual_faces=" << queried
+              << " strict_native_admitted=" << strict_admitted
+              << " refused=" << rejected
+              << " native_noncylinders=" << noncylinders
+              << " multi_face_carrier_accepted=NEVER"
+              << " axis_source=SEMANTIC_ONLY"
+              << " v20_cold_rebuild_reopened=" << saved_and_reopened_v20
+              << '\n';
+}
+
 void verifyCylinderEdgeFeature(
     const part::PartDocument& source,
     const part::MaterialEdgeReference& edge,
@@ -915,6 +1206,10 @@ void verifyCylinderEdgeFeature(
         false);
     observeC1P1B0NativeFaceSurfaceAdmission(
         evaluated, kernel,
+        is_fillet ? "circular-rim-fillet" : "circular-rim-chamfer",
+        false);
+    verifyH1StrictCylindricalFaceAxisAdmission(
+        *restored.document, evaluated, kernel,
         is_fillet ? "circular-rim-fillet" : "circular-rim-chamfer",
         false);
     // The surviving native cylindrical patch, if any, is read through
@@ -1382,6 +1677,8 @@ int main() {
             evaluated, kernel, "revolve-full-360", {1.0, 0.0, 0.0}, true);
         observeC1P1B0NativeFaceSurfaceAdmission(
             evaluated, kernel, "revolve-full-360", true);
+        verifyH1StrictCylindricalFaceAxisAdmission(
+            document, evaluated, kernel, "revolve-full-360", true);
         const auto g0_full_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-full-360-part");
@@ -1493,6 +1790,8 @@ int main() {
             {0.0, 0.0, 1.0}, false);
         observeC1P1B0NativeFaceSurfaceAdmission(
             evaluated, kernel, "extrude-circle-full-cylinder", true);
+        verifyH1StrictCylindricalFaceAxisAdmission(
+            extrude, evaluated, kernel, "extrude-circle-full-cylinder", true);
         const auto repeated = part::evaluatePart(extrude, kernel);
         CHECK(repeated.body_status ==
               part::BodyEvaluationStatus::up_to_date);
@@ -1550,6 +1849,9 @@ int main() {
             {0.0, 0.0, 1.0}, false);
         observeC1P1B0NativeFaceSurfaceAdmission(
             half_evaluation, kernel, "extrude-cylinder-half-cut", true);
+        verifyH1StrictCylindricalFaceAxisAdmission(
+            half_document, half_evaluation, kernel,
+            "extrude-cylinder-half-cut", false);
         const auto half_counts = observeRevolvePartVertices(
             half_catalog, "V08-half-cylinder-cut");
         CHECK(half_counts.native == 6U);
@@ -1671,6 +1973,8 @@ int main() {
             evaluated, kernel, "revolve-partial-90", {1.0, 0.0, 0.0}, true);
         observeC1P1B0NativeFaceSurfaceAdmission(
             evaluated, kernel, "revolve-partial-90", true);
+        verifyH1StrictCylindricalFaceAxisAdmission(
+            partial, evaluated, kernel, "revolve-partial-90", true);
         const auto g0_partial_part = observeRevolvePartVertices(
             *feature.result_topology,
             "V04-partial-90-part");
@@ -1728,6 +2032,218 @@ int main() {
         CHECK(authorable_edges > 0U);
         CHECK(authorable_lines > 0U);
         CHECK(cap_side_curves > 0U);
+    }
+
+    // H1 positive Edit: two DIFFERENT real current cylindrical Face
+    // carriers from an annular 90-degree native Revolve. No geometric
+    // equality rebinding, provider ordinal or invented Surface identity.
+    {
+        const auto document = makePartRevolve(
+            core::BuiltinReferenceRole::x_axis,
+            {10.0, 3.0}, {20.0, 10.0}, pi / 2.0);
+        const auto evaluated = part::evaluatePart(document, kernel);
+        CHECK(evaluated.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(evaluated.current_topology);
+        CHECK(evaluated.current_topology->complete());
+        const auto stage = evaluated.current_topology->stage;
+        std::vector<part::StrictCylindricalFaceAxisSource> sources;
+        for (const auto& face : evaluated.current_topology->faces) {
+            const auto authored = part::authorStrictCylindricalFaceAxisSource(
+                document, stage, face.runtime_token, evaluated, kernel);
+            if (!authored.ok()) {
+                CHECK(!authored.source);
+                continue;
+            }
+            CHECK(authored.source);
+            CHECK(authored.line && authored.line->valid());
+            if (std::find(sources.begin(), sources.end(),
+                          *authored.source) == sources.end()) {
+                sources.push_back(*authored.source);
+            }
+        }
+        CHECK(sources.size() >= 2U);
+        CHECK(sources[0].surface != sources[1].surface);
+
+        auto copy = part::PartDocument::restore(
+            document.documentId(), document.state(), document.revision());
+        CHECK(copy.ok());
+        application::DocumentSession session{
+            {}, std::move(*copy.document)};
+        const auto created = session.execute(
+            application::CreateAxisCommand{
+                part::PartAxisSource{sources[0]},
+                session.document().revision(),
+                "H1 Face Edit Distinct Carrier", true},
+            kernel);
+        CHECK(created.ok() && created.axis_id);
+        const auto axis_id = *created.axis_id;
+        const auto original_undo = session.undoDepth();
+        const auto original_revision = session.document().revision();
+        const auto edited = session.execute(
+            application::EditAxisCommand{
+                axis_id, part::PartAxisSource{sources[1]},
+                original_revision},
+            kernel);
+        CHECK(edited.ok() && edited.changed);
+        CHECK(session.document().revision() != original_revision);
+        CHECK(session.undoDepth() == original_undo + 1U);
+        CHECK(session.document().findAxis(axis_id));
+        CHECK(session.document().findAxis(axis_id)->source ==
+              part::PartAxisSource{sources[1]});
+        const auto after = part::evaluatePart(session.document(), kernel);
+        const auto resolved = part::resolveAxisReference(
+            session.document(),
+            part::AxisReference{part::AuthoredAxisReference{axis_id}},
+            &after, nullptr, nullptr, &kernel);
+        CHECK(resolved.status == part::AxisEvaluationStatus::resolved);
+        CHECK(resolved.line && resolved.line->valid());
+        CHECK(resolved.required_body_stage ==
+              std::optional<part::BodyStageRef>{stage});
+        CHECK(session.undo().ok());
+        CHECK(session.document().findAxis(axis_id)->source ==
+              part::PartAxisSource{sources[0]});
+        CHECK(session.redo().ok());
+        CHECK(session.document().findAxis(axis_id)->source ==
+              part::PartAxisSource{sources[1]});
+        std::cout << "RG02C_C1_P1B1_H1_EDIT"
+                  << " distinct_strict_face_sources=" << sources.size()
+                  << " axis_id_preserved=1"
+                  << " native_resolved=1 undo_redo=1\n";
+    }
+
+    // H1 actual downstream consumer: a real full cylinder's strict Face
+    // Axis drives a later Revolve CUT, producing a valid different native
+    // Body. Verify v20 Save/Reopen and cold provider recomputation of BOTH
+    // the Axis and its dependent Feature, not only an isolated Axis line.
+    {
+        const auto document = makePartRevolve(
+            core::BuiltinReferenceRole::x_axis,
+            {10.0, 0.0}, {20.0, 10.0}, full_turn);
+        const auto initial = part::evaluatePart(document, kernel);
+        CHECK(initial.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(initial.current_topology);
+        CHECK(initial.current_topology->complete());
+        std::optional<part::StrictCylindricalFaceAxisSource> cylinder;
+        for (const auto& face : initial.current_topology->faces) {
+            const auto selected = part::authorStrictCylindricalFaceAxisSource(
+                document, initial.current_topology->stage,
+                face.runtime_token, initial, kernel);
+            if (selected.ok()) {
+                CHECK(selected.source && selected.line);
+                cylinder = *selected.source;
+                break;
+            }
+        }
+        CHECK(cylinder);
+        const auto source_stage = cylinder->surface.stage;
+        auto copy = part::PartDocument::restore(
+            document.documentId(), document.state(), document.revision());
+        CHECK(copy.ok());
+        application::DocumentSession session{
+            {}, std::move(*copy.document)};
+        const auto axis = session.execute(
+            application::CreateAxisCommand{
+                part::PartAxisSource{*cylinder},
+                session.document().revision(),
+                "H1 Native Face Consumer Axis", true},
+            kernel);
+        CHECK(axis.ok() && axis.axis_id);
+        const auto axis_id = *axis.axis_id;
+        const auto sketch_created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(sketch_created.ok() && sketch_created.sketch_id);
+        const auto sketch_id = *sketch_created.sketch_id;
+        const auto rectangle_created = session.execute(
+            application::AddSketchRectangleCommand{
+                sketch_id, session.document().revision(),
+                {12.0, 0.0}, {18.0, 5.0},
+                sketch::EntityRole::regular, false});
+        CHECK(rectangle_created.ok());
+        const auto* sketch_model = session.document().findSketch(sketch_id);
+        CHECK(sketch_model);
+        const auto regions = sketch::analyzeRegions(sketch_model->model);
+        CHECK(regions.complete() && regions.regions.size() == 1U);
+        const auto intent =
+            part::makeProfileRegionIntent(regions.regions.front());
+        CHECK(intent);
+        const auto profile = session.execute(
+            application::CreateProfileCommand{
+                sketch_id, session.document().revision(), *intent});
+        CHECK(profile.ok() && profile.profile_id);
+
+        auto state = session.document().state();
+        const auto consumer_id = state.body.next_feature_id.allocate();
+        CHECK(consumer_id);
+        state.body.features.push_back(part::PartFeature{
+            *consumer_id, "H1 Face Axis Driven Revolve Cut", false,
+            part::RevolveFeature{
+                *profile.profile_id,
+                part::AxisReference{part::AuthoredAxisReference{axis_id}},
+                part::RevolveOperation::cut,
+                part::OneSidedRevolveExtent{
+                    core::AngleValue{full_turn}, false}}});
+        auto authored = part::PartDocument::restore(
+            session.document().documentId(), std::move(state),
+            session.document().revision());
+        CHECK(authored.ok());
+        const auto evaluated = part::evaluatePart(
+            *authored.document, kernel);
+        CHECK(evaluated.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(evaluated.features.size() == 2U);
+        CHECK(evaluated.features.back().status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(evaluated.features.back().result_topology);
+        CHECK(evaluated.features.back().result_topology->complete());
+        const auto resolved = part::resolveAxisReference(
+            *authored.document,
+            part::AxisReference{part::AuthoredAxisReference{axis_id}},
+            &evaluated, nullptr, nullptr, &kernel);
+        CHECK(resolved.status == part::AxisEvaluationStatus::resolved);
+        CHECK(resolved.line && resolved.line->valid());
+        CHECK(resolved.required_body_stage ==
+              std::optional<part::BodyStageRef>{source_stage});
+
+        const auto native_path =
+            std::filesystem::temp_directory_path() /
+            "ss2_h1_native_face_axis_revolve_consumer_v20.ss2part";
+        part::PartDocumentStore store;
+        const auto saved = store.createNew(native_path, *authored.document);
+        CHECK(saved.ok());
+        const auto native =
+            persistence::readNativeDocumentContainer(native_path);
+        CHECK(native.ok());
+        CHECK(native.package->descriptor.domain_schema_version == 20);
+        const auto reopened = store.load(native_path);
+        CHECK(reopened.ok() && reopened.document);
+        CHECK(reopened.document->findAxis(axis_id));
+        CHECK(reopened.document->findAxis(axis_id)->source ==
+              part::PartAxisSource{*cylinder});
+        const auto cold = part::evaluatePart(*reopened.document, kernel);
+        CHECK(cold.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(cold.features.size() == 2U);
+        CHECK(cold.features.back().status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(cold.features.back().result_topology);
+        CHECK(cold.features.back().result_topology->complete());
+        const auto cold_axis = part::resolveAxisReference(
+            *reopened.document,
+            part::AxisReference{part::AuthoredAxisReference{axis_id}},
+            &cold, nullptr, nullptr, &kernel);
+        CHECK(cold_axis.status == part::AxisEvaluationStatus::resolved);
+        CHECK(cold_axis.line && cold_axis.line->valid());
+        CHECK(cold_axis.required_body_stage ==
+              std::optional<part::BodyStageRef>{source_stage});
+        std::error_code remove_error;
+        CHECK(std::filesystem::remove(native_path, remove_error));
+        CHECK(!remove_error);
+        std::cout << "RG02C_C1_P1B1_H1_CONSUMER"
+                  << " native_face_axis_revolve_cut=1"
+                  << " v20_reopen_cold_revolve=1\n";
     }
 
     std::cout

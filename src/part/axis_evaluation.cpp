@@ -190,7 +190,8 @@ AxisEvaluation resolveAxisReference(
     const AxisReference& reference,
     const PartEvaluation* part_evaluation,
     const DatumEvaluation* datum_evaluation,
-    kernel::IExactBoundedEdgeGeometryQuery* provider) noexcept {
+    kernel::IExactBoundedEdgeGeometryQuery* provider,
+    kernel::IExactCylindricalFaceAxisQuery* face_provider) noexcept {
     if (!reference.valid()) {
         return unresolved(
             AxisEvaluationStatus::unsupported,
@@ -219,9 +220,30 @@ AxisEvaluation resolveAxisReference(
             AxisEvaluationDiagnostic::missing_axis);
     }
 
-    // Only Edge-source Axes are resolved using the real strict native
-    // provider, on the correct Body stage. Legacy Sketch-Line Axis
-    // evaluation follows its original path unchanged.
+    // Only native Body source kinds need exact provider geometry. Legacy
+    // Sketch-Line evaluation is preserved as an independent source path.
+    // Both query interfaces are provider-neutral; do not import OCCT types.
+    if (const auto* face =
+            std::get_if<StrictCylindricalFaceAxisSource>(
+                &axis->source)) {
+        auto* exact = face_provider;
+        if (exact == nullptr && provider != nullptr) {
+            // Existing Part/Revolve callers pass the exact Edge capability;
+            // the SAME kernel instance may additionally support P1-A.
+            exact = dynamic_cast<
+                kernel::IExactCylindricalFaceAxisQuery*>(provider);
+        }
+        if (part_evaluation == nullptr || exact == nullptr) {
+            return unresolved(
+                AxisEvaluationStatus::blocked,
+                AxisEvaluationDiagnostic::
+                    cylindrical_face_native_geometry_unavailable,
+                face->surface.stage);
+        }
+        return resolveStrictCylindricalFaceAxisLine(
+            document, face->surface,
+            *part_evaluation, *exact);
+    }
     const auto* sketch_source =
         std::get_if<SketchLineAxisSource>(&axis->source);
     if (sketch_source == nullptr) {
@@ -380,6 +402,256 @@ AxisEvaluation resolveAxisReference(
             start,
             direction},
         stage);
+}
+
+// H1 strict option A: durable Surface identity plus a strict singleton
+// bounded Face at the ORIGINAL declared stage. The Surface alone never
+// authorizes a multi-Face analytic cylinder, even when all patches are
+// coaxial. Transient Face tokens and world geometry remain disposable.
+AxisEvaluation resolveStrictCylindricalFaceAxisLine(
+    const PartDocument& document,
+    const SurfaceReference& source,
+    const PartEvaluation& evaluation,
+    kernel::IExactCylindricalFaceAxisQuery& provider) noexcept {
+    using ReferenceStatus = kernel::ReferenceStatus;
+    if (!source.valid()) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::invalid_reference);
+    }
+    if (evaluation.source_revision != document.revision() ||
+        !evaluation.source_document_id ||
+        *evaluation.source_document_id != document.documentId() ||
+        // During actual sequential Revolve feature evaluation, prefix
+        // Body status is still 'empty', even though earlier Feature stages
+        // have real current solids and catalogues. The exact source stage
+        // (checked below) is authority; final unavailable is never used.
+        evaluation.body_status == BodyEvaluationStatus::unavailable) {
+        return unresolved(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::stale_part_evaluation,
+            source.stage);
+    }
+    const auto* feature = evaluation.findFeature(
+        *source.stage.feature_id);
+    if (feature == nullptr ||
+        feature->status != FeatureEvaluationStatus::up_to_date ||
+        !feature->result_solid ||
+        !feature->result_topology ||
+        feature->result_topology->stage != source.stage ||
+        !feature->result_topology->complete()) {
+        return unresolved(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::support_stage_unavailable,
+            source.stage);
+    }
+
+    const auto& catalog = *feature->result_topology;
+    const auto matches = [&source](
+        const FeatureSurfaceResolution& carrier) {
+        return carrier.address == source.surface;
+    };
+    const auto count = std::count_if(
+        catalog.surfaces.begin(), catalog.surfaces.end(), matches);
+    if (count == 0) {
+        return unresolved(
+            AxisEvaluationStatus::missing,
+            AxisEvaluationDiagnostic::cylindrical_face_missing,
+            source.stage);
+    }
+    if (count != 1) {
+        return unresolved(
+            AxisEvaluationStatus::ambiguous,
+            AxisEvaluationDiagnostic::cylindrical_face_ambiguous,
+            source.stage);
+    }
+    const auto carrier = std::find_if(
+        catalog.surfaces.begin(), catalog.surfaces.end(), matches);
+    if (carrier->status == ReferenceStatus::missing) {
+        return unresolved(
+            AxisEvaluationStatus::missing,
+            AxisEvaluationDiagnostic::cylindrical_face_missing,
+            source.stage);
+    }
+    if (carrier->status != ReferenceStatus::resolved) {
+        return unresolved(
+            carrier->status == ReferenceStatus::ambiguous
+                ? AxisEvaluationStatus::ambiguous
+                : AxisEvaluationStatus::unsupported,
+            carrier->status == ReferenceStatus::ambiguous
+                ? AxisEvaluationDiagnostic::cylindrical_face_ambiguous
+                : AxisEvaluationDiagnostic::cylindrical_face_not_cylinder,
+            source.stage);
+    }
+    if (carrier->surface_kind != kernel::SurfaceKind::cylinder) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::cylindrical_face_not_cylinder,
+            source.stage);
+    }
+    if (carrier->strict_face_status !=
+            ReferenceStatus::resolved ||
+        carrier->candidate_face_count != 1U ||
+        carrier->current_faces.size() != 1U ||
+        !carrier->current_faces.front().valid()) {
+        // This intentionally refuses a uniquely resolved Surface whose
+        // strict bounded Face has partitioned into multiple patches.
+        return unresolved(
+            AxisEvaluationStatus::ambiguous,
+            AxisEvaluationDiagnostic::cylindrical_face_ambiguous,
+            source.stage);
+    }
+    const auto token = carrier->current_faces.front();
+    const auto same_face = [token](
+        const BodyFaceTopologyRecord& face) {
+        return face.runtime_token == token;
+    };
+    if (std::count_if(
+            catalog.faces.begin(), catalog.faces.end(),
+            same_face) != 1) {
+        return unresolved(
+            AxisEvaluationStatus::ambiguous,
+            AxisEvaluationDiagnostic::cylindrical_face_ambiguous,
+            source.stage);
+    }
+    const auto face = std::find_if(
+        catalog.faces.begin(), catalog.faces.end(), same_face);
+    if (!face->semantic_address ||
+        face->surface_candidates.size() != 1U ||
+        face->surface_candidates.front() != source.surface) {
+        return unresolved(
+            AxisEvaluationStatus::ambiguous,
+            AxisEvaluationDiagnostic::cylindrical_face_ambiguous,
+            source.stage);
+    }
+
+    // P1-A alone may mint a scoped native Face bound to this exact Body
+    // generation; never trust the catalog's token as durable identity.
+    const auto native = provider.bindExactCylindricalFaceToBody(
+        feature->result_solid, token);
+    if (!native || !native->valid()) {
+        return unresolved(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::
+                cylindrical_face_native_geometry_unavailable,
+            source.stage);
+    }
+    const auto geometry = provider.queryExactCylindricalFaceAxis(
+        feature->result_solid, *native);
+    if (!geometry.ok()) {
+        return unresolved(
+            geometry.status ==
+                kernel::ExactCylindricalFaceAxisStatus::
+                    non_cylindrical_surface
+                ? AxisEvaluationStatus::unsupported
+                : AxisEvaluationStatus::blocked,
+            geometry.status ==
+                kernel::ExactCylindricalFaceAxisStatus::
+                    non_cylindrical_surface
+                ? AxisEvaluationDiagnostic::
+                    cylindrical_face_not_cylinder
+                : AxisEvaluationDiagnostic::
+                    cylindrical_face_native_geometry_unavailable,
+            source.stage);
+    }
+    const ResolvedAxisLine line{
+        geometry.geometry->point_on_axis_world_mm,
+        geometry.geometry->unoriented_unit_direction};
+    if (!line.valid()) {
+        return unresolved(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::
+                cylindrical_face_native_geometry_unavailable,
+            source.stage);
+    }
+    return resolved(line, source.stage);
+}
+
+// A user pick is a transient bounded Face. Author ONLY the one durable
+// SurfaceReference which was actually certified for this exact Face/Body;
+// geometric equality never selects or repairs semantic provenance.
+StrictCylindricalFaceAxisAuthoringResult
+authorStrictCylindricalFaceAxisSource(
+    const PartDocument& document,
+    BodyStageRef stage,
+    kernel::RuntimeFaceToken picked_face,
+    const PartEvaluation& evaluation,
+    kernel::IExactCylindricalFaceAxisQuery& provider) noexcept {
+    auto fail = [](
+        AxisEvaluationStatus status,
+        AxisEvaluationDiagnostic diagnostic)
+        -> StrictCylindricalFaceAxisAuthoringResult {
+        return {status, diagnostic, std::nullopt, std::nullopt};
+    };
+    if (!stage.valid() ||
+        stage.kind != BodyStageKind::after_feature ||
+        !picked_face.valid()) {
+        return fail(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::invalid_reference);
+    }
+    if (evaluation.source_revision != document.revision() ||
+        !evaluation.source_document_id ||
+        *evaluation.source_document_id != document.documentId() ||
+        // During actual sequential Revolve feature evaluation, prefix
+        // Body status is still 'empty', even though earlier Feature stages
+        // have real current solids and catalogues. The exact source stage
+        // (checked below) is authority; final unavailable is never used.
+        evaluation.body_status == BodyEvaluationStatus::unavailable) {
+        return fail(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::stale_part_evaluation);
+    }
+    const auto* feature =
+        evaluation.findFeature(*stage.feature_id);
+    if (feature == nullptr ||
+        feature->status != FeatureEvaluationStatus::up_to_date ||
+        !feature->result_topology ||
+        !feature->result_solid ||
+        !feature->result_topology->complete() ||
+        feature->result_topology->stage != stage) {
+        return fail(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::support_stage_unavailable);
+    }
+    const auto& catalog = *feature->result_topology;
+    const auto same = [picked_face](
+        const BodyFaceTopologyRecord& entry) {
+        return entry.runtime_token == picked_face;
+    };
+    if (std::count_if(
+            catalog.faces.begin(), catalog.faces.end(),
+            same) != 1) {
+        return fail(
+            AxisEvaluationStatus::ambiguous,
+            AxisEvaluationDiagnostic::cylindrical_face_ambiguous);
+    }
+    const auto picked = std::find_if(
+        catalog.faces.begin(), catalog.faces.end(), same);
+    if (picked->surface_candidates.size() != 1U ||
+        !picked->semantic_address) {
+        return fail(
+            AxisEvaluationStatus::ambiguous,
+            AxisEvaluationDiagnostic::cylindrical_face_ambiguous);
+    }
+    const SurfaceReference source{
+        stage, picked->surface_candidates.front()};
+    if (!source.valid()) {
+        return fail(
+            AxisEvaluationStatus::unsupported,
+            AxisEvaluationDiagnostic::invalid_reference);
+    }
+    const auto evaluated = resolveStrictCylindricalFaceAxisLine(
+        document, source, evaluation, provider);
+    if (evaluated.status != AxisEvaluationStatus::resolved ||
+        !evaluated.line) {
+        return fail(evaluated.status, evaluated.diagnostic);
+    }
+    return {
+        AxisEvaluationStatus::resolved,
+        AxisEvaluationDiagnostic::none,
+        StrictCylindricalFaceAxisSource{source},
+        evaluated.line};
 }
 
 // RG-02C/B1: no independent Edge resolver, no native token authoring and
