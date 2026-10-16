@@ -43,6 +43,7 @@
 #include <gp_Circ.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Dir.hxx>
+#include <gp_Cylinder.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 #include <GProp_GProps.hxx>
@@ -5657,6 +5658,80 @@ OcctSolidModelingKernel::bodyPresentation(
     }
 }
 
+
+// P1-A: a bounded Face is a current provider realization, not a durable
+// semantic Surface nor a constructor/operation-specific axis source.
+std::optional<kernel::ScopedExactCylindricalFace>
+OcctSolidModelingKernel::bindExactCylindricalFaceToBody(
+    kernel::RuntimeSolidHandle source_body,
+    kernel::RuntimeFaceToken current_face) noexcept {
+    if (!source_body || !current_face.valid()) {
+        return std::nullopt;
+    }
+    const auto* runtime =
+        dynamic_cast<const OcctRuntimeSolid*>(source_body.get());
+    if (runtime == nullptr ||
+        runtime->inventory_faces.find(current_face.value) ==
+            runtime->inventory_faces.end()) {
+        return std::nullopt;
+    }
+    return makeScopedExactCylindricalFace(
+        std::move(source_body), current_face);
+}
+
+kernel::ExactCylindricalFaceAxisResult
+OcctSolidModelingKernel::queryExactCylindricalFaceAxis(
+    kernel::RuntimeSolidHandle current_body,
+    const kernel::ScopedExactCylindricalFace& bound_face) noexcept {
+    using Status = kernel::ExactCylindricalFaceAxisStatus;
+    const auto fail = [](Status status)
+        -> kernel::ExactCylindricalFaceAxisResult {
+        return {status, std::nullopt};
+    };
+
+    if (!current_body || !bound_face.valid()) {
+        return fail(Status::invalid_input);
+    }
+    // Equal Face token INTEGERS across Body generations are not identity.
+    if (current_body.get() != bound_face.sourceBody().get()) {
+        return fail(Status::provider_mismatch);
+    }
+    const auto* runtime =
+        dynamic_cast<const OcctRuntimeSolid*>(current_body.get());
+    if (runtime == nullptr) {
+        return fail(Status::provider_mismatch);
+    }
+    const auto found = runtime->inventory_faces.find(
+        bound_face.face().value);
+    if (found == runtime->inventory_faces.end() ||
+        found->second.IsNull()) {
+        return fail(Status::face_unavailable);
+    }
+    try {
+        // This adaptor reads the *actual selected current bounded Face*.
+        // UV trim, native Face orientation and producer Feature kind do not
+        // determine the infinite supporting cylinder axis.
+        const BRepAdaptor_Surface adaptor{found->second, true};
+        if (adaptor.GetType() != GeomAbs_Cylinder) {
+            return fail(Status::non_cylindrical_surface);
+        }
+        const gp_Cylinder cylinder = adaptor.Cylinder();
+        const gp_Ax1 axis = cylinder.Axis();
+        const gp_Pnt point = axis.Location();
+        const gp_Dir direction = axis.Direction();
+        const kernel::ExactCylindricalFaceAxisGeometry geometry{
+            {point.X(), point.Y(), point.Z()},
+            {direction.X(), direction.Y(), direction.Z()},
+            cylinder.Radius()};
+        if (!geometry.valid() ||
+            !(geometry.radius_mm > Precision::Confusion())) {
+            return fail(Status::invalid_cylinder);
+        }
+        return {Status::ok, geometry};
+    } catch (...) {
+        return fail(Status::kernel_failure);
+    }
+}
 
 std::optional<kernel::ScopedBoundaryFace>
 OcctSolidModelingKernel::bindFaceToBody(
