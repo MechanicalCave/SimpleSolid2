@@ -1,6 +1,6 @@
 # RG-02C/C1-P1-A — exact analytic cylindrical Face-axis native evidence
 
-**Status: ACTIVE VERIFICATION — Windows DRAFT FAST #3341 PASS 93/93 and DOC-01 bootstrap PASS at exact `29606530b35f214d3b4b0d39b9fe4d44d5bb2f24`; P1-A native FOCUSED and FULL still NOT EXECUTED.** No P1-A technical FINAL PASS or protected-main production merge is claimed. First genuine #3335/#3336 DOC-01 RED remains historical evidence, not erased by successful regeneration.
+**Status: ACTIVE VERIFICATION — independent native Windows FOCUSED #3342 PASS 1/1 at exact `9fc798338e201b67091a115ed581dec242a1d6c3`; prior DRAFT FAST #3341 PASS 93/93 and DOC-01 bootstrap PASS at `29606530b35f214d3b4b0d39b9fe4d44d5bb2f24`. Post-FOCUSED FAST and Ready FULL remain pending.** No P1-A technical FINAL PASS or protected-main production merge is claimed. First genuine #3335/#3336 DOC-01 RED remains historical evidence, not erased by successful regeneration.
 
 ## Bounded D2 and actual implementation
 
@@ -31,7 +31,7 @@ The accepted exact P1-A D2 six-path allowlist *requires* `docs/internal/PART_EDG
 | First Windows DRAFT FAST / DOC-01 [#3335](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38893894889) | `4253cf218a0602932dc7f787d6fd5484a0186a50` | **RED**, stale Browser before build |
 | Repeated Windows DRAFT FAST / DOC-01 [#3336](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38894221701) | `6d4238f1be45b1a8bed6a9ae81b8ec90e3ec327c` | **RED**, stale Browser before build |
 | Windows DRAFT FAST [#3341](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38903531938) | `29606530b35f214d3b4b0d39b9fe4d44d5bb2f24` | **PASS 93/93**, DOC-01 bootstrap and FAST build PASS; not native focused |
-| Native FOCUSED `pm04c2.production_revolve` | Pending | NOT RUN |
+| Native FOCUSED `pm04c2.production_revolve` [#3342](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38903817575) | `9fc798338e201b67091a115ed581dec242a1d6c3` | **PASS 1/1** (native OCCT, kernel build/test, DOC-01 bootstrap) |
 | Independent post-focused FAST | Pending | NOT RUN |
 | Ready FULL Core, native Kernel/OCCT and Qt/OCCT Desktop | Pending | NOT RUN |
 | Official DOC-01 internal as-built / generated Browser | #3341 bootstrap PASS; FULL pending | PARTIAL |
@@ -40,6 +40,10 @@ The accepted exact P1-A D2 six-path allowlist *requires* `docs/internal/PART_EDG
 | Independently Owner-authorized production squash | Not requested | NOT AUTHORIZED |
 
 Current proposal/activation governance CI checks are **not** native P1-A execution evidence. Failed real runs must remain visible in the acceptance ledger, including first RED and gaps.
+
+## Exact native FOCUSED #3342 witnessed scope (2026-10-16)
+
+The real Windows `windows-msvc-focused` job completed with `pm04c2.production_revolve` **1/1 PASS** and no failed tests at `9fc798338e201b67091a115ed581dec242a1d6c3`. It exercised the added P1-A assertions in the existing, already-registered OCCT kernel-native test: actual current Body Face analytic Cylinder extraction for Extrude, full/partial Revolve and half-cylinder Boolean Cut, infinite unoriented line/radius checks, mapped semantic carrier corroboration, actual noncylindrical refusal, and Body-pointer generation mismatch. The test also inspects existing round-rim Fillet/Chamfer Face classifications without treating operation names as cylinder identity. No separate native `TopoDS_Face` reversed-orientation fixture, straight-edge Fillet-generated cylinder positive, fault-injected exception or invalid cylinder fixture was proved by this aggregate PASS. Those remain the specifically disclosed GAP/NOT TESTED items above until independently evidenced or Owner-reviewed; do not infer them from `1/1`.
 
 ## Documentation impact
 
