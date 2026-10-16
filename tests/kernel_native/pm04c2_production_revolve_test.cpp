@@ -1039,6 +1039,53 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
         CHECK(session.document().findAxis(*created.axis_id)->source ==
               created_value.source);
 
+        // A headless H1 Face source must use the ordinary Axis Edit
+        // command without changing AxisId or adding Undo for a no-op.
+        const auto edit_revision = session.document().revision();
+        const auto edit_undo = session.undoDepth();
+        const auto unchanged_edit = session.execute(
+            application::EditAxisCommand{
+                *created.axis_id,
+                part::PartAxisSource{*admitted.source},
+                edit_revision},
+            provider);
+        CHECK(unchanged_edit.ok());
+        CHECK(!unchanged_edit.changed);
+        CHECK(session.document().revision() == edit_revision);
+        CHECK(session.undoDepth() == edit_undo);
+        CHECK(session.document().findAxis(*created.axis_id)->source ==
+              created_value.source);
+
+        // Re-source to an absent semantic producer stage must not
+        // mutate the existing authored Face Axis or consume history.
+        auto absent_source = *admitted.source;
+        absent_source.surface = wrong_stage;
+        const auto rejected_edit = session.execute(
+            application::EditAxisCommand{
+                *created.axis_id,
+                part::PartAxisSource{absent_source},
+                edit_revision},
+            provider);
+        CHECK(!rejected_edit.ok());
+        CHECK(session.document().revision() == edit_revision);
+        CHECK(session.undoDepth() == edit_undo);
+        CHECK(session.document().findAxis(*created.axis_id)->source ==
+              created_value.source);
+
+        // Even a geometrically valid Face source never rescues an Edit
+        // dispatched against the superseded pre-Create revision.
+        const auto stale_edit = session.execute(
+            application::EditAxisCommand{
+                *created.axis_id,
+                part::PartAxisSource{*admitted.source},
+                before_revision},
+            provider);
+        CHECK(!stale_edit.ok());
+        CHECK(session.document().revision() == edit_revision);
+        CHECK(session.undoDepth() == edit_undo);
+        CHECK(session.document().findAxis(*created.axis_id)->source ==
+              created_value.source);
+
         // Genuine native v20 Save / Close / Reopen of a real Part-owned
         // strict Face Axis, on exactly one positive source per fixture.
         // No native Face token, OCCT shape, radius or cached axis geometry
