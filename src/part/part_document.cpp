@@ -832,6 +832,43 @@ bool PartDocument::validAuthoredState(
             return false;
         }
 
+        if (const auto* face =
+                std::get_if<StrictCylindricalFaceAxisSource>(
+                    &axis.source)) {
+            const auto& ref = face->surface;
+            // A missing or deleted stage is authored but repairable only
+            // when its IDs were already allocated in THIS Part. Never
+            // accept a forged/cross-Part producer or stage FeatureId.
+            if (!ref.stage.feature_id ||
+                !state.body.next_feature_id.containsAllocated(
+                    *ref.stage.feature_id) ||
+                !state.body.next_feature_id.containsAllocated(
+                    ref.surface.producer_feature_id)) {
+                return false;
+            }
+            const auto producer = std::find_if(
+                state.body.features.begin(),
+                state.body.features.end(),
+                [&ref](const PartFeature& feature) {
+                    return feature.id ==
+                        ref.surface.producer_feature_id;
+                });
+            const auto stage = std::find_if(
+                state.body.features.begin(),
+                state.body.features.end(),
+                [&ref](const PartFeature& feature) {
+                    return feature.id == *ref.stage.feature_id;
+                });
+            // If both survive, enforce the SAME semantic Surface
+            // provenance and causal history rules already used for Body
+            // Sketch/Datum support. No fallback by current Face geometry.
+            if (producer != state.body.features.end() &&
+                stage != state.body.features.end() &&
+                !valid_surface_reference(ref)) {
+                return false;
+            }
+        }
+
         for (std::size_t previous = 0U;
              previous < index;
              ++previous) {
