@@ -1,9 +1,15 @@
 # RG-02C/C1-P1-B1/H1 — strict singleton cylindrical Face → durable Part Axis: bounded headless D2 Work Contract PROPOSAL
 
-**Status: PROPOSED EXECUTABLE D2 TEXT — NOT OWNER-ACCEPTED EXACT TEXT, NOT ACTIVE AND NOT IMPLEMENTABLE.**
+**Status: OWNER ACCEPTED EXACT P1-B1/H1 HEADLESS D2 CONTRACT + 18-PATH ALLOWLIST — 2026-10-16; GOVERNANCE PR #440 STILL OPEN/DRAFT AND NOT MERGED; NO ACTIVE H1 CODE AUTHORITY UNTIL SEPARATE GOVERNANCE SQUASH + ACTIVE-ONLY ACTIVATION.**
 **Owner direction:** 2026-10-16 Owner expressly `akceptuje i akceptuje implementację i merge - kontynuuj pracę i nie przerywaj` to the Agent's recommended **architectural option A** and a wish to implement/integrate. This accepts A's **strict singleton policy**, not future unshown code/file/schema/UX choices or the separate exact-head guarded merges governed by `AGENTS.md`.
 **Baseline:** protected `main` `b14c6821c8707e57f7b9a8ad8cacf348a6a54dba` after [P1-B0 evidence #438](https://github.com/MechanicalCave/SimpleSolid2/pull/438) Owner technical FINAL PASS with explicit native GAPs and separate guarded squash. `work/ACTIVE.yaml` still points to P1-B0; it is NOT a P1-B1 mutation authorization.
-**Authority:** Constitution/Foundation 1.0, Architecture/accepted ADR-0014/-0016/-0017, Part Modeling v1.33, RG-02 owner direction, existing PM-04 Axis/PM-05/Projection, B1 Edge native v19 compatibility, accepted P1-A `IExactCylindricalFaceAxisQuery` and accepted P1-B0 stage-semantic Face-vs-Surface evidence. Distinct [P1-B1 UX Owner review proposal](RG-02C_C1_P1B1_STRICT_CYLINDRICAL_FACE_AXIS_UX_OWNER_REVIEW_PROPOSAL.md) remains NOT UX-APPROVED.
+**Authority:** Constitution/Foundation 1.0, Architecture/accepted ADR-0014/-0016/-0017, Part Modeling v1.33, RG-02 owner direction, existing PM-04 Axis/PM-05/Projection, B1 Edge native v19 compatibility, accepted P1-A `IExactCylindricalFaceAxisQuery` and accepted P1-B0 stage-semantic Face-vs-Surface evidence. Distinct [P1-B1 UX design #439](RG-02C_C1_P1B1_STRICT_CYLINDRICAL_FACE_AXIS_UX_OWNER_REVIEW_PROPOSAL.md) received **separate explicit Owner UX signoff** on its exact W1–W3/UX-01…14; #439 governance merge remains a separate STOP and neither approval starts H2 code.
+
+## Recorded Owner exact H1 D2 contract acceptance — independent gates
+
+On 2026-10-16, after presenting complete reviewable [UX Draft PR #439](https://github.com/MechanicalCave/SimpleSolid2/pull/439) and exact bounded [headless H1 D2 Draft PR #440](https://github.com/MechanicalCave/SimpleSolid2/pull/440), the Agent asked for **two independently explicit decisions**: approval of the exact new UX, and approval of **this precise H1 Work Contract, its 18 allowed paths, strict variant A, new native v20 writer/legacy v19 readers, headless stages and Windows gates**. The Owner answered **`akceptuję - kontynuuj`**. This records exact **Owner H1 D2 scope ACCEPTANCE** and, independently, new UX design SIGNOFF; these decisions do not merge their separate governance PRs, change `ACTIVE.yaml` or authorize immediate code mutations.
+
+**Allowed only after separate governance protected-main integration plus independent ACTIVE-only activation:** actual H1 headless strict cylindrical Face→semantic `SurfaceReference` `PartAxisSource` implementation, schema v20, reused source evaluation / headless lifecycle / native tests / DOC-01 within **exactly the 18 §2 paths**. Any path expansion or non-headless UI requires a distinct approved amendment or new H2 contract. The Owner previously expressed an intent to implement and merge the feature, but this reply to an exact **scope-design** question is not a guarded squash authorization for #439, #440, an ACTIVE-only PR or a future code PR. Native B0 partition-positive and other explicitly deferred fixture GAPs remain NOT TESTED, never silently promoted to proof.
 
 ## 0. Deliverable boundary — H1 is **headless**, not new UI
 
@@ -11,7 +17,7 @@
 
 P1-A **reads exact native cylindrical Face** into infinite unoriented line/radius, while P1-B0 **observed** its owner/strict Face semantics and independent all-member geometry. Neither established durable picked-patch identity after partition. This H1 adopts conservative A by **refusing every partition** with `strict_face_status != resolved` OR `current_faces.size() != 1`. The semantic `SurfaceReference{BodyStageRef,FeatureSurfaceAddress}` may persist because it certifies exactly one **strict Face at the authored stage when resolved**, but its runtime numeric `FaceToken`, OCCT shape, provider order, fitted XYZ, radius, and cached line **MUST NOT** persist.
 
-## 1. Proposed exact headless Part technical design — Owner review required
+## 1. Owner-accepted exact headless Part technical design — activation separately gated
 
 ### H1-01 — semantic source / schema separation
 
@@ -39,9 +45,9 @@ Reuse existing Part `CreateAxisCommand`/`EditAxisCommand`, `AxisDraft` and revis
 
 Use actual resulting Part/OCCT Faces in existing registered kernel native fixtures: full cylinder Extrude, full/90° Revolve, half cylinder Cut and circular-rim Fillet/Chamfer **without assuming Fillet is cylindrical**. Require at least one successful unique stage-semantic strict cylinder source and valid unoriented line/radius; planar/torus/cone must refuse when actually witnessed. Test wrong Body/stage, no Face, ambiguous owner, multi-Face carrier, source invalidation and noncoaxial member only when a **genuine actual fixture** exists; label absent branches **NOT TESTED**, do not construct fake statuses and claim PASS. Native multi-Face carrier B0 positive remains a deferred GAP and is not a prerequisite for A if that case cannot be produced; specifically a partition is always rejected, no adoption of B. Inherited P1-A native topological orientation reversal, positive straight-edge Fillet cylinder and fault/degenerate cases remain **NOT TESTED** unless the actual new tests execute them.
 
-## 2. **PROPOSED EXACT H1 implementation allowlist — not yet active**
+## 2. **OWNER-ACCEPTED EXACT H1 implementation allowlist — not yet active**
 
-Only after **Owner expressly accepts the exact H1 scope/paths**, this D2 document passes its own governance CLOSURE and **separate Owner guarded squash approval** into `main`, then a separately authorized and merged **ACTIVE-only** transition, may H1 mutate the following file paths, and **ONLY** these:
+Owner has **expressly accepted this exact H1 scope and paths**. H1 may mutate the following paths, and **ONLY** these, but exclusively **after** this D2 document's post-decision exact-head Windows governance CLOSURE, **separate Owner guarded squash approval** of PR #440 into `main`, and a separately Owner-authorized and merged **ACTIVE-only** transition:
 
 1. `src/part/include/simplesolid2/part/axis.hpp` — third source variant.
 2. `src/part/axis.cpp` — source/structural validation.
@@ -62,7 +68,7 @@ Only after **Owner expressly accepts the exact H1 scope/paths**, this D2 documen
 17. `docs/browser/index.html` — **generated-only DOC-01**, never manually edited; only official browser regeneration if required by the verified canonical internal doc change.
 18. `work/RG-02C_C1_P1B1_H1_STRICT_FACE_AXIS_HEADLESS_ACCEPTANCE_EVIDENCE.md` — new factual RED/GAP/PASS ledger.
 
-This list is **proposed**, not accepted/activated. No other `src/**`, tests, version-assertion fixes, CMake/CI, `AGENTS.md`, roadmap, `ACTIVE.yaml`, Qt/Viewers, `src/ui/**`, Operations/Tree/CLI, PL/EN product docs or shipped code. If RED evidence requires a missing file path, STOP for an **Owner-accepted narrow D2 path amendment**; no skipping native FULL or silently broadening. H1 is **headless** only; GUI H2 requires a separate exact Product D2 Work Contract and Owner UX signoff.
+This list is **Owner-accepted for future H1 implementation**, but **NOT ACTIVE or executable** until separate protected-main governance squash and dedicated ACTIVE-only transition. No other `src/**`, tests, version-assertion fixes, CMake/CI, `AGENTS.md`, roadmap, `ACTIVE.yaml`, Qt/Viewers, `src/ui/**`, Operations/Tree/CLI, PL/EN product docs or shipped code. If RED evidence requires a missing file path, STOP for an **Owner-accepted narrow D2 path amendment**; no skipping native FULL or silently broadening. H1 is **headless** only; GUI H2 requires a separate exact Product D2 Work Contract and Owner UX signoff.
 
 ## 3. Mandatory validation and owner gates — no invented PASS
 
@@ -70,15 +76,15 @@ This list is **proposed**, not accepted/activated. No other `src/**`, tests, ver
 - Separate Windows **Draft FAST** (existing full FAST denominator), real **Ready FULL** Core-only + Kernel-native OCCT Release + Qt/OCCT Desktop, **official DOC-01** (including generated Browser if canonical docs changed). Expected baseline 25/57/117, but actual verified CTest denominators take precedence.
 - Owner Windows headless Save/Close/Reopen/cold-build and Revolve selection where executable; explicitly report what is automated vs manual and all inherited B0 native GAPs.
 - Exact-head evidence-only Windows **CLOSURE** after final factual ledger; separately accepted **Owner technical FINAL PASS**, then separately authorized guarded squash of *the actual implementation PR*, never blanket assumption based on this proposal.
-- No product UX or shipped `Cylindrical Face` constructor before separate Owner signoff of the W1–W3 UX design, and independent H2 contract/activation.
+- **Separate Owner UX signoff is now ACCEPTED** for #439 W1–W3; still NO product UX or shipped `Cylindrical Face` constructor until independent H2 executable contract/activation and normal native/Owner manual Windows checks.
 
 ## 4. Owner decision sequence — do not conflate
 
 1. **CLOSED:** Owner chose *architecture A* and desires implementation/merge. No automatic selection of B or C.
-2. **PENDING:** Owner exact-text D2 signoff on **H1 bounded headless implementation** and its exact allowlist/version policy; this single work-only proposal PR itself is not a code PR or merge consent.
-3. **PENDING:** independent governance protected-main squash of H1 D2 text, exact-head CLOSURE; independent `ACTIVE.yaml` activation.
+2. **CLOSED — OWNER ACCEPTED exact-text H1 D2 2026-10-16:** bounded headless implementation, exactly 18 paths and v20/legacy v19 policy. This scope acceptance is NOT code PR or governance merge consent.
+3. **PENDING:** new exact-head Windows governance CLOSURE on the decision-only H1 D2 HEAD, then separately authorized protected-main squash of #440; separately authorized `ACTIVE.yaml` activation.
 4. **PENDING:** actual H1 headless code + native Windows gates + technical FINAL PASS + independent guarded squash.
-5. **PENDING:** **distinct Owner UX design signoff** on reviewable second `Cylindrical Face` constructor; independent H2 executable Work Contract/activation for existing `Axis` Work Features product UX, PL+EN docs and generated Browser.
+5. **CLOSED for UX DESIGN ONLY — separate Owner signoff recorded in #439:** exact existing-tool second `Cylindrical Face` Constructor. **PENDING** independent #439 governance merge and independent H2 executable Work Contract/activation for existing `Axis` Work Features product UX, PL+EN docs and generated Browser.
 6. **PENDING:** H2 full product test/Owner manual Windows/technical FINAL PASS and independently authorized guarded squash. Later variant B/C, PM-06, other constructors remain separate D2 priorities.
 
 ## Documentation impact
