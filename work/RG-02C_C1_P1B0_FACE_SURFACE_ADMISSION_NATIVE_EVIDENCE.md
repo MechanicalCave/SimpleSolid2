@@ -1,6 +1,6 @@
 # RG-02C/C1-P1-B0 — native picked-Face / semantic Surface admission evidence
 
-**Status: NATIVE FOCUSED VERIFIED (1/1 PASS); FAST, FULL AND EXACT-HEAD CLOSURE STILL PENDING.** This ledger records only actually executed observations and does not establish A/B/C durable Axis source semantics or a Part Axis product. Baseline: protected `main` `6ff550a0b448300a0441954ab67825f7fbecc7c7` after separately Owner-authorized, Windows-CLOSURE-verified ACTIVE-only [PR #437](https://github.com/MechanicalCave/SimpleSolid2/pull/437), which activates the exact already Owner-accepted [P1-B0 D2 evidence contract](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) merged through governance [PR #436](https://github.com/MechanicalCave/SimpleSolid2/pull/436).
+**Status: NATIVE FOCUSED 1/1 PASS AND INDEPENDENT DRAFT FAST 93/93 PASS; READY FULL AND FINAL EXACT-HEAD CLOSURE STILL PENDING.** This ledger records only actually executed observations and does not establish A/B/C durable Axis source semantics or a Part Axis product. Baseline: protected `main` `6ff550a0b448300a0441954ab67825f7fbecc7c7` after separately Owner-authorized, Windows-CLOSURE-verified ACTIVE-only [PR #437](https://github.com/MechanicalCave/SimpleSolid2/pull/437), which activates the exact already Owner-accepted [P1-B0 D2 evidence contract](RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE_D2_PROPOSAL.md) merged through governance [PR #436](https://github.com/MechanicalCave/SimpleSolid2/pull/436).
 
 ## Exact scope and test wiring
 
@@ -41,11 +41,13 @@ The [Windows #3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/
 | Gate | Exact source HEAD / run | Result |
 | --- | --- | --- |
 | Windows native FOCUSED `pm04c2.production_revolve` (real OCCT/MSVC) | [#3352](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911057989), HEAD `07efe573b6115cf9b9d40514efd4f1fae10e0c78` | **1/1 PASS** — actual Windows/MSVC Release OCCT binary and CTest #35 Passed in 0.11 s; DOC-01 bootstrap PASS |
-| Independent Windows Draft FAST | Not run yet | PENDING |
+| Independent Windows Draft FAST | [#3353](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911301976), HEAD `407d94c04fef41ae24d06714ddc0e61324fd7e39` | **93/93 PASS**, zero failures; official documentation verification PASS |
 | Windows Ready FULL Core-only, Kernel-native, Qt/OCCT Desktop, DOC-01 | Not run yet | PENDING |
 | Final evidence-only exact-head CLOSURE | Not run yet | PENDING |
 | Owner B0 technical FINAL PASS | Not requested | PENDING |
 | Independent guarded squash of evidence PR | Not authorized | NOT AUTHORIZED |
+
+The independent Windows Draft [FAST #3353](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38911301976) executed 93/93 tests with zero failures at `407d94c04fef41ae24d06714ddc0e61324fd7e39`; official `SS2 documentation verification PASSED`. This is not substituted for the separate native FOCUSED #3352 or forthcoming complete Ready FULL. All missing per-Face counts and the multi-Face-cylinder-positive requirement remain explicitly GAP/NOT PROVEN.
 
 ## Deliberate STOPs and inherited GAPs
 
