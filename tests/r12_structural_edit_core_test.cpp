@@ -1,4 +1,5 @@
 #include <simplesolid2/sketch/structural_edit.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <cmath>
 #include <iostream>
@@ -268,6 +269,46 @@ int main() {
             trimmed.status ==
             StructuralEditStatus::not_applicable);
         CHECK(!trimmed.state.has_value());
+    }
+
+    // S0/B02 exact integer oblique tangents: shared relation analysis and
+    // two distinct finite cutter contacts must permit ONE Circle->Arc Trim.
+    // The historical baseline normalized d=(9,12), yielding 5.0000000000000009
+    // instead of exactly R=5 and incorrectly reported both lines disjoint.
+    {
+        SketchModel model;
+        const auto target =
+            model.addCircle({0.0, 0.0}, 5.0);
+        const auto left =
+            model.addLine({-13.0, -9.0}, {-4.0, 3.0});
+        const auto right =
+            model.addLine({13.0, -9.0}, {4.0, 3.0});
+        const auto left_relation =
+            analyzeCurveRelation(model, target, left);
+        const auto right_relation =
+            analyzeCurveRelation(model, target, right);
+        std::cerr << "SKETCH_S0_B02_OBLIQUE"
+                  << " left=" << left_relation.intersections.size()
+                  << " right=" << right_relation.intersections.size()
+                  << " left_status=" << static_cast<int>(left_relation.status)
+                  << " right_status=" << static_cast<int>(right_relation.status)
+                  << '\n';
+        CHECK(left_relation.status == CurveRelationStatus::discrete);
+        CHECK(right_relation.status == CurveRelationStatus::discrete);
+        CHECK(left_relation.intersections.size() == 1U);
+        CHECK(right_relation.intersections.size() == 1U);
+        CHECK(left_relation.intersections[0].contact == CurveContactKind::tangent);
+        CHECK(right_relation.intersections[0].contact == CurveContactKind::tangent);
+        const auto trimmed = evaluateTrim(
+            model,
+            TrimSketchRequest{target, {left, right}, {0.0, -5.0}});
+        CHECK(trimmed.ready());
+        CHECK(trimmed.result_entity.has_value());
+        CHECK(*trimmed.result_entity != target);
+        const auto edited = resultModel(trimmed);
+        CHECK(edited.has_value());
+        CHECK(edited->findCircle(target) == nullptr);
+        CHECK(edited->findArc(*trimmed.result_entity) != nullptr);
     }
 
     // Line Extend uses finite authored boundary geometry and keeps identity.
