@@ -10714,6 +10714,8 @@ int main(int argc, char* argv[]) {
             std::size_t strict_axis_resolved = 0U;
             std::size_t strict_axis_ambiguous = 0U;
             std::size_t strict_axis_other = 0U;
+            std::optional<part::StrictCylindricalFaceAxisSource>
+                valid_fillet_source;
             for (const auto& carrier :
                  evaluated.current_topology->surfaces) {
                 if (carrier.address.producer_feature_id != *fillet4 ||
@@ -10793,6 +10795,14 @@ int main(int argc, char* argv[]) {
                             token, evaluated, kernel);
                     exact_cylinders += geometry.ok() ? 1U : 0U;
                     strict_axis_resolved += admission.ok() ? 1U : 0U;
+                    if (admission.ok() && geometry.ok()) {
+                        CHECK(!valid_fillet_source);
+                        valid_fillet_source = *admission.source;
+                        CHECK(direct_resolution.status ==
+                              part::AxisEvaluationStatus::resolved);
+                        CHECK(direct_resolution.line &&
+                              direct_resolution.line->valid());
+                    }
                     strict_axis_ambiguous +=
                         admission.diagnostic ==
                             part::AxisEvaluationDiagnostic::
@@ -10836,6 +10846,68 @@ int main(int argc, char* argv[]) {
             // current architecture-A rejection instead.
             CHECK(exact_cylinders > 0U);
             CHECK(strict_axis_resolved == exact_cylinders);
+            CHECK(strict_axis_ambiguous == 0U);
+            CHECK(strict_axis_other == 0U);
+            CHECK(valid_fillet_source.has_value());
+            const auto before_axis_undo = repro.undoDepth();
+            const auto created_fillet_axis = repro.execute(
+                application::CreateAxisCommand{
+                    *valid_fillet_source,
+                    repro.document().revision(),
+                    "Owner Part002 Fillet R30 Axis", true},
+                kernel);
+            CHECK(created_fillet_axis.ok() &&
+                  created_fillet_axis.axis_id);
+            CHECK(repro.undoDepth() == before_axis_undo + 1U);
+            const auto axis_id = *created_fillet_axis.axis_id;
+            CHECK(repro.document().findAxis(axis_id));
+            CHECK(repro.document().findAxis(axis_id)->source ==
+                  part::PartAxisSource{*valid_fillet_source});
+
+            // Cold v20 Save/Reopen must resolve the SAME durable
+            // stage-qualified semantic Surface with a new OCCT kernel.
+            QTemporaryDir owner_fillet_dir;
+            CHECK(owner_fillet_dir.isValid());
+            const auto owner_fillet_path =
+                std::filesystem::path{
+                    owner_fillet_dir.path().toStdWString()} /
+                "Part002_FilletR30_Axis_v20.ss2part";
+            part::PartDocumentStore owner_fillet_store;
+            CHECK(owner_fillet_store.createNew(
+                owner_fillet_path, repro.document()).ok());
+            const auto cold_fillet =
+                owner_fillet_store.load(owner_fillet_path);
+            CHECK(cold_fillet.ok() && cold_fillet.document);
+            const auto* persisted =
+                cold_fillet.document->findAxis(axis_id);
+            CHECK(persisted &&
+                  persisted->source ==
+                      part::PartAxisSource{*valid_fillet_source});
+            kernel_occt::OcctSolidModelingKernel cold_fillet_kernel;
+            const auto cold_fillet_body = part::evaluatePart(
+                *cold_fillet.document, cold_fillet_kernel);
+            CHECK(cold_fillet_body.body_status ==
+                  part::BodyEvaluationStatus::up_to_date);
+            CHECK(cold_fillet_body.current_topology &&
+                  cold_fillet_body.current_topology->complete());
+            const auto cold_fillet_axis =
+                part::resolveAxisReference(
+                    *cold_fillet.document,
+                    part::AxisReference{
+                        part::AuthoredAxisReference{axis_id}},
+                    &cold_fillet_body, nullptr,
+                    &cold_fillet_kernel, &cold_fillet_kernel);
+            CHECK(cold_fillet_axis.status ==
+                  part::AxisEvaluationStatus::resolved);
+            CHECK(cold_fillet_axis.line &&
+                  cold_fillet_axis.line->valid());
+            std::cerr << "RG02C_H2_OWNER_PART002_FILLET_AXIS_PASS"
+                      << " native_cylinder=1"
+                      << " single_surface=1"
+                      << " face_address_optional=1"
+                      << " command_undo=1"
+                      << " native_v20_cold_reopen=1"
+                      << std::endl;
         }
 
         // Restore a known-live session before the temporary Revolve
