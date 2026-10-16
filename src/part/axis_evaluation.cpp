@@ -420,9 +420,13 @@ AxisEvaluation resolveStrictCylindricalFaceAxisLine(
             AxisEvaluationDiagnostic::invalid_reference);
     }
     if (evaluation.source_revision != document.revision() ||
-        (evaluation.source_document_id &&
-         *evaluation.source_document_id != document.documentId()) ||
-        evaluation.body_status != BodyEvaluationStatus::up_to_date) {
+        !evaluation.source_document_id ||
+        *evaluation.source_document_id != document.documentId() ||
+        // During actual sequential Revolve feature evaluation, prefix
+        // Body status is still 'empty', even though earlier Feature stages
+        // have real current solids and catalogues. The exact source stage
+        // (checked below) is authority; final unavailable is never used.
+        evaluation.body_status == BodyEvaluationStatus::unavailable) {
         return unresolved(
             AxisEvaluationStatus::blocked,
             AxisEvaluationDiagnostic::stale_part_evaluation,
@@ -430,7 +434,9 @@ AxisEvaluation resolveStrictCylindricalFaceAxisLine(
     }
     const auto* feature = evaluation.findFeature(
         *source.stage.feature_id);
-    if (feature == nullptr || !feature->result_solid ||
+    if (feature == nullptr ||
+        feature->status != FeatureEvaluationStatus::up_to_date ||
+        !feature->result_solid ||
         !feature->result_topology ||
         feature->result_topology->stage != source.stage ||
         !feature->result_topology->complete()) {
@@ -485,6 +491,7 @@ AxisEvaluation resolveStrictCylindricalFaceAxisLine(
     }
     if (carrier->strict_face_status !=
             ReferenceStatus::resolved ||
+        carrier->candidate_face_count != 1U ||
         carrier->current_faces.size() != 1U ||
         !carrier->current_faces.front().valid()) {
         // This intentionally refuses a uniquely resolved Surface whose
@@ -584,16 +591,22 @@ authorStrictCylindricalFaceAxisSource(
             AxisEvaluationDiagnostic::invalid_reference);
     }
     if (evaluation.source_revision != document.revision() ||
-        (evaluation.source_document_id &&
-         *evaluation.source_document_id != document.documentId()) ||
-        evaluation.body_status != BodyEvaluationStatus::up_to_date) {
+        !evaluation.source_document_id ||
+        *evaluation.source_document_id != document.documentId() ||
+        // During actual sequential Revolve feature evaluation, prefix
+        // Body status is still 'empty', even though earlier Feature stages
+        // have real current solids and catalogues. The exact source stage
+        // (checked below) is authority; final unavailable is never used.
+        evaluation.body_status == BodyEvaluationStatus::unavailable) {
         return fail(
             AxisEvaluationStatus::blocked,
             AxisEvaluationDiagnostic::stale_part_evaluation);
     }
     const auto* feature =
         evaluation.findFeature(*stage.feature_id);
-    if (feature == nullptr || !feature->result_topology ||
+    if (feature == nullptr ||
+        feature->status != FeatureEvaluationStatus::up_to_date ||
+        !feature->result_topology ||
         !feature->result_solid ||
         !feature->result_topology->complete() ||
         feature->result_topology->stage != stage) {
