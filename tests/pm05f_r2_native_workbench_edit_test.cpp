@@ -10786,6 +10786,13 @@ int main(int argc, char* argv[]) {
                       << strict_axis_other << std::endl;
             CHECK(carriers > 0U);
             CHECK(generated_face_tokens > 0U);
+            // Owner requirement: qualify result geometry, not its
+            // creating operation. Deliberately RED if the exact native
+            // cylinder is refused by the current semantic admission.
+            // Never turn the prior FAIL into a false PASS by asserting
+            // current architecture-A rejection instead.
+            CHECK(exact_cylinders > 0U);
+            CHECK(strict_axis_resolved == exact_cylinders);
         }
 
         // Restore a known-live session before the temporary Revolve
