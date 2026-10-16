@@ -2153,9 +2153,11 @@ int main(int argc, char* argv[]) {
             CHECK(axis_tool && axis_constructor &&
                   axis_finish && axis_cancel);
             CHECK(axis_tool->isEnabled());
-            CHECK(axis_constructor->count() == 1);
+            CHECK(axis_constructor->count() == 2);
             CHECK(axis_constructor->itemText(0) ==
                   QStringLiteral("Edge"));
+            CHECK(axis_constructor->itemText(1) ==
+                  QStringLiteral("Cylindrical Face"));
 
             const auto before_revision =
                 b1_axis_session.document().revision();
