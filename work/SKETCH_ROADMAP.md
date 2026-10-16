@@ -1,14 +1,29 @@
 # Sketcher Program Roadmap
 
-**Status:** ACCEPTED  
-**Version:** 1.9  
-**Owner acceptance:** 2026-10-02  
-**Previous accepted version:** 1.8 — 2026-10-01  
+**Status:** **v1.10 PROPOSED PRIORITY AMENDMENT — NOT YET OWNER-ACCEPTED EXACT TEXT / NOT MERGED / NO CODE AUTHORITY**; last accepted v1.9 remains in protected main pending review  
+**Version:** **1.10 PROPOSED**  
+**Owner direction:** 2026-10-16 accepted Sketcher audit repair **S0→S1→S2→S3** scheduling; exact roadmap v1.10 is a **separate** unapproved proposal  
+**Previous accepted version:** 1.9 — Owner-accepted 2026-10-02  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0011, ADR-0012  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** R0–R12, WB-02, AUDIT-01 A–F and the complete SR-01 → SR-02 → SR-03 stabilization sequence are completed. The next program action is the explicit Sketcher profile-authoring readiness re-test. Split/Join remain deferred; Part Feature Tree and solid modeling remain inactive behind separate future gates.  
+**Proposed scheduling:** existing R0–R12, WB-02, AUDIT-01 A–F, SR-01–SR-03 and later separately accepted Part/Projection/RG-02 work stay historically completed. **New priority S0/S1 (B01/B02)** reproduces and repairs exact Line/Circle/Arc tangent predicates, arrangement and durable Profile/Extrude correctness before independent **S2 (B03a/B04)** and **S3 (B03b/B05/B06)**. These do not retroactively erase old readiness findings, reactivate R13 constraints/Split/Join, or authorize code without the separately accepted exact S0/S1 contract and formal ACTIVE-only switch.  
+
+## 0. Proposed S0–S3 audit-repair scheduling amendment — 2026-10-16
+
+**Owner scheduling direction: ACCEPTED; exact roadmap text: PROPOSED / not merged.** On 2026-10-16, after reviewing the 2026-10-07 Sketcher source/core audit, the Owner accepted returning from RG-02 to Sketcher, splitting six findings into **S0 → S1 → S2 → S3**, first **S0/S1**. The Owner subsequently accepted the exact S0/S1 D2 contract for B01/B02 ([PR #454](https://github.com/MechanicalCave/SimpleSolid2/pull/454)), with a **15-path conditional allowlist**; the governance PR and activation have independent uncompleted gates. The companion **Part Modeling v1.34** proposal pauses later RG-02 packages while retaining PM-06 deferral. The current work/ACTIVE.yaml on protected main still points to completed RG-02C/H2 until a separately accepted and merged ACTIVE-only transition; it cannot be treated as Sketcher mutation authority.
+
+| Priority | Repair focus | Status/authorization |
+| --- | --- | --- |
+| **S0** | Current-main/head RED reproductions: analytic tangent F1/F2/F3, all 24 insertion permutations, baseline issues B01–B06, Qt focus/geometry diagnostics and affected Profile/Extrude lifecycle | First evidence phase within bounded proposed S0/S1 contract after activation, **no product fix presumed** |
+| **S1** | **B01/B02:** robust shared finite Line/Circle/Arc tangency, geometric half-edge order and cell topology; Trim, durable ProfileRegionIntent, Add/Subtract and native OCCT Profile→Extrude / .ss2part cold rebuild | **First executable repair**, exact D2 Owner scope approved in PR #454; no product edits until contract and ACTIVE activation on main |
+| **S2** | **B03a/B04:** Circle Radius/Diameter PointRequest/OSNAP and stationary opposite-end Grip Tangent/Perpendicular snap base | Follow-on **separate** UI/snap Work Contract, not authorized by S0/S1 |
+| **S3** | **B03b/B05/B06:** end-to-end Qt Esc routing with real focus and numeric locks, Grip Rotate/Scale/Mirror+Copy and normal Mirror Keep Original/Copy | Follow-on **separate** CAD input and transform Work Contract, with independently settled one-key C versus C+Enter product grammar |
+
+Do not manufacture evidence for the audit's unexecuted current-main Windows witnesses. S0/S1 must begin with actual current-HEAD F1/F2/F3 RED cases after activation, and preserve the existing R12 one-tangent Circle Trim refusal, no global numerical epsilon or gap snap-healing, F's distinct point-contact material-region semantics, authored EntityIds/roles, Part Profile durable identity and native storage/lifecycle. No standalone constraints, global parameter solver or unrelated work.
+
+**Mandatory governance sequence:** independently approve the exact v1.10 and Part-v1.34 roadmap texts, pass their own exact-head Windows governance CLOSURE, separately authorize guarded squash into protected main; integrate the separately accepted S0/S1 D2 contract PR #454 after its exact-head CLOSURE and independent guarded-squash permission; propose and independently authorize a one-file ACTIVE-only activation. Work Contract accepted but not integrated/activated is not authority for production mutation. Implementation, validation, Owner manual/technical PASS and feature merge are later independent steps. Historic v1.9 readiness narrative below remains an audit trail, not the new product program state.
 
 ## 1. Why v1.8 narrows R12 structural editing
 
@@ -32,7 +47,7 @@ R8  Measure / relational diagnostics — completed
 → SR-01 Interaction Correctness and Profile UX — completed
 → SR-02 Sketch Interaction & Presentation Latency — completed
 → SR-03 Responsive Workbench Shell — completed
-→ Sketcher profile-authoring readiness re-test — NEXT evidence checkpoint
+→ Sketcher profile-authoring readiness re-test — historical v1.9 evidence checkpoint, superseded for 2026-10-16 repair priority
 → separate Part Feature Tree architecture gate
 → only then may a first solid-operation contract be considered
 ```
@@ -874,12 +889,11 @@ Initial Sketcher profile-authoring readiness review — concrete blockers record
 SR-01 Interaction Correctness and Profile UX — completed 2026-10-02 after Windows FULL #1128 and Owner manual Windows PASS  
 SR-02 Sketch Interaction & Presentation Latency — completed 2026-10-02 after Windows FULL #1169 and Owner manual Windows PASS  
 SR-03 Responsive Workbench Shell — completed 2026-10-02 after Windows FULL #1187 and Owner manual Windows PASS  
-Sketcher profile-authoring readiness re-test — NEXT evidence checkpoint  
-Part Feature Tree architecture gate inactive  
-Solid modeling / Extrude inactive  
+Sketcher profile-authoring readiness re-test — historical v1.9 checkpoint, now superseded by proposed S0/S1 audit repair for sequencing  
+Part Feature Tree / Extrude — later separately Owner-accepted delivered work, not retroactively undone by this historical v1.9 snapshot  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.9 is authoritative for Sketcher feature sequencing. R9–R12 and SR-01 through SR-03 are completed. The explicit Sketcher profile-authoring readiness re-test is now next, with no production CAD Work Contract active. Split/Join and R13+ remain inactive; no Part Feature Tree or solid-modeling scope is active.
+**Historical v1.9 statement:** R9–R12 and SR-01 through SR-03 were completed, and a profile-authoring readiness re-test was recorded as next at that time. The proposed v1.10 §0, when separately accepted and merged, supersedes this old scheduling with S0/S1 first; it does **not** undo subsequently accepted Part Profile/Extrude or RG-02 deliveries. Split/Join and R13+ remain inactive and outside the repair contracts.
 
 ## AUDIT-01 program interlock — completed
 
