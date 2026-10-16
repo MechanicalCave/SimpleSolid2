@@ -278,7 +278,7 @@ std::string repackage(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        19);
+        20);
 
     TempDirectory temp;
     part::PartDocumentStore store;
