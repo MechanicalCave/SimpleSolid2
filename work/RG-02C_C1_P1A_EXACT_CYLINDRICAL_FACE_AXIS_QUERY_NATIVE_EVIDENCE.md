@@ -1,6 +1,6 @@
 # RG-02C/C1-P1-A — exact analytic cylindrical Face-axis native evidence
 
-**Status:** implementation candidate, **NOT YET RUN ON REAL WINDOWS**. No P1-A technical PASS or protected-main production merge is claimed.
+**Status: BLOCKED — FIRST WINDOWS DRAFT FAST #3335 RED (DOC-01), P1-A NATIVE TESTS NOT EXECUTED.** No P1-A technical PASS or protected-main production merge is claimed. **Owner D2 additional-file decision required** because the accepted six-path implementation allowlist excludes generated `docs/browser/index.html`, but DOC-01 requires it after editing the approved internal as-built document.
 
 ## Bounded D2 and actual implementation
 
@@ -18,11 +18,17 @@ The native provider binds an opaque `ScopedExactCylindricalFace` to one current 
 - **Not independently executed until proven:** native `TopoDS_Face` topological orientation reversal, OCCT exception/fault-injection, degenerate OCCT cylinder, in-inventory deletion of an already bound Face within immutable runtime, separate toroidal/conical negative fixture if not present. No production test-only backdoors are permitted. Report any gaps truthfully, not as successes.
 - No Part-level authored source, persistent `SurfaceReference`, feature Axis, Revolve Reverse semantics, UI or P1-B partitioned-carrier authoring is implemented or tested. Provider scope is evaluation-local geometry only.
 
+## First RED and exact bounded-contract blocker (2026-10-16)
+
+At source/test/docs/evidence HEAD `4253cf218a0602932dc7f787d6fd5484a0186a50`, real Windows [PR #433 DRAFT FAST #3335](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38893894889) **FAIL** in official DOC-01 verification, **before** C++ compilation or native test execution. The failing `windows-msvc-fast` log says: **`[BROWSER] docs/browser/index.html is stale. Run '.\\ss2.ps1 docs' and commit the generated file.`** The generated Browser encodes canonical documentation text including `docs/internal/*.md`: `scripts/docs/ss2-docs-core.ps1::Get-CanonicalDocPaths` enumerates `docs/internal`, and `New-BrowserHtml` embeds that markdown; `scripts/docs/ss2-docs-validation.ps1::Test-BrowserFreshness` compares `docs/browser/index.html` to the exact generated result. This is a **real, deterministic DOC-01 failure**, not a C1-P1-A query compile failure or native geometric FAIL.
+
+The accepted exact P1-A D2 six-path allowlist *requires* `docs/internal/PART_EDGE_PROJECTION_KERNEL.md` be updated (`Internal docs: required`) but **does not include** `docs/browser/index.html` and forbids additional docs paths without fresh Owner amendment. Therefore there is currently **no policy-compliant way to PASS Windows**. No script weakening, bypass, exclusion of internal source from Browser, rollback of required internal docs or creation of an out-of-scope generated file is authorized. **Fail-closed STOP** for Owner to decide the minimal D2 addendum: seventh path `docs/browser/index.html`, **generated only** via existing canonical generator, with Browser parity DOC-01 and otherwise unchanged original six files. Such a separate governance addendum requires Owner acceptance, guarded governance merge, and independent ACTIVE-only amendment/activation before actual production branch may edit that seventh path. No P1-A code compile/native test result may be inferred from #3335.
+
 ## Actual Windows gates (do not invent PASS)
 
 | Gate | Exact tested SHA / run | Result |
 | --- | --- | --- |
-| Native FOCUSED `pm04c2.production_revolve` | Pending | NOT RUN |
+| First Windows DRAFT FAST / DOC-01 [#3335](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38893894889) | `4253cf218a0602932dc7f787d6fd5484a0186a50` | **RED**, Browser stale; C++ / native test not executed |\n| Native FOCUSED `pm04c2.production_revolve` | Pending | NOT RUN |
 | Independent Draft FAST | Pending | NOT RUN |
 | Ready FULL Core, native Kernel/OCCT and Qt/OCCT Desktop | Pending | NOT RUN |
 | Official DOC-01 internal as-built | Pending | NOT RUN |
