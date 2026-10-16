@@ -1,9 +1,15 @@
 # RG-02C/C1-P1-B1/H1 — native v20 writer: legacy test expectation correction, exact-path D2 addendum
 
-**Status: D2 PROPOSAL / OWNER EXACT-SCOPE ACCEPTANCE REQUIRED. NO PRODUCTION TEST MUTATION OUTSIDE EXISTING 19 H1 PATHS IS AUTHORIZED BY THIS FILE.**
+**Status: OWNER ACCEPTED EXACT SEVEN-PATH H1 D2 ADDENDUM (2026-10-16); GOVERNANCE PR #449 OPEN/UNMERGED, ACTIVE H1 CONTRACT STILL 19-PATH UNTIL SEPARATE AMENDMENT AND PROTECTED-MAIN INTEGRATION. NO NEW-PATH CODE EDITS YET.**
 **Date:** 2026-10-16.
 **Baseline:** protected `main` `b4265c53e5b6677af566733fdfc3deafc14fcad8`. Owner separately accepted architectural option **A** (one real current strict bounded analytic cylindrical Face and stage-qualified semantic SurfaceReference only), exact H1 D2/UX, and explicitly authorized guarded-squash #445 and #446. Both were independently Windows-green and merged, leaving H1 **ACTIVE with exactly 19 authorized paths**. H1 implementation [Draft/Ready PR #444](https://github.com/MechanicalCave/SimpleSolid2/pull/444) is NOT merged, technical FINAL PASS not requested.
 **Authority:** AGENTS.md; frozen Constitution/Foundation 1.0; Architecture and accepted ADR-0014/-0016/-0017; Part Modeling roadmap v1.33; accepted `work/RG-02C_C1_P1B1_H1_STRICT_CYLINDRICAL_FACE_AXIS_HEADLESS_D2_WORK_CONTRACT_PROPOSAL.md` §2, including strict STOP if native RED requires a path outside the allowlist. DOC-01 impact declarations remain required.
+
+## Recorded exact seven-path Owner D2 acceptance — 2026-10-16
+
+The Agent explicitly presented all **seven actual new paths** in [PR #449](https://github.com/MechanicalCave/SimpleSolid2/pull/449) and asked: **“czy akceptujesz dodanie tych dokładnie siedmiu ścieżek do kontraktu H1 (łącznie 26), wyłącznie na potrzeby korekty oczekiwań aktualnego zapisu v19 → v20, z zachowaniem wszystkich rzeczywistych testów zgodności starych formatów?”**. The Owner replied **`akceptuje - kontynuuj`**. This independently **ACCEPTS the exact H1 D2 scope of seven specific test paths 20–26** below, limited to current-writer v19→v20 expectations and strictly adjacent truthful comments. The old historical v9–v19 file fixtures and their negative/upgrade tests remain protected.
+
+This does **not** merge this one-file governance addendum, does **not** change the already active 19-path H1 contract, and does **not** authorize editing seven tests before the separately Windows-validated governance addendum and one-file active-contract amendment have each received **distinct Owner guarded-squash authority** and been merged. The acceptance does **not** mean FULL #3388 passed: it remains RED (Core 25/25 PASS; native 55/57; desktop NOT COMPLETE). It does not accept H1 technical FINAL PASS or authorize merging the production PR #444. A new exact-head Windows CLOSURE is required after recording this decision.
 
 ## 1. Real Windows RED and reason to change historical tests
 
@@ -18,7 +24,7 @@ These are **real RED test assertions**, not a flaky runner, not OCCT geometry pr
 
 ## 2. Requested EXACT D2 extension — seven test paths, no other changes
 
-If Owner explicitly accepts this contract addendum, the exact list of H1 §2 allowed paths becomes **26 rather than 19** after separately governed integration. Add these **SEVEN** and only these:
+Owner has **explicitly accepted the precise seven-path D2 addendum**; the list of executable paths will become **26 rather than 19** only after separately governed integration of this record and the active H1 Work Contract amendment. Add these **SEVEN** and only these:
 
 | New H1 # | Exact path | Required current-writer assertion repair; observed source |
 | --- | --- | --- |
@@ -36,7 +42,7 @@ If Owner explicitly accepts this contract addendum, the exact list of H1 §2 all
 
 ## 3. Owner decision, formal activation and merge gates
 
-1. **Owner exact-path D2 acceptance PENDING:** the user's latest `kontynuuj` authorized continued analysis and in-scope work, **not** prior acceptance of these unshown seven additional paths. The Owner must separately accept these precise paths/limitations.
+1. **CLOSED — Owner exact-path D2 acceptance recorded 2026-10-16:** the Owner explicitly approved all seven listed paths (20–26) and only current-writer v19→v20 assertion/comment corrections, retaining real historical fixtures.
 2. Record exact Owner acceptance in this **governance-only** one-file proposal PR, run Windows exact-head CLOSURE, obtain independently explicit guarded-squash authority for that proposal and verify protected `main` after merge.
 3. Independently amend the **already active H1 D2 Work Contract** by adding these exact seven test paths (20–26) to §2, preserving original 19, and pass Windows exact-head governance CLOSURE + separate guarded squash. There is no need to toggle `work/ACTIVE.yaml`: H1 remains active.
 4. **Only after both governance PRs are integrated** may implementation #444 modify any of the seven new paths. Existing 19 authorized H1 paths may continue to be edited; no early test patch in the new paths to force GREEN.
