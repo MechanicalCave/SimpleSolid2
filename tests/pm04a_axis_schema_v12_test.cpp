@@ -424,6 +424,43 @@ int main() {
             .get<std::string>() ==
         regular_line.serialized());
 
+    // H1 v20 fail-closed native reader: a new Face source cannot be
+    // smuggled into an older schema or accepted with malformed provenance.
+    // Reuse the REAL current-schema authored Part payload so the negative
+    // reaches the Axis-specific reader rather than a synthetic document.
+    const auto rejectFaceAxisPayload = [&](
+        int schema_version,
+        const nlohmann::json& axis_source,
+        const char* filename) {
+        auto malformed_authored = authored;
+        auto& first_axis = malformed_authored["axes"].at(0);
+        first_axis.erase("source_sketch_id");
+        first_axis.erase("source_entity_id");
+        first_axis["kind"] = "cylindrical_body_face_strict";
+        first_axis["source_surface"] = axis_source;
+        auto text = malformed_authored.dump(2);
+        text.push_back('\n');
+        const auto built =
+            persistence::buildNativeDocumentContainer(
+                persistence::NativeDocumentDescriptor{
+                    "part",
+                    package.package->descriptor.document_id,
+                    schema_version},
+                text);
+        CHECK(built.ok());
+        const auto path = temp.path / filename;
+        writeBytes(path, *built.bytes);
+        const auto refused = store.load(path);
+        CHECK(!refused.ok());
+        CHECK(!refused.document);
+    };
+    rejectFaceAxisPayload(
+        20, nlohmann::json::object(),
+        "H1FaceMissingStageAndSurfaceV20.ss2part");
+    rejectFaceAxisPayload(
+        19, nlohmann::json::object(),
+        "H1FaceSourceIsForbiddenInV19.ss2part");
+
     const auto reloaded =
         store.load(current_path);
     CHECK(reloaded.ok());
