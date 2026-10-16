@@ -277,6 +277,14 @@ std::string axisEvaluationMessage(
         return "Axis source Sketch Body stage is unavailable";
     case Diagnostic::invalid_frame:
         return "Axis source resolves to an invalid world frame";
+    case Diagnostic::cylindrical_face_missing:
+        return "Cylindrical Face Axis source is missing";
+    case Diagnostic::cylindrical_face_ambiguous:
+        return "Cylindrical Face Axis source is not one strict Face at the authored stage";
+    case Diagnostic::cylindrical_face_not_cylinder:
+        return "Axis source Face is not an exact analytic cylinder";
+    case Diagnostic::cylindrical_face_native_geometry_unavailable:
+        return "Exact current Body Face cylinder geometry is unavailable";
     }
     return "Axis source could not be resolved";
 }
@@ -308,6 +316,19 @@ part::AxisEvaluation evaluateAxisInDocument(
         return part::resolveAxisReference(
             document, reference, &evaluation,
             nullptr, provider);
+    }
+
+    if (std::holds_alternative<
+            part::StrictCylindricalFaceAxisSource>(
+            axis->source)) {
+        const auto evaluation =
+            part::evaluatePart(document, modeling_kernel);
+        auto* provider = dynamic_cast<
+            kernel::IExactCylindricalFaceAxisQuery*>(
+                &modeling_kernel);
+        return part::resolveAxisReference(
+            document, reference, &evaluation,
+            nullptr, nullptr, provider);
     }
 
     const auto* sketch_source =
