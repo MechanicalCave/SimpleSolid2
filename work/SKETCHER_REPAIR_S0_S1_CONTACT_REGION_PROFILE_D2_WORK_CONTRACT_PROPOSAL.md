@@ -92,9 +92,9 @@ NO `tests/CMakeLists.txt`, `tests/core_only/CMakeLists.txt`, new CTest target, `
 
 ## Documentation impact
 
-Internal docs: **required** — analytical relation, arrangement/connectedness, deterministic diagnostics and Profile lifecycle semantics.
-User/Product docs: **required** — Circle/Arc tangent Profile and Trim user-visible behavior and current limits; canonical Polish/English peers; generated Browser freshness.
-Reason: S1 changes observable and reusable CAD geometry behavior, and may change derived evaluation of existing authored Profile references. Neither historical implementation log nor guessed future S2/S3 UX belongs in as-built docs.
+Internal docs: required
+User/Product docs: required
+Reason: S1 changes observable and reusable CAD geometry behavior, including analytical contact classification, arrangement/connectedness, deterministic diagnostics, Profile lifecycle semantics, Circle/Arc tangent Profile and Trim user-visible workflows, and may change derived evaluation of existing authored Profile references. Product documentation must remain canonical Polish/English peers with generated Browser freshness. Neither historical implementation log nor guessed future S2/S3 UX belongs in as-built docs.
 
 ## 7. Follow-on program boundary
 
