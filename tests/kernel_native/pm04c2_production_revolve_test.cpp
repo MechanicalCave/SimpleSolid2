@@ -430,6 +430,7 @@ firstAuthorableCircle(
 // Axis authoring/resolver or a substitute for the absent exact Face-axis API.
 // A selected bounded Face and one semantic Surface carrier are distinct:
 // a carrier can have several current Face realizations after a Boolean.
+// P0 records the source-stage/Face partition as evidence, never a new selector.
 struct C1FaceEvidence final {
     std::size_t cylindrical_faces{};
     std::size_t other_faces{};
