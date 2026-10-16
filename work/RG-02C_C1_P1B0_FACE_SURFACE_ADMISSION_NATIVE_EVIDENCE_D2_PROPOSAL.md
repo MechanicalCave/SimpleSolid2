@@ -1,17 +1,23 @@
 # RG-02C/C1-P1-B0 — picked cylindrical Face versus durable semantic Surface: native admission evidence D2 proposal
 
-**Status:** PROPOSAL ONLY — NOT OWNER D2 ACCEPTED, NOT ACTIVE, NOT IMPLEMENTABLE.  
+**Status:** OWNER ACCEPTED EXACT P1-B0 D2 TWO-PATH NATIVE EVIDENCE CONTRACT — 2026-10-16; GOVERNANCE PR #436 STILL DRAFT / NOT MERGED; B0 NOT ACTIVE OR EXECUTABLE.  
 **Date:** 2026-10-16.  
 **Decision class:** D2 architecture/evidence planning; later persistence/product/UX choices remain independently Owner-gated.  
 **Baseline:** protected `main` `8488b8c20077bb39689cfb009d79686f1082db71`, resulting from separately Owner-authorized guarded-squash [P1-A PR #433](https://github.com/MechanicalCave/SimpleSolid2/pull/433).  
 **Program:** [Part Modeling v1 roadmap](PART_MODELING_V1_ROADMAP.md) accepted v1.33, RG-02 Datum Plane + Axis focus; Foundation 1.0, Architecture 1.0 and accepted ADR-0014, ADR-0016, ADR-0017.  
 **Prior evidence:** P0 [native Face/Surface evidence](RG-02C_C1_CYLINDRICAL_FACE_AXIS_NATIVE_EVIDENCE.md); P1-A [exact Face-axis query native evidence](RG-02C_C1_P1A_EXACT_CYLINDRICAL_FACE_AXIS_QUERY_NATIVE_EVIDENCE.md); product-intent boundary in [C1/P1 proposal](RG-02C_C1_P1_EXACT_CYLINDRICAL_FACE_AXIS_D2_PROPOSAL.md).
 
+## Recorded Owner exact D2 acceptance — separately gated governance
+
+On 2026-10-16 the Agent explicitly asked: **“czy akceptujesz dokładny, dwuplikowy kontrakt dowodowy P1-B0 D2 z PR #436?”** and expressly excluded permission for proposal merge, `ACTIVE.yaml` activation and product implementation. The Owner answered **`akcepyuję - kontynuuj`** (affirmative acceptance). This is **acceptance of this exact B0 native evidence contract**, limited to future additive use of the already registered OCCT test and one factual evidence ledger, with honest GAP/RED handling and the real FOCUSED → FAST → FULL → DOC-01 → exact-head CLOSURE gates.
+
+**Not accepted by that answer:** any durable Axis source/persistence or schema choice; option A/B/C (strict Face versus whole Surface carrier versus future patch discriminator); a product-facing `Constructor: Cylindrical Face` UX; new Part/Kernel public APIs; starting B0 test mutations before dedicated activation; merging PR #436 or any later implementation PR. The sole Draft PR changes only this proposal file. The initial [Windows governance CLOSURE #3347](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/38908131921) **SUCCESS** at `e52363438025c4400a32a9d589a5c572bd3c3bc4` preceded this decision-only documentation change; the updated PR HEAD must pass a **new exact-head CLOSURE** before asking separately for a guarded governance squash.
+
 ## 0. Actual upstream checkpoint; no implicit extension authority
 
 C1-P0 was Owner-final and merged as #429. P1-A is likewise **Owner technical FINAL PASS with explicit native fixture GAPs deferred** and was guarded-squash merged to `main` by #433. Genuine independent Windows P1-A FOCUSED #3342 (1/1), FAST #3343 (93/93), FULL #3344 (199/199; Core 25 / native Kernel 57 / Desktop 117, official DOC-01 Browser parity), and final exact-head CLOSURE #3346 SUCCESS are recorded in the P1-A ledger. Historical #3335/#3336 DOC-01 RED remains factual. P1-A supplies a **read-only, evaluation-local** `IExactCylindricalFaceAxisQuery` of the **actual current Body-bounded Face**; it does not supply a durable Part Axis source, persistent selector, picked-Face admission rule or UI.
 
-The current `work/ACTIVE.yaml` still points to the completed P1-A Work Contract and roadmap 1.33; this **work-only draft proposal does not update ACTIVE**, activate P1-B0 or claim continuation production authority. In particular, the Owner's authorization to squash #433 only integrated P1-A. The present continuation is permission to **prepare a proposal for review**, not an Owner decision selecting option A/B/C below or permission to merge this governance proposal.
+The current `work/ACTIVE.yaml` still points to the completed P1-A Work Contract and roadmap 1.33; this **work-only draft proposal does not update ACTIVE**, activate P1-B0 or claim continuation production authority. In particular, the Owner's authorization to squash #433 only integrated P1-A. The Owner's later response explicitly **accepts the exact D2 B0 evidence scope**, but **does not select option A/B/C below or authorize merge/activation/product mutation**.
 
 ## 1. Precise architectural question — not a UI question
 
@@ -39,11 +45,11 @@ These are implemented in `src/part/include/simplesolid2/part/semantic_topology_r
 
 Do not collapse the choice by guessing that equal axis/radius implies semantic identity: **proven unique stage-semantic ownership comes first**, then analytic consistency is a numerical admission predicate *inside* that ownership. Equal/coaxial cylinders with different Feature provenance stay different source candidates.
 
-## 3. Proposed single P1-B0 evidence-only contract — for separate Owner acceptance
+## 3. Owner-accepted single P1-B0 evidence-only D2 contract — activation separately gated
 
 **One deliverable:** a read-only native OCCT/Part-stage admission matrix distinguishing selected bounded Face, semantic Surface owner, strict Face status, all owner-current Face realizations and their P1-A geometric cylinder queries. This stage chooses **no durable Axis product semantics** and writes no provider/interface/Part schema/UI implementation.
 
-**Exact proposed TWO paths (only if the Owner accepts this text, governance is separately squash-merged, and a dedicated ACTIVE-only activation is separately Owner-authorized and merged):**
+**Exact TWO paths ACCEPTED by Owner (executable only AFTER this governance proposal is separately squash-merged and dedicated ACTIVE-only activation is independently Owner-authorized and merged):**
 
 1. `tests/kernel_native/pm04c2_production_revolve_test.cpp` — additive assertions/helpers in the **existing already-registered** OCCT native target, reusing C1-P0 and C1-P1-A fixtures and the current public provider/Part catalog; no duplicated standalone tests/CMake.
 2. `work/RG-02C_C1_P1B0_FACE_SURFACE_ADMISSION_NATIVE_EVIDENCE.md` — new factual evidence ledger with counts, PASS/RED/GAP, actual cases and relevant run/commit SHAs.
@@ -86,8 +92,8 @@ Keep acceptance denominators and actual logs, not invented cardinalities. If sep
 
 ## 5. STOP matrix and independent decision sequence
 
-1. **Now**: this one-file D2 proposal branch / Draft PR is a review artifact only. No acceptance, merge, activation or native tests are implied.
-2. **Owner D2 scope decision**: accept/reject/amend the exact B0 two-file evidence contract; no automatic merge permission.
+1. **Now**: the one-file D2 proposal has exact Owner scope **ACCEPTANCE**; its Draft PR remains a review artifact only. No merge, activation or native tests are implied.
+2. **Owner D2 scope decision — CLOSED / ACCEPTED 2026-10-16**: exact two-file B0 evidence contract approved as written, **without automatic governance merge permission**.
 3. **Governance merge decision**: after real exact-head governance Windows check, independently authorize protected-main squash of the proposal.
 4. **ACTIVE-only activation decision**: separately propose and merge one `work/ACTIVE.yaml` pointer/history update after Owner approval and its own exact-head CLOSURE.
 5. **B0 evidence execution**: only from activated main and only inside the two approved files; actual Windows gates and separately accepted technical PASS/merge.
