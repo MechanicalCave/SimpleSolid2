@@ -1389,6 +1389,8 @@ struct TopologyIntersection final {
     std::uint32_t canonical_branch{};
     bool first_endpoint{false};
     bool second_endpoint{false};
+    // Preserve source contact semantics across derived fragmentation.
+    CurveContactKind contact{CurveContactKind::proper_crossing};
 };
 
 struct Vertex final {
@@ -3998,15 +4000,10 @@ RegionAnalysis2D analyzeRegions(
 
             for (const auto& item :
                  relation.intersections) {
-                const bool topological =
-                    item.contact !=
-                        CurveContactKind::tangent ||
-                    item.first_endpoint ||
-                    item.second_endpoint;
-                if (!topological) {
-                    continue;
-                }
-
+                // Interior tangencies are arrangement vertices, too.
+                // Material regions remain separated by the geometric
+                // order of outgoing half-edges, not by dropping this
+                // contact or treating point-touch as shared material.
                 sets.unite(first, second);
                 intersections.push_back(
                     TopologyIntersection{
@@ -4017,7 +4014,8 @@ RegionAnalysis2D analyzeRegions(
                         item.second_parameter,
                         item.canonical_branch,
                         item.first_endpoint,
-                        item.second_endpoint});
+                        item.second_endpoint,
+                        item.contact});
             }
         }
     }
