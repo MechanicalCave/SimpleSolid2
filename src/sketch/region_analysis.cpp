@@ -1,6 +1,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -604,7 +605,29 @@ using ExactExpansion = std::vector<double>;
 struct ExactLineCircleDiscriminant final {
     int sign{};
     double value{};
+    // Outward interval bounds of the exact stored-binary polynomial.
+    // Only used for local D2-A witness-resolution certification.
+    double positive_upper{};
+    double direction_squared_lower{};
 };
+
+[[nodiscard]] std::optional<std::pair<double, double>>
+exactExpansionBounds(const ExactExpansion& terms) {
+    double lower = 0.0;
+    double upper = 0.0;
+    for (const double term : terms) {
+        const double lo = lower + term;
+        const double hi = upper + term;
+        if (!finiteValue(lo) || !finiteValue(hi)) {
+            return std::nullopt;
+        }
+        lower = std::nextafter(
+            lo, -std::numeric_limits<double>::infinity());
+        upper = std::nextafter(
+            hi, std::numeric_limits<double>::infinity());
+    }
+    return std::pair{lower, upper};
+}
 
 [[nodiscard]] std::optional<ExactLineCircleDiscriminant>
 exactLineCircleDiscriminant(
@@ -677,7 +700,13 @@ exactLineCircleDiscriminant(
             return std::nullopt;
         }
     }
-    return ExactLineCircleDiscriminant{sign, value};
+    const auto d_bounds = exactExpansionBounds(*discriminant);
+    const auto dsq_bounds = exactExpansionBounds(*dsq);
+    if (!d_bounds || !dsq_bounds) {
+        return std::nullopt;
+    }
+    return ExactLineCircleDiscriminant{
+        sign, value, d_bounds->second, dsq_bounds->first};
 }
 
 [[nodiscard]] std::optional<int> exactLineCircleSign(
@@ -2832,6 +2861,128 @@ wholeCircleLoop(
         *sample};
 }
 
+// D2-A: a strictly source-anchored Line/Circle two-use sliver may
+// have two genuine distinct finite secants and yet a clearance smaller
+// than half a representable Cartesian coordinate step at the chord.
+// That does NOT mean there are no binary64 points in its mathematical
+// interior. It means this binary64 evaluated witness/area pipeline
+// cannot certify the face's material meaning. Report it, keep the two
+// intersections and every surrounding halfedge, never weld/delete.
+[[nodiscard]] std::optional<std::vector<EntityId>>
+certifiedUnresolvedLineCircleLens(
+    const SketchModel& model,
+    const RegionLoop2D& loop) {
+    if (loop.boundary.size() != 2U) {
+        return std::nullopt;
+    }
+    const auto first =
+        curveView(model, loop.boundary[0].source_entity);
+    const auto second =
+        curveView(model, loop.boundary[1].source_entity);
+    if (!first || !second) {
+        return std::nullopt;
+    }
+    const CurveView* line = nullptr;
+    const CurveView* circle = nullptr;
+    const RegionBoundaryUse2D* line_use = nullptr;
+    const RegionBoundaryUse2D* circle_use = nullptr;
+    if (first->kind == CurveKind::line &&
+        second->kind == CurveKind::circle) {
+        line = &*first;
+        circle = &*second;
+        line_use = &loop.boundary[0];
+        circle_use = &loop.boundary[1];
+    } else if (second->kind == CurveKind::line &&
+               first->kind == CurveKind::circle) {
+        line = &*second;
+        circle = &*first;
+        line_use = &loop.boundary[1];
+        circle_use = &loop.boundary[0];
+    } else {
+        return std::nullopt;
+    }
+    const auto angle =
+        circularDeltaAngle(*circle, *circle_use);
+    if (!angle || !(std::abs(*angle) > 0.0) ||
+        !(std::abs(*angle) <
+          std::numbers::pi_v<double> * 0.5)) {
+        return std::nullopt;
+    }
+    const auto relation =
+        analyzeCurveRelation(model, line->id, circle->id);
+    if (relation.status != CurveRelationStatus::discrete ||
+        relation.intersections.size() != 2U) {
+        return std::nullopt;
+    }
+    std::array<double, 2> actual_line{};
+    std::array<double, 2> actual_circle{};
+    for (std::size_t index = 0U; index < 2U; ++index) {
+        const auto& item = relation.intersections[index];
+        if (item.contact != CurveContactKind::proper_crossing) {
+            return std::nullopt;
+        }
+        actual_line[index] =
+            relation.first_entity == line->id
+                ? item.first_parameter : item.second_parameter;
+        actual_circle[index] =
+            relation.first_entity == circle->id
+                ? item.first_parameter : item.second_parameter;
+    }
+    const auto parameters_match =
+        [](std::array<double, 2> actual,
+           const RegionBoundaryUse2D& use) {
+            std::sort(actual.begin(), actual.end());
+            std::array<double, 2> bounds{
+                use.start_parameter, use.end_parameter};
+            std::sort(bounds.begin(), bounds.end());
+            return actual[0] != actual[1] &&
+                   actual == bounds;
+        };
+    if (!parameters_match(actual_line, *line_use) ||
+        !parameters_match(actual_circle, *circle_use)) {
+        return std::nullopt;
+    }
+    const auto exact =
+        exactLineCircleDiscriminant(*line, *circle);
+    if (!exact || exact->sign <= 0 ||
+        !(exact->positive_upper > 0.0) ||
+        !(exact->direction_squared_lower > 0.0)) {
+        return std::nullopt;
+    }
+    // D = |d|^2 (r^2 - distance(center, line)^2).
+    // With distance >= 0 and r > 0, cap height satisfies
+    //   h = D / (|d|^2 (r + distance))
+    //     <= D_upper / (|d|^2_lower * r).
+    // All input expansions bound the exact dyadic operands.
+    const double denominator =
+        exact->direction_squared_lower * circle->radius;
+    if (!(denominator > 0.0) || !finiteValue(denominator)) {
+        return std::nullopt;
+    }
+    const double height_upper = std::nextafter(
+        exact->positive_upper / denominator,
+        std::numeric_limits<double>::infinity());
+    const Point2 contact = relation.intersections[0].point;
+    const auto ulp =
+        [](double value) {
+            const double magnitude = std::abs(value);
+            return std::nextafter(
+                magnitude,
+                std::numeric_limits<double>::infinity()) -
+                magnitude;
+        };
+    const double coordinate_step =
+        std::min(ulp(contact.u), ulp(contact.v));
+    if (!(height_upper > 0.0) ||
+        !finiteValue(height_upper) ||
+        !(coordinate_step > 0.0) ||
+        !finiteValue(coordinate_step) ||
+        !(height_upper < coordinate_step * 0.5)) {
+        return std::nullopt;
+    }
+    return std::vector<EntityId>{line->id, circle->id};
+}
+
 [[nodiscard]] bool anchorLess(
     const RegionBoundaryAnchor2D& first,
     const RegionBoundaryAnchor2D& second) noexcept {
@@ -2904,7 +3055,12 @@ intersectionAnchor(
         branch};
 }
 
-[[nodiscard]] std::optional<std::vector<BuiltLoop>>
+struct ComponentLoopBuildResult final {
+    std::vector<BuiltLoop> loops;
+    std::vector<std::vector<EntityId>> unresolved;
+};
+
+[[nodiscard]] std::optional<ComponentLoopBuildResult>
 buildComponentLoops(
     const SketchModel& model,
     const std::vector<EntityId>& entities,
@@ -3040,6 +3196,7 @@ buildComponentLoops(
     }
 
     std::vector<BuiltLoop> loops;
+    std::vector<std::vector<EntityId>> unresolved;
     std::vector<DerivedEdge> edges;
 
     for (std::size_t index = 0U;
@@ -3306,7 +3463,18 @@ buildComponentLoops(
                 model,
                 *loop);
         if (!sample) {
-            return std::nullopt;
+            const auto certified =
+                certifiedUnresolvedLineCircleLens(model, *loop);
+            if (!certified) {
+                // An arbitrary missing witness is never justification
+                // for discarding topology or publishing partial cells.
+                return std::nullopt;
+            }
+            unresolved.push_back(*certified);
+            // Halfedges and authentic crossing branches remain in the
+            // original arrangement. Only this uncertifiable derived face
+            // is withheld from material/Profile publication.
+            continue;
         }
 
         loops.push_back(
@@ -3315,7 +3483,8 @@ buildComponentLoops(
                 *sample});
     }
 
-    return loops;
+    return ComponentLoopBuildResult{
+        std::move(loops), std::move(unresolved)};
 }
 
 [[nodiscard]] std::vector<EntityId> componentEntities(
@@ -4518,19 +4687,28 @@ RegionAnalysis2D analyzeRegions(
             continue;
         }
 
-        if (built->empty()) {
+        for (const auto& sources : built->unresolved) {
             result.diagnostics.push_back(
                 RegionAnalysisDiagnostic2D{
                     RegionAnalysisDiagnosticKind::
-                        open_boundary,
-                    entities});
+                        invalid_topology,
+                    sources});
+        }
+        if (built->loops.empty()) {
+            if (built->unresolved.empty()) {
+                result.diagnostics.push_back(
+                    RegionAnalysisDiagnostic2D{
+                        RegionAnalysisDiagnosticKind::
+                            open_boundary,
+                        entities});
+            }
             continue;
         }
 
         loops.insert(
             loops.end(),
-            built->begin(),
-            built->end());
+            built->loops.begin(),
+            built->loops.end());
     }
 
     if (loops.empty()) {
