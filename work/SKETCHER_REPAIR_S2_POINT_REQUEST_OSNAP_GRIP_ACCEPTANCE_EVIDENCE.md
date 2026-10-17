@@ -20,20 +20,22 @@
 | Windows Ready FULL #3595 | `ace9544dcf710fbbb566de35e14b5e3727bf4505` | FAIL; Core and kernel-native stages PASS, Desktop 115/117. B04 controller fixture used stale runtime source token after presentation refresh; distinct pre-existing `pm05f_r2.native_workbench_edit` failed at native S3A MID-hover re-entry. Both remain factual RED at this SHA. |
 | Windows FOCUSED #3596 | `0e897881ac0e66408d1912ea91678a822904bc65` | FAIL 0/1 after first stale-token fixture repair; S2 fixture changed transient selection, breaking a later unrelated R10 assertion. No test removed. |
 | Windows FOCUSED #3597 | `392e531655ac29f80aabb11688a99b65f41bc907` | PASS 1/1 `sk07f.precision_input_controller`; test reacquires current source tokens and restores the prior selection state, preserving all downstream R10 controls. |
+| Windows FOCUSED #3598 | `5073307444785965860a5a29f5f09f5ff76b7c67` | PASS 2/2: `sk07f.precision_input_controller` and unchanged `pm05f_r2.native_workbench_edit` native GUI. Original #3595 RED remains historical, not reclassified. |
+| Windows Ready FULL #3599 | `5073307444785965860a5a29f5f09f5ff76b7c67` | **PASS 199/199**: Core 25/25, native Kernel 57/57, Qt/Desktop 117/117; aggregate `windows-msvc` SUCCESS. Official `.\\ss2.ps1 docs`, generated Browser no-diff and DOC-01 verification PASS. |
 
 ## Current implementation findings
 
 - B03a: Circle center acceptance exposes one Center-based request for the size-stage; Qt controller uses the shared point resolver rather than raw pointer position, while explicit typed Diameter/Radius retains its own length grammar and numeric authority.
 - B04: Line Start/End Reshape keeps its original grip pivot in `PointRequest.base` while a transient `snap_reference_base` uses the stationary opposite endpoint for request-relative TAN/PER only.
 - Registered Core tests cover centered request availability and base semantics. Registered Qt tests cover actual off-cursor Circle size OSNAP, actual TAN/PER snap source, preview/committed line endpoint geometry and original opposite endpoint unchanged. Existing tests also cover numeric/Grip Copy/Rotate negative compatibility; further exact-HEAD FULL and Owner manual checks remain mandatory.
-- The #3595 native MID-hover failure is **not resolved by #3597**, which executes only the focused controller test. It remains a regression/failure investigation item; no edit to nonallowlisted native test file or global UI semantics is authorized.
+- The #3595 native MID-hover failure **remains a historical genuine FAIL**, not a retroactive PASS. It did not recur in focused #3598 or in the exact same code/docs FULL #3599, with **no changes** to the nonallowlisted native test or global UI semantics. No general claim that future intermittent failure is impossible.
 - No new public interface, native schema, authored snap/constraint, Part/OCCT source, global snap tolerance, S3 behavior or generalized rebind has been introduced.
 
 ## Remaining gates
 
-- DOC-01 current-state internal and PL/EN product docs plus generated Browser freshness and exact-head verification;
-- independent Windows FOCUSED where appropriate, FAST and Ready FULL with all Core/native Kernel/Desktop PASS and no hidden historical failures;
-- repeat/diagnose native MID-hover case without weakening or modifying its existing out-of-scope test;
+- DOC-01 internal/PL+EN docs, generated Browser and no-diff verification were PASS on exact code/docs HEAD `5073307444785965860a5a29f5f09f5ff76b7c67`; a later evidence-only commit must preserve those blobs;
+- FOCUSED #3598 and Ready FULL #3599 are PASS on exact code/docs SHA `5073307444785965860a5a29f5f09f5ff76b7c67`. FAST #3594 passed on prior source/test SHA; it cannot be called exact-head FAST for #3599;
+- preserve the #3595 native MID-hover FAIL and the subsequent #3598/#3599 PASS evidence without removing, weakening or modifying the out-of-scope test;
 - exact-head Windows CLOSURE after factual evidence synchronization;
 - Owner manual Windows B03a/B04 acceptance, independent technical FINAL PASS, and separate guarded product merge authorization.
 
