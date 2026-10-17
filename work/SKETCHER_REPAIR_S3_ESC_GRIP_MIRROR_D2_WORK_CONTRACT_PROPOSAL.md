@@ -13,7 +13,7 @@ S0/S1 → S2 → S3 scheduling is already an Owner-accepted **direction**, not a
 
 **D3 STOP (`5):** No shortcut-policy or focus interception change is permitted until Owner explicitly chooses the behavior. If the product decision cannot be reached, isolate an independent S3 sub-scope in a newly accepted contract and do not silently ship a partial product feature under this proposal.
 
-**Protected integration sequence:** (1) Owner approves exact D2 ``0–9, paths and D3 outcome; (2) governance proposal runs independent exact-HEAD Windows CLOSURE; (3) Owner separately authorizes guarded squash of this governance-only PR; (4) verify contract on protected `main`; (5) a **distinct ACTIVE-only PR** switches only `active_work` to this contract, passes its own exact-head Ready CLOSURE and receives separate Owner guarded-squash authority; (6) only after verified `main` activation begin test-first production PR(s). Each product PR later needs focused/FAST/Ready FULL, DOC-01, manual PASS, independent technical FINAL PASS and separate guarded product merge authorization. Never direct-write protected `main`.
+**Protected integration sequence:** (1) Owner approves exact D2 sections 0–9, paths and D3 outcome; (2) governance proposal runs independent exact-HEAD Windows CLOSURE; (3) Owner separately authorizes guarded squash of this governance-only PR; (4) verify contract on protected `main`; (5) a **distinct ACTIVE-only PR** switches only `active_work` to this contract, passes its own exact-head Ready CLOSURE and receives separate Owner guarded-squash authority; (6) only after verified `main` activation begin test-first production PR(s). Each product PR later needs focused/FAST/Ready FULL, DOC-01, manual PASS, independent technical FINAL PASS and separate guarded product merge authorization. Never direct-write protected `main`.
 
 ## 1. Current-main audit: evidence, not an asserted current Windows RED
 
@@ -106,7 +106,7 @@ All items are optional, conditioned on **future exact Owner approval** and prove
 22. `docs/internal/UI_PROJECT_HUB.md` — only if workspace global Command Line/Esc behavior changes.
 23. `docs/product/pl/PARTS.md` — Polish Grip and Mirror user workflow, exact accepted C behavior.
 24. `docs/product/en/PARTS.md` — English product parity with PL.
-25. `docs/browser/index.html` — **generated only with `.\\ss2.ps1 docs`** from canonical Markdown; never independent hand-edit.
+25. `docs/browser/index.html` — **generated only with `.\ss2.ps1 docs`** from canonical Markdown; never independent hand-edit.
 26. `work/SKETCHER_REPAIR_S3_ESC_GRIP_MIRROR_ACCEPTANCE_EVIDENCE.md` — new factual RED/PASS/FAIL/GAP and Owner decision ledger.
 
 **Explicit exclusions:** `work/ACTIVE.yaml` (separate activation PR); `work/SKETCH_ROADMAP.md` and accepted ADR/Foundation (frozen); `src/part/**`, OCCT provider, Part persistence/native schema, `src/viewer/**`, new CMake or test targets, global Command Line API redesign, other `src/application/**`, layout/theme redesign, R13 constraints/solver, S0/S1/S2 code/geometry redesign, RG-02/PM-06 and all unlisted tests. A needed provider, existing CAD Input header, or new public semantic command/API requires Owner D2 review/amendment, not an improvisational change.
@@ -122,6 +122,6 @@ All items are optional, conditioned on **future exact Owner approval** and prove
 
 ## 9. DOC-01 — Documentation Impact
 
-**Internal as-built docs: REQUIRED** for Qt focus/cancel ownership and shared Sketch Copy/transform behavior. **PL/EN Product docs: REQUIRED** for Grip Rotate/Scale/Mirror Copy, normal Mirror Keep Original and precisely accepted `C` keyboard grammar. **Generated Browser: REQUIRED** by repository `.\\ss2.ps1 docs`; freshness must be verified in the actual Windows build. This contract review is governance-only: no current-state doc changes until product behavior is genuinely implemented and verified.
+**Internal as-built docs: REQUIRED** for Qt focus/cancel ownership and shared Sketch Copy/transform behavior. **PL/EN Product docs: REQUIRED** for Grip Rotate/Scale/Mirror Copy, normal Mirror Keep Original and precisely accepted `C` keyboard grammar. **Generated Browser: REQUIRED** by repository `.\ss2.ps1 docs`; freshness must be verified in the actual Windows build. This contract review is governance-only: no current-state doc changes until product behavior is genuinely implemented and verified.
 
-**Owner decision requested for this proposal:** select **D3 A (one-key C)** or **D3 B (C+Enter)**, and separately accept exact S3 D2 ``0–9 plus 26 conditional paths. No merge/activation authority derives from accepting this direction alone.
+**Owner decision requested for this proposal:** select **D3 A (one-key C)** or **D3 B (C+Enter)**, and separately accept exact S3 D2 sections 0–9 plus 26 conditional paths. No merge/activation authority derives from accepting this direction alone.
