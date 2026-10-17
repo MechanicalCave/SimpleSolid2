@@ -992,7 +992,7 @@ int main(int argc, char* argv[]) {
             4900.0,
             4900.0}));
     const auto circle_size_request =
-        interaction.interactionState().activePointRequest();
+        interaction.activePointRequest();
     CHECK(circle_size_request.has_value());
     CHECK(circle_size_request->base.has_value());
     CHECK(*circle_size_request->base ==
