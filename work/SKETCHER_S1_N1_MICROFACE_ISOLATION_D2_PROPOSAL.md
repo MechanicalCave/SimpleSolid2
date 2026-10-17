@@ -1,14 +1,14 @@
 # Sketcher S1/N1 — unresolved microface isolation (Owner D2-A) — EXACT SCOPE PROPOSAL
 
-**Status:** **D2-A DIRECTION OWNER-ACCEPTED 2026-10-17; EXACT DOCUMENT / ALLOWLIST PROPOSED FOR SEPARATE OWNER REVIEW; NOT INTEGRATED; NOT ACTIVE; NO NEW MICROFACE PRODUCT IMPLEMENTATION AUTHORITY.**
+**Status:** **D2-A EXACT §§0–7 POLICY + 11 CONDITIONAL PATHS OWNER-ACCEPTED 2026-10-17; GOVERNANCE PR #470 AWAITING SEPARATE GUARDED SQUASH AUTHORIZATION / MERGE; NOT YET INTEGRATED IN MAIN; NOT ACTIVE; NO NEW MICROFACE PRODUCT IMPLEMENTATION AUTHORITY.**
 **Decision class:** D2, narrowly bounded derived Shared-2D arrangement/Region policy; NOT an unrestricted numerical tolerance, global microfeature deletion, persistence change or product-wide healing mechanism.
 **Governing priority:** \`AGENTS.md\` → Constitution → Foundation v1.0 FROZEN / Architecture → accepted ADR-0008/0009/0012 and 0014/0016/0017 as relevant → \`work/ACTIVE.yaml\` → \`work/SKETCH_ROADMAP.md\` v1.10 → active S0/S1 B01/B02 Work Contract and its already integrated F2/N1 D2 additions → \`governance/DOCUMENTATION.md\`.
 **Historical parent:** \`work/SKETCHER_REPAIR_S0_S1_CONTACT_REGION_PROFILE_D2_WORK_CONTRACT_PROPOSAL.md\` (15 conditional paths); F2 two-path addendum accepted/integrated; \`work/SKETCHER_S1_REAL_GEOMETRY_NUMERICAL_ENVELOPE_D2_PROPOSAL.md\` accepted/integrated and N1 ACTIVE-only PR #467 guarded-squash merged main \`78bd9b6614494727302554e7886d80db3d9592d3\`.
-**Owner's latest direction:** Owner accepted **D2-A as the preferred direction** in conversation on 2026-10-17, asking to continue. This approves *preparing and reviewing* a bounded exact policy; it is **not acceptance of this subsequently drafted exact text**, not permission to integrate this PR, not ACTIVE-only permission and not permission to merge implementation.
+**Owner's latest decision:** Owner explicitly replied **`zatwierdzam i akceptuję - dokoncz formalnosci i rozpocznij pracę`** on 2026-10-17 to a request to accept precisely the **§§0–7 scope and 11 conditional paths of PR #470**. This establishes **EXACT D2-A contract acceptance**. Acceptance does not itself satisfy the separately required guarded-squash permission, independent ACTIVE-only activation or technical implementation/final product merge gates.
 
 ## 0. Decision requested and purpose
 
-Approve EXACTLY the isolated policy in §§2–7 and the path/verification budget in §5, **only after review**. The goal is to keep independently valid larger Sketch Regions usable when the same connected arrangement includes a certified *non-representable microface*, without turning two authentic secant crossings into a tangent, welding real gaps, forging a Profile boundary or silently ignoring a material barrier.
+Owner accepted EXACTLY the isolated policy in §§2–7 and the path/verification budget in §5 (2026-10-17). The goal is to keep independently valid larger Sketch Regions usable when the same connected arrangement includes a certified *non-representable microface*, without turning two authentic secant crossings into a tangent, welding real gaps, forging a Profile boundary or silently ignoring a material barrier.
 
 A **microface** here is a *derived, mathematically bounded arrangement cycle with distinct source intersections* whose interior cannot be certified by the currently supported evaluated binary64 coordinate/witness representation. It is **not** any face whose area happens to be below a fixed threshold, a pixel threshold, the N1 contact band or the minimum user feature envelope. Small but representable regions remain valid candidates; a thin/topologically consequential or uncertain region never disappears merely because it is small.
 
@@ -29,7 +29,7 @@ The proposal is specifically motivated by the documented Owner 3-vs-4 real-world
 
 **Root-cause split:** (i) fast negative discrimination in a near-cancellation case loses positive *exact represented* binary64 secant discriminant, although two finite roots are distinguishable; (ii) after recovery, a microscopic two-use cycle can fail interior-sample construction, causing \`buildComponentLoops\` to fail closed at entire-component scope, hiding independent ordinary regions. Both are real. A mere epsilon increase, blanket skip on \`interiorPoint\` failure or equating the two crossings is unacceptable.
 
-## 2. Proposed D2-A semantic contract (MUST prove, never infer)
+## 2. Owner-accepted exact D2-A semantic contract (MUST prove, never infer)
 
 1. **Real crossings remain real.** Exact-sign/filtered adaptive Line–Circle/Arc classification must preserve two distinct finite secant intersections, their canonical branches, original EntityIds and authored coordinates. Root approximations and finite \`[0,1]\` parameters require demonstrated stability and ordering. One synthetic N1 near-contact is allowed only by its previously accepted separate uniqueness/finite-error policy; it must not override certified real secants. An unresolved pair is explicitly rejected, not silently converted to one contact. Never expand tangent chains, merge positive gaps, or infer authored Tangent/Coincident.
 2. **Topological graph retained in full.** A source-anchored microcycle stays present in the derived planar arrangement/face walk and cannot be reclassified as an open boundary, deleted edge or connected material bridge. Only its *promotion to a selectable/material RegionCandidate* can be withheld. No change to persisted Sketch/Profile identity or source geometry. It may remain a derived unresolved face with complete source provenance.
@@ -65,7 +65,7 @@ The proposal is specifically motivated by the documented Owner 3-vs-4 real-world
 
 ## 5. Narrow prospective implementation allowlist (only AFTER all D2 gates)
 
-The following is a **conditional subset of already historically permitted paths**, with an explicit new D2-A semantic role; this D2 approval would not authorize files outside these paths:
+The following is the **Owner-accepted conditional subset of already historically permitted paths**, with an explicit D2-A semantic role. Approval does not activate the contract for product implementation and does not authorize files outside these paths:
 
 1. \`src/sketch/region_analysis.cpp\` — filtered exact root stability, private derived microface certification, independent face/Region isolation with existing public contracts.
 2. \`tests/pm02f_stage_aware_profile_evaluation_test.cpp\` — exact Owner #3/#4 and independent macrocell/microface negative Region/Profile fixtures (existing registered test).
@@ -81,11 +81,11 @@ The following is a **conditional subset of already historically permitted paths*
 
 **Not authorized:** \`src/part/**\` (including historically F2-approved \`profile.cpp\` for this *different* microface policy), public Sketch headers/API, Kernel OCCT production changes, native schema/persistence, \`src/ui/**\`, \`src/application/**\`, construction/OSNAP/Copy, constraints/solver, new tests/CMake targets, \`work/ACTIVE.yaml\` as an implementation edit, CI scripts, ROADMAP/ADR/Foundation. **Missing essential path, unsafe API/consumer contract, global-pick behavior or unresolved numerical semantics ⇒ STOP for exact supplementary Owner D2/D3**, not a stealth extension.
 
-This governance-only proposal modifies **one new work/** file** on an independent branch. #469's prior diagnostic source edits are not retroactive product D2-A authority. No production microface changes before exact scope approval + integration + ACTIVE-only activation.
+This governance-only acceptance record modifies **one new work/** file** on an independent branch. #469's prior diagnostic source edits are not retroactive product D2-A authority. No production microface changes before exact scope approval + integration + ACTIVE-only activation.
 
 ## 6. Gates and Owner decisions — in sequence
 
-1. Owner reviews this entire exact §0–§7 text and explicitly accepts/refines the D2-A *policy and allowlist*. The earlier short \`akceptuję - kontynuuj pracę\` approves the **direction only**, not this unreviewed exact document.
+1. **SATISFIED 2026-10-17:** Owner explicitly accepted the complete exact §0–§7 text and its 11 conditional paths in PR #470 (`zatwierdzam i akceptuję - dokoncz formalnosci i rozpocznij pracę`). Earlier approval of the *direction only* remains distinct historical evidence. Scope is frozen for this governance gate; further changes require separate review.
 2. Governance-only PR on a branch from verified protected main; exact-head Windows **CLOSURE** after final Owner decision text; Owner **separately authorizes guarded squash** to main; verify merge/main SHA. No direct main push.
 3. **Separate one-file ACTIVE-only** amendment referencing the integrated D2-A document while preserving existing active Work Contract, Sketch Roadmap v1.10 and all historical \`next\` entries. Its own exact-head Windows governance CLOSURE, separate Owner authorization and verified protected-main squash are mandatory.
 4. Only then, in a separate implementation candidate stacked on N1, revise source/test files within the exact approved conditional subset. Preserve initial RED commits and do NOT retroactively relabel those results as PASS.
@@ -102,4 +102,6 @@ Reason: D2-A, if later implemented, changes which already-existing mathematicall
 
 ## 7. Decision log
 
-2026-10-17 — Owner said \`akceptuję - kontynuuj pracę\` in response to **direction A**, meaning *certified local non-representable microface isolation with remaining valid macroregions, without merging two real intersections*. **D2-A direction accepted**. **This new exact proposal is not yet accepted or integrated.** Wait for separate exact-text Owner review, governance CLOSURE, independent protected-main merge authorization and ACTIVE-only activation before authorizing any new microface semantic product mutation.
+2026-10-17 — Owner said \`akceptuję - kontynuuj pracę\` in response to **direction A**, meaning *certified local non-representable microface isolation with remaining valid macroregions, without merging two real intersections*. **D2-A direction accepted**.
+
+2026-10-17 — After receiving Draft governance PR #470 and a specific request to accept its exact §§0–7 and 11 conditional allowlisted paths, Owner explicitly answered **`zatwierdzam i akceptuję - dokoncz formalnosci i rozpocznij pracę`**. **EXACT D2-A POLICY AND SCOPE ACCEPTED**. Independent final-head Windows CLOSURE, protected-main guarded-squash permission and integration, one-file ACTIVE-only gate, and implementation/manual/technical/merge decisions remain mandatory. This decision log is acceptance evidence, not code authorization.
