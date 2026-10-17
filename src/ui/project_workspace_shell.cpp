@@ -770,29 +770,50 @@ bool ProjectWorkspaceShell::eventFilter(
             return true;
         }
         if (key_event->key() == Qt::Key_Escape) {
-            // PG-01C shares the single CadInputSession buffer with
-            // viewport-typed commands. On the first Esc, preserve
-            // focused Command Line ownership and pending source Edges.
-            // On empty-buffer Esc, dispatch the stage-local semantic
-            // request through the *same* endpoint as typed "ESC".
-            const bool project_context =
-                cad_input_.prompt().starts_with(
-                    "Command: PROJECT");
-            const bool typed_buffer =
-                !cad_input_.buffer().empty();
-            if (typed_buffer) {
+            // The live CAD token owns the first Esc even when the
+            // visible global Command Line has actual Qt text focus.
+            // Keep this focus so the current Sketch request survives.
+            if (!cad_input_.buffer().empty()) {
                 cad_input_.clearBuffer();
-            } else if (project_context) {
+                refreshCadInputPresentation();
+                return true;
+            }
+
+            // Existing PROJECT source-selection Esc is an explicit
+            // semantic command and must not also cancel a Workbench
+            // tool through a separately forwarded Qt key event.
+            if (cad_input_.prompt().starts_with(
+                    "Command: PROJECT")) {
                 cad_input_.setBuffer("ESC");
                 static_cast<void>(cad_input_.submit());
-            } else {
-                cad_input_.clearBuffer();
+                refreshCadInputPresentation();
+                return true;
             }
+
+            cad_input_.clearBuffer();
             refreshCadInputPresentation();
-            if (!project_context &&
-                document_workbench_ != nullptr) {
+            if (document_workbench_ != nullptr) {
                 document_workbench_->setFocus(
                     Qt::OtherFocusReason);
+
+                // An empty-buffer Esc must reach exactly one normal
+                // CAD surface key handler (Sketch numeric locks, Grip,
+                // active tool or Select), not merely shift Qt focus.
+                // Forward to the focus proxy of the active Workbench,
+                // never to an ordinary editor, popup or inactive tab.
+                auto* target = QApplication::focusWidget();
+                if (cad_input_.hasEndpoint() &&
+                    target != nullptr &&
+                    focusBelongsToActiveCadSurface(target) &&
+                    !focusOwnsTextInput(target)) {
+                    QKeyEvent delegated{
+                        QEvent::KeyPress,
+                        Qt::Key_Escape,
+                        key_event->modifiers()};
+                    static_cast<void>(
+                        QCoreApplication::sendEvent(
+                            target, &delegated));
+                }
             }
             return true;
         }
