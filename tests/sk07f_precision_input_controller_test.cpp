@@ -1585,6 +1585,26 @@ int main(int argc, char* argv[]) {
           sketch::Point2{6105.0, 6100.0});
     CHECK(interaction.escape());
 
+    // Isolate S2 grip selection from the pre-existing R10/R11
+    // controller fixture, whose later Rotate tests require the original
+    // selected Line. Selection is transient; clearing it is not a
+    // geometry edit and does not weaken those downstream assertions.
+    viewport.grip_query_ = {true, std::nullopt};
+    interaction.activateSelect();
+    viewport.point_query_ = {true, std::nullopt};
+    click(interaction, sketch_id, 9000.0, 9000.0,
+          9000.0, 9000.0);
+    CHECK(interaction.selectedCount() == 0U);
+    viewport_controller.refreshPresentation();
+    const auto restored_source_token =
+        viewport_controller.sketchPresentationFor(source_id);
+    CHECK(restored_source_token.has_value());
+    viewport.point_query_ = {true, *restored_source_token};
+    click(interaction, sketch_id, 30.0, 40.0,
+          30.0, 40.0);
+    CHECK(interaction.selectedCount() == 1U);
+    CHECK(viewport.selection_.primary.has_value());
+
     // A non-NONE Temporary Override is restrictive. With no requested-family
     // candidate there is no raw or Polar fallback and stale resolution is
     // explicitly cleared.
