@@ -2,6 +2,7 @@
 #include <simplesolid2/kernel/evidence.hpp>
 #include <simplesolid2/kernel/profile_input.hpp>
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
+#include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
@@ -248,6 +249,20 @@ void verifyF2TangentPocketColdRebuild() {
         CHECK(face.ok());
         CHECK(face.face_count == 1U);
         CHECK(face.wire_count == 1U);
+
+        // True native OCCT solid modeling, not a WorkflowKernel mock.
+        kernel_occt::OcctSolidModelingKernel native_provider;
+        kernel::LinearExtrudeInput extrusion;
+        extrusion.profile = *input;
+        extrusion.start_offset_mm = 0.0;
+        extrusion.end_offset_mm = 10.0;
+        CHECK(extrusion.valid());
+        const auto solid = native_provider.extrude(extrusion);
+        CHECK(solid.status == kernel::SolidModelingStatus::ok);
+        CHECK(solid.brep_valid);
+        CHECK(solid.solid_count == 1U);
+        CHECK(solid.solid != nullptr);
+
         before_fingerprint = fingerprint(*input);
         before_evidence = snapshot(face);
         CHECK(session.save().ok());
@@ -267,9 +282,22 @@ void verifyF2TangentPocketColdRebuild() {
         kernel_occt::buildProfileFaceEvidence(*input);
     CHECK(cold_face.ok());
     CHECK(snapshot(cold_face) == before_evidence);
+    // The same authored Profile produces a fresh native Body after reopen.
+    kernel_occt::OcctSolidModelingKernel cold_provider;
+    kernel::LinearExtrudeInput cold_extrusion;
+    cold_extrusion.profile = *input;
+    cold_extrusion.start_offset_mm = 0.0;
+    cold_extrusion.end_offset_mm = 10.0;
+    CHECK(cold_extrusion.valid());
+    const auto cold_solid = cold_provider.extrude(cold_extrusion);
+    CHECK(cold_solid.status == kernel::SolidModelingStatus::ok);
+    CHECK(cold_solid.brep_valid);
+    CHECK(cold_solid.solid_count == 1U);
+    CHECK(cold_solid.solid != nullptr);
 
     std::cout << "PM00A_F2_TANGENT_POCKET_COLD_PASS"
-              << " native_occt_face=1 cold_reopen=1\n";
+              << " native_occt_face=1 native_occt_solid=1"
+              << " cold_reopen=1\n";
 }
 
 } // namespace
