@@ -555,8 +555,6 @@ int main(int argc, char* argv[]) {
     movePointer(
         interaction, sketch_id,
         60.0, 50.0, 1.0, 0.0);
-    const auto source_before_mirror_copy_commit =
-        session.document().state();
     CHECK(interaction.commitTransform());
     CHECK(interaction.tool() == sketch::SketchTool::select);
     CHECK(!interaction.mirrorKeepOriginal());
