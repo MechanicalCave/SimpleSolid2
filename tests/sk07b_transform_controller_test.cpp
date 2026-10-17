@@ -537,6 +537,79 @@ int main(int argc, char* argv[]) {
         after_mirror.arcs.front().sweep_angle ==
         -before_mirror.arcs.front().sweep_angle);
 
+    // S3 B06 TEST-FIRST: ordinary MIRROR Copy/Keep Original is OFF by
+    // default, ON duplicates a frozen mixed Line/Circle/Arc selection.
+    // This is one-shot MIRROR, not the repeated COPY placement mode.
+    const auto preserved_mirror_source =
+        capture(session, sketch_id, ids);
+    const auto entities_before_mirror_copy =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    const auto undo_before_mirror_copy =
+        session.undoDepth();
+    CHECK(interaction.activateMirror());
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    CHECK(interaction.mirrorKeepOriginal());
+    click(interaction, sketch_id, 50.0, 50.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        60.0, 50.0, 1.0, 0.0);
+    const auto source_before_mirror_copy_commit =
+        session.document().state();
+    CHECK(interaction.commitTransform());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(!interaction.setMirrorKeepOriginal(true));
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(session.undoDepth() ==
+          undo_before_mirror_copy + 1U);
+    CHECK(capture(session, sketch_id, ids) ==
+          preserved_mirror_source);
+
+    const auto* copied_mirror_hosted =
+        session.document().findSketch(sketch_id);
+    CHECK(copied_mirror_hosted != nullptr);
+    CHECK(copied_mirror_hosted->model.entityCount() ==
+          entities_before_mirror_copy + 3U);
+    const auto expected_mirror_copies =
+        sketch::mirrorSketchGeometry(
+            preserved_mirror_source,
+            {0.0, 0.0},
+            {1.0, 0.0});
+    CHECK(expected_mirror_copies.has_value());
+    const auto& copied_mirror_state =
+        copied_mirror_hosted->model.state();
+    CHECK(copied_mirror_state.lines.back().id != line_id);
+    CHECK(copied_mirror_state.circles.back().id != circle_id);
+    CHECK(copied_mirror_state.arcs.back().id != arc_id);
+    CHECK(copied_mirror_state.lines.back().start ==
+          expected_mirror_copies->lines.front().start);
+    CHECK(copied_mirror_state.lines.back().end ==
+          expected_mirror_copies->lines.front().end);
+    CHECK(copied_mirror_state.circles.back().center ==
+          expected_mirror_copies->circles.front().center);
+    CHECK(copied_mirror_state.arcs.back().sweep_angle ==
+          expected_mirror_copies->arcs.front().sweep_angle);
+
+    interaction.cancelForHistory();
+    const auto mirror_copy_undo = session.undo();
+    CHECK(mirror_copy_undo.ok() && mirror_copy_undo.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() ==
+          entities_before_mirror_copy);
+    CHECK(capture(session, sketch_id, ids) ==
+          preserved_mirror_source);
+    const auto mirror_copy_redo = session.redo();
+    CHECK(mirror_copy_redo.ok() && mirror_copy_redo.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() ==
+          entities_before_mirror_copy + 3U);
+    CHECK(capture(session, sketch_id, ids) ==
+          preserved_mirror_source);
+
     // Degenerate mirror axis cannot commit and Esc preserves selection.
     const auto invalid_mirror_state =
         session.document().state();
