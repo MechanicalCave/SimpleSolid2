@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <numbers>
 
@@ -236,12 +237,40 @@ int main() {
         // relation is recorded only; its tolerance policy is not yet D2.
         CHECK(can_trim[0]);
         CHECK(can_trim[1]);
-        // N0 does not assign user-intended tangency to already
-        // different persisted coordinates. The positive finite
-        // secants of case 3 still Trim, while the disjoint case 4
-        // remains a documented near-contact GAP pending N1 D2.
+        // N1 admits one unambiguous finite near-tangent for the
+        // copied outside case 4; the case 3 proper finite secants
+        // remain proper and are not collapsed into a fake tangent.
         CHECK(can_trim[2]);
         CHECK(can_trim[3]);
+        // A one-ULP outward endpoint offset also works at the
+        // proposed practical 1 m and 100 m coordinate scales.
+        for (const double coordinate : {1000.0, 100000.0}) {
+            SketchModel scaled;
+            const auto circle_id = scaled.addCircle(
+                {coordinate, coordinate}, 30.0);
+            const double left_x = std::nextafter(
+                coordinate - 30.0,
+                -std::numeric_limits<double>::infinity());
+            const double right_x = std::nextafter(
+                coordinate + 30.0,
+                std::numeric_limits<double>::infinity());
+            const auto left_id = scaled.addLine(
+                {left_x, coordinate - 40.0},
+                {left_x, coordinate});
+            const auto right_id = scaled.addLine(
+                {right_x, coordinate - 40.0},
+                {right_x, coordinate});
+            CHECK(analyzeCurveRelation(
+                scaled, circle_id, left_id).status ==
+                  CurveRelationStatus::discrete);
+            CHECK(analyzeCurveRelation(
+                scaled, circle_id, right_id).status ==
+                  CurveRelationStatus::discrete);
+            CHECK(evaluateTrim(
+                scaled, TrimSketchRequest{
+                    circle_id, {left_id, right_id},
+                    {coordinate, coordinate - 30.0}}).ready());
+        }
         // A genuine finite gap at the 100 m coordinate scale remains
         // disjoint and cannot authorize Circle Trim.
         SketchModel gap_scene;
