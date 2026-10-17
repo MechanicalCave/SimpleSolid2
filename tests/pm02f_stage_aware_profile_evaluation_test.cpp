@@ -840,9 +840,11 @@ void verifyOwnerExtendedNearSecantRegions() {
 // never discard it merely because its area is small or it has two uses.
 void verifyD2ARepresentableNarrowCap() {
     sketch::SketchModel model;
-    model.addCircle({0.0, 0.0}, 30.0);
-    model.addLine({-45.0, 30.0 - 1e-5},
-                  {45.0, 30.0 - 1e-5});
+    [[maybe_unused]] const auto circle =
+        model.addCircle({0.0, 0.0}, 30.0);
+    [[maybe_unused]] const auto line =
+        model.addLine({-45.0, 30.0 - 1e-5},
+                      {45.0, 30.0 - 1e-5});
     const auto regions = sketch::analyzeRegions(model);
     CHECK(regions.complete());
     CHECK(regions.regions.size() == 2U);
