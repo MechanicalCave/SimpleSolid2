@@ -55,7 +55,7 @@ The proposal is specifically motivated by the documented Owner 3-vs-4 real-world
 
 ## 4. Required acceptance and explicit negatives
 
-- **Owner #3** full 26-entity authored scene and isolated Circle9 / Line26 / Line28 with post-Extend Both common apex: recover exactly **2** certified finite crossings per side, keep original source parameters/canonical branches, and recover each independently valid macrocell as selectable/usable Region. Explicit unresolved microface diagnostic must identify affected original geometry. If existing API cannot simultaneously expose valid macro candidates and diagnostic, STOP for D2.
+- **Owner #3** full **40-entity** authored native scene (schema 20, exactly 32 Lines + 7 Circles + 1 Arc; previously cited 26-entity fixture refers to the older six-case input, NOT this Owner attachment) and isolated Circle9 / Line26 / Line28 with post-Extend Both common apex: recover exactly **2** certified finite crossings per side, keep original source parameters/canonical branches, and recover each independently valid macrocell as selectable/usable Region. Explicit unresolved microface diagnostic must identify affected original geometry. If existing API cannot simultaneously expose valid macro candidates and diagnostic, STOP for D2.
 - **Owner #4** copied short-Line Circle59 fixture: retain its **2 existing Regions**, no extra synthetic face, no changes to source or Fill semantics; same results under creation permutations, reversal, transforms and cold reopening.
 - **Microface negative:** cannot select/create/extrude microface; cannot turn two true crossings into one tangent; no bogus tiny Profile; no surrogate authored vertex.
 - **Other geometry controls:** true gap \`1e-8 mm\` stays OPEN at stated 1 m /100 m envelopes; genuinely representable narrow region remains accessible; distinct near-root secants remain two; tiny but structurally consequential hole/passage blocks affected macroregion if uncertain; externally tangent whole Circle islands remain separate; overlaps and unsupported ambiguity fail closed.
@@ -103,5 +103,7 @@ Reason: D2-A, if later implemented, changes which already-existing mathematicall
 ## 7. Decision log
 
 2026-10-17 — Owner said \`akceptuję - kontynuuj pracę\` in response to **direction A**, meaning *certified local non-representable microface isolation with remaining valid macroregions, without merging two real intersections*. **D2-A direction accepted**.
+
+2026-10-17 — Factual fixture clarification: attached `szkic_test_01(2).ss2part` contains exactly **40 authored entities** (32 Lines, 7 Circles, 1 Arc); **26** was the count for the earlier original six-case reproduction. This correction changes only fixture provenance and the strength of the required full-scene test, never the D2-A semantic policy or permitted paths.
 
 2026-10-17 — After receiving Draft governance PR #470 and a specific request to accept its exact §§0–7 and 11 conditional allowlisted paths, Owner explicitly answered **`zatwierdzam i akceptuję - dokoncz formalnosci i rozpocznij pracę`**. **EXACT D2-A POLICY AND SCOPE ACCEPTED**. Independent final-head Windows CLOSURE, protected-main guarded-squash permission and integration, one-file ACTIVE-only gate, and implementation/manual/technical/merge decisions remain mandatory. This decision log is acceptance evidence, not code authorization.
