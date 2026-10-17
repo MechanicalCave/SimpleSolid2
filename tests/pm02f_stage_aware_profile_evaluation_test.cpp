@@ -810,6 +810,95 @@ void verifyOwnerExtendedNearSecantRegions() {
     CHECK(!regions4.regions.empty());
 }
 
+// Native Owner .ss2part schema 20, exact complete 40 authored entities,
+// including Regular/Construction distinction and the copied #3/#4 cases.
+// Test-only reconstruction; no parsing or persistent-product source change.
+void verifyOwnerFullNativeScenePick() {
+    struct Line {
+        sketch::Point2 start;
+        sketch::Point2 end;
+        bool construction;
+    };
+    struct Circle {
+        sketch::Point2 center;
+        double radius;
+    };
+    const std::array<Line, 32> lines{{
+        {{-30.0, 0.0}, {30.0, 0.0}, false}, // 1
+        {{-30.0, 0.0}, {-30.0, 67.52296383563574}, false}, // 3
+        {{30.0, 0.0}, {30.0, 67.52296383563574}, false}, // 4
+        {{59.16841975020736, 0.0}, {59.16841975020736, 67.52296383563574}, false}, // 7
+        {{119.16841975020736, 0.0}, {119.16841975020736, 67.52296383563574}, true}, // 8
+        {{89.16841975020736, 0.0}, {89.16841975020736, -14.407052512069733}, true}, // 10
+        {{49.16841975020738, 0.0}, {129.16841975020736, 0.0}, false}, // 11
+        {{-111.13570411713846, 0.0}, {-51.13570411713846, 0.0}, false}, // 14
+        {{-111.13570411713846, 0.0}, {-111.13570411713846, 92.56448649641345}, false}, // 15
+        {{-51.13570411713846, 0.0}, {-51.13570411713846, 106.53001893976436}, false}, // 16
+        {{6.846405134007824, -83.25915596546274}, {23.83920538253282, -66.26635571693774}, false}, // 22
+        {{68.92311233700123, -78.74091461840942}, {56.130014366619065, -65.94781664802726}, false}, // 23
+        {{49.16841975020738, 0.0}, {49.16841975020738, 60.507216219488555}, false}, // 25
+        {{49.16841975020738, 60.507216219488555}, {89.16841975020735, 123.46646180728104}, false}, // 26
+        {{129.16841975020736, 0.0}, {129.16841975020736, 60.507216219488555}, false}, // 27
+        {{129.16841975020736, 60.507216219488555}, {89.16841975020735, 123.46646180728104}, false}, // 28
+        {{349.5249764379939, 60.507216219488555}, {309.5249764379939, 123.46646180728108}, false}, // 32
+        {{269.5249764379939, 60.507216219488555}, {309.5249764379939, 123.46646180728108}, false}, // 33
+        {{266.5211586963419, -26.45386716719539}, {291.24935468828653, 12.97385113268978}, false}, // 39
+        {{366.93648026946914, -38.82828053277269}, {349.2998050920396, 7.297268993808445}, false}, // 40
+        {{-78.65740689293105, -83.25915596546274}, {-70.86501309242436, -75.46676216495605}, false}, // 41
+        {{-16.580699689937646, -78.74091461840942}, {-24.208286064424026, -71.11332824392304}, false}, // 42
+        {{-61.114932567368186, 140.6338796053901}, {72.52443017728294, 140.6338796053901}, false}, // 46
+        {{-61.114932567368186, 181.295796953154}, {-61.114932567368186, 140.6338796053901}, false}, // 47
+        {{151.1670624652628, 0.0}, {151.1670624652628, 67.52296383563574}, false}, // 51
+        {{211.1670624652628, 0.0}, {211.1670624652628, 67.52296383563574}, true}, // 52
+        {{181.1670624652628, 0.0}, {181.1670624652628, -14.407052512069733}, true}, // 53
+        {{141.1670624652628, 0.0}, {221.1670624652628, 0.0}, false}, // 54
+        {{141.1670624652628, 0.0}, {141.1670624652628, 60.507216219488555}, false}, // 55
+        {{141.1670624652628, 60.507216219488555}, {155.8453883282019, 83.61062429004924}, false}, // 56
+        {{221.1670624652628, 0.0}, {221.1670624652628, 60.507216219488555}, false}, // 57
+        {{221.1670624652628, 60.507216219488555}, {206.4887366023237, 83.61062429004924}, false}, // 58
+    }};
+    const std::array<Circle, 7> circles{{
+        {{0.0, 67.52296383563574}, 30.0}, // 2
+        {{89.16841975020736, 67.52296383563574}, 30.0}, // 9
+        {{-81.13570411713846, 67.52296383563574}, 30.0}, // 17
+        {{36.2264805817629, -54.63476751496982}, 30.0}, // 19
+        {{318.85884145566877, -4.342210497557272}, 32.59033215450208}, // 38
+        {{-49.277331445175975, -54.63476751496982}, 30.0}, // 43
+        {{181.1670624652628, 67.52296383563574}, 30.0}, // 59
+    }};
+    sketch::SketchModel scene;
+    for (const auto& line : lines) {
+        scene.addLine(line.start, line.end,
+            line.construction ? sketch::EntityRole::construction
+                              : sketch::EntityRole::regular);
+    }
+    for (const auto& circle : circles) {
+        scene.addCircle(circle.center, circle.radius);
+    }
+    scene.addArc(
+        {309.5249764379939, 67.52296383563574},
+        30.0, 2.5755983265454314, 4.2735813076785165); // 49
+    const auto state = scene.state();
+    CHECK(state.lines.size() == 32U);
+    CHECK(state.circles.size() == 7U);
+    CHECK(state.arcs.size() == 1U);
+    const auto analysis = sketch::analyzeRegions(scene);
+    const auto pick3 = sketch::pickRegion(
+        scene, analysis, {89.16841975020736, 20.0});
+    const auto pick4 = sketch::pickRegion(
+        scene, analysis, {181.1670624652628, 20.0});
+    std::cerr << "SS2_S1_N1_OWNER_FULL_40_SCENE"
+              << " regions=" << analysis.regions.size()
+              << " diagnostics=" << analysis.diagnostics.size()
+              << " pick3=" << pick3.region_index.has_value()
+              << " pick4=" << pick4.region_index.has_value()
+              << '\n';
+    // The new D2-A fix must isolate unsupported microfaces, not hide
+    // independently usable macro regions in the same connected component.
+    CHECK(pick4.region_index.has_value());
+    CHECK(pick3.region_index.has_value());
+}
+
 void verifyS0CircleTangentRegionCells() {
     const std::array<int, 4> initial{0, 1, 2, 3};
     constexpr double pi = std::numbers::pi_v<double>;
@@ -1092,6 +1181,7 @@ void verifyS0CircleTangentRegionCells() {
 } // namespace
 
 int main() {
+    verifyOwnerFullNativeScenePick();
     verifyOwnerExtendedNearSecantRegions();
     verifyS0CircleTangentRegionCells();
     verifyExactRegionEndpointBoundary();
