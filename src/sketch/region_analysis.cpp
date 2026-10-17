@@ -2983,6 +2983,124 @@ certifiedUnresolvedLineCircleLens(
     return std::vector<EntityId>{line->id, circle->id};
 }
 
+[[nodiscard]] int exactExpansionSign(
+    const ExactExpansion& values) noexcept {
+    for (auto it = values.rbegin(); it != values.rend(); ++it) {
+        if (*it != 0.0) {
+            return *it > 0.0 ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
+[[nodiscard]] std::optional<int> exactCirclePointPowerSign(
+    const CurveView& circle,
+    Point2 point) {
+    const auto x = exactDifference(point.u, circle.center.u);
+    const auto y = exactDifference(point.v, circle.center.v);
+    if (!x || !y) {
+        return std::nullopt;
+    }
+    const auto x2 = exactMultiply(*x, *x);
+    const auto y2 = exactMultiply(*y, *y);
+    const auto r2 = exactMultiply(
+        {circle.radius}, {circle.radius});
+    if (!x2 || !y2 || !r2) {
+        return std::nullopt;
+    }
+    const auto sum = exactAdd(*x2, *y2);
+    if (!sum) {
+        return std::nullopt;
+    }
+    const auto power = exactAdd(*sum, *r2, true);
+    return power ? std::optional<int>{exactExpansionSign(*power)}
+                 : std::nullopt;
+}
+
+[[nodiscard]] std::optional<int> exactLinePointSide(
+    const CurveView& line,
+    Point2 point) {
+    const auto dx = exactDifference(
+        line.second.u, line.first.u);
+    const auto dy = exactDifference(
+        line.second.v, line.first.v);
+    const auto px = exactDifference(
+        point.u, line.first.u);
+    const auto py = exactDifference(
+        point.v, line.first.v);
+    if (!dx || !dy || !px || !py) {
+        return std::nullopt;
+    }
+    const auto first = exactMultiply(*dx, *py);
+    const auto second = exactMultiply(*dy, *px);
+    if (!first || !second) {
+        return std::nullopt;
+    }
+    const auto signed_cross =
+        exactAdd(*first, *second, true);
+    return signed_cross
+        ? std::optional<int>{exactExpansionSign(*signed_cross)}
+        : std::nullopt;
+}
+
+// A certified but unpublishable Line/Circle cap is STILL a material
+// boundary. Exact dyadic predicates prevent Region picking from treating
+// its true interior as any neighboring macroface.
+[[nodiscard]] std::optional<RegionPointLocation>
+unresolvedLensPointLocation(
+    const SketchModel& model,
+    const RegionAnalysisDiagnostic2D& diagnostic,
+    Point2 point) {
+    if (diagnostic.kind !=
+            RegionAnalysisDiagnosticKind::invalid_topology ||
+        diagnostic.entities.size() != 2U) {
+        return std::nullopt;
+    }
+    const auto a =
+        curveView(model, diagnostic.entities[0]);
+    const auto b =
+        curveView(model, diagnostic.entities[1]);
+    if (!a || !b) {
+        return RegionPointLocation::ambiguous;
+    }
+    const CurveView* line = nullptr;
+    const CurveView* circle = nullptr;
+    if (a->kind == CurveKind::line &&
+        b->kind == CurveKind::circle) {
+        line = &*a;
+        circle = &*b;
+    } else if (b->kind == CurveKind::line &&
+               a->kind == CurveKind::circle) {
+        line = &*b;
+        circle = &*a;
+    } else {
+        return std::nullopt;
+    }
+    const auto relation =
+        analyzeCurveRelation(model, line->id, circle->id);
+    if (relation.status != CurveRelationStatus::discrete ||
+        relation.intersections.size() != 2U) {
+        return RegionPointLocation::ambiguous;
+    }
+    const auto power =
+        exactCirclePointPowerSign(*circle, point);
+    const auto line_side =
+        exactLinePointSide(*line, point);
+    const auto center_side =
+        exactLinePointSide(*line, circle->center);
+    if (!power || !line_side || !center_side ||
+        *center_side == 0) {
+        return RegionPointLocation::ambiguous;
+    }
+    if (*power > 0 || *line_side == *center_side) {
+        return std::nullopt;
+    }
+    if (*power == 0 || *line_side == 0) {
+        return RegionPointLocation::boundary;
+    }
+    return RegionPointLocation::ambiguous;
+}
+
 [[nodiscard]] bool anchorLess(
     const RegionBoundaryAnchor2D& first,
     const RegionBoundaryAnchor2D& second) noexcept {
@@ -5038,6 +5156,14 @@ RegionPick2D pickRegion(
         return RegionPick2D{
             RegionPointLocation::ambiguous,
             std::nullopt};
+    }
+
+    for (const auto& diagnostic : analysis.diagnostics) {
+        const auto affected =
+            unresolvedLensPointLocation(model, diagnostic, point);
+        if (affected) {
+            return RegionPick2D{*affected, std::nullopt};
+        }
     }
 
     std::optional<std::uint32_t> found;
