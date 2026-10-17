@@ -232,6 +232,11 @@ int main() {
         // relation is recorded only; its tolerance policy is not yet D2.
         CHECK(can_trim[0]);
         CHECK(can_trim[1]);
+        // EXPERIMENTAL OWNER-REPORTED consistency expectation, not an
+        // approved change to the currently exact-disjoint semantics.
+        // Intentional S0 RED if the 1-ULP translated copies disagree;
+        // a future N1 D2 must decide whether/how to reconcile them.
+        CHECK(can_trim[2] == can_trim[3]);
     }
 
     // Line terminal Trim preserves identity and role.
