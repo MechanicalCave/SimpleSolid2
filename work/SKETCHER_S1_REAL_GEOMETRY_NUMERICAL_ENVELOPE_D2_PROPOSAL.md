@@ -42,6 +42,21 @@ Two unrelated and independently actionable failure classes were isolated:
 
 This confirms **N0 has a concrete regression** before adopting any N1 proximity topology: the approximate discriminant currently misses even truly exact finite tangents after power-of-two scaling. N1 concerns a different issue, accepted behavior of already-persisted ~1-ULP outward gaps; its topology semantics are not inferred from N0 RED.
 
+### 1B. Complete 26-entity direct Trim reproduction — Windows FULL #3504
+
+[Ready Windows FULL #3504](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39022467162), exact diagnostic HEAD \`d2b78af92617122e98e742de06b910fe3045aa8e\`, **expected RED** on existing registered \`r12.structural_edit_core\`: all other **Core 25/25, native Kernel 57/57** and 116/117 other Desktop tests passed. The test logged **all four direct \`evaluateTrim\` results on a faithful reconstruction of the complete native 26-entity scene** before asserting acceptance:
+
+| Scene and exact saved input | Direct \`evaluateTrim\` | StructuralEditStatus |
+| --- | --- | --- |
+| Case 1, extended exact vertical Lines | **NOT READY / FAIL** | 4 (\`not_applicable\`) |
+| Case 2, exact Lines ending at contact | **READY / PASS** | 0 (\`ready\`) |
+| Case 3, almost-on-Circle diagonal Lines | **READY / PASS** | 0 (\`ready\`) |
+| Case 4, copied-to-other-Circle, ~1-ULP outward gap | **NOT READY / FAIL** | 4 (\`not_applicable\`) |
+
+The diagnostic R12 test failed specifically at \`CHECK(can_trim[0])\` after printing these results. **This reproduces the Owner manual observations 1–4 inside the core, not merely UI or pixel picking.** Earlier assumptions that FULL-scene direct Trim might already pass were false and are superseded by #3504. This is a real, grounded B02 gap; the final contract must not treat #460's old 199/199 as proof that these new cases passed.
+
+Fix order: (1) **N0 exact-on-stored-input**, preserving exact support and cutter bounds for case1/2; (2) separately Owner-accept **N1 represented-near-contact semantics** if case3/4 should behave identically; (3) prove that topology and native Profile/Extrude remain consistent. No new Copy, snap, solver or tool-specific epsilon.
+
 ## 2. Proposed two-stage numerical semantics
 
 **N0 — robust exact-on-stored-input predicate (uncontroversial B02 repair).** Give priority to a scale-conditioned error bound for sign of the Line↔Circle/Arc discriminant (and endpoint predicates). If the floating sign is provably outside the *computed arithmetic error bound*, retain strict sign; when inconclusive, recompute with higher/extended precision or an exact expansion/rational sign based on the original binary64 operands. Avoid arbitrary fixed \`epsilon\` on the discriminant. Preserve finite source range checks and exact tangent-vs-two-proper-crossings meaning. The fallback should distinguish **calculation rounding** from **authored nonintersecting binary values**. Compare case 1 vs 2 and all reversed/translated/rotated/scale variants.
