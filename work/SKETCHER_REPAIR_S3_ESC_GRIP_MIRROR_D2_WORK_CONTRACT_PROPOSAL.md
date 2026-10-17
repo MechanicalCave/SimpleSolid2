@@ -89,7 +89,7 @@ All 26 paths below are **Owner-accepted conditional bounds** for future activate
 3. `src/ui/cad_workbench.cpp` — actual viewport Esc / active Sketch keyboard and Mirror Operations UI only.
 4. `src/ui/cad_workbench.hpp` — private UI controls/callback declarations only.
 5. `src/ui/part_sketch_interaction_controller.cpp` — single semantic Esc and Grip/normal Mirror Copy command routing, preview/commit.
-6. `src/ui/part_sketch_interaction_controller.hpp` — only private operation-local options if essential.
+6. `src/ui/part_sketch_interaction_controller.hpp` — private operation-local options if essential; **additional narrowly proposed D2 exception (§10, NOT YET OWNER ACCEPTED):** modify only the existing inline `cadInputSemanticGripCopyAvailable() const noexcept` predicate body to recognize Rotate/Scale/Mirror as eligible active Grip modes for the already accepted D3 B (`C` + Enter). No signature/API/vtable change or unrelated public-header edit.
 7. `src/sketch/interaction_state.cpp` — transient Copy mode/transform stage and fail-closed lifecycle semantics.
 8. `src/sketch/include/simplesolid2/sketch/interaction_state.hpp` — only transient nonpersistent S3 state; no durable schema or public architecture change.
 9. `src/application/cad_input.cpp` — existing one-buffer input lifecycle if proven necessary for B03b; no unrelated grammar rewrite.
@@ -133,3 +133,17 @@ All 26 paths below are **Owner-accepted conditional bounds** for future activate
 Internal docs: required
 User/Product docs: required
 Reason: S3 B03b changes Qt/Workbench CAD Input focus and hierarchical Esc handling; B05 extends Grip Rotate/Scale/Mirror with Copy; B06 adds normal Mirror Keep Original/Copy. Keep current-state shared 2D and Workbench internals and the Polish/English Parts user instructions synchronized and regenerate the DOC-01 Product Browser before completion. This is the machine-readable DOC-01 declaration for the already Owner-accepted §9; it adds no new product behavior, scope, path or merge/activation authority.
+
+## 10. D2 ADDENDUM PROPOSAL — inline existing Grip Copy availability predicate (NOT OWNER-ACCEPTED)
+
+**Status: PROPOSED / NOT ACCEPTED / NO AUTHORITY TO EDIT THIS HEADER.** All original Owner-accepted S3 §§0–9, D3 B, 26 paths and exact §7 constraints remain authoritative until this bounded §10 and amended §7 item 6 receive separate explicit Owner D2 approval, exact-HEAD governance Windows CLOSURE and separate guarded governance squash integration into protected `main`.
+
+**Test-first finding:** On initial S3 B05 test-only SHA `f7863e4b76d16e16e134be5f4036871ec173891a`, Windows Ready FULL #3619 reproduced `sk07e.space_cycle_edit_mode` RED at line 238 (`state.enableDirectManipulationCopy()`), with remaining 116/117 Qt/Desktop PASS, Core 25/25 and Kernel 57/57. In the live controller `PartSketchInteractionController::cadInputSemanticGripCopyAvailable()` is an existing **public inline override** that advertises only `reshape`/`move` as eligible despite the now accepted S3 B05 requirement to support `rotate`/`scale`/`mirror` with submitted `C` + Enter. The approved §7 item 6 permitted only private operation-local options in this header. Altering this public inline predicate exceeds that precise purpose even though the path itself is in the 26-path list.
+
+**Requested minimal exception:** permit editing **only the existing body** of `cadInputSemanticGripCopyAvailable() const noexcept` inside already listed `src/ui/part_sketch_interaction_controller.hpp` to return availability for valid active `reshape`, `move`, `rotate`, `scale` and `mirror` grip states. Preserve signature, override, const/noexcept, visibility, dependency direction, semantic endpoint grammar and compiled interface. Do **not** add any new public API, broaden availability outside live Grip, intercept one-key `C` or modify unrelated controller-header code. Update tests in existing §7 paths to verify that `C` alone merely populates the shared buffer, `C`+Enter arms Copy only on eligible live Grip, Space turns Copy OFF, and normal transforms reject Grip Copy.
+
+**Fallback if not approved:** stop before changing the inline predicate, keep product PR #490 DRAFT/UNMERGED and report B05 end-to-end as incomplete. No bypass of the availability query or global CAD Input grammar to evade this governance decision.
+
+**Separate gate:** Owner acceptance of this narrow D2 exception does not authorize merging the governance addendum PR or any product PR; those require independent guarded squash decisions. No active-work pointer change is needed after integration because S3 is already active, but product PR must rebase/recheck protected main and run exact-head Windows tests.
+
+**Documentation impact:** Existing §9 plus the canonical `## Documentation impact` declaration remain unchanged; this addendum only clarifies authorization for an existing inline predicate. Product docs follow the genuinely implemented behavior, not this proposal.
