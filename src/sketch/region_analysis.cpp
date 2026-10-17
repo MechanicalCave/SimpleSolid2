@@ -663,6 +663,88 @@ using ExactExpansion = std::vector<double>;
     return 0;
 }
 
+// N1 experimental: a dimensioned, ULP-aware *derived* near contact.
+// Never rewrites authored coordinates, never modifies a genuine two-root
+// secant and never changes how source entities are persisted.
+// The entire signed relation consumer graph reuses this same result.
+[[nodiscard]] std::optional<RawIntersection>
+nearFiniteLineCircleContact(
+    const CurveView& line,
+    const CurveView& circle) {
+    const double du = line.second.u - line.first.u;
+    const double dv = line.second.v - line.first.v;
+    const double squared = std::fma(du, du, dv * dv);
+    if (!(squared > 0.0) || !finiteValue(squared)) {
+        return std::nullopt;
+    }
+    const double coordinate = std::max({
+        std::abs(line.first.u), std::abs(line.first.v),
+        std::abs(line.second.u), std::abs(line.second.v),
+        std::abs(circle.center.u), std::abs(circle.center.v),
+        std::abs(circle.radius)});
+    if (!(coordinate > 0.0) ||
+        !finiteValue(coordinate)) {
+        return std::nullopt;
+    }
+    const double ulp = std::nextafter(
+        coordinate, std::numeric_limits<double>::infinity()) -
+        coordinate;
+    // Study candidate for the Owner-accepted 1m..100m envelope.
+    // Hard cap is orders of magnitude smaller than the 0.1/1mm
+    // smallest significant features, and below 1e-8mm true-gap guard.
+    const double bound = std::min(
+        1.0e-7, std::max(1.0e-12, 32.0 * ulp));
+    if (!finiteValue(bound) || !(bound > 0.0)) {
+        return std::nullopt;
+    }
+
+    const double rel_u = circle.center.u - line.first.u;
+    const double rel_v = circle.center.v - line.first.v;
+    const double parameter = std::fma(
+        rel_u, du, rel_v * dv) / squared;
+    if (!finiteValue(parameter)) {
+        return std::nullopt;
+    }
+    // A projection just beyond the finite source endpoint is eligible
+    // only if its physical overrun is inside the same numerical budget.
+    const double length = std::sqrt(squared);
+    if (!finiteValue(length) ||
+        parameter * length < -bound ||
+        (parameter - 1.0) * length > bound) {
+        return std::nullopt;
+    }
+    const double finite_parameter =
+        std::clamp(parameter, 0.0, 1.0);
+    const auto point =
+        linePoint(line, finite_parameter);
+    if (!point) {
+        return std::nullopt;
+    }
+    const double distance = std::hypot(
+        point->u - circle.center.u,
+        point->v - circle.center.v);
+    if (!finiteValue(distance)) {
+        return std::nullopt;
+    }
+    // Pure sign errors in near tangent support are distinct from
+    // a real line offset. Compare *linear* distances in millimetres.
+    const double perpendicular =
+        std::abs(std::fma(rel_u, dv, -rel_v * du)) /
+        length;
+    if (!finiteValue(perpendicular) ||
+        std::abs(perpendicular - circle.radius) > bound ||
+        std::abs(distance - circle.radius) > bound) {
+        return std::nullopt;
+    }
+    const auto circle_parameter =
+        circleParameter(circle, *point);
+    if (!circle_parameter) {
+        return std::nullopt;
+    }
+    return RawIntersection{
+        *point, finite_parameter, *circle_parameter, true};
+}
+
 [[nodiscard]] RawRelation lineCircle(
     const CurveView& line,
     const CurveView& circle) {
@@ -774,6 +856,16 @@ using ExactExpansion = std::vector<double>;
         }
     }
     if (sign < 0) {
+        // N1 candidate is admitted only after a *real* finite, unique
+        // near-tangent support and signed radial error are certified.
+        // Nonlocal gaps, line extension-only cuts and positive two-root
+        // secants stay on the strict analytic path.
+        const auto near =
+            nearFiniteLineCircleContact(line, circle);
+        if (near) {
+            return RawRelation{
+                CurveRelationStatus::discrete, {*near}};
+        }
         return RawRelation{
             CurveRelationStatus::disjoint, {}};
     }
