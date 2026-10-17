@@ -981,6 +981,51 @@ int main(int argc, char* argv[]) {
         sketch::Point2{5000.0, 5007.0}));
     CHECK(interaction.escape());
 
+    // S2 B03a: Circle's SECOND point is resolved by the same
+    // viewport OSNAP pipeline as Line. The snapped authored
+    // endpoint is deliberately displaced from the raw cursor.
+    interaction.activateCircle();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            4900.0,
+            4900.0}));
+    const auto circle_size_request =
+        interaction.interactionState().activePointRequest();
+    CHECK(circle_size_request.has_value());
+    CHECK(circle_size_request->base.has_value());
+    CHECK(*circle_size_request->base ==
+          sketch::Point2{4900.0, 4900.0});
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    const auto circles_before_osnap =
+        hosted->model.state().circles.size();
+    movePointer(
+        interaction, sketch_id,
+        5004.0, 5010.0, 5004.0, 5010.0);
+    point_resolution = interaction.pointResolution();
+    CHECK(point_resolution.has_value());
+    CHECK(point_resolution->source ==
+          sketch::PointResolutionSource::object_snap);
+    CHECK(point_resolution->object_snap.has_value());
+    CHECK(point_resolution->position ==
+          sketch::Point2{5000.0, 5007.0});
+    click(
+        interaction, sketch_id,
+        5004.0, 5010.0, 5004.0, 5010.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(model_state.circles.size() ==
+          circles_before_osnap + 1U);
+    CHECK(model_state.circles.back().center ==
+          sketch::Point2{4900.0, 4900.0});
+    CHECK(near(
+        model_state.circles.back().radius,
+        std::hypot(100.0, 107.0)));
+    CHECK(interaction.escape());
+
     // Master OFF preserves mode choices but removes OSNAP from pointer
     // resolution. With Polar also OFF, the same near-target click stays raw.
     snap_settings.object_snap.master_enabled = false;
