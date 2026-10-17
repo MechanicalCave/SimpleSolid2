@@ -919,6 +919,19 @@ void verifyOwnerFullNativeScenePick() {
     // independently usable macro regions in the same connected component.
     CHECK(pick4.region_index.has_value());
     CHECK(pick3.region_index.has_value());
+
+    // A binary64 point independently certified with dyadic-rational
+    // squared-circle and Line-side inequalities to be STRICTLY inside
+    // the Circle9/Line26 microscopic lens. It must not pick a macroface
+    // when that derived microface is unresolved for Profile consumers.
+    const sketch::Point2 actual_lens_point{
+        63.84674552114644, 83.61062414524297};
+    const auto lens_pick = sketch::pickRegion(
+        scene, analysis, actual_lens_point);
+    CHECK(!lens_pick.region_index.has_value());
+    CHECK(lens_pick.location ==
+          sketch::RegionPointLocation::ambiguous);
+
     // Localized uncertain geometry must stay visible to callers. A
     // macro-profile cannot be obtained by silently erasing real faces.
     CHECK(!analysis.complete());
