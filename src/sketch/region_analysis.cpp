@@ -3335,7 +3335,7 @@ buildComponentLoops(
                           << '\n';
                 for (const auto& use : loop->boundary) {
                     std::cerr << "SS2_S1_N1_LOOP_USE"
-                              << " entity=" << use.source_entity.value()
+                              << " entity=" << use.source_entity.serialized()
                               << " from=" << use.start_parameter
                               << " to=" << use.end_parameter
                               << " forward=" << use.follows_source_direction
