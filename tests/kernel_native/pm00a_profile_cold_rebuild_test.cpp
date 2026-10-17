@@ -176,12 +176,15 @@ EvidenceSnapshot snapshot(
 // Native S1/F2 witness: two exact interior Line/Circle tangencies form
 // a durable lower pocket. Release all runtime Sketch/Profile/OCCT handles,
 // then cold-rebuild the Profile Face from the authored .ss2part payload.
-void verifyF2TangentPocketColdRebuild(bool near_contact) {
+void verifyF2TangentPocketColdRebuild(
+    bool near_contact, bool contact_interior = false) {
     TempDirectory temp;
     const auto path = temp.path /
-        (near_contact
-            ? "PM00AN1NearTangentPocket.ss2part"
-            : "PM00AF2TangentPocket.ss2part");
+        (contact_interior
+            ? "PM00AN1InteriorTangentPocket.ss2part"
+            : (near_contact
+                ? "PM00AN1NearTangentPocket.ss2part"
+                : "PM00AF2TangentPocket.ss2part"));
     part::PartDocumentStore store;
     part::ProfileId pocket_profile;
     std::optional<sketch::SketchId> sketch_id;
@@ -218,8 +221,9 @@ void verifyF2TangentPocketColdRebuild(bool near_contact) {
             : 5.0;
         const double y_base =
             near_contact ? center.v - 60.0 : -9.0;
-        const double y_top =
-            near_contact ? center.v : 7.0;
+        const double y_top = near_contact
+            ? center.v + (contact_interior ? 20.0 : 0.0)
+            : 7.0;
         const auto circle = session.execute(
             application::AddSketchCircleCommand{
                 *sketch_id, center, radius});
@@ -331,6 +335,7 @@ void verifyF2TangentPocketColdRebuild(bool near_contact) {
 int main() {
     verifyF2TangentPocketColdRebuild(false);
     verifyF2TangentPocketColdRebuild(true);
+    verifyF2TangentPocketColdRebuild(true, true);
     TempDirectory temp;
     const auto path =
         temp.path / "PM00AColdRebuild.ss2part";
