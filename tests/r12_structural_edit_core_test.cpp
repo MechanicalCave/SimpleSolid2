@@ -1,6 +1,7 @@
 #include <simplesolid2/sketch/structural_edit.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <numbers>
@@ -41,6 +42,101 @@ resultModel(
 
 int main() {
     using namespace simplesolid2::sketch;
+
+    // B02 real-user Windows artifact, copied verbatim from the authored
+    // entities in szkic_test_01(1).ss2part (schema 20, six Circles).
+    // Only case 1/2 EXACT binary tangencies are asserted here. Case 3/4
+    // are deliberately diagnostic: their authored finite endpoint
+    // coordinates differ by 1 ULP and whether a near-contact is admitted
+    // requires a separately accepted numerical D2 policy. The test does
+    // not add a tolerance, weld edges or assert false precision.
+    {
+        struct RealCase final {
+            const char* name;
+            Point2 center;
+            Point2 first_start;
+            Point2 first_end;
+            Point2 second_start;
+            Point2 second_end;
+        };
+        const std::array<RealCase, 6> cases{{
+            {"case1-extended-exact", {-81.13570411713846, 67.52296383563574},
+                {-111.13570411713846, 0.0},
+                {-111.13570411713846, 92.56448649641345},
+                {-51.13570411713846, 0.0},
+                {-51.13570411713846, 106.53001893976436}},
+            {"case2-end-exact", {0.0, 67.52296383563574},
+                {-30.0, 0.0}, {-30.0, 67.52296383563574},
+                {30.0, 0.0}, {30.0, 67.52296383563574}},
+            {"case3-copied-inside", {89.16841975020736, 67.52296383563574},
+                {49.16841975020738, 60.507216219488555},
+                {63.84674561314644, 83.61062429004923},
+                {129.16841975020736, 60.507216219488555},
+                {114.49009388726829, 83.61062429004923}},
+            {"case4-copied-outside", {190.34517723877235, 67.52296383563574},
+                {150.34517723877235, 60.507216219488555},
+                {165.0235031017114, 83.61062429004923},
+                {230.34517723877235, 60.507216219488555},
+                {215.6668513758333, 83.61062429004923}},
+            {"case5-end-near", {-52.63750445097793, -54.29688164032062},
+                {-84.1794889180956, -95.72801266910211},
+                {-72.09093198090801, -77.13466080857073},
+                {-35.780318328485, -79.11291025151527},
+                {-13.710456786348955, -97.4411982152548}},
+            {"case6-secant-finite", {36.2264805817629, -54.63476751496982},
+                {6.846405134007824, -83.25915596546274},
+                {23.83920538253282, -66.26635571693774},
+                {68.92311233700123, -78.74091461840942},
+                {56.130014366619065, -65.94781664802726}},
+        }};
+        std::array<std::size_t, 6> first_hits{};
+        std::array<std::size_t, 6> second_hits{};
+        std::array<bool, 6> first_tangent{};
+        std::array<bool, 6> second_tangent{};
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+            const auto& sample = cases[index];
+            SketchModel observed;
+            const auto circle_id =
+                observed.addCircle(sample.center, 30.0);
+            const auto left_id =
+                observed.addLine(sample.first_start, sample.first_end);
+            const auto right_id =
+                observed.addLine(sample.second_start, sample.second_end);
+            const auto first =
+                analyzeCurveRelation(observed, circle_id, left_id);
+            const auto second =
+                analyzeCurveRelation(observed, circle_id, right_id);
+            first_hits[index] = first.intersections.size();
+            second_hits[index] = second.intersections.size();
+            first_tangent[index] =
+                first.intersections.size() == 1U &&
+                first.intersections.front().contact ==
+                    CurveContactKind::tangent;
+            second_tangent[index] =
+                second.intersections.size() == 1U &&
+                second.intersections.front().contact ==
+                    CurveContactKind::tangent;
+            std::cerr << "SS2_REAL_ULP_FIXTURE " << sample.name
+                      << " left_status=" << static_cast<int>(first.status)
+                      << " left_hits=" << first_hits[index]
+                      << " left_exact_tangent=" << first_tangent[index]
+                      << " right_status=" << static_cast<int>(second.status)
+                      << " right_hits=" << second_hits[index]
+                      << " right_exact_tangent=" << second_tangent[index]
+                      << '\n';
+        }
+
+        // Fail the genuine old numeric defect even before specifying how
+        // to handle the separately logged 1-ULP Copy near-contacts.
+        CHECK(first_hits[0] == 1U);
+        CHECK(second_hits[0] == 1U);
+        CHECK(first_tangent[0]);
+        CHECK(second_tangent[0]);
+        CHECK(first_hits[1] == 1U);
+        CHECK(second_hits[1] == 1U);
+        CHECK(first_tangent[1]);
+        CHECK(second_tangent[1]);
+    }
 
     // Line terminal Trim preserves identity and role.
     {
