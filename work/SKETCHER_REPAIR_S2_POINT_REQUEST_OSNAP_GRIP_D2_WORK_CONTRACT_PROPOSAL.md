@@ -106,7 +106,9 @@ Using a fresh build from exact implementation HEAD and the same local Sketch sta
 6. Owner exact-HEAD manual Windows PASS for B03a and B04 + existing R11/S1 critical controls; **independent technical FINAL PASS** and **separate guarded implementation squash authority**, with protected-main changed-path/lease preflight. No automatic merge from green CI.
 7. S3 B03b/B05/B06 remains a **future independent D2 work contract and ACTIVE-only transition**. Any need to settle product `C` vs `C+Enter`, Esc/focus routing or Mirror/Copy UX first ⇒ STOP for Owner D3, not part of this work.
 
-## 8. Documentation impact
+## Documentation impact
+
+**§8 of the Owner-accepted S2 Work Contract — mandatory DOC-01 declaration.**
 
 Internal docs: required
 User/Product docs: required
