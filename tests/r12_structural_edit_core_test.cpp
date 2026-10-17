@@ -323,9 +323,12 @@ int main() {
         // Real positive clearance stays disjoint; a nearby genuine
         // secant retains both distinct contacts. Neither is merged into
         // an exact tangent by a world-space radius epsilon.
+        // Use extended Lines here: the original F3 exact cutter ends
+        // at the contact (t=1), where a nearby secant would put one
+        // root beyond the finite endpoint, correctly admitting only one.
         const auto outside =
             model.addLine({-13.000001, -9.0},
-                          {-4.000001, 3.0});
+                          {4.999999, 15.0});
         const auto outside_relation =
             analyzeCurveRelation(model, target, outside);
         CHECK(outside_relation.status == CurveRelationStatus::disjoint);
@@ -333,7 +336,7 @@ int main() {
 
         const auto inside =
             model.addLine({-12.999999, -9.0},
-                          {-3.999999, 3.0});
+                          {5.000001, 15.0});
         const auto inside_relation =
             analyzeCurveRelation(model, target, inside);
         CHECK(inside_relation.status == CurveRelationStatus::discrete);
