@@ -236,12 +236,32 @@ int main() {
         // relation is recorded only; its tolerance policy is not yet D2.
         CHECK(can_trim[0]);
         CHECK(can_trim[1]);
-        // N0 does not assign user-intended tangency to already
-        // different persisted coordinates. The positive finite
-        // secants of case 3 still Trim, while the disjoint case 4
-        // remains a documented near-contact GAP pending N1 D2.
+        // N1 acceptance: copied finite source Lines from cases 3/4
+        // must now produce the same two-cut Circle Trim. This is an
+        // EXPERIMENTAL positive on the original persisted binary64
+        // values, not yet a native Profile/OCCT acceptance.
+        CHECK(can_trim[0]);
+        CHECK(can_trim[1]);
         CHECK(can_trim[2]);
-        CHECK(!can_trim[3]);
+        CHECK(can_trim[3]);
+
+        // Negative precision controls at both ends of the intended
+        // 1m..100m envelope. Actual 1e-8 mm clearance must NEVER turn
+        // into a false finite Circle/Line tangent, including after a
+        // large global translation of the authored sketch.
+        for (const double origin : {1000.0, 100000.0}) {
+            SketchModel negative;
+            const auto disk = negative.addCircle(
+                {origin, 0.0}, 30.0);
+            const auto missed =
+                negative.addLine(
+                    {origin + 30.0 + 1.0e-8, -40.0},
+                    {origin + 30.0 + 1.0e-8, 40.0});
+            const auto relation =
+                analyzeCurveRelation(negative, disk, missed);
+            CHECK(relation.status == CurveRelationStatus::disjoint);
+            CHECK(relation.intersections.empty());
+        }
     }
 
     // Line terminal Trim preserves identity and role.

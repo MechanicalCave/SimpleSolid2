@@ -968,9 +968,57 @@ void verifyS0CircleTangentRegionCells() {
     CHECK(verified_similarities == 8U);
 }
 
+// The user's original case 5: even when one finite cutter touches
+// a closed Circle and the other misses, the intact Circle must remain
+// a legitimate independently selectable Profile. Trim may correctly
+// refuse one-cut destructive edits, but Profile is a separate semantic
+// operation and cannot disappear just because Trim has insufficient cuts.
+void verifyOwnerCase5IndependentCircleProfile() {
+    sketch::SketchModel model;
+    [[maybe_unused]] const auto disk =
+        model.addCircle(
+            {-52.63750445097793, -54.29688164032062}, 30.0);
+    [[maybe_unused]] const auto left =
+        model.addLine(
+            {-84.1794889180956, -95.72801266910211},
+            {-72.09093198090801, -77.13466080857073});
+    [[maybe_unused]] const auto right =
+        model.addLine(
+            {-35.780318328485, -79.11291025151527},
+            {-13.710456786348955, -97.4411982152548});
+    const auto regions = sketch::analyzeRegions(model);
+    const auto picked = sketch::pickRegion(
+        model, regions, {-52.63750445097793, -54.29688164032062});
+    std::cerr << "SS2_OWNER_CASE5_PROFILE"
+              << " cells=" << regions.regions.size()
+              << " diagnostics=" << regions.diagnostics.size()
+              << " picked=" << picked.region_index.has_value()
+              << '\n';
+    CHECK(picked.region_index.has_value());
+    const auto found = std::find_if(
+        regions.regions.begin(), regions.regions.end(),
+        [&picked](const auto& region) {
+            return region.region_index == *picked.region_index;
+        });
+    CHECK(found != regions.regions.end());
+    const auto intent = part::makeProfileRegionIntent(*found);
+    CHECK(intent.has_value());
+    const auto replay = part::resolveProfileRegionIntent(model, *intent);
+    std::cerr << "SS2_OWNER_CASE5_PROFILE_REPLAY"
+              << " status=" << static_cast<int>(replay.status)
+              << " outer_uses=" << found->outer.boundary.size()
+              << " intent_uses=" << intent->outer.boundary.size()
+              << " first_whole="
+              << (!found->outer.boundary.empty() &&
+                  found->outer.boundary.front().whole_closed_curve)
+              << '\n';
+    CHECK(replay.valid());
+}
+
 } // namespace
 
 int main() {
+    verifyOwnerCase5IndependentCircleProfile();
     verifyS0CircleTangentRegionCells();
     verifyExactRegionEndpointBoundary();
     verifyProjectedArcDatumProfileEndpointEvidence();
