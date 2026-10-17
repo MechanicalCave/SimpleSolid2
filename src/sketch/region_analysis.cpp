@@ -2954,9 +2954,18 @@ certifiedUnresolvedLineCircleLens(
     //   h = D / (|d|^2 (r + distance))
     //     <= D_upper / (|d|^2_lower * r).
     // All input expansions bound the exact dyadic operands.
-    const double denominator =
+    // Round the positive lower denominator OUTWARD too: a nearest-
+    // rounded product can exceed its mathematical value by half an
+    // ULP and would weaken the claimed upper-height certificate.
+    const double approximate_denominator =
         exact->direction_squared_lower * circle->radius;
-    if (!(denominator > 0.0) || !finiteValue(denominator)) {
+    if (!(approximate_denominator > 0.0) ||
+        !finiteValue(approximate_denominator)) {
+        return std::nullopt;
+    }
+    const double denominator = std::nextafter(
+        approximate_denominator, 0.0);
+    if (!(denominator > 0.0)) {
         return std::nullopt;
     }
     const double height_upper = std::nextafter(
