@@ -1,7 +1,7 @@
-# Sketcher Repair S3 — Esc / Grip Copy / Mirror Keep Original — D2 Work Contract PROPOSAL
+# Sketcher Repair S3 — Esc / Grip Copy / Mirror Keep Original — D2 Work Contract — OWNER-ACCEPTED SCOPE / GOVERNANCE DRAFT
 
-**Status:** PROPOSED, **NOT OWNER-ACCEPTED, NOT ACTIVE**, governance-only; S3 source/test/docs mutation expressly FORBIDDEN until separate exact Owner D2 approval, guarded governance integration and ACTIVE-only activation.
-**Decision:** D2 cross-layer CAD Input / Shared 2D / Qt interaction **PROPOSED, Owner acceptance PENDING**; **D3 shortcut choice B (`C` + Enter) OWNER-DECIDED on 2026-10-17** (§5).
+**Status:** **OWNER-ACCEPTED EXACT S3 D2 §§0–9 + 26 CONDITIONAL PATHS** (2026-10-17) and explicitly authorized bounded future implementation, **subject to** integration and activation gates. Governance-only PR #487 **NOT MERGED, NOT ACTIVE; NO PRODUCTION MUTATION AUTHORITY YET**. The Owner has NOT separately authorized a guarded squash of #487 or an ACTIVE-only merge.
+**Decision:** D2 cross-layer CAD Input / Shared 2D / Qt interaction **OWNER-ACCEPTED EXACT SCOPE**; D3 B (`C` + Enter) Owner-chosen independently. Later guarded governance/ACTIVE integration and product merge each retain independent gates.
 **Baseline:** protected `main` = `6f8dc4f62452c749a53804ba79e661acd5a65251`, the verified Owner-authorized guarded squash of S2 implementation PR #483 (2026-10-17). Earlier B01/B02 S1 and B03a/B04 S2 are completed; don't re-open them.
 **Program:** Owner-accepted `work/SKETCH_ROADMAP.md` v1.10, **S3 B03b/B05/B06**; companion Owner-accepted `work/PART_MODELING_V1_ROADMAP.md` v1.34 defers new RG-02 packages/PM-06.
 **Authority:** `AGENTS.md` → frozen Constitution/Foundation/Architecture v1.0 → accepted ADR-0008 (Shared 2D), ADR-0009 (Sketch interaction), ADR-0011 (global CAD Input/focus), ADR-0012 (revision-bound transactions) → `work/ACTIVE.yaml` → program roadmap → future accepted/integrated/activated S3 contract → DOC-01.
@@ -9,11 +9,11 @@
 
 ## 0. Governance decision and D3 fail-closed boundary
 
-S0/S1 → S2 → S3 scheduling is already an Owner-accepted **direction**, not authorization to implement S3. This exact S3 D2 contract and every conditional source/test/doc path below **still require separate explicit Owner acceptance**. The Owner's `ok, kontynuuj pracę` after S2 integration authorized preparing this review proposal, NOT accepting its terms, merging it, changing `ACTIVE.yaml` or starting product code. The later Owner decision `Wybieram D3 B dla skrótu Grip Copy w proponowanym kontrakcie S3 PR #487. Kontynuuj procedurę zatwierdzania D2.` **settles only D3 keyboard grammar**, not this D2 contract or any merge/activation authority.
+S0/S1 → S2 → S3 scheduling had only given direction. The Owner subsequently selected **D3 B** (`C` + Enter) and, when asked explicitly whether to approve **the exact S3 D2 contract §§0–9 and all 26 conditional paths**, answered **`akceptuje i autoryzuje implementacje  - kontynuuj pracę`** on 2026-10-17. This **accepts the entire exact D2 scope and grants future bounded implementation authority** but does not waive the separate governance PR squash, separate ACTIVE-only acceptance/merge and separate product PR merge gates. Historic D3 decision: `Wybieram D3 B dla skrótu Grip Copy w proponowanym kontrakcie S3 PR #487. Kontynuuj procedurę zatwierdzania D2.`
 
-**D3 shortcut decision (§5): CLOSED — Owner chose B (`C` + Enter).** One-key `C` interception remains out of scope. **D2 STOP remains:** no source/test/docs implementation until Owner separately accepts this exact contract, it is independently merged with separately authorized guarded squash, and a separately approved ACTIVE-only PR is merged.
+**D3 shortcut decision (§5): CLOSED — Owner chose B (`C` + Enter).** One-key immediate `C` is excluded. **D2 approval: SATISFIED.** Implementation remains gated by independent Owner-authorized guarded integration of this contract and separate ACTIVE-only integration on protected `main`; do not change source, tests, product docs or ACTIVE meanwhile.
 
-**Protected integration sequence:** (1) Owner separately approves exact D2 sections 0–9 and 26 conditional paths (D3 B already decided); (2) governance proposal runs independent exact-HEAD Windows CLOSURE; (3) Owner separately authorizes guarded squash of this governance-only PR; (4) verify contract on protected `main`; (5) a **distinct ACTIVE-only PR** switches only `active_work` to this contract, passes its own exact-head Ready CLOSURE and receives separate Owner guarded-squash authority; (6) only after verified `main` activation begin test-first production PR(s). Each product PR later needs focused/FAST/Ready FULL, DOC-01, manual PASS, independent technical FINAL PASS and separate guarded product merge authorization. Never direct-write protected `main`.
+**Protected integration sequence:** (1) **DONE: Owner accepted exact S3 D2 §§0–9 and all 26 conditional paths plus D3 B**; (2) run Windows exact-HEAD CLOSURE on this acceptance update; (3) obtain separate explicit Owner permission for guarded squash merge of governance-only PR #487 and verify `main`; (4) create a distinct ACTIVE-only PR switching only `active_work`, with independent exact-head Windows CLOSURE and separate explicit Owner acceptance/guarded merge permission; (5) only after verifying protected `main` activation begin already Owner-authorized test-first S3 source/test/docs changes within the conditional 26-path scope; (6) each product PR still requires focused/FAST/Ready FULL, DOC-01, real Owner manual PASS, independent technical FINAL PASS and separate guarded product merge authorization. No direct protected-main push.
 
 ## 1. Current-main audit: evidence, not an asserted current Windows RED
 
@@ -68,7 +68,7 @@ Required contract when an active Sketch/Workbench owns CAD input:
 
 **Not selected A — one-key immediate `C`:** pressing `C` without Enter must **never** arm Copy within this S3 contract. A later change to one-key `C` requires a new explicit Owner D3 decision and appropriate D2 amendment.
 
-**Governance:** D3 B is decided. D2 contract §§0–9, the 26-path allowlist, contract integration, ACTIVE-only switch, implementation and product merge remain separate unresolved approvals. No decision may be inferred from `kontynuuj`.
+**Governance:** D3 B and exact D2 §§0–9 including 26 conditional paths are **Owner-accepted**. Future bounded implementation was explicitly authorized **contingent on** contract integration and separate ACTIVE-only activation. No permission for guarded squash of PR #487, for merging ACTIVE-only or future product PR is implied by that statement.
 
 ## 6. Registered test-first Windows matrix and hard acceptance
 
@@ -80,9 +80,9 @@ Required contract when an active Sketch/Workbench owns CAD input:
 
 **Windows gates:** exact-baseline registered audit → genuine Qt/semantic RED for demonstrated gaps → minimal product fixes → focused registered Qt/Core → Draft FAST → Ready FULL (Core, Kernel-native, Qt/Desktop), docs+Browser freshness → evidence-only exact-head Windows CLOSURE → Owner real Windows GUI PASS (Esc, all three Grip Copy modes, normal Mirror ON/OFF and history/persistence) → independent technical FINAL PASS → separate Owner guarded-squash permission for product PR(s). No blanket “PASS” transferred between SHA or from a mock-only test.
 
-## 7. Narrow CONDITIONAL 26-path product/test/docs allowlist — PROPOSAL ONLY
+## 7. Narrow CONDITIONAL 26-path product/test/docs allowlist — OWNER-ACCEPTED, NOT ACTIVE
 
-All items are optional, conditioned on **future exact Owner approval** and proved need for S3; this governance PR changes none of them. If an essential file is outside the list, STOP for separate Owner D2 path addendum before editing. Listing does not authorize broad refactors inside a file.
+All 26 paths below are **Owner-accepted conditional bounds** for future activated S3 implementation. They are **not active for edits yet** and may be touched only after independently authorized guarded integration of this contract and independently approved/merged ACTIVE-only switch; each edit must be required for in-scope S3 work. An essential path outside the list requires new Owner-approved D2 addendum. The allowlist does not authorize unrelated refactoring.
 
 1. `src/ui/project_workspace_shell.cpp` — actual Qt focus/filter Esc plus preservation of D3 B `C`-as-token-until-Enter; no one-key `C` interceptor.
 2. `src/ui/project_workspace_shell.hpp` — private scoped routing state/interface if unavoidable.
@@ -119,11 +119,11 @@ All items are optional, conditioned on **future exact Owner approval** and prove
 - No automatic activation when the S3 governance proposal merges; activate only via separate **one-file ACTIVE-only PR** with Owner permission and an exact-head Ready CLOSURE.
 - If Qt/Workbench repair requires crossing into Part/Project global input ownership beyond exact listed files, stop and present evidence, alternatives and path request.
 - No silent reinterpretation of S1/S2 geometry, deferred R11 OSNAP, numeric locks, existing command grammar or authored identity. Preserve stale-revision failure, selection, Undo/Redo, Save/Reopen and no ghost IDs.
-- **D3 B SETTLED:** Owner chose `C` + Enter; one-key immediate `C` is excluded. The pending D2 scope, governance merge and ACTIVE-only activation must still be separately approved.
+- **D3 B AND D2 SCOPE SETTLED:** Owner chose `C` + Enter and approved exact §§0–9 and 26 conditional paths. One-key `C` is excluded. Governance PR squash, ACTIVE-only PR approval/merge and any product PR merge still need separate explicit Owner permission.
 - Do not claim technical FINAL PASS based on Windows CI alone; actual Owner manual GUI validation is separately required.
 
 ## 9. DOC-01 — Documentation Impact
 
 **Internal as-built docs: REQUIRED** for Qt focus/cancel ownership and shared Sketch Copy/transform behavior. **PL/EN Product docs: REQUIRED** for Grip Rotate/Scale/Mirror Copy, normal Mirror Keep Original and precisely accepted `C` keyboard grammar. **Generated Browser: REQUIRED** by repository `.\ss2.ps1 docs`; freshness must be verified in the actual Windows build. This contract review is governance-only: no current-state doc changes until product behavior is genuinely implemented and verified.
 
-**Next Owner decision requested:** explicitly approve or reject the exact **S3 D2 contract §§0–9 and all 26 conditional paths** in PR #487 with **D3 B (`C` + Enter) already decided**. That approval, if granted, does not authorize any governance guarded squash, ACTIVE-only integration or product implementation; those require separate gates.
+**Next Owner decision (independent guarded merge gate):** Once this acceptance-evidence HEAD passes Windows exact-HEAD CLOSURE, request explicit guarded squash merge authorization for **governance-only PR #487**. Then independently propose and obtain exact Owner authorization for a separate ACTIVE-only PR. Already approved S3 implementation may start only after that ACTIVE-only merge. This approval is not product merge authority.
