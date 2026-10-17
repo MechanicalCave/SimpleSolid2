@@ -104,7 +104,11 @@ int main() {
         state.activePointRequest();
     CHECK(start_snap_request.has_value());
     CHECK(start_snap_request->base.has_value());
+    // Original moving grip stays the numeric/direct-edit pivot.
     CHECK(*start_snap_request->base ==
+          sketch::Point2{0.0, 0.0});
+    CHECK(start_snap_request->snap_reference_base.has_value());
+    CHECK(*start_snap_request->snap_reference_base ==
           sketch::Point2{10.0, 0.0});
     {
         auto end_state = selectedState(
@@ -120,6 +124,9 @@ int main() {
         CHECK(end_snap_request.has_value());
         CHECK(end_snap_request->base.has_value());
         CHECK(*end_snap_request->base ==
+              sketch::Point2{10.0, 0.0});
+        CHECK(end_snap_request->snap_reference_base.has_value());
+        CHECK(*end_snap_request->snap_reference_base ==
               sketch::Point2{0.0, 0.0});
     }
 
