@@ -1008,13 +1008,10 @@ void verifyOwnerCase5IndependentCircleProfile() {
               << " status=" << static_cast<int>(replay.status)
               << " outer_uses=" << found->outer.boundary.size()
               << " intent_uses=" << intent->outer.boundary.size()
-              << " first_source=";
-    if (!found->outer.boundary.empty()) {
-        std::cerr << found->outer.boundary.front().source_entity.value();
-    } else {
-        std::cerr << "none";
-    }
-    std::cerr << '\n';
+              << " first_whole="
+              << (!found->outer.boundary.empty() &&
+                  found->outer.boundary.front().whole_closed_curve)
+              << '\n';
     CHECK(replay.valid());
 }
 
