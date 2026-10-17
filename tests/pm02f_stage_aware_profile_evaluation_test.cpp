@@ -807,7 +807,29 @@ void verifyOwnerExtendedNearSecantRegions() {
     CHECK(left_relation3.intersections.size() == 2U);
     CHECK(right_relation3.intersections.size() == 2U);
     CHECK(!regions3.regions.empty());
+    // Publishing other cells is NOT a waiver of the unresolved lens:
+    // it must retain an explicit source-grounded diagnostic.
+    CHECK(!regions3.complete());
+    CHECK(std::any_of(
+        regions3.diagnostics.begin(),
+        regions3.diagnostics.end(),
+        [circle3, left3, right3](const auto& diagnostic) {
+            const auto has = [&diagnostic](sketch::EntityId id) {
+                return std::find(
+                    diagnostic.entities.begin(),
+                    diagnostic.entities.end(), id) !=
+                    diagnostic.entities.end();
+            };
+            return diagnostic.kind ==
+                sketch::RegionAnalysisDiagnosticKind::invalid_topology &&
+                has(circle3) && (has(left3) || has(right3));
+        }));
+    CHECK(left_relation3.intersections[0].first_parameter !=
+          left_relation3.intersections[1].first_parameter);
+    CHECK(right_relation3.intersections[0].first_parameter !=
+          right_relation3.intersections[1].first_parameter);
     CHECK(!regions4.regions.empty());
+    CHECK(regions4.complete());
 }
 
 // Native Owner .ss2part schema 20, exact complete 40 authored entities,
@@ -897,6 +919,22 @@ void verifyOwnerFullNativeScenePick() {
     // independently usable macro regions in the same connected component.
     CHECK(pick4.region_index.has_value());
     CHECK(pick3.region_index.has_value());
+    // Localized uncertain geometry must stay visible to callers. A
+    // macro-profile cannot be obtained by silently erasing real faces.
+    CHECK(!analysis.complete());
+    const auto original_case3_circle = state.circles[1].id;
+    CHECK(std::any_of(
+        analysis.diagnostics.begin(),
+        analysis.diagnostics.end(),
+        [original_case3_circle](const auto& diagnostic) {
+            return diagnostic.kind ==
+                       sketch::RegionAnalysisDiagnosticKind::invalid_topology &&
+                   std::find(
+                       diagnostic.entities.begin(),
+                       diagnostic.entities.end(),
+                       original_case3_circle) !=
+                       diagnostic.entities.end();
+        }));
 }
 
 void verifyS0CircleTangentRegionCells() {
