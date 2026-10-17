@@ -309,6 +309,35 @@ int main() {
         CHECK(edited.has_value());
         CHECK(edited->findCircle(target) == nullptr);
         CHECK(edited->findArc(*trimmed.result_entity) != nullptr);
+
+        // Reversing a finite cutter must not change exact contact type.
+        const auto reversed =
+            model.addLine({-4.0, 3.0}, {-13.0, -9.0});
+        const auto reversed_relation =
+            analyzeCurveRelation(model, target, reversed);
+        CHECK(reversed_relation.status == CurveRelationStatus::discrete);
+        CHECK(reversed_relation.intersections.size() == 1U);
+        CHECK(reversed_relation.intersections[0].contact ==
+              CurveContactKind::tangent);
+
+        // Real positive clearance stays disjoint; a nearby genuine
+        // secant retains both distinct contacts. Neither is merged into
+        // an exact tangent by a world-space radius epsilon.
+        const auto outside =
+            model.addLine({-13.000001, -9.0},
+                          {-4.000001, 3.0});
+        const auto outside_relation =
+            analyzeCurveRelation(model, target, outside);
+        CHECK(outside_relation.status == CurveRelationStatus::disjoint);
+        CHECK(outside_relation.intersections.empty());
+
+        const auto inside =
+            model.addLine({-12.999999, -9.0},
+                          {-3.999999, 3.0});
+        const auto inside_relation =
+            analyzeCurveRelation(model, target, inside);
+        CHECK(inside_relation.status == CurveRelationStatus::discrete);
+        CHECK(inside_relation.intersections.size() == 2U);
     }
 
     // Line Extend uses finite authored boundary geometry and keeps identity.
