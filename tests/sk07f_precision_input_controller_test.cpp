@@ -1435,6 +1435,146 @@ int main(int argc, char* argv[]) {
             10.0 * std::sqrt(8.0 / 9.0)));
     CHECK(interaction.escape());
 
+    // S2 B04 viewport integration: TAN for a moving Line Start Grip
+    // uses the unmodified End as the geometric reference, not the grip
+    // pivot. Verify the final authored segment, not only snap UI cues.
+    const auto grip_tan_line_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {6230.0, 6160.0},
+                {6230.0, 6200.0},
+                sketch::EntityRole::regular});
+    CHECK(grip_tan_line_result.ok());
+    CHECK(grip_tan_line_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    const auto grip_tan_id =
+        hosted->model.state().lines.back().id;
+    viewport_controller.refreshPresentation();
+    const auto grip_tan_token =
+        viewport_controller.sketchPresentationFor(grip_tan_id);
+    CHECK(grip_tan_token.has_value());
+    viewport.grip_query_ = {true, std::nullopt};
+    viewport.point_query_ = {true, *grip_tan_token};
+    interaction.activateSelect();
+    click(interaction, sketch_id, 6230.0, 6170.0,
+          6230.0, 6170.0);
+    viewport.grip_query_ = {
+        true, viewer::SketchGripKey{
+                  *grip_tan_token,
+                  viewer::SketchGripRole::line_start}};
+    click(interaction, sketch_id, 6230.0, 6160.0,
+          6230.0, 6160.0);
+    CHECK(interaction.directManipulationActive());
+    const auto tan_grip_request =
+        interaction.activePointRequest();
+    CHECK(tan_grip_request.has_value());
+    CHECK(tan_grip_request->base ==
+          sketch::Point2{6230.0, 6160.0});
+    CHECK(tan_grip_request->snap_reference_base ==
+          sketch::Point2{6230.0, 6200.0});
+    viewport.rectangle_query_ = {true, {*tangent_token}};
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::tangent));
+    movePointer(interaction, sketch_id, 6204.0, 6209.0,
+                6204.0, 6209.0);
+    local_resolution = interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(local_resolution->object_snap.has_value());
+    CHECK(local_resolution->object_snap->kind ==
+          sketch::SnapKind::tangent);
+    const auto expected_tan = local_resolution->position;
+    CHECK(near(expected_tan.u, 6200.0 + 100.0 / 30.0));
+    CHECK(near(expected_tan.v,
+               6200.0 + 10.0 * std::sqrt(8.0 / 9.0)));
+    viewport.grip_query_ = {true, std::nullopt};
+    click(interaction, sketch_id, 6204.0, 6209.0,
+          6204.0, 6209.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    const auto* gripped_tan =
+        hosted->model.findLine(grip_tan_id);
+    CHECK(gripped_tan != nullptr);
+    CHECK(gripped_tan->start() == expected_tan);
+    CHECK(gripped_tan->end() ==
+          sketch::Point2{6230.0, 6200.0});
+    const auto tangent_radius =
+        sketch::Point2{expected_tan.u - 6200.0,
+                       expected_tan.v - 6200.0};
+    const auto tangent_direction =
+        sketch::Point2{expected_tan.u - 6230.0,
+                       expected_tan.v - 6200.0};
+    CHECK(std::abs(tangent_radius.u * tangent_direction.u +
+                   tangent_radius.v * tangent_direction.v) <
+          1.0e-8);
+    CHECK(interaction.escape());
+
+    // S2 B04 converse: moving Line End Grip uses stationary Start
+    // for a finite source-Line PER foot. Verify unchanged Start and
+    // geometric perpendicularity after the actual viewport commit.
+    const auto grip_per_line_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {6105.0, 6050.0},
+                {6110.0, 6070.0},
+                sketch::EntityRole::regular});
+    CHECK(grip_per_line_result.ok());
+    CHECK(grip_per_line_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    const auto grip_per_id =
+        hosted->model.state().lines.back().id;
+    viewport_controller.refreshPresentation();
+    const auto grip_per_token =
+        viewport_controller.sketchPresentationFor(grip_per_id);
+    CHECK(grip_per_token.has_value());
+    viewport.grip_query_ = {true, std::nullopt};
+    viewport.point_query_ = {true, *grip_per_token};
+    interaction.activateSelect();
+    click(interaction, sketch_id, 6108.0, 6060.0,
+          6108.0, 6060.0);
+    viewport.grip_query_ = {
+        true, viewer::SketchGripKey{
+                  *grip_per_token,
+                  viewer::SketchGripRole::line_end}};
+    click(interaction, sketch_id, 6110.0, 6070.0,
+          6110.0, 6070.0);
+    CHECK(interaction.directManipulationActive());
+    const auto per_grip_request =
+        interaction.activePointRequest();
+    CHECK(per_grip_request.has_value());
+    CHECK(per_grip_request->base ==
+          sketch::Point2{6110.0, 6070.0});
+    CHECK(per_grip_request->snap_reference_base ==
+          sketch::Point2{6105.0, 6050.0});
+    viewport.rectangle_query_ = {true, {*per_token}};
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::perpendicular));
+    movePointer(interaction, sketch_id, 6107.0, 6102.0,
+                6107.0, 6102.0);
+    local_resolution = interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(local_resolution->object_snap.has_value());
+    CHECK(local_resolution->object_snap->kind ==
+          sketch::SnapKind::perpendicular);
+    CHECK(local_resolution->position ==
+          sketch::Point2{6105.0, 6100.0});
+    viewport.grip_query_ = {true, std::nullopt};
+    click(interaction, sketch_id, 6107.0, 6102.0,
+          6107.0, 6102.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    const auto* gripped_per =
+        hosted->model.findLine(grip_per_id);
+    CHECK(gripped_per != nullptr);
+    CHECK(gripped_per->start() ==
+          sketch::Point2{6105.0, 6050.0});
+    CHECK(gripped_per->end() ==
+          sketch::Point2{6105.0, 6100.0});
+    CHECK(interaction.escape());
+
     // A non-NONE Temporary Override is restrictive. With no requested-family
     // candidate there is no raw or Polar fallback and stale resolution is
     // explicitly cleared.
