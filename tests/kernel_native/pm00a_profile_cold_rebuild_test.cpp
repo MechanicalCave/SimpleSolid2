@@ -174,10 +174,11 @@ EvidenceSnapshot snapshot(
 // Native S1/F2 witness: two exact interior Line/Circle tangencies form
 // a durable lower pocket. Release all runtime Sketch/Profile/OCCT handles,
 // then cold-rebuild the Profile Face from the authored .ss2part payload.
-void verifyF2TangentPocketColdRebuild() {
+void verifyF2TangentPocketColdRebuild(double side_delta) {
     TempDirectory temp;
     const auto path =
         temp.path / "PM00AF2TangentPocket.ss2part";
+    const double side = 5.0 + side_delta;
     part::PartDocumentStore store;
     part::ProfileId pocket_profile;
     std::optional<sketch::SketchId> sketch_id;
@@ -204,13 +205,13 @@ void verifyF2TangentPocketColdRebuild() {
         CHECK(circle.ok() && circle.entity_id.has_value());
         const auto left = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {-5.0, -9.0}, {-5.0, 7.0}});
+                *sketch_id, {-side, -9.0}, {-side, 7.0}});
         const auto right = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {5.0, -9.0}, {5.0, 7.0}});
+                *sketch_id, {side, -9.0}, {side, 7.0}});
         const auto base = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {-5.0, -9.0}, {5.0, -9.0}});
+                *sketch_id, {-side, -9.0}, {side, -9.0}});
         CHECK(left.ok() && right.ok() && base.ok());
 
         const auto* source =
@@ -297,13 +298,19 @@ void verifyF2TangentPocketColdRebuild() {
 
     std::cout << "PM00A_F2_TANGENT_POCKET_COLD_PASS"
               << " native_occt_face=1 native_occt_solid=1"
-              << " cold_reopen=1\n";
+              << " cold_reopen=1" << " side_delta="
+              << side_delta << '\n';
 }
 
 } // namespace
 
 int main() {
-    verifyF2TangentPocketColdRebuild();
+    verifyF2TangentPocketColdRebuild(0.0);
+    // N1: intentional one-ULP-ish outward shift on both side Lines;
+    // actual sources have no geometric intersection with the Circle.
+    // A derived common contact must permit a *real* native BRep-valid
+    // lower pocket Profile and cold Extrude, without source mutation.
+    verifyF2TangentPocketColdRebuild(1.0e-13);
     TempDirectory temp;
     const auto path =
         temp.path / "PM00AColdRebuild.ss2part";
