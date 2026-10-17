@@ -530,8 +530,14 @@ ResolvedProfileRegion resolveProfileRegionIntent(
             return {};
         };
 
+    // Analytic interior tangencies may be durable anchors only when
+    // currently certified by a bounded Region arrangement cell. Cache
+    // the derived arrangement once per replay; it is never authored.
+    std::optional<sketch::RegionAnalysis2D>
+        tangent_arrangement;
+
     const auto resolve_anchor =
-        [&model, &regular_source](
+        [&model, &regular_source, &tangent_arrangement](
             sketch::EntityId source,
             const ProfileBoundaryAnchor& anchor)
             -> std::optional<double> {
@@ -589,7 +595,93 @@ ResolvedProfileRegion resolveProfileRegionIntent(
                     sketch::CurveContactKind::tangent &&
                 !found->first_endpoint &&
                 !found->second_endpoint) {
-                return std::nullopt;
+                // A bare curve-to-curve contact is NOT a Profile edge.
+                // Admit F2 only if the same uniquely identified semantic
+                // branch is present in the current bounded arrangement.
+                // In particular externally tangent whole Circles remain
+                // point-only islands with no such derived loop use.
+                if (std::count_if(
+                        relation.intersections.begin(),
+                        relation.intersections.end(),
+                        [&anchor](const auto& item) {
+                            return item.canonical_branch ==
+                                   anchor.canonical_branch;
+                        }) != 1) {
+                    return std::nullopt;
+                }
+                if (!tangent_arrangement) {
+                    tangent_arrangement =
+                        sketch::analyzeRegions(model);
+                }
+                const auto& arrangement =
+                    *tangent_arrangement;
+                if (std::any_of(
+                        arrangement.diagnostics.begin(),
+                        arrangement.diagnostics.end(),
+                        [source, &anchor](const auto& diagnostic) {
+                            return std::find(
+                                diagnostic.entities.begin(),
+                                diagnostic.entities.end(),
+                                source) !=
+                                    diagnostic.entities.end() ||
+                                std::find(
+                                    diagnostic.entities.begin(),
+                                    diagnostic.entities.end(),
+                                    anchor.other_entity) !=
+                                    diagnostic.entities.end();
+                        })) {
+                    return std::nullopt;
+                }
+
+                const double current_parameter =
+                    relation.first_entity == source
+                        ? found->first_parameter
+                        : found->second_parameter;
+                const auto matches = [source, &anchor,
+                                      current_parameter](
+                    const sketch::RegionLoop2D& loop) {
+                    return std::any_of(
+                        loop.boundary.begin(),
+                        loop.boundary.end(),
+                        [source, &anchor,
+                         current_parameter](const auto& use) {
+                            if (use.source_entity != source ||
+                                use.whole_closed_curve) {
+                                return false;
+                            }
+                            const auto matching_anchor =
+                                [&anchor](const auto& candidate) {
+                                    return candidate &&
+                                        candidate->kind ==
+                                            sketch::RegionBoundaryAnchorKind::
+                                                intersection &&
+                                        candidate->other_entity ==
+                                            anchor.other_entity &&
+                                        candidate->canonical_branch ==
+                                            anchor.canonical_branch;
+                                };
+                            return (use.start_parameter ==
+                                        current_parameter &&
+                                    matching_anchor(use.start_anchor)) ||
+                                   (use.end_parameter ==
+                                        current_parameter &&
+                                    matching_anchor(use.end_anchor));
+                        });
+                };
+                if (!std::any_of(
+                        arrangement.regions.begin(),
+                        arrangement.regions.end(),
+                        [&matches](const auto& region) {
+                            if (matches(region.outer)) {
+                                return true;
+                            }
+                            return std::any_of(
+                                region.holes.begin(),
+                                region.holes.end(),
+                                matches);
+                        })) {
+                    return std::nullopt;
+                }
             }
 
             return relation.first_entity == source
