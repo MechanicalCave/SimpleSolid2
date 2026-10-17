@@ -341,6 +341,45 @@ int main() {
             analyzeCurveRelation(model, target, inside);
         CHECK(inside_relation.status == CurveRelationStatus::discrete);
         CHECK(inside_relation.intersections.size() == 2U);
+
+        // F3 exact integer-vector tangencies survive an exact 90-degree
+        // rotation and factor-two positive scale. Keep both finite
+        // cutter endpoints on the transformed Circle's contact points.
+        std::size_t transformed_verified = 0U;
+        for (const bool quarter_turn : {false, true}) {
+            for (const double factor : {1.0, 2.0}) {
+                const auto mapped =
+                    [quarter_turn, factor](Point2 point) {
+                        return quarter_turn
+                            ? Point2{-point.v * factor,
+                                     point.u * factor}
+                            : Point2{point.u * factor,
+                                     point.v * factor};
+                    };
+                SketchModel transformed;
+                const auto target_id =
+                    transformed.addCircle({0.0, 0.0}, 5.0 * factor);
+                const auto cutter_left =
+                    transformed.addLine(
+                        mapped({-13.0, -9.0}),
+                        mapped({-4.0, 3.0}));
+                const auto cutter_right =
+                    transformed.addLine(
+                        mapped({13.0, -9.0}),
+                        mapped({4.0, 3.0}));
+                for (const auto candidate :
+                     {cutter_left, cutter_right}) {
+                    const auto contact = analyzeCurveRelation(
+                        transformed, target_id, candidate);
+                    CHECK(contact.status == CurveRelationStatus::discrete);
+                    CHECK(contact.intersections.size() == 1U);
+                    CHECK(contact.intersections[0].contact ==
+                          CurveContactKind::tangent);
+                }
+                ++transformed_verified;
+            }
+        }
+        CHECK(transformed_verified == 4U);
     }
 
     // Line Extend uses finite authored boundary geometry and keeps identity.
