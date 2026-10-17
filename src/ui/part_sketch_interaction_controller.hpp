@@ -370,6 +370,10 @@ public:
     [[nodiscard]] bool activateRotate();
     [[nodiscard]] bool activateScale();
     [[nodiscard]] bool activateMirror();
+    // Ordinary MIRROR alone: transient Keep Original option, distinct
+    // from Grip Copy and the repeated normal COPY command.
+    [[nodiscard]] bool setMirrorKeepOriginal(bool enabled);
+    [[nodiscard]] bool mirrorKeepOriginal() const noexcept;
     [[nodiscard]] bool completeTransformSelection();
     [[nodiscard]] bool commitTransform();
 
@@ -551,6 +555,7 @@ private:
         sketch::EntityRole::regular};
     bool line_axis_designation_{};
     bool rectangle_draw_diagonals_{};
+    bool mirror_keep_original_{};
     application::CircleSizeInputMode
         circle_size_input_mode_{
             application::CircleSizeInputMode::diameter};
