@@ -1225,7 +1225,7 @@ int main() {
     {
         sketch::SketchModel extended_tangents;
         (void)extended_tangents.addCircle({0.0, 0.0}, 5.0);
-        (void)extended_tangents.addLine(
+        const auto f2_left = extended_tangents.addLine(
             {-5.0, -9.0}, {-5.0, 7.0});
         (void)extended_tangents.addLine(
             {5.0, -9.0}, {5.0, 7.0});
@@ -1274,6 +1274,15 @@ int main() {
         CHECK(std::abs(adjoining.region->area -
               (90.0 + 12.5 * std::numbers::pi_v<double>)) <
               1.0e-8);
+
+        // Move one source Line off its analytic tangent support:
+        // a stored intersection anchor cannot silently remap to the
+        // nearest new Line/Circle location or survive as stale fill.
+        CHECK(extended_tangents.updateLine(
+            f2_left, {-5.0, -9.0}, {-5.01, 7.0}));
+        const auto stale = part::resolveProfileRegionIntent(
+            extended_tangents, *pocket_intent);
+        CHECK(!stale.valid());
     }
 
     // Disconnected and point-only Add are rejected.
