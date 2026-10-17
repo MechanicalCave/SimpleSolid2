@@ -835,6 +835,27 @@ void verifyOwnerExtendedNearSecantRegions() {
 // Native Owner .ss2part schema 20, exact complete 40 authored entities,
 // including Regular/Construction distinction and the copied #3/#4 cases.
 // Test-only reconstruction; no parsing or persistent-product source change.
+// D2-A negative: a geometrically narrow but numerically resolvable
+// Circle/Line crescent is a REAL material Region. Certification must
+// never discard it merely because its area is small or it has two uses.
+void verifyD2ARepresentableNarrowCap() {
+    sketch::SketchModel model;
+    model.addCircle({0.0, 0.0}, 30.0);
+    model.addLine({-45.0, 30.0 - 1e-5},
+                  {45.0, 30.0 - 1e-5});
+    const auto regions = sketch::analyzeRegions(model);
+    CHECK(regions.complete());
+    CHECK(regions.regions.size() == 2U);
+    const auto cap = sketch::pickRegion(
+        model, regions, {0.0, 30.0 - 2e-6});
+    CHECK(cap.region_index.has_value());
+    CHECK(cap.location == sketch::RegionPointLocation::inside);
+    const auto disk = sketch::pickRegion(
+        model, regions, {0.0, 0.0});
+    CHECK(disk.region_index.has_value());
+    CHECK(cap.region_index != disk.region_index);
+}
+
 void verifyOwnerFullNativeScenePick() {
     struct Line {
         sketch::Point2 start;
@@ -1288,6 +1309,7 @@ void verifyS0CircleTangentRegionCells() {
 } // namespace
 
 int main() {
+    verifyD2ARepresentableNarrowCap();
     verifyOwnerFullNativeScenePick();
     verifyOwnerExtendedNearSecantRegions();
     verifyS0CircleTangentRegionCells();
