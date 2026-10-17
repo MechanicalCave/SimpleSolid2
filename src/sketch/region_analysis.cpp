@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <iostream>
 #include <limits>
 #include <numbers>
 #include <optional>
@@ -2909,6 +2910,25 @@ buildComponentLoops(
     const SketchModel& model,
     const std::vector<EntityId>& entities,
     const std::vector<TopologyIntersection>& intersections) {
+    // TEMPORARY S1-N1 diagnostic; remove after exact failing stage isolated.
+    const auto actual_state = model.state();
+    const bool owner_case3 = std::any_of(
+        actual_state.circles.begin(),
+        actual_state.circles.end(),
+        [](const auto& entry) {
+            return entry.center.u == 89.16841975020736 &&
+                   entry.center.v == 67.52296383563574;
+        });
+    const auto trace_reject =
+        [owner_case3](int line)
+            -> std::optional<std::vector<BuiltLoop>> {
+            if (owner_case3) {
+                std::cerr << "SS2_S1_N1_REGION_TRACE"
+                          << " stage=build_component_loops"
+                          << " line=" << line << '\n';
+            }
+            return std::nullopt;
+        };
     std::vector<Vertex> vertices;
     std::vector<std::vector<Cut>> cuts(
         entities.size());
@@ -2957,7 +2977,7 @@ buildComponentLoops(
                 intersection.second_parameter,
                 vertex,
                 *second_anchor)) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
     }
 
@@ -3005,7 +3025,7 @@ buildComponentLoops(
                 model,
                 entities[index]);
         if (!curve) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
 
         if (curve->kind == CurveKind::line) {
@@ -3017,7 +3037,7 @@ buildComponentLoops(
                     index,
                     1.0,
                     curve->second)) {
-                return std::nullopt;
+                return trace_reject(__LINE__);
             }
         } else if (curve->kind == CurveKind::arc) {
             const auto first_point =
@@ -3034,7 +3054,7 @@ buildComponentLoops(
                     index,
                     1.0,
                     *second_point)) {
-                return std::nullopt;
+                return trace_reject(__LINE__);
             }
         }
     }
@@ -3050,7 +3070,7 @@ buildComponentLoops(
                 model,
                 entities[index]);
         if (!curve) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
 
         auto& entity_cuts = cuts[index];
@@ -3074,7 +3094,7 @@ buildComponentLoops(
                     model,
                     entities[index]);
             if (!circle) {
-                return std::nullopt;
+                return trace_reject(__LINE__);
             }
             loops.push_back(*circle);
             continue;
@@ -3111,7 +3131,7 @@ buildComponentLoops(
         }
 
         if (entity_cuts.size() < 2U) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
         for (std::size_t cut = 0U;
              cut + 1U < entity_cuts.size();
@@ -3144,7 +3164,7 @@ buildComponentLoops(
         const auto curve =
             curveView(model, edge.source);
         if (!curve) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
         const auto forward_geometry =
             halfEdgeOrder(
@@ -3160,7 +3180,7 @@ buildComponentLoops(
                 vertices[edge.second_vertex].point);
         if (!forward_geometry ||
             !reverse_geometry) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
 
         const auto forward_index =
@@ -3263,7 +3283,7 @@ buildComponentLoops(
                     twin);
             if (found == outgoing.end() ||
                 outgoing.empty()) {
-                return std::nullopt;
+                return trace_reject(__LINE__);
             }
 
             const auto position =
@@ -3276,7 +3296,7 @@ buildComponentLoops(
         }
 
         if (!closed) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
 
         cycle =
@@ -3294,7 +3314,7 @@ buildComponentLoops(
                 half_edges,
                 cycle);
         if (!loop) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
 
         if (!(loop->signed_area > 0.0)) {
@@ -3306,7 +3326,7 @@ buildComponentLoops(
                 model,
                 *loop);
         if (!sample) {
-            return std::nullopt;
+            return trace_reject(__LINE__);
         }
 
         loops.push_back(
