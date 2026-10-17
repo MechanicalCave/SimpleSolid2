@@ -739,11 +739,10 @@ using ExactExpansion = std::vector<double>;
     if (!finiteValue(discriminant)) {
         return {};
     }
-    // N0 filtered predicate. The filter tests whether the computed
-    // *arithmetic sign* is sufficiently separated from cancellation;
-    // its bound is dimensionless relative roundoff, NOT a new geometric
-    // 1e-12 mm contact band. Recompute on exact persisted binary64
-    // operands only if the inexpensive sign is ambiguous.
+    // N0a filtered *exact-zero confirmation*. Filter uncertainty is
+    // dimensionless roundoff, NOT a new world-distance contact band.
+    // Confirm exact stored-binary tangency without altering legacy
+    // near-contact treatment of nonzero floating geometry (N1 pending).
     const double positive_product =
         radial_squared * direction_squared;
     const double negative_product =
@@ -762,16 +761,26 @@ using ExactExpansion = std::vector<double>;
         if (!exact) {
             return {};
         }
-        sign = *exact;
+        // N0a: only a mathematically exact ZERO on the stored binary
+        // operands overrides the legacy approximate result. Replacing
+        // ALL near-cancellation signs with exact rational signs would
+        // break existing transformed Line/Arc source boundary closure
+        // (real Windows #3507: sk07a.transform_core RED), because those
+        // transformed endpoints accumulate small *authored* rounding.
+        // The nonzero near-contact policy requires distinct Owner D2;
+        // do not silently reinterpret it as exact disjointness.
+        if (*exact == 0) {
+            sign = 0;
+        }
     }
     if (sign < 0) {
         return RawRelation{
             CurveRelationStatus::disjoint, {}};
     }
     const bool tangent = sign == 0;
-    // If exact expansion says two crossings but the fast discriminant
-    // rounded to <=0, the finite floating geometry cannot resolve the
-    // distinct roots. Fail closed; do not forge a tangent topology.
+    // Nonzero roots still use the legacy approximate value. If it
+    // rounded to zero while not exactly tangent, finite binary64
+    // resolution cannot separate them: fail closed, do not forge one.
     if (!tangent && !(discriminant > 0.0)) {
         return {};
     }
