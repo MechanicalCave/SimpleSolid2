@@ -330,9 +330,144 @@ void verifyF2TangentPocketColdRebuild(
               << " cold_reopen=1\n";
 }
 
+// S1/N1 D2-A real native acceptance: Circle 9 with two near-secant
+// diagonals (authored Extend Both shared apex). Two honest intersection
+// branches survive; unsupported microlenses are explicitly diagnostic,
+// but the lower macroregion must create a durable OCCT Face and solid.
+void verifyD2AOwnerExtendedSecantColdRebuild() {
+    TempDirectory temp;
+    const auto path =
+        temp.path / "PM00AD2AOwnerExtendedSecants.ss2part";
+    part::PartDocumentStore store;
+    part::ProfileId selected_profile;
+    std::optional<sketch::SketchId> sketch_id;
+    std::string before_fingerprint;
+    EvidenceSnapshot before_evidence;
+    const sketch::Point2 center{
+        89.16841975020736, 67.52296383563574};
+    const double left_x = 49.16841975020738;
+    const double right_x = 129.16841975020736;
+    const double top_y = 60.507216219488555;
+    const sketch::Point2 apex{
+        89.16841975020735, 123.46646180728104};
+    {
+        auto document = part::PartDocument::create(
+            core::DocumentId::generate());
+        const auto created_file =
+            store.createNew(path, document);
+        CHECK(created_file.ok());
+        application::DocumentSession session{
+            path, std::move(document),
+            *created_file.checkpoint};
+        const auto sketch_create = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(sketch_create.ok() &&
+              sketch_create.sketch_id.has_value());
+        sketch_id = *sketch_create.sketch_id;
+        const auto circle = session.execute(
+            application::AddSketchCircleCommand{
+                *sketch_id, center, 30.0});
+        CHECK(circle.ok() && circle.entity_id.has_value());
+        const auto add_line =
+            [&session, &sketch_id](
+                sketch::Point2 first, sketch::Point2 second) {
+                return session.execute(
+                    application::AddSketchLineCommand{
+                        *sketch_id, first, second});
+            };
+        CHECK(add_line({left_x, 0.0},
+                       {right_x, 0.0}).ok());
+        CHECK(add_line({left_x, 0.0},
+                       {left_x, top_y}).ok());
+        CHECK(add_line({left_x, top_y}, apex).ok());
+        CHECK(add_line({right_x, 0.0},
+                       {right_x, top_y}).ok());
+        CHECK(add_line({right_x, top_y}, apex).ok());
+
+        const auto* source =
+            session.document().findSketch(*sketch_id);
+        CHECK(source != nullptr);
+        const auto analysis =
+            sketch::analyzeRegions(source->model);
+        CHECK(!analysis.complete());
+        const auto picked = sketch::pickRegion(
+            source->model, analysis, {center.u, 20.0});
+        CHECK(picked.region_index.has_value());
+        const auto region = std::find_if(
+            analysis.regions.begin(), analysis.regions.end(),
+            [&picked](const auto& candidate) {
+                return candidate.region_index ==
+                    *picked.region_index;
+            });
+        CHECK(region != analysis.regions.end());
+        const auto intent =
+            part::makeProfileRegionIntent(*region);
+        CHECK(intent.has_value());
+        CHECK(part::resolveProfileRegionIntent(
+            source->model, *intent).valid());
+        const auto profile = session.execute(
+            application::CreateProfileCommand{
+                *sketch_id, session.document().revision(),
+                *intent});
+        CHECK(profile.ok() && profile.profile_id.has_value());
+        selected_profile = *profile.profile_id;
+
+        const auto input = part::makeKernelProfileInput(
+            session.document(), selected_profile);
+        CHECK(input.has_value() && input->valid());
+        const auto face =
+            kernel_occt::buildProfileFaceEvidence(*input);
+        CHECK(face.ok());
+        CHECK(face.face_count == 1U);
+        CHECK(face.wire_count == 1U);
+
+        kernel_occt::OcctSolidModelingKernel provider;
+        kernel::LinearExtrudeInput extrusion;
+        extrusion.profile = *input;
+        extrusion.start_offset_mm = 0.0;
+        extrusion.end_offset_mm = 10.0;
+        CHECK(extrusion.valid());
+        const auto solid = provider.extrude(extrusion);
+        CHECK(solid.status == kernel::SolidModelingStatus::ok);
+        CHECK(solid.brep_valid);
+        CHECK(solid.solid_count == 1U);
+
+        before_fingerprint = fingerprint(*input);
+        before_evidence = snapshot(face);
+        CHECK(session.save().ok());
+    }
+    const auto cold = store.load(path);
+    CHECK(cold.ok());
+    CHECK(cold.document->findSketch(*sketch_id) != nullptr);
+    CHECK(cold.document->findProfile(selected_profile) != nullptr);
+    const auto input = part::makeKernelProfileInput(
+        *cold.document, selected_profile);
+    CHECK(input.has_value() && input->valid());
+    CHECK(fingerprint(*input) == before_fingerprint);
+    const auto face =
+        kernel_occt::buildProfileFaceEvidence(*input);
+    CHECK(face.ok());
+    CHECK(snapshot(face) == before_evidence);
+    kernel_occt::OcctSolidModelingKernel cold_provider;
+    kernel::LinearExtrudeInput cold_extrusion;
+    cold_extrusion.profile = *input;
+    cold_extrusion.start_offset_mm = 0.0;
+    cold_extrusion.end_offset_mm = 10.0;
+    CHECK(cold_extrusion.valid());
+    const auto solid = cold_provider.extrude(cold_extrusion);
+    CHECK(solid.status == kernel::SolidModelingStatus::ok);
+    CHECK(solid.brep_valid);
+    CHECK(solid.solid_count == 1U);
+    std::cout << "PM00A_D2A_OWNER_SECTANTS_NATIVE_COLD_PASS"
+              << " source_crossings_distinct=1"
+              << " profile_face=1 extrude=1 cold_reopen=1\n";
+}
+
 } // namespace
 
 int main() {
+    verifyD2AOwnerExtendedSecantColdRebuild();
     verifyF2TangentPocketColdRebuild(false);
     verifyF2TangentPocketColdRebuild(true);
     verifyF2TangentPocketColdRebuild(true, true);
