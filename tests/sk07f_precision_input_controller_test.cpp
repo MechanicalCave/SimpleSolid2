@@ -2913,6 +2913,68 @@ int main(int argc, char* argv[]) {
                           owner_tan_point.v - 6200.0)));
     CHECK(interaction.escape());
 
+    // Owner manual B03a confusion case: TAN to a straight Line has no
+    // unique R11 point-from-base tangent; do not invent a source or a
+    // Circle. For a Circle tangent to a finite Line at its nearest foot,
+    // use request-relative PER during Center->Size instead.
+    viewport_controller.refreshPresentation();
+    const auto owner_per_source =
+        viewport_controller.sketchPresentationFor(per_source);
+    CHECK(owner_per_source.has_value());
+    viewport.rectangle_query_ = {true, {*owner_per_source}};
+    const auto circle_count_before_owner_per =
+        session.document().findSketch(sketch_id)->
+            model.state().circles.size();
+    interaction.activateCircle();
+    CHECK(interaction.submitExplicitPoint(
+        {sketch::ExplicitPointInputKind::absolute_cartesian,
+         6105.0, 6050.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::tangent));
+    movePointer(interaction, sketch_id, 6107.0, 6102.0,
+                6107.0, 6102.0);
+    CHECK(!interaction.pointResolution().has_value());
+    click(interaction, sketch_id, 6107.0, 6102.0,
+          6107.0, 6102.0);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.state().circles.size() ==
+          circle_count_before_owner_per);
+    CHECK(interaction.escape());
+    interaction.activateCircle();
+    CHECK(interaction.submitExplicitPoint(
+        {sketch::ExplicitPointInputKind::absolute_cartesian,
+         6105.0, 6050.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::perpendicular));
+    movePointer(interaction, sketch_id, 6107.0, 6102.0,
+                6107.0, 6102.0);
+    const auto owner_per_resolution =
+        interaction.pointResolution();
+    CHECK(owner_per_resolution.has_value());
+    CHECK(owner_per_resolution->object_snap.has_value());
+    CHECK(owner_per_resolution->object_snap->kind ==
+          sketch::SnapKind::perpendicular);
+    CHECK(owner_per_resolution->position ==
+          sketch::Point2{6105.0, 6100.0});
+    click(interaction, sketch_id, 6107.0, 6102.0,
+          6107.0, 6102.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(model_state.circles.size() ==
+          circle_count_before_owner_per + 1U);
+    CHECK(model_state.circles.back().center ==
+          sketch::Point2{6105.0, 6050.0});
+    CHECK(near(model_state.circles.back().radius, 50.0));
+    const auto* per_source_after =
+        hosted->model.findLine(per_source);
+    CHECK(per_source_after != nullptr);
+    CHECK(per_source_after->start() ==
+          sketch::Point2{6090.0, 6100.0});
+    CHECK(per_source_after->end() ==
+          sketch::Point2{6130.0, 6100.0});
+    CHECK(interaction.escape());
+
     std::cout
         << "SK-07F precision input controller PASS\n";
     return EXIT_SUCCESS;
