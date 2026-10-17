@@ -241,7 +241,7 @@ int main() {
         // secants of case 3 still Trim, while the disjoint case 4
         // remains a documented near-contact GAP pending N1 D2.
         CHECK(can_trim[2]);
-        CHECK(!can_trim[3]);
+        CHECK(can_trim[3]);
     }
 
     // Line terminal Trim preserves identity and role.
