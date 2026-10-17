@@ -861,11 +861,13 @@ void verifyS0CircleTangentRegionCells() {
     CHECK(verify_durable(false));
     CHECK(verify_durable(true));
 
-    // S1 F2/Arc: the same two contact vertices bound a lower pocket
-    // even for an open analytic Arc that does NOT enclose a full disk.
-    // Reverse source parameterization (CW) and finite side-Line
-    // orientation must not turn a valid pocket into an EntityId-dependent
-    // walk or silently complete the open Arc into a fake disk.
+    // S1 F2/Arc: start=-0.2, sweep=6.0 DOES NOT contain the entire
+    // bottom semicircle (it ends at 5.8 < 2*pi), so it cannot enclose
+    // the lower pocket. The top semicircle (0..pi) plus the side Lines
+    // and bottom base instead bounds ONE upper/outer cell of area
+    // 90 + 12.5*pi. CW parameter reversal and Line source reversal
+    // must preserve that cell without inventing a second closed disk
+    // or healing the open Arc's actual missing bottom-right segment.
     std::size_t verified_arc_variants = 0U;
     for (const bool extended : {false, true}) {
         for (const bool clockwise : {false, true}) {
@@ -892,10 +894,15 @@ void verifyS0CircleTangentRegionCells() {
                           << " clockwise=" << clockwise
                           << " reversed=" << reverse_lines
                           << " count=" << regions.regions.size()
+                          << " first_area="
+                          << (regions.regions.empty()
+                                  ? -1.0
+                                  : regions.regions.front().area)
                           << '\n';
                 CHECK(regions.regions.size() == 1U);
                 CHECK(std::abs(
-                    regions.regions.front().area - pocket_area) < 1e-8);
+                    regions.regions.front().area -
+                    (90.0 + 12.5 * pi)) < 1e-8);
                 ++verified_arc_variants;
             }
         }
