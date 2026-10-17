@@ -1,4 +1,5 @@
 #include <simplesolid2/sketch/structural_edit.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <cmath>
 #include <iostream>
@@ -268,6 +269,117 @@ int main() {
             trimmed.status ==
             StructuralEditStatus::not_applicable);
         CHECK(!trimmed.state.has_value());
+    }
+
+    // S0/B02 exact integer oblique tangents: shared relation analysis and
+    // two distinct finite cutter contacts must permit ONE Circle->Arc Trim.
+    // The historical baseline normalized d=(9,12), yielding 5.0000000000000009
+    // instead of exactly R=5 and incorrectly reported both lines disjoint.
+    {
+        SketchModel model;
+        const auto target =
+            model.addCircle({0.0, 0.0}, 5.0);
+        const auto left =
+            model.addLine({-13.0, -9.0}, {-4.0, 3.0});
+        const auto right =
+            model.addLine({13.0, -9.0}, {4.0, 3.0});
+        const auto left_relation =
+            analyzeCurveRelation(model, target, left);
+        const auto right_relation =
+            analyzeCurveRelation(model, target, right);
+        std::cerr << "SKETCH_S0_B02_OBLIQUE"
+                  << " left=" << left_relation.intersections.size()
+                  << " right=" << right_relation.intersections.size()
+                  << " left_status=" << static_cast<int>(left_relation.status)
+                  << " right_status=" << static_cast<int>(right_relation.status)
+                  << '\n';
+        CHECK(left_relation.status == CurveRelationStatus::discrete);
+        CHECK(right_relation.status == CurveRelationStatus::discrete);
+        CHECK(left_relation.intersections.size() == 1U);
+        CHECK(right_relation.intersections.size() == 1U);
+        CHECK(left_relation.intersections[0].contact == CurveContactKind::tangent);
+        CHECK(right_relation.intersections[0].contact == CurveContactKind::tangent);
+        const auto trimmed = evaluateTrim(
+            model,
+            TrimSketchRequest{target, {left, right}, {0.0, -5.0}});
+        CHECK(trimmed.ready());
+        CHECK(trimmed.result_entity.has_value());
+        CHECK(*trimmed.result_entity != target);
+        const auto edited = resultModel(trimmed);
+        CHECK(edited.has_value());
+        CHECK(edited->findCircle(target) == nullptr);
+        CHECK(edited->findArc(*trimmed.result_entity) != nullptr);
+
+        // Reversing a finite cutter must not change exact contact type.
+        const auto reversed =
+            model.addLine({-4.0, 3.0}, {-13.0, -9.0});
+        const auto reversed_relation =
+            analyzeCurveRelation(model, target, reversed);
+        CHECK(reversed_relation.status == CurveRelationStatus::discrete);
+        CHECK(reversed_relation.intersections.size() == 1U);
+        CHECK(reversed_relation.intersections[0].contact ==
+              CurveContactKind::tangent);
+
+        // Real positive clearance stays disjoint; a nearby genuine
+        // secant retains both distinct contacts. Neither is merged into
+        // an exact tangent by a world-space radius epsilon.
+        // Use extended Lines here: the original F3 exact cutter ends
+        // at the contact (t=1), where a nearby secant would put one
+        // root beyond the finite endpoint, correctly admitting only one.
+        const auto outside =
+            model.addLine({-13.000001, -9.0},
+                          {4.999999, 15.0});
+        const auto outside_relation =
+            analyzeCurveRelation(model, target, outside);
+        CHECK(outside_relation.status == CurveRelationStatus::disjoint);
+        CHECK(outside_relation.intersections.empty());
+
+        const auto inside =
+            model.addLine({-12.999999, -9.0},
+                          {5.000001, 15.0});
+        const auto inside_relation =
+            analyzeCurveRelation(model, target, inside);
+        CHECK(inside_relation.status == CurveRelationStatus::discrete);
+        CHECK(inside_relation.intersections.size() == 2U);
+
+        // F3 exact integer-vector tangencies survive an exact 90-degree
+        // rotation and factor-two positive scale. Keep both finite
+        // cutter endpoints on the transformed Circle's contact points.
+        std::size_t transformed_verified = 0U;
+        for (const bool quarter_turn : {false, true}) {
+            for (const double factor : {1.0, 2.0}) {
+                const auto mapped =
+                    [quarter_turn, factor](Point2 point) {
+                        return quarter_turn
+                            ? Point2{-point.v * factor,
+                                     point.u * factor}
+                            : Point2{point.u * factor,
+                                     point.v * factor};
+                    };
+                SketchModel transformed;
+                const auto target_id =
+                    transformed.addCircle({0.0, 0.0}, 5.0 * factor);
+                const auto cutter_left =
+                    transformed.addLine(
+                        mapped({-13.0, -9.0}),
+                        mapped({-4.0, 3.0}));
+                const auto cutter_right =
+                    transformed.addLine(
+                        mapped({13.0, -9.0}),
+                        mapped({4.0, 3.0}));
+                for (const auto candidate :
+                     {cutter_left, cutter_right}) {
+                    const auto contact = analyzeCurveRelation(
+                        transformed, target_id, candidate);
+                    CHECK(contact.status == CurveRelationStatus::discrete);
+                    CHECK(contact.intersections.size() == 1U);
+                    CHECK(contact.intersections[0].contact ==
+                          CurveContactKind::tangent);
+                }
+                ++transformed_verified;
+            }
+        }
+        CHECK(transformed_verified == 4U);
     }
 
     // Line Extend uses finite authored boundary geometry and keeps identity.

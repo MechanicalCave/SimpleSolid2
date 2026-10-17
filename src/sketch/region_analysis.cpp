@@ -520,56 +520,78 @@ struct RawRelation final {
         return {};
     }
 
-    const double length =
-        std::hypot(du, dv);
-    if (!finiteValue(length) ||
-        length == 0.0) {
+    // B02: classify *before* normalizing the direction. The previous
+    // perpendicular = cross(q, d / hypot(d)) test turned an exactly
+    // tangent integer-vector construction into R + 1 ULP (F3).
+    // Power-of-two scaling preserves binary input ratios, unlike division
+    // by an arbitrary hypot/max coordinate, and avoids avoidable square
+    // overflow for very large finite geometry. This is a geometric
+    // predicate, NOT a product snap/gap tolerance.
+    const double magnitude =
+        std::max({std::abs(du), std::abs(dv),
+                  std::abs(rel_u), std::abs(rel_v),
+                  circle.radius});
+    if (!finiteValue(magnitude) || magnitude == 0.0) {
+        return {};
+    }
+    const int exponent = std::ilogb(magnitude);
+    const double nd_u = std::scalbn(du, -exponent);
+    const double nd_v = std::scalbn(dv, -exponent);
+    const double nq_u = std::scalbn(rel_u, -exponent);
+    const double nq_v = std::scalbn(rel_v, -exponent);
+    const double nr = std::scalbn(circle.radius, -exponent);
+    if (!finiteValue(nd_u) || !finiteValue(nd_v) ||
+        !finiteValue(nq_u) || !finiteValue(nq_v) ||
+        !finiteValue(nr) ||
+        (du != 0.0 && nd_u == 0.0) ||
+        (dv != 0.0 && nd_v == 0.0) ||
+        (rel_u != 0.0 && nq_u == 0.0) ||
+        (rel_v != 0.0 && nq_v == 0.0) ||
+        nr == 0.0) {
+        // Dynamic range exceeds safe predicate resolution: fail closed.
         return {};
     }
 
-    const double unit_u = du / length;
-    const double unit_v = dv / length;
-    const double projection =
-        std::fma(rel_u, unit_u, rel_v * unit_v);
-    const double signed_perpendicular =
-        cross(rel_u, rel_v, unit_u, unit_v);
-
-    if (!finiteValue(projection) ||
-        !finiteValue(signed_perpendicular)) {
+    const double direction_squared =
+        std::fma(nd_u, nd_u, nd_v * nd_v);
+    const double signed_cross =
+        cross(nq_u, nq_v, nd_u, nd_v);
+    const double radial_squared = nr * nr;
+    if (!finiteValue(direction_squared) ||
+        !(direction_squared > 0.0) ||
+        !finiteValue(signed_cross) ||
+        !finiteValue(radial_squared) ||
+        !(radial_squared > 0.0)) {
         return {};
     }
 
-    const double perpendicular =
-        std::abs(signed_perpendicular);
-    if (perpendicular > circle.radius) {
+    // Signed power-of-two-scaled discriminant:
+    //     R^2 |d|^2 - cross(q,d)^2.
+    // Its zero is the exact algebraic contact for F3. In particular
+    // there is no global epsilon and two distinct near-secant contacts
+    // are not silently collapsed into a tangent.
+    const double discriminant = std::fma(
+        radial_squared,
+        direction_squared,
+        -(signed_cross * signed_cross));
+    if (!finiteValue(discriminant)) {
+        return {};
+    }
+    if (discriminant < 0.0) {
         return RawRelation{
-            CurveRelationStatus::disjoint,
-            {}};
+            CurveRelationStatus::disjoint, {}};
     }
+    const bool tangent = discriminant == 0.0;
 
-    const bool tangent =
-        perpendicular == circle.radius;
-    double offset = 0.0;
-    if (!tangent) {
-        const double ratio =
-            perpendicular / circle.radius;
-        const double remainder =
-            std::fma(-ratio, ratio, 1.0);
-        if (!finiteValue(remainder) ||
-            remainder < 0.0) {
-            return {};
-        }
-        offset =
-            circle.radius * std::sqrt(remainder);
-        if (!finiteValue(offset)) {
-            return {};
-        }
-    }
-
+    const double projection = std::fma(
+        nq_u, nd_u, nq_v * nd_v);
     const double base_parameter =
-        projection / length;
+        projection / direction_squared;
     const double delta_parameter =
-        offset / length;
+        tangent
+            ? 0.0
+            : std::sqrt(discriminant) /
+                  direction_squared;
     if (!finiteValue(base_parameter) ||
         !finiteValue(delta_parameter)) {
         return {};
@@ -578,6 +600,8 @@ struct RawRelation final {
     std::vector<RawIntersection> intersections;
     const auto append =
         [&](double parameter) {
+            // Finite Line admission is strict: never clamp near a cutter
+            // endpoint or use an infinite-line-only intersection.
             if (parameter < 0.0 ||
                 parameter > 1.0) {
                 return true;
@@ -1365,6 +1389,8 @@ struct TopologyIntersection final {
     std::uint32_t canonical_branch{};
     bool first_endpoint{false};
     bool second_endpoint{false};
+    // Preserve source contact semantics across derived fragmentation.
+    CurveContactKind contact{CurveContactKind::proper_crossing};
 };
 
 struct Vertex final {
@@ -1396,6 +1422,9 @@ struct HalfEdge final {
     std::size_t origin{};
     std::size_t destination{};
     double tangent_angle{};
+    // Signed angular turn for coincident tangent directions. A curved
+    // branch lies to a geometric side of the straight tangent at O(t^2).
+    double curvature_order{};
 };
 
 struct BuiltLoop final {
@@ -1491,43 +1520,6 @@ struct BuiltLoop final {
     return std::nullopt;
 }
 
-[[nodiscard]] std::optional<Point2> sourceDerivative(
-    const CurveView& curve,
-    double parameter) noexcept {
-    if (!finiteValue(parameter)) {
-        return std::nullopt;
-    }
-
-    if (curve.kind == CurveKind::line) {
-        const Point2 result{
-            curve.second.u - curve.first.u,
-            curve.second.v - curve.first.v};
-        return result.finite()
-            ? std::optional<Point2>{result}
-            : std::nullopt;
-    }
-
-    const double angle =
-        curve.kind == CurveKind::circle
-            ? full_turn * parameter
-            : curve.start_angle +
-                  curve.sweep_angle * parameter;
-    const double angular_scale =
-        curve.kind == CurveKind::circle
-            ? full_turn
-            : curve.sweep_angle;
-    const Point2 result{
-        -curve.radius *
-            std::sin(angle) *
-            angular_scale,
-        curve.radius *
-            std::cos(angle) *
-            angular_scale};
-    return result.finite()
-        ? std::optional<Point2>{result}
-        : std::nullopt;
-}
-
 [[nodiscard]] double sourceParameterDelta(
     const DerivedEdge& edge) noexcept {
     if (edge.kind == CurveKind::circle &&
@@ -1539,35 +1531,67 @@ struct BuiltLoop final {
            edge.first_parameter;
 }
 
-[[nodiscard]] std::optional<double> halfEdgeAngle(
+struct OutgoingGeometry final {
+    double angle{};
+    double signed_curvature{};
+};
+
+[[nodiscard]] std::optional<OutgoingGeometry> halfEdgeOrder(
     const CurveView& curve,
     const DerivedEdge& edge,
-    bool forward) noexcept {
-    const double parameter =
-        forward
-            ? edge.first_parameter
-            : edge.second_parameter;
-    const auto derivative =
-        sourceDerivative(curve, parameter);
-    if (!derivative) {
-        return std::nullopt;
+    bool forward,
+    Point2 vertex_point) noexcept {
+    double du{};
+    double dv{};
+    double curvature{};
+
+    if (curve.kind == CurveKind::line) {
+        du = curve.second.u - curve.first.u;
+        dv = curve.second.v - curve.first.v;
+        if (!forward) {
+            du = -du;
+            dv = -dv;
+        }
+    } else {
+        // The analytic shared contact vertex is authoritative for the
+        // outgoing radial direction. Re-evaluating sin(pi), etc. would
+        // manufacture a tiny angular difference between a Circle and a
+        // Line that have exactly the same mathematical tangent.
+        const double radial_u =
+            vertex_point.u - curve.center.u;
+        const double radial_v =
+            vertex_point.v - curve.center.v;
+        const double source_sense =
+            curve.kind == CurveKind::circle
+                ? 1.0
+                : (curve.sweep_angle > 0.0 ? 1.0 : -1.0);
+        const double outgoing_sense =
+            forward ? source_sense : -source_sense;
+        du = -outgoing_sense * radial_v;
+        dv = outgoing_sense * radial_u;
+        curvature = outgoing_sense / curve.radius;
     }
 
-    const double du =
-        forward ? derivative->u : -derivative->u;
-    const double dv =
-        forward ? derivative->v : -derivative->v;
-    if (!finiteValue(du) ||
-        !finiteValue(dv) ||
-        (du == 0.0 && dv == 0.0)) {
+    if (!finiteValue(du) || !finiteValue(dv) ||
+        !finiteValue(curvature)) {
         return std::nullopt;
     }
-
+    const double scale =
+        std::max(std::abs(du), std::abs(dv));
+    if (!(scale > 0.0) || !finiteValue(scale)) {
+        return std::nullopt;
+    }
+    // Normalize only by a common direction scale: tangents (0,9),
+    // (0,5) and proportional oblique integer vectors sort identically.
+    // At equal angle sort by signed curvature, *not* by EntityId/edge
+    // allocation order. Negative turn bends clockwise from tangent;
+    // positive bends counterclockwise. A Line has zero curvature.
     const double angle =
-        std::atan2(dv, du);
-    return finiteValue(angle)
-        ? std::optional<double>{angle}
-        : std::nullopt;
+        normalizedAngle(std::atan2(dv / scale, du / scale));
+    if (!finiteValue(angle)) {
+        return std::nullopt;
+    }
+    return OutgoingGeometry{angle, curvature};
 }
 
 [[nodiscard]] RegionBoundaryUse2D boundaryUse(
@@ -2772,18 +2796,20 @@ buildComponentLoops(
         if (!curve) {
             return std::nullopt;
         }
-        const auto forward_angle =
-            halfEdgeAngle(
+        const auto forward_geometry =
+            halfEdgeOrder(
                 *curve,
                 edge,
-                true);
-        const auto reverse_angle =
-            halfEdgeAngle(
+                true,
+                vertices[edge.first_vertex].point);
+        const auto reverse_geometry =
+            halfEdgeOrder(
                 *curve,
                 edge,
-                false);
-        if (!forward_angle ||
-            !reverse_angle) {
+                false,
+                vertices[edge.second_vertex].point);
+        if (!forward_geometry ||
+            !reverse_geometry) {
             return std::nullopt;
         }
 
@@ -2795,7 +2821,8 @@ buildComponentLoops(
                 true,
                 edge.first_vertex,
                 edge.second_vertex,
-                *forward_angle});
+                forward_geometry->angle,
+                forward_geometry->signed_curvature});
         const auto reverse_index =
             half_edges.size();
         half_edges.push_back(
@@ -2804,7 +2831,8 @@ buildComponentLoops(
                 false,
                 edge.second_vertex,
                 edge.first_vertex,
-                *reverse_angle});
+                reverse_geometry->angle,
+                reverse_geometry->signed_curvature});
 
         vertices[edge.first_vertex]
             .outgoing.push_back(
@@ -2830,6 +2858,14 @@ buildComponentLoops(
                     return first.tangent_angle <
                            second.tangent_angle;
                 }
+                if (first.curvature_order !=
+                    second.curvature_order) {
+                    return first.curvature_order <
+                           second.curvature_order;
+                }
+                // Only geometrically indistinguishable local jets can
+                // now use stable index ordering; indexes never decide
+                // which side of a tangent contains a bounded face.
                 if (first.edge != second.edge) {
                     return first.edge <
                            second.edge;
@@ -3735,20 +3771,74 @@ composeRegionCellsImpl(
             std::nullopt};
     }
 
-    std::vector<RegionBoundaryUse2D>
-        boundary;
+    // Material connectivity is NOT the same as topological contact.
+    // Two regular cells touching only at one tangent vertex have no
+    // common positive-length edge and must not become one Profile.
+    // Build connectivity *before* arranging exposed loops: any shared
+    // opposite-oriented derived use is material adjacency; a point
+    // alone cannot unite islands.
+    std::vector<std::vector<RegionBoundaryUse2D>>
+        cell_boundaries;
+    cell_boundaries.reserve(cells.size());
     for (const auto& cell : cells) {
+        std::vector<RegionBoundaryUse2D> uses;
         appendMaterialLoop(
-            boundary,
+            uses,
             cell.outer,
             true);
-        for (const auto& hole :
-             cell.holes) {
+        for (const auto& hole : cell.holes) {
             appendMaterialLoop(
-                boundary,
+                uses,
                 hole,
                 false);
         }
+        cell_boundaries.push_back(std::move(uses));
+    }
+
+    if (cell_boundaries.size() > 1U) {
+        DisjointSet material_sets(cell_boundaries.size());
+        for (std::size_t first = 0U;
+             first < cell_boundaries.size();
+             ++first) {
+            for (std::size_t second = first + 1U;
+                 second < cell_boundaries.size();
+                 ++second) {
+                bool shared_edge = false;
+                for (const auto& use :
+                     cell_boundaries[first]) {
+                    if (std::any_of(
+                            cell_boundaries[second].begin(),
+                            cell_boundaries[second].end(),
+                            [&use](const RegionBoundaryUse2D& other) {
+                                return inverseUses(use, other);
+                            })) {
+                        shared_edge = true;
+                        break;
+                    }
+                }
+                if (shared_edge) {
+                    material_sets.unite(first, second);
+                }
+            }
+        }
+        const auto root = material_sets.find(0U);
+        for (std::size_t index = 1U;
+             index < cell_boundaries.size();
+             ++index) {
+            if (material_sets.find(index) != root) {
+                return {
+                    RegionCompositionStatus::disconnected,
+                    std::nullopt};
+            }
+        }
+    }
+
+    std::vector<RegionBoundaryUse2D> boundary;
+    for (const auto& uses : cell_boundaries) {
+        boundary.insert(
+            boundary.end(),
+            uses.begin(),
+            uses.end());
     }
 
     std::vector<RegionBoundaryUse2D>
@@ -3964,15 +4054,24 @@ RegionAnalysis2D analyzeRegions(
 
             for (const auto& item :
                  relation.intersections) {
-                const bool topological =
-                    item.contact !=
-                        CurveContactKind::tangent ||
-                    item.first_endpoint ||
-                    item.second_endpoint;
-                if (!topological) {
+                // Two complete circles in point-only tangency are
+                // independently bounded material islands. Splitting
+                // their whole-closed-curve semantics into intersection
+                // anchors would invent a connected material boundary
+                // and break the existing durable Circle Profile intent.
+                // In contrast an interior Line/Circle tangency may be
+                // a genuine arrangement vertex for another closed
+                // cell (F2): it MUST NOT be dropped.
+                const bool separate_circle_islands =
+                    item.contact ==
+                        CurveContactKind::tangent &&
+                    !item.first_endpoint &&
+                    !item.second_endpoint &&
+                    model.findCircle(ids[first]) != nullptr &&
+                    model.findCircle(ids[second]) != nullptr;
+                if (separate_circle_islands) {
                     continue;
                 }
-
                 sets.unite(first, second);
                 intersections.push_back(
                     TopologyIntersection{
@@ -3983,7 +4082,8 @@ RegionAnalysis2D analyzeRegions(
                         item.second_parameter,
                         item.canonical_branch,
                         item.first_endpoint,
-                        item.second_endpoint});
+                        item.second_endpoint,
+                        item.contact});
             }
         }
     }
