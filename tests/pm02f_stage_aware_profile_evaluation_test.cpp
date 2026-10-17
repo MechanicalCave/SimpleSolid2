@@ -763,17 +763,21 @@ void verifyS0CircleTangentRegionCells() {
                 }
             }
             const auto analysis = sketch::analyzeRegions(model);
-            std::vector<double> areas;
+            std::vector<std::pair<double, double>> geometry;
             for (const auto& region : analysis.regions) {
-                areas.push_back(region.area);
+                geometry.emplace_back(region.area, region.perimeter);
             }
-            std::sort(areas.begin(), areas.end());
+            std::sort(geometry.begin(), geometry.end());
             const bool correct =
-                areas.size() == 2U &&
-                std::abs(areas[0] - pocket_area) < 1e-8 &&
-                std::abs(areas[1] - disk_area) < 1e-8;
+                geometry.size() == 2U &&
+                std::abs(geometry[0].first - pocket_area) < 1e-8 &&
+                std::abs(geometry[0].second -
+                         (28.0 + 5.0 * pi)) < 1e-8 &&
+                std::abs(geometry[1].first - disk_area) < 1e-8 &&
+                std::abs(geometry[1].second -
+                         10.0 * pi) < 1e-8;
             return std::pair<std::size_t, bool>{
-                areas.size(), correct};
+                geometry.size(), correct};
         };
         const auto [endpoint_count, endpoint_ok] = evaluate(false);
         const auto [interior_count, interior_ok] = evaluate(true);
@@ -908,6 +912,60 @@ void verifyS0CircleTangentRegionCells() {
         }
     }
     CHECK(verified_arc_variants == 8U);
+
+    // Exact quarter-turn and positive factor-two similarity do not
+    // create or destroy material cells or authored finite contacts.
+    // The transform here uses exact integer-coordinate permutations
+    // rather than constructing "exact" tangency from rounded trig.
+    std::size_t verified_similarities = 0U;
+    for (const bool extended : {false, true}) {
+        for (const bool quarter_turn : {false, true}) {
+            for (const double factor : {1.0, 2.0}) {
+                sketch::SketchModel model;
+                const auto mapped =
+                    [factor, quarter_turn](sketch::Point2 point) {
+                        return quarter_turn
+                            ? sketch::Point2{
+                                -point.v * factor,
+                                point.u * factor}
+                            : sketch::Point2{
+                                point.u * factor,
+                                point.v * factor};
+                    };
+                [[maybe_unused]] const auto circle =
+                    model.addCircle({0.0, 0.0}, 5.0 * factor);
+                [[maybe_unused]] const auto left =
+                    model.addLine(
+                        mapped({-5.0, -9.0}),
+                        mapped({-5.0, extended ? 7.0 : 0.0}));
+                [[maybe_unused]] const auto right =
+                    model.addLine(
+                        mapped({5.0, -9.0}),
+                        mapped({5.0, extended ? 7.0 : 0.0}));
+                [[maybe_unused]] const auto base =
+                    model.addLine(
+                        mapped({-5.0, -9.0}),
+                        mapped({5.0, -9.0}));
+                const auto regions = sketch::analyzeRegions(model);
+                std::vector<std::pair<double, double>> metrics;
+                for (const auto& region : regions.regions) {
+                    metrics.emplace_back(region.area, region.perimeter);
+                }
+                std::sort(metrics.begin(), metrics.end());
+                CHECK(metrics.size() == 2U);
+                CHECK(std::abs(metrics[0].first -
+                      pocket_area * factor * factor) < 1e-8);
+                CHECK(std::abs(metrics[0].second -
+                      (28.0 + 5.0 * pi) * factor) < 1e-8);
+                CHECK(std::abs(metrics[1].first -
+                      disk_area * factor * factor) < 1e-8);
+                CHECK(std::abs(metrics[1].second -
+                      10.0 * pi * factor) < 1e-8);
+                ++verified_similarities;
+            }
+        }
+    }
+    CHECK(verified_similarities == 8U);
 }
 
 } // namespace
