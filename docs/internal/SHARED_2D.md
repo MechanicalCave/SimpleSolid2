@@ -267,6 +267,8 @@ Common Move/Rotate/positive-Scale/Mirror transforms preserve already-existing Li
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
+Circle creation has one Center → Size interaction: after Center acceptance, Size remains an active provider-neutral `PointRequest` with the captured Center as the request base. Its point-selected radius is the exact current distance from Center to the shared R10/R11 resolved Sketch U/V point. Explicit typed Radius/Diameter sizes remain separate from point-coordinate interpretation; preview and acceptance use the same resolved point. For direct Line endpoint Grip Reshape, the original moving grip remains the numeric/transform `PointRequest.base`; the strictly request-local `snap_reference_base` refers to the unmodified opposite Line endpoint and is used only for request-relative R11 Tangent/Perpendicular. Non-Line Reshape and Move/Rotate/Scale/Mirror retain their earlier pivots; this distinction creates no authored constraint, persistence field or alternate snap engine.
+
 The current Part integration presents and edits authored Line/Circle/Arc through runtime adapters outside the Shared 2D target. Active authored geometry is mapped from Sketch U/V to the Part support frame, while the intrinsic Sketch Origin remains a runtime overlay.
 
 The current normal Modify command set is Move, Copy, Rotate, positive uniform Scale and Mirror. COPY currently means translation duplication with repeated placements and fresh identities.
