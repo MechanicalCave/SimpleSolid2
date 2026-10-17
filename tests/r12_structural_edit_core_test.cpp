@@ -237,6 +237,13 @@ int main() {
         // Intentional S0 RED if the 1-ULP translated copies disagree;
         // a future N1 D2 must decide whether/how to reconcile them.
         CHECK(can_trim[2] == can_trim[3]);
+        // DIAGNOSTIC ONLY: force the individual values into Windows
+        // --output-on-failure logs if the current direct core does not
+        // mirror the reported UI PASS(3)/FAIL(4) split. This is NOT
+        // an accepted production-behavior assertion and the branch is
+        // intentionally unmergeable until the root cause is explained.
+        CHECK(can_trim[2]);
+        CHECK(!can_trim[3]);
     }
 
     // Line terminal Trim preserves identity and role.
