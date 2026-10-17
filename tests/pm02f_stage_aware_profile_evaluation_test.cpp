@@ -966,6 +966,28 @@ void verifyOwnerFullNativeScenePick() {
     CHECK(has_micro_diagnostic(original_left));
     CHECK(has_micro_diagnostic(original_right));
 
+    // Separate macro-cell publication is useful only if Part can
+    // create and uniquely replay its durable source-anchored identity.
+    // No speculative OCCT/fuzzy wire representation is used here.
+    const auto check_durable =
+        [&scene, &analysis](std::uint32_t index) {
+            const auto region = std::find_if(
+                analysis.regions.begin(),
+                analysis.regions.end(),
+                [index](const auto& cell) {
+                    return cell.region_index == index;
+                });
+            CHECK(region != analysis.regions.end());
+            const auto intent =
+                part::makeProfileRegionIntent(*region);
+            CHECK(intent.has_value());
+            const auto replay =
+                part::resolveProfileRegionIntent(scene, *intent);
+            CHECK(replay.valid());
+        };
+    check_durable(*pick3.region_index);
+    check_durable(*pick4.region_index);
+
     // Localized uncertain geometry must stay visible to callers. A
     // macro-profile cannot be obtained by silently erasing real faces.
     CHECK(!analysis.complete());
