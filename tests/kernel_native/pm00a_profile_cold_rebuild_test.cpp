@@ -380,14 +380,46 @@ void verifyD2AOwnerExtendedSecantColdRebuild() {
                        {right_x, 0.0}).ok());
         CHECK(add_line({left_x, 0.0},
                        {left_x, top_y}).ok());
-        CHECK(add_line({left_x, top_y}, apex).ok());
+        const auto left_diag =
+            add_line({left_x, top_y}, apex);
+        CHECK(left_diag.ok() && left_diag.entity_id.has_value());
         CHECK(add_line({right_x, 0.0},
                        {right_x, top_y}).ok());
-        CHECK(add_line({right_x, top_y}, apex).ok());
+        const auto right_diag =
+            add_line({right_x, top_y}, apex);
+        CHECK(right_diag.ok() && right_diag.entity_id.has_value());
 
         const auto* source =
             session.document().findSketch(*sketch_id);
         CHECK(source != nullptr);
+        // OCCT/Profile positive is only meaningful if exact authored
+        // binary64 Line/Circle topology has not silently collapsed
+        // either genuine near-secant pair into a synthetic tangent.
+        for (const auto cutter : {
+                 *left_diag.entity_id,
+                 *right_diag.entity_id}) {
+            const auto relation = sketch::analyzeCurveRelation(
+                source->model, *circle.entity_id, cutter);
+            CHECK(relation.status ==
+                  sketch::CurveRelationStatus::discrete);
+            CHECK(relation.intersections.size() == 2U);
+            CHECK(relation.intersections[0].contact ==
+                  sketch::CurveContactKind::proper_crossing);
+            CHECK(relation.intersections[1].contact ==
+                  sketch::CurveContactKind::proper_crossing);
+            const auto parameter =
+                [&relation, cutter](
+                    const sketch::CurveIntersection2D& contact) {
+                    return relation.first_entity == cutter
+                        ? contact.first_parameter
+                        : contact.second_parameter;
+                };
+            const auto low = parameter(relation.intersections[0]);
+            const auto high = parameter(relation.intersections[1]);
+            CHECK(low >= 0.0 && low <= 1.0);
+            CHECK(high >= 0.0 && high <= 1.0);
+            CHECK(low != high);
+        }
         const auto analysis =
             sketch::analyzeRegions(source->model);
         CHECK(!analysis.complete());
