@@ -244,6 +244,24 @@ int main() {
         CHECK(can_trim[1]);
         CHECK(can_trim[2]);
         CHECK(can_trim[3]);
+
+        // Negative precision controls at both ends of the intended
+        // 1m..100m envelope. Actual 1e-8 mm clearance must NEVER turn
+        // into a false finite Circle/Line tangent, including after a
+        // large global translation of the authored sketch.
+        for (const double origin : {1000.0, 100000.0}) {
+            SketchModel negative;
+            const auto disk = negative.addCircle(
+                {origin, 0.0}, 30.0);
+            const auto missed =
+                negative.addLine(
+                    {origin + 30.0 + 1.0e-8, -40.0},
+                    {origin + 30.0 + 1.0e-8, 40.0});
+            const auto relation =
+                analyzeCurveRelation(negative, disk, missed);
+            CHECK(relation.status == CurveRelationStatus::disjoint);
+            CHECK(relation.intersections.empty());
+        }
     }
 
     // Line terminal Trim preserves identity and role.
