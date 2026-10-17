@@ -663,6 +663,90 @@ using ExactExpansion = std::vector<double>;
     return 0;
 }
 
+// N1 experimental: local binary64-representation contact, not snapping.
+// Only a single finite Line endpoint may be admitted if BOTH the whole
+// straight support and this endpoint are at most one tightly bounded
+// *linear* coordinate-uncertainty budget from a Circle. Contacts on an
+// open interior with no authored endpoint are NOT invented by this rule.
+// A separate genuine intersection was already handled by lineCircle.
+[[nodiscard]] std::optional<RawIntersection>
+uniqueNearTangentEndpoint(
+    const CurveView& line, const CurveView& circle) {
+    const double coordinate_scale = std::max({
+        std::abs(line.first.u), std::abs(line.first.v),
+        std::abs(line.second.u), std::abs(line.second.v),
+        std::abs(circle.center.u), std::abs(circle.center.v),
+        circle.radius});
+    if (!(coordinate_scale > 0.0) ||
+        !finiteValue(coordinate_scale)) {
+        return std::nullopt;
+    }
+    const double ulp =
+        std::nextafter(
+            coordinate_scale,
+            std::numeric_limits<double>::infinity()) -
+        coordinate_scale;
+    // Calibration hypothesis, not a universal Product gap tolerance:
+    // ~32 coordinate representable steps with a 1e-12 mm floor.
+    // Never promote a gap >= 1e-8 mm in the supported 1 m..100 m
+    // modelling envelope. The 1e-6 cap is an additional fail-closed
+    // bound for coordinates far outside that envelope.
+    const double threshold =
+        std::min(1.0e-6, std::max(1.0e-12, 32.0 * ulp));
+    if (!finiteValue(threshold) || !(threshold > 0.0)) {
+        return std::nullopt;
+    }
+    const double du = line.second.u - line.first.u;
+    const double dv = line.second.v - line.first.v;
+    const double direction = std::hypot(du, dv);
+    if (!(direction > 0.0) || !finiteValue(direction)) {
+        return std::nullopt;
+    }
+    const double qu = circle.center.u - line.first.u;
+    const double qv = circle.center.v - line.first.v;
+    const double support_distance =
+        std::abs(std::fma(qu, dv, -(qv * du))) / direction;
+    if (!finiteValue(support_distance) ||
+        std::abs(support_distance - circle.radius) > threshold) {
+        return std::nullopt;
+    }
+
+    std::optional<RawIntersection> unique;
+    for (const bool last : {false, true}) {
+        const auto point = last ? line.second : line.first;
+        const double dx = point.u - circle.center.u;
+        const double dy = point.v - circle.center.v;
+        const double radius_at_endpoint = std::hypot(dx, dy);
+        if (!finiteValue(radius_at_endpoint) ||
+            std::abs(radius_at_endpoint - circle.radius) >
+                threshold) {
+            continue;
+        }
+        // The normal projection of the Circle's center onto the
+        // infinite Line must lie at this finite endpoint to within
+        // the SAME linear uncertainty, not at a distant interior
+        // crossing or outside the authored cutter by a visible gap.
+        const double projection_length =
+            std::abs(std::fma(
+                circle.center.u - point.u, du,
+                (circle.center.v - point.v) * dv)) / direction;
+        if (!finiteValue(projection_length) ||
+            projection_length > threshold) {
+            continue;
+        }
+        const auto parameter =
+            circleParameter(circle, point);
+        if (!parameter || unique) {
+            // Two different eligible endpoints or nonfinite
+            // Circle parameter: ambiguous, fail closed.
+            return std::nullopt;
+        }
+        unique = RawIntersection{
+            point, last ? 1.0 : 0.0, *parameter, true};
+    }
+    return unique;
+}
+
 [[nodiscard]] RawRelation lineCircle(
     const CurveView& line,
     const CurveView& circle) {
@@ -774,6 +858,16 @@ using ExactExpansion = std::vector<double>;
         }
     }
     if (sign < 0) {
+        // N1: only the unique authored finite endpoint that is
+        // already within binary64 coordinate error of the Circle.
+        // Return a source-anchored derived contact, never alter either
+        // authored source or use a separate Trim-only tolerance.
+        if (const auto near =
+                uniqueNearTangentEndpoint(line, circle)) {
+            return RawRelation{
+                CurveRelationStatus::discrete,
+                {*near}};
+        }
         return RawRelation{
             CurveRelationStatus::disjoint, {}};
     }
