@@ -3011,8 +3011,15 @@ buildComponentLoops(
                 return lhs.vertex < rhs.vertex;
             });
 
+        // A single point contact cannot split an authored complete
+        // Circle into two material cells. Treat it as the same whole
+        // source loop even if one finite Line has a real or N1-derived
+        // end contact. Otherwise a one-use circular fragment with
+        // start==end is not persistently resolvable as a Profile.
+        // Two or more distinct contact cuts still use the ordinary
+        // arrangement / fragmentation path.
         if (curve->kind == CurveKind::circle &&
-            entity_cuts.empty()) {
+            entity_cuts.size() <= 1U) {
             const auto circle =
                 buildWholeCircle(
                     model,
