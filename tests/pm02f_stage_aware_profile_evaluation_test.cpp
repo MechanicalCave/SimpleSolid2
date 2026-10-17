@@ -928,23 +928,43 @@ void verifyOwnerFullNativeScenePick() {
         63.84674552114644, 83.61062414524297};
     const auto lens_pick = sketch::pickRegion(
         scene, analysis, actual_lens_point);
-    std::cerr << "SS2_D2A_LENS_PICK"
-              << " location=" << static_cast<int>(lens_pick.location)
-              << " index=" << lens_pick.region_index.has_value()
-              << " diagnostic_count=" << analysis.diagnostics.size()
-              << '\n';
-    for (const auto& diagnostic : analysis.diagnostics) {
-        std::cerr << "SS2_D2A_DIAGNOSTIC"
-                  << " kind=" << static_cast<int>(diagnostic.kind)
-                  << " sources=";
-        for (const auto id : diagnostic.entities) {
-            std::cerr << id.serialized() << ',';
-        }
-        std::cerr << '\n';
-    }
     CHECK(!lens_pick.region_index.has_value());
     CHECK(lens_pick.location ==
           sketch::RegionPointLocation::ambiguous);
+    // Also test the mirrored, independently certified STRICT interior
+    // binary64 point in the Circle9/Line28 right microcap.
+    const auto right_lens_pick = sketch::pickRegion(
+        scene, analysis,
+        {114.49009370326829, 83.61062457966176});
+    CHECK(!right_lens_pick.region_index.has_value());
+    CHECK(right_lens_pick.location ==
+          sketch::RegionPointLocation::ambiguous);
+
+    const auto original_left = state.lines[13].id;  // Line 26
+    const auto original_right = state.lines[15].id; // Line 28
+    const auto circle_id = state.circles[1].id;      // Circle 9
+    const auto has_micro_diagnostic =
+        [&analysis, circle_id](sketch::EntityId line_id) {
+            return std::any_of(
+                analysis.diagnostics.begin(),
+                analysis.diagnostics.end(),
+                [line_id, circle_id](const auto& diagnostic) {
+                    return diagnostic.kind ==
+                               sketch::RegionAnalysisDiagnosticKind::
+                                   invalid_topology &&
+                        diagnostic.entities.size() == 2U &&
+                        std::find(
+                            diagnostic.entities.begin(),
+                            diagnostic.entities.end(), circle_id) !=
+                            diagnostic.entities.end() &&
+                        std::find(
+                            diagnostic.entities.begin(),
+                            diagnostic.entities.end(), line_id) !=
+                            diagnostic.entities.end();
+                });
+        };
+    CHECK(has_micro_diagnostic(original_left));
+    CHECK(has_micro_diagnostic(original_right));
 
     // Localized uncertain geometry must stay visible to callers. A
     // macro-profile cannot be obtained by silently erasing real faces.
