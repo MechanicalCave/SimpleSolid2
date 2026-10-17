@@ -7,6 +7,7 @@
 #include <numbers>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace simplesolid2::sketch {
 namespace {
@@ -501,6 +502,167 @@ struct RawRelation final {
         }};
 }
 
+// N0: error-free binary64 expansions for the *sign* of the analytic
+// Line/Circle discriminant. This is deliberately a filtered fallback,
+// not a distance tolerance or permission to weld close but disjoint
+// authored geometry. Each input is the exact binary number stored by
+// the Sketch, including the rounding incurred by Copy/Move.
+// TwoSum / TwoProduct keep low residual terms instead of discarding them.
+using ExactExpansion = std::vector<double>;
+
+[[nodiscard]] std::optional<ExactExpansion> exactGrow(
+    const ExactExpansion& terms, double value) {
+    if (!finiteValue(value)) {
+        return std::nullopt;
+    }
+    ExactExpansion result;
+    result.reserve(terms.size() + 1U);
+    double accumulator = value;
+    for (const double term : terms) {
+        const double sum = accumulator + term;
+        if (!finiteValue(sum)) {
+            return std::nullopt;
+        }
+        const double delta = sum - accumulator;
+        const double residue =
+            (accumulator - (sum - delta)) + (term - delta);
+        if (!finiteValue(residue)) {
+            return std::nullopt;
+        }
+        if (residue != 0.0) {
+            result.push_back(residue);
+        }
+        accumulator = sum;
+    }
+    if (accumulator != 0.0 || result.empty()) {
+        result.push_back(accumulator);
+    }
+    return result;
+}
+
+[[nodiscard]] std::optional<ExactExpansion> exactDifference(
+    double first, double second) {
+    if (!finiteValue(first) || !finiteValue(second)) {
+        return std::nullopt;
+    }
+    const double sum = first - second;
+    if (!finiteValue(sum)) {
+        return std::nullopt;
+    }
+    const double virtual_second = sum - first;
+    const double virtual_first = sum - virtual_second;
+    const double residual =
+        (first - virtual_first) +
+        (-second - virtual_second);
+    return exactGrow({sum}, residual);
+}
+
+[[nodiscard]] std::optional<ExactExpansion> exactAdd(
+    ExactExpansion left,
+    const ExactExpansion& right,
+    bool negate_right = false) {
+    for (const double value : right) {
+        const auto grown =
+            exactGrow(left, negate_right ? -value : value);
+        if (!grown) {
+            return std::nullopt;
+        }
+        left = std::move(*grown);
+    }
+    return left;
+}
+
+[[nodiscard]] std::optional<ExactExpansion> exactMultiply(
+    const ExactExpansion& left,
+    const ExactExpansion& right) {
+    ExactExpansion result{0.0};
+    for (const double a : left) {
+        for (const double b : right) {
+            const double high = a * b;
+            if (!finiteValue(high)) {
+                return std::nullopt;
+            }
+            const double low = std::fma(a, b, -high);
+            if (!finiteValue(low)) {
+                return std::nullopt;
+            }
+            // Exact multiplication decomposes into high + low.
+            const auto first = exactGrow(result, low);
+            if (!first) {
+                return std::nullopt;
+            }
+            const auto second = exactGrow(*first, high);
+            if (!second) {
+                return std::nullopt;
+            }
+            result = std::move(*second);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] std::optional<int> exactLineCircleSign(
+    const CurveView& line, const CurveView& circle) {
+    // Products of ordinary, unscaled binary64 model coordinates are
+    // safely normal in SS2's proposed 1 m .. 100 m working envelope.
+    // For unsupported extreme exponents an ambiguous predicate fails
+    // closed instead of silently assigning an incorrect contact sign.
+    const double maximum = std::max({
+        std::abs(line.first.u), std::abs(line.first.v),
+        std::abs(line.second.u), std::abs(line.second.v),
+        std::abs(circle.center.u), std::abs(circle.center.v),
+        std::abs(circle.radius)});
+    if (!(maximum > 0.0) ||
+        !finiteValue(maximum) ||
+        std::ilogb(maximum) > 160 ||
+        std::ilogb(maximum) < -160) {
+        return std::nullopt;
+    }
+    const auto du = exactDifference(
+        line.second.u, line.first.u);
+    const auto dv = exactDifference(
+        line.second.v, line.first.v);
+    const auto qu = exactDifference(
+        circle.center.u, line.first.u);
+    const auto qv = exactDifference(
+        circle.center.v, line.first.v);
+    if (!du || !dv || !qu || !qv) {
+        return std::nullopt;
+    }
+    const auto du2 = exactMultiply(*du, *du);
+    const auto dv2 = exactMultiply(*dv, *dv);
+    const auto qudv = exactMultiply(*qu, *dv);
+    const auto qvdu = exactMultiply(*qv, *du);
+    const auto r2 = exactMultiply(
+        {circle.radius}, {circle.radius});
+    if (!du2 || !dv2 || !qudv || !qvdu || !r2) {
+        return std::nullopt;
+    }
+    const auto dsq = exactAdd(*du2, *dv2);
+    const auto cross = exactAdd(*qudv, *qvdu, true);
+    if (!dsq || !cross) {
+        return std::nullopt;
+    }
+    const auto first = exactMultiply(*r2, *dsq);
+    const auto cross_squared = exactMultiply(*cross, *cross);
+    if (!first || !cross_squared) {
+        return std::nullopt;
+    }
+    const auto discriminant =
+        exactAdd(*first, *cross_squared, true);
+    if (!discriminant) {
+        return std::nullopt;
+    }
+    for (auto it = discriminant->rbegin();
+         it != discriminant->rend();
+         ++it) {
+        if (*it != 0.0) {
+            return *it > 0.0 ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
 [[nodiscard]] RawRelation lineCircle(
     const CurveView& line,
     const CurveView& circle) {
@@ -577,11 +739,42 @@ struct RawRelation final {
     if (!finiteValue(discriminant)) {
         return {};
     }
-    if (discriminant < 0.0) {
+    // N0 filtered predicate. The filter tests whether the computed
+    // *arithmetic sign* is sufficiently separated from cancellation;
+    // its bound is dimensionless relative roundoff, NOT a new geometric
+    // 1e-12 mm contact band. Recompute on exact persisted binary64
+    // operands only if the inexpensive sign is ambiguous.
+    const double positive_product =
+        radial_squared * direction_squared;
+    const double negative_product =
+        signed_cross * signed_cross;
+    const double cancellation_budget =
+        64.0 * std::numeric_limits<double>::epsilon() *
+        (positive_product + negative_product);
+    if (!finiteValue(cancellation_budget)) {
+        return {};
+    }
+    int sign = discriminant > 0.0
+                   ? 1
+                   : (discriminant < 0.0 ? -1 : 0);
+    if (std::abs(discriminant) <= cancellation_budget) {
+        const auto exact = exactLineCircleSign(line, circle);
+        if (!exact) {
+            return {};
+        }
+        sign = *exact;
+    }
+    if (sign < 0) {
         return RawRelation{
             CurveRelationStatus::disjoint, {}};
     }
-    const bool tangent = discriminant == 0.0;
+    const bool tangent = sign == 0;
+    // If exact expansion says two crossings but the fast discriminant
+    // rounded to <=0, the finite floating geometry cannot resolve the
+    // distinct roots. Fail closed; do not forge a tangent topology.
+    if (!tangent && !(discriminant > 0.0)) {
+        return {};
+    }
 
     const double projection = std::fma(
         nq_u, nd_u, nq_v * nd_v);
