@@ -259,9 +259,9 @@ int main() {
     state.cancelDirectManipulation();
     CHECK(!state.activePointRequest().has_value());
 
-    // Circle Center is an unbased exact point request. Size is a
-    // separate typed Length request, so no generic point request remains
-    // after Center is accepted.
+    // Circle Center is an unbased exact point request. After Center,
+    // the size-stage exposes a Center-based point request for R11 OSNAP,
+    // while explicit R/D numeric size remains a distinct length grammar.
     {
         sketch::SketchInteractionState circle;
         circle.activateCircle();
@@ -283,7 +283,22 @@ int main() {
         CHECK(
             circle.acceptCirclePoint(center->position).outcome ==
             sketch::CirclePointOutcome::center_accepted);
-        CHECK(!circle.activePointRequest().has_value());
+        circle_request = circle.activePointRequest();
+        CHECK(circle_request.has_value());
+        CHECK(circle_request->base == sketch::Point2{5.0, 6.0});
+        CHECK(!circle_request->direct_distance_enabled);
+        CHECK(circle_request->absolute_cartesian_enabled);
+        CHECK(circle_request->relative_cartesian_enabled);
+        CHECK(circle_request->relative_polar_enabled);
+        const auto relative_size_point =
+            circle.resolveExplicitPoint(
+                {sketch::ExplicitPointInputKind::
+                     relative_cartesian,
+                 3.0,
+                 4.0});
+        CHECK(relative_size_point.has_value());
+        CHECK(relative_size_point->position ==
+              sketch::Point2{8.0, 10.0});
 
         CHECK(
             circle.acceptCircleRadius(0.0).outcome ==
