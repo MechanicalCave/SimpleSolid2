@@ -3572,27 +3572,26 @@ buildComponentLoops(
             return std::nullopt;
         }
 
+        // A two-use secant cap can have its double signed_area
+        // catastrophically cancelled, including a WRONG SIGN. Check
+        // the exact-binary clearance certificate BEFORE trusting it
+        // or an opportunistically rounded pointInLoop witness.
+        if (const auto certified =
+                certifiedUnresolvedLineCircleLens(model, *loop)) {
+            unresolved.push_back(*certified);
+            // Source geometry, distinct branches and every halfedge
+            // remain unchanged; only face publication is withheld.
+            continue;
+        }
         if (!(loop->signed_area > 0.0)) {
             continue;
         }
 
         const auto sample =
-            interiorPoint(
-                model,
-                *loop);
+            interiorPoint(model, *loop);
         if (!sample) {
-            const auto certified =
-                certifiedUnresolvedLineCircleLens(model, *loop);
-            if (!certified) {
-                // An arbitrary missing witness is never justification
-                // for discarding topology or publishing partial cells.
-                return std::nullopt;
-            }
-            unresolved.push_back(*certified);
-            // Halfedges and authentic crossing branches remain in the
-            // original arrangement. Only this uncertifiable derived face
-            // is withheld from material/Profile publication.
-            continue;
+            // No generic skip when the exact certificate does not hold.
+            return std::nullopt;
         }
 
         loops.push_back(
