@@ -2240,6 +2240,7 @@ void PartSketchInteractionController::activateSelect() {
     resetProfileRuntime();
 
     interaction_.finishTool();
+    mirror_keep_original_ = false;
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -2663,6 +2664,8 @@ bool PartSketchInteractionController::activateMirror() {
         return false;
     }
 
+    // Every fresh ordinary MIRROR session defaults to replacement.
+    mirror_keep_original_ = false;
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -2682,6 +2685,28 @@ bool PartSketchInteractionController::activateMirror() {
         sketch::SketchTool::mirror;
     notifyStateChanged();
     return true;
+}
+
+bool PartSketchInteractionController::setMirrorKeepOriginal(
+    bool enabled) {
+    if (!active() ||
+        profile_session_ ||
+        interaction_.tool() != sketch::SketchTool::mirror ||
+        !interaction_.commonTransformStage().has_value()) {
+        return false;
+    }
+    mirror_keep_original_ = enabled;
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
+mirrorKeepOriginal() const noexcept {
+    return active() &&
+           !profile_session_ &&
+           interaction_.tool() == sketch::SketchTool::mirror &&
+           interaction_.commonTransformStage().has_value() &&
+           mirror_keep_original_;
 }
 
 bool PartSketchInteractionController::
@@ -2749,6 +2774,7 @@ bool PartSketchInteractionController::escape() {
     if (was_transform &&
         !interaction_.commonTransformStage().has_value()) {
         transform_revision_.reset();
+        mirror_keep_original_ = false;
     }
     if (was_rectangle &&
         (interaction_.tool() !=
@@ -3049,10 +3075,15 @@ bool PartSketchInteractionController::commitTransform() {
                         ? "SCALE"
                         : "MIRROR";
 
-    if (tool == sketch::SketchTool::copy) {
+    const bool mirror_keep_original =
+        tool == sketch::SketchTool::mirror &&
+        mirrorKeepOriginal();
+    if (tool == sketch::SketchTool::copy ||
+        mirror_keep_original) {
         if (session_ == nullptr || !sketch_id_ ||
             session_->document().revision() !=
                 *transform_revision_) {
+            mirror_keep_original_ = false;
             interaction_.finishTransform();
             transform_revision_.reset();
             viewport_controller_->clearSketchPreview();
@@ -3075,6 +3106,7 @@ bool PartSketchInteractionController::commitTransform() {
         if (!source) {
             interaction_.finishTransform();
             transform_revision_.reset();
+            mirror_keep_original_ = false;
             viewport_controller_->clearSketchPreview();
             configureForCurrentTool();
             projectSelection();
@@ -3108,6 +3140,7 @@ bool PartSketchInteractionController::commitTransform() {
         if (!result.ok() || !result.changed) {
             interaction_.finishTransform();
             transform_revision_.reset();
+            mirror_keep_original_ = false;
             configureForCurrentTool();
             projectSelection();
             projectInteraction();
@@ -3120,6 +3153,24 @@ bool PartSketchInteractionController::commitTransform() {
         }
 
         viewport_controller_->refreshPresentation();
+
+        if (mirror_keep_original) {
+            // Ordinary MIRROR stays one-shot: preserve original IDs,
+            // clear the local option and retain the source selection.
+            interaction_.finishTransform();
+            transform_revision_.reset();
+            mirror_keep_original_ = false;
+            const auto* current = activeSketch();
+            if (current != nullptr) {
+                interaction_.reconcileSelection(current->model);
+            }
+            configureForCurrentTool();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus("MIRROR Keep Original committed.");
+            return true;
+        }
 
         if (!interaction_.continueCopyPlacement()) {
             interaction_.finishTransform();
@@ -3150,6 +3201,7 @@ bool PartSketchInteractionController::commitTransform() {
 
     interaction_.finishTransform();
     transform_revision_.reset();
+    mirror_keep_original_ = false;
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     viewport_controller_->clearSketchPreview();
@@ -3194,6 +3246,7 @@ void PartSketchInteractionController::cancelForHistory() {
 
     resetProfileRuntime();
     interaction_.cancelForHistory();
+    mirror_keep_original_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
     rectangle_revision_.reset();
