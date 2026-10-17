@@ -928,6 +928,20 @@ void verifyOwnerFullNativeScenePick() {
         63.84674552114644, 83.61062414524297};
     const auto lens_pick = sketch::pickRegion(
         scene, analysis, actual_lens_point);
+    std::cerr << "SS2_D2A_LENS_PICK"
+              << " location=" << static_cast<int>(lens_pick.location)
+              << " index=" << lens_pick.region_index.has_value()
+              << " diagnostic_count=" << analysis.diagnostics.size()
+              << '\n';
+    for (const auto& diagnostic : analysis.diagnostics) {
+        std::cerr << "SS2_D2A_DIAGNOSTIC"
+                  << " kind=" << static_cast<int>(diagnostic.kind)
+                  << " sources=";
+        for (const auto id : diagnostic.entities) {
+            std::cerr << id.serialized() << ',';
+        }
+        std::cerr << '\n';
+    }
     CHECK(!lens_pick.region_index.has_value());
     CHECK(lens_pick.location ==
           sketch::RegionPointLocation::ambiguous);
