@@ -174,7 +174,8 @@ EvidenceSnapshot snapshot(
 // Native S1/F2 witness: two exact interior Line/Circle tangencies form
 // a durable lower pocket. Release all runtime Sketch/Profile/OCCT handles,
 // then cold-rebuild the Profile Face from the authored .ss2part payload.
-void verifyF2TangentPocketColdRebuild(double side_delta) {
+void verifyF2TangentPocketColdRebuild(double side_delta,
+                                     double origin_x) {
     TempDirectory temp;
     const auto path =
         temp.path / "PM00AF2TangentPocket.ss2part";
@@ -201,17 +202,23 @@ void verifyF2TangentPocketColdRebuild(double side_delta) {
 
         const auto circle = session.execute(
             application::AddSketchCircleCommand{
-                *sketch_id, {0.0, 0.0}, 5.0});
+                *sketch_id, {origin_x, 0.0}, 5.0});
         CHECK(circle.ok() && circle.entity_id.has_value());
         const auto left = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {-side, -9.0}, {-side, 7.0}});
+                *sketch_id,
+                {origin_x - side, -9.0},
+                {origin_x - side, 7.0}});
         const auto right = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {side, -9.0}, {side, 7.0}});
+                *sketch_id,
+                {origin_x + side, -9.0},
+                {origin_x + side, 7.0}});
         const auto base = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {-side, -9.0}, {side, -9.0}});
+                *sketch_id,
+                {origin_x - side, -9.0},
+                {origin_x + side, -9.0}});
         CHECK(left.ok() && right.ok() && base.ok());
 
         const auto* source =
@@ -220,7 +227,7 @@ void verifyF2TangentPocketColdRebuild(double side_delta) {
         const auto regions = sketch::analyzeRegions(source->model);
         CHECK(regions.regions.size() == 2U);
         const auto picked = sketch::pickRegion(
-            source->model, regions, {0.0, -8.0});
+            source->model, regions, {origin_x, -8.0});
         CHECK(picked.region_index.has_value());
         const auto region = std::find_if(
             regions.regions.begin(), regions.regions.end(),
@@ -299,18 +306,23 @@ void verifyF2TangentPocketColdRebuild(double side_delta) {
     std::cout << "PM00A_F2_TANGENT_POCKET_COLD_PASS"
               << " native_occt_face=1 native_occt_solid=1"
               << " cold_reopen=1" << " side_delta="
-              << side_delta << '\n';
+              << side_delta << " origin_x=" << origin_x << '\n';
 }
 
 } // namespace
 
 int main() {
-    verifyF2TangentPocketColdRebuild(0.0);
+    verifyF2TangentPocketColdRebuild(0.0, 0.0);
     // N1: intentional one-ULP-ish outward shift on both side Lines;
     // actual sources have no geometric intersection with the Circle.
     // A derived common contact must permit a *real* native BRep-valid
     // lower pocket Profile and cold Extrude, without source mutation.
-    verifyF2TangentPocketColdRebuild(1.0e-13);
+    verifyF2TangentPocketColdRebuild(1.0e-13, 0.0);
+    // N1 at the actual working-envelope coordinate scales. These
+    // offsets are representable at each magnitude, well below the
+    // supported minimum 0.1mm/1mm detail and the selected 32 ULP.
+    verifyF2TangentPocketColdRebuild(1.0e-12, 1000.0);
+    verifyF2TangentPocketColdRebuild(5.0e-11, 100000.0);
     TempDirectory temp;
     const auto path =
         temp.path / "PM00AColdRebuild.ss2part";
