@@ -170,9 +170,112 @@ EvidenceSnapshot snapshot(
     };
 }
 
+// Native S1/F2 witness: two exact interior Line/Circle tangencies form
+// a durable lower pocket. Release all runtime Sketch/Profile/OCCT handles,
+// then cold-rebuild the Profile Face from the authored .ss2part payload.
+void verifyF2TangentPocketColdRebuild() {
+    TempDirectory temp;
+    const auto path =
+        temp.path / "PM00AF2TangentPocket.ss2part";
+    part::PartDocumentStore store;
+    part::ProfileId pocket_profile;
+    std::optional<sketch::SketchId> sketch_id;
+    std::string before_fingerprint;
+    EvidenceSnapshot before_evidence;
+
+    {
+        auto document = part::PartDocument::create(
+            core::DocumentId::generate());
+        const auto published = store.createNew(path, document);
+        CHECK(published.ok());
+        application::DocumentSession session{
+            path, std::move(document), *published.checkpoint};
+
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id.has_value());
+        sketch_id = *created.sketch_id;
+
+        const auto circle = session.execute(
+            application::AddSketchCircleCommand{
+                *sketch_id, {0.0, 0.0}, 5.0});
+        CHECK(circle.ok() && circle.entity_id.has_value());
+        const auto left = session.execute(
+            application::AddSketchLineCommand{
+                *sketch_id, {-5.0, -9.0}, {-5.0, 7.0}});
+        const auto right = session.execute(
+            application::AddSketchLineCommand{
+                *sketch_id, {5.0, -9.0}, {5.0, 7.0}});
+        const auto base = session.execute(
+            application::AddSketchLineCommand{
+                *sketch_id, {-5.0, -9.0}, {5.0, -9.0}});
+        CHECK(left.ok() && right.ok() && base.ok());
+
+        const auto* source =
+            session.document().findSketch(*sketch_id);
+        CHECK(source != nullptr);
+        const auto regions = sketch::analyzeRegions(source->model);
+        CHECK(regions.regions.size() == 2U);
+        const auto picked = sketch::pickRegion(
+            source->model, regions, {0.0, -8.0});
+        CHECK(picked.region_index.has_value());
+        const auto region = std::find_if(
+            regions.regions.begin(), regions.regions.end(),
+            [&picked](const auto& candidate) {
+                return candidate.region_index ==
+                       *picked.region_index;
+            });
+        CHECK(region != regions.regions.end());
+        const auto intent =
+            part::makeProfileRegionIntent(*region);
+        CHECK(intent.has_value());
+        const auto replay = part::resolveProfileRegionIntent(
+            source->model, *intent);
+        CHECK(replay.valid());
+
+        const auto profile = session.execute(
+            application::CreateProfileCommand{
+                *sketch_id, session.document().revision(), *intent});
+        CHECK(profile.ok() && profile.profile_id.has_value());
+        pocket_profile = *profile.profile_id;
+
+        const auto input = part::makeKernelProfileInput(
+            session.document(), pocket_profile);
+        CHECK(input.has_value() && input->valid());
+        const auto face =
+            kernel_occt::buildProfileFaceEvidence(*input);
+        CHECK(face.ok());
+        CHECK(face.face_count == 1U);
+        CHECK(face.wire_count == 1U);
+        before_fingerprint = fingerprint(*input);
+        before_evidence = snapshot(face);
+        CHECK(session.save().ok());
+    }
+
+    // A new document load and entirely fresh OCCT B-Rep evidence:
+    // no cached fragment, OCCT face, profile or session survives.
+    const auto loaded = store.load(path);
+    CHECK(loaded.ok());
+    CHECK(loaded.document->findSketch(*sketch_id) != nullptr);
+    CHECK(loaded.document->findProfile(pocket_profile) != nullptr);
+    const auto input = part::makeKernelProfileInput(
+        *loaded.document, pocket_profile);
+    CHECK(input.has_value() && input->valid());
+    CHECK(fingerprint(*input) == before_fingerprint);
+    const auto cold_face =
+        kernel_occt::buildProfileFaceEvidence(*input);
+    CHECK(cold_face.ok());
+    CHECK(snapshot(cold_face) == before_evidence);
+
+    std::cout << "PM00A_F2_TANGENT_POCKET_COLD_PASS"
+              << " native_occt_face=1 cold_reopen=1\n";
+}
+
 } // namespace
 
 int main() {
+    verifyF2TangentPocketColdRebuild();
     TempDirectory temp;
     const auto path =
         temp.path / "PM00AColdRebuild.ss2part";
