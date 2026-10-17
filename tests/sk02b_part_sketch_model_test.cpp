@@ -1216,6 +1216,75 @@ int main() {
             disconnected_result);
     CHECK(!split_result.region_intent.has_value());
 
+    // S1/F2: the exact tangent between a Circle and the interiors of
+    // extended finite Lines is an actual arrangement vertex. The lower
+    // material pocket must author and replay a stable semantic Profile,
+    // even though the lines' authored endpoints lie above the contact.
+    // Adjacent cells share the lower Circle arc; in contrast the old
+    // circle/circle point-only Add negative below MUST remain rejected.
+    {
+        sketch::SketchModel extended_tangents;
+        (void)extended_tangents.addCircle({0.0, 0.0}, 5.0);
+        const auto f2_left = extended_tangents.addLine(
+            {-5.0, -9.0}, {-5.0, 7.0});
+        (void)extended_tangents.addLine(
+            {5.0, -9.0}, {5.0, 7.0});
+        (void)extended_tangents.addLine(
+            {-5.0, -9.0}, {5.0, -9.0});
+        const auto regions =
+            sketch::analyzeRegions(extended_tangents);
+        CHECK(regions.regions.size() == 2U);
+        const auto disk_pick = sketch::pickRegion(
+            extended_tangents, regions, {0.0, 0.0});
+        const auto pocket_pick = sketch::pickRegion(
+            extended_tangents, regions, {0.0, -8.0});
+        CHECK(disk_pick.region_index.has_value());
+        CHECK(pocket_pick.region_index.has_value());
+        CHECK(*disk_pick.region_index !=
+              *pocket_pick.region_index);
+
+        std::optional<part::ProfileRegionIntent> disk_intent;
+        std::optional<part::ProfileRegionIntent> pocket_intent;
+        for (const auto& region : regions.regions) {
+            const auto intent =
+                part::makeProfileRegionIntent(region);
+            CHECK(intent.has_value());
+            const auto replay =
+                part::resolveProfileRegionIntent(
+                    extended_tangents, *intent);
+            CHECK(replay.valid());
+            CHECK(replay.region.has_value());
+            CHECK(std::abs(replay.region->area - region.area) < 1.0e-8);
+            if (region.region_index == *disk_pick.region_index) {
+                disk_intent = intent;
+            } else if (region.region_index ==
+                       *pocket_pick.region_index) {
+                pocket_intent = intent;
+            }
+        }
+        CHECK(disk_intent.has_value());
+        CHECK(pocket_intent.has_value());
+        const auto adjoining = part::applyProfileAreaEdit(
+            extended_tangents,
+            *disk_intent,
+            *pocket_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+        CHECK(adjoining.changed());
+        CHECK(adjoining.region.has_value());
+        CHECK(std::abs(adjoining.region->area -
+              (90.0 + 12.5 * std::numbers::pi_v<double>)) <
+              1.0e-8);
+
+        // Move one source Line off its analytic tangent support:
+        // a stored intersection anchor cannot silently remap to the
+        // nearest new Line/Circle location or survive as stale fill.
+        CHECK(extended_tangents.updateLine(
+            f2_left, {-5.0, -9.0}, {-5.01, 7.0}));
+        const auto stale = part::resolveProfileRegionIntent(
+            extended_tangents, *pocket_intent);
+        CHECK(!stale.valid());
+    }
+
     // Disconnected and point-only Add are rejected.
     sketch::SketchModel disconnected_model;
     (void)disconnected_model.addCircle(

@@ -1,12 +1,14 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
 #include <numbers>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace simplesolid2::sketch {
 namespace {
@@ -501,6 +503,313 @@ struct RawRelation final {
         }};
 }
 
+// N0: error-free binary64 expansions for the *sign* of the analytic
+// Line/Circle discriminant. This is deliberately a filtered fallback,
+// not a distance tolerance or permission to weld close but disjoint
+// authored geometry. Each input is the exact binary number stored by
+// the Sketch, including the rounding incurred by Copy/Move.
+// TwoSum / TwoProduct keep low residual terms instead of discarding them.
+using ExactExpansion = std::vector<double>;
+
+[[nodiscard]] std::optional<ExactExpansion> exactGrow(
+    const ExactExpansion& terms, double value) {
+    if (!finiteValue(value)) {
+        return std::nullopt;
+    }
+    ExactExpansion result;
+    result.reserve(terms.size() + 1U);
+    double accumulator = value;
+    for (const double term : terms) {
+        const double sum = accumulator + term;
+        if (!finiteValue(sum)) {
+            return std::nullopt;
+        }
+        const double delta = sum - accumulator;
+        const double residue =
+            (accumulator - (sum - delta)) + (term - delta);
+        if (!finiteValue(residue)) {
+            return std::nullopt;
+        }
+        if (residue != 0.0) {
+            result.push_back(residue);
+        }
+        accumulator = sum;
+    }
+    if (accumulator != 0.0 || result.empty()) {
+        result.push_back(accumulator);
+    }
+    return result;
+}
+
+[[nodiscard]] std::optional<ExactExpansion> exactDifference(
+    double first, double second) {
+    if (!finiteValue(first) || !finiteValue(second)) {
+        return std::nullopt;
+    }
+    const double sum = first - second;
+    if (!finiteValue(sum)) {
+        return std::nullopt;
+    }
+    const double virtual_second = sum - first;
+    const double virtual_first = sum - virtual_second;
+    const double residual =
+        (first - virtual_first) +
+        (-second - virtual_second);
+    return exactGrow({sum}, residual);
+}
+
+[[nodiscard]] std::optional<ExactExpansion> exactAdd(
+    ExactExpansion left,
+    const ExactExpansion& right,
+    bool negate_right = false) {
+    for (const double value : right) {
+        const auto grown =
+            exactGrow(left, negate_right ? -value : value);
+        if (!grown) {
+            return std::nullopt;
+        }
+        left = std::move(*grown);
+    }
+    return left;
+}
+
+[[nodiscard]] std::optional<ExactExpansion> exactMultiply(
+    const ExactExpansion& left,
+    const ExactExpansion& right) {
+    ExactExpansion result{0.0};
+    for (const double a : left) {
+        for (const double b : right) {
+            const double high = a * b;
+            if (!finiteValue(high)) {
+                return std::nullopt;
+            }
+            const double low = std::fma(a, b, -high);
+            if (!finiteValue(low)) {
+                return std::nullopt;
+            }
+            // Exact multiplication decomposes into high + low.
+            const auto first = exactGrow(result, low);
+            if (!first) {
+                return std::nullopt;
+            }
+            const auto second = exactGrow(*first, high);
+            if (!second) {
+                return std::nullopt;
+            }
+            result = std::move(*second);
+        }
+    }
+    return result;
+}
+
+struct ExactLineCircleDiscriminant final {
+    int sign{};
+    double value{};
+    // Outward interval bounds of the exact stored-binary polynomial.
+    // Only used for local D2-A witness-resolution certification.
+    double positive_upper{};
+    double direction_squared_lower{};
+};
+
+[[nodiscard]] std::optional<std::pair<double, double>>
+exactExpansionBounds(const ExactExpansion& terms) {
+    double lower = 0.0;
+    double upper = 0.0;
+    for (const double term : terms) {
+        const double lo = lower + term;
+        const double hi = upper + term;
+        if (!finiteValue(lo) || !finiteValue(hi)) {
+            return std::nullopt;
+        }
+        lower = std::nextafter(
+            lo, -std::numeric_limits<double>::infinity());
+        upper = std::nextafter(
+            hi, std::numeric_limits<double>::infinity());
+    }
+    return std::pair{lower, upper};
+}
+
+[[nodiscard]] std::optional<ExactLineCircleDiscriminant>
+exactLineCircleDiscriminant(
+    const CurveView& line, const CurveView& circle) {
+    // Products of ordinary, unscaled binary64 model coordinates are
+    // safely normal in SS2's proposed 1 m .. 100 m working envelope.
+    // For unsupported extreme exponents an ambiguous predicate fails
+    // closed instead of silently assigning an incorrect contact sign.
+    const double maximum = std::max({
+        std::abs(line.first.u), std::abs(line.first.v),
+        std::abs(line.second.u), std::abs(line.second.v),
+        std::abs(circle.center.u), std::abs(circle.center.v),
+        std::abs(circle.radius)});
+    if (!(maximum > 0.0) ||
+        !finiteValue(maximum) ||
+        std::ilogb(maximum) > 160 ||
+        std::ilogb(maximum) < -160) {
+        return std::nullopt;
+    }
+    const auto du = exactDifference(
+        line.second.u, line.first.u);
+    const auto dv = exactDifference(
+        line.second.v, line.first.v);
+    const auto qu = exactDifference(
+        circle.center.u, line.first.u);
+    const auto qv = exactDifference(
+        circle.center.v, line.first.v);
+    if (!du || !dv || !qu || !qv) {
+        return std::nullopt;
+    }
+    const auto du2 = exactMultiply(*du, *du);
+    const auto dv2 = exactMultiply(*dv, *dv);
+    const auto qudv = exactMultiply(*qu, *dv);
+    const auto qvdu = exactMultiply(*qv, *du);
+    const auto r2 = exactMultiply(
+        {circle.radius}, {circle.radius});
+    if (!du2 || !dv2 || !qudv || !qvdu || !r2) {
+        return std::nullopt;
+    }
+    const auto dsq = exactAdd(*du2, *dv2);
+    const auto cross = exactAdd(*qudv, *qvdu, true);
+    if (!dsq || !cross) {
+        return std::nullopt;
+    }
+    const auto first = exactMultiply(*r2, *dsq);
+    const auto cross_squared = exactMultiply(*cross, *cross);
+    if (!first || !cross_squared) {
+        return std::nullopt;
+    }
+    const auto discriminant =
+        exactAdd(*first, *cross_squared, true);
+    if (!discriminant) {
+        return std::nullopt;
+    }
+    int sign = 0;
+    for (auto it = discriminant->rbegin();
+         it != discriminant->rend();
+         ++it) {
+        if (*it != 0.0) {
+            sign = *it > 0.0 ? 1 : -1;
+            break;
+        }
+    }
+    // Summation in increasing expansion magnitude retains the low
+    // residual terms lost by the fast signed discriminant calculation.
+    double value = 0.0;
+    for (const double term : *discriminant) {
+        value += term;
+        if (!finiteValue(value)) {
+            return std::nullopt;
+        }
+    }
+    const auto d_bounds = exactExpansionBounds(*discriminant);
+    const auto dsq_bounds = exactExpansionBounds(*dsq);
+    if (!d_bounds || !dsq_bounds) {
+        return std::nullopt;
+    }
+    return ExactLineCircleDiscriminant{
+        sign, value, d_bounds->second, dsq_bounds->first};
+}
+
+[[nodiscard]] std::optional<int> exactLineCircleSign(
+    const CurveView& line, const CurveView& circle) {
+    const auto result =
+        exactLineCircleDiscriminant(line, circle);
+    return result ? std::optional<int>{result->sign}
+                  : std::nullopt;
+}
+
+// N1 experimental: one derived numerical contact on a finite Line,
+// whether its tangent foot lies at an endpoint OR in its interior.
+// This is shared analytic relation semantics, not a Trim/Copy exception,
+// coordinate mutation or a distance-to-cursor snapping rule.
+[[nodiscard]] std::optional<RawIntersection>
+uniqueNearTangentContact(
+    const CurveView& line, const CurveView& circle) {
+    const double coordinate_scale = std::max({
+        std::abs(line.first.u), std::abs(line.first.v),
+        std::abs(line.second.u), std::abs(line.second.v),
+        std::abs(circle.center.u), std::abs(circle.center.v),
+        circle.radius});
+    if (!(coordinate_scale > 0.0) ||
+        !finiteValue(coordinate_scale)) {
+        return std::nullopt;
+    }
+    const double ulp = std::nextafter(
+        coordinate_scale,
+        std::numeric_limits<double>::infinity()) -
+        coordinate_scale;
+    // D2 numerical calibration candidate. This bound is linear mm,
+    // not a quadratic discriminant epsilon or visible gap closing.
+    const double threshold =
+        std::min(1.0e-6, std::max(1.0e-12, 32.0 * ulp));
+    if (!(threshold > 0.0) || !finiteValue(threshold)) {
+        return std::nullopt;
+    }
+    const double du = line.second.u - line.first.u;
+    const double dv = line.second.v - line.first.v;
+    const double length = std::hypot(du, dv);
+    if (!finiteValue(length) || length <= 4.0 * threshold) {
+        // Extremely short source / two plausible endpoints: ambiguous.
+        return std::nullopt;
+    }
+    const double qu = circle.center.u - line.first.u;
+    const double qv = circle.center.v - line.first.v;
+    const double support_distance =
+        std::abs(std::fma(qu, dv, -(qv * du))) / length;
+    if (!finiteValue(support_distance) ||
+        std::abs(support_distance - circle.radius) >
+            threshold) {
+        return std::nullopt;
+    }
+    // Never collapse a true two-root secant into a single tangent.
+    // The expansion is an exact sign for the authored binary64 inputs.
+    // N1 only admits the truly-disjoint-but-representationally-near
+    // case; strict exact contacts were handled by N0a.
+    const auto exact_sign = exactLineCircleSign(line, circle);
+    if (!exact_sign || *exact_sign >= 0) {
+        return std::nullopt;
+    }
+
+    const double along = std::fma(qu, du, qv * dv) / length;
+    if (!finiteValue(along) ||
+        along < -threshold ||
+        along > length + threshold) {
+        // No infinite-line extrapolation beyond finite cutter range.
+        return std::nullopt;
+    }
+    // A tangent foot closer than the same numerical budget to an
+    // authored finite endpoint uses the endpoint's exact 0/1 parameter;
+    // otherwise retain its unique source-interior position.
+    const double parameter =
+        along <= threshold
+            ? 0.0
+            : (along >= length - threshold
+                   ? 1.0
+                   : along / length);
+    if (!finiteValue(parameter) ||
+        parameter < 0.0 || parameter > 1.0) {
+        return std::nullopt;
+    }
+    const auto point = linePoint(line, parameter);
+    if (!point) {
+        return std::nullopt;
+    }
+    const double radial_distance = std::hypot(
+        point->u - circle.center.u,
+        point->v - circle.center.v);
+    if (!finiteValue(radial_distance) ||
+        std::abs(radial_distance - circle.radius) >
+            threshold) {
+        return std::nullopt;
+    }
+    const auto circle_parameter =
+        circleParameter(circle, *point);
+    if (!circle_parameter) {
+        return std::nullopt;
+    }
+    return RawIntersection{
+        *point, parameter, *circle_parameter, true};
+}
+
 [[nodiscard]] RawRelation lineCircle(
     const CurveView& line,
     const CurveView& circle) {
@@ -520,56 +829,148 @@ struct RawRelation final {
         return {};
     }
 
-    const double length =
-        std::hypot(du, dv);
-    if (!finiteValue(length) ||
-        length == 0.0) {
+    // B02: classify *before* normalizing the direction. The previous
+    // perpendicular = cross(q, d / hypot(d)) test turned an exactly
+    // tangent integer-vector construction into R + 1 ULP (F3).
+    // Power-of-two scaling preserves binary input ratios, unlike division
+    // by an arbitrary hypot/max coordinate, and avoids avoidable square
+    // overflow for very large finite geometry. This is a geometric
+    // predicate, NOT a product snap/gap tolerance.
+    const double magnitude =
+        std::max({std::abs(du), std::abs(dv),
+                  std::abs(rel_u), std::abs(rel_v),
+                  circle.radius});
+    if (!finiteValue(magnitude) || magnitude == 0.0) {
+        return {};
+    }
+    const int exponent = std::ilogb(magnitude);
+    const double nd_u = std::scalbn(du, -exponent);
+    const double nd_v = std::scalbn(dv, -exponent);
+    const double nq_u = std::scalbn(rel_u, -exponent);
+    const double nq_v = std::scalbn(rel_v, -exponent);
+    const double nr = std::scalbn(circle.radius, -exponent);
+    if (!finiteValue(nd_u) || !finiteValue(nd_v) ||
+        !finiteValue(nq_u) || !finiteValue(nq_v) ||
+        !finiteValue(nr) ||
+        (du != 0.0 && nd_u == 0.0) ||
+        (dv != 0.0 && nd_v == 0.0) ||
+        (rel_u != 0.0 && nq_u == 0.0) ||
+        (rel_v != 0.0 && nq_v == 0.0) ||
+        nr == 0.0) {
+        // Dynamic range exceeds safe predicate resolution: fail closed.
         return {};
     }
 
-    const double unit_u = du / length;
-    const double unit_v = dv / length;
-    const double projection =
-        std::fma(rel_u, unit_u, rel_v * unit_v);
-    const double signed_perpendicular =
-        cross(rel_u, rel_v, unit_u, unit_v);
-
-    if (!finiteValue(projection) ||
-        !finiteValue(signed_perpendicular)) {
+    const double direction_squared =
+        std::fma(nd_u, nd_u, nd_v * nd_v);
+    const double signed_cross =
+        cross(nq_u, nq_v, nd_u, nd_v);
+    const double radial_squared = nr * nr;
+    if (!finiteValue(direction_squared) ||
+        !(direction_squared > 0.0) ||
+        !finiteValue(signed_cross) ||
+        !finiteValue(radial_squared) ||
+        !(radial_squared > 0.0)) {
         return {};
     }
 
-    const double perpendicular =
-        std::abs(signed_perpendicular);
-    if (perpendicular > circle.radius) {
+    // Signed power-of-two-scaled discriminant:
+    //     R^2 |d|^2 - cross(q,d)^2.
+    // Its zero is the exact algebraic contact for F3. In particular
+    // there is no global epsilon and two distinct near-secant contacts
+    // are not silently collapsed into a tangent.
+    const double discriminant = std::fma(
+        radial_squared,
+        direction_squared,
+        -(signed_cross * signed_cross));
+    if (!finiteValue(discriminant)) {
+        return {};
+    }
+    // N0a filtered *exact-zero confirmation*. Filter uncertainty is
+    // dimensionless roundoff, NOT a new world-distance contact band.
+    // Confirm exact stored-binary tangency without altering legacy
+    // near-contact treatment of nonzero floating geometry (N1 pending).
+    const double positive_product =
+        radial_squared * direction_squared;
+    const double negative_product =
+        signed_cross * signed_cross;
+    const double cancellation_budget =
+        64.0 * std::numeric_limits<double>::epsilon() *
+        (positive_product + negative_product);
+    if (!finiteValue(cancellation_budget)) {
+        return {};
+    }
+    int sign = discriminant > 0.0
+                    ? 1
+                    : (discriminant < 0.0 ? -1 : 0);
+    double resolved_discriminant = discriminant;
+    if (std::abs(discriminant) <= cancellation_budget) {
+        const auto exact =
+            exactLineCircleDiscriminant(line, circle);
+        if (!exact) {
+            return {};
+        }
+        // Preserve the accepted transformed-endpoint N1 behaviour.
+        // Do not blanket-change approximate positive secants into exact
+        // negative results: sk07a.transform_core regressed at #3507.
+        // Conversely, a nonpositive fast value MUST NOT erase two
+        // separable actual secants proven from authored binary64 inputs.
+        if (exact->sign == 0) {
+            sign = 0;
+            resolved_discriminant = 0.0;
+        } else if (exact->sign > 0 && sign <= 0) {
+            const double restored =
+                std::scalbn(exact->value, -4 * exponent);
+            if (!(restored > 0.0) || !finiteValue(restored)) {
+                return {};
+            }
+            const double base =
+                std::fma(nq_u, nd_u, nq_v * nd_v) /
+                direction_squared;
+            const double delta =
+                std::sqrt(restored) / direction_squared;
+            // No fictitious split when both roots round to one
+            // indistinguishable binary64 source parameter.
+            if (!finiteValue(base) || !finiteValue(delta) ||
+                !(delta > 0.0) ||
+                !(base - delta < base && base + delta > base)) {
+                return {};
+            }
+            sign = 1;
+            resolved_discriminant = restored;
+        }
+    }
+    if (sign < 0) {
+        // N1: only the unique authored finite endpoint that is
+        // already within binary64 coordinate error of the Circle.
+        // Return a source-anchored derived contact, never alter either
+        // authored source or use a separate Trim-only tolerance.
+        if (const auto near =
+                uniqueNearTangentContact(line, circle)) {
+            return RawRelation{
+                CurveRelationStatus::discrete,
+                {*near}};
+        }
         return RawRelation{
-            CurveRelationStatus::disjoint,
-            {}};
+            CurveRelationStatus::disjoint, {}};
+    }
+    const bool tangent = sign == 0;
+    // Nonzero roots still use the legacy approximate value. If it
+    // rounded to zero while not exactly tangent, finite binary64
+    // resolution cannot separate them: fail closed, do not forge one.
+    if (!tangent && !(resolved_discriminant > 0.0)) {
+        return {};
     }
 
-    const bool tangent =
-        perpendicular == circle.radius;
-    double offset = 0.0;
-    if (!tangent) {
-        const double ratio =
-            perpendicular / circle.radius;
-        const double remainder =
-            std::fma(-ratio, ratio, 1.0);
-        if (!finiteValue(remainder) ||
-            remainder < 0.0) {
-            return {};
-        }
-        offset =
-            circle.radius * std::sqrt(remainder);
-        if (!finiteValue(offset)) {
-            return {};
-        }
-    }
-
+    const double projection = std::fma(
+        nq_u, nd_u, nq_v * nd_v);
     const double base_parameter =
-        projection / length;
+        projection / direction_squared;
     const double delta_parameter =
-        offset / length;
+        tangent
+            ? 0.0
+            : std::sqrt(resolved_discriminant) /
+                  direction_squared;
     if (!finiteValue(base_parameter) ||
         !finiteValue(delta_parameter)) {
         return {};
@@ -578,6 +979,8 @@ struct RawRelation final {
     std::vector<RawIntersection> intersections;
     const auto append =
         [&](double parameter) {
+            // Finite Line admission is strict: never clamp near a cutter
+            // endpoint or use an infinite-line-only intersection.
             if (parameter < 0.0 ||
                 parameter > 1.0) {
                 return true;
@@ -1365,6 +1768,8 @@ struct TopologyIntersection final {
     std::uint32_t canonical_branch{};
     bool first_endpoint{false};
     bool second_endpoint{false};
+    // Preserve source contact semantics across derived fragmentation.
+    CurveContactKind contact{CurveContactKind::proper_crossing};
 };
 
 struct Vertex final {
@@ -1396,6 +1801,9 @@ struct HalfEdge final {
     std::size_t origin{};
     std::size_t destination{};
     double tangent_angle{};
+    // Signed angular turn for coincident tangent directions. A curved
+    // branch lies to a geometric side of the straight tangent at O(t^2).
+    double curvature_order{};
 };
 
 struct BuiltLoop final {
@@ -1491,43 +1899,6 @@ struct BuiltLoop final {
     return std::nullopt;
 }
 
-[[nodiscard]] std::optional<Point2> sourceDerivative(
-    const CurveView& curve,
-    double parameter) noexcept {
-    if (!finiteValue(parameter)) {
-        return std::nullopt;
-    }
-
-    if (curve.kind == CurveKind::line) {
-        const Point2 result{
-            curve.second.u - curve.first.u,
-            curve.second.v - curve.first.v};
-        return result.finite()
-            ? std::optional<Point2>{result}
-            : std::nullopt;
-    }
-
-    const double angle =
-        curve.kind == CurveKind::circle
-            ? full_turn * parameter
-            : curve.start_angle +
-                  curve.sweep_angle * parameter;
-    const double angular_scale =
-        curve.kind == CurveKind::circle
-            ? full_turn
-            : curve.sweep_angle;
-    const Point2 result{
-        -curve.radius *
-            std::sin(angle) *
-            angular_scale,
-        curve.radius *
-            std::cos(angle) *
-            angular_scale};
-    return result.finite()
-        ? std::optional<Point2>{result}
-        : std::nullopt;
-}
-
 [[nodiscard]] double sourceParameterDelta(
     const DerivedEdge& edge) noexcept {
     if (edge.kind == CurveKind::circle &&
@@ -1539,35 +1910,67 @@ struct BuiltLoop final {
            edge.first_parameter;
 }
 
-[[nodiscard]] std::optional<double> halfEdgeAngle(
+struct OutgoingGeometry final {
+    double angle{};
+    double signed_curvature{};
+};
+
+[[nodiscard]] std::optional<OutgoingGeometry> halfEdgeOrder(
     const CurveView& curve,
     const DerivedEdge& edge,
-    bool forward) noexcept {
-    const double parameter =
-        forward
-            ? edge.first_parameter
-            : edge.second_parameter;
-    const auto derivative =
-        sourceDerivative(curve, parameter);
-    if (!derivative) {
-        return std::nullopt;
+    bool forward,
+    Point2 vertex_point) noexcept {
+    double du{};
+    double dv{};
+    double curvature{};
+
+    if (curve.kind == CurveKind::line) {
+        du = curve.second.u - curve.first.u;
+        dv = curve.second.v - curve.first.v;
+        if (!forward) {
+            du = -du;
+            dv = -dv;
+        }
+    } else {
+        // The analytic shared contact vertex is authoritative for the
+        // outgoing radial direction. Re-evaluating sin(pi), etc. would
+        // manufacture a tiny angular difference between a Circle and a
+        // Line that have exactly the same mathematical tangent.
+        const double radial_u =
+            vertex_point.u - curve.center.u;
+        const double radial_v =
+            vertex_point.v - curve.center.v;
+        const double source_sense =
+            curve.kind == CurveKind::circle
+                ? 1.0
+                : (curve.sweep_angle > 0.0 ? 1.0 : -1.0);
+        const double outgoing_sense =
+            forward ? source_sense : -source_sense;
+        du = -outgoing_sense * radial_v;
+        dv = outgoing_sense * radial_u;
+        curvature = outgoing_sense / curve.radius;
     }
 
-    const double du =
-        forward ? derivative->u : -derivative->u;
-    const double dv =
-        forward ? derivative->v : -derivative->v;
-    if (!finiteValue(du) ||
-        !finiteValue(dv) ||
-        (du == 0.0 && dv == 0.0)) {
+    if (!finiteValue(du) || !finiteValue(dv) ||
+        !finiteValue(curvature)) {
         return std::nullopt;
     }
-
+    const double scale =
+        std::max(std::abs(du), std::abs(dv));
+    if (!(scale > 0.0) || !finiteValue(scale)) {
+        return std::nullopt;
+    }
+    // Normalize only by a common direction scale: tangents (0,9),
+    // (0,5) and proportional oblique integer vectors sort identically.
+    // At equal angle sort by signed curvature, *not* by EntityId/edge
+    // allocation order. Negative turn bends clockwise from tangent;
+    // positive bends counterclockwise. A Line has zero curvature.
     const double angle =
-        std::atan2(dv, du);
-    return finiteValue(angle)
-        ? std::optional<double>{angle}
-        : std::nullopt;
+        normalizedAngle(std::atan2(dv / scale, du / scale));
+    if (!finiteValue(angle)) {
+        return std::nullopt;
+    }
+    return OutgoingGeometry{angle, curvature};
 }
 
 [[nodiscard]] RegionBoundaryUse2D boundaryUse(
@@ -2458,6 +2861,255 @@ wholeCircleLoop(
         *sample};
 }
 
+// D2-A: a strictly source-anchored Line/Circle two-use sliver may
+// have two genuine distinct finite secants and yet a clearance smaller
+// than half a representable Cartesian coordinate step at the chord.
+// That does NOT mean there are no binary64 points in its mathematical
+// interior. It means this binary64 evaluated witness/area pipeline
+// cannot certify the face's material meaning. Report it, keep the two
+// intersections and every surrounding halfedge, never weld/delete.
+[[nodiscard]] std::optional<std::vector<EntityId>>
+certifiedUnresolvedLineCircleLens(
+    const SketchModel& model,
+    const RegionLoop2D& loop) {
+    if (loop.boundary.size() != 2U) {
+        return std::nullopt;
+    }
+    const auto first =
+        curveView(model, loop.boundary[0].source_entity);
+    const auto second =
+        curveView(model, loop.boundary[1].source_entity);
+    if (!first || !second) {
+        return std::nullopt;
+    }
+    const CurveView* line = nullptr;
+    const CurveView* circle = nullptr;
+    const RegionBoundaryUse2D* line_use = nullptr;
+    const RegionBoundaryUse2D* circle_use = nullptr;
+    if (first->kind == CurveKind::line &&
+        second->kind == CurveKind::circle) {
+        line = &*first;
+        circle = &*second;
+        line_use = &loop.boundary[0];
+        circle_use = &loop.boundary[1];
+    } else if (second->kind == CurveKind::line &&
+               first->kind == CurveKind::circle) {
+        line = &*second;
+        circle = &*first;
+        line_use = &loop.boundary[1];
+        circle_use = &loop.boundary[0];
+    } else {
+        return std::nullopt;
+    }
+    const auto angle =
+        circularDeltaAngle(*circle, *circle_use);
+    if (!angle || !(std::abs(*angle) > 0.0) ||
+        !(std::abs(*angle) <
+          std::numbers::pi_v<double> * 0.5)) {
+        return std::nullopt;
+    }
+    const auto relation =
+        analyzeCurveRelation(model, line->id, circle->id);
+    if (relation.status != CurveRelationStatus::discrete ||
+        relation.intersections.size() != 2U) {
+        return std::nullopt;
+    }
+    std::array<double, 2> actual_line{};
+    std::array<double, 2> actual_circle{};
+    for (std::size_t index = 0U; index < 2U; ++index) {
+        const auto& item = relation.intersections[index];
+        if (item.contact != CurveContactKind::proper_crossing) {
+            return std::nullopt;
+        }
+        actual_line[index] =
+            relation.first_entity == line->id
+                ? item.first_parameter : item.second_parameter;
+        actual_circle[index] =
+            relation.first_entity == circle->id
+                ? item.first_parameter : item.second_parameter;
+    }
+    const auto parameters_match =
+        [](std::array<double, 2> actual,
+           const RegionBoundaryUse2D& use) {
+            std::sort(actual.begin(), actual.end());
+            std::array<double, 2> bounds{
+                use.start_parameter, use.end_parameter};
+            std::sort(bounds.begin(), bounds.end());
+            return actual[0] != actual[1] &&
+                   actual == bounds;
+        };
+    if (!parameters_match(actual_line, *line_use) ||
+        !parameters_match(actual_circle, *circle_use)) {
+        return std::nullopt;
+    }
+    const auto exact =
+        exactLineCircleDiscriminant(*line, *circle);
+    if (!exact || exact->sign <= 0 ||
+        !(exact->positive_upper > 0.0) ||
+        !(exact->direction_squared_lower > 0.0)) {
+        return std::nullopt;
+    }
+    // D = |d|^2 (r^2 - distance(center, line)^2).
+    // With distance >= 0 and r > 0, cap height satisfies
+    //   h = D / (|d|^2 (r + distance))
+    //     <= D_upper / (|d|^2_lower * r).
+    // All input expansions bound the exact dyadic operands.
+    // Round the positive lower denominator OUTWARD too: a nearest-
+    // rounded product can exceed its mathematical value by half an
+    // ULP and would weaken the claimed upper-height certificate.
+    const double approximate_denominator =
+        exact->direction_squared_lower * circle->radius;
+    if (!(approximate_denominator > 0.0) ||
+        !finiteValue(approximate_denominator)) {
+        return std::nullopt;
+    }
+    const double denominator = std::nextafter(
+        approximate_denominator, 0.0);
+    if (!(denominator > 0.0)) {
+        return std::nullopt;
+    }
+    const double height_upper = std::nextafter(
+        exact->positive_upper / denominator,
+        std::numeric_limits<double>::infinity());
+    const Point2 contact = relation.intersections[0].point;
+    const auto ulp =
+        [](double value) {
+            const double magnitude = std::abs(value);
+            return std::nextafter(
+                magnitude,
+                std::numeric_limits<double>::infinity()) -
+                magnitude;
+        };
+    const double coordinate_step =
+        std::min(ulp(contact.u), ulp(contact.v));
+    if (!(height_upper > 0.0) ||
+        !finiteValue(height_upper) ||
+        !(coordinate_step > 0.0) ||
+        !finiteValue(coordinate_step) ||
+        !(height_upper < coordinate_step * 0.5)) {
+        return std::nullopt;
+    }
+    return std::vector<EntityId>{line->id, circle->id};
+}
+
+[[nodiscard]] int exactExpansionSign(
+    const ExactExpansion& values) noexcept {
+    for (auto it = values.rbegin(); it != values.rend(); ++it) {
+        if (*it != 0.0) {
+            return *it > 0.0 ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
+[[nodiscard]] std::optional<int> exactCirclePointPowerSign(
+    const CurveView& circle,
+    Point2 point) {
+    const auto x = exactDifference(point.u, circle.center.u);
+    const auto y = exactDifference(point.v, circle.center.v);
+    if (!x || !y) {
+        return std::nullopt;
+    }
+    const auto x2 = exactMultiply(*x, *x);
+    const auto y2 = exactMultiply(*y, *y);
+    const auto r2 = exactMultiply(
+        {circle.radius}, {circle.radius});
+    if (!x2 || !y2 || !r2) {
+        return std::nullopt;
+    }
+    const auto sum = exactAdd(*x2, *y2);
+    if (!sum) {
+        return std::nullopt;
+    }
+    const auto power = exactAdd(*sum, *r2, true);
+    return power ? std::optional<int>{exactExpansionSign(*power)}
+                 : std::nullopt;
+}
+
+[[nodiscard]] std::optional<int> exactLinePointSide(
+    const CurveView& line,
+    Point2 point) {
+    const auto dx = exactDifference(
+        line.second.u, line.first.u);
+    const auto dy = exactDifference(
+        line.second.v, line.first.v);
+    const auto px = exactDifference(
+        point.u, line.first.u);
+    const auto py = exactDifference(
+        point.v, line.first.v);
+    if (!dx || !dy || !px || !py) {
+        return std::nullopt;
+    }
+    const auto first = exactMultiply(*dx, *py);
+    const auto second = exactMultiply(*dy, *px);
+    if (!first || !second) {
+        return std::nullopt;
+    }
+    const auto signed_cross =
+        exactAdd(*first, *second, true);
+    return signed_cross
+        ? std::optional<int>{exactExpansionSign(*signed_cross)}
+        : std::nullopt;
+}
+
+// A certified but unpublishable Line/Circle cap is STILL a material
+// boundary. Exact dyadic predicates prevent Region picking from treating
+// its true interior as any neighboring macroface.
+[[nodiscard]] std::optional<RegionPointLocation>
+unresolvedLensPointLocation(
+    const SketchModel& model,
+    const RegionAnalysisDiagnostic2D& diagnostic,
+    Point2 point) {
+    if (diagnostic.kind !=
+            RegionAnalysisDiagnosticKind::invalid_topology ||
+        diagnostic.entities.size() != 2U) {
+        return std::nullopt;
+    }
+    const auto a =
+        curveView(model, diagnostic.entities[0]);
+    const auto b =
+        curveView(model, diagnostic.entities[1]);
+    if (!a || !b) {
+        return RegionPointLocation::ambiguous;
+    }
+    const CurveView* line = nullptr;
+    const CurveView* circle = nullptr;
+    if (a->kind == CurveKind::line &&
+        b->kind == CurveKind::circle) {
+        line = &*a;
+        circle = &*b;
+    } else if (b->kind == CurveKind::line &&
+               a->kind == CurveKind::circle) {
+        line = &*b;
+        circle = &*a;
+    } else {
+        return std::nullopt;
+    }
+    const auto relation =
+        analyzeCurveRelation(model, line->id, circle->id);
+    if (relation.status != CurveRelationStatus::discrete ||
+        relation.intersections.size() != 2U) {
+        return RegionPointLocation::ambiguous;
+    }
+    const auto power =
+        exactCirclePointPowerSign(*circle, point);
+    const auto line_side =
+        exactLinePointSide(*line, point);
+    const auto center_side =
+        exactLinePointSide(*line, circle->center);
+    if (!power || !line_side || !center_side ||
+        *center_side == 0) {
+        return RegionPointLocation::ambiguous;
+    }
+    if (*power > 0 || *line_side == *center_side) {
+        return std::nullopt;
+    }
+    if (*power == 0 || *line_side == 0) {
+        return RegionPointLocation::boundary;
+    }
+    return RegionPointLocation::ambiguous;
+}
+
 [[nodiscard]] bool anchorLess(
     const RegionBoundaryAnchor2D& first,
     const RegionBoundaryAnchor2D& second) noexcept {
@@ -2530,7 +3182,12 @@ intersectionAnchor(
         branch};
 }
 
-[[nodiscard]] std::optional<std::vector<BuiltLoop>>
+struct ComponentLoopBuildResult final {
+    std::vector<BuiltLoop> loops;
+    std::vector<std::vector<EntityId>> unresolved;
+};
+
+[[nodiscard]] std::optional<ComponentLoopBuildResult>
 buildComponentLoops(
     const SketchModel& model,
     const std::vector<EntityId>& entities,
@@ -2666,6 +3323,7 @@ buildComponentLoops(
     }
 
     std::vector<BuiltLoop> loops;
+    std::vector<std::vector<EntityId>> unresolved;
     std::vector<DerivedEdge> edges;
 
     for (std::size_t index = 0U;
@@ -2772,18 +3430,20 @@ buildComponentLoops(
         if (!curve) {
             return std::nullopt;
         }
-        const auto forward_angle =
-            halfEdgeAngle(
+        const auto forward_geometry =
+            halfEdgeOrder(
                 *curve,
                 edge,
-                true);
-        const auto reverse_angle =
-            halfEdgeAngle(
+                true,
+                vertices[edge.first_vertex].point);
+        const auto reverse_geometry =
+            halfEdgeOrder(
                 *curve,
                 edge,
-                false);
-        if (!forward_angle ||
-            !reverse_angle) {
+                false,
+                vertices[edge.second_vertex].point);
+        if (!forward_geometry ||
+            !reverse_geometry) {
             return std::nullopt;
         }
 
@@ -2795,7 +3455,8 @@ buildComponentLoops(
                 true,
                 edge.first_vertex,
                 edge.second_vertex,
-                *forward_angle});
+                forward_geometry->angle,
+                forward_geometry->signed_curvature});
         const auto reverse_index =
             half_edges.size();
         half_edges.push_back(
@@ -2804,7 +3465,8 @@ buildComponentLoops(
                 false,
                 edge.second_vertex,
                 edge.first_vertex,
-                *reverse_angle});
+                reverse_geometry->angle,
+                reverse_geometry->signed_curvature});
 
         vertices[edge.first_vertex]
             .outgoing.push_back(
@@ -2830,6 +3492,14 @@ buildComponentLoops(
                     return first.tangent_angle <
                            second.tangent_angle;
                 }
+                if (first.curvature_order !=
+                    second.curvature_order) {
+                    return first.curvature_order <
+                           second.curvature_order;
+                }
+                // Only geometrically indistinguishable local jets can
+                // now use stable index ordering; indexes never decide
+                // which side of a tangent contains a bounded face.
                 if (first.edge != second.edge) {
                     return first.edge <
                            second.edge;
@@ -2911,15 +3581,25 @@ buildComponentLoops(
             return std::nullopt;
         }
 
+        // A two-use secant cap can have its double signed_area
+        // catastrophically cancelled, including a WRONG SIGN. Check
+        // the exact-binary clearance certificate BEFORE trusting it
+        // or an opportunistically rounded pointInLoop witness.
+        if (const auto certified =
+                certifiedUnresolvedLineCircleLens(model, *loop)) {
+            unresolved.push_back(*certified);
+            // Source geometry, distinct branches and every halfedge
+            // remain unchanged; only face publication is withheld.
+            continue;
+        }
         if (!(loop->signed_area > 0.0)) {
             continue;
         }
 
         const auto sample =
-            interiorPoint(
-                model,
-                *loop);
+            interiorPoint(model, *loop);
         if (!sample) {
+            // No generic skip when the exact certificate does not hold.
             return std::nullopt;
         }
 
@@ -2929,7 +3609,8 @@ buildComponentLoops(
                 *sample});
     }
 
-    return loops;
+    return ComponentLoopBuildResult{
+        std::move(loops), std::move(unresolved)};
 }
 
 [[nodiscard]] std::vector<EntityId> componentEntities(
@@ -3735,20 +4416,74 @@ composeRegionCellsImpl(
             std::nullopt};
     }
 
-    std::vector<RegionBoundaryUse2D>
-        boundary;
+    // Material connectivity is NOT the same as topological contact.
+    // Two regular cells touching only at one tangent vertex have no
+    // common positive-length edge and must not become one Profile.
+    // Build connectivity *before* arranging exposed loops: any shared
+    // opposite-oriented derived use is material adjacency; a point
+    // alone cannot unite islands.
+    std::vector<std::vector<RegionBoundaryUse2D>>
+        cell_boundaries;
+    cell_boundaries.reserve(cells.size());
     for (const auto& cell : cells) {
+        std::vector<RegionBoundaryUse2D> uses;
         appendMaterialLoop(
-            boundary,
+            uses,
             cell.outer,
             true);
-        for (const auto& hole :
-             cell.holes) {
+        for (const auto& hole : cell.holes) {
             appendMaterialLoop(
-                boundary,
+                uses,
                 hole,
                 false);
         }
+        cell_boundaries.push_back(std::move(uses));
+    }
+
+    if (cell_boundaries.size() > 1U) {
+        DisjointSet material_sets(cell_boundaries.size());
+        for (std::size_t first = 0U;
+             first < cell_boundaries.size();
+             ++first) {
+            for (std::size_t second = first + 1U;
+                 second < cell_boundaries.size();
+                 ++second) {
+                bool shared_edge = false;
+                for (const auto& use :
+                     cell_boundaries[first]) {
+                    if (std::any_of(
+                            cell_boundaries[second].begin(),
+                            cell_boundaries[second].end(),
+                            [&use](const RegionBoundaryUse2D& other) {
+                                return inverseUses(use, other);
+                            })) {
+                        shared_edge = true;
+                        break;
+                    }
+                }
+                if (shared_edge) {
+                    material_sets.unite(first, second);
+                }
+            }
+        }
+        const auto root = material_sets.find(0U);
+        for (std::size_t index = 1U;
+             index < cell_boundaries.size();
+             ++index) {
+            if (material_sets.find(index) != root) {
+                return {
+                    RegionCompositionStatus::disconnected,
+                    std::nullopt};
+            }
+        }
+    }
+
+    std::vector<RegionBoundaryUse2D> boundary;
+    for (const auto& uses : cell_boundaries) {
+        boundary.insert(
+            boundary.end(),
+            uses.begin(),
+            uses.end());
     }
 
     std::vector<RegionBoundaryUse2D>
@@ -3964,15 +4699,24 @@ RegionAnalysis2D analyzeRegions(
 
             for (const auto& item :
                  relation.intersections) {
-                const bool topological =
-                    item.contact !=
-                        CurveContactKind::tangent ||
-                    item.first_endpoint ||
-                    item.second_endpoint;
-                if (!topological) {
+                // Two complete circles in point-only tangency are
+                // independently bounded material islands. Splitting
+                // their whole-closed-curve semantics into intersection
+                // anchors would invent a connected material boundary
+                // and break the existing durable Circle Profile intent.
+                // In contrast an interior Line/Circle tangency may be
+                // a genuine arrangement vertex for another closed
+                // cell (F2): it MUST NOT be dropped.
+                const bool separate_circle_islands =
+                    item.contact ==
+                        CurveContactKind::tangent &&
+                    !item.first_endpoint &&
+                    !item.second_endpoint &&
+                    model.findCircle(ids[first]) != nullptr &&
+                    model.findCircle(ids[second]) != nullptr;
+                if (separate_circle_islands) {
                     continue;
                 }
-
                 sets.unite(first, second);
                 intersections.push_back(
                     TopologyIntersection{
@@ -3983,7 +4727,8 @@ RegionAnalysis2D analyzeRegions(
                         item.second_parameter,
                         item.canonical_branch,
                         item.first_endpoint,
-                        item.second_endpoint});
+                        item.second_endpoint,
+                        item.contact});
             }
         }
     }
@@ -4068,19 +4813,28 @@ RegionAnalysis2D analyzeRegions(
             continue;
         }
 
-        if (built->empty()) {
+        for (const auto& sources : built->unresolved) {
             result.diagnostics.push_back(
                 RegionAnalysisDiagnostic2D{
                     RegionAnalysisDiagnosticKind::
-                        open_boundary,
-                    entities});
+                        invalid_topology,
+                    sources});
+        }
+        if (built->loops.empty()) {
+            if (built->unresolved.empty()) {
+                result.diagnostics.push_back(
+                    RegionAnalysisDiagnostic2D{
+                        RegionAnalysisDiagnosticKind::
+                            open_boundary,
+                        entities});
+            }
             continue;
         }
 
         loops.insert(
             loops.end(),
-            built->begin(),
-            built->end());
+            built->loops.begin(),
+            built->loops.end());
     }
 
     if (loops.empty()) {
@@ -4410,6 +5164,14 @@ RegionPick2D pickRegion(
         return RegionPick2D{
             RegionPointLocation::ambiguous,
             std::nullopt};
+    }
+
+    for (const auto& diagnostic : analysis.diagnostics) {
+        const auto affected =
+            unresolvedLensPointLocation(model, diagnostic, point);
+        if (affected) {
+            return RegionPick2D{*affected, std::nullopt};
+        }
     }
 
     std::optional<std::uint32_t> found;

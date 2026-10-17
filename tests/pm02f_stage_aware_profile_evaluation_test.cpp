@@ -5,11 +5,13 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <utility>
@@ -727,9 +729,592 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
         << " global_tolerance_unchanged=1\\n";
 }
 
+// S0 baseline witness for B01, enabled before changing region algorithms.
+// Assertions encode corrected geometry, not the historically observed defect.
+// Keep emitted counts visible in genuine Windows RED job logs.
+// Owner's original .ss2part, 2026-10-17: Circle 9 with both
+// Lines 26/28 extended to their exactly shared apex (case 3), versus the
+// visually similar copied short finite Lines 56/58 around Circle 59 (case 4).
+// These stored decimal literals are the actual authored binary64 values.
+// Case 3 has TWO distinct true finite intersections on each Line,
+// separated by ~5.56e-7 / 7.74e-7 mm. N1 must not conflate them with
+// one synthetic tangent, nor misclassify the left pair as disjoint.
+void verifyOwnerExtendedNearSecantRegions() {
+    using sketch::CurveRelationStatus;
+    sketch::SketchModel extended;
+    const auto circle3 = extended.addCircle(
+        {89.16841975020736, 67.52296383563574}, 30.0);
+    extended.addLine(
+        {49.16841975020738, 0.0},
+        {129.16841975020736, 0.0});
+    extended.addLine(
+        {49.16841975020738, 0.0},
+        {49.16841975020738, 60.507216219488555});
+    const auto left3 = extended.addLine(
+        {49.16841975020738, 60.507216219488555},
+        {89.16841975020735, 123.46646180728104});
+    extended.addLine(
+        {129.16841975020736, 0.0},
+        {129.16841975020736, 60.507216219488555});
+    const auto right3 = extended.addLine(
+        {129.16841975020736, 60.507216219488555},
+        {89.16841975020735, 123.46646180728104});
+    const auto left_relation3 =
+        sketch::analyzeCurveRelation(extended, circle3, left3);
+    const auto right_relation3 =
+        sketch::analyzeCurveRelation(extended, circle3, right3);
+    const auto regions3 = sketch::analyzeRegions(extended);
+
+    sketch::SketchModel copied;
+    const auto circle4 = copied.addCircle(
+        {181.1670624652628, 67.52296383563574}, 30.0);
+    copied.addLine(
+        {141.1670624652628, 0.0},
+        {221.1670624652628, 0.0});
+    copied.addLine(
+        {141.1670624652628, 0.0},
+        {141.1670624652628, 60.507216219488555});
+    const auto left4 = copied.addLine(
+        {141.1670624652628, 60.507216219488555},
+        {155.8453883282019, 83.61062429004924});
+    copied.addLine(
+        {221.1670624652628, 0.0},
+        {221.1670624652628, 60.507216219488555});
+    const auto right4 = copied.addLine(
+        {221.1670624652628, 60.507216219488555},
+        {206.4887366023237, 83.61062429004924});
+    const auto left_relation4 =
+        sketch::analyzeCurveRelation(copied, circle4, left4);
+    const auto right_relation4 =
+        sketch::analyzeCurveRelation(copied, circle4, right4);
+    const auto regions4 = sketch::analyzeRegions(copied);
+
+    std::cerr << "SS2_N1_OWNER_EXTENDED_SECANTS"
+              << " case3_left=" << left_relation3.intersections.size()
+              << " case3_left_status=" << static_cast<int>(left_relation3.status)
+              << " case3_right=" << right_relation3.intersections.size()
+              << " case3_right_status=" << static_cast<int>(right_relation3.status)
+              << " case3_regions=" << regions3.regions.size()
+              << " case3_diagnostics=" << regions3.diagnostics.size()
+              << " case4_left=" << left_relation4.intersections.size()
+              << " case4_right=" << right_relation4.intersections.size()
+              << " case4_regions=" << regions4.regions.size()
+              << " case4_diagnostics=" << regions4.diagnostics.size()
+              << '\n';
+
+    CHECK(left_relation3.status == CurveRelationStatus::discrete);
+    CHECK(right_relation3.status == CurveRelationStatus::discrete);
+    CHECK(left_relation3.intersections.size() == 2U);
+    CHECK(right_relation3.intersections.size() == 2U);
+    CHECK(!regions3.regions.empty());
+    // Publishing other cells is NOT a waiver of the unresolved lens:
+    // it must retain an explicit source-grounded diagnostic.
+    CHECK(!regions3.complete());
+    CHECK(std::any_of(
+        regions3.diagnostics.begin(),
+        regions3.diagnostics.end(),
+        [circle3, left3, right3](const auto& diagnostic) {
+            const auto has = [&diagnostic](sketch::EntityId id) {
+                return std::find(
+                    diagnostic.entities.begin(),
+                    diagnostic.entities.end(), id) !=
+                    diagnostic.entities.end();
+            };
+            return diagnostic.kind ==
+                sketch::RegionAnalysisDiagnosticKind::invalid_topology &&
+                has(circle3) && (has(left3) || has(right3));
+        }));
+    CHECK(left_relation3.intersections[0].first_parameter !=
+          left_relation3.intersections[1].first_parameter);
+    CHECK(right_relation3.intersections[0].first_parameter !=
+          right_relation3.intersections[1].first_parameter);
+    CHECK(!regions4.regions.empty());
+    CHECK(regions4.complete());
+}
+
+// Native Owner .ss2part schema 20, exact complete 40 authored entities,
+// including Regular/Construction distinction and the copied #3/#4 cases.
+// Test-only reconstruction; no parsing or persistent-product source change.
+// D2-A negative: a geometrically narrow but numerically resolvable
+// Circle/Line crescent is a REAL material Region. Certification must
+// never discard it merely because its area is small or it has two uses.
+void verifyD2ARepresentableNarrowCap() {
+    sketch::SketchModel model;
+    [[maybe_unused]] const auto circle =
+        model.addCircle({0.0, 0.0}, 30.0);
+    [[maybe_unused]] const auto line =
+        model.addLine({-45.0, 30.0 - 1e-5},
+                      {45.0, 30.0 - 1e-5});
+    const auto regions = sketch::analyzeRegions(model);
+    CHECK(regions.complete());
+    CHECK(regions.regions.size() == 2U);
+    const auto cap = sketch::pickRegion(
+        model, regions, {0.0, 30.0 - 2e-6});
+    CHECK(cap.region_index.has_value());
+    CHECK(cap.location == sketch::RegionPointLocation::inside);
+    const auto disk = sketch::pickRegion(
+        model, regions, {0.0, 0.0});
+    CHECK(disk.region_index.has_value());
+    CHECK(cap.region_index != disk.region_index);
+}
+
+void verifyOwnerFullNativeScenePick() {
+    struct Line {
+        sketch::Point2 start;
+        sketch::Point2 end;
+        bool construction;
+    };
+    struct Circle {
+        sketch::Point2 center;
+        double radius;
+    };
+    const std::array<Line, 32> lines{{
+        {{-30.0, 0.0}, {30.0, 0.0}, false}, // 1
+        {{-30.0, 0.0}, {-30.0, 67.52296383563574}, false}, // 3
+        {{30.0, 0.0}, {30.0, 67.52296383563574}, false}, // 4
+        {{59.16841975020736, 0.0}, {59.16841975020736, 67.52296383563574}, false}, // 7
+        {{119.16841975020736, 0.0}, {119.16841975020736, 67.52296383563574}, true}, // 8
+        {{89.16841975020736, 0.0}, {89.16841975020736, -14.407052512069733}, true}, // 10
+        {{49.16841975020738, 0.0}, {129.16841975020736, 0.0}, false}, // 11
+        {{-111.13570411713846, 0.0}, {-51.13570411713846, 0.0}, false}, // 14
+        {{-111.13570411713846, 0.0}, {-111.13570411713846, 92.56448649641345}, false}, // 15
+        {{-51.13570411713846, 0.0}, {-51.13570411713846, 106.53001893976436}, false}, // 16
+        {{6.846405134007824, -83.25915596546274}, {23.83920538253282, -66.26635571693774}, false}, // 22
+        {{68.92311233700123, -78.74091461840942}, {56.130014366619065, -65.94781664802726}, false}, // 23
+        {{49.16841975020738, 0.0}, {49.16841975020738, 60.507216219488555}, false}, // 25
+        {{49.16841975020738, 60.507216219488555}, {89.16841975020735, 123.46646180728104}, false}, // 26
+        {{129.16841975020736, 0.0}, {129.16841975020736, 60.507216219488555}, false}, // 27
+        {{129.16841975020736, 60.507216219488555}, {89.16841975020735, 123.46646180728104}, false}, // 28
+        {{349.5249764379939, 60.507216219488555}, {309.5249764379939, 123.46646180728108}, false}, // 32
+        {{269.5249764379939, 60.507216219488555}, {309.5249764379939, 123.46646180728108}, false}, // 33
+        {{266.5211586963419, -26.45386716719539}, {291.24935468828653, 12.97385113268978}, false}, // 39
+        {{366.93648026946914, -38.82828053277269}, {349.2998050920396, 7.297268993808445}, false}, // 40
+        {{-78.65740689293105, -83.25915596546274}, {-70.86501309242436, -75.46676216495605}, false}, // 41
+        {{-16.580699689937646, -78.74091461840942}, {-24.208286064424026, -71.11332824392304}, false}, // 42
+        {{-61.114932567368186, 140.6338796053901}, {72.52443017728294, 140.6338796053901}, false}, // 46
+        {{-61.114932567368186, 181.295796953154}, {-61.114932567368186, 140.6338796053901}, false}, // 47
+        {{151.1670624652628, 0.0}, {151.1670624652628, 67.52296383563574}, false}, // 51
+        {{211.1670624652628, 0.0}, {211.1670624652628, 67.52296383563574}, true}, // 52
+        {{181.1670624652628, 0.0}, {181.1670624652628, -14.407052512069733}, true}, // 53
+        {{141.1670624652628, 0.0}, {221.1670624652628, 0.0}, false}, // 54
+        {{141.1670624652628, 0.0}, {141.1670624652628, 60.507216219488555}, false}, // 55
+        {{141.1670624652628, 60.507216219488555}, {155.8453883282019, 83.61062429004924}, false}, // 56
+        {{221.1670624652628, 0.0}, {221.1670624652628, 60.507216219488555}, false}, // 57
+        {{221.1670624652628, 60.507216219488555}, {206.4887366023237, 83.61062429004924}, false}, // 58
+    }};
+    const std::array<Circle, 7> circles{{
+        {{0.0, 67.52296383563574}, 30.0}, // 2
+        {{89.16841975020736, 67.52296383563574}, 30.0}, // 9
+        {{-81.13570411713846, 67.52296383563574}, 30.0}, // 17
+        {{36.2264805817629, -54.63476751496982}, 30.0}, // 19
+        {{318.85884145566877, -4.342210497557272}, 32.59033215450208}, // 38
+        {{-49.277331445175975, -54.63476751496982}, 30.0}, // 43
+        {{181.1670624652628, 67.52296383563574}, 30.0}, // 59
+    }};
+    sketch::SketchModel scene;
+    for (const auto& line : lines) {
+        scene.addLine(line.start, line.end,
+            line.construction ? sketch::EntityRole::construction
+                              : sketch::EntityRole::regular);
+    }
+    for (const auto& circle : circles) {
+        scene.addCircle(circle.center, circle.radius);
+    }
+    scene.addArc(
+        {309.5249764379939, 67.52296383563574},
+        30.0, 2.5755983265454314, 4.2735813076785165); // 49
+    const auto state = scene.state();
+    CHECK(state.lines.size() == 32U);
+    CHECK(state.circles.size() == 7U);
+    CHECK(state.arcs.size() == 1U);
+    const auto analysis = sketch::analyzeRegions(scene);
+    const auto pick3 = sketch::pickRegion(
+        scene, analysis, {89.16841975020736, 20.0});
+    const auto pick4 = sketch::pickRegion(
+        scene, analysis, {181.1670624652628, 20.0});
+    std::cerr << "SS2_S1_N1_OWNER_FULL_40_SCENE"
+              << " regions=" << analysis.regions.size()
+              << " diagnostics=" << analysis.diagnostics.size()
+              << " pick3=" << pick3.region_index.has_value()
+              << " pick4=" << pick4.region_index.has_value()
+              << '\n';
+    // The new D2-A fix must isolate unsupported microfaces, not hide
+    // independently usable macro regions in the same connected component.
+    CHECK(pick4.region_index.has_value());
+    CHECK(pick3.region_index.has_value());
+
+    // A binary64 point independently certified with dyadic-rational
+    // squared-circle and Line-side inequalities to be STRICTLY inside
+    // the Circle9/Line26 microscopic lens. It must not pick a macroface
+    // when that derived microface is unresolved for Profile consumers.
+    const sketch::Point2 actual_lens_point{
+        63.84674552114644, 83.61062414524297};
+    const auto lens_pick = sketch::pickRegion(
+        scene, analysis, actual_lens_point);
+    CHECK(!lens_pick.region_index.has_value());
+    CHECK(lens_pick.location ==
+          sketch::RegionPointLocation::ambiguous);
+    // Also test the mirrored, independently certified STRICT interior
+    // binary64 point in the Circle9/Line28 right microcap.
+    const auto right_lens_pick = sketch::pickRegion(
+        scene, analysis,
+        {114.49009370326829, 83.61062457966176});
+    CHECK(!right_lens_pick.region_index.has_value());
+    CHECK(right_lens_pick.location ==
+          sketch::RegionPointLocation::ambiguous);
+
+    const auto original_left = state.lines[13].id;  // Line 26
+    const auto original_right = state.lines[15].id; // Line 28
+    const auto circle_id = state.circles[1].id;      // Circle 9
+    const auto has_micro_diagnostic =
+        [&analysis, circle_id](sketch::EntityId line_id) {
+            return std::any_of(
+                analysis.diagnostics.begin(),
+                analysis.diagnostics.end(),
+                [line_id, circle_id](const auto& diagnostic) {
+                    return diagnostic.kind ==
+                               sketch::RegionAnalysisDiagnosticKind::
+                                   invalid_topology &&
+                        diagnostic.entities.size() == 2U &&
+                        std::find(
+                            diagnostic.entities.begin(),
+                            diagnostic.entities.end(), circle_id) !=
+                            diagnostic.entities.end() &&
+                        std::find(
+                            diagnostic.entities.begin(),
+                            diagnostic.entities.end(), line_id) !=
+                            diagnostic.entities.end();
+                });
+        };
+    CHECK(has_micro_diagnostic(original_left));
+    CHECK(has_micro_diagnostic(original_right));
+
+    // Separate macro-cell publication is useful only if Part can
+    // create and uniquely replay its durable source-anchored identity.
+    // No speculative OCCT/fuzzy wire representation is used here.
+    const auto check_durable =
+        [&scene, &analysis](std::uint32_t index) {
+            const auto region = std::find_if(
+                analysis.regions.begin(),
+                analysis.regions.end(),
+                [index](const auto& cell) {
+                    return cell.region_index == index;
+                });
+            CHECK(region != analysis.regions.end());
+            const auto intent =
+                part::makeProfileRegionIntent(*region);
+            CHECK(intent.has_value());
+            const auto replay =
+                part::resolveProfileRegionIntent(scene, *intent);
+            CHECK(replay.valid());
+        };
+    check_durable(*pick3.region_index);
+    check_durable(*pick4.region_index);
+
+    // Localized uncertain geometry must stay visible to callers. A
+    // macro-profile cannot be obtained by silently erasing real faces.
+    CHECK(!analysis.complete());
+    const auto original_case3_circle = state.circles[1].id;
+    CHECK(std::any_of(
+        analysis.diagnostics.begin(),
+        analysis.diagnostics.end(),
+        [original_case3_circle](const auto& diagnostic) {
+            return diagnostic.kind ==
+                       sketch::RegionAnalysisDiagnosticKind::invalid_topology &&
+                   std::find(
+                       diagnostic.entities.begin(),
+                       diagnostic.entities.end(),
+                       original_case3_circle) !=
+                       diagnostic.entities.end();
+        }));
+}
+
+void verifyS0CircleTangentRegionCells() {
+    const std::array<int, 4> initial{0, 1, 2, 3};
+    constexpr double pi = std::numbers::pi_v<double>;
+    constexpr double disk_area = 25.0 * pi;
+    constexpr double pocket_area = 90.0 - 12.5 * pi;
+    std::size_t endpoint_correct = 0U;
+    std::size_t interior_correct = 0U;
+    std::array<std::size_t, 5> endpoint_hist{};
+    std::array<std::size_t, 5> interior_hist{};
+    std::array<int, 4> order = initial;
+
+    do {
+        const auto evaluate = [&](bool extended) {
+            sketch::SketchModel model;
+            for (int kind : order) {
+                if (kind == 0) {
+                    [[maybe_unused]] const auto circle =
+                        model.addCircle({0.0, 0.0}, 5.0);
+                } else if (kind == 1) {
+                    [[maybe_unused]] const auto left =
+                        model.addLine({-5.0, -9.0},
+                                      {-5.0, extended ? 7.0 : 0.0});
+                } else if (kind == 2) {
+                    [[maybe_unused]] const auto right =
+                        model.addLine({5.0, -9.0},
+                                      {5.0, extended ? 7.0 : 0.0});
+                } else {
+                    [[maybe_unused]] const auto base =
+                        model.addLine({-5.0, -9.0}, {5.0, -9.0});
+                }
+            }
+            const auto analysis = sketch::analyzeRegions(model);
+            std::vector<std::pair<double, double>> geometry;
+            for (const auto& region : analysis.regions) {
+                geometry.emplace_back(region.area, region.perimeter);
+            }
+            std::sort(geometry.begin(), geometry.end());
+            const bool correct =
+                geometry.size() == 2U &&
+                std::abs(geometry[0].first - pocket_area) < 1e-8 &&
+                std::abs(geometry[0].second -
+                         (28.0 + 5.0 * pi)) < 1e-8 &&
+                std::abs(geometry[1].first - disk_area) < 1e-8 &&
+                std::abs(geometry[1].second -
+                         10.0 * pi) < 1e-8;
+            return std::pair<std::size_t, bool>{
+                geometry.size(), correct};
+        };
+        const auto [endpoint_count, endpoint_ok] = evaluate(false);
+        const auto [interior_count, interior_ok] = evaluate(true);
+        ++endpoint_hist[std::min(endpoint_count, std::size_t{4})];
+        ++interior_hist[std::min(interior_count, std::size_t{4})];
+        endpoint_correct += static_cast<std::size_t>(endpoint_ok);
+        interior_correct += static_cast<std::size_t>(interior_ok);
+    } while (std::next_permutation(order.begin(), order.end()));
+
+    std::cerr
+        << "SKETCH_S0_B01_ENDPOINT_24"
+        << " correct=" << endpoint_correct
+        << " region0=" << endpoint_hist[0]
+        << " region1=" << endpoint_hist[1]
+        << " region2=" << endpoint_hist[2] << '\n'
+        << "SKETCH_S0_B01_INTERIOR_24"
+        << " correct=" << interior_correct
+        << " region0=" << interior_hist[0]
+        << " region1=" << interior_hist[1]
+        << " region2=" << interior_hist[2] << '\n';
+    // Independent numerical witness for F3 before changing predicates.
+    // R12 asserts the full Circle->Arc Trim lifecycle in its own CTest.
+    sketch::SketchModel oblique;
+    const auto circle = oblique.addCircle({0.0, 0.0}, 5.0);
+    const auto left = oblique.addLine({-13.0, -9.0}, {-4.0, 3.0});
+    const auto right = oblique.addLine({13.0, -9.0}, {4.0, 3.0});
+    const auto left_contact = sketch::analyzeCurveRelation(
+        oblique, circle, left);
+    const auto right_contact = sketch::analyzeCurveRelation(
+        oblique, circle, right);
+    std::cerr
+        << "SKETCH_S0_B02_F3_RELATION"
+        << " left=" << left_contact.intersections.size()
+        << " right=" << right_contact.intersections.size()
+        << " left_status=" << static_cast<int>(left_contact.status)
+        << " right_status=" << static_cast<int>(right_contact.status)
+        << '\n';
+    CHECK(endpoint_correct == 24U);
+    CHECK(interior_correct == 24U);
+    CHECK(left_contact.intersections.size() == 1U);
+    CHECK(right_contact.intersections.size() == 1U);
+
+    // F1/F2 are more than UI polygons. A current accepted Part Profile
+    // RegionIntent must survive exact source-anchored replay. This test
+    // intentionally exposes any pre-existing Part resolver restriction
+    // after Shared-2D begins returning the missing tangent cells.
+    const auto verify_durable = [](bool extended) {
+        sketch::SketchModel model;
+        [[maybe_unused]] const auto circle =
+            model.addCircle({0.0, 0.0}, 5.0);
+        [[maybe_unused]] const auto left =
+            model.addLine({-5.0, -9.0},
+                          {-5.0, extended ? 7.0 : 0.0});
+        [[maybe_unused]] const auto right =
+            model.addLine({5.0, -9.0},
+                          {5.0, extended ? 7.0 : 0.0});
+        [[maybe_unused]] const auto base =
+            model.addLine({-5.0, -9.0}, {5.0, -9.0});
+        const auto analysis = sketch::analyzeRegions(model);
+        CHECK(analysis.regions.size() == 2U);
+        std::size_t resolved = 0U;
+        for (const auto& region : analysis.regions) {
+            const auto intent = part::makeProfileRegionIntent(region);
+            if (!intent) {
+                continue;
+            }
+            const auto replay =
+                part::resolveProfileRegionIntent(model, *intent);
+            if (replay.valid()) {
+                ++resolved;
+            } else {
+                std::cerr << "SKETCH_S0_PROFILE_REPLAY"
+                          << " extended=" << extended
+                          << " region_area=" << region.area
+                          << " status=" << static_cast<int>(replay.status)
+                          << '\n';
+            }
+        }
+        std::cerr << "SKETCH_S0_PROFILE_REPLAY_SUMMARY"
+                  << " extended=" << extended
+                  << " resolved=" << resolved
+                  << " expected=2\n";
+        return resolved == 2U;
+    };
+    CHECK(verify_durable(false));
+    CHECK(verify_durable(true));
+
+    // S1 F2/Arc: start=-0.2, sweep=6.0 DOES NOT contain the entire
+    // bottom semicircle (it ends at 5.8 < 2*pi), so it cannot enclose
+    // the lower pocket. The top semicircle (0..pi) plus the side Lines
+    // and bottom base instead bounds ONE upper/outer cell of area
+    // 90 + 12.5*pi. CW parameter reversal and Line source reversal
+    // must preserve that cell without inventing a second closed disk
+    // or healing the open Arc's actual missing bottom-right segment.
+    std::size_t verified_arc_variants = 0U;
+    for (const bool extended : {false, true}) {
+        for (const bool clockwise : {false, true}) {
+            for (const bool reverse_lines : {false, true}) {
+                sketch::SketchModel model;
+                [[maybe_unused]] const auto arc = model.addArc(
+                    {0.0, 0.0}, 5.0,
+                    clockwise ? 5.8 : -0.2,
+                    clockwise ? -6.0 : 6.0);
+                const auto line = [&](sketch::Point2 first,
+                                      sketch::Point2 second) {
+                    if (reverse_lines) {
+                        std::swap(first, second);
+                    }
+                    [[maybe_unused]] const auto id =
+                        model.addLine(first, second);
+                };
+                line({-5.0, -9.0}, {-5.0, extended ? 7.0 : 0.0});
+                line({5.0, -9.0}, {5.0, extended ? 7.0 : 0.0});
+                line({-5.0, -9.0}, {5.0, -9.0});
+                const auto regions = sketch::analyzeRegions(model);
+                std::cerr << "SKETCH_S0_B01_ARC"
+                          << " extended=" << extended
+                          << " clockwise=" << clockwise
+                          << " reversed=" << reverse_lines
+                          << " count=" << regions.regions.size()
+                          << " first_area="
+                          << (regions.regions.empty()
+                                  ? -1.0
+                                  : regions.regions.front().area)
+                          << '\n';
+                CHECK(regions.regions.size() == 1U);
+                CHECK(std::abs(
+                    regions.regions.front().area -
+                    (90.0 + 12.5 * pi)) < 1e-8);
+                ++verified_arc_variants;
+            }
+        }
+    }
+    CHECK(verified_arc_variants == 8U);
+
+    // Exact quarter-turn and positive factor-two similarity do not
+    // create or destroy material cells or authored finite contacts.
+    // The transform here uses exact integer-coordinate permutations
+    // rather than constructing "exact" tangency from rounded trig.
+    std::size_t verified_similarities = 0U;
+    for (const bool extended : {false, true}) {
+        for (const bool quarter_turn : {false, true}) {
+            for (const double factor : {1.0, 2.0}) {
+                sketch::SketchModel model;
+                const auto mapped =
+                    [factor, quarter_turn](sketch::Point2 point) {
+                        return quarter_turn
+                            ? sketch::Point2{
+                                -point.v * factor,
+                                point.u * factor}
+                            : sketch::Point2{
+                                point.u * factor,
+                                point.v * factor};
+                    };
+                [[maybe_unused]] const auto circle =
+                    model.addCircle({0.0, 0.0}, 5.0 * factor);
+                [[maybe_unused]] const auto left =
+                    model.addLine(
+                        mapped({-5.0, -9.0}),
+                        mapped({-5.0, extended ? 7.0 : 0.0}));
+                [[maybe_unused]] const auto right =
+                    model.addLine(
+                        mapped({5.0, -9.0}),
+                        mapped({5.0, extended ? 7.0 : 0.0}));
+                [[maybe_unused]] const auto base =
+                    model.addLine(
+                        mapped({-5.0, -9.0}),
+                        mapped({5.0, -9.0}));
+                const auto regions = sketch::analyzeRegions(model);
+                std::vector<std::pair<double, double>> metrics;
+                for (const auto& region : regions.regions) {
+                    metrics.emplace_back(region.area, region.perimeter);
+                }
+                std::sort(metrics.begin(), metrics.end());
+                CHECK(metrics.size() == 2U);
+                CHECK(std::abs(metrics[0].first -
+                      pocket_area * factor * factor) < 1e-8);
+                CHECK(std::abs(metrics[0].second -
+                      (28.0 + 5.0 * pi) * factor) < 1e-8);
+                CHECK(std::abs(metrics[1].first -
+                      disk_area * factor * factor) < 1e-8);
+                CHECK(std::abs(metrics[1].second -
+                      10.0 * pi * factor) < 1e-8);
+                ++verified_similarities;
+            }
+        }
+    }
+    CHECK(verified_similarities == 8U);
+
+    // One ULP outside a Circle must produce the same semantic
+    // bounded regions/Profile with contact at finite Line endpoints
+    // OR inside those authored Lines. No tool-specific Trim exception.
+    for (const bool contact_interior : {false, true}) {
+        sketch::SketchModel model;
+        const sketch::Point2 center{
+            190.34517723877235, 67.52296383563574};
+        const auto left_x = std::nextafter(
+            center.u - 30.0, -std::numeric_limits<double>::infinity());
+        const auto right_x = std::nextafter(
+            center.u + 30.0, std::numeric_limits<double>::infinity());
+        [[maybe_unused]] const auto circle =
+            model.addCircle(center, 30.0);
+        const double top =
+            center.v + (contact_interior ? 20.0 : 0.0);
+        [[maybe_unused]] const auto left = model.addLine(
+            {left_x, center.v - 60.0}, {left_x, top});
+        [[maybe_unused]] const auto right = model.addLine(
+            {right_x, center.v - 60.0}, {right_x, top});
+        [[maybe_unused]] const auto base = model.addLine(
+            {left_x, center.v - 60.0},
+            {right_x, center.v - 60.0});
+        const auto cells = sketch::analyzeRegions(model);
+        std::cerr << "SS2_N1_DERIVED_REGION"
+                  << " interior=" << contact_interior
+                  << " cells=" << cells.regions.size()
+                  << " diagnostic=" << cells.diagnostics.size()
+                  << '\n';
+        CHECK(cells.regions.size() == 2U);
+        std::size_t replayed = 0U;
+        for (const auto& cell : cells.regions) {
+            const auto intent = part::makeProfileRegionIntent(cell);
+            CHECK(intent.has_value());
+            if (part::resolveProfileRegionIntent(model, *intent).valid()) {
+                ++replayed;
+            }
+        }
+        std::cerr << "SS2_N1_DURABLE_PROFILE"
+                  << " replay=" << replayed << "/2\n";
+        CHECK(replayed == 2U);
+    }
+}
+
 } // namespace
 
 int main() {
+    verifyD2ARepresentableNarrowCap();
+    verifyOwnerFullNativeScenePick();
+    verifyOwnerExtendedNearSecantRegions();
+    verifyS0CircleTangentRegionCells();
     verifyExactRegionEndpointBoundary();
     verifyProjectedArcDatumProfileEndpointEvidence();
     auto fixture = makeFixture();

@@ -1,7 +1,11 @@
 #include <simplesolid2/sketch/structural_edit.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <array>
 #include <cmath>
 #include <iostream>
+#include <limits>
+#include <map>
 #include <numbers>
 
 namespace {
@@ -40,6 +44,269 @@ resultModel(
 
 int main() {
     using namespace simplesolid2::sketch;
+
+    // B02 real-user Windows artifact, copied verbatim from the authored
+    // entities in szkic_test_01(1).ss2part (schema 20, six Circles).
+    // Only case 1/2 EXACT binary tangencies are asserted here. Case 3/4
+    // are deliberately diagnostic: their authored finite endpoint
+    // coordinates differ by 1 ULP and whether a near-contact is admitted
+    // requires a separately accepted numerical D2 policy. The test does
+    // not add a tolerance, weld edges or assert false precision.
+    {
+        struct RealCase final {
+            const char* name;
+            Point2 center;
+            Point2 first_start;
+            Point2 first_end;
+            Point2 second_start;
+            Point2 second_end;
+        };
+        const std::array<RealCase, 6> cases{{
+            {"case1-extended-exact", {-81.13570411713846, 67.52296383563574},
+                {-111.13570411713846, 0.0},
+                {-111.13570411713846, 92.56448649641345},
+                {-51.13570411713846, 0.0},
+                {-51.13570411713846, 106.53001893976436}},
+            {"case2-end-exact", {0.0, 67.52296383563574},
+                {-30.0, 0.0}, {-30.0, 67.52296383563574},
+                {30.0, 0.0}, {30.0, 67.52296383563574}},
+            {"case3-copied-inside", {89.16841975020736, 67.52296383563574},
+                {49.16841975020738, 60.507216219488555},
+                {63.84674561314644, 83.61062429004923},
+                {129.16841975020736, 60.507216219488555},
+                {114.49009388726829, 83.61062429004923}},
+            {"case4-copied-outside", {190.34517723877235, 67.52296383563574},
+                {150.34517723877235, 60.507216219488555},
+                {165.0235031017114, 83.61062429004923},
+                {230.34517723877235, 60.507216219488555},
+                {215.6668513758333, 83.61062429004923}},
+            {"case5-end-near", {-52.63750445097793, -54.29688164032062},
+                {-84.1794889180956, -95.72801266910211},
+                {-72.09093198090801, -77.13466080857073},
+                {-35.780318328485, -79.11291025151527},
+                {-13.710456786348955, -97.4411982152548}},
+            {"case6-secant-finite", {36.2264805817629, -54.63476751496982},
+                {6.846405134007824, -83.25915596546274},
+                {23.83920538253282, -66.26635571693774},
+                {68.92311233700123, -78.74091461840942},
+                {56.130014366619065, -65.94781664802726}},
+        }};
+        std::array<std::size_t, 6> first_hits{};
+        std::array<std::size_t, 6> second_hits{};
+        std::array<bool, 6> first_tangent{};
+        std::array<bool, 6> second_tangent{};
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+            const auto& sample = cases[index];
+            SketchModel observed;
+            const auto circle_id =
+                observed.addCircle(sample.center, 30.0);
+            const auto left_id =
+                observed.addLine(sample.first_start, sample.first_end);
+            const auto right_id =
+                observed.addLine(sample.second_start, sample.second_end);
+            const auto first =
+                analyzeCurveRelation(observed, circle_id, left_id);
+            const auto second =
+                analyzeCurveRelation(observed, circle_id, right_id);
+            first_hits[index] = first.intersections.size();
+            second_hits[index] = second.intersections.size();
+            first_tangent[index] =
+                first.intersections.size() == 1U &&
+                first.intersections.front().contact ==
+                    CurveContactKind::tangent;
+            second_tangent[index] =
+                second.intersections.size() == 1U &&
+                second.intersections.front().contact ==
+                    CurveContactKind::tangent;
+            std::cerr << "SS2_REAL_ULP_FIXTURE " << sample.name
+                      << " left_status=" << static_cast<int>(first.status)
+                      << " left_hits=" << first_hits[index]
+                      << " left_exact_tangent=" << first_tangent[index]
+                      << " right_status=" << static_cast<int>(second.status)
+                      << " right_hits=" << second_hits[index]
+                      << " right_exact_tangent=" << second_tangent[index]
+                      << '\n';
+        }
+
+        // Fail the genuine old numeric defect even before specifying how
+        // to handle the separately logged 1-ULP Copy near-contacts.
+        std::cerr << "SS2_REAL_EXACT_EXPECTATIONS"
+                  << " case1_hits=" << first_hits[0]
+                  << "," << second_hits[0]
+                  << " case1_tangent=" << first_tangent[0]
+                  << "," << second_tangent[0]
+                  << " case2_hits=" << first_hits[1]
+                  << "," << second_hits[1]
+                  << " case2_tangent=" << first_tangent[1]
+                  << "," << second_tangent[1]
+                  << '\n';
+        // No early return: the separate full-scene Trim diagnostics must
+        // print before this intentionally RED fixture exits.
+    }
+
+    // Faithful full authored scene replay. IDs 1..34 below refer to
+    // historical JSON keys, NOT freshly assigned runtime EntityIds.
+    // Reinsert in numeric creation order including Construction roles;
+    // unlike isolated pair checks, this also exercises presence of
+    // unrelated authored entities and original global coordinate frame.
+    {
+        struct SerializedEntity final {
+            int archived_id;
+            bool is_circle;
+            bool construction;
+            Point2 first;
+            Point2 second;
+            double radius;
+        };
+        const std::array<SerializedEntity, 26> original{{
+            {1, false, false, {-30.0, 0.0}, {30.0, 0.0}, 0.0},
+            {2, true, false, {0.0, 67.52296383563574}, {}, 30.0},
+            {3, false, false, {-30.0, 0.0}, {-30.0, 67.52296383563574}, 0.0},
+            {4, false, false, {30.0, 0.0}, {30.0, 67.52296383563574}, 0.0},
+            {7, false, false, {59.16841975020736, 0.0}, {59.16841975020736, 67.52296383563574}, 0.0},
+            {8, false, true, {119.16841975020736, 0.0}, {119.16841975020736, 67.52296383563574}, 0.0},
+            {9, true, false, {89.16841975020736, 67.52296383563574}, {}, 30.0},
+            {10, false, true, {89.16841975020736, 0.0}, {89.16841975020736, -14.407052512069733}, 0.0},
+            {11, false, false, {49.16841975020738, 0.0}, {129.16841975020736, 0.0}, 0.0},
+            {14, false, false, {-111.13570411713846, 0.0}, {-51.13570411713846, 0.0}, 0.0},
+            {15, false, false, {-111.13570411713846, 0.0}, {-111.13570411713846, 92.56448649641345}, 0.0},
+            {16, false, false, {-51.13570411713846, 0.0}, {-51.13570411713846, 106.53001893976436}, 0.0},
+            {17, true, false, {-81.13570411713846, 67.52296383563574}, {}, 30.0},
+            {18, true, false, {-52.63750445097793, -54.29688164032062}, {}, 30.0},
+            {19, true, false, {36.2264805817629, -54.63476751496982}, {}, 30.0},
+            {20, false, false, {-84.1794889180956, -95.72801266910211}, {-72.09093198090801, -77.13466080857073}, 0.0},
+            {21, false, false, {-35.780318328485, -79.11291025151527}, {-13.710456786348955, -97.4411982152548}, 0.0},
+            {22, false, false, {6.846405134007824, -83.25915596546274}, {23.83920538253282, -66.26635571693774}, 0.0},
+            {23, false, false, {68.92311233700123, -78.74091461840942}, {56.130014366619065, -65.94781664802726}, 0.0},
+            {25, false, false, {49.16841975020738, 0.0}, {49.16841975020738, 60.507216219488555}, 0.0},
+            {26, false, false, {49.16841975020738, 60.507216219488555}, {63.84674561314644, 83.61062429004923}, 0.0},
+            {27, false, false, {129.16841975020736, 0.0}, {129.16841975020736, 60.507216219488555}, 0.0},
+            {28, false, false, {129.16841975020736, 60.507216219488555}, {114.49009388726829, 83.61062429004923}, 0.0},
+            {32, false, false, {230.34517723877235, 60.507216219488555}, {215.6668513758333, 83.61062429004923}, 0.0},
+            {33, false, false, {150.34517723877235, 60.507216219488555}, {165.0235031017114, 83.61062429004923}, 0.0},
+            {34, true, false, {190.34517723877235, 67.52296383563574}, {}, 30.0},
+        }};
+        SketchModel scene;
+        std::map<int, EntityId> id;
+        for (const auto& item : original) {
+            if (item.is_circle) {
+                id.emplace(item.archived_id,
+                           scene.addCircle(item.first, item.radius));
+            } else {
+                id.emplace(item.archived_id,
+                           scene.addLine(item.first, item.second,
+                               item.construction
+                                   ? EntityRole::construction
+                                   : EntityRole::regular));
+            }
+        }
+        struct EditCase final {
+            const char* name;
+            int circle;
+            int first;
+            int second;
+            Point2 pick;
+        };
+        const std::array<EditCase, 4> edits{{
+            {"1-extended", 17, 15, 16,
+                {-81.13570411713846, 37.52296383563574}},
+            {"2-at-end", 2, 3, 4,
+                {0.0, 37.52296383563574}},
+            {"3-copied-inside", 9, 26, 28,
+                {89.16841975020736, 37.52296383563574}},
+            {"4-copied-outside", 34, 33, 32,
+                {190.34517723877235, 37.52296383563574}},
+        }};
+        std::array<bool, 4> can_trim{};
+        for (std::size_t index = 0; index < edits.size(); ++index) {
+            const auto& sample = edits[index];
+            const auto result = evaluateTrim(
+                scene, TrimSketchRequest{
+                    id.at(sample.circle),
+                    {id.at(sample.first), id.at(sample.second)},
+                    sample.pick});
+            can_trim[index] = result.ready();
+            std::cerr << "SS2_REAL_COMPLETE_SCENE_TRIM"
+                      << " case=" << sample.name
+                      << " ready=" << can_trim[index]
+                      << " status=" << static_cast<int>(result.status)
+                      << '\n';
+        }
+        // Both cases have *exact* finite cutter contacts in the
+        // original binary64 authored values. The copied case #4 near
+        // relation is recorded only; its tolerance policy is not yet D2.
+        CHECK(can_trim[0]);
+        CHECK(can_trim[1]);
+        // N1 admits one unambiguous finite near-tangent for the
+        // copied outside case 4; the case 3 proper finite secants
+        // remain proper and are not collapsed into a fake tangent.
+        CHECK(can_trim[2]);
+        CHECK(can_trim[3]);
+
+        // Owner's real case 5 also reported a missing Profile fill.
+        // The original complete scene has a separate authored Circle:
+        // verify the disk remains independently pickable despite its
+        // two short neighboring Lines and unrelated other components.
+        const auto full_scene_regions = analyzeRegions(scene);
+        const auto case5 = pickRegion(
+            scene, full_scene_regions,
+            {-52.63750445097793, -54.29688164032062});
+        std::cerr << "SS2_REAL_CASE5_PROFILE_PICK"
+                  << " regions=" << full_scene_regions.regions.size()
+                  << " diagnostics="
+                  << full_scene_regions.diagnostics.size()
+                  << " pick=" << case5.region_index.has_value()
+                  << '\n';
+        CHECK(case5.region_index.has_value());
+        // A one-ULP outward endpoint offset also works at the
+        // proposed practical 1 m and 100 m coordinate scales.
+        for (const double coordinate : {1000.0, 100000.0}) {
+            SketchModel scaled;
+            const auto circle_id = scaled.addCircle(
+                {coordinate, coordinate}, 30.0);
+            const double left_x = std::nextafter(
+                coordinate - 30.0,
+                -std::numeric_limits<double>::infinity());
+            const double right_x = std::nextafter(
+                coordinate + 30.0,
+                std::numeric_limits<double>::infinity());
+            const auto left_id = scaled.addLine(
+                {left_x, coordinate - 40.0},
+                {left_x, coordinate});
+            const auto right_id = scaled.addLine(
+                {right_x, coordinate - 40.0},
+                {right_x, coordinate});
+            CHECK(analyzeCurveRelation(
+                scaled, circle_id, left_id).status ==
+                  CurveRelationStatus::discrete);
+            CHECK(analyzeCurveRelation(
+                scaled, circle_id, right_id).status ==
+                  CurveRelationStatus::discrete);
+            CHECK(evaluateTrim(
+                scaled, TrimSketchRequest{
+                    circle_id, {left_id, right_id},
+                    {coordinate, coordinate - 30.0}}).ready());
+        }
+        // A genuine finite gap at the 100 m coordinate scale remains
+        // disjoint and cannot authorize Circle Trim.
+        SketchModel gap_scene;
+        const auto gap_circle =
+            gap_scene.addCircle({100000.0, 100000.0}, 30.0);
+        const auto outside_right = gap_scene.addLine(
+            {100030.0 + 1.0e-8, 99960.0},
+            {100030.0 + 1.0e-8, 100040.0});
+        const auto outside_left = gap_scene.addLine(
+            {99970.0 - 1.0e-8, 99960.0},
+            {99970.0 - 1.0e-8, 100040.0});
+        CHECK(analyzeCurveRelation(gap_scene, gap_circle,
+              outside_right).status == CurveRelationStatus::disjoint);
+        CHECK(analyzeCurveRelation(gap_scene, gap_circle,
+              outside_left).status == CurveRelationStatus::disjoint);
+        CHECK(!evaluateTrim(
+            gap_scene, TrimSketchRequest{
+                gap_circle, {outside_left, outside_right},
+                {100000.0, 99970.0}}).ready());
+    }
 
     // Line terminal Trim preserves identity and role.
     {
@@ -268,6 +535,117 @@ int main() {
             trimmed.status ==
             StructuralEditStatus::not_applicable);
         CHECK(!trimmed.state.has_value());
+    }
+
+    // S0/B02 exact integer oblique tangents: shared relation analysis and
+    // two distinct finite cutter contacts must permit ONE Circle->Arc Trim.
+    // The historical baseline normalized d=(9,12), yielding 5.0000000000000009
+    // instead of exactly R=5 and incorrectly reported both lines disjoint.
+    {
+        SketchModel model;
+        const auto target =
+            model.addCircle({0.0, 0.0}, 5.0);
+        const auto left =
+            model.addLine({-13.0, -9.0}, {-4.0, 3.0});
+        const auto right =
+            model.addLine({13.0, -9.0}, {4.0, 3.0});
+        const auto left_relation =
+            analyzeCurveRelation(model, target, left);
+        const auto right_relation =
+            analyzeCurveRelation(model, target, right);
+        std::cerr << "SKETCH_S0_B02_OBLIQUE"
+                  << " left=" << left_relation.intersections.size()
+                  << " right=" << right_relation.intersections.size()
+                  << " left_status=" << static_cast<int>(left_relation.status)
+                  << " right_status=" << static_cast<int>(right_relation.status)
+                  << '\n';
+        CHECK(left_relation.status == CurveRelationStatus::discrete);
+        CHECK(right_relation.status == CurveRelationStatus::discrete);
+        CHECK(left_relation.intersections.size() == 1U);
+        CHECK(right_relation.intersections.size() == 1U);
+        CHECK(left_relation.intersections[0].contact == CurveContactKind::tangent);
+        CHECK(right_relation.intersections[0].contact == CurveContactKind::tangent);
+        const auto trimmed = evaluateTrim(
+            model,
+            TrimSketchRequest{target, {left, right}, {0.0, -5.0}});
+        CHECK(trimmed.ready());
+        CHECK(trimmed.result_entity.has_value());
+        CHECK(*trimmed.result_entity != target);
+        const auto edited = resultModel(trimmed);
+        CHECK(edited.has_value());
+        CHECK(edited->findCircle(target) == nullptr);
+        CHECK(edited->findArc(*trimmed.result_entity) != nullptr);
+
+        // Reversing a finite cutter must not change exact contact type.
+        const auto reversed =
+            model.addLine({-4.0, 3.0}, {-13.0, -9.0});
+        const auto reversed_relation =
+            analyzeCurveRelation(model, target, reversed);
+        CHECK(reversed_relation.status == CurveRelationStatus::discrete);
+        CHECK(reversed_relation.intersections.size() == 1U);
+        CHECK(reversed_relation.intersections[0].contact ==
+              CurveContactKind::tangent);
+
+        // Real positive clearance stays disjoint; a nearby genuine
+        // secant retains both distinct contacts. Neither is merged into
+        // an exact tangent by a world-space radius epsilon.
+        // Use extended Lines here: the original F3 exact cutter ends
+        // at the contact (t=1), where a nearby secant would put one
+        // root beyond the finite endpoint, correctly admitting only one.
+        const auto outside =
+            model.addLine({-13.000001, -9.0},
+                          {4.999999, 15.0});
+        const auto outside_relation =
+            analyzeCurveRelation(model, target, outside);
+        CHECK(outside_relation.status == CurveRelationStatus::disjoint);
+        CHECK(outside_relation.intersections.empty());
+
+        const auto inside =
+            model.addLine({-12.999999, -9.0},
+                          {5.000001, 15.0});
+        const auto inside_relation =
+            analyzeCurveRelation(model, target, inside);
+        CHECK(inside_relation.status == CurveRelationStatus::discrete);
+        CHECK(inside_relation.intersections.size() == 2U);
+
+        // F3 exact integer-vector tangencies survive an exact 90-degree
+        // rotation and factor-two positive scale. Keep both finite
+        // cutter endpoints on the transformed Circle's contact points.
+        std::size_t transformed_verified = 0U;
+        for (const bool quarter_turn : {false, true}) {
+            for (const double factor : {1.0, 2.0}) {
+                const auto mapped =
+                    [quarter_turn, factor](Point2 point) {
+                        return quarter_turn
+                            ? Point2{-point.v * factor,
+                                     point.u * factor}
+                            : Point2{point.u * factor,
+                                     point.v * factor};
+                    };
+                SketchModel transformed;
+                const auto target_id =
+                    transformed.addCircle({0.0, 0.0}, 5.0 * factor);
+                const auto cutter_left =
+                    transformed.addLine(
+                        mapped({-13.0, -9.0}),
+                        mapped({-4.0, 3.0}));
+                const auto cutter_right =
+                    transformed.addLine(
+                        mapped({13.0, -9.0}),
+                        mapped({4.0, 3.0}));
+                for (const auto candidate :
+                     {cutter_left, cutter_right}) {
+                    const auto contact = analyzeCurveRelation(
+                        transformed, target_id, candidate);
+                    CHECK(contact.status == CurveRelationStatus::discrete);
+                    CHECK(contact.intersections.size() == 1U);
+                    CHECK(contact.intersections[0].contact ==
+                          CurveContactKind::tangent);
+                }
+                ++transformed_verified;
+            }
+        }
+        CHECK(transformed_verified == 4U);
     }
 
     // Line Extend uses finite authored boundary geometry and keeps identity.
