@@ -8,6 +8,8 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <cstdlib>
 #include <filesystem>
 #include <iomanip>
@@ -174,10 +176,15 @@ EvidenceSnapshot snapshot(
 // Native S1/F2 witness: two exact interior Line/Circle tangencies form
 // a durable lower pocket. Release all runtime Sketch/Profile/OCCT handles,
 // then cold-rebuild the Profile Face from the authored .ss2part payload.
-void verifyF2TangentPocketColdRebuild() {
+void verifyF2TangentPocketColdRebuild(
+    bool near_contact, bool contact_interior = false) {
     TempDirectory temp;
-    const auto path =
-        temp.path / "PM00AF2TangentPocket.ss2part";
+    const auto path = temp.path /
+        (contact_interior
+            ? "PM00AN1InteriorTangentPocket.ss2part"
+            : (near_contact
+                ? "PM00AN1NearTangentPocket.ss2part"
+                : "PM00AF2TangentPocket.ss2part"));
     part::PartDocumentStore store;
     part::ProfileId pocket_profile;
     std::optional<sketch::SketchId> sketch_id;
@@ -198,19 +205,41 @@ void verifyF2TangentPocketColdRebuild() {
         CHECK(created.ok() && created.sketch_id.has_value());
         sketch_id = *created.sketch_id;
 
+        const sketch::Point2 center =
+            near_contact
+                ? sketch::Point2{
+                    190.34517723877235, 67.52296383563574}
+                : sketch::Point2{0.0, 0.0};
+        const double radius = near_contact ? 30.0 : 5.0;
+        const double x_left = near_contact
+            ? std::nextafter(center.u - radius,
+                             -std::numeric_limits<double>::infinity())
+            : -5.0;
+        const double x_right = near_contact
+            ? std::nextafter(center.u + radius,
+                             std::numeric_limits<double>::infinity())
+            : 5.0;
+        const double y_base =
+            near_contact ? center.v - 60.0 : -9.0;
+        const double y_top = near_contact
+            ? center.v + (contact_interior ? 20.0 : 0.0)
+            : 7.0;
         const auto circle = session.execute(
             application::AddSketchCircleCommand{
-                *sketch_id, {0.0, 0.0}, 5.0});
+                *sketch_id, center, radius});
         CHECK(circle.ok() && circle.entity_id.has_value());
         const auto left = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {-5.0, -9.0}, {-5.0, 7.0}});
+                *sketch_id,
+                {x_left, y_base}, {x_left, y_top}});
         const auto right = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {5.0, -9.0}, {5.0, 7.0}});
+                *sketch_id,
+                {x_right, y_base}, {x_right, y_top}});
         const auto base = session.execute(
             application::AddSketchLineCommand{
-                *sketch_id, {-5.0, -9.0}, {5.0, -9.0}});
+                *sketch_id,
+                {x_left, y_base}, {x_right, y_base}});
         CHECK(left.ok() && right.ok() && base.ok());
 
         const auto* source =
@@ -219,7 +248,8 @@ void verifyF2TangentPocketColdRebuild() {
         const auto regions = sketch::analyzeRegions(source->model);
         CHECK(regions.regions.size() == 2U);
         const auto picked = sketch::pickRegion(
-            source->model, regions, {0.0, -8.0});
+            source->model, regions,
+            {center.u, near_contact ? center.v - 50.0 : -8.0});
         CHECK(picked.region_index.has_value());
         const auto region = std::find_if(
             regions.regions.begin(), regions.regions.end(),
@@ -303,7 +333,9 @@ void verifyF2TangentPocketColdRebuild() {
 } // namespace
 
 int main() {
-    verifyF2TangentPocketColdRebuild();
+    verifyF2TangentPocketColdRebuild(false);
+    verifyF2TangentPocketColdRebuild(true);
+    verifyF2TangentPocketColdRebuild(true, true);
     TempDirectory temp;
     const auto path =
         temp.path / "PM00AColdRebuild.ss2part";

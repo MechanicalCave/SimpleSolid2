@@ -663,6 +663,99 @@ using ExactExpansion = std::vector<double>;
     return 0;
 }
 
+// N1 experimental: one derived numerical contact on a finite Line,
+// whether its tangent foot lies at an endpoint OR in its interior.
+// This is shared analytic relation semantics, not a Trim/Copy exception,
+// coordinate mutation or a distance-to-cursor snapping rule.
+[[nodiscard]] std::optional<RawIntersection>
+uniqueNearTangentContact(
+    const CurveView& line, const CurveView& circle) {
+    const double coordinate_scale = std::max({
+        std::abs(line.first.u), std::abs(line.first.v),
+        std::abs(line.second.u), std::abs(line.second.v),
+        std::abs(circle.center.u), std::abs(circle.center.v),
+        circle.radius});
+    if (!(coordinate_scale > 0.0) ||
+        !finiteValue(coordinate_scale)) {
+        return std::nullopt;
+    }
+    const double ulp = std::nextafter(
+        coordinate_scale,
+        std::numeric_limits<double>::infinity()) -
+        coordinate_scale;
+    // D2 numerical calibration candidate. This bound is linear mm,
+    // not a quadratic discriminant epsilon or visible gap closing.
+    const double threshold =
+        std::min(1.0e-6, std::max(1.0e-12, 32.0 * ulp));
+    if (!(threshold > 0.0) || !finiteValue(threshold)) {
+        return std::nullopt;
+    }
+    const double du = line.second.u - line.first.u;
+    const double dv = line.second.v - line.first.v;
+    const double length = std::hypot(du, dv);
+    if (!finiteValue(length) || length <= 4.0 * threshold) {
+        // Extremely short source / two plausible endpoints: ambiguous.
+        return std::nullopt;
+    }
+    const double qu = circle.center.u - line.first.u;
+    const double qv = circle.center.v - line.first.v;
+    const double support_distance =
+        std::abs(std::fma(qu, dv, -(qv * du))) / length;
+    if (!finiteValue(support_distance) ||
+        std::abs(support_distance - circle.radius) >
+            threshold) {
+        return std::nullopt;
+    }
+    // Never collapse a true two-root secant into a single tangent.
+    // The expansion is an exact sign for the authored binary64 inputs.
+    // N1 only admits the truly-disjoint-but-representationally-near
+    // case; strict exact contacts were handled by N0a.
+    const auto exact_sign = exactLineCircleSign(line, circle);
+    if (!exact_sign || *exact_sign >= 0) {
+        return std::nullopt;
+    }
+
+    const double along = std::fma(qu, du, qv * dv) / length;
+    if (!finiteValue(along) ||
+        along < -threshold ||
+        along > length + threshold) {
+        // No infinite-line extrapolation beyond finite cutter range.
+        return std::nullopt;
+    }
+    // A tangent foot closer than the same numerical budget to an
+    // authored finite endpoint uses the endpoint's exact 0/1 parameter;
+    // otherwise retain its unique source-interior position.
+    const double parameter =
+        along <= threshold
+            ? 0.0
+            : (along >= length - threshold
+                   ? 1.0
+                   : along / length);
+    if (!finiteValue(parameter) ||
+        parameter < 0.0 || parameter > 1.0) {
+        return std::nullopt;
+    }
+    const auto point = linePoint(line, parameter);
+    if (!point) {
+        return std::nullopt;
+    }
+    const double radial_distance = std::hypot(
+        point->u - circle.center.u,
+        point->v - circle.center.v);
+    if (!finiteValue(radial_distance) ||
+        std::abs(radial_distance - circle.radius) >
+            threshold) {
+        return std::nullopt;
+    }
+    const auto circle_parameter =
+        circleParameter(circle, *point);
+    if (!circle_parameter) {
+        return std::nullopt;
+    }
+    return RawIntersection{
+        *point, parameter, *circle_parameter, true};
+}
+
 [[nodiscard]] RawRelation lineCircle(
     const CurveView& line,
     const CurveView& circle) {
@@ -774,6 +867,16 @@ using ExactExpansion = std::vector<double>;
         }
     }
     if (sign < 0) {
+        // N1: only the unique authored finite endpoint that is
+        // already within binary64 coordinate error of the Circle.
+        // Return a source-anchored derived contact, never alter either
+        // authored source or use a separate Trim-only tolerance.
+        if (const auto near =
+                uniqueNearTangentContact(line, circle)) {
+            return RawRelation{
+                CurveRelationStatus::discrete,
+                {*near}};
+        }
         return RawRelation{
             CurveRelationStatus::disjoint, {}};
     }

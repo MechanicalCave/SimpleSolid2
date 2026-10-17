@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <numbers>
 
@@ -236,12 +237,75 @@ int main() {
         // relation is recorded only; its tolerance policy is not yet D2.
         CHECK(can_trim[0]);
         CHECK(can_trim[1]);
-        // N0 does not assign user-intended tangency to already
-        // different persisted coordinates. The positive finite
-        // secants of case 3 still Trim, while the disjoint case 4
-        // remains a documented near-contact GAP pending N1 D2.
+        // N1 admits one unambiguous finite near-tangent for the
+        // copied outside case 4; the case 3 proper finite secants
+        // remain proper and are not collapsed into a fake tangent.
         CHECK(can_trim[2]);
-        CHECK(!can_trim[3]);
+        CHECK(can_trim[3]);
+
+        // Owner's real case 5 also reported a missing Profile fill.
+        // The original complete scene has a separate authored Circle:
+        // verify the disk remains independently pickable despite its
+        // two short neighboring Lines and unrelated other components.
+        const auto full_scene_regions = analyzeRegions(scene);
+        const auto case5 = pickRegion(
+            scene, full_scene_regions,
+            {-52.63750445097793, -54.29688164032062});
+        std::cerr << "SS2_REAL_CASE5_PROFILE_PICK"
+                  << " regions=" << full_scene_regions.regions.size()
+                  << " diagnostics="
+                  << full_scene_regions.diagnostics.size()
+                  << " pick=" << case5.region_index.has_value()
+                  << '\n';
+        CHECK(case5.region_index.has_value());
+        // A one-ULP outward endpoint offset also works at the
+        // proposed practical 1 m and 100 m coordinate scales.
+        for (const double coordinate : {1000.0, 100000.0}) {
+            SketchModel scaled;
+            const auto circle_id = scaled.addCircle(
+                {coordinate, coordinate}, 30.0);
+            const double left_x = std::nextafter(
+                coordinate - 30.0,
+                -std::numeric_limits<double>::infinity());
+            const double right_x = std::nextafter(
+                coordinate + 30.0,
+                std::numeric_limits<double>::infinity());
+            const auto left_id = scaled.addLine(
+                {left_x, coordinate - 40.0},
+                {left_x, coordinate});
+            const auto right_id = scaled.addLine(
+                {right_x, coordinate - 40.0},
+                {right_x, coordinate});
+            CHECK(analyzeCurveRelation(
+                scaled, circle_id, left_id).status ==
+                  CurveRelationStatus::discrete);
+            CHECK(analyzeCurveRelation(
+                scaled, circle_id, right_id).status ==
+                  CurveRelationStatus::discrete);
+            CHECK(evaluateTrim(
+                scaled, TrimSketchRequest{
+                    circle_id, {left_id, right_id},
+                    {coordinate, coordinate - 30.0}}).ready());
+        }
+        // A genuine finite gap at the 100 m coordinate scale remains
+        // disjoint and cannot authorize Circle Trim.
+        SketchModel gap_scene;
+        const auto gap_circle =
+            gap_scene.addCircle({100000.0, 100000.0}, 30.0);
+        const auto outside_right = gap_scene.addLine(
+            {100030.0 + 1.0e-8, 99960.0},
+            {100030.0 + 1.0e-8, 100040.0});
+        const auto outside_left = gap_scene.addLine(
+            {99970.0 - 1.0e-8, 99960.0},
+            {99970.0 - 1.0e-8, 100040.0});
+        CHECK(analyzeCurveRelation(gap_scene, gap_circle,
+              outside_right).status == CurveRelationStatus::disjoint);
+        CHECK(analyzeCurveRelation(gap_scene, gap_circle,
+              outside_left).status == CurveRelationStatus::disjoint);
+        CHECK(!evaluateTrim(
+            gap_scene, TrimSketchRequest{
+                gap_circle, {outside_left, outside_right},
+                {100000.0, 99970.0}}).ready());
     }
 
     // Line terminal Trim preserves identity and role.
