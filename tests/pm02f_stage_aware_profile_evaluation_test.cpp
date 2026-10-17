@@ -732,6 +732,84 @@ void verifyProjectedArcDatumProfileEndpointEvidence() {
 // S0 baseline witness for B01, enabled before changing region algorithms.
 // Assertions encode corrected geometry, not the historically observed defect.
 // Keep emitted counts visible in genuine Windows RED job logs.
+// Owner's original .ss2part, 2026-10-17: Circle 9 with both
+// Lines 26/28 extended to their exactly shared apex (case 3), versus the
+// visually similar copied short finite Lines 56/58 around Circle 59 (case 4).
+// These stored decimal literals are the actual authored binary64 values.
+// Case 3 has TWO distinct true finite intersections on each Line,
+// separated by ~5.56e-7 / 7.74e-7 mm. N1 must not conflate them with
+// one synthetic tangent, nor misclassify the left pair as disjoint.
+void verifyOwnerExtendedNearSecantRegions() {
+    using sketch::CurveRelationStatus;
+    sketch::SketchModel extended;
+    const auto circle3 = extended.addCircle(
+        {89.16841975020736, 67.52296383563574}, 30.0);
+    extended.addLine(
+        {49.16841975020738, 0.0},
+        {129.16841975020736, 0.0});
+    extended.addLine(
+        {49.16841975020738, 0.0},
+        {49.16841975020738, 60.507216219488555});
+    const auto left3 = extended.addLine(
+        {49.16841975020738, 60.507216219488555},
+        {89.16841975020735, 123.46646180728104});
+    extended.addLine(
+        {129.16841975020736, 0.0},
+        {129.16841975020736, 60.507216219488555});
+    const auto right3 = extended.addLine(
+        {129.16841975020736, 60.507216219488555},
+        {89.16841975020735, 123.46646180728104});
+    const auto left_relation3 =
+        sketch::analyzeCurveRelation(extended, circle3, left3);
+    const auto right_relation3 =
+        sketch::analyzeCurveRelation(extended, circle3, right3);
+    const auto regions3 = sketch::analyzeRegions(extended);
+
+    sketch::SketchModel copied;
+    const auto circle4 = copied.addCircle(
+        {181.1670624652628, 67.52296383563574}, 30.0);
+    copied.addLine(
+        {141.1670624652628, 0.0},
+        {221.1670624652628, 0.0});
+    copied.addLine(
+        {141.1670624652628, 0.0},
+        {141.1670624652628, 60.507216219488555});
+    const auto left4 = copied.addLine(
+        {141.1670624652628, 60.507216219488555},
+        {155.8453883282019, 83.61062429004924});
+    copied.addLine(
+        {221.1670624652628, 0.0},
+        {221.1670624652628, 60.507216219488555});
+    const auto right4 = copied.addLine(
+        {221.1670624652628, 60.507216219488555},
+        {206.4887366023237, 83.61062429004924});
+    const auto left_relation4 =
+        sketch::analyzeCurveRelation(copied, circle4, left4);
+    const auto right_relation4 =
+        sketch::analyzeCurveRelation(copied, circle4, right4);
+    const auto regions4 = sketch::analyzeRegions(copied);
+
+    std::cerr << "SS2_N1_OWNER_EXTENDED_SECANTS"
+              << " case3_left=" << left_relation3.intersections.size()
+              << " case3_left_status=" << static_cast<int>(left_relation3.status)
+              << " case3_right=" << right_relation3.intersections.size()
+              << " case3_right_status=" << static_cast<int>(right_relation3.status)
+              << " case3_regions=" << regions3.regions.size()
+              << " case3_diagnostics=" << regions3.diagnostics.size()
+              << " case4_left=" << left_relation4.intersections.size()
+              << " case4_right=" << right_relation4.intersections.size()
+              << " case4_regions=" << regions4.regions.size()
+              << " case4_diagnostics=" << regions4.diagnostics.size()
+              << '\n';
+
+    CHECK(left_relation3.status == CurveRelationStatus::discrete);
+    CHECK(right_relation3.status == CurveRelationStatus::discrete);
+    CHECK(left_relation3.intersections.size() == 2U);
+    CHECK(right_relation3.intersections.size() == 2U);
+    CHECK(!regions3.regions.empty());
+    CHECK(!regions4.regions.empty());
+}
+
 void verifyS0CircleTangentRegionCells() {
     const std::array<int, 4> initial{0, 1, 2, 3};
     constexpr double pi = std::numbers::pi_v<double>;
@@ -1014,6 +1092,7 @@ void verifyS0CircleTangentRegionCells() {
 } // namespace
 
 int main() {
+    verifyOwnerExtendedNearSecantRegions();
     verifyS0CircleTangentRegionCells();
     verifyExactRegionEndpointBoundary();
     verifyProjectedArcDatumProfileEndpointEvidence();
