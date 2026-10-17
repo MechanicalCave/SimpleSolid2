@@ -1004,6 +1004,17 @@ void verifyOwnerCase5IndependentCircleProfile() {
     const auto intent = part::makeProfileRegionIntent(*found);
     CHECK(intent.has_value());
     const auto replay = part::resolveProfileRegionIntent(model, *intent);
+    std::cerr << "SS2_OWNER_CASE5_PROFILE_REPLAY"
+              << " status=" << static_cast<int>(replay.status)
+              << " outer_uses=" << found->outer.boundary.size()
+              << " intent_uses=" << intent->outer.boundary.size()
+              << " first_source=";
+    if (!found->outer.boundary.empty()) {
+        std::cerr << found->outer.boundary.front().source_entity.value();
+    } else {
+        std::cerr << "none";
+    }
+    std::cerr << '\n';
     CHECK(replay.valid());
 }
 
