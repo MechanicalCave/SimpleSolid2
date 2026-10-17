@@ -1,7 +1,7 @@
 # Sketcher Repair S3 — Esc / Grip Copy / Mirror Keep Original — D2 Work Contract PROPOSAL
 
 **Status:** PROPOSED, **NOT OWNER-ACCEPTED, NOT ACTIVE**, governance-only; S3 source/test/docs mutation expressly FORBIDDEN until separate exact Owner D2 approval, guarded governance integration and ACTIVE-only activation.
-**Decision:** D2 cross-layer CAD Input / Shared 2D / Qt interaction; **D3 shortcut/product grammar OPEN** (`5).
+**Decision:** D2 cross-layer CAD Input / Shared 2D / Qt interaction **PROPOSED, Owner acceptance PENDING**; **D3 shortcut choice B (`C` + Enter) OWNER-DECIDED on 2026-10-17** (§5).
 **Baseline:** protected `main` = `6f8dc4f62452c749a53804ba79e661acd5a65251`, the verified Owner-authorized guarded squash of S2 implementation PR #483 (2026-10-17). Earlier B01/B02 S1 and B03a/B04 S2 are completed; don't re-open them.
 **Program:** Owner-accepted `work/SKETCH_ROADMAP.md` v1.10, **S3 B03b/B05/B06**; companion Owner-accepted `work/PART_MODELING_V1_ROADMAP.md` v1.34 defers new RG-02 packages/PM-06.
 **Authority:** `AGENTS.md` → frozen Constitution/Foundation/Architecture v1.0 → accepted ADR-0008 (Shared 2D), ADR-0009 (Sketch interaction), ADR-0011 (global CAD Input/focus), ADR-0012 (revision-bound transactions) → `work/ACTIVE.yaml` → program roadmap → future accepted/integrated/activated S3 contract → DOC-01.
@@ -9,11 +9,11 @@
 
 ## 0. Governance decision and D3 fail-closed boundary
 
-S0/S1 → S2 → S3 scheduling is already an Owner-accepted **direction**, not authorization to implement S3. This exact S3 contract, every conditional source/test/doc path below, and the unresolved one-key `C` versus `C+Enter` grammar require **separate explicit Owner acceptance**. The Owner's `ok, kontynuuj pracę` after S2 integration authorizes preparing this review proposal, NOT accepting its terms, merging it, changing `ACTIVE.yaml` or starting product code.
+S0/S1 → S2 → S3 scheduling is already an Owner-accepted **direction**, not authorization to implement S3. This exact S3 D2 contract and every conditional source/test/doc path below **still require separate explicit Owner acceptance**. The Owner's `ok, kontynuuj pracę` after S2 integration authorized preparing this review proposal, NOT accepting its terms, merging it, changing `ACTIVE.yaml` or starting product code. The later Owner decision `Wybieram D3 B dla skrótu Grip Copy w proponowanym kontrakcie S3 PR #487. Kontynuuj procedurę zatwierdzania D2.` **settles only D3 keyboard grammar**, not this D2 contract or any merge/activation authority.
 
-**D3 STOP (`5):** No shortcut-policy or focus interception change is permitted until Owner explicitly chooses the behavior. If the product decision cannot be reached, isolate an independent S3 sub-scope in a newly accepted contract and do not silently ship a partial product feature under this proposal.
+**D3 shortcut decision (§5): CLOSED — Owner chose B (`C` + Enter).** One-key `C` interception remains out of scope. **D2 STOP remains:** no source/test/docs implementation until Owner separately accepts this exact contract, it is independently merged with separately authorized guarded squash, and a separately approved ACTIVE-only PR is merged.
 
-**Protected integration sequence:** (1) Owner approves exact D2 sections 0–9, paths and D3 outcome; (2) governance proposal runs independent exact-HEAD Windows CLOSURE; (3) Owner separately authorizes guarded squash of this governance-only PR; (4) verify contract on protected `main`; (5) a **distinct ACTIVE-only PR** switches only `active_work` to this contract, passes its own exact-head Ready CLOSURE and receives separate Owner guarded-squash authority; (6) only after verified `main` activation begin test-first production PR(s). Each product PR later needs focused/FAST/Ready FULL, DOC-01, manual PASS, independent technical FINAL PASS and separate guarded product merge authorization. Never direct-write protected `main`.
+**Protected integration sequence:** (1) Owner separately approves exact D2 sections 0–9 and 26 conditional paths (D3 B already decided); (2) governance proposal runs independent exact-HEAD Windows CLOSURE; (3) Owner separately authorizes guarded squash of this governance-only PR; (4) verify contract on protected `main`; (5) a **distinct ACTIVE-only PR** switches only `active_work` to this contract, passes its own exact-head Ready CLOSURE and receives separate Owner guarded-squash authority; (6) only after verified `main` activation begin test-first production PR(s). Each product PR later needs focused/FAST/Ready FULL, DOC-01, manual PASS, independent technical FINAL PASS and separate guarded product merge authorization. Never direct-write protected `main`.
 
 ## 1. Current-main audit: evidence, not an asserted current Windows RED
 
@@ -58,21 +58,23 @@ Required contract when an active Sketch/Workbench owns CAD input:
 3. Mirror preview uses the original snapshot regardless of Copy toggle; invalid/coincident axis, stale source, mixed selected roles, unsupported nonfinite coordinates or failed projection produce no changed state. A no-op mirror cannot silently duplicate identical geometry without a separately accepted rule. Do not silently turn Mirror+Copy into infinitely repeated placements when ordinary Mirror is one-shot.
 4. Toggling normal Mirror Keep Original/Copy must never set or leak Grip Copy, global COPY, or different tools' options; cancellation and after-commit reset are deterministic. If a new visible Operations toggle and label are necessary, keep within existing Sketch/Workbench UI ownership; no generic global CAD toolbar redesign.
 
-## 5. **Owner D3 decision REQUIRED: Grip Copy shortcut C**
+## 5. **Owner D3 decision CLOSED: B — `C` + Enter**
 
-Owner must select one exact product rule before S3 D2 is considered settled.
+**Exact Owner decision (2026-10-17):** `Wybieram D3 B dla skrótu Grip Copy w proponowanym kontrakcie S3 PR #487. Kontynuuj procedurę zatwierdzania D2.` This is **only** a D3 choice. It is **not** Owner acceptance of D2 §§0–9, the 26 conditional file paths, merge of governance PR #487, the ACTIVE-only transition, or product code mutation.
 
-**Option A — one-key `C`**: with a *live eligible Grip* mode and an empty shared CAD input token, no modal/text editor and no modifiers, pressing `C` immediately turns on Grip Copy without waiting for Enter. It must not generate a visible lone CAD token, conflict with Circle/other commands, or override the currently typed field/number; repeated/cycled modes and one-shot request consumption remain tested. This requires a guarded, tightly context-qualified cross-layer key-handling change.
+**Selected B — `C` followed by Enter:** In a live eligible Grip stage, a plain `C` is ordinary printable text in the **one shared workspace CAD Input buffer**. Only pressing Enter submits that token to the existing semantic endpoint and can arm Grip Copy. There is **no new one-key `C` interceptor**. This rule also governs future Grip Rotate/Scale/Mirror + Copy; it does not mean those modes are already implemented. Existing explicit Operations UI activation remains permitted only where available.
 
-**Option B — `C` then Enter (existing safe keyboard-first grammar)**: `C` is a printable text token in the one global CAD Input buffer, Enter submits it through the existing semantic endpoint only in a supported active Grip stage; no new one-key shortcut is intercepted. Grip Copy after Rotate/Scale/Mirror uses the same submitted-token grammar. Preserve direct UI Operations activation where available. This is the lowest-change option.
+**Required precedence and isolation:** A lone `C` must not arm Copy, author geometry, dirty the document, allocate IDs or add Undo. Esc with the pending `C` first clears that live text token while preserving the active Grip and its Copy state; later Esc follows the existing numeric-lock and stage hierarchy. Real text editors retain their own literal `C`. Submitted `C` outside a currently eligible Grip must not silently arm Copy, change numeric mode or launch another tool. Other tokens, complete point/angle/factor inputs, one-shot OSNAP and mode-switch resets keep their established semantic priority. After Space cycles edit mode, Copy stays OFF until separately re-armed through a new `C` + Enter submission.
 
-**Proposed conservative default for review:** Option B; **NOT accepted** unless Owner explicitly chooses B. If Owner chooses A, scope/test cases below require targeted amendment for immediate-key interception before product implementation. The D2 contract must not infer this D3 selection from `kontynuuj`.
+**Not selected A — one-key immediate `C`:** pressing `C` without Enter must **never** arm Copy within this S3 contract. A later change to one-key `C` requires a new explicit Owner D3 decision and appropriate D2 amendment.
+
+**Governance:** D3 B is decided. D2 contract §§0–9, the 26-path allowlist, contract integration, ACTIVE-only switch, implementation and product merge remain separate unresolved approvals. No decision may be inferred from `kontynuuj`.
 
 ## 6. Registered test-first Windows matrix and hard acceptance
 
-**B03b:** real `QTest` keypresses on active Viewport, focused global Command Line, ordinary editor, inactive secondary Workspace and popup, with staged Sketch Line/Circle/Arc, ordinary Mirror axis, grip Rotate numeric lock and dynamic field; two/three/four Esc hierarchies as actually necessary. Assert exact active stage/selection/input buffer, preview clearing, persisted revision and Undo depth. Regression Ctrl+Z/Y, Tab, Space mode cycle and R11 one-shot override.
+**B03b:** real `QTest` keypresses on active Viewport, focused global Command Line, ordinary editor, inactive secondary Workspace and popup, with staged Sketch Line/Circle/Arc, ordinary Mirror axis, grip Rotate numeric lock and dynamic field; two/three/four Esc hierarchies as actually necessary. For **D3 B**, press `C` alone and verify it stays a buffer token with no Copy enablement, then Enter arms only in eligible Grip mode; Esc clears pending `C` before canceling the stage; an ordinary text editor retains `C` under local ownership. Assert exact active stage/selection/input buffer, preview clearing, persisted revision and Undo depth. Regression Ctrl+Z/Y, Tab, Space mode cycle and R11 one-shot override.
 
-**B05:** Line Start/End/center + Circle/Arc grips; mixed selection, each Rotate/Scale/Mirror with Copy, numeric angle/factor/mirror axis, pointer previews, explicit modes, re-arming after Space, repeated copy with frozen source, fresh IDs, source still selected, cross-role source geometry, invalid/zero/negative factor and zero-length axis, stale revision, per-placement Undo/Redo and cold Save/Reopen. Retain preexisting Grip Reshape+Copy/Move+Copy, R10, R11 and S2 TAN/PER regression semantics.
+**B05:** Line Start/End/center + Circle/Arc grips; mixed selection, each Rotate/Scale/Mirror with Copy **armed by `C` + Enter**, numeric angle/factor/mirror axis, pointer previews, explicit modes, re-arming after Space, repeated copy with frozen source, fresh IDs, source still selected, cross-role source geometry, invalid/zero/negative factor and zero-length axis, stale revision, per-placement Undo/Redo and cold Save/Reopen. Retain preexisting Grip Reshape+Copy/Move+Copy, R10, R11 and S2 TAN/PER regression semantics.
 
 **B06:** normal Mirror selected-first and command-first, Keep Original OFF and ON, empty/partial/mixed selection, two-point axis, point/angle precision, focus/Esc cleanup, preview vs commit and invalid-axis fail-closed; assert original IDs unaffected when ON, mirrored entities fresh, one undo/redo and cold .ss2part roundtrip. Preserve standard normal MOVE/COPY/ROTATE/SCALE, prior S1 Profile/Extrude and completed S2.
 
@@ -82,7 +84,7 @@ Owner must select one exact product rule before S3 D2 is considered settled.
 
 All items are optional, conditioned on **future exact Owner approval** and proved need for S3; this governance PR changes none of them. If an essential file is outside the list, STOP for separate Owner D2 path addendum before editing. Listing does not authorize broad refactors inside a file.
 
-1. `src/ui/project_workspace_shell.cpp` — actual Qt focus/filter Esc + selected D3 C grammar only.
+1. `src/ui/project_workspace_shell.cpp` — actual Qt focus/filter Esc plus preservation of D3 B `C`-as-token-until-Enter; no one-key `C` interceptor.
 2. `src/ui/project_workspace_shell.hpp` — private scoped routing state/interface if unavoidable.
 3. `src/ui/cad_workbench.cpp` — actual viewport Esc / active Sketch keyboard and Mirror Operations UI only.
 4. `src/ui/cad_workbench.hpp` — private UI controls/callback declarations only.
@@ -117,11 +119,11 @@ All items are optional, conditioned on **future exact Owner approval** and prove
 - No automatic activation when the S3 governance proposal merges; activate only via separate **one-file ACTIVE-only PR** with Owner permission and an exact-head Ready CLOSURE.
 - If Qt/Workbench repair requires crossing into Part/Project global input ownership beyond exact listed files, stop and present evidence, alternatives and path request.
 - No silent reinterpretation of S1/S2 geometry, deferred R11 OSNAP, numeric locks, existing command grammar or authored identity. Preserve stale-revision failure, selection, Undo/Redo, Save/Reopen and no ghost IDs.
-- D3 one-key `C` vs `C+Enter` must be settled *before* Owner exact D2 contract acceptance and activation. Owner can choose either explicitly, and the contractual tests must match the choice.
+- **D3 B SETTLED:** Owner chose `C` + Enter; one-key immediate `C` is excluded. The pending D2 scope, governance merge and ACTIVE-only activation must still be separately approved.
 - Do not claim technical FINAL PASS based on Windows CI alone; actual Owner manual GUI validation is separately required.
 
 ## 9. DOC-01 — Documentation Impact
 
 **Internal as-built docs: REQUIRED** for Qt focus/cancel ownership and shared Sketch Copy/transform behavior. **PL/EN Product docs: REQUIRED** for Grip Rotate/Scale/Mirror Copy, normal Mirror Keep Original and precisely accepted `C` keyboard grammar. **Generated Browser: REQUIRED** by repository `.\ss2.ps1 docs`; freshness must be verified in the actual Windows build. This contract review is governance-only: no current-state doc changes until product behavior is genuinely implemented and verified.
 
-**Owner decision requested for this proposal:** select **D3 A (one-key C)** or **D3 B (C+Enter)**, and separately accept exact S3 D2 sections 0–9 plus 26 conditional paths. No merge/activation authority derives from accepting this direction alone.
+**Next Owner decision requested:** explicitly approve or reject the exact **S3 D2 contract §§0–9 and all 26 conditional paths** in PR #487 with **D3 B (`C` + Enter) already decided**. That approval, if granted, does not authorize any governance guarded squash, ACTIVE-only integration or product implementation; those require separate gates.
