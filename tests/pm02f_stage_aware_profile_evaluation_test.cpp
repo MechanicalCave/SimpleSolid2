@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <utility>
@@ -966,6 +967,46 @@ void verifyS0CircleTangentRegionCells() {
         }
     }
     CHECK(verified_similarities == 8U);
+
+    // N1 derived near contacts must also be coherent in the bounded
+    // arrangement AND source-anchored durable Profile replay. One ULP
+    // outside the Circle on either finite side Line is an intentional
+    // precision fixture, not an authored snap or moved endpoint.
+    {
+        sketch::SketchModel model;
+        const sketch::Point2 center{
+            190.34517723877235, 67.52296383563574};
+        const auto left_x = std::nextafter(
+            center.u - 30.0, -std::numeric_limits<double>::infinity());
+        const auto right_x = std::nextafter(
+            center.u + 30.0, std::numeric_limits<double>::infinity());
+        [[maybe_unused]] const auto circle =
+            model.addCircle(center, 30.0);
+        [[maybe_unused]] const auto left = model.addLine(
+            {left_x, center.v - 60.0}, {left_x, center.v});
+        [[maybe_unused]] const auto right = model.addLine(
+            {right_x, center.v - 60.0}, {right_x, center.v});
+        [[maybe_unused]] const auto base = model.addLine(
+            {left_x, center.v - 60.0},
+            {right_x, center.v - 60.0});
+        const auto cells = sketch::analyzeRegions(model);
+        std::cerr << "SS2_N1_DERIVED_REGION"
+                  << " cells=" << cells.regions.size()
+                  << " diagnostic=" << cells.diagnostics.size()
+                  << '\n';
+        CHECK(cells.regions.size() == 2U);
+        std::size_t replayed = 0U;
+        for (const auto& cell : cells.regions) {
+            const auto intent = part::makeProfileRegionIntent(cell);
+            CHECK(intent.has_value());
+            if (part::resolveProfileRegionIntent(model, *intent).valid()) {
+                ++replayed;
+            }
+        }
+        std::cerr << "SS2_N1_DURABLE_PROFILE"
+                  << " replay=" << replayed << "/2\n";
+        CHECK(replayed == 2U);
+    }
 }
 
 } // namespace
