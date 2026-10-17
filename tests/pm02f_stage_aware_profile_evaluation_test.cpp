@@ -835,6 +835,29 @@ void verifyOwnerExtendedNearSecantRegions() {
 // Native Owner .ss2part schema 20, exact complete 40 authored entities,
 // including Regular/Construction distinction and the copied #3/#4 cases.
 // Test-only reconstruction; no parsing or persistent-product source change.
+// D2-A negative: a geometrically narrow but numerically resolvable
+// Circle/Line crescent is a REAL material Region. Certification must
+// never discard it merely because its area is small or it has two uses.
+void verifyD2ARepresentableNarrowCap() {
+    sketch::SketchModel model;
+    [[maybe_unused]] const auto circle =
+        model.addCircle({0.0, 0.0}, 30.0);
+    [[maybe_unused]] const auto line =
+        model.addLine({-45.0, 30.0 - 1e-5},
+                      {45.0, 30.0 - 1e-5});
+    const auto regions = sketch::analyzeRegions(model);
+    CHECK(regions.complete());
+    CHECK(regions.regions.size() == 2U);
+    const auto cap = sketch::pickRegion(
+        model, regions, {0.0, 30.0 - 2e-6});
+    CHECK(cap.region_index.has_value());
+    CHECK(cap.location == sketch::RegionPointLocation::inside);
+    const auto disk = sketch::pickRegion(
+        model, regions, {0.0, 0.0});
+    CHECK(disk.region_index.has_value());
+    CHECK(cap.region_index != disk.region_index);
+}
+
 void verifyOwnerFullNativeScenePick() {
     struct Line {
         sketch::Point2 start;
@@ -919,6 +942,75 @@ void verifyOwnerFullNativeScenePick() {
     // independently usable macro regions in the same connected component.
     CHECK(pick4.region_index.has_value());
     CHECK(pick3.region_index.has_value());
+
+    // A binary64 point independently certified with dyadic-rational
+    // squared-circle and Line-side inequalities to be STRICTLY inside
+    // the Circle9/Line26 microscopic lens. It must not pick a macroface
+    // when that derived microface is unresolved for Profile consumers.
+    const sketch::Point2 actual_lens_point{
+        63.84674552114644, 83.61062414524297};
+    const auto lens_pick = sketch::pickRegion(
+        scene, analysis, actual_lens_point);
+    CHECK(!lens_pick.region_index.has_value());
+    CHECK(lens_pick.location ==
+          sketch::RegionPointLocation::ambiguous);
+    // Also test the mirrored, independently certified STRICT interior
+    // binary64 point in the Circle9/Line28 right microcap.
+    const auto right_lens_pick = sketch::pickRegion(
+        scene, analysis,
+        {114.49009370326829, 83.61062457966176});
+    CHECK(!right_lens_pick.region_index.has_value());
+    CHECK(right_lens_pick.location ==
+          sketch::RegionPointLocation::ambiguous);
+
+    const auto original_left = state.lines[13].id;  // Line 26
+    const auto original_right = state.lines[15].id; // Line 28
+    const auto circle_id = state.circles[1].id;      // Circle 9
+    const auto has_micro_diagnostic =
+        [&analysis, circle_id](sketch::EntityId line_id) {
+            return std::any_of(
+                analysis.diagnostics.begin(),
+                analysis.diagnostics.end(),
+                [line_id, circle_id](const auto& diagnostic) {
+                    return diagnostic.kind ==
+                               sketch::RegionAnalysisDiagnosticKind::
+                                   invalid_topology &&
+                        diagnostic.entities.size() == 2U &&
+                        std::find(
+                            diagnostic.entities.begin(),
+                            diagnostic.entities.end(), circle_id) !=
+                            diagnostic.entities.end() &&
+                        std::find(
+                            diagnostic.entities.begin(),
+                            diagnostic.entities.end(), line_id) !=
+                            diagnostic.entities.end();
+                });
+        };
+    CHECK(has_micro_diagnostic(original_left));
+    CHECK(has_micro_diagnostic(original_right));
+
+    // Separate macro-cell publication is useful only if Part can
+    // create and uniquely replay its durable source-anchored identity.
+    // No speculative OCCT/fuzzy wire representation is used here.
+    const auto check_durable =
+        [&scene, &analysis](std::uint32_t index) {
+            const auto region = std::find_if(
+                analysis.regions.begin(),
+                analysis.regions.end(),
+                [index](const auto& cell) {
+                    return cell.region_index == index;
+                });
+            CHECK(region != analysis.regions.end());
+            const auto intent =
+                part::makeProfileRegionIntent(*region);
+            CHECK(intent.has_value());
+            const auto replay =
+                part::resolveProfileRegionIntent(scene, *intent);
+            CHECK(replay.valid());
+        };
+    check_durable(*pick3.region_index);
+    check_durable(*pick4.region_index);
+
     // Localized uncertain geometry must stay visible to callers. A
     // macro-profile cannot be obtained by silently erasing real faces.
     CHECK(!analysis.complete());
@@ -1219,6 +1311,7 @@ void verifyS0CircleTangentRegionCells() {
 } // namespace
 
 int main() {
+    verifyD2ARepresentableNarrowCap();
     verifyOwnerFullNativeScenePick();
     verifyOwnerExtendedNearSecantRegions();
     verifyS0CircleTangentRegionCells();
