@@ -77,6 +77,32 @@ The independently stacked [experimental PR #465](https://github.com/MechanicalCa
 
 **N2 — consistency and non-welding proofs.** One common relation classification must serve Shared-2D Region, Circle/Arc Trim, persistent Profile semantic anchor replay and native OCCT geometry. Do not independently add "Trim epsilon" or "Profile epsilon." Preserve shared boundary positive-length connectivity and external tangent Circle/Circle distinct material islands. If N1 tolerance only permits picking/diagnostics but native exact geometry has no consistent closed topology, **do not claim the edit/Extrude valid**; either devise a deterministic runtime derived-contact canonicalization that all layers can replay without modifying source, or report unsupported/ambiguous. Any need for a Kernel/serializer/public API/schema or other source path requires another STOP/Owner D2, not stealth widening.
 
+## 2A. Functional N1 decision candidate — one topology from Sketch through native Body
+
+**Explicit proposed product outcome (NOT YET OWNER ACCEPTED):** both authored Copy cases 3 and 4 must allow the user to complete the intended two-contact Circle Trim. A green unit test only for Trim, but a broken Region/Profile/OCCT, is **RED for SS2 as a product**. Freehand, Copy, Move, and future constraint features retain independent semantics; no tool-specific epsilon or automatic modification of authored coordinates.
+
+**Single-contact-seam proposal.** Compute strict actual intersections and N0a exact binary contacts first. For unmatched pairs, consider a derived numerical contact only inside a *dimensionally correct, local linear-distance* error band. Initial study candidate (not an accepted fixed tolerance): T = max(1e-12 mm, 32 * ulp(M)), where M is a representative magnitude of the actual absolute binary64 coordinates involved, capped to no more than 1e-6 of the support envelope's minimum significant feature (0.1 mm at model span 1 m; 1 mm at span 100 m). Calibrate the numerical constant from tests, preserve separate rigorous arithmetic-sign bounds, and never compare the dimensional distance T directly with a quadratic discriminant. At 100 m, illustrative 32 ULP is only approximately 4.66e-10 mm; a genuine 1e-8 mm gap is much larger and **must remain open**. The near-contact choice is an acknowledged extension of the old strict no-gap semantics requiring its own exact Owner D2; it cannot be disguised as exact arithmetic.
+
+**One unambiguous canonical *runtime* vertex.** For each eligible endpoint/curve near-contact, require one unique source pair, canonical contact branch and bounded support parameter; reject overlaps, multiple plausible candidates and genuine separated double roots that would otherwise collapse. A candidate nearest point may be projected onto an analytic Circle for the derived evaluated boundary ONLY: keep all authored Line/Circle/Arc coordinates, EntityIds, source roles and durable ProfileIntent references intact. Every consumer (analyzeCurveRelation, region loop, R12 Trim, profile intent replay, kernel-native Profile Face/Extrude) must agree on that same source-anchored contact decision. If the current Kernel input or wire builder cannot represent it consistently without new public schema, STOP and request a new narrowly scoped D2 rather than writing an independent OCCT tolerance.
+
+**Material semantics never follow point-only equivalence.** Two externally tangent whole Circles still yield distinct material islands and disconnected Add Area; only a positive-length actual shared edge can join material. Real gaps larger than the calibrated band remain gaps. If an unexpected ambiguity appears, reject the operation and preserve Document state rather than fabricating a Face.
+
+**Unwaivable end-to-end acceptance matrix:**
+
+| Original Owner / existing fixture | Mandatory result |
+| --- | --- |
+| Case 1, extended true tangents | 2 contacts and 1 fresh Arc from Circle Trim |
+| Case 2, true contacts at Line endpoints | Same 2 contacts and fresh Arc |
+| Case 3, copied near-inside diagonal Lines | Circle Trim works and stable resulting geometry |
+| Case 4, copied near-outside diagonal Lines | Same user-visible functional result as 3 after unambiguous derived-contact admission |
+| Case 5, only one valid cutter | No destructive two-contact Trim; independent closed Circle Region/Profile remains usable |
+| Case 6, two proper finite intersections | Trim works; distinct crossings must NOT merge |
+| Negative geometry controls | Real 1e-8 mm gap OPEN at all stated envelope scales; point-only tangent Circles disconnected; true close secant roots remain distinct or explicitly ambiguous |
+| Existing regressions | F1/F2 24/24, partial Arc CW/CCW, SK07A dome transformed by Move/Rotate/Scale, oblique F3 and x2 rotations remain green |
+| Durable/native | Profile Add/Subtract, valid/stale intent, stable ID, Undo/Redo, cold Save/Close/Reopen of a real ss2part document, real OCCT Profile Face and valid Extrude solid |
+
+**Final no-shortcut gate:** independently verified Windows exact-HEAD Ready FULL, FOCUSED where required, DOC-01, CLOSURE and Owner real Windows manual on the *same resulting product revision*, then independent Owner technical FINAL PASS and separately authorized guarded merge. Existing #460/#463/#465 Windows results are baseline evidence, NOT a claim that unimplemented N1 passes. S2/S3, Copy, OSNAP, constraint solver and broad Kernel public API remain outside current authorization.
+
 ## 3. Scope proposal / strict files / test gates
 
 This initial **governance-only proposal changes one work/** file** and does not modify current #460 production code. An eventual accepted N0/N1 implementation should prefer already approved exact paths:
