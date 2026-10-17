@@ -95,6 +95,34 @@ int main() {
     CHECK(
         state.directEditMode() ==
         sketch::DirectEditMode::reshape);
+
+    // S2 B04 genuine RED: for a moving Start Grip, the R11 TAN/PER
+    // source reference must be the stationary End. Conversely the
+    // moving End Grip refers to stationary Start. Do not change the
+    // direct edit pivot, whose separate movement semantics stay fixed.
+    const auto start_snap_request =
+        state.activePointRequest();
+    CHECK(start_snap_request.has_value());
+    CHECK(start_snap_request->base.has_value());
+    CHECK(*start_snap_request->base ==
+          sketch::Point2{10.0, 0.0});
+    {
+        auto end_state = selectedState(
+            line_id, circle_id, arc_id);
+        const sketch::SketchGripRef line_end{
+            line_id, sketch::SketchGripRole::line_end};
+        CHECK(end_state.beginDirectManipulation(
+            model, line_end));
+        CHECK(end_state.directEditMode() ==
+              sketch::DirectEditMode::reshape);
+        const auto end_snap_request =
+            end_state.activePointRequest();
+        CHECK(end_snap_request.has_value());
+        CHECK(end_snap_request->base.has_value());
+        CHECK(*end_snap_request->base ==
+              sketch::Point2{0.0, 0.0});
+    }
+
     CHECK(!state.directManipulationCopyEnabled());
     CHECK(state.enableDirectManipulationCopy());
     CHECK(state.directManipulationCopyEnabled());
