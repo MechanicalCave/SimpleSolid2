@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <iostream>
 #include <limits>
 #include <numbers>
 #include <optional>
@@ -3226,9 +3225,6 @@ buildComponentLoops(
             });
     }
 
-    // D2-A exploratory diagnostic only: retain fail-closed component
-    // semantics while collecting evidence from EVERY derived cycle.
-    bool unresolved_micro_cycle = false;
     std::vector<bool> visited(
         half_edges.size(),
         false);
@@ -3310,24 +3306,7 @@ buildComponentLoops(
                 model,
                 *loop);
         if (!sample) {
-            unresolved_micro_cycle = true;
-            std::cerr.precision(17);
-            std::cerr << "SS2_D2A_UNRESOLVED_CYCLE"
-                      << " area_double=" << loop->signed_area
-                      << " perimeter=" << loop->perimeter
-                      << " source_uses=" << loop->boundary.size()
-                      << '\n';
-            for (const auto& use : loop->boundary) {
-                std::cerr << "SS2_D2A_CYCLE_SOURCE"
-                          << " id=" << use.source_entity.serialized()
-                          << " start=" << use.start_parameter
-                          << " end=" << use.end_parameter
-                          << " forward=" << use.follows_source_direction
-                          << '\n';
-            }
-            // Continue walking for evidence, but NEVER publish a
-            // partial component. The return below stays fail-closed.
-            continue;
+            return std::nullopt;
         }
 
         loops.push_back(
@@ -3336,13 +3315,6 @@ buildComponentLoops(
                 *sample});
     }
 
-    if (unresolved_micro_cycle) {
-        std::cerr << "SS2_D2A_UNSAFE_EXPERIMENT_ONLY_NOT_FOR_MERGE"
-                  << " naive_other_loops=" << loops.size() << '\n';
-        // Deliberate NON-SHIPPABLE probe to measure consumer behavior:
-        // no certified microface/adjacency/OCCT proof is provided here.
-        // Revert before every product candidate; not D2-A acceptance.
-    }
     return loops;
 }
 
