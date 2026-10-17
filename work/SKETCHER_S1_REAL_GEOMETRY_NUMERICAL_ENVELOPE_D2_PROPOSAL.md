@@ -25,6 +25,23 @@ Two unrelated and independently actionable failure classes were isolated:
 
 **Test-only diagnostic branch:** [PR #463](https://github.com/MechanicalCave/SimpleSolid2/pull/463) is stacked on unmerged #460 HEAD `b2183fcbcc0606ddb319d5909c5e6c3b6f7f177d`, modifying only the previously approved `tests/r12_structural_edit_core_test.cpp` path relative to #460. It records six stored Circle/Line pairs and recreates **all 26 native sketch entities including Construction roles**, logging four direct Circle→Arc Trim outcomes. Initial Windows FAST [#3496](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39021008049), [#3498](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39021437779), [#3499](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39021634845), and [#3501](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39021816949) each say **93/93 PASS of FAST only**, but **R12 did NOT run** in these FAST tiers. They are NOT fixture evidence. The PR has been marked Ready solely to trigger **Windows FULL #3502**, which includes R12, for a real pass/fail and its diagnostic stdout. The case3/case4 parity expression remains a clearly UNAPPROVED experimental user-symmetry check, not a settled N1 production policy. No diagnostic branch merge is authorized.
 
+### 1A. Verified genuine Windows R12 diagnostic RED (not borrowed FAST)
+
+[Ready Windows FULL #3502](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39021995717), exact diagnostic HEAD \`8487cef480431179f5eb5b1740e1fec2f0816087\`, **FAILED 116/117 Desktop tests**, with \`r12.structural_edit_core\` the sole Desktop failure at the first real-input exact-contact assertion. The dedicated program emitted before that assertion:
+
+| Original stored case | Left R12 relation | Right R12 relation | Meaning of actual analyzer output |
+| --- | --- | --- | --- |
+| 1, extended, Circle 17 / Lines 15+16 | disjoint, 0 | disjoint, 0 | **genuine B02 numerical RED**, both mathematically exact binary tangents missed |
+| 2, endpoint, Circle 2 / Lines 3+4 | discrete, 1 (not tangent) | discrete, 1 (not tangent) | correct finite single contact count, **wrong contact kind** (proper-crossing instead of exact tangent) |
+| 3, copied-in, Circle 9 / Lines 26+28 | discrete, 1 (not tangent) | discrete, 1 (not tangent) | one finite contact from slightly inward binary representations |
+| 4, copied-out, Circle 34 / Lines 33+32 | disjoint, 0 | disjoint, 0 | actual persisted ~1-ULP outward separation |
+| 5, Circle 18 / Lines 20+21 | disjoint, 0 | discrete, 1 | heterogeneous finite contacts; do not call identical tangent pair |
+| 6, Circle 19 / Lines 22+23 | discrete, 1 | discrete, 1 | genuine finite intersections |
+
+**Important:** #3502 exits early at the first case-1 assertion, so it did **not** yet execute the subsequent full-26-entity **direct \`evaluateTrim\`** calls. Do not claim full-scene Trim results from #3502. Diagnostic HEAD \`d2b78af92617122e98e742de06b910fe3045aa8e\` moves that assertion *after* logging full-scene evaluations; exact-HEAD Ready FULL #3504 is pending to obtain that separate evidence. No source geometry implementation changed. The earlier Windows FAST #3496/#3498/#3499/#3501 **did not include R12 in its 93 tests**, and their green status is not evidence that the six-case witness ran.
+
+This confirms **N0 has a concrete regression** before adopting any N1 proximity topology: the approximate discriminant currently misses even truly exact finite tangents after power-of-two scaling. N1 concerns a different issue, accepted behavior of already-persisted ~1-ULP outward gaps; its topology semantics are not inferred from N0 RED.
+
 ## 2. Proposed two-stage numerical semantics
 
 **N0 — robust exact-on-stored-input predicate (uncontroversial B02 repair).** Give priority to a scale-conditioned error bound for sign of the Line↔Circle/Arc discriminant (and endpoint predicates). If the floating sign is provably outside the *computed arithmetic error bound*, retain strict sign; when inconclusive, recompute with higher/extended precision or an exact expansion/rational sign based on the original binary64 operands. Avoid arbitrary fixed \`epsilon\` on the discriminant. Preserve finite source range checks and exact tangent-vs-two-proper-crossings meaning. The fallback should distinguish **calculation rounding** from **authored nonintersecting binary values**. Compare case 1 vs 2 and all reversed/translated/rotated/scale variants.
