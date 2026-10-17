@@ -601,7 +601,13 @@ using ExactExpansion = std::vector<double>;
     return result;
 }
 
-[[nodiscard]] std::optional<int> exactLineCircleSign(
+struct ExactLineCircleDiscriminant final {
+    int sign{};
+    double value{};
+};
+
+[[nodiscard]] std::optional<ExactLineCircleDiscriminant>
+exactLineCircleDiscriminant(
     const CurveView& line, const CurveView& circle) {
     // Products of ordinary, unscaled binary64 model coordinates are
     // safely normal in SS2's proposed 1 m .. 100 m working envelope.
@@ -653,14 +659,33 @@ using ExactExpansion = std::vector<double>;
     if (!discriminant) {
         return std::nullopt;
     }
+    int sign = 0;
     for (auto it = discriminant->rbegin();
          it != discriminant->rend();
          ++it) {
         if (*it != 0.0) {
-            return *it > 0.0 ? 1 : -1;
+            sign = *it > 0.0 ? 1 : -1;
+            break;
         }
     }
-    return 0;
+    // Summation in increasing expansion magnitude retains the low
+    // residual terms lost by the fast signed discriminant calculation.
+    double value = 0.0;
+    for (const double term : *discriminant) {
+        value += term;
+        if (!finiteValue(value)) {
+            return std::nullopt;
+        }
+    }
+    return ExactLineCircleDiscriminant{sign, value};
+}
+
+[[nodiscard]] std::optional<int> exactLineCircleSign(
+    const CurveView& line, const CurveView& circle) {
+    const auto result =
+        exactLineCircleDiscriminant(line, circle);
+    return result ? std::optional<int>{result->sign}
+                  : std::nullopt;
 }
 
 // N1 experimental: one derived numerical contact on a finite Line,
@@ -847,23 +872,43 @@ uniqueNearTangentContact(
         return {};
     }
     int sign = discriminant > 0.0
-                   ? 1
-                   : (discriminant < 0.0 ? -1 : 0);
+                    ? 1
+                    : (discriminant < 0.0 ? -1 : 0);
+    double resolved_discriminant = discriminant;
     if (std::abs(discriminant) <= cancellation_budget) {
-        const auto exact = exactLineCircleSign(line, circle);
+        const auto exact =
+            exactLineCircleDiscriminant(line, circle);
         if (!exact) {
             return {};
         }
-        // N0a: only a mathematically exact ZERO on the stored binary
-        // operands overrides the legacy approximate result. Replacing
-        // ALL near-cancellation signs with exact rational signs would
-        // break existing transformed Line/Arc source boundary closure
-        // (real Windows #3507: sk07a.transform_core RED), because those
-        // transformed endpoints accumulate small *authored* rounding.
-        // The nonzero near-contact policy requires distinct Owner D2;
-        // do not silently reinterpret it as exact disjointness.
-        if (*exact == 0) {
+        // Preserve the accepted transformed-endpoint N1 behaviour.
+        // Do not blanket-change approximate positive secants into exact
+        // negative results: sk07a.transform_core regressed at #3507.
+        // Conversely, a nonpositive fast value MUST NOT erase two
+        // separable actual secants proven from authored binary64 inputs.
+        if (exact->sign == 0) {
             sign = 0;
+            resolved_discriminant = 0.0;
+        } else if (exact->sign > 0 && sign <= 0) {
+            const double restored =
+                std::scalbn(exact->value, -4 * exponent);
+            if (!(restored > 0.0) || !finiteValue(restored)) {
+                return {};
+            }
+            const double base =
+                std::fma(nq_u, nd_u, nq_v * nd_v) /
+                direction_squared;
+            const double delta =
+                std::sqrt(restored) / direction_squared;
+            // No fictitious split when both roots round to one
+            // indistinguishable binary64 source parameter.
+            if (!finiteValue(base) || !finiteValue(delta) ||
+                !(delta > 0.0) ||
+                !(base - delta < base && base + delta > base)) {
+                return {};
+            }
+            sign = 1;
+            resolved_discriminant = restored;
         }
     }
     if (sign < 0) {
@@ -884,7 +929,7 @@ uniqueNearTangentContact(
     // Nonzero roots still use the legacy approximate value. If it
     // rounded to zero while not exactly tangent, finite binary64
     // resolution cannot separate them: fail closed, do not forge one.
-    if (!tangent && !(discriminant > 0.0)) {
+    if (!tangent && !(resolved_discriminant > 0.0)) {
         return {};
     }
 
@@ -895,7 +940,7 @@ uniqueNearTangentContact(
     const double delta_parameter =
         tangent
             ? 0.0
-            : std::sqrt(discriminant) /
+            : std::sqrt(resolved_discriminant) /
                   direction_squared;
     if (!finiteValue(base_parameter) ||
         !finiteValue(delta_parameter)) {
