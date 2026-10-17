@@ -53,7 +53,7 @@ Provider-neutral presentation contains the current marker, up to two acquired ma
 
 The UI controller owns logical-pixel acquisition because it has Sketch-local pointer coordinates plus viewport projection. Viewer queries only bounded nearby semantic entities; final CAD coordinates come from Shared 2D math.
 
-OSNAP, Tracking, Polar and Dynamic Input converge on the same `PointResolution` before preview/commit. R11 fails closed on stale/non-finite sources, absent bases, invalid tangent/perpendicular construction, ambiguous overlap, lock-incompatible snaps and failed required projection.
+OSNAP, Tracking, Polar and Dynamic Input converge on the same `PointResolution` before preview/commit. Circle **Center → Size** exposes a Center-based PointRequest after the center is accepted; the snapped second point supplies a geometric circumference point even in Diameter mode, while typed Radius/Diameter quantities retain their existing explicit numeric precedence. Line Start/End Grip **Reshape** uses a separate transient stationary-opposite-end `snap_reference_base` only for TAN/PER, leaving the active grip pivot/ordinary numeric and Polar semantics unchanged. R11 fails closed on stale/non-finite sources, absent bases, invalid tangent/perpendicular construction, ambiguous overlap, lock-incompatible snaps and failed required projection.
 
 Runtime configuration/acquisition creates no revision, dirty state or Undo step. Only the owning operation's normal accepted command mutates authored state.
 
