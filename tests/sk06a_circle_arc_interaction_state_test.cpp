@@ -84,6 +84,18 @@ int main() {
         creation.circleStage() ==
         sketch::CircleStage::await_radius);
 
+    // S2 B03a genuine RED: the second Circle point is an ordinary
+    // PointRequest relative to its already authored Center. Current
+    // main returns nullopt here; a raw pointer must NOT be substituted
+    // for the shared snap/tracking/numeric request pipeline.
+    const auto size_point_request =
+        creation.activePointRequest();
+    CHECK(size_point_request.has_value());
+    CHECK(size_point_request->valid());
+    CHECK(size_point_request->base.has_value());
+    CHECK(*size_point_request->base ==
+          sketch::Point2{0.0, 0.0});
+
     const auto circle_preview =
         creation.previewCircle({3.0, 4.0});
     CHECK(circle_preview.has_value());

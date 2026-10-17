@@ -4763,12 +4763,11 @@ bool PartSketchInteractionController::acceptLineResolvedPoint(
 
 void PartSketchInteractionController::handleCirclePointer(
     const SketchPointerInput& input) {
+    // S2 B03a: Center and second-point Size use exactly the same
+    // request-local OSNAP/OTRACK/Polar and numeric-lock resolver.
+    // R/D typed sizes remain a separate keyboard grammar.
     const auto resolved =
-        interaction_.circleStage() ==
-                sketch::CircleStage::await_center
-            ? resolvePointerInput(input)
-            : sketch::resolveSketchInput(
-                  input.position);
+        resolvePointerInput(input);
 
     if (input.phase == viewer::SpatialPointerPhase::move) {
         const auto preview =
@@ -5760,6 +5759,13 @@ PartSketchInteractionController::resolvePointerInput(
             objectSnapPreferences(
                 settings.object_snap),
             request->temporary_snap_override);
+    // For Line endpoint Grip Reshape only, TAN/PER takes the
+    // opposite fixed endpoint. All other numeric/Polar/transform
+    // inputs continue to use the original request.base pivot.
+    const auto snap_base =
+        request->snap_reference_base
+            ? request->snap_reference_base
+            : request->base;
 
     // OSNAP resolves before tracking/Polar. Complete explicit numeric input
     // bypasses this pointer path. Numeric locks retain authority: exact
@@ -6202,28 +6208,28 @@ PartSketchInteractionController::resolvePointerInput(
                     }
                 }
 
-                if (request->base &&
+                if (snap_base &&
                     eligibility.perpendicular) {
                     auto perpendicular =
                         sketch::
                             perpendicularSnapCandidates(
                                 *current_model,
                                 entity,
-                                *request->base);
+                                *snap_base);
                     semantic_candidates.insert(
                         semantic_candidates.end(),
                         perpendicular.begin(),
                         perpendicular.end());
                 }
 
-                if (request->base &&
+                if (snap_base &&
                     eligibility.tangent) {
                     auto tangent =
                         sketch::
                             tangentSnapCandidates(
                                 *current_model,
                                 entity,
-                                *request->base);
+                                *snap_base);
                     semantic_candidates.insert(
                         semantic_candidates.end(),
                         tangent.begin(),
@@ -6315,13 +6321,13 @@ PartSketchInteractionController::resolvePointerInput(
                     input.position);
         } else if (
             eligibility.perpendicular &&
-            request->base) {
+            snap_base) {
             extension_point =
                 sketch::
                     perpendicularPointOnLineExtension(
                         *current_model,
                         *deferred_reference,
-                        *request->base);
+                        *snap_base);
         }
 
         if (extension_point) {

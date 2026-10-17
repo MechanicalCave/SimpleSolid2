@@ -774,6 +774,25 @@ SketchInteractionState::activePointRequest() const noexcept {
             true,
             true,
             true};
+        // Only Reshape of an endpoint on a Line uses the other,
+        // stationary endpoint for request-relative TAN/PER. Keep
+        // request.base at the original moving grip pivot: numeric
+        // distance/Cartesian/Polar inputs and transform modes retain
+        // their existing meaning.
+        const auto grip_role =
+            manipulation_->active_grip.role;
+        if (manipulation_->mode ==
+                DirectEditMode::reshape &&
+            (grip_role == SketchGripRole::line_start ||
+             grip_role == SketchGripRole::line_end) &&
+            !manipulation_->owner_geometry.lines.empty()) {
+            const auto& source_line =
+                manipulation_->owner_geometry.lines.front();
+            request.snap_reference_base =
+                grip_role == SketchGripRole::line_start
+                    ? source_line.end
+                    : source_line.start;
+        }
         if (manipulation_->mode ==
                 DirectEditMode::rotate &&
             manipulation_->rotate_reference_point) {
@@ -806,15 +825,21 @@ SketchInteractionState::activePointRequest() const noexcept {
     }
 
     if (tool_ == SketchTool::circle &&
-        circle_stage_ == CircleStage::await_center &&
-        !pending_circle_request_) {
+        !pending_circle_request_ &&
+        (circle_stage_ == CircleStage::await_center ||
+         (circle_stage_ == CircleStage::await_radius &&
+          circle_center_))) {
+        const bool size_stage =
+            circle_stage_ == CircleStage::await_radius;
         PointRequest request{
-            std::nullopt,
+            size_stage
+                ? circle_center_
+                : std::nullopt,
             point_pointer_candidate_,
-            false,
+            false, // explicit R/D numeric size grammar remains separate
             true,
-            false,
-            false};
+            size_stage,
+            size_stage};
         return finalized(std::move(request));
     }
 

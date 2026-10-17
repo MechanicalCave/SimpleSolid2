@@ -354,6 +354,10 @@ struct PointRequest final {
         deferred_snap_reference;
     TrackingAnchorState tracking_anchors;
     std::optional<PointResolution> resolution;
+    // S2 B04: request-local OSNAP TAN/PER reference can differ from
+    // the manipulation pivot used by numeric/direct-distance locks.
+    // Transient only; not a document field or authored constraint.
+    std::optional<Point2> snap_reference_base;
 
     [[nodiscard]] bool valid() const noexcept {
         const bool requires_base =
@@ -361,6 +365,8 @@ struct PointRequest final {
             relative_cartesian_enabled ||
             relative_polar_enabled;
         return (!base || base->finite()) &&
+               (!snap_reference_base ||
+                snap_reference_base->finite()) &&
                (!pointer_candidate ||
                 pointer_candidate->finite()) &&
                (!polar_relative_reference ||
