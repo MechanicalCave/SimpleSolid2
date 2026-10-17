@@ -242,6 +242,25 @@ int main() {
         // remains a documented near-contact GAP pending N1 D2.
         CHECK(can_trim[2]);
         CHECK(can_trim[3]);
+        // A genuine finite gap at the 100 m coordinate scale remains
+        // disjoint and cannot authorize Circle Trim.
+        SketchModel gap_scene;
+        const auto gap_circle =
+            gap_scene.addCircle({100000.0, 100000.0}, 30.0);
+        const auto outside_right = gap_scene.addLine(
+            {100030.0 + 1.0e-8, 99960.0},
+            {100030.0 + 1.0e-8, 100040.0});
+        const auto outside_left = gap_scene.addLine(
+            {99970.0 - 1.0e-8, 99960.0},
+            {99970.0 - 1.0e-8, 100040.0});
+        CHECK(analyzeCurveRelation(gap_scene, gap_circle,
+              outside_right).status == CurveRelationStatus::disjoint);
+        CHECK(analyzeCurveRelation(gap_scene, gap_circle,
+              outside_left).status == CurveRelationStatus::disjoint);
+        CHECK(!evaluateTrim(
+            gap_scene, TrimSketchRequest{
+                gap_circle, {outside_left, outside_right},
+                {100000.0, 99970.0}}).ready());
     }
 
     // Line terminal Trim preserves identity and role.
