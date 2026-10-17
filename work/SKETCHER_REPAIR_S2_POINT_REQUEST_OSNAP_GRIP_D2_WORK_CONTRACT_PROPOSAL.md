@@ -1,15 +1,15 @@
 # Sketcher Repair S2 — Circle Size PointRequest/OSNAP and Line Grip TAN/PER Base — D2 Work Contract PROPOSAL
 
-**Status:** **OWNER ACCEPTED S2 DIRECTION ONLY** (2026-10-17), exact §§0–8 and conditional path allowlist **PROPOSED FOR SEPARATE OWNER APPROVAL**, governance-only Draft, **NOT ACCEPTED EXACT TEXT, NOT INTEGRATED, NOT ACTIVE, NO S2 PRODUCT CODE AUTHORITY**.
+**Status:** **OWNER-ACCEPTED EXACT S2 §§0–8 + 16 CONDITIONAL PATHS** (2026-10-17). Governance-only PR #479, **NOT INTEGRATED, NOT ACTIVE, NO S2 PRODUCT CODE AUTHORITY**. Owner's exact acceptance is distinct from the still-required protected-main guarded-squash authorization, ACTIVE-only switch and eventual product approval.
 **Decision class:** D2 (shared runtime CAD input/point-request semantics and Sketch/Qt interaction). Any unexpected D3 product shortcut/grammar decision remains Owner-owned.
 **Authoritative baseline:** protected `MechanicalCave/SimpleSolid2` main `1874e1db07ffe7b1cb27a8ec9e14247859245ffc`, verified 2026-10-17 after Owner-manual/technical FINAL PASS and Owner-authorized guarded squash of completed S0/S1 + F2/N1 + D2-A product PR #477. No assumptions about unmerged experimental PR branches.
 **Authority:** `AGENTS.md` → Constitution/Foundation 1.0/Architecture → accepted ADR-0008/-0009/-0010/-0011/-0012 as relevant → `work/ACTIVE.yaml` → Owner-accepted Sketcher Roadmap v1.10 §0, §5 and accepted R10/R11 contracts → the future explicitly integrated and ACTIVE-activated S2 Work Contract. R11 completed snap semantics are FROZEN positive/negative regressions, not fresh permission to redesign OSNAP. Part Modeling v1.34 retains S2-before-S3 planning and RG-02/PM-06 deferral.
 
 ## 0. Exact decision and governance boundary
 
-The Owner accepted **the proposed S2 B03a + B04 direction**, replying `akceptuje - kontynuuj pracę` on 2026-10-17 after the completed S1/D2-A work. This is permission to **prepare a precise contract and governance-only PR**; it is NOT approval of the exact implementation file list or this subsequently authored §§0–8, and does not authorize product mutation, this PR's merge, changing `work/ACTIVE.yaml`, technical FINAL PASS or any eventual implementation merge.
+On 2026-10-17 the Owner first accepted **S2 B03a + B04 direction** (`akceptuje - kontynuuj pracę`). After receiving governance Draft PR #479 and the explicit question **`Czy zatwierdzasz dokładny kontrakt S2 z PR #479 — §§0–8 i wszystkie 16 warunkowo dopuszczonych ścieżek?`**, the Owner replied **`zatwierdzam - kontynuuj`**. This is **exact acceptance of this contract's §§0–8 and the conditional 16-file allowlist**. It does **not** authorize product mutation, this PR's guarded squash, the separate `work/ACTIVE.yaml` switch, technical FINAL PASS or eventual implementation merge.
 
-**Requested next Owner decision:** accept or amend exactly the B03a/B04 semantics in §§2–4, exact conditional allowlist in §5 and acceptance/gate sequence in §§6–8. The governance PR will require its own exact-head Windows CLOSURE and separately authorized protected-main guarded squash; then a separate ACTIVE-only one-file switch with its own CLOSURE and Owner merge authorization before any product source or tests are modified under S2.
+**Exact contract decision: SATISFIED, 2026-10-17.** Next independent decision is Owner authorization of the governance PR's **guarded squash** after exact-head Windows CLOSURE on the acceptance-record HEAD. Following verified merge, a separate ACTIVE-only one-file switch with its own CLOSURE and Owner merge authorization is mandatory before any S2 product source or test is modified.
 
 **ACTIVE pointer truth:** protected main still names `work/SKETCHER_REPAIR_S0_S1_CONTACT_REGION_PROFILE_D2_WORK_CONTRACT_PROPOSAL.md` and Sketcher Roadmap v1.10. S0/S1 + D2-A has been technically accepted/merged, but merely having the S2 priority in v1.10 does not make S2 active. Preserve Roadmap v1.10, Foundation, ADRs and historical `next` record rather than overwriting it.
 
@@ -28,7 +28,7 @@ The Owner accepted **the proposed S2 B03a + B04 direction**, replying `akceptuje
 
 Prior Sketcher audit issues B03a/B04 against older heads are historical only. Do not rebrand old Linux/audit or screenshot claims as a Windows RED on current main. S1 exact-secant/contact fix and the 199/199 Windows integration baseline are frozen control witnesses.
 
-## 2. B03a proposed acceptance contract — Circle Center → Size
+## 2. B03a Owner-accepted D2 contract — Circle Center → Size
 
 1. **One shared point resolver:** after Center acceptance, `await_radius` must expose a valid active `PointRequest` with Circle Center as the semantic base where relevant; preview, hover and accept must use the **same resolved Sketch-local candidate** through the existing `resolvePointerInput`/R10/R11 machinery. Do not fork a Circle-specific snap resolver or persist snap provenance.
 2. **Size mode is separate from target geometry:** a pointer-selected second point yields Radius = Euclidean distance from stored Center to the resolved point; the Radius/Diameter **numeric mode** continues to interpret explicit typed lengths as Radius or Diameter respectively. A snapped geometric *point* does not have its coordinates or length doubled because the UI is in Diameter mode. No automatic authored Tangent/Coincident/Distance constraint.
@@ -37,7 +37,7 @@ Prior Sketcher audit issues B03a/B04 against older heads are historical only. Do
 5. **Exact and negative geometry:** finite eligible authored Line/Circle/Arc intersections/endpoints/centers/quadrants and construction geometry are valid sources subject to existing R11 priorities; overlap/coincident, ambiguous TAN/PER, inside-circle/no tangent, zero radius, nonfinite numeric input and disallowed finite Arc sweep remain fail-closed. If a specific request-relative TAN/PER mode has no unambiguous base, it must not fabricate a candidate or a Circle.
 6. **Identity and lifecycle:** one valid Circle command commits once, produces fresh authored EntityId with selected Regular/Construction role; preview and rejected attempt allocate no authored IDs and no extra Undo step. Undo/Redo and Save/Close/Reopen reproduce the same Circle center/radius; no new persistent fields or schema revision.
 
-## 3. B04 proposed acceptance contract — opposite-end Grip Reshape TAN/PER
+## 3. B04 Owner-accepted D2 contract — opposite-end Grip Reshape TAN/PER
 
 1. **Distinct operation pivot and snap reference:** for an active Reshape on Line Start, the stationary **Line End** is the reference point for PER/TAN; for Line End, stationary **Line Start** is the reference. The operation's original grip pivot/captured geometry still govern its existing movement, Copy and numeric behavior; do not implicitly relocate the transform pivot.
 2. **One canonical request/resolver:** encode/derive an explicit request-local reference suitable for the existing R11 PointRequest/TAN/PER mechanics. Do not add a parallel Grip snap engine or use a viewer-space cursor coordinate as the geometric base. If an additive internal/request-local `PointRequest` datum in `src/sketch/include/simplesolid2/sketch/interaction_state.hpp` is essential, it is conditionally within this exact D2 scope ONLY when transient, nonpersistent and preserves all established R10/R11 request-compatibility rules. Any broader externally visible PointRequest contract/API change ⇒ STOP for Owner D2.
@@ -63,7 +63,7 @@ Prior Sketcher audit issues B03a/B04 against older heads are historical only. Do
 
 **Evidence:** separate Windows FOCUSED for the relevant registered Core and Qt/Controller tests (as supported by current lane), Draft FAST, Ready FULL Core+native OCCT+Qt/Desktop, DOC-01, exact-head CLOSURE, Owner real GUI acceptance and separate technical/merge decisions. All claimed PASS tied to specific HEAD + executed lane.
 
-## 5. Narrow CONDITIONAL 16-path implementation allowlist (requires activation first)
+## 5. Owner-accepted narrow CONDITIONAL 16-path implementation allowlist (requires activation first)
 
 Each path is authorized only for the stated S2 B03a/B04 role; a listed file is not mandatory to change. An essential file outside the list ⇒ STOP and separately approved D2 amendment.
 
@@ -98,8 +98,8 @@ Using a fresh build from exact implementation HEAD and the same local Sketch sta
 
 ## 7. Required independent governance and implementation gates
 
-1. **NOW:** Owner reviews the entire exact S2 §§0–8 contract, including 16-path conditional budget and decision-level semantics, and explicitly accepts or requests changes. Earlier `akceptuje - kontynuuj pracę` accepted S2 **direction only**.
-2. This governance-only proposal must have independent **exact-HEAD Windows CLOSURE PASS**. Following exact Owner acceptance, record acceptance in this same document and re-run CLOSURE on changed SHA. Separately request and obtain guarded-squash merge authority for the governance PR; verify protected-main merge and exact contents.
+1. **SATISFIED 2026-10-17:** Owner explicitly approved exact PR #479 **§§0–8** including all **16 conditional permitted paths**, replying `zatwierdzam - kontynuuj` to the precise scope question. The earlier `akceptuje - kontynuuj pracę` accepted S2 **direction only**, independently.
+2. This Owner-accepted governance contract must have independent **exact-HEAD Windows CLOSURE PASS** on the acceptance-record SHA; initial draft CLOSURE #3575 was SUCCESS on the earlier direction-only SHA `2cba87ab5494d5c048763f8efac683319c34943a` but is NOT credited to the acceptance-record SHA. **Separately request and obtain guarded-squash merge authority for PR #479**; then verify protected-main merge and exact contents.
 3. Propose a distinct **ONE-FILE `work/ACTIVE.yaml` PR** after governance integration: switch `active_work` to this exact accepted S2 contract, retain Sketch Roadmap v1.10, Foundation 1.0, ADR list, history `next` and accepted completed S1/D2-A status. That PR requires its own Ready exact-head Windows governance CLOSURE, a **separate Owner guarded-squash authorization**, and verified main merge.
 4. Only then branch product work from verified main, first genuine current-head RED for B03a/B04; implement exclusively within §5 allowlist and without overriding R11/R10 or completed S1.
 5. Genuine Windows **FOCUSED → Draft FAST → Ready FULL** (Core/Qt/native OCCT as current CI supports), canonical current-state internal/PL+EN docs, generated Browser via `.\\ss2.ps1 docs`, factual evidence ledger and exact-head Windows **CLOSURE**. No relabeling of RED to PASS.
@@ -114,4 +114,6 @@ Reason: S2 changes observable Circle point-assisted sizing and Grip tangent/perp
 
 ## Decision log
 
-2026-10-17 — Owner direction **S2 B03a + B04 accepted**: `akceptuje - kontynuuj pracę`, after explicit confirmation of next priority. Exact policy, file allowlist and CI/governance gates above are newly proposed, not yet individually Owner-accepted. No active S2 product edits, no main mutation, no technical PASS or merge authority derived from this direction.
+2026-10-17 — Owner direction **S2 B03a + B04 accepted**: `akceptuje - kontynuuj pracę`, after explicit confirmation of next priority. This earlier reply accepted the direction, not the exact text.
+
+2026-10-17 — **Owner exact contract acceptance:** In response to an explicit request to approve PR #479 §§0–8 and 16 conditional paths, Owner replied `zatwierdzam - kontynuuj`. Exact bounded D2 S2 policy and path allowance ACCEPTED. Initial Draft Windows CLOSURE #3575 had passed on the previous text; re-run exact-head CLOSURE after this governance acceptance update. No active S2 product edits, protected-main merge authorization, ACTIVE switch, technical FINAL PASS or implementation merge authority derives from exact contract acceptance alone.
