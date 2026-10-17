@@ -3326,6 +3326,22 @@ buildComponentLoops(
                 model,
                 *loop);
         if (!sample) {
+            if (owner_case3) {
+                std::cerr.precision(17);
+                std::cerr << "SS2_S1_N1_LOOP_SAMPLE_FAIL"
+                          << " area=" << loop->signed_area
+                          << " perimeter=" << loop->perimeter
+                          << " uses=" << loop->boundary.size()
+                          << '\n';
+                for (const auto& use : loop->boundary) {
+                    std::cerr << "SS2_S1_N1_LOOP_USE"
+                              << " entity=" << use.source_entity.value()
+                              << " from=" << use.start_parameter
+                              << " to=" << use.end_parameter
+                              << " forward=" << use.follows_source_direction
+                              << '\n';
+                }
+            }
             return trace_reject(__LINE__);
         }
 
