@@ -880,8 +880,10 @@ int main(int argc, char* argv[]) {
 
     // S3 B05: each direct Grip Rotate/Scale/Mirror + Copy placement
     // duplicates semantic geometry with fresh ID while preserving source.
-    // These tests use the already available explicit Operations action;
-    // typed C+Enter remains independently gated by the D2 header addendum.
+    // D3 B: this semantic submission represents C followed by Enter.
+    // The shared buffer owns the literal C before Enter (wb02 Qt test).
+    // The controller must advertise an eligible Grip in all three
+    // active modes; the original B05 code rejects C outside Move/Reshape.
     for (int grip_mode_index = 0; grip_mode_index < 3;
          ++grip_mode_index) {
         hosted = session.document().findSketch(sketch_id);
@@ -917,7 +919,8 @@ int main(int argc, char* argv[]) {
                        ? sketch::DirectEditMode::scale
                        : sketch::DirectEditMode::mirror));
         CHECK(!interaction.directManipulationCopyEnabled());
-        CHECK(interaction.enableGripCopy());
+        semantic_result = semantic_input.submit("C");
+        CHECK(semantic_result.accepted);
         CHECK(interaction.directManipulationCopyEnabled());
         CHECK(session.document().revision() ==
               revision_before_copy);
