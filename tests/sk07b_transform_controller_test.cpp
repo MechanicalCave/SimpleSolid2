@@ -608,6 +608,22 @@ int main(int argc, char* argv[]) {
     CHECK(capture(session, sketch_id, ids) ==
           preserved_mirror_source);
 
+    // Restore the exact pre-B06 history baseline before existing SK-07B
+    // transform/selection tests. Keep the independently verified Redo
+    // assertion above, but do not let this extra authored placement
+    // change what their subsequent Undo is expected to remove.
+    interaction.cancelForHistory();
+    const auto mirror_copy_cleanup = session.undo();
+    CHECK(mirror_copy_cleanup.ok() &&
+          mirror_copy_cleanup.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(session.undoDepth() == undo_before_mirror_copy);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == entities_before_mirror_copy);
+    CHECK(capture(session, sketch_id, ids) ==
+          preserved_mirror_source);
+    CHECK(interaction.selectedCount() == 3U);
+
     // Degenerate mirror axis cannot commit and Esc preserves selection.
     const auto invalid_mirror_state =
         session.document().state();
