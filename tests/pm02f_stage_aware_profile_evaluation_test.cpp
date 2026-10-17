@@ -860,6 +860,47 @@ void verifyS0CircleTangentRegionCells() {
     };
     CHECK(verify_durable(false));
     CHECK(verify_durable(true));
+
+    // S1 F2/Arc: the same two contact vertices bound a lower pocket
+    // even for an open analytic Arc that does NOT enclose a full disk.
+    // Reverse source parameterization (CW) and finite side-Line
+    // orientation must not turn a valid pocket into an EntityId-dependent
+    // walk or silently complete the open Arc into a fake disk.
+    std::size_t verified_arc_variants = 0U;
+    for (const bool extended : {false, true}) {
+        for (const bool clockwise : {false, true}) {
+            for (const bool reverse_lines : {false, true}) {
+                sketch::SketchModel model;
+                [[maybe_unused]] const auto arc = model.addArc(
+                    {0.0, 0.0}, 5.0,
+                    clockwise ? 5.8 : -0.2,
+                    clockwise ? -6.0 : 6.0);
+                const auto line = [&](sketch::Point2 first,
+                                      sketch::Point2 second) {
+                    if (reverse_lines) {
+                        std::swap(first, second);
+                    }
+                    [[maybe_unused]] const auto id =
+                        model.addLine(first, second);
+                };
+                line({-5.0, -9.0}, {-5.0, extended ? 7.0 : 0.0});
+                line({5.0, -9.0}, {5.0, extended ? 7.0 : 0.0});
+                line({-5.0, -9.0}, {5.0, -9.0});
+                const auto regions = sketch::analyzeRegions(model);
+                std::cerr << "SKETCH_S0_B01_ARC"
+                          << " extended=" << extended
+                          << " clockwise=" << clockwise
+                          << " reversed=" << reverse_lines
+                          << " count=" << regions.regions.size()
+                          << '\n';
+                CHECK(regions.regions.size() == 1U);
+                CHECK(std::abs(
+                    regions.regions.front().area - pocket_area) < 1e-8);
+                ++verified_arc_variants;
+            }
+        }
+    }
+    CHECK(verified_arc_variants == 8U);
 }
 
 } // namespace
