@@ -127,3 +127,9 @@ All 26 paths below are **Owner-accepted conditional bounds** for future activate
 **Internal as-built docs: REQUIRED** for Qt focus/cancel ownership and shared Sketch Copy/transform behavior. **PL/EN Product docs: REQUIRED** for Grip Rotate/Scale/Mirror Copy, normal Mirror Keep Original and precisely accepted `C` keyboard grammar. **Generated Browser: REQUIRED** by repository `.\ss2.ps1 docs`; freshness must be verified in the actual Windows build. This contract review is governance-only: no current-state doc changes until product behavior is genuinely implemented and verified.
 
 **Next Owner decision (independent guarded merge gate):** Once this acceptance-evidence HEAD passes Windows exact-HEAD CLOSURE, request explicit guarded squash merge authorization for **governance-only PR #487**. Then independently propose and obtain exact Owner authorization for a separate ACTIVE-only PR. Already approved S3 implementation may start only after that ACTIVE-only merge. This approval is not product merge authority.
+
+## Documentation impact
+
+Internal docs: required
+User/Product docs: required
+Reason: S3 B03b changes Qt/Workbench CAD Input focus and hierarchical Esc handling; B05 extends Grip Rotate/Scale/Mirror with Copy; B06 adds normal Mirror Keep Original/Copy. Keep current-state shared 2D and Workbench internals and the Polish/English Parts user instructions synchronized and regenerate the DOC-01 Product Browser before completion. This is the machine-readable DOC-01 declaration for the already Owner-accepted §9; it adds no new product behavior, scope, path or merge/activation authority.
