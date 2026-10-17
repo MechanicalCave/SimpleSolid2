@@ -242,6 +242,22 @@ int main() {
         // remain proper and are not collapsed into a fake tangent.
         CHECK(can_trim[2]);
         CHECK(can_trim[3]);
+
+        // Owner's real case 5 also reported a missing Profile fill.
+        // The original complete scene has a separate authored Circle:
+        // verify the disk remains independently pickable despite its
+        // two short neighboring Lines and unrelated other components.
+        const auto full_scene_regions = analyzeRegions(scene);
+        const auto case5 = pickRegion(
+            scene, full_scene_regions,
+            {-52.63750445097793, -54.29688164032062});
+        std::cerr << "SS2_REAL_CASE5_PROFILE_PICK"
+                  << " regions=" << full_scene_regions.regions.size()
+                  << " diagnostics="
+                  << full_scene_regions.diagnostics.size()
+                  << " pick=" << case5.region_index.has_value()
+                  << '\n';
+        CHECK(case5.region_index.has_value());
         // A one-ULP outward endpoint offset also works at the
         // proposed practical 1 m and 100 m coordinate scales.
         for (const double coordinate : {1000.0, 100000.0}) {
