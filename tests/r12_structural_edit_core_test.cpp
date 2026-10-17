@@ -236,12 +236,14 @@ int main() {
         // relation is recorded only; its tolerance policy is not yet D2.
         CHECK(can_trim[0]);
         CHECK(can_trim[1]);
-        // N0 does not assign user-intended tangency to already
-        // different persisted coordinates. The positive finite
-        // secants of case 3 still Trim, while the disjoint case 4
-        // remains a documented near-contact GAP pending N1 D2.
+        // N1 acceptance: copied finite source Lines from cases 3/4
+        // must now produce the same two-cut Circle Trim. This is an
+        // EXPERIMENTAL positive on the original persisted binary64
+        // values, not yet a native Profile/OCCT acceptance.
+        CHECK(can_trim[0]);
+        CHECK(can_trim[1]);
         CHECK(can_trim[2]);
-        CHECK(!can_trim[3]);
+        CHECK(can_trim[3]);
     }
 
     // Line terminal Trim preserves identity and role.
