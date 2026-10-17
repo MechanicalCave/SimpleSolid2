@@ -185,7 +185,10 @@ public:
                directManipulationActive() &&
                mode.has_value() &&
                (*mode == sketch::DirectEditMode::reshape ||
-                *mode == sketch::DirectEditMode::move);
+                *mode == sketch::DirectEditMode::move ||
+                *mode == sketch::DirectEditMode::rotate ||
+                *mode == sketch::DirectEditMode::scale ||
+                *mode == sketch::DirectEditMode::mirror);
     }
     [[nodiscard]] bool
     submitCadInputSemanticGripCopy() override {
