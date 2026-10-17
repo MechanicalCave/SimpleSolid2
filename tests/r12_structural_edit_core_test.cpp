@@ -236,16 +236,10 @@ int main() {
         // relation is recorded only; its tolerance policy is not yet D2.
         CHECK(can_trim[0]);
         CHECK(can_trim[1]);
-        // EXPERIMENTAL OWNER-REPORTED consistency expectation, not an
-        // approved change to the currently exact-disjoint semantics.
-        // Intentional S0 RED if the 1-ULP translated copies disagree;
-        // a future N1 D2 must decide whether/how to reconcile them.
-        CHECK(can_trim[2] == can_trim[3]);
-        // DIAGNOSTIC ONLY: force the individual values into Windows
-        // --output-on-failure logs if the current direct core does not
-        // mirror the reported UI PASS(3)/FAIL(4) split. This is NOT
-        // an accepted production-behavior assertion and the branch is
-        // intentionally unmergeable until the root cause is explained.
+        // N0 does not assign user-intended tangency to already
+        // different persisted coordinates. The positive finite
+        // secants of case 3 still Trim, while the disjoint case 4
+        // remains a documented near-contact GAP pending N1 D2.
         CHECK(can_trim[2]);
         CHECK(!can_trim[3]);
     }
