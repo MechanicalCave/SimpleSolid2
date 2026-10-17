@@ -1474,7 +1474,12 @@ int main(int argc, char* argv[]) {
           sketch::Point2{6230.0, 6160.0});
     CHECK(tan_grip_request->snap_reference_base ==
           sketch::Point2{6230.0, 6200.0});
-    viewport.rectangle_query_ = {true, {*tangent_token}};
+    // Presentation refresh after adding the gripped Line invalidates the
+    // earlier Circle token. Reacquire the current source for this pick.
+    const auto grip_tan_source_token =
+        viewport_controller.sketchPresentationFor(tangent_circle);
+    CHECK(grip_tan_source_token.has_value());
+    viewport.rectangle_query_ = {true, {*grip_tan_source_token}};
     CHECK(interaction.setTemporarySnapOverride(
         sketch::TemporarySnapOverrideKind::tangent));
     movePointer(interaction, sketch_id, 6204.0, 6209.0,
@@ -1549,7 +1554,12 @@ int main(int argc, char* argv[]) {
           sketch::Point2{6110.0, 6070.0});
     CHECK(per_grip_request->snap_reference_base ==
           sketch::Point2{6105.0, 6050.0});
-    viewport.rectangle_query_ = {true, {*per_token}};
+    // Reacquire the current finite-Line source token after presentation
+    // rebuild instead of borrowing a stale token from the R11 fixture.
+    const auto grip_per_source_token =
+        viewport_controller.sketchPresentationFor(per_source);
+    CHECK(grip_per_source_token.has_value());
+    viewport.rectangle_query_ = {true, {*grip_per_source_token}};
     CHECK(interaction.setTemporarySnapOverride(
         sketch::TemporarySnapOverrideKind::perpendicular));
     movePointer(interaction, sketch_id, 6107.0, 6102.0,
