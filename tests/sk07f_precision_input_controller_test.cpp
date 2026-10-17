@@ -1490,6 +1490,18 @@ int main(int argc, char* argv[]) {
     CHECK(local_resolution->object_snap->kind ==
           sketch::SnapKind::tangent);
     const auto expected_tan = local_resolution->position;
+    // Manual B04: a TAN badge is not enough. The *displayed* reshape
+    // preview must connect the snapped Start to the stationary End,
+    // not draw a misleading segment from the original moving grip.
+    CHECK(viewport.preview_scene_.lines.size() == 1U);
+    CHECK(near(viewport.preview_scene_.lines[0].start.x,
+               expected_tan.u));
+    CHECK(near(viewport.preview_scene_.lines[0].start.y,
+               expected_tan.v));
+    CHECK(near(viewport.preview_scene_.lines[0].end.x,
+               6230.0));
+    CHECK(near(viewport.preview_scene_.lines[0].end.y,
+               6200.0));
     CHECK(near(expected_tan.u, 6200.0 + 100.0 / 30.0));
     CHECK(near(expected_tan.v,
                6200.0 + 10.0 * std::sqrt(8.0 / 9.0)));
@@ -1571,6 +1583,16 @@ int main(int argc, char* argv[]) {
           sketch::SnapKind::perpendicular);
     CHECK(local_resolution->position ==
           sketch::Point2{6105.0, 6100.0});
+    // Manual B04: PER preview uses stationary Start, not grip pivot.
+    CHECK(viewport.preview_scene_.lines.size() == 1U);
+    CHECK(near(viewport.preview_scene_.lines[0].start.x,
+               6105.0));
+    CHECK(near(viewport.preview_scene_.lines[0].start.y,
+               6050.0));
+    CHECK(near(viewport.preview_scene_.lines[0].end.x,
+               6105.0));
+    CHECK(near(viewport.preview_scene_.lines[0].end.y,
+               6100.0));
     viewport.grip_query_ = {true, std::nullopt};
     click(interaction, sketch_id, 6107.0, 6102.0,
           6107.0, 6102.0);
@@ -2831,6 +2853,65 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.undoDepth() ==
         undo_before_unlock_escape + 1U);
+
+    // Owner manual B03a: explicitly exercise Circle *creation* Size
+    // against TAN on another Circle with one-shot OSNAP. This is a
+    // request-relative tangent-point construction, NOT a promise that
+    // the two Circle circumferences will themselves be tangent.
+    // Tangent to a straight Line is not a unique contact point.
+    application::CadInteractionSettings owner_circle_snap_settings;
+    owner_circle_snap_settings.polar.enabled = false;
+    interaction.setCadInteractionSettingsProvider(
+        [&owner_circle_snap_settings] {
+            return owner_circle_snap_settings;
+        });
+    viewport.grip_query_ = {true, std::nullopt};
+    viewport_controller.refreshPresentation();
+    const auto owner_tan_source =
+        viewport_controller.sketchPresentationFor(tangent_circle);
+    CHECK(owner_tan_source.has_value());
+    viewport.rectangle_query_ = {true, {*owner_tan_source}};
+    const auto circle_count_before_owner_tan =
+        session.document().findSketch(sketch_id)->
+            model.state().circles.size();
+    interaction.activateCircle();
+    CHECK(interaction.submitExplicitPoint(
+        {sketch::ExplicitPointInputKind::absolute_cartesian,
+         6230.0, 6200.0}));
+    const auto owner_size_request =
+        interaction.activePointRequest();
+    CHECK(owner_size_request.has_value());
+    CHECK(owner_size_request->base ==
+          sketch::Point2{6230.0, 6200.0});
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::tangent));
+    movePointer(interaction, sketch_id, 6204.0, 6209.0,
+                6204.0, 6209.0);
+    const auto owner_tan_resolution =
+        interaction.pointResolution();
+    CHECK(owner_tan_resolution.has_value());
+    CHECK(owner_tan_resolution->object_snap.has_value());
+    CHECK(owner_tan_resolution->object_snap->kind ==
+          sketch::SnapKind::tangent);
+    const auto owner_tan_point =
+        owner_tan_resolution->position;
+    CHECK(near(owner_tan_point.u,
+               6200.0 + 100.0 / 30.0));
+    CHECK(near(owner_tan_point.v,
+               6200.0 + 10.0 * std::sqrt(8.0 / 9.0)));
+    click(interaction, sketch_id, 6204.0, 6209.0,
+          6204.0, 6209.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(model_state.circles.size() ==
+          circle_count_before_owner_tan + 1U);
+    CHECK(model_state.circles.back().center ==
+          sketch::Point2{6230.0, 6200.0});
+    CHECK(near(model_state.circles.back().radius,
+               std::hypot(owner_tan_point.u - 6230.0,
+                          owner_tan_point.v - 6200.0)));
+    CHECK(interaction.escape());
 
     std::cout
         << "SK-07F precision input controller PASS\n";
