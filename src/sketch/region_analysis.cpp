@@ -3337,10 +3337,11 @@ buildComponentLoops(
     }
 
     if (unresolved_micro_cycle) {
-        std::cerr << "SS2_D2A_STOP_COMPONENT"
-                  << " potentially_valid_other_loops="
-                  << loops.size() << '\n';
-        return std::nullopt;
+        std::cerr << "SS2_D2A_UNSAFE_EXPERIMENT_ONLY_NOT_FOR_MERGE"
+                  << " naive_other_loops=" << loops.size() << '\n';
+        // Deliberate NON-SHIPPABLE probe to measure consumer behavior:
+        // no certified microface/adjacency/OCCT proof is provided here.
+        // Revert before every product candidate; not D2-A acceptance.
     }
     return loops;
 }
