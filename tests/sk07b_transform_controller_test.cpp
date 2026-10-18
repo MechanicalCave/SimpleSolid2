@@ -322,6 +322,8 @@ int main(int argc, char* argv[]) {
     const auto mirror_noop_undo =
         session.undoDepth();
     CHECK(interaction.activateMirror());
+    // S3 §12 test-first: every new normal Mirror session starts ON.
+    CHECK(interaction.mirrorKeepOriginal());
     click(interaction, sketch_id, 30.0, 30.0, 0.0, 0.0);
     movePointer(
         interaction,
