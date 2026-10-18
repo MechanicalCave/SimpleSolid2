@@ -79,6 +79,12 @@ Ledger must include: clean exact SS2 Head/base, donor commit SHA and license/pro
 
 **Internal docs: not required**. **User/Product docs: not required.** **Reason:** G0 reads and evaluates current product and produces work-only feasibility evidence, with **no shipped behavior, identity, interface or persistence changes**. Actual A1/A2/A3 contracts must declare internal/product PL+EN and generated Browser impact **required** for their shipped semantics.
 
+## Documentation impact
+
+Internal docs: not required
+User/Product docs: not required
+Reason: R13-G0 executes only read-only source and numeric feasibility review and writes factual work evidence; it does not change current SS2 behavior, persistent state, architecture or UI. Actual R13-A1/A2/A3 feature delivery must update its accepted internal and Product PL/EN documentation and generated Browser under its independently scoped work contracts.
+
 ## 9. Owner decisions still required
 
 1. **DONE / OWNER D2 ACCEPTED 2026-10-18:** exact R13-G0 §§0–9 and the two conditional paths, with only future evidence Markdown mutable after activation. This is independent of earlier D3 product approval; source mutation remains forbidden.
