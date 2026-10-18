@@ -7,6 +7,7 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QBoxLayout>
 #include <QItemSelectionModel>
 #include <QFrame>
@@ -369,8 +370,9 @@ int main(int argc, char* argv[]) {
     auto* operations =
         workbench.findChild<QLabel*>(
             QStringLiteral("operationsPlaceholder"));
+    // S3 §12 test-first: contextual Operations CHECKBOX, not toolbar button.
     auto* mirror_keep_original =
-        workbench.findChild<QPushButton*>(
+        workbench.findChild<QCheckBox*>(
             QStringLiteral("mirrorKeepOriginalSketchButton"));
     auto* title =
         workbench.findChild<QLineEdit*>(
@@ -427,6 +429,8 @@ int main(int argc, char* argv[]) {
     // outside live ordinary MIRROR (not global COPY or Grip Copy).
     CHECK(mirror_keep_original != nullptr);
     CHECK(mirror_keep_original->isCheckable());
+    CHECK(operations->parentWidget()->isAncestorOf(mirror_keep_original));
+    CHECK(!document_top_row->isAncestorOf(mirror_keep_original));
     CHECK(!mirror_keep_original->isChecked());
     CHECK(mirror_keep_original->isHidden());
     CHECK(title != nullptr);
