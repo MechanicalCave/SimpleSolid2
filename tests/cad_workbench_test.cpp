@@ -369,6 +369,9 @@ int main(int argc, char* argv[]) {
     auto* operations =
         workbench.findChild<QLabel*>(
             QStringLiteral("operationsPlaceholder"));
+    auto* mirror_keep_original =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("mirrorKeepOriginalSketchButton"));
     auto* title =
         workbench.findChild<QLineEdit*>(
             QStringLiteral("documentTitleEdit"));
@@ -420,6 +423,12 @@ int main(int argc, char* argv[]) {
     CHECK(right_recovery != nullptr);
     CHECK(sketch_tool != nullptr);
     CHECK(operations != nullptr);
+    // B06: local Operations toggle exists, defaults OFF and is hidden
+    // outside live ordinary MIRROR (not global COPY or Grip Copy).
+    CHECK(mirror_keep_original != nullptr);
+    CHECK(mirror_keep_original->isCheckable());
+    CHECK(!mirror_keep_original->isChecked());
+    CHECK(mirror_keep_original->isHidden());
     CHECK(title != nullptr);
     CHECK(apply != nullptr);
     CHECK(undo != nullptr);
