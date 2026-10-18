@@ -142,7 +142,7 @@ Native Part **v18** writes a separate `three_point_datum_planes` collection, one
 
 Use `Sketch` in the expanding left side of the active-Document top row, then select either `XY Plane`, `XZ Plane` or `YZ Plane` from Origin, a current planar Body Face, or an existing Datum Plane. A planar semantic Face is accepted as standard Sketch support; a non-planar Face remains selectable but reports **Unsupported** instead of falling through to another target. A Datum-backed Sketch persists only the support `DatumId`; authored local U/V geometry remains independent from the Datum's current world placement. Selecting the support is still a runtime draft: **Create Sketch** performs the single authored Create transaction and **Cancel** changes nothing. After the Sketch exists and Edit is active, the same action area becomes **Finish Sketch**.
 
-During Sketch Edit the tools are grouped as:
+During Sketch Edit, tools are grouped as follows. Part-owned **Work Features → Axis** remains in Part Modeling and is hidden on the Sketcher toolbar; the separate **Operations → Part reference → Axis** Sketch Line designation remains available:
 
 ```text
 Select
@@ -224,15 +224,15 @@ Move/Rotate/Scale/Mirror operate on the complete selection frozen when manipulat
 
 You can type exact values in the numeric modes: Angle for Rotate, a positive Factor for Scale and Axis Angle for Mirror. Once accepted, the exact value outranks further pointer motion.
 
-Space cycles the mode and creates no authored change. LMB or Enter commits; Esc cancels the uncommitted manipulation. Grip Copy is available only in Reshape and Move and turns OFF when cycling into another mode. When **Reshaping a Line Start or End grip**, **Tangent/Perpendicular** object snap computes the moved endpoint relative to the **stationary opposite endpoint**. The opposite endpoint stays fixed; numeric movement still uses the original grip pivot. If no unique valid tangent/perpendicular construction exists, the operation does not silently adjust other geometry. **Testing tip:** enable TAN/PER in Operations or select a one-shot Override (both are OFF by default). Move near the computed contact or perpendicular foot on the actual finite source curve; an END/EXT marker elsewhere does not imply PER. Judge the final segment from the fixed endpoint to the snapped movable endpoint, not a numeric-input guide originating at the old grip pivot.
+Space cycles the mode and creates no authored change. LMB or Enter commits; Esc cancels the uncommitted manipulation. Grip Copy is available in Reshape, Move, Rotate, positive Scale and Mirror, and turns OFF whenever Space cycles mode. When **Reshaping a Line Start or End grip**, **Tangent/Perpendicular** object snap computes the moved endpoint relative to the **stationary opposite endpoint**. The opposite endpoint stays fixed; numeric movement still uses the original grip pivot. If no unique valid tangent/perpendicular construction exists, the operation does not silently adjust other geometry. **Testing tip:** enable TAN/PER in Operations or select a one-shot Override (both are OFF by default). Move near the computed contact or perpendicular foot on the actual finite source curve; an END/EXT marker elsewhere does not imply PER. Judge the final segment from the fixed endpoint to the snapped movable endpoint, not a numeric-input guide originating at the old grip pivot.
 
 ### Grip Copy
 
-While a grip manipulation is active, type `C` and press Enter to enable **Grip Copy**. Copy is a commit modifier available only in Reshape and Move.
+While a grip manipulation is active, type `C` and press Enter to enable **Grip Copy**. Copy is a commit modifier available in Reshape, Move, Rotate, positive Scale and Mirror. Bare `C` without Enter does not arm Copy.
 
-In **Reshape + Copy**, each accepted placement creates one fresh-ID copy of only the active-grip owner. In **Move + Copy**, each placement duplicates the complete frozen selection. Originals remain unchanged and selected.
+In **Reshape + Copy**, each accepted placement creates one fresh-ID copy of only the active-grip owner. In **Move / Rotate / Scale / Mirror + Copy**, each placement duplicates the frozen selection translated, rotated, positively scaled (finite factor) or reflected about the active grip (valid axis). Originals remain unchanged and selected.
 
-Placement can use LMB or the same precision PointRequest. After a successful copy, the interaction-start source/pivot are retained for another placement, but request-local pointer candidates and numeric locks are cleared. An exact no-change placement is a no-op. Space cycles mode and turns Copy OFF; it must be enabled again after returning to Reshape or Move. Esc ends the transient session while keeping committed copies; Undo then affects the latest committed history step normally.
+Placement can use LMB or the same precision PointRequest. After a successful copy, the interaction-start source/pivot are retained for another placement, but request-local pointer candidates and numeric locks are cleared. An exact no-change placement is a no-op. Space cycles mode and turns Copy OFF; it must be enabled again after every mode change. Esc ends the transient session while keeping committed copies; Undo then affects the latest committed history step normally.
 
 ### Selecting objects for Modify
 
@@ -299,11 +299,11 @@ The factor must be finite and strictly greater than zero. Values between `0` and
 
 Specify the first and second axis points. Two distinct points define an infinite reflection line.
 
-Mirror reflects the complete frozen selection. Line/Circle/Arc preserve their EntityIds, and Arc direction remains geometrically consistent with the reflected directed arc. If the complete geometry is exactly unchanged by the chosen axis, the operation completes as a no-op.
+Mirror reflects the complete frozen selection. Ordinary Mirror shows a **Keep Original** checkbox in the right-hand **Operations** panel, **ON by default**. ON duplicates reflected Line/Circle/Arc under fresh EntityIds, retaining original geometry, roles and selection (one Undo step). Uncheck it (**OFF**) to replace source geometry in place while preserving EntityIds. Both modes use the same two-point axis grammar; invalid axes and unchanged reflections create no copies or Undo. The checkbox is hidden after commit/cancel, and each new Mirror starts ON. It does not enable Grip Copy.
 
 ### Commit and precision input
 
-Move/Copy/Rotate/Scale/Mirror preview is runtime-only. Move/Rotate/Scale/Mirror preserve EntityIds; COPY creates fresh EntityIds only for accepted placements. LMB at the final stage or Enter commits the current valid request.
+Move/Copy/Rotate/Scale/Mirror preview is runtime-only. Move/Rotate/Scale and ordinary Mirror with Keep Original OFF preserve EntityIds; COPY, Grip Copy and ordinary Mirror with Keep Original ON allocate fresh EntityIds only for accepted placements. LMB at the final stage or Enter commits the current valid request.
 
 The shared precision grammar accepts:
 

@@ -878,6 +878,103 @@ int main(int argc, char* argv[]) {
     CHECK(near(moved_source->end().u, 5.0));
     CHECK(near(moved_source->end().v, -10.0));
 
+    // S3 B05: each direct Grip Rotate/Scale/Mirror + Copy placement
+    // duplicates semantic geometry with fresh ID while preserving source.
+    // D3 B: this semantic submission represents C followed by Enter.
+    // The shared buffer owns the literal C before Enter (wb02 Qt test).
+    // The controller must advertise an eligible Grip in all three
+    // active modes; the original B05 code rejects C outside Move/Reshape.
+    for (int grip_mode_index = 0; grip_mode_index < 3;
+         ++grip_mode_index) {
+        hosted = session.document().findSketch(sketch_id);
+        CHECK(hosted != nullptr);
+        const auto source_before_copy =
+            *hosted->model.findLine(source_id);
+        const auto before_copy_state = hosted->model.state();
+        const auto undo_before_copy =
+            session.undoDepth();
+        const auto revision_before_copy =
+            session.document().revision();
+        CHECK(viewport.selection_.primary.has_value());
+        viewport.grip_query_ = {
+            true,
+            viewer::SketchGripKey{
+                *viewport.selection_.primary,
+                viewer::SketchGripRole::line_start}};
+        click(
+            interaction, sketch_id,
+            240.0 + grip_mode_index * 10.0, 240.0,
+            source_before_copy.start().u,
+            source_before_copy.start().v);
+        CHECK(interaction.directManipulationActive());
+        for (int i = 0; i < grip_mode_index + 2; ++i) {
+            CHECK(interaction.cycleDirectEditMode());
+        }
+        const auto mode = interaction.directEditMode();
+        CHECK(mode.has_value());
+        CHECK(*mode ==
+              (grip_mode_index == 0
+                   ? sketch::DirectEditMode::rotate
+                   : grip_mode_index == 1
+                       ? sketch::DirectEditMode::scale
+                       : sketch::DirectEditMode::mirror));
+        CHECK(!interaction.directManipulationCopyEnabled());
+        semantic_result = semantic_input.submit("C");
+        CHECK(semantic_result.accepted);
+        CHECK(interaction.directManipulationCopyEnabled());
+        CHECK(session.document().revision() ==
+              revision_before_copy);
+        CHECK(session.undoDepth() == undo_before_copy);
+
+        semantic_result = semantic_input.submit(
+            grip_mode_index == 1 ? "2" : "90");
+        CHECK(semantic_result.accepted);
+        CHECK(interaction.directManipulationActive());
+        CHECK(interaction.directManipulationCopyEnabled());
+        hosted = session.document().findSketch(sketch_id);
+        CHECK(hosted != nullptr);
+        const auto after_copy_state = hosted->model.state();
+        CHECK(after_copy_state.lines.size() ==
+              before_copy_state.lines.size() + 1U);
+        CHECK(after_copy_state.lines.back().id != source_id);
+        CHECK(after_copy_state.lines.back().role ==
+              source_before_copy.role());
+        CHECK(after_copy_state.lines.back().start ==
+              source_before_copy.start());
+        CHECK(after_copy_state.lines.back().end !=
+              source_before_copy.end());
+        CHECK(*hosted->model.findLine(source_id) ==
+              source_before_copy);
+        CHECK(session.undoDepth() == undo_before_copy + 1U);
+        const auto next_revision =
+            revision_before_copy.next();
+        CHECK(next_revision.has_value());
+        CHECK(session.document().revision() == *next_revision);
+
+        // History interrupts repeated Copy; undo removes only the
+        // last new entity, redo restores it with the original intact.
+        interaction.cancelForHistory();
+        CHECK(!interaction.directManipulationActive());
+        auto undone_copy = session.undo();
+        CHECK(undone_copy.ok() && undone_copy.changed);
+        CHECK(interaction.reconcileAfterHistory());
+        hosted = session.document().findSketch(sketch_id);
+        CHECK(hosted != nullptr);
+        CHECK(hosted->model.state().lines.size() ==
+              before_copy_state.lines.size());
+        CHECK(*hosted->model.findLine(source_id) ==
+              source_before_copy);
+        auto redone_copy = session.redo();
+        CHECK(redone_copy.ok() && redone_copy.changed);
+        CHECK(interaction.reconcileAfterHistory());
+        hosted = session.document().findSketch(sketch_id);
+        CHECK(hosted != nullptr);
+        CHECK(hosted->model.state().lines.size() ==
+              before_copy_state.lines.size() + 1U);
+        CHECK(*hosted->model.findLine(source_id) ==
+              source_before_copy);
+    }
+
     // R11 static OSNAP resolves exact Sketch geometry from logical screen
     // aperture before Polar. A remote target avoids accidental capture from
     // the earlier precision-input geometry in this integration test.

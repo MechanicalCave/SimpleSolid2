@@ -1812,6 +1812,7 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         16,
         mirror_sketch_button_);
+
     sketch_transform_tools_label_ =
         new QLabel(QStringLiteral("Transform:"), shell_);
     sketch_transform_tools_label_->setObjectName(
@@ -3300,6 +3301,18 @@ void CadWorkbench::buildUi() {
         QStringLiteral("deleteSketchSelectionButton"));
     operations_layout->addWidget(
         delete_selection_button_);
+
+    // S3 §12: ordinary MIRROR has an operation-local checkbox,
+    // never a persistent or toolbar-level Copy setting.
+    mirror_keep_original_sketch_button_ =
+        new QCheckBox(
+            QStringLiteral("Keep Original"),
+            operations_content);
+    mirror_keep_original_sketch_button_->setObjectName(
+        QStringLiteral("mirrorKeepOriginalSketchButton"));
+    mirror_keep_original_sketch_button_->setVisible(false);
+    operations_layout->addWidget(
+        mirror_keep_original_sketch_button_);
 
     entity_role_label_ =
         new QLabel(
@@ -4988,6 +5001,23 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchMirror(); });
+    QObject::connect(
+        mirror_keep_original_sketch_button_,
+        &QCheckBox::clicked,
+        this,
+        [this](bool enabled) {
+            if (sketch_interaction_controller_ == nullptr ||
+                !sketch_interaction_controller_->
+                    setMirrorKeepOriginal(enabled)) {
+                setStatusText(QStringLiteral(
+                    "Keep Original requires active MIRROR."));
+            }
+            syncSketchInteractionUi();
+            if (viewport_widget_ != nullptr) {
+                viewport_widget_->setFocus(
+                    Qt::OtherFocusReason);
+            }
+        });
     QObject::connect(
         measure_sketch_button_,
         &QPushButton::clicked,
@@ -17012,6 +17042,20 @@ void CadWorkbench::syncSketchInteractionUi() {
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::mirror);
     }
+    if (mirror_keep_original_sketch_button_ != nullptr) {
+        const bool mirror_active =
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::mirror;
+        mirror_keep_original_sketch_button_->
+            setVisible(mirror_active);
+        mirror_keep_original_sketch_button_->
+            setEnabled(mirror_active);
+        mirror_keep_original_sketch_button_->setChecked(
+            mirror_active &&
+            sketch_interaction_controller_->
+                mirrorKeepOriginal());
+    }
     if (inspect_tools_label_ != nullptr) {
         inspect_tools_label_->setVisible(editing);
     }
@@ -18004,9 +18048,11 @@ void CadWorkbench::syncActionState() {
         !edge_feature_active);
 
     if (axis_button_ != nullptr) {
-        axis_button_->setVisible(active);
+        // Part Work Features Axis must not leak into Sketch Edit.
+        axis_button_->setVisible(active && !editing_sketch);
         axis_button_->setEnabled(
             active &&
+            !editing_sketch &&
             !sketch_support_pick_active_ &&
             !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
             !extrude_profile_pick_active_ &&
@@ -18160,6 +18206,11 @@ void CadWorkbench::syncActionState() {
         editing_sketch);
     mirror_sketch_button_->setVisible(
         editing_sketch);
+    mirror_keep_original_sketch_button_->setVisible(
+        editing_sketch &&
+        sketch_interaction_controller_ != nullptr &&
+        sketch_interaction_controller_->tool() ==
+            sketch::SketchTool::mirror);
     inspect_tools_label_->setVisible(
         editing_sketch);
     measure_sketch_button_->setVisible(

@@ -322,6 +322,11 @@ int main(int argc, char* argv[]) {
     const auto mirror_noop_undo =
         session.undoDepth();
     CHECK(interaction.activateMirror());
+    // S3 §12: fresh Mirror defaults ON; explicit OFF preserves the
+    // long-standing no-op replacement behavior for this source Line.
+    CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(false));
+    CHECK(!interaction.mirrorKeepOriginal());
     click(interaction, sketch_id, 30.0, 30.0, 0.0, 0.0);
     movePointer(
         interaction,
@@ -334,6 +339,39 @@ int main(int argc, char* argv[]) {
         session.document().revision() ==
         mirror_noop_revision);
     CHECK(session.undoDepth() == mirror_noop_undo);
+    CHECK(interaction.selectedCount() == 1U);
+
+    // S3 B06: Keep Original must reject an exact-identity MIRROR without
+    // allocating ghost copies, revision or Undo history. Esc then drops
+    // the transient toggle but preserves the selected source Line.
+    const auto copy_noop_state =
+        session.document().state();
+    const auto copy_noop_revision =
+        session.document().revision();
+    const auto copy_noop_undo =
+        session.undoDepth();
+    const auto copy_noop_count =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    CHECK(interaction.activateMirror());
+    CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    click(interaction, sketch_id, 30.0, 30.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        40.0, 30.0, 1.0, 0.0);
+    CHECK(!interaction.commitTransform());
+    CHECK(session.document().state() == copy_noop_state);
+    CHECK(session.document().revision() == copy_noop_revision);
+    CHECK(session.undoDepth() == copy_noop_undo);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == copy_noop_count);
+    CHECK(interaction.tool() == sketch::SketchTool::mirror);
+    CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.escape());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(!interaction.setMirrorKeepOriginal(true));
     CHECK(interaction.selectedCount() == 1U);
 
     viewport.point_query_ = {
@@ -502,6 +540,8 @@ int main(int argc, char* argv[]) {
         session.undoDepth();
 
     CHECK(interaction.activateMirror());
+    CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(false));
     CHECK(
         interaction.commonTransformStage() ==
         sketch::CommonTransformStage::await_axis_start);
@@ -536,6 +576,209 @@ int main(int argc, char* argv[]) {
     CHECK(
         after_mirror.arcs.front().sweep_angle ==
         -before_mirror.arcs.front().sweep_angle);
+
+    // S3 B06 TEST-FIRST: ordinary MIRROR Copy/Keep Original is OFF by
+    // default, ON duplicates a frozen mixed Line/Circle/Arc selection.
+    // This is one-shot MIRROR, not the repeated COPY placement mode.
+    const auto preserved_mirror_source =
+        capture(session, sketch_id, ids);
+    const auto entities_before_mirror_copy =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    const auto undo_before_mirror_copy =
+        session.undoDepth();
+    CHECK(interaction.activateMirror());
+    CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    CHECK(interaction.mirrorKeepOriginal());
+    click(interaction, sketch_id, 50.0, 50.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        60.0, 50.0, 1.0, 0.0);
+    CHECK(interaction.commitTransform());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(!interaction.setMirrorKeepOriginal(true));
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(session.undoDepth() ==
+          undo_before_mirror_copy + 1U);
+    CHECK(capture(session, sketch_id, ids) ==
+          preserved_mirror_source);
+
+    const auto* copied_mirror_hosted =
+        session.document().findSketch(sketch_id);
+    CHECK(copied_mirror_hosted != nullptr);
+    CHECK(copied_mirror_hosted->model.entityCount() ==
+          entities_before_mirror_copy + 3U);
+    const auto expected_mirror_copies =
+        sketch::mirrorSketchGeometry(
+            preserved_mirror_source,
+            {0.0, 0.0},
+            {1.0, 0.0});
+    CHECK(expected_mirror_copies.has_value());
+    const auto& copied_mirror_state =
+        copied_mirror_hosted->model.state();
+    CHECK(copied_mirror_state.lines.back().id != line_id);
+    CHECK(copied_mirror_state.circles.back().id != circle_id);
+    CHECK(copied_mirror_state.arcs.back().id != arc_id);
+    CHECK(copied_mirror_state.lines.back().start ==
+          expected_mirror_copies->lines.front().start);
+    CHECK(copied_mirror_state.lines.back().end ==
+          expected_mirror_copies->lines.front().end);
+    CHECK(copied_mirror_state.circles.back().center ==
+          expected_mirror_copies->circles.front().center);
+    CHECK(copied_mirror_state.arcs.back().sweep_angle ==
+          expected_mirror_copies->arcs.front().sweep_angle);
+
+    // B06 cold Save/Close/Reopen-equivalent read: authored duplicate
+    // IDs and roles must survive the existing .ss2part schema. Keep
+    // the original session for subsequent exact Undo/Redo assertions.
+    CHECK(session.save().ok());
+    {
+        auto cold_mirror = store.load(path);
+        CHECK(cold_mirror.ok());
+        const auto* cold_hosted =
+            cold_mirror.document->findSketch(sketch_id);
+        CHECK(cold_hosted != nullptr);
+        CHECK(cold_hosted->model.entityCount() ==
+              entities_before_mirror_copy + 3U);
+        CHECK(cold_hosted->model.findLine(
+                  copied_mirror_state.lines.back().id) != nullptr);
+        CHECK(cold_hosted->model.findCircle(
+                  copied_mirror_state.circles.back().id) != nullptr);
+        CHECK(cold_hosted->model.findArc(
+                  copied_mirror_state.arcs.back().id) != nullptr);
+        CHECK(cold_hosted->model.state().lines.back().role ==
+              copied_mirror_state.lines.back().role);
+        CHECK(cold_hosted->model.state().circles.back().role ==
+              copied_mirror_state.circles.back().role);
+        CHECK(cold_hosted->model.state().arcs.back().role ==
+              copied_mirror_state.arcs.back().role);
+        const auto cold_original_geometry =
+            sketch::captureSketchTransformGeometry(
+                cold_hosted->model, ids);
+        CHECK(cold_original_geometry.has_value());
+        CHECK(*cold_original_geometry ==
+              preserved_mirror_source);
+    }
+
+    interaction.cancelForHistory();
+    const auto mirror_copy_undo = session.undo();
+    CHECK(mirror_copy_undo.ok() && mirror_copy_undo.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() ==
+          entities_before_mirror_copy);
+    CHECK(capture(session, sketch_id, ids) ==
+          preserved_mirror_source);
+    const auto mirror_copy_redo = session.redo();
+    CHECK(mirror_copy_redo.ok() && mirror_copy_redo.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() ==
+          entities_before_mirror_copy + 3U);
+    CHECK(capture(session, sketch_id, ids) ==
+          preserved_mirror_source);
+
+    // Restore the exact pre-B06 history baseline before existing SK-07B
+    // transform/selection tests. Keep the independently verified Redo
+    // assertion above, but do not let this extra authored placement
+    // change what their subsequent Undo is expected to remove.
+    interaction.cancelForHistory();
+    const auto mirror_copy_cleanup = session.undo();
+    CHECK(mirror_copy_cleanup.ok() &&
+          mirror_copy_cleanup.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(session.undoDepth() == undo_before_mirror_copy);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == entities_before_mirror_copy);
+    CHECK(capture(session, sketch_id, ids) ==
+          preserved_mirror_source);
+    CHECK(interaction.selectedCount() == 3U);
+
+    // S3 B06: command-first MIRROR accepts object collection before the
+    // two-point axis and uses the same explicit Keep Original option.
+    // Undo the extra placement immediately to retain prior history tests.
+    CHECK(interaction.escape());
+    CHECK(interaction.selectedCount() == 0U);
+    const auto command_first_sources =
+        capture(session, sketch_id, ids);
+    const auto command_first_entity_count =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    const auto command_first_undo_depth = session.undoDepth();
+    CHECK(interaction.activateMirror());
+    CHECK(interaction.commonTransformStage() ==
+          sketch::CommonTransformStage::select_objects);
+    CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    const auto line_pick =
+        viewport.sketch_scene_.lines.front().token;
+    const auto circle_pick =
+        viewport.sketch_scene_.curves[0].token;
+    const auto arc_pick =
+        viewport.sketch_scene_.curves[1].token;
+    viewport.point_query_ = {true, line_pick};
+    click(interaction, sketch_id, 10.0, 10.0, 1.5, 0.0);
+    viewport.point_query_ = {true, circle_pick};
+    click(interaction, sketch_id, 20.0, 20.0, 2.0, 1.0);
+    viewport.point_query_ = {true, arc_pick};
+    click(interaction, sketch_id, 30.0, 30.0, 1.0, 6.0);
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(interaction.completeTransformSelection());
+    CHECK(interaction.commonTransformStage() ==
+          sketch::CommonTransformStage::await_axis_start);
+    click(interaction, sketch_id, 50.0, 50.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        60.0, 50.0, 1.0, 0.0);
+    CHECK(interaction.commitTransform());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(!interaction.setMirrorKeepOriginal(true));
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(session.undoDepth() == command_first_undo_depth + 1U);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == command_first_entity_count + 3U);
+    CHECK(capture(session, sketch_id, ids) ==
+          command_first_sources);
+    interaction.cancelForHistory();
+    const auto command_first_undo = session.undo();
+    CHECK(command_first_undo.ok() && command_first_undo.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(session.undoDepth() == command_first_undo_depth);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == command_first_entity_count);
+    CHECK(capture(session, sketch_id, ids) ==
+          command_first_sources);
+    CHECK(interaction.selectedCount() == 3U);
+
+    // S3 B06: the same zero-length axis must also fail with Keep
+    // Original ON, without partial duplicates or leaked Mirror state.
+    const auto invalid_copy_state =
+        session.document().state();
+    const auto invalid_copy_revision =
+        session.document().revision();
+    const auto invalid_copy_undo =
+        session.undoDepth();
+    const auto invalid_copy_count =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    CHECK(interaction.activateMirror());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    click(interaction, sketch_id, 50.0, 50.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        50.0, 50.0, 0.0, 0.0);
+    CHECK(!interaction.commitTransform());
+    CHECK(session.document().state() == invalid_copy_state);
+    CHECK(session.document().revision() == invalid_copy_revision);
+    CHECK(session.undoDepth() == invalid_copy_undo);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == invalid_copy_count);
+    CHECK(interaction.escape());
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(interaction.selectedCount() == 3U);
 
     // Degenerate mirror axis cannot commit and Esc preserves selection.
     const auto invalid_mirror_state =
@@ -670,6 +913,43 @@ int main(int argc, char* argv[]) {
     CHECK(
         interaction.tool() ==
         sketch::SketchTool::select);
+    CHECK(interaction.selectedCount() == 3U);
+
+    // S3 B06: a competing authored revision invalidates Keep Original
+    // before publication. No partial mirrored copies can escape the
+    // revision-bound DuplicateSketchGeometryCommand boundary.
+    CHECK(interaction.activateMirror());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    click(interaction, sketch_id, 120.0, 120.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        130.0, 120.0, 1.0, 0.0);
+    const auto competing_mirror_edit =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {200.0, 200.0},
+                {210.0, 200.0}});
+    CHECK(competing_mirror_edit.ok() &&
+          competing_mirror_edit.changed);
+    const auto stale_mirror_state =
+        session.document().state();
+    const auto stale_mirror_revision =
+        session.document().revision();
+    const auto stale_mirror_undo =
+        session.undoDepth();
+    const auto stale_mirror_count =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    CHECK(!interaction.commitTransform());
+    CHECK(session.document().state() == stale_mirror_state);
+    CHECK(session.document().revision() == stale_mirror_revision);
+    CHECK(session.undoDepth() == stale_mirror_undo);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == stale_mirror_count);
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(!interaction.setMirrorKeepOriginal(true));
     CHECK(interaction.selectedCount() == 3U);
 
     // Existing schema-v4 persistence preserves the transformed geometry

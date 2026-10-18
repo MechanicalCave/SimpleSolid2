@@ -231,6 +231,17 @@ int main() {
     CHECK(expected_rotated.has_value());
     CHECK(*rotated == *expected_rotated);
 
+    // S3 B05 test-first RED: Rotate+Copy must be explicitly armed,
+    // keep the frozen selected set and use the existing preview.
+    // Pre-S3 implementation only permits Copy in Reshape/Move.
+    CHECK(!state.directManipulationCopyEnabled());
+    CHECK(state.enableDirectManipulationCopy());
+    CHECK(state.directManipulationCopyEnabled());
+    CHECK(state.selectedEntities() == frozen_selection);
+    CHECK(
+        state.directManipulationGeometryState() ==
+        expected_rotated);
+
     // Scale captures the current radius as factor 1.0; pointer direction
     // is irrelevant and the preview still comes from frozen geometry.
     CHECK(state.cycleDirectEditMode());
@@ -263,6 +274,14 @@ int main() {
     CHECK(expected_scaled.has_value());
     CHECK(*scaled == *expected_scaled);
 
+    // Cycling Rotate -> Scale cleared the previous Copy modifier.
+    CHECK(!state.directManipulationCopyEnabled());
+    CHECK(state.enableDirectManipulationCopy());
+    CHECK(state.directManipulationCopyEnabled());
+    CHECK(
+        state.directManipulationGeometryState() ==
+        expected_scaled);
+
     // Mirror uses the active grip as Axis Start and the pointer as Axis End.
     CHECK(state.cycleDirectEditMode());
     CHECK(
@@ -280,6 +299,15 @@ int main() {
     CHECK(mirrored.has_value());
     CHECK(expected_mirrored.has_value());
     CHECK(*mirrored == *expected_mirrored);
+
+    // Cycling Scale -> Mirror clears Copy until re-armed; the
+    // Mirror axis is based at the original active grip, not the copy.
+    CHECK(!state.directManipulationCopyEnabled());
+    CHECK(state.enableDirectManipulationCopy());
+    CHECK(state.directManipulationCopyEnabled());
+    CHECK(
+        state.directManipulationGeometryState() ==
+        expected_mirrored);
 
     CHECK(state.cycleDirectEditMode());
     CHECK(
@@ -388,6 +416,10 @@ int main() {
                 cycling.primarySelection() ==
                 primary);
             CHECK(!cycling.directManipulationCopyEnabled());
+            // Each cycled mode can independently arm Copy, and
+            // the next Space cycle must turn it off again.
+            CHECK(cycling.enableDirectManipulationCopy());
+            CHECK(cycling.directManipulationCopyEnabled());
         }
         cycling.cancelDirectManipulation();
     }
@@ -439,6 +471,10 @@ int main() {
                 cycling.primarySelection() ==
                 primary);
             CHECK(!cycling.directManipulationCopyEnabled());
+            // Each cycled mode can independently arm Copy, and
+            // the next Space cycle must turn it off again.
+            CHECK(cycling.enableDirectManipulationCopy());
+            CHECK(cycling.directManipulationCopyEnabled());
         }
 
         cycling.cancelDirectManipulation();

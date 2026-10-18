@@ -7,6 +7,7 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QBoxLayout>
 #include <QItemSelectionModel>
 #include <QFrame>
@@ -25,6 +26,7 @@
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
 #include <QWidget>
 
 #include <cstdlib>
@@ -369,6 +371,10 @@ int main(int argc, char* argv[]) {
     auto* operations =
         workbench.findChild<QLabel*>(
             QStringLiteral("operationsPlaceholder"));
+    // S3 §12 registered Qt RED: Operations CHECKBOX, not toolbar button.
+    auto* mirror_keep_original =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("mirrorKeepOriginalSketchButton"));
     auto* title =
         workbench.findChild<QLineEdit*>(
             QStringLiteral("documentTitleEdit"));
@@ -420,6 +426,14 @@ int main(int argc, char* argv[]) {
     CHECK(right_recovery != nullptr);
     CHECK(sketch_tool != nullptr);
     CHECK(operations != nullptr);
+    // B06: local Operations toggle exists, defaults OFF and is hidden
+    // outside live ordinary MIRROR (not global COPY or Grip Copy).
+    CHECK(mirror_keep_original != nullptr);
+    CHECK(mirror_keep_original->isCheckable());
+    CHECK(operations->parentWidget()->isAncestorOf(mirror_keep_original));
+    CHECK(!document_top_row->isAncestorOf(mirror_keep_original));
+    CHECK(!mirror_keep_original->isChecked());
+    CHECK(mirror_keep_original->isHidden());
     CHECK(title != nullptr);
     CHECK(apply != nullptr);
     CHECK(undo != nullptr);
@@ -2258,6 +2272,78 @@ int main(int argc, char* argv[]) {
     workbench.deactivateDocument();
     CHECK(!workbench.activeDocumentId().has_value());
     CHECK(!title->isEnabled());
+
+    // S3 §12: exercise the actual Sketch Edit context and Qt Operations
+    // signals, not just the idle widget type/ancestry.
+    auto* ux_session =
+        opened.session->documentSession(second_id);
+    CHECK(ux_session != nullptr);
+    const auto ux_sketch =
+        ux_session->execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+    CHECK(ux_sketch.ok() && ux_sketch.sketch_id);
+    CHECK(workbench.activateDocument(ux_session, workspace));
+    auto* part_axis_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("axisToolButton"));
+    auto* edit_sketch_action =
+        workbench.findChild<QAction*>(
+            QStringLiteral("editSketchAction"));
+    auto* mirror_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("mirrorSketchToolButton"));
+    auto* select_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("selectSketchToolButton"));
+    auto* finish_sketch =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("finishSketchButton"));
+    auto* axis_designation =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("sketchAxisDesignationCheck"));
+    CHECK(part_axis_tool && edit_sketch_action &&
+          mirror_tool && select_tool && finish_sketch &&
+          axis_designation);
+    CHECK(!part_axis_tool->isHidden());
+    QTreeWidgetItem* ux_sketch_row = nullptr;
+    for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+        if ((*it)->text(0) == QStringLiteral("Sketch 1")) {
+            ux_sketch_row = *it;
+            break;
+        }
+    }
+    CHECK(ux_sketch_row != nullptr);
+    tree->setCurrentItem(ux_sketch_row);
+    QApplication::processEvents();
+    CHECK(edit_sketch_action->isEnabled());
+    edit_sketch_action->trigger();
+    QApplication::processEvents();
+    CHECK(part_axis_tool->isHidden());
+    CHECK(!mirror_tool->isHidden());
+    CHECK(mirror_keep_original->isHidden());
+    CHECK(operations->parentWidget()->isAncestorOf(
+        mirror_keep_original));
+    mirror_tool->click();
+    QApplication::processEvents();
+    CHECK(!mirror_keep_original->isHidden());
+    CHECK(mirror_keep_original->isChecked());
+    CHECK(part_axis_tool->isHidden());
+    mirror_keep_original->click();
+    QApplication::processEvents();
+    CHECK(!mirror_keep_original->isChecked());
+    CHECK(!part_axis_tool->isVisible());
+    select_tool->click();
+    QApplication::processEvents();
+    CHECK(mirror_keep_original->isHidden());
+    mirror_tool->click();
+    QApplication::processEvents();
+    CHECK(mirror_keep_original->isChecked());
+    CHECK(!axis_designation->isChecked());
+    finish_sketch->click();
+    QApplication::processEvents();
+    CHECK(mirror_keep_original->isHidden());
+    CHECK(!part_axis_tool->isHidden());
 
     return EXIT_SUCCESS;
 }

@@ -3106,11 +3106,12 @@ bool SketchInteractionState::directManipulationCopyEnabled()
 
 bool SketchInteractionState::enableDirectManipulationCopy()
     noexcept {
-    if (!manipulation_ ||
-        (manipulation_->mode != DirectEditMode::reshape &&
-         manipulation_->mode != DirectEditMode::move)) {
+    if (!manipulation_) {
         return false;
     }
+    // Copy is a modifier orthogonal to every active grip EditMode.
+    // Cycling the mode separately clears it; never duplicate a preview
+    // before the accepted semantic command commits a valid placement.
     manipulation_->copy_enabled = true;
     return true;
 }
