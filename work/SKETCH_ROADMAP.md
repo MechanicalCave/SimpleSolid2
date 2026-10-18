@@ -1,7 +1,7 @@
 # Sketcher Program Roadmap
 
-**Status:** **PROPOSED v1.11 DRAFT — R13 next after S3, exact roadmap text NOT YET OWNER ACCEPTED / UNMERGED / NOT ACTIVE.** Historic v1.10 remains authoritative on protected main.
-**Version:** **1.11 PROPOSAL (2026-10-18)** — pending separate Owner exact-text acceptance and guarded merge. **Previously accepted:** 1.10 (2026-10-16).
+**Status:** **OWNER-ACCEPTED EXACT v1.11 ROADMAP TEXT (2026-10-18), PR #494 STILL OPEN / NOT MERGED / NOT ACTIVE.** Historic v1.10 remains the latest integrated roadmap on protected main pending separate Owner guarded-squash permission.
+**Version:** **1.11 OWNER-ACCEPTED EXACT TEXT (2026-10-18)** — acceptance of paired PR #494 at design SHA `972da58f6fb67e537d0941978007bda467a7cb04`; separate guarded merge permission PENDING. **Previous integrated:** v1.10 (2026-10-16).
 **Owner direction:** 2026-10-16 accepted Sketcher audit repair **S0→S1→S2→S3** scheduling and later **expressly approved exact paired v1.10/v1.34 roadmap text** and guarded squash of PR #455 (`akceptuje - kontynuuj pracce`).  
 **Previous accepted version:** 1.9 — Owner-accepted 2026-10-02  
 **Foundation:** 1.0 (foundation-v1.0)  
@@ -10,9 +10,9 @@
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
 **Historical v1.10 scheduling snapshot (not current post-S3 product status):** existing R0–R12, WB-02, AUDIT-01 A–F, SR-01–SR-03 and later separately accepted Part/Projection/RG-02 work stay historically completed. **New priority S0/S1 (B01/B02)** reproduces and repairs exact Line/Circle/Arc tangent predicates, arrangement and durable Profile/Extrude correctness before independent **S2 (B03a/B04)** and **S3 (B03b/B05/B06)**. These do not retroactively erase old readiness findings, reactivate R13 constraints/Split/Join, or authorize code without the separately accepted exact S0/S1 contract and formal ACTIVE-only switch.  
 
-## 0R. DRAFT v1.11 — Owner-directed R13 constraints/dimensions after completed S3
+## 0R. OWNER-ACCEPTED v1.11 — R13 constraints/dimensions after completed S3 (merge pending)
 
-**Decision class:** proposed D2 roadmap scheduling. The Owner selected R13 over PM-06 / further RG-02 and accepted the R13-G0→A1→A2→A3 sequence and product D3 choices in Draft PR #493, but **has NOT accepted this exact v1.11 roadmap text or authorized its merge**. S3 product PR #490 was guarded-squash merged protected main at `47bcd16f2b75b845b14fc5d9fecf5ffe8e553178`. Prior v1.10 S0/S1/S2/S3 planning and their old pending states below are historical; they are not newly active product tasks.
+**Decision class:** **Owner-accepted D2 exact roadmap scheduling/text** in PR #494 (`zatwierdzam - kontynuuj`, 2026-10-18). The Owner selected R13 over PM-06 / further RG-02 and accepted the R13-G0→A1→A2→A3 sequence and product D3 choices in Draft PR #493, but **has NOT separately authorized guarded squash merge of roadmap PR #494**. S3 product PR #490 was guarded-squash merged protected main at `47bcd16f2b75b845b14fc5d9fecf5ffe8e553178`. Prior v1.10 S0/S1/S2/S3 planning and their old pending states below are historical; they are not newly active product tasks.
 
 **Proposed next sole focus: Sketcher R13, optional local constraints and parametric Driving/Reference dimensions.** Defer PM-06 and further RG-02 without cancelling accepted Part obligations or reopening S0–S3. Use MechanicalCave/SimpleSolid for inspected algorithms, tests and UX patterns only; current SS2 ownership/ADRs and versioned native Part store are authoritative. No global project-level parametric graph or Assembly/Drawings implementation.
 
@@ -26,7 +26,7 @@
 
 **Accepted product D3, not implementation authorization:** manual relations/Auto-Constraint OFF; A1 five types; A2 three dimension kinds and real on-label editable viewport label with movable annotation; A3 Reference+typed conversion; Delete Driving freezes solved geometry; local cascading geometry Delete with impact prompt and downstream Part repair option B. Full proposal in `work/SKETCH_R13_CONSTRAINTS_DIMENSIONS_D2_CONTRACT_PROPOSAL.md` (Draft PR #493). Existing CAD Input / DocumentSession / Sketch role semantics remain singular authorities.
 
-**Governance gates still separate:** Owner must accept the exact paired v1.11 Sketch + v1.35 Part roadmap text and separately authorize its guarded squash after exact-head Windows CLOSURE; approve/merge a finite R13-G0 Work Contract under its own independent governance gate; approve/merge a one-file ACTIVE-only pointer + program_roadmap_version switch; only then run G0 work. A1/A2/A3 need their own contracts and activation. The previous S3 product permission cannot authorize new R13 implementation.
+**Governance gates still separate:** Owner has **accepted the exact paired v1.11 Sketch + v1.35 Part roadmap text**; a **separate explicit guarded-squash authorization remains required for PR #494** after final exact-head Windows CLOSURE; approve/merge a finite R13-G0 Work Contract under its own independent governance gate; approve/merge a one-file ACTIVE-only pointer + program_roadmap_version switch; only then run G0 work. A1/A2/A3 need their own contracts and activation. The previous S3 product permission cannot authorize new R13 implementation.
 
 **Documentation impact:** program-only planning update; current Internal/Product PL/EN/Browser **not required** until an accepted executable phase actually changes behavior.
 ## 0. Owner-accepted S0–S3 audit-repair scheduling amendment — 2026-10-16
