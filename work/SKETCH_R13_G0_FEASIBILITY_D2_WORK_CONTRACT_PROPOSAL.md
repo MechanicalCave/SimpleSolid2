@@ -65,7 +65,7 @@ Evidence not available because Windows environment, external archive or baseline
 
 ## 6. G0 failure / STOP thresholds
 
-STOP and ask Owner for D2/D3 amendment for: inability to resolve semantic endpoint role without invented Point entity, unsupported projected fixed-reference terms; non-reproducible solver/LLGPL provenance/distribution risk; non-deterministic under/over/constrained diagnostics; requirement to change Part persistence/Kernel/Qt API during G0; hidden numerical epsilon, mutated authored seed on read-only recompute; inconsistent Part-stage Profile/Extrude invalidation; no actual Windows evidence for claimed PASS; any source/test edit outside two files.
+STOP and ask Owner for D2/D3 amendment for: inability to resolve semantic endpoint role without invented Point entity, unsupported projected fixed-reference terms; non-reproducible solver/LGPL provenance/distribution risk; non-deterministic under/over/constrained diagnostics; requirement to change Part persistence/Kernel/Qt API during G0; hidden numerical epsilon, mutated authored seed on read-only recompute; inconsistent Part-stage Profile/Extrude invalidation; no actual Windows evidence for claimed PASS; any source/test edit outside two files.
 
 Any solver candidate must be evaluated against alternative or reference residual policy. Do not promise that PlaneGCS is selected until native build/ABI/license/distribution are reviewed and Owner explicitly accepts its dependency addition in an A1 D2 contract. Native PlaneGCS archive pin and hash in donor may serve as evidence **only after independent verification**.
 
