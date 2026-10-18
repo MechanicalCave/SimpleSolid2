@@ -336,6 +336,39 @@ int main(int argc, char* argv[]) {
     CHECK(session.undoDepth() == mirror_noop_undo);
     CHECK(interaction.selectedCount() == 1U);
 
+    // S3 B06: Keep Original must reject an exact-identity MIRROR without
+    // allocating ghost copies, revision or Undo history. Esc then drops
+    // the transient toggle but preserves the selected source Line.
+    const auto copy_noop_state =
+        session.document().state();
+    const auto copy_noop_revision =
+        session.document().revision();
+    const auto copy_noop_undo =
+        session.undoDepth();
+    const auto copy_noop_count =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    CHECK(interaction.activateMirror());
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    click(interaction, sketch_id, 30.0, 30.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        40.0, 30.0, 1.0, 0.0);
+    CHECK(!interaction.commitTransform());
+    CHECK(session.document().state() == copy_noop_state);
+    CHECK(session.document().revision() == copy_noop_revision);
+    CHECK(session.undoDepth() == copy_noop_undo);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == copy_noop_count);
+    CHECK(interaction.tool() == sketch::SketchTool::mirror);
+    CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.escape());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(!interaction.setMirrorKeepOriginal(true));
+    CHECK(interaction.selectedCount() == 1U);
+
     viewport.point_query_ = {
         true,
         viewport.sketch_scene_.curves[0].token};
@@ -654,6 +687,33 @@ int main(int argc, char* argv[]) {
           model.entityCount() == entities_before_mirror_copy);
     CHECK(capture(session, sketch_id, ids) ==
           preserved_mirror_source);
+    CHECK(interaction.selectedCount() == 3U);
+
+    // S3 B06: the same zero-length axis must also fail with Keep
+    // Original ON, without partial duplicates or leaked Mirror state.
+    const auto invalid_copy_state =
+        session.document().state();
+    const auto invalid_copy_revision =
+        session.document().revision();
+    const auto invalid_copy_undo =
+        session.undoDepth();
+    const auto invalid_copy_count =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    CHECK(interaction.activateMirror());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    click(interaction, sketch_id, 50.0, 50.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        50.0, 50.0, 0.0, 0.0);
+    CHECK(!interaction.commitTransform());
+    CHECK(session.document().state() == invalid_copy_state);
+    CHECK(session.document().revision() == invalid_copy_revision);
+    CHECK(session.undoDepth() == invalid_copy_undo);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == invalid_copy_count);
+    CHECK(interaction.escape());
+    CHECK(!interaction.mirrorKeepOriginal());
     CHECK(interaction.selectedCount() == 3U);
 
     // Degenerate mirror axis cannot commit and Esc preserves selection.
