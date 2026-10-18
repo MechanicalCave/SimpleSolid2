@@ -590,6 +590,38 @@ int main(int argc, char* argv[]) {
     CHECK(copied_mirror_state.arcs.back().sweep_angle ==
           expected_mirror_copies->arcs.front().sweep_angle);
 
+    // B06 cold Save/Close/Reopen-equivalent read: authored duplicate
+    // IDs and roles must survive the existing .ss2part schema. Keep
+    // the original session for subsequent exact Undo/Redo assertions.
+    CHECK(session.save().ok());
+    {
+        auto cold_mirror = store.load(path);
+        CHECK(cold_mirror.ok());
+        const auto* cold_hosted =
+            cold_mirror.document->findSketch(sketch_id);
+        CHECK(cold_hosted != nullptr);
+        CHECK(cold_hosted->model.entityCount() ==
+              entities_before_mirror_copy + 3U);
+        CHECK(cold_hosted->model.findLine(
+                  copied_mirror_state.lines.back().id) != nullptr);
+        CHECK(cold_hosted->model.findCircle(
+                  copied_mirror_state.circles.back().id) != nullptr);
+        CHECK(cold_hosted->model.findArc(
+                  copied_mirror_state.arcs.back().id) != nullptr);
+        CHECK(cold_hosted->model.state().lines.back().role ==
+              copied_mirror_state.lines.back().role);
+        CHECK(cold_hosted->model.state().circles.back().role ==
+              copied_mirror_state.circles.back().role);
+        CHECK(cold_hosted->model.state().arcs.back().role ==
+              copied_mirror_state.arcs.back().role);
+        const auto cold_original_geometry =
+            sketch::captureSketchTransformGeometry(
+                cold_hosted->model, ids);
+        CHECK(cold_original_geometry.has_value());
+        CHECK(*cold_original_geometry ==
+              preserved_mirror_source);
+    }
+
     interaction.cancelForHistory();
     const auto mirror_copy_undo = session.undo();
     CHECK(mirror_copy_undo.ok() && mirror_copy_undo.changed);
