@@ -322,8 +322,11 @@ int main(int argc, char* argv[]) {
     const auto mirror_noop_undo =
         session.undoDepth();
     CHECK(interaction.activateMirror());
-    // S3 §12 test-first: every new normal Mirror session starts ON.
+    // S3 §12: fresh Mirror defaults ON; explicit OFF preserves the
+    // long-standing no-op replacement behavior for this source Line.
     CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(false));
+    CHECK(!interaction.mirrorKeepOriginal());
     click(interaction, sketch_id, 30.0, 30.0, 0.0, 0.0);
     movePointer(
         interaction,
@@ -351,7 +354,7 @@ int main(int argc, char* argv[]) {
         session.document().findSketch(sketch_id)->
             model.entityCount();
     CHECK(interaction.activateMirror());
-    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(interaction.mirrorKeepOriginal());
     CHECK(interaction.setMirrorKeepOriginal(true));
     click(interaction, sketch_id, 30.0, 30.0, 0.0, 0.0);
     movePointer(
@@ -537,6 +540,8 @@ int main(int argc, char* argv[]) {
         session.undoDepth();
 
     CHECK(interaction.activateMirror());
+    CHECK(interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(false));
     CHECK(
         interaction.commonTransformStage() ==
         sketch::CommonTransformStage::await_axis_start);
@@ -583,7 +588,7 @@ int main(int argc, char* argv[]) {
     const auto undo_before_mirror_copy =
         session.undoDepth();
     CHECK(interaction.activateMirror());
-    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(interaction.mirrorKeepOriginal());
     CHECK(interaction.setMirrorKeepOriginal(true));
     CHECK(interaction.mirrorKeepOriginal());
     click(interaction, sketch_id, 50.0, 50.0, 0.0, 0.0);

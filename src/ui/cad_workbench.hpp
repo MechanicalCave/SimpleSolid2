@@ -692,7 +692,7 @@ private:
     QPushButton* rotate_sketch_button_{};
     QPushButton* scale_sketch_button_{};
     QPushButton* mirror_sketch_button_{};
-    QPushButton* mirror_keep_original_sketch_button_{};
+    QCheckBox* mirror_keep_original_sketch_button_{};
     QLabel* inspect_tools_label_{};
     QPushButton* measure_sketch_button_{};
     QPushButton* measure_between_button_{};

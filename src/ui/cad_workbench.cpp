@@ -1813,17 +1813,6 @@ void CadWorkbench::buildUi() {
         16,
         mirror_sketch_button_);
 
-    mirror_keep_original_sketch_button_ =
-        new QPushButton(
-            QStringLiteral("Keep Original"),
-            shell_);
-    mirror_keep_original_sketch_button_->setObjectName(
-        QStringLiteral("mirrorKeepOriginalSketchButton"));
-    mirror_keep_original_sketch_button_->setCheckable(true);
-    mirror_keep_original_sketch_button_->setVisible(false);
-    shell_->editorToolsLayout().insertWidget(
-        17,
-        mirror_keep_original_sketch_button_);
     sketch_transform_tools_label_ =
         new QLabel(QStringLiteral("Transform:"), shell_);
     sketch_transform_tools_label_->setObjectName(
@@ -3312,6 +3301,18 @@ void CadWorkbench::buildUi() {
         QStringLiteral("deleteSketchSelectionButton"));
     operations_layout->addWidget(
         delete_selection_button_);
+
+    // S3 §12: ordinary MIRROR has an operation-local checkbox,
+    // never a persistent or toolbar-level Copy setting.
+    mirror_keep_original_sketch_button_ =
+        new QCheckBox(
+            QStringLiteral("Keep Original"),
+            operations_content);
+    mirror_keep_original_sketch_button_->setObjectName(
+        QStringLiteral("mirrorKeepOriginalSketchButton"));
+    mirror_keep_original_sketch_button_->setVisible(false);
+    operations_layout->addWidget(
+        mirror_keep_original_sketch_button_);
 
     entity_role_label_ =
         new QLabel(
@@ -5002,7 +5003,7 @@ void CadWorkbench::buildUi() {
         [this] { activateSketchMirror(); });
     QObject::connect(
         mirror_keep_original_sketch_button_,
-        &QPushButton::clicked,
+        &QCheckBox::clicked,
         this,
         [this](bool enabled) {
             if (sketch_interaction_controller_ == nullptr ||
@@ -18047,9 +18048,11 @@ void CadWorkbench::syncActionState() {
         !edge_feature_active);
 
     if (axis_button_ != nullptr) {
-        axis_button_->setVisible(active);
+        // Part Work Features Axis must not leak into Sketch Edit.
+        axis_button_->setVisible(active && !editing_sketch);
         axis_button_->setEnabled(
             active &&
+            !editing_sketch &&
             !sketch_support_pick_active_ &&
             !(datum_plane_draft_ || edge_datum_edit_id_ || edge_datum_create_revision_ || three_point_datum_revision_) &&
             !extrude_profile_pick_active_ &&

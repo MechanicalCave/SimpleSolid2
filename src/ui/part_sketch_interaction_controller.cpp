@@ -2664,8 +2664,9 @@ bool PartSketchInteractionController::activateMirror() {
         return false;
     }
 
-    // Every fresh ordinary MIRROR session defaults to replacement.
-    mirror_keep_original_ = false;
+    // S3 §12: every fresh ordinary MIRROR session preserves originals
+    // unless its Operations checkbox is explicitly unchecked.
+    mirror_keep_original_ = true;
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
