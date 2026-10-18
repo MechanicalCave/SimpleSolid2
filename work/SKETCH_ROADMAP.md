@@ -1,15 +1,34 @@
 # Sketcher Program Roadmap
 
-**Status:** **v1.10 OWNER-ACCEPTED EXACT PRIORITY AMENDMENT (2026-10-16), GUARDED SQUASH OF PR #455 EXPLICITLY AUTHORIZED; NO PRODUCTION AUTHORITY WITHOUT ACTIVE-ONLY SWITCH**  
-**Version:** **1.10 OWNER-ACCEPTED 2026-10-16**  
+**Status:** **PROPOSED v1.11 DRAFT — R13 next after S3, exact roadmap text NOT YET OWNER ACCEPTED / UNMERGED / NOT ACTIVE.** Historic v1.10 remains authoritative on protected main.
+**Version:** **1.11 PROPOSAL (2026-10-18)** — pending separate Owner exact-text acceptance and guarded merge. **Previously accepted:** 1.10 (2026-10-16).
 **Owner direction:** 2026-10-16 accepted Sketcher audit repair **S0→S1→S2→S3** scheduling and later **expressly approved exact paired v1.10/v1.34 roadmap text** and guarded squash of PR #455 (`akceptuje - kontynuuj pracce`).  
 **Previous accepted version:** 1.9 — Owner-accepted 2026-10-02  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0011, ADR-0012  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Owner-accepted scheduling (S0/S1 implementation still requires separate ACTIVE-only switch):** existing R0–R12, WB-02, AUDIT-01 A–F, SR-01–SR-03 and later separately accepted Part/Projection/RG-02 work stay historically completed. **New priority S0/S1 (B01/B02)** reproduces and repairs exact Line/Circle/Arc tangent predicates, arrangement and durable Profile/Extrude correctness before independent **S2 (B03a/B04)** and **S3 (B03b/B05/B06)**. These do not retroactively erase old readiness findings, reactivate R13 constraints/Split/Join, or authorize code without the separately accepted exact S0/S1 contract and formal ACTIVE-only switch.  
+**Historical v1.10 scheduling snapshot (not current post-S3 product status):** existing R0–R12, WB-02, AUDIT-01 A–F, SR-01–SR-03 and later separately accepted Part/Projection/RG-02 work stay historically completed. **New priority S0/S1 (B01/B02)** reproduces and repairs exact Line/Circle/Arc tangent predicates, arrangement and durable Profile/Extrude correctness before independent **S2 (B03a/B04)** and **S3 (B03b/B05/B06)**. These do not retroactively erase old readiness findings, reactivate R13 constraints/Split/Join, or authorize code without the separately accepted exact S0/S1 contract and formal ACTIVE-only switch.  
 
+## 0R. DRAFT v1.11 — Owner-directed R13 constraints/dimensions after completed S3
+
+**Decision class:** proposed D2 roadmap scheduling. The Owner selected R13 over PM-06 / further RG-02 and accepted the R13-G0→A1→A2→A3 sequence and product D3 choices in Draft PR #493, but **has NOT accepted this exact v1.11 roadmap text or authorized its merge**. S3 product PR #490 was guarded-squash merged protected main at `47bcd16f2b75b845b14fc5d9fecf5ffe8e553178`. Prior v1.10 S0/S1/S2/S3 planning and their old pending states below are historical; they are not newly active product tasks.
+
+**Proposed next sole focus: Sketcher R13, optional local constraints and parametric Driving/Reference dimensions.** Defer PM-06 and further RG-02 without cancelling accepted Part obligations or reopening S0–S3. Use MechanicalCave/SimpleSolid for inspected algorithms, tests and UX patterns only; current SS2 ownership/ADRs and versioned native Part store are authoritative. No global project-level parametric graph or Assembly/Drawings implementation.
+
+**Proposed strict bounded phase order (separate Work Contract and ACTIVE switch for each executable phase):**
+
+1. **R13-G0 Evidence/feasibility:** map donor Constraint2D / persistent PlaneGCS / residuals/DoF to SS2 Line/Circle/Arc and semantic IDs; verify solver vendor pin/license/distribution and native Windows prerequisites; baseline current Part Sketch→Profile→Extrude, Undo/Redo/cold Save/Reopen and interactive latency; issue a scoped A1 interface/schema/Windows RED-first proposal. **No production code/schema/UI or dependency import under G0 without a new exact D2 addendum.**
+2. **R13-A1 Constraint model + evaluation:** stable ConstraintIds and semantic references; first explicit manual Coincident(Line endpoint–endpoint), Horizontal(Line), Vertical(Line), Parallel and Perpendicular(Line–Line); accepted solver-status/DoF/conflict/redundancy/numeric residual checks, optional authored constraints, evaluated geometry separate from persistent seed; revision-bound commands, migration, Sketch-local constrained-geometry Delete cascade with impact confirmation. When dependent Part Profile/Extrude becomes invalid, Owner chose **B**: keep durable Part feature, mark current derived state Failed/Blocked/Unavailable as applicable, make repair visible, never present stale last-good BRep as current.
+3. **R13-A2 Driving dimensions:** Line Length, Circle Radius or Circle Diameter (one independent circle size driver). In actual 3D Sketch Edit viewport, attached but draggable sketch-relative annotation; **edit the number inline on the visible label**; Enter atomic solve, Esc cancel, Delete removes only dimension and preserves last accepted solved geometry, full Undo/Redo/cold Save/Reopen. An Operations-only editor does not satisfy acceptance.
+4. **R13-A3 Durable Reference dimensions + deliberate conversion:** separate DimensionId, read-only measurement from evaluated geometry, same 3D select/move/Esc/Delete/lifecycle, no implicit numeric drive. Explicit Driving↔Reference converts through a fresh destination-type ID with retired source ID, preserved attachment/label/geometry, Undo restoring source ID and Redo deterministic destination ID. Later Tangent/Equal/Concentric/Angle/Arc etc. require separately frozen contracts.
+5. **Native release gates per product slice:** real registered Windows RED→GREEN, FOCUSED→FAST→Ready FULL Core/Kernel/Qt, DOC-01 PL/EN/internal + generated Browser, exact-head CLOSURE, Owner Windows manual PASS, independent technical FINAL, separate Owner product guarded-squash authorization. No reduction of prior 199 S3 tests.
+
+**Accepted product D3, not implementation authorization:** manual relations/Auto-Constraint OFF; A1 five types; A2 three dimension kinds and real on-label editable viewport label with movable annotation; A3 Reference+typed conversion; Delete Driving freezes solved geometry; local cascading geometry Delete with impact prompt and downstream Part repair option B. Full proposal in `work/SKETCH_R13_CONSTRAINTS_DIMENSIONS_D2_CONTRACT_PROPOSAL.md` (Draft PR #493). Existing CAD Input / DocumentSession / Sketch role semantics remain singular authorities.
+
+**Governance gates still separate:** Owner must accept the exact paired v1.11 Sketch + v1.35 Part roadmap text and separately authorize its guarded squash after exact-head Windows CLOSURE; approve/merge a finite R13-G0 Work Contract under its own independent governance gate; approve/merge a one-file ACTIVE-only pointer + program_roadmap_version switch; only then run G0 work. A1/A2/A3 need their own contracts and activation. The previous S3 product permission cannot authorize new R13 implementation.
+
+**Documentation impact:** program-only planning update; current Internal/Product PL/EN/Browser **not required** until an accepted executable phase actually changes behavior.
 ## 0. Owner-accepted S0–S3 audit-repair scheduling amendment — 2026-10-16
 
 **Owner scheduling and complete exact v1.10 text: ACCEPTED 2026-10-16; explicit guarded squash of roadmap PR #455 AUTHORIZED, contingent on exact-HEAD Windows governance CLOSURE.** On 2026-10-16, after reviewing the 2026-10-07 Sketcher source/core audit, the Owner accepted returning from RG-02 to Sketcher, splitting six findings into **S0 → S1 → S2 → S3**, first **S0/S1**. The Owner subsequently accepted the exact S0/S1 D2 contract for B01/B02 ([PR #454](https://github.com/MechanicalCave/SimpleSolid2/pull/454)), with a **15-path conditional allowlist**; the D2 contract PR #454 was independently guarded-squash merged main `50d8df8c7e01a61a4f817d687b4f7ab901cc04f0`; ACTIVE-only activation remains a separate future Owner gate. The companion **Owner-accepted Part Modeling v1.34** text pauses later RG-02 packages while retaining PM-06 deferral. The current work/ACTIVE.yaml on protected main still points to completed RG-02C/H2 until a separately accepted and merged ACTIVE-only transition; it cannot be treated as Sketcher mutation authority.
@@ -801,18 +820,9 @@ Even after the architecture gate passes, the first solid operation still require
 
 ### Later Sketcher evolution — not a prerequisite for the profile-authoring checkpoint
 
-#### R13 — Authored relations, parametric dimensions and local solver
-Goal:
+#### R13 — Authored local relations and parametric dimensions — proposed next
 
-- introduce explicit durable relation semantics only under later accepted contracts;
-- keep snap/inference distinct from authored constraints;
-- define stable semantic references for authored relations/dimensions only after R12 structural-edit identity outcomes are accepted;
-- decide driving/reference dimension behavior, parameter editing and solver ownership from concrete workflows;
-- optionally support an explicit Auto-Constraint user setting;
-- reconsider Show Dimensions as a read-only presentation/projection of the accepted dimension/reference architecture rather than a separate runtime-only imitation.
-
-R13 is deliberately after structural-edit identity stabilization. It is not automatically a prerequisite to the first Part architecture gate; the Owner may move it earlier if profile-authoring evidence shows that constraints or parametric dimensions are required for practical use.
-
+Historic v1.10 deferred language is superseded for *scheduling* only once this paired roadmap amendment is accepted and merged. Owner selected R13 now and already accepted D3 product semantics; the **proposed** phased program and activation gate are in §0R. Draft D2/D3 design: PR #493. Constraints remain optional, snapshots and automatic snap/inference are not authored equations, and no global parameter graph is introduced. No source or dependency mutation follows solely from this roadmap.
 #### R14 — Broader geometry and editing operations
 Goal:
 
