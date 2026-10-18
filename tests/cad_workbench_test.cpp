@@ -370,7 +370,7 @@ int main(int argc, char* argv[]) {
     auto* operations =
         workbench.findChild<QLabel*>(
             QStringLiteral("operationsPlaceholder"));
-    // S3 §12 test-first: contextual Operations CHECKBOX, not toolbar button.
+    // S3 §12 registered Qt RED: Operations CHECKBOX, not toolbar button.
     auto* mirror_keep_original =
         workbench.findChild<QCheckBox*>(
             QStringLiteral("mirrorKeepOriginalSketchButton"));
