@@ -908,6 +908,43 @@ int main(int argc, char* argv[]) {
         sketch::SketchTool::select);
     CHECK(interaction.selectedCount() == 3U);
 
+    // S3 B06: a competing authored revision invalidates Keep Original
+    // before publication. No partial mirrored copies can escape the
+    // revision-bound DuplicateSketchGeometryCommand boundary.
+    CHECK(interaction.activateMirror());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    click(interaction, sketch_id, 120.0, 120.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        130.0, 120.0, 1.0, 0.0);
+    const auto competing_mirror_edit =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {200.0, 200.0},
+                {210.0, 200.0}});
+    CHECK(competing_mirror_edit.ok() &&
+          competing_mirror_edit.changed);
+    const auto stale_mirror_state =
+        session.document().state();
+    const auto stale_mirror_revision =
+        session.document().revision();
+    const auto stale_mirror_undo =
+        session.undoDepth();
+    const auto stale_mirror_count =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    CHECK(!interaction.commitTransform());
+    CHECK(session.document().state() == stale_mirror_state);
+    CHECK(session.document().revision() == stale_mirror_revision);
+    CHECK(session.undoDepth() == stale_mirror_undo);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == stale_mirror_count);
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(!interaction.setMirrorKeepOriginal(true));
+    CHECK(interaction.selectedCount() == 3U);
+
     // Existing schema-v4 persistence preserves the transformed geometry
     // and original IDs.
     const auto persisted_geometry =
