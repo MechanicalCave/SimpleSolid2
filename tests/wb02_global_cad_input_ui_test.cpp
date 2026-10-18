@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QLabel>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QMenu>
 #include <QPoint>
@@ -29,6 +30,23 @@ namespace {
             return EXIT_FAILURE; \
         } \
     } while (false)
+
+// A real Qt CAD focus surface, recording the key event reaching its
+// own handler (not merely the workspace's CAD text buffer).
+class EscRecordingCadSurface final : public QWidget {
+public:
+    using QWidget::QWidget;
+    int escape_key_presses{};
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override {
+        if (event != nullptr &&
+            event->key() == Qt::Key_Escape) {
+            ++escape_key_presses;
+        }
+        QWidget::keyPressEvent(event);
+    }
+};
 
 class FakeEndpoint final
     : public simplesolid2::application::ICadInputEndpoint {
@@ -198,7 +216,7 @@ int main(int argc, char* argv[]) {
     workbench.setFocusPolicy(Qt::StrongFocus);
     auto* layout = new QVBoxLayout(&workbench);
 
-    auto* cad_surface = new QWidget(&workbench);
+    auto* cad_surface = new EscRecordingCadSurface(&workbench);
     cad_surface->setObjectName(
         QStringLiteral("testCadSurface"));
     cad_surface->setFocusPolicy(Qt::StrongFocus);
@@ -388,6 +406,29 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(first.last == "ESC");
     CHECK(input->text().isEmpty());
+    first.active_prompt = "Command: FAKE";
+    shell.refreshCadInputPresentation();
+    cad_surface->setFocus(Qt::OtherFocusReason);
+
+    // S3 B03b real-Qt RED: Command Line text owns the *first* Esc;
+    // an empty-buffer second Esc delegates exactly one cancel event to
+    // the active CAD viewport instead of only shifting keyboard focus.
+    first.active_prompt = "Command: SKETCH — Grip";
+    shell.refreshCadInputPresentation();
+    input->setFocus(Qt::OtherFocusReason);
+    CHECK(QApplication::focusWidget() == input);
+    QTest::keyClicks(input, QStringLiteral("C"));
+    CHECK(input->text() == QStringLiteral("C"));
+    const int esc_before = cad_surface->escape_key_presses;
+    QTest::keyClick(input, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(input->text().isEmpty());
+    CHECK(QApplication::focusWidget() == input);
+    CHECK(cad_surface->escape_key_presses == esc_before);
+    QTest::keyClick(input, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(QApplication::focusWidget() == cad_surface);
+    CHECK(cad_surface->escape_key_presses == esc_before + 1);
     first.active_prompt = "Command: FAKE";
     shell.refreshCadInputPresentation();
     cad_surface->setFocus(Qt::OtherFocusReason);

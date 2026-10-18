@@ -1812,6 +1812,18 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         16,
         mirror_sketch_button_);
+
+    mirror_keep_original_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Keep Original"),
+            shell_);
+    mirror_keep_original_sketch_button_->setObjectName(
+        QStringLiteral("mirrorKeepOriginalSketchButton"));
+    mirror_keep_original_sketch_button_->setCheckable(true);
+    mirror_keep_original_sketch_button_->setVisible(false);
+    shell_->editorToolsLayout().insertWidget(
+        17,
+        mirror_keep_original_sketch_button_);
     sketch_transform_tools_label_ =
         new QLabel(QStringLiteral("Transform:"), shell_);
     sketch_transform_tools_label_->setObjectName(
@@ -4988,6 +5000,23 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchMirror(); });
+    QObject::connect(
+        mirror_keep_original_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool enabled) {
+            if (sketch_interaction_controller_ == nullptr ||
+                !sketch_interaction_controller_->
+                    setMirrorKeepOriginal(enabled)) {
+                setStatusText(QStringLiteral(
+                    "Keep Original requires active MIRROR."));
+            }
+            syncSketchInteractionUi();
+            if (viewport_widget_ != nullptr) {
+                viewport_widget_->setFocus(
+                    Qt::OtherFocusReason);
+            }
+        });
     QObject::connect(
         measure_sketch_button_,
         &QPushButton::clicked,
@@ -17012,6 +17041,20 @@ void CadWorkbench::syncSketchInteractionUi() {
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::mirror);
     }
+    if (mirror_keep_original_sketch_button_ != nullptr) {
+        const bool mirror_active =
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::mirror;
+        mirror_keep_original_sketch_button_->
+            setVisible(mirror_active);
+        mirror_keep_original_sketch_button_->
+            setEnabled(mirror_active);
+        mirror_keep_original_sketch_button_->setChecked(
+            mirror_active &&
+            sketch_interaction_controller_->
+                mirrorKeepOriginal());
+    }
     if (inspect_tools_label_ != nullptr) {
         inspect_tools_label_->setVisible(editing);
     }
@@ -18160,6 +18203,11 @@ void CadWorkbench::syncActionState() {
         editing_sketch);
     mirror_sketch_button_->setVisible(
         editing_sketch);
+    mirror_keep_original_sketch_button_->setVisible(
+        editing_sketch &&
+        sketch_interaction_controller_ != nullptr &&
+        sketch_interaction_controller_->tool() ==
+            sketch::SketchTool::mirror);
     inspect_tools_label_->setVisible(
         editing_sketch);
     measure_sketch_button_->setVisible(
