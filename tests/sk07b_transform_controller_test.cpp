@@ -710,7 +710,7 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.activateMirror());
     CHECK(interaction.commonTransformStage() ==
           sketch::CommonTransformStage::select_objects);
-    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(interaction.mirrorKeepOriginal());
     CHECK(interaction.setMirrorKeepOriginal(true));
     const auto line_pick =
         viewport.sketch_scene_.lines.front().token;
