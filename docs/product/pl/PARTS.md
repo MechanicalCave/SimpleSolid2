@@ -142,7 +142,7 @@ Natywny dokument **v18** zapisuje nową kolekcję `three_point_datum_planes`, `D
 
 W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin, bieżącą planarną Face Body albo istniejący Datum Plane. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Datum-backed Sketch zapisuje tylko `DatumId` supportu; lokalna geometria U/V pozostaje authored niezależnie od bieżącego położenia Datuma. Sam wybór supportu pozostaje runtime draftem: **Create Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu. Po utworzeniu Sketchu i wejściu w Edit ten sam obszar akcji zmienia się na **Finish Sketch**.
 
-Podczas Sketch Edit narzędzia są uporządkowane w grupy:
+Podczas Sketch Edit narzędzia są uporządkowane w grupy. Partowe **Work Features → Axis** pozostaje w Part Modeling i nie jest wyświetlane na pasku Sketchera; osobne **Operations → Part reference → Axis** dla linii szkicu pozostaje dostępne:
 
 ```text
 Select
@@ -224,15 +224,15 @@ Move/Rotate/Scale/Mirror działają na całym selection zamrożonym przy rozpocz
 
 Możesz wpisać dokładną wartość: Angle dla Rotate, dodatni Factor dla Scale i Axis Angle dla Mirror. Po zaakceptowaniu dokładna wartość ma pierwszeństwo przed dalszym ruchem kursora.
 
-Space przełącza tryb i nie tworzy authored change. LMB albo Enter zatwierdza, Esc anuluje niezatwierdzoną manipulację. Grip Copy działa tylko w Reshape i Move i wyłącza się po przejściu do innego trybu. Podczas **Reshape gripa Start lub End linii** OSNAP **Tangent/Perpendicular** wyznacza nowy ruchomy koniec względem **nieruchomego przeciwnego końca** tej linii. Przeciwny koniec nie przesuwa się; wpisywane wartości numeryczne nadal odnoszą się do pierwotnego gripa. Gdy nie istnieje jednoznaczne styczne/prostopadłe rozwiązanie, nie następuje automatyczne dopasowanie ani edycja. **Wskazówka testowa:** włącz TAN/PER w Operations albo wybierz ich jednorazowy Override (domyślnie są wyłączone). Zbliż kursor do matematycznego punktu styczności lub rzutu prostopadłego na rzeczywistą skończoną krzywą — samo wskazanie END/EXT nie wymusi PER. Oceniamy linię od nieruchomego końca do nowego punktu, nie prowadnicę wymiarowania od starego położenia gripa.
+Space przełącza tryb i nie tworzy authored change. LMB albo Enter zatwierdza, Esc anuluje niezatwierdzoną manipulację. Grip Copy działa w Reshape, Move, Rotate, dodatnim Scale i Mirror. Space wyłącza Copy przy każdej zmianie trybu. Podczas **Reshape gripa Start lub End linii** OSNAP **Tangent/Perpendicular** wyznacza nowy ruchomy koniec względem **nieruchomego przeciwnego końca** tej linii. Przeciwny koniec nie przesuwa się; wpisywane wartości numeryczne nadal odnoszą się do pierwotnego gripa. Gdy nie istnieje jednoznaczne styczne/prostopadłe rozwiązanie, nie następuje automatyczne dopasowanie ani edycja. **Wskazówka testowa:** włącz TAN/PER w Operations albo wybierz ich jednorazowy Override (domyślnie są wyłączone). Zbliż kursor do matematycznego punktu styczności lub rzutu prostopadłego na rzeczywistą skończoną krzywą — samo wskazanie END/EXT nie wymusi PER. Oceniamy linię od nieruchomego końca do nowego punktu, nie prowadnicę wymiarowania od starego położenia gripa.
 
 ### Grip Copy
 
-Podczas aktywnej manipulacji gripem wpisz `C` i naciśnij Enter, aby włączyć **Grip Copy**. Copy jest modyfikatorem commit dostępnym tylko w Reshape i Move.
+Podczas aktywnej manipulacji gripem wpisz `C` i naciśnij Enter, aby włączyć **Grip Copy**. Copy jest modyfikatorem commit dostępnym w Reshape, Move, Rotate, dodatnim Scale i Mirror. Samo `C` bez Enter nie włącza Copy.
 
-W **Reshape + Copy** placement tworzy fresh-ID kopię wyłącznie właściciela aktywnego gripa. W **Move + Copy** placement kopiuje cały zamrożony selection. Oryginały pozostają bez zmian i zaznaczone.
+W **Reshape + Copy** placement tworzy fresh-ID kopię wyłącznie właściciela aktywnego gripa. W **Move / Rotate / Scale / Mirror + Copy** placement kopiuje cały zamrożony selection odpowiednio przesunięty, obrócony, przeskalowany (skończony dodatni factor) lub odbity wokół aktywnego gripa (prawidłowa oś). Oryginały pozostają bez zmian i zaznaczone.
 
-Placement może użyć LMB albo tego samego precision PointRequest. Po udanej kopii source/pivot ze startu interakcji pozostają dla kolejnego placementu, ale request-local pointer candidates i numeric locks są czyszczone. Placement bez zmiany jest no-op. Space przełącza tryb i wyłącza Copy; po powrocie do Reshape albo Move trzeba ponownie wysłać `C`. Esc kończy transient session i zachowuje committed copies; Undo działa potem normalnie na ostatnim zatwierdzonym kroku historii.
+Placement może użyć LMB albo tego samego precision PointRequest. Po udanej kopii source/pivot ze startu interakcji pozostają dla kolejnego placementu, ale request-local pointer candidates i numeric locks są czyszczone. Placement bez zmiany jest no-op. Space przełącza tryb i wyłącza Copy; po każdej zmianie trybu trzeba ponownie wysłać `C` + Enter. Esc kończy transient session i zachowuje committed copies; Undo działa potem normalnie na ostatnim zatwierdzonym kroku historii.
 
 ### Wybór obiektów dla Modify
 
@@ -299,11 +299,11 @@ Factor musi być skończony i większy od zera. Wartości pomiędzy `0` i `1` po
 
 Wskaż pierwszy, a następnie drugi punkt osi. Dwa różne punkty definiują nieskończoną linię odbicia.
 
-Mirror odbija cały zamrożony selection. Line/Circle/Arc zachowują swoje EntityId, a kierunek Arc po odbiciu pozostaje geometrycznie zgodny z odbitym łukiem. Jeżeli geometria po odbiciu jest dokładnie taka sama, operacja kończy się jako no-op.
+Mirror odbija cały zamrożony selection. Podczas zwykłego Mirror w prawym panelu **Operations** pojawia się checkbox **Keep Original**, domyślnie **ON**. ON tworzy odbite kopie Line/Circle/Arc z nowymi EntityId, zachowując oryginały, role i ich zaznaczenie (jeden Undo). Po odznaczeniu (**OFF**) Mirror zastępuje geometrię na miejscu z zachowaniem EntityId. Obydwa tryby używają tej samej dwu-punktowej osi; niedozwolona oś lub odbicie bez zmiany nie tworzy kopii ani Undo. Checkbox znika po anulowaniu lub zatwierdzeniu, a nowy Mirror zawsze zaczyna od ON. Nie jest to Grip Copy.
 
 ### Zatwierdzanie i precision input
 
-Preview Move/Copy/Rotate/Scale/Mirror jest runtime-only. Move/Rotate/Scale/Mirror zachowują EntityId, a COPY tworzy świeże EntityId wyłącznie dla zaakceptowanych placementów. LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny request.
+Preview Move/Copy/Rotate/Scale/Mirror jest runtime-only. Move/Rotate/Scale i zwykły Mirror z Keep Original OFF zachowują EntityId, natomiast COPY, Grip Copy i zwykły Mirror z Keep Original ON tworzą świeże EntityId wyłącznie przy zaakceptowanym zatwierdzeniu. LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny request.
 
 Wspólna gramatyka precision input przyjmuje:
 
