@@ -689,6 +689,63 @@ int main(int argc, char* argv[]) {
           preserved_mirror_source);
     CHECK(interaction.selectedCount() == 3U);
 
+    // S3 B06: command-first MIRROR accepts object collection before the
+    // two-point axis and uses the same explicit Keep Original option.
+    // Undo the extra placement immediately to retain prior history tests.
+    CHECK(interaction.escape());
+    CHECK(interaction.selectedCount() == 0U);
+    const auto command_first_sources =
+        capture(session, sketch_id, ids);
+    const auto command_first_entity_count =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    const auto command_first_undo_depth = session.undoDepth();
+    CHECK(interaction.activateMirror());
+    CHECK(interaction.commonTransformStage() ==
+          sketch::CommonTransformStage::select_objects);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(interaction.setMirrorKeepOriginal(true));
+    const auto line_pick =
+        viewport.sketch_scene_.lines.front().token;
+    const auto circle_pick =
+        viewport.sketch_scene_.curves[0].token;
+    const auto arc_pick =
+        viewport.sketch_scene_.curves[1].token;
+    viewport.point_query_ = {true, line_pick};
+    click(interaction, sketch_id, 10.0, 10.0, 1.5, 0.0);
+    viewport.point_query_ = {true, circle_pick};
+    click(interaction, sketch_id, 20.0, 20.0, 2.0, 1.0);
+    viewport.point_query_ = {true, arc_pick};
+    click(interaction, sketch_id, 30.0, 30.0, 1.0, 6.0);
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(interaction.completeTransformSelection());
+    CHECK(interaction.commonTransformStage() ==
+          sketch::CommonTransformStage::await_axis_start);
+    click(interaction, sketch_id, 50.0, 50.0, 0.0, 0.0);
+    movePointer(
+        interaction, sketch_id,
+        60.0, 50.0, 1.0, 0.0);
+    CHECK(interaction.commitTransform());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(!interaction.mirrorKeepOriginal());
+    CHECK(!interaction.setMirrorKeepOriginal(true));
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(session.undoDepth() == command_first_undo_depth + 1U);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == command_first_entity_count + 3U);
+    CHECK(capture(session, sketch_id, ids) ==
+          command_first_sources);
+    interaction.cancelForHistory();
+    const auto command_first_undo = session.undo();
+    CHECK(command_first_undo.ok() && command_first_undo.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(session.undoDepth() == command_first_undo_depth);
+    CHECK(session.document().findSketch(sketch_id)->
+          model.entityCount() == command_first_entity_count);
+    CHECK(capture(session, sketch_id, ids) ==
+          command_first_sources);
+    CHECK(interaction.selectedCount() == 3U);
+
     // S3 B06: the same zero-length axis must also fail with Keep
     // Original ON, without partial duplicates or leaked Mirror state.
     const auto invalid_copy_state =
