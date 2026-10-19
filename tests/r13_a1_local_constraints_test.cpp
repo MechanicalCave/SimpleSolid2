@@ -862,6 +862,14 @@ int main() {
         CHECK(session.needsSave());
         const auto depth = session.undoDepth();
         const auto afterFixRevision = session.document().revision();
+        const auto contradictory = session.execute(app::AddSketchRelationCommand{
+            *made.sketch_id, afterFixRevision, K::horizontal,
+            {*line.entity_id, E::line}, {}});
+        CHECK(!contradictory.ok() && !contradictory.changed);
+        CHECK(contradictory.diagnostic.code ==
+            app::DocumentSessionErrorCode::invalid_command);
+        CHECK(session.document().revision() == afterFixRevision);
+        CHECK(session.undoDepth() == depth);
         const auto attempted = session.execute(app::UpdateSketchGeometryCommand{
             *made.sketch_id, afterFixRevision,
             {{*line.entity_id, {2.0, 3.0}, {10.0, 8.0}}}, {}, {}});
