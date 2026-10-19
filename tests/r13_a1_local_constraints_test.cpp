@@ -1,4 +1,6 @@
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/profile_kernel_input.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
 
 #include <cstdlib>
@@ -156,6 +158,62 @@ int main() {
             .findConstraint(*forked.constraint_id) != nullptr);
         CHECK(session.redo().changed);
         CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 0U);
+    }
+
+    // A1.1 has no accepted solver yet: an authored Horizontal on a
+    // geometrically closed rectangle MUST NOT publish seed geometry to
+    // Profile/Kernel as if it had passed a constraint solve.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(
+            app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto rectangle = session.execute(
+            app::AddSketchRectangleCommand{
+                *made.sketch_id, session.document().revision(),
+                {0.0, 0.0}, {10.0, 8.0}, sk::EntityRole::regular, false});
+        CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+        const auto* sketchBefore = session.document().findSketch(*made.sketch_id);
+        CHECK(sketchBefore != nullptr);
+        const auto regions = sk::analyzeRegions(sketchBefore->model);
+        CHECK(regions.complete() && regions.regions.size() == 1U);
+        const auto intent = part::makeProfileRegionIntent(regions.regions.front());
+        CHECK(intent.has_value());
+        const auto profile = session.execute(
+            app::CreateProfileCommand{
+                *made.sketch_id, session.document().revision(), *intent});
+        CHECK(profile.ok() && profile.profile_id);
+        CHECK(session.document().evaluateProfile(*profile.profile_id)->valid());
+        CHECK(part::resolveKernelProfileInput(
+            session.document(), *profile.profile_id).ok());
+
+        const auto linked = session.execute(
+            app::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, session.document().revision(),
+                rectangle.entity_ids.front()});
+        CHECK(linked.ok() && linked.changed && linked.constraint_id);
+        CHECK(!session.document().evaluateProfile(*profile.profile_id).has_value());
+        const auto unresolved = part::resolveKernelProfileInput(
+            session.document(), *profile.profile_id);
+        CHECK(!unresolved.ok());
+        CHECK(unresolved.status == part::ProfileKernelInputStatus::unresolved_profile);
+        CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
+
+        // Undo revives the previously valid Profile; Redo blocks it again
+        // without mutating the authored Profile or Sketch line coordinates.
+        CHECK(session.undo().changed);
+        CHECK(session.document().evaluateProfile(*profile.profile_id)->valid());
+        CHECK(part::resolveKernelProfileInput(
+            session.document(), *profile.profile_id).ok());
+        CHECK(session.redo().changed);
+        CHECK(!session.document().evaluateProfile(*profile.profile_id).has_value());
+        CHECK(part::resolveKernelProfileInput(
+            session.document(), *profile.profile_id).status ==
+            part::ProfileKernelInputStatus::unresolved_profile);
     }
 
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
