@@ -40,6 +40,42 @@ constexpr double full_turn =
            std::abs(sweep_angle) < full_turn;
 }
 
+// Exact semantic shape and duplicate identity, without any numeric solve.
+[[nodiscard]] bool validConstraintShape(
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second) noexcept {
+    if (!first.entity.valid()) return false;
+    switch (kind) {
+    case ConstraintKind::horizontal:
+    case ConstraintKind::vertical:
+        return first.element == ConstraintElement::line &&
+               second == ConstraintReference{};
+    case ConstraintKind::coincident:
+        return (first.element == ConstraintElement::line_start ||
+                first.element == ConstraintElement::line_end) &&
+               (second.element == ConstraintElement::line_start ||
+                second.element == ConstraintElement::line_end) &&
+               second.entity.valid() && first.entity != second.entity;
+    case ConstraintKind::parallel:
+    case ConstraintKind::perpendicular:
+        return first.element == ConstraintElement::line &&
+               second.element == ConstraintElement::line &&
+               second.entity.valid() && first.entity != second.entity;
+    }
+    return false; // unknown future enum values fail closed
+}
+
+[[nodiscard]] bool sameConstraintMeaning(
+    const SketchConstraintState& lhs,
+    const SketchConstraintState& rhs) noexcept {
+    if (lhs.kind != rhs.kind) return false;
+    if (lhs.first == rhs.first && lhs.second == rhs.second) return true;
+    return lhs.kind != ConstraintKind::horizontal &&
+           lhs.kind != ConstraintKind::vertical &&
+           lhs.first == rhs.second && lhs.second == rhs.first;
+}
+
 } // namespace
 
 EntityId SketchModel::allocateEntityId() {
@@ -291,24 +327,37 @@ void SketchModel::preserveConstraintIdCursor(
     }
 }
 
-std::optional<ConstraintId> SketchModel::addHorizontal(EntityId line) {
-    if (findLine(line) == nullptr ||
+std::optional<ConstraintId> SketchModel::addConstraint(
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second) {
+    if (!validConstraintShape(kind, first, second) ||
+        findLine(first.entity) == nullptr ||
+        (second.entity.valid() && findLine(second.entity) == nullptr) ||
         next_constraint_value_ == std::numeric_limits<std::uint64_t>::max()) {
         return std::nullopt;
     }
+
+    const SketchConstraintState candidate{
+        ConstraintId{next_constraint_value_}, kind, first, second};
     const auto duplicate = std::find_if(
         constraints_.cbegin(), constraints_.cend(),
-        [line](const SketchConstraintState& value) {
-            return value.kind == ConstraintKind::horizontal &&
-                value.first == ConstraintReference{line, ConstraintElement::line};
+        [&candidate](const SketchConstraintState& existing) {
+            return sameConstraintMeaning(existing, candidate);
         });
-    if (duplicate != constraints_.cend()) return std::nullopt;
-    const ConstraintId id{next_constraint_value_};
-    constraints_.push_back({
-        id, ConstraintKind::horizontal,
-        ConstraintReference{line, ConstraintElement::line}, {}});
+    if (duplicate != constraints_.cend()) {
+        return std::nullopt;
+    }
+
+    constraints_.push_back(candidate);
     ++next_constraint_value_;
-    return id;
+    return candidate.id;
+}
+
+std::optional<ConstraintId> SketchModel::addHorizontal(EntityId line) {
+    return addConstraint(
+        ConstraintKind::horizontal,
+        ConstraintReference{line, ConstraintElement::line});
 }
 
 const SketchConstraintState* SketchModel::findConstraint(ConstraintId id) const noexcept {
@@ -499,22 +548,27 @@ std::optional<SketchModel> SketchModel::restore(
                 item.role});
     }
 
-    // Only Horizontal(Line) is executable in this first A1.1 slice.
-    // Reject corrupt IDs, unsupported kinds, duplicates or dangling references.
+    // Restore all five explicit kinds; no malformed, stale, duplicate,
+    // same-entity pair or unrecognised future kind may enter owned state.
     std::set<ConstraintId> seen_constraints;
-    std::set<EntityId> horizontal_lines;
+    std::vector<SketchConstraintState> seen_meanings;
+    seen_meanings.reserve(state.constraints.size());
     for (const auto& item : state.constraints) {
         if (!item.id.valid() ||
             item.id.value_ >= state.next_constraint_id.next_value_ ||
             !seen_constraints.insert(item.id).second ||
-            item.kind != ConstraintKind::horizontal ||
-            item.first.element != ConstraintElement::line ||
-            !item.first.entity.valid() ||
-            item.second != ConstraintReference{} ||
+            !validConstraintShape(item.kind, item.first, item.second) ||
             model.findLine(item.first.entity) == nullptr ||
-            !horizontal_lines.insert(item.first.entity).second) {
+            (item.second.entity.valid() &&
+             model.findLine(item.second.entity) == nullptr) ||
+            std::any_of(
+                seen_meanings.cbegin(), seen_meanings.cend(),
+                [&item](const SketchConstraintState& existing) {
+                    return sameConstraintMeaning(item, existing);
+                })) {
             return std::nullopt;
         }
+        seen_meanings.push_back(item);
     }
     model.constraints_ = std::move(state.constraints);
     model.next_constraint_value_ = state.next_constraint_id.next_value_;
