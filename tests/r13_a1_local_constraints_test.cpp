@@ -471,6 +471,8 @@ int main() {
             sk::LocalBackendStatus status{sk::LocalBackendStatus::converged};
             std::optional<sk::SketchModelState> candidate;
             std::vector<sk::ConstraintId> conflicts;
+            std::vector<sk::LocalBackendDiagnostic> diagnostics;
+            std::optional<std::size_t> degrees_of_freedom;
             bool throw_on_solve{false};
             unsigned calls{};
 
@@ -480,7 +482,7 @@ int main() {
                 if (throw_on_solve) {
                     throw std::runtime_error{"synthetic backend failure"};
                 }
-                return {status, candidate, conflicts};
+                return {status, candidate, conflicts, diagnostics, degrees_of_freedom};
             }
         };
 
@@ -494,10 +496,13 @@ int main() {
         const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-6};
         ScriptedBackend backend;
         backend.candidate = state;
+        backend.degrees_of_freedom = 3U; // underconstrained is legal
         const auto accepted = sk::evaluateLocalSolve(*input, policy, backend);
         CHECK(accepted.status == sk::LocalSolveGatewayStatus::candidate_accepted);
         CHECK(accepted.candidate && *accepted.candidate == state);
         CHECK(accepted.residuals.status == sk::LocalResidualStatus::residuals_satisfied);
+        CHECK(accepted.degrees_of_freedom == 3U);
+        CHECK(accepted.diagnostics.empty());
         CHECK(backend.calls == 1U);
         CHECK(seed.state() == state);
 
@@ -506,9 +511,41 @@ int main() {
         CHECK(residualRejected.status == sk::LocalSolveGatewayStatus::residual_violation);
         CHECK(!residualRejected.candidate);
         CHECK(residualRejected.residuals.status == sk::LocalResidualStatus::residual_violation);
+        CHECK(!residualRejected.diagnostics.empty());
+        CHECK(residualRejected.diagnostics.front().kind ==
+            sk::LocalBackendDiagnosticKind::residual_violation);
+        CHECK(residualRejected.diagnostics.front().constraint == relation);
 
         backend.candidate = state;
+        backend.diagnostics = {{sk::LocalBackendDiagnosticKind::redundant_constraint, relation}};
+        const auto redundancy = sk::evaluateLocalSolve(*input, policy, backend);
+        CHECK(redundancy.status == sk::LocalSolveGatewayStatus::redundant_constraint);
+        CHECK(!redundancy.candidate);
+        CHECK(redundancy.diagnostics == backend.diagnostics);
+        backend.diagnostics.clear();
+
+        backend.diagnostics = {{sk::LocalBackendDiagnosticKind::conflicting_constraint, relation}};
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.diagnostics.clear();
+        backend.diagnostics = {{sk::LocalBackendDiagnosticKind::redundant_constraint,
+                               *sk::ConstraintId::parse("9999")}};
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.diagnostics.clear();
+        backend.diagnostics = {{static_cast<sk::LocalBackendDiagnosticKind>(255), relation}};
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.diagnostics.clear();
+        backend.diagnostics = {
+            {sk::LocalBackendDiagnosticKind::redundant_constraint, relation},
+            {sk::LocalBackendDiagnosticKind::redundant_constraint, relation}};
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.diagnostics.clear();
+
         backend.status = sk::LocalBackendStatus::conflict;
+        backend.candidate.reset();
         backend.conflicts = {*relation};
         const auto conflict = sk::evaluateLocalSolve(*input, policy, backend);
         CHECK(conflict.status == sk::LocalSolveGatewayStatus::conflict);
@@ -519,10 +556,18 @@ int main() {
         CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
               sk::LocalSolveGatewayStatus::invalid_backend_response);
         backend.conflicts.clear();
+        backend.candidate = state;
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.candidate.reset();
         backend.status = sk::LocalBackendStatus::unsupported;
         const auto unsupported = sk::evaluateLocalSolve(*input, policy, backend);
         CHECK(unsupported.status == sk::LocalSolveGatewayStatus::unsupported);
         CHECK(!unsupported.candidate);
+        backend.candidate = state;
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.candidate.reset();
         backend.status = sk::LocalBackendStatus::failed;
         CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
               sk::LocalSolveGatewayStatus::backend_failure);
