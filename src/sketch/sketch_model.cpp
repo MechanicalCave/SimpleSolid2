@@ -284,6 +284,44 @@ bool SketchModel::setEntityRole(
     return false;
 }
 
+std::optional<ConstraintId> SketchModel::addHorizontal(EntityId line) {
+    if (findLine(line) == nullptr ||
+        next_constraint_value_ == std::numeric_limits<std::uint64_t>::max()) {
+        return std::nullopt;
+    }
+    const auto duplicate = std::find_if(
+        constraints_.cbegin(), constraints_.cend(),
+        [line](const SketchConstraintState& value) {
+            return value.kind == ConstraintKind::horizontal &&
+                value.first == ConstraintReference{line, ConstraintElement::line};
+        });
+    if (duplicate != constraints_.cend()) return std::nullopt;
+    const ConstraintId id{next_constraint_value_};
+    constraints_.push_back({
+        id, ConstraintKind::horizontal,
+        ConstraintReference{line, ConstraintElement::line}, {}});
+    ++next_constraint_value_;
+    return id;
+}
+
+const SketchConstraintState* SketchModel::findConstraint(ConstraintId id) const noexcept {
+    if (!id.valid()) return nullptr;
+    const auto found = std::find_if(
+        constraints_.cbegin(), constraints_.cend(),
+        [id](const SketchConstraintState& value) { return value.id == id; });
+    return found == constraints_.cend() ? nullptr : &*found;
+}
+
+bool SketchModel::eraseConstraint(ConstraintId id) noexcept {
+    if (!id.valid()) return false;
+    const auto found = std::find_if(
+        constraints_.begin(), constraints_.end(),
+        [id](const SketchConstraintState& value) { return value.id == id; });
+    if (found == constraints_.end()) return false;
+    constraints_.erase(found);
+    return true;
+}
+
 bool SketchModel::erase(
     EntityId id) noexcept {
     if (!id.valid()) {
