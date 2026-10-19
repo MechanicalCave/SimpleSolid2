@@ -1930,43 +1930,70 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
 }
 
 AddSketchConstraintResult DocumentSession::execute(
-    const AddHorizontalSketchConstraintCommand& command) {
+    const AddSketchRelationCommand& command) {
     if (document_.revision() != command.expected_revision) {
         const auto failed = failure(
             DocumentSessionErrorCode::revision_diverged,
-            "Horizontal relation command has stale DocumentRevision", path_);
-        return {false, std::nullopt, failed.diagnostic};
-    }
-    auto after = document_.state();
-    applySketchConstraintIdCursors(after);
-    auto* target = findSketch(after, command.sketch_id);
-    if (target == nullptr ||
-        target->model.findLine(command.line_id) == nullptr ||
-        std::any_of(
-            target->projection_bindings.cbegin(),
-            target->projection_bindings.cend(),
-            [id = command.line_id](const part::ProjectedEdgeBinding& binding) {
-                return binding.target_entity == id;
-            })) {
-        const auto failed = failure(
-            DocumentSessionErrorCode::invalid_command,
-            "Horizontal relation requires an authored, unlinked Line", path_);
+            "Sketch relation command has stale DocumentRevision", path_);
         return {false, std::nullopt, failed.diagnostic};
     }
 
-    const auto id = target->model.addHorizontal(command.line_id);
+    auto after = document_.state();
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Sketch relation target SketchId does not exist", path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+
+    // PG-01 projected sketch geometry is not ordinary editable user line
+    // authorship. Require a later explicit fixed-reference solver gate.
+    const auto projected = [target](sketch::EntityId entity) {
+        return std::any_of(
+            target->projection_bindings.cbegin(),
+            target->projection_bindings.cend(),
+            [entity](const part::ProjectedEdgeBinding& binding) {
+                return binding.target_entity == entity;
+            });
+    };
+    if (projected(command.first.entity) ||
+        (command.second.entity.valid() &&
+         projected(command.second.entity))) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Sketch relation references linked projection without a fixed-reference solver",
+            path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+
+    const auto id = target->model.addConstraint(
+        command.kind, command.first, command.second);
     if (!id) {
         const auto failed = failure(
             DocumentSessionErrorCode::invalid_command,
-            "Horizontal relation is duplicate or ConstraintId allocation failed", path_);
+            "Sketch relation has invalid references, duplicate intent or exhausted IDs",
+            path_);
         return {false, std::nullopt, failed.diagnostic};
     }
+
     const auto committed = commitCommandState(
-        std::move(after), "Part transaction failed while creating Horizontal relation");
+        std::move(after), "Part transaction failed while creating Sketch relation");
     if (!committed.ok() || !committed.changed) {
         return {false, std::nullopt, committed.diagnostic};
     }
     return {true, *id, {}};
+}
+
+AddSketchConstraintResult DocumentSession::execute(
+    const AddHorizontalSketchConstraintCommand& command) {
+    return execute(AddSketchRelationCommand{
+        command.sketch_id,
+        command.expected_revision,
+        sketch::ConstraintKind::horizontal,
+        {command.line_id, sketch::ConstraintElement::line},
+        {}});
 }
 
 DocumentSessionResult DocumentSession::execute(
