@@ -143,6 +143,12 @@ std::optional<LocalSolveProblem> prepareLocalSolveProblem(
     LocalSolveProblem result;
     result.authored = authored;
     result.constraints = authored.constraints;
+    result.equations.reserve(authored.constraints.size());
+    for (const auto& relation : authored.constraints) {
+        if (relation.kind != ConstraintKind::fix) {
+            result.equations.push_back(relation);
+        }
+    }
     result.fixed_lines.assign(fixed_lines.begin(), fixed_lines.end());
     // A user-authored Fix(Line) is as strong as a fixed PG-01 source,
     // without requiring any Body projection. Preserve both forms of
@@ -185,6 +191,7 @@ LocalResidualReport reviewLocalSolveCandidate(
         problem.authored, std::span<const EntityId>{problem.fixed_lines});
     if (!canonical ||
         canonical->constraints != problem.constraints ||
+        canonical->equations != problem.equations ||
         canonical->fixed_lines != problem.fixed_lines ||
         problem.lines.size() != problem.authored.lines.size() ||
         !sameNonGeometryState(problem.authored, candidate)) {
@@ -269,6 +276,7 @@ LocalSolveGatewayResult evaluateLocalSolve(
         problem.authored, std::span<const EntityId>{problem.fixed_lines});
     if (!canonical ||
         canonical->constraints != problem.constraints ||
+        canonical->equations != problem.equations ||
         canonical->fixed_lines != problem.fixed_lines ||
         canonical->lines.size() != problem.lines.size()) {
         result.status = LocalSolveGatewayStatus::invalid_problem;
