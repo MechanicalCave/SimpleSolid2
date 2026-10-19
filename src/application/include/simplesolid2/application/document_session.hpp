@@ -134,6 +134,16 @@ struct BreakProjectedEdgeLinksCommand final {
     core::DocumentRevision expected_revision;
 };
 
+// All five explicit relations use one revision-bound, atomic authored command.
+// Numeric evaluation and distribution approval are separate A1 acceptance gates.
+struct AddSketchRelationCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::ConstraintKind kind;
+    sketch::ConstraintReference first;
+    sketch::ConstraintReference second;
+};
+
 struct AddHorizontalSketchConstraintCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
@@ -736,6 +746,8 @@ public:
     [[nodiscard]] BreakProjectedEdgeLinkResult execute(
         const BreakProjectedEdgeLinksCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] AddSketchConstraintResult execute(
+        const AddSketchRelationCommand& command);
     [[nodiscard]] AddSketchConstraintResult execute(
         const AddHorizontalSketchConstraintCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
