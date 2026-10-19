@@ -1615,7 +1615,7 @@ add_test(
 add_executable(r13_a1_local_constraints_test
     r13_a1_local_constraints_test.cpp
 )
-target_link_libraries(r13_a1_local_constraints_test PRIVATE simplesolid2_sketch)
+target_link_libraries(r13_a1_local_constraints_test PRIVATE simplesolid2_application simplesolid2_sketch)
 target_compile_features(r13_a1_local_constraints_test PRIVATE cxx_std_20)
 add_test(NAME r13a1.local_horizontal COMMAND r13_a1_local_constraints_test)
 
