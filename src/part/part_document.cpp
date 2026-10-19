@@ -1300,4 +1300,43 @@ prepareStageLocalSolveProblem(
         evaluated->model.state(), fixed_lines);
 }
 
+
+std::optional<StageLocalSolveEvaluation>
+evaluateStageLocalSolve(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend,
+    std::optional<FeatureId> consuming_feature) {
+    // Fail before any provider/backend work for invalid acceptance policy.
+    if (!policy.valid()) return std::nullopt;
+
+    // This is the ONLY Part-owned source of projected fixed reference
+    // geometry; a failed current stage must not fall back to Sketch seeds.
+    const auto problem = prepareStageLocalSolveProblem(
+        document, sketch_id, evaluated_prefix, query, consuming_feature);
+    if (!problem ||
+        !evaluated_prefix.source_document_id ||
+        *evaluated_prefix.source_document_id != document.documentId() ||
+        evaluated_prefix.source_revision != document.revision()) {
+        return std::nullopt;
+    }
+
+    auto solution = sketch::evaluateLocalSolve(*problem, policy, backend);
+    // The adapter may invoke code that edits DocumentSession. Never return
+    // its otherwise converged, but now stale, derived snapshot to Part.
+    if (*evaluated_prefix.source_document_id != document.documentId() ||
+        evaluated_prefix.source_revision != document.revision()) {
+        return std::nullopt;
+    }
+    return StageLocalSolveEvaluation{
+        document.documentId(),
+        document.revision(),
+        sketch_id,
+        consuming_feature,
+        std::move(solution)};
+}
+
 } // namespace simplesolid2::part
