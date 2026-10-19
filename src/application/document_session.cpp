@@ -1892,10 +1892,20 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
     // Never materialize a subset when a source is unavailable.
     const auto current_prefix =
         part::evaluatePart(document_, modeling_kernel);
+    // The kernel may execute a nested DocumentSession command. An
+    // evaluation belonging to the old request cannot authorize detachment.
+    if (document_.revision() != command.expected_revision) {
+        return {Status::stale_revision};
+    }
     const auto effective =
         part::evaluateEffectiveSketchProjection(
             document_, command.sketch_id,
             current_prefix, *projection_query);
+    // The exact projection query may itself mutate the owning session.
+    // Report the stale original request before a generic source failure.
+    if (document_.revision() != command.expected_revision) {
+        return {Status::stale_revision};
+    }
     if (!effective) {
         return {Status::source_unavailable};
     }
@@ -1941,6 +1951,11 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
         [&unique](const part::ProjectedEdgeBinding& item) {
             return unique.contains(item.target_entity);
         });
+    // commitCommandState guards its mutable session expectation; nested
+    // commands may have advanced it. Guard THIS command's original revision.
+    if (document_.revision() != command.expected_revision) {
+        return {Status::stale_revision};
+    }
     const auto committed = commitCommandState(
         std::move(after),
         "Part transaction failed while breaking Projected Edge Links");
