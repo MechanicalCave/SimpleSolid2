@@ -2122,7 +2122,7 @@ int main() {
     // through that provider must not leave any borrowed authored pointers
     // dangling or allow an obsolete problem to escape standalone prepare.
     {
-        const auto cloned = part::PartDocument::restore(
+        auto cloned = part::PartDocument::restore(
             authored_chain.documentId(), authored_chain.state(),
             authored_chain.revision());
         CHECK(cloned.ok() && cloned.document);
