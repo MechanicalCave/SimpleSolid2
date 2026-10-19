@@ -148,16 +148,35 @@ constexpr double full_turn =
             }
             const auto* second = model.findLine(relation.second.entity);
             if (!second) return true;
-            const double a = std::atan2(
-                first->end().v - first->start().v,
-                first->end().u - first->start().u);
-            const double b = std::atan2(
-                second->end().v - second->start().v,
-                second->end().u - second->start().u);
-            const double expected = relation.kind == ConstraintKind::parallel
-                ? 0.0 : 0.5 * std::numbers::pi_v<double>;
-            const double error = std::remainder(
-                a - b - expected, std::numbers::pi_v<double>);
+            // A fixed pair has no adjustable geometry. Use its exact
+            // algebraic parallel/perpendicular relation, not atan2 angle
+            // equality: angle rounding can falsely reject a valid oblique
+            // orthogonal pair even when its dot product is exactly zero.
+            const double au = first->end().u - first->start().u;
+            const double av = first->end().v - first->start().v;
+            const double bu = second->end().u - second->start().u;
+            const double bv = second->end().v - second->start().v;
+            if (!std::isfinite(au) || !std::isfinite(av) ||
+                !std::isfinite(bu) || !std::isfinite(bv)) {
+                return true;
+            }
+            const double p = relation.kind == ConstraintKind::parallel
+                ? au * bv : au * bu;
+            const double q = relation.kind == ConstraintKind::parallel
+                ? av * bu : av * bv;
+            // Overflow or a product rounded all the way to zero despite
+            // nonzero factors cannot certify a fixed compatibility claim.
+            const auto untrusted = [](double x, double y, double product) {
+                return !std::isfinite(product) ||
+                       (x != 0.0 && y != 0.0 && product == 0.0);
+            };
+            if (relation.kind == ConstraintKind::parallel
+                    ? (untrusted(au, bv, p) || untrusted(av, bu, q))
+                    : (untrusted(au, bu, p) || untrusted(av, bv, q))) {
+                return true;
+            }
+            const double error = relation.kind == ConstraintKind::parallel
+                ? p - q : p + q;
             return !std::isfinite(error) || error != 0.0;
         }
         }
