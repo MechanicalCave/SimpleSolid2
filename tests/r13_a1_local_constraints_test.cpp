@@ -804,6 +804,32 @@ int main() {
             app::DocumentSessionErrorCode::invalid_command);
         CHECK(session.document().revision() == afterFixRevision);
         CHECK(session.undoDepth() == depth);
+        const auto other = session.execute(app::AddSketchLineCommand{
+            *made.sketch_id, {3.0, 0.0}, {3.0, 12.0}});
+        CHECK(other.ok() && other.entity_id);
+        const auto fixedDepth = session.undoDepth();
+        const auto fixedRevision = session.document().revision();
+        const auto trimBlocked = session.execute(app::TrimSketchCommand{
+            *made.sketch_id, fixedRevision, *line.entity_id,
+            {*other.entity_id}, {4.0, 5.0}});
+        CHECK(!trimBlocked.changed && !trimBlocked.diagnostic.ok());
+        CHECK(trimBlocked.diagnostic.code ==
+            app::DocumentSessionErrorCode::invalid_command);
+        const auto extendBlocked = session.execute(app::ExtendSketchCommand{
+            *made.sketch_id, fixedRevision, *line.entity_id,
+            {*other.entity_id}, sk::StructuralEndpointRole::end});
+        CHECK(!extendBlocked.changed);
+        CHECK(extendBlocked.diagnostic.code ==
+            app::DocumentSessionErrorCode::invalid_command);
+        const auto extendBothBlocked =
+            session.execute(app::ExtendBothSketchLinesCommand{
+                *made.sketch_id, fixedRevision,
+                *line.entity_id, *other.entity_id});
+        CHECK(!extendBothBlocked.changed);
+        CHECK(extendBothBlocked.diagnostic.code ==
+            app::DocumentSessionErrorCode::invalid_command);
+        CHECK(session.undoDepth() == fixedDepth);
+        CHECK(session.document().revision() == fixedRevision);
         CHECK(!session.execute(app::AddSketchRelationCommand{
             *made.sketch_id, initialRevision, K::fix,
             {*line.entity_id, E::line}, {}}).ok());
