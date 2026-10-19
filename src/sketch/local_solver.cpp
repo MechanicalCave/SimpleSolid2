@@ -236,4 +236,105 @@ LocalResidualReport reviewLocalSolveCandidate(
     return result;
 }
 
+LocalSolveGatewayResult evaluateLocalSolve(
+    const LocalSolveProblem& problem,
+    const LocalSolverAcceptancePolicy& policy,
+    ILocalSketchSolver& backend) {
+    LocalSolveGatewayResult result;
+    if (!policy.valid()) {
+        result.status = LocalSolveGatewayStatus::invalid_policy;
+        return result;
+    }
+
+    // Callers cannot fabricate or alter the prepared bridge's constraint
+    // inventory, reference geometry or fixed-line declaration.
+    const auto canonical = prepareLocalSolveProblem(
+        problem.authored, std::span<const EntityId>{problem.fixed_lines});
+    if (!canonical ||
+        canonical->constraints != problem.constraints ||
+        canonical->fixed_lines != problem.fixed_lines ||
+        canonical->lines.size() != problem.lines.size()) {
+        result.status = LocalSolveGatewayStatus::invalid_problem;
+        return result;
+    }
+    for (std::size_t i = 0; i < problem.lines.size(); ++i) {
+        const auto& a = canonical->lines[i];
+        const auto& b = problem.lines[i];
+        if (a.id != b.id || a.start != b.start || a.end != b.end ||
+            a.fixed != b.fixed) {
+            result.status = LocalSolveGatewayStatus::invalid_problem;
+            return result;
+        }
+    }
+
+    LocalBackendSolveResult backend_result;
+    try {
+        backend_result = backend.solve(*canonical);
+    } catch (...) {
+        result.status = LocalSolveGatewayStatus::backend_failure;
+        return result;
+    }
+
+    // Backend diagnostics cannot invent new ConstraintIds or repeat IDs.
+    std::set<ConstraintId> seen;
+    for (const auto id : backend_result.conflicting_constraints) {
+        const auto it = std::find_if(
+            problem.constraints.cbegin(), problem.constraints.cend(),
+            [id](const SketchConstraintState& c) { return c.id == id; });
+        if (!id.valid() || it == problem.constraints.cend() ||
+            !seen.insert(id).second) {
+            result.status = LocalSolveGatewayStatus::invalid_backend_response;
+            return result;
+        }
+    }
+
+    switch (backend_result.status) {
+    case LocalBackendStatus::conflict:
+        result.status = LocalSolveGatewayStatus::conflict;
+        result.conflicting_constraints =
+            std::move(backend_result.conflicting_constraints);
+        return result;
+    case LocalBackendStatus::unsupported:
+        if (!backend_result.conflicting_constraints.empty()) break;
+        result.status = LocalSolveGatewayStatus::unsupported;
+        return result;
+    case LocalBackendStatus::failed:
+        if (!backend_result.conflicting_constraints.empty()) break;
+        result.status = LocalSolveGatewayStatus::backend_failure;
+        return result;
+    case LocalBackendStatus::converged:
+        if (!backend_result.candidate ||
+            !backend_result.conflicting_constraints.empty()) {
+            break;
+        }
+        result.residuals = reviewLocalSolveCandidate(
+            *canonical, *backend_result.candidate, policy);
+        switch (result.residuals.status) {
+        case LocalResidualStatus::residuals_satisfied:
+            result.status = LocalSolveGatewayStatus::candidate_accepted;
+            // A COPY, not a live mutable reference to authored state.
+            result.candidate = std::move(backend_result.candidate);
+            return result;
+        case LocalResidualStatus::residual_violation:
+            result.status = LocalSolveGatewayStatus::residual_violation;
+            return result;
+        case LocalResidualStatus::invalid_candidate:
+            result.status = LocalSolveGatewayStatus::invalid_candidate;
+            return result;
+        case LocalResidualStatus::stale_semantics:
+            result.status = LocalSolveGatewayStatus::stale_semantics;
+            return result;
+        case LocalResidualStatus::fixed_entity_changed:
+            result.status = LocalSolveGatewayStatus::fixed_entity_changed;
+            return result;
+        case LocalResidualStatus::invalid_policy:
+            result.status = LocalSolveGatewayStatus::invalid_policy;
+            return result;
+        }
+        break;
+    }
+    result.status = LocalSolveGatewayStatus::invalid_backend_response;
+    return result;
+}
+
 } // namespace simplesolid2::sketch
