@@ -3,6 +3,7 @@
 #include <simplesolid2/kernel/edge_projection.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
+#include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/sketch/local_solver.hpp>
 
 #include <optional>
@@ -130,6 +131,25 @@ evaluateStageLocalSolve(
     kernel::IEdgeProjectionQuery& query,
     const sketch::LocalSolverAcceptancePolicy& policy,
     sketch::ILocalSketchSolver& backend,
+    std::optional<FeatureId> consuming_feature = std::nullopt);
+
+
+// The ONLY stage-authorized gateway from a constrained Sketch into the
+// existing ProfileRegionIntent -> shared 2D -> Kernel profile machinery.
+// Internally prepares the actual current PG-01 stage, invokes and accepts the
+// solver, and immediately resolves the derived geometry for this Profile.
+// No caller-supplied arbitrary SketchModel can bypass the legacy safety fence.
+// Does NOT publish a Profile, evaluate a Body/OCCT feature, or persist geometry.
+[[nodiscard]] ProfileKernelInputResult
+resolveStageSolvedProfileKernelInput(
+    const PartDocument& document,
+    ProfileId profile_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend,
+    const BodyStageTopologyCatalog* support_topology = nullptr,
+    const DatumEvaluation* datum_evaluation = nullptr,
     std::optional<FeatureId> consuming_feature = std::nullopt);
 
 } // namespace simplesolid2::part
