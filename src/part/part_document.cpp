@@ -1269,14 +1269,22 @@ prepareStageLocalSolveProblem(
         evaluated_prefix.source_revision != document.revision()) {
         return std::nullopt;
     }
-    const auto* authored = document.findSketch(sketch_id);
-    if (authored == nullptr) return std::nullopt;
+    if (document.findSketch(sketch_id) == nullptr) return std::nullopt;
 
     // Existing Part-owned PG-01 resolver rejects missing/ambiguous stages,
     // unsupported geometry and stale sources, without mutating Sketch seeds.
     const auto evaluated = evaluateEffectiveSketchProjection(
         document, sketch_id, evaluated_prefix, query, consuming_feature);
-    if (!evaluated || !evaluated->allResolved() ||
+    // A provider may re-enter DocumentSession, replacing PartAuthoredState
+    // entirely. Check owner/revision BEFORE dereferencing any authored
+    // reference after projection; no cross-revision mixture may escape.
+    if (!evaluated_prefix.source_document_id ||
+        *evaluated_prefix.source_document_id != document.documentId() ||
+        evaluated_prefix.source_revision != document.revision()) {
+        return std::nullopt;
+    }
+    const auto* authored = document.findSketch(sketch_id);
+    if (!authored || !evaluated || !evaluated->allResolved() ||
         evaluated->outcomes.size() != authored->projection_bindings.size()) {
         return std::nullopt;
     }
@@ -1296,8 +1304,15 @@ prepareStageLocalSolveProblem(
         }
         fixed_lines.push_back(id);
     }
-    return sketch::prepareLocalSolveProblem(
+    auto problem = sketch::prepareLocalSolveProblem(
         evaluated->model.state(), fixed_lines);
+    if (!problem ||
+        !evaluated_prefix.source_document_id ||
+        *evaluated_prefix.source_document_id != document.documentId() ||
+        evaluated_prefix.source_revision != document.revision()) {
+        return std::nullopt;
+    }
+    return problem;
 }
 
 
