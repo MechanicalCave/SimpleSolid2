@@ -200,11 +200,11 @@ struct ResidualValue final {
 
         for (const auto i : group) {
             const auto before = endpoint(candidate, references[i]);
-            if (!before ||
-                !std::isfinite(std::hypot(
-                    before->u - anchor->u, before->v - anchor->v)) ||
-                std::hypot(before->u - anchor->u, before->v - anchor->v) >
-                    policy.distance_tolerance) {
+            if (!before) return std::nullopt;
+            const double distance = std::hypot(
+                before->u - anchor->u, before->v - anchor->v);
+            if (!std::isfinite(distance) ||
+                distance > policy.distance_tolerance) {
                 return std::nullopt;
             }
             if (fixed(i)) {
@@ -500,7 +500,7 @@ LocalSolveGatewayResult evaluateLocalSolve(
             *canonical, *backend_result.candidate, policy);
         switch (result.residuals.status) {
         case LocalResidualStatus::residuals_satisfied: {
-            // The caller-owned tolerance may admit a sub-ULP/1e-12
+            // The caller-owned tolerance may admit a tiny/1e-12
             // Coincident residual, but Profile must never consume a seam.
             // Close ONLY explicit endpoint groups in derived candidate
             // geometry; keep Fix/PG-01 anchors and all authored seeds exact.
