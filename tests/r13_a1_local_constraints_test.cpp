@@ -232,7 +232,7 @@ int main() {
         const sk::ConstraintReference ae{a, E::line_end};
         const sk::ConstraintReference bs{b, E::line_start};
         const auto horizontal = relations.addConstraint(K::horizontal, la);
-        const auto vertical = relations.addConstraint(K::vertical, la);
+        const auto vertical = relations.addConstraint(K::vertical, lc);
         const auto coincident = relations.addConstraint(K::coincident, ae, bs);
         const auto parallel = relations.addConstraint(K::parallel, la, lb);
         const auto perpendicular = relations.addConstraint(K::perpendicular, lb, lc);
@@ -244,10 +244,13 @@ int main() {
         CHECK(perpendicular->serialized() == "5");
         const auto beforeInvalid = relations.state();
         CHECK(!relations.addConstraint(K::horizontal, la));
-        CHECK(!relations.addConstraint(K::vertical, la));
+        CHECK(!relations.addConstraint(K::vertical, lc)); // duplicate
+        CHECK(!relations.addConstraint(K::vertical, la)); // conflicts with Horizontal(a)
         CHECK(!relations.addConstraint(K::coincident, bs, ae));
         CHECK(!relations.addConstraint(K::parallel, lb, la));
         CHECK(!relations.addConstraint(K::perpendicular, lc, lb));
+        CHECK(!relations.addConstraint(K::perpendicular, la, lb)); // conflicts with Parallel(a,b)
+        CHECK(!relations.addConstraint(K::parallel, lb, lc)); // conflicts with Perpendicular(b,c)
         CHECK(!relations.addConstraint(K::coincident, as, ae)); // same Line
         CHECK(!relations.addConstraint(K::coincident, as, as));
         CHECK(!relations.addConstraint(K::parallel, la, la));
@@ -311,9 +314,13 @@ int main() {
             app::AddSketchLineCommand{*made.sketch_id, {1.0, 2.0}, {5.0, 6.0}});
         const auto second = session.execute(
             app::AddSketchLineCommand{*made.sketch_id, {6.0, 1.0}, {8.0, 2.0}});
+        const auto third = session.execute(
+            app::AddSketchLineCommand{*made.sketch_id, {10.0, 2.0}, {12.0, 4.0}});
         CHECK(first.ok() && first.entity_id && second.ok() && second.entity_id);
+        CHECK(third.ok() && third.entity_id);
         const sk::ConstraintReference firstLine{*first.entity_id, E::line};
         const sk::ConstraintReference secondLine{*second.entity_id, E::line};
+        const sk::ConstraintReference thirdLine{*third.entity_id, E::line};
         const sk::ConstraintReference firstEnd{*first.entity_id, E::line_end};
         const sk::ConstraintReference secondStart{*second.entity_id, E::line_start};
         const auto oldRevision = session.document().revision();
@@ -327,12 +334,15 @@ int main() {
         const auto coincident = add(K::coincident, firstEnd, secondStart);
         CHECK(coincident.changed && coincident.constraint_id);
         CHECK(add(K::parallel, firstLine, secondLine).changed);
-        CHECK(add(K::perpendicular, firstLine, secondLine).changed);
+        CHECK(add(K::perpendicular, secondLine, thirdLine).changed);
         const auto* hosted = session.document().findSketch(*made.sketch_id);
         CHECK(hosted && hosted->model.constraintCount() == 5U);
         const auto undoDepth = session.undoDepth();
         const auto duplicate = add(K::coincident, secondStart, firstEnd);
         CHECK(!duplicate.changed && !duplicate.ok());
+        CHECK(session.undoDepth() == undoDepth);
+        CHECK(!add(K::vertical, firstLine).ok()); // conflicts with Horizontal
+        CHECK(!add(K::perpendicular, firstLine, secondLine).ok()); // conflicts with Parallel
         CHECK(session.undoDepth() == undoDepth);
         const auto stale = session.execute(app::AddSketchRelationCommand{
             *made.sketch_id, oldRevision,
