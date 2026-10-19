@@ -2116,9 +2116,8 @@ int main() {
             *cut_constraint.constraint_id);
         CHECK(authored_chain.findProfile(*parent_profile.profile_id));
         CHECK(authored_chain.findProfile(*cut_profile.profile_id));
-    }
 
-    // A legitimate PG-01 projected Line triggers an external provider call
+        // A legitimate PG-01 projected Line triggers an external provider call
     // *inside* prepareStageLocalSolveProblem. Reentering DocumentSession
     // through that provider must not leave any borrowed authored pointers
     // dangling or allow an obsolete problem to escape standalone prepare.
@@ -2191,6 +2190,13 @@ int main() {
             unsigned projections{};
             bool mutated{};
 
+            ReentrantQuery(
+                occt::OcctSolidModelingKernel& native_provider,
+                app::DocumentSession& owner,
+                sk::SketchId target_id)
+                : native{native_provider}, session{owner},
+                  sketch_id{target_id} {}
+
             std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
                 kernel::RuntimeSolidHandle body,
                 kernel::RuntimeEdgeToken edge) noexcept override {
@@ -2232,6 +2238,7 @@ int main() {
             current_prefix, provider);
         CHECK(restored && restored->lines.size() == 2U);
         CHECK(restored->fixed_lines.size() == 1U);
+        }
     }
 
     std::cout << "R13_A1_OCCT_PASS exact_seam=1"
