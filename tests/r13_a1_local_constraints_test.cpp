@@ -2502,7 +2502,8 @@ int main() {
               << " stage_prefix_cut=1"
               << " pg01_reentrant_stale=0"
               << " pg01_reentrant_bind_stale=0"
-              << " pg01_command_atomic_reentry=1\n";
+              << " pg01_command_atomic_reentry=1"
+              << " pg01_break_atomic_reentry=1\n";
     return EXIT_SUCCESS;
 }
 #endif
