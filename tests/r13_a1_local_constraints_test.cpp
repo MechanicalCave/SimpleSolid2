@@ -231,7 +231,6 @@ int main() {
         const sk::ConstraintReference as{a, E::line_start};
         const sk::ConstraintReference ae{a, E::line_end};
         const sk::ConstraintReference bs{b, E::line_start};
-        const sk::ConstraintReference be{b, E::line_end};
         const auto horizontal = relations.addConstraint(K::horizontal, la);
         const auto vertical = relations.addConstraint(K::vertical, la);
         const auto coincident = relations.addConstraint(K::coincident, ae, bs);
@@ -263,7 +262,8 @@ int main() {
         CHECK(relations.state() == beforeInvalid);
         auto roundTrip = sk::SketchModel::restore(beforeInvalid);
         CHECK(roundTrip && roundTrip->state() == beforeInvalid);
-        CHECK(relations.findLine(a)->start() == sk::Point2{0.0, 0.0});
+        const sk::Point2 originalStart{0.0, 0.0};
+        CHECK(relations.findLine(a)->start() == originalStart);
         auto invalidState = beforeInvalid;
         invalidState.constraints.push_back(invalidState.constraints[3]);
         invalidState.constraints.back().id = *sk::ConstraintId::parse("6");
@@ -316,6 +316,7 @@ int main() {
         const sk::ConstraintReference secondLine{*second.entity_id, E::line};
         const sk::ConstraintReference firstEnd{*first.entity_id, E::line_end};
         const sk::ConstraintReference secondStart{*second.entity_id, E::line_start};
+        const auto oldRevision = session.document().revision();
         const auto add = [&](K kind, sk::ConstraintReference lhs,
                              sk::ConstraintReference rhs = {}) {
             return session.execute(app::AddSketchRelationCommand{
@@ -334,7 +335,7 @@ int main() {
         CHECK(!duplicate.changed && !duplicate.ok());
         CHECK(session.undoDepth() == undoDepth);
         const auto stale = session.execute(app::AddSketchRelationCommand{
-            *made.sketch_id, *core::DocumentRevision::parse("1"),
+            *made.sketch_id, oldRevision,
             K::parallel, firstLine, secondLine});
         CHECK(!stale.ok());
         CHECK(stale.diagnostic.code == app::DocumentSessionErrorCode::revision_diverged);
