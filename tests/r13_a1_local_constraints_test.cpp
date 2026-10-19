@@ -216,5 +216,139 @@ int main() {
             part::ProfileKernelInputStatus::unresolved_profile);
     }
 
+
+    // R13-A1: explicit five-relation authored semantics (not numeric solve).
+    {
+        sk::SketchModel relations;
+        const auto a = relations.addLine({0.0, 0.0}, {2.0, 3.0});
+        const auto b = relations.addLine({4.0, 5.0}, {6.0, 7.0});
+        const auto c = relations.addLine({1.0, 1.0}, {4.0, 4.0});
+        using K = sk::ConstraintKind;
+        using E = sk::ConstraintElement;
+        const sk::ConstraintReference la{a, E::line};
+        const sk::ConstraintReference lb{b, E::line};
+        const sk::ConstraintReference lc{c, E::line};
+        const sk::ConstraintReference as{a, E::line_start};
+        const sk::ConstraintReference ae{a, E::line_end};
+        const sk::ConstraintReference bs{b, E::line_start};
+        const sk::ConstraintReference be{b, E::line_end};
+        const auto horizontal = relations.addConstraint(K::horizontal, la);
+        const auto vertical = relations.addConstraint(K::vertical, la);
+        const auto coincident = relations.addConstraint(K::coincident, ae, bs);
+        const auto parallel = relations.addConstraint(K::parallel, la, lb);
+        const auto perpendicular = relations.addConstraint(K::perpendicular, lb, lc);
+        CHECK(horizontal && vertical && coincident && parallel && perpendicular);
+        CHECK(horizontal->serialized() == "1");
+        CHECK(vertical->serialized() == "2");
+        CHECK(coincident->serialized() == "3");
+        CHECK(parallel->serialized() == "4");
+        CHECK(perpendicular->serialized() == "5");
+        const auto beforeInvalid = relations.state();
+        CHECK(!relations.addConstraint(K::horizontal, la));
+        CHECK(!relations.addConstraint(K::vertical, la));
+        CHECK(!relations.addConstraint(K::coincident, bs, ae));
+        CHECK(!relations.addConstraint(K::parallel, lb, la));
+        CHECK(!relations.addConstraint(K::perpendicular, lc, lb));
+        CHECK(!relations.addConstraint(K::coincident, as, ae)); // same Line
+        CHECK(!relations.addConstraint(K::coincident, as, as));
+        CHECK(!relations.addConstraint(K::parallel, la, la));
+        CHECK(!relations.addConstraint(K::perpendicular, la, la));
+        CHECK(!relations.addConstraint(K::vertical, as));
+        CHECK(!relations.addConstraint(K::horizontal, la, lb));
+        CHECK(!relations.addConstraint(K::coincident, la, bs));
+        CHECK(!relations.addConstraint(K::parallel, as, lb));
+        CHECK(!relations.addConstraint(K::perpendicular, la, bs));
+        CHECK(!relations.addConstraint(static_cast<K>(255), la));
+        CHECK(!relations.addConstraint(K::vertical, { *sk::EntityId::parse("9999"), E::line }));
+        CHECK(relations.state() == beforeInvalid);
+        auto roundTrip = sk::SketchModel::restore(beforeInvalid);
+        CHECK(roundTrip && roundTrip->state() == beforeInvalid);
+        CHECK(relations.findLine(a)->start() == sk::Point2{0.0, 0.0});
+        auto invalidState = beforeInvalid;
+        invalidState.constraints.push_back(invalidState.constraints[3]);
+        invalidState.constraints.back().id = *sk::ConstraintId::parse("6");
+        invalidState.next_constraint_id = *sk::ConstraintIdCursor::parse("7");
+        invalidState.constraints.back().first = lb;
+        invalidState.constraints.back().second = la;
+        CHECK(!sk::SketchModel::restore(invalidState));
+        invalidState = beforeInvalid;
+        invalidState.constraints[2].first = la;
+        CHECK(!sk::SketchModel::restore(invalidState));
+        invalidState = beforeInvalid;
+        invalidState.constraints[4].second.entity = *sk::EntityId::parse("9999");
+        CHECK(!sk::SketchModel::restore(invalidState));
+        invalidState = beforeInvalid;
+        invalidState.constraints[1].kind = static_cast<K>(255);
+        CHECK(!sk::SketchModel::restore(invalidState));
+        CHECK(relations.erase(b));
+        CHECK(relations.constraintCount() == 2U); // Horizontal(a), Vertical(a)
+        CHECK(relations.findConstraint(*horizontal) != nullptr);
+        CHECK(relations.findConstraint(*vertical) != nullptr);
+        CHECK(relations.findConstraint(*coincident) == nullptr);
+        CHECK(relations.findConstraint(*parallel) == nullptr);
+        CHECK(relations.findConstraint(*perpendicular) == nullptr);
+        CHECK(relations.constraintIdCursor().serialized() == "6");
+        const auto newParallel = relations.addConstraint(K::parallel, la, lc);
+        CHECK(newParallel && newParallel->serialized() == "6");
+        CHECK(relations.state().constraints.size() == 3U);
+        // Current solved geometry is not published for any of these intents.
+    }
+
+    // All five manual relation kinds are wired to the real revision-bound
+    // DocumentSession transaction path and undoable as one command each.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        using K = sk::ConstraintKind;
+        using E = sk::ConstraintElement;
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(
+            app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto first = session.execute(
+            app::AddSketchLineCommand{*made.sketch_id, {1.0, 2.0}, {5.0, 6.0}});
+        const auto second = session.execute(
+            app::AddSketchLineCommand{*made.sketch_id, {6.0, 1.0}, {8.0, 2.0}});
+        CHECK(first.ok() && first.entity_id && second.ok() && second.entity_id);
+        const sk::ConstraintReference firstLine{*first.entity_id, E::line};
+        const sk::ConstraintReference secondLine{*second.entity_id, E::line};
+        const sk::ConstraintReference firstEnd{*first.entity_id, E::line_end};
+        const sk::ConstraintReference secondStart{*second.entity_id, E::line_start};
+        const auto add = [&](K kind, sk::ConstraintReference lhs,
+                             sk::ConstraintReference rhs = {}) {
+            return session.execute(app::AddSketchRelationCommand{
+                *made.sketch_id, session.document().revision(), kind, lhs, rhs});
+        };
+        CHECK(add(K::horizontal, firstLine).changed);
+        CHECK(add(K::vertical, secondLine).changed);
+        const auto coincident = add(K::coincident, firstEnd, secondStart);
+        CHECK(coincident.changed && coincident.constraint_id);
+        CHECK(add(K::parallel, firstLine, secondLine).changed);
+        CHECK(add(K::perpendicular, firstLine, secondLine).changed);
+        const auto* hosted = session.document().findSketch(*made.sketch_id);
+        CHECK(hosted && hosted->model.constraintCount() == 5U);
+        const auto undoDepth = session.undoDepth();
+        const auto duplicate = add(K::coincident, secondStart, firstEnd);
+        CHECK(!duplicate.changed && !duplicate.ok());
+        CHECK(session.undoDepth() == undoDepth);
+        const auto stale = session.execute(app::AddSketchRelationCommand{
+            *made.sketch_id, *core::DocumentRevision::parse("1"),
+            K::parallel, firstLine, secondLine});
+        CHECK(!stale.ok());
+        CHECK(stale.diagnostic.code == app::DocumentSessionErrorCode::revision_diverged);
+        CHECK(session.undo().changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 4U);
+        CHECK(session.redo().changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 5U);
+        const auto deleted = session.execute(app::EraseSketchConstraintCommand{
+            *made.sketch_id, session.document().revision(), *coincident.constraint_id});
+        CHECK(deleted.ok() && deleted.changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 4U);
+        CHECK(session.undo().changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 5U);
+    }
+
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
 }
