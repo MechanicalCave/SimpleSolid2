@@ -36,6 +36,9 @@ void check(bool condition, const char* expression, int line) {
 
 #if !defined(SS2_R13_A1_OCCT_EVIDENCE)
 int main() {
+    // Native MSVC RED: a caller-owned solver may drive the actual Part
+    // feature scheduler, without changing the legacy evaluatePart API.
+    CHECK(&simplesolid2::part::evaluatePartWithLocalSolve != nullptr);
     CHECK(!sk::ConstraintId::parse("0"));
     CHECK(!sk::ConstraintId::parse("01"));
     CHECK(!sk::ConstraintId::parse("-1"));
@@ -1722,6 +1725,63 @@ int main() {
         part::ProfileKernelInputStatus::unresolved_profile);
     CHECK(!session.document().evaluateProfile(*profile.profile_id));
     CHECK(backend.calls == 2U);
+
+    // A1.3 RED: from SAME persisted ProfileIntent/ConstraintId into the
+    // REAL existing Part Feature scheduler (not a naked OCCT adapter).
+    // The original product evaluatePart must remain fail-closed until a
+    // native numeric solver is explicitly supplied.
+    auto staged = session.document().state();
+    const auto feature_id = staged.body.next_feature_id.allocate();
+    CHECK(feature_id);
+    staged.body.features.push_back(part::PartFeature{
+        *feature_id,
+        "R13StageExtrude",
+        false,
+        part::ExtrudeFeature{
+            *profile.profile_id,
+            part::ExtrudeOperation::add,
+            part::OneSidedExtrudeExtent{
+                core::LengthValue{10.0}, false}}});
+    auto owning = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(staged), session.document().revision());
+    CHECK(owning.ok());
+    CHECK(owning.document);
+    const auto legacy_body = part::evaluatePart(*owning.document, provider);
+    CHECK(legacy_body.features.size() == 1U);
+    CHECK(legacy_body.features.front().status ==
+        part::FeatureEvaluationStatus::blocked);
+    backend.seam_offset = 5.0e-13;
+    const auto actual_body = part::evaluatePartWithLocalSolve(
+        *owning.document, provider, policy, backend);
+    CHECK(actual_body.source_document_id == owning.document->documentId());
+    CHECK(actual_body.source_revision == owning.document->revision());
+    CHECK(actual_body.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(actual_body.features.size() == 1U);
+    CHECK(actual_body.features.front().feature_id == *feature_id);
+    CHECK(actual_body.features.front().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(actual_body.features.front().result_topology);
+    CHECK(actual_body.features.front().result_topology->complete());
+    CHECK(actual_body.body_solid != nullptr);
+    CHECK(actual_body.current_topology);
+    CHECK(actual_body.current_topology->complete());
+    CHECK(backend.calls == 3U);
+    CHECK(owning.document->findProfile(*profile.profile_id));
+    CHECK(owning.document->findSketch(*sketch.sketch_id)->model
+        .state().constraints.front().id == *coincide.constraint_id);
+
+    // Violated residual and obsolete revision cannot reach Feature/OCCT.
+    backend.seam_offset = 5.0e-12;
+    const auto rejected_body = part::evaluatePartWithLocalSolve(
+        *owning.document, provider, policy, backend);
+    CHECK(rejected_body.features.size() == 1U);
+    CHECK(rejected_body.features.front().status ==
+        part::FeatureEvaluationStatus::blocked);
+    CHECK(rejected_body.body_status !=
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(backend.calls == 4U);
 
     std::cout << "R13_A1_OCCT_PASS exact_seam=1"
               << " extrude_solid=1 revolve_solid=1"
