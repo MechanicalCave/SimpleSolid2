@@ -2432,6 +2432,65 @@ int main() {
         CHECK(clean_after->projection_bindings.size() == 1U);
         CHECK(clean_after->projection_bindings.front().target_entity ==
             clean_project.entity_ids.front());
+
+        // Break Link is ALSO a revision-bound provider command. The
+        // recompute may reenter through native BIND or PROJECT. Its older
+        // outer transaction must not detach the live link, erase a nested
+        // Line or consume another Undo slot. Both hooks are exercised on
+        // real OCCT-backed geometry, not artificial pick tokens.
+        const auto linked_id = clean_project.entity_ids.front();
+        const auto check_stale_break = [&](CommandReentrantKernel::Hook hook) {
+            const auto expected = projected_session.document().revision();
+            const auto undo_before = projected_session.undoDepth();
+            const auto* before = projected_session.document().findSketch(
+                *command_sketch.sketch_id);
+            CHECK(before != nullptr);
+            const auto line_count = before->model.state().lines.size();
+            CommandReentrantKernel reentry{
+                provider, projected_session, *command_sketch.sketch_id,
+                hook};
+            const auto broken = projected_session.execute(
+                app::BreakProjectedEdgeLinksCommand{
+                    *command_sketch.sketch_id, {linked_id}, expected},
+                reentry);
+            CHECK(!broken.ok() && !broken.changed);
+            CHECK(broken.status ==
+                app::BreakProjectedEdgeLinkStatus::stale_revision);
+            CHECK(reentry.mutated && reentry.binds == 1U);
+            CHECK(reentry.projections ==
+                (hook == CommandReentrantKernel::Hook::bind ? 0U : 1U));
+            CHECK(projected_session.undoDepth() == undo_before + 1U);
+            const auto* live = projected_session.document().findSketch(
+                *command_sketch.sketch_id);
+            CHECK(live != nullptr);
+            CHECK(live->model.state().lines.size() == line_count + 1U);
+            CHECK(live->projection_bindings.size() == 1U);
+            CHECK(live->projection_bindings.front().target_entity == linked_id);
+        };
+        check_stale_break(CommandReentrantKernel::Hook::bind);
+        check_stale_break(CommandReentrantKernel::Hook::project);
+
+        // A fresh ordinary native Break Link remains exactly one atomic
+        // Undoable edit. It retains the latest resolved local Line/EntityId
+        // while removing only its external PG-01 dependency.
+        const auto final_undo = projected_session.undoDepth();
+        const auto* before_break = projected_session.document().findSketch(
+            *command_sketch.sketch_id);
+        CHECK(before_break != nullptr);
+        const auto final_lines = before_break->model.state().lines.size();
+        const auto normal_break = projected_session.execute(
+            app::BreakProjectedEdgeLinksCommand{
+                *command_sketch.sketch_id, {linked_id},
+                projected_session.document().revision()},
+            provider);
+        CHECK(normal_break.ok() && normal_break.changed);
+        CHECK(projected_session.undoDepth() == final_undo + 1U);
+        const auto* detached = projected_session.document().findSketch(
+            *command_sketch.sketch_id);
+        CHECK(detached != nullptr);
+        CHECK(detached->projection_bindings.empty());
+        CHECK(detached->model.findLine(linked_id) != nullptr);
+        CHECK(detached->model.state().lines.size() == final_lines);
         }
     }
 
