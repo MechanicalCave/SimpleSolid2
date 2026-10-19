@@ -709,5 +709,118 @@ int main() {
             session.document(), sk::SketchId::generate(), prefix, provider));
     }
 
+    // Owner-approved sixth relation: Fix(Line) locks both endpoints in the
+    // authored Sketch. No projected Body, implicit origin anchor or solver
+    // is needed to ground ordinary sketch lines.
+    {
+        using K = sk::ConstraintKind;
+        using E = sk::ConstraintElement;
+        sk::SketchModel model;
+        const auto locked = model.addLine({1.0, 3.0}, {5.0, 7.0});
+        const auto freeLine = model.addLine({0.0, 1.0}, {8.0, 2.0});
+        const auto untouched = model.state();
+        CHECK(!model.isFixedLine(locked));
+        const auto fix = model.addConstraint(K::fix, {locked, E::line});
+        CHECK(fix && fix->serialized() == "1");
+        CHECK(model.isFixedLine(locked));
+        CHECK(!model.isFixedLine(freeLine));
+        const auto frozen = model.state();
+        CHECK(frozen.constraints.size() == 1U);
+        CHECK(frozen.constraints.front().kind == K::fix);
+        CHECK(frozen.lines == untouched.lines);
+        CHECK(!model.addConstraint(K::fix, {locked, E::line}));
+        CHECK(!model.addConstraint(K::fix, {locked, E::line_start}));
+        CHECK(!model.addConstraint(K::fix, {locked, E::line_end}));
+        CHECK(!model.addConstraint(K::fix, {locked, E::line},
+                                   {freeLine, E::line}));
+        CHECK(model.state() == frozen); // no duplicate ID consumed
+        CHECK(!model.updateLine(locked, {8.0, 9.0}, {5.0, 7.0}));
+        CHECK(!model.updateLine(locked, {1.0, 3.0}, {5.0, 7.0}));
+        CHECK(model.findLine(locked)->start() == frozen.lines[0].start);
+        CHECK(model.findLine(locked)->end() == frozen.lines[0].end);
+        CHECK(model.updateLine(freeLine, {0.0, 2.0}, {8.0, 3.0}));
+
+        const auto solvedInput = sk::prepareLocalSolveProblem(model.state());
+        CHECK(solvedInput && solvedInput->lines.size() == 2U);
+        CHECK(solvedInput->constraints.size() == 1U);
+        CHECK(solvedInput->fixed_lines.size() == 1U);
+        CHECK(solvedInput->fixed_lines.front() == locked);
+        CHECK(solvedInput->lines.front().fixed);
+        CHECK(!solvedInput->lines.back().fixed);
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-7, 1.0e-6};
+        CHECK(sk::reviewLocalSolveCandidate(
+            *solvedInput, model.state(), policy).status ==
+            sk::LocalResidualStatus::residuals_satisfied);
+        auto movedFixed = model.state();
+        movedFixed.lines.front().start.u += 1.0e-9;
+        CHECK(sk::reviewLocalSolveCandidate(
+            *solvedInput, movedFixed, policy).status ==
+            sk::LocalResidualStatus::fixed_entity_changed);
+        auto restored = sk::SketchModel::restore(model.state());
+        CHECK(restored && restored->isFixedLine(locked));
+        CHECK(!restored->updateLine(locked, {7.0, 7.0}, {9.0, 9.0}));
+        CHECK(restored->eraseConstraint(*fix));
+        CHECK(!restored->isFixedLine(locked));
+        CHECK(restored->updateLine(locked, {7.0, 7.0}, {9.0, 9.0}));
+        CHECK(model.erase(locked)); // dependent Fix is removed with line
+        CHECK(model.constraintCount() == 0U);
+        CHECK(!model.isFixedLine(locked));
+    }
+
+    // Fix is an ordinary undoable revision-bound DocumentSession relation;
+    // attempts to mutate it must fail atomically, without dirty/history
+    // changes, and become possible only after explicit Unfix.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        using K = sk::ConstraintKind;
+        using E = sk::ConstraintElement;
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(
+            app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto line = session.execute(
+            app::AddSketchLineCommand{*made.sketch_id, {2.0, 3.0}, {7.0, 8.0}});
+        CHECK(line.ok() && line.entity_id);
+        const auto initialRevision = session.document().revision();
+        const auto initialDepth = session.undoDepth();
+        const auto fixed = session.execute(app::AddSketchRelationCommand{
+            *made.sketch_id, initialRevision, K::fix,
+            {*line.entity_id, E::line}, {}});
+        CHECK(fixed.ok() && fixed.changed && fixed.constraint_id);
+        CHECK(session.document().findSketch(*made.sketch_id)->
+            model.isFixedLine(*line.entity_id));
+        CHECK(session.undoDepth() == initialDepth + 1U);
+        CHECK(session.needsSave());
+        const auto depth = session.undoDepth();
+        const auto afterFixRevision = session.document().revision();
+        const auto attempted = session.execute(app::UpdateSketchGeometryCommand{
+            *made.sketch_id, afterFixRevision,
+            {{*line.entity_id, {2.0, 3.0}, {10.0, 8.0}}}, {}, {}});
+        CHECK(!attempted.ok() && !attempted.changed);
+        CHECK(attempted.diagnostic.code ==
+            app::DocumentSessionErrorCode::invalid_command);
+        CHECK(session.document().revision() == afterFixRevision);
+        CHECK(session.undoDepth() == depth);
+        CHECK(!session.execute(app::AddSketchRelationCommand{
+            *made.sketch_id, initialRevision, K::fix,
+            {*line.entity_id, E::line}, {}}).ok());
+        CHECK(session.undo().changed);
+        CHECK(!session.document().findSketch(*made.sketch_id)->
+            model.isFixedLine(*line.entity_id));
+        CHECK(session.redo().changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->
+            model.isFixedLine(*line.entity_id));
+        CHECK(session.execute(app::EraseSketchConstraintCommand{
+            *made.sketch_id, session.document().revision(), *fixed.constraint_id}).changed);
+        CHECK(!session.document().findSketch(*made.sketch_id)->
+            model.isFixedLine(*line.entity_id));
+        CHECK(session.execute(app::UpdateSketchGeometryCommand{
+            *made.sketch_id, session.document().revision(),
+            {{*line.entity_id, {2.0, 3.0}, {10.0, 8.0}}}, {}, {}}).changed);
+    }
+
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
 }
