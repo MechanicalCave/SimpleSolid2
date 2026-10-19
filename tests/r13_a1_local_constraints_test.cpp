@@ -598,6 +598,11 @@ int main() {
         CHECK(sk::evaluateLocalSolve(spoofed, policy, backend).status ==
               sk::LocalSolveGatewayStatus::invalid_problem);
         CHECK(backend.calls == calls);
+        spoofed = *input;
+        spoofed.equations.clear();
+        CHECK(sk::evaluateLocalSolve(spoofed, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_problem);
+        CHECK(backend.calls == calls);
 
         // A candidate can meet a numerical Coincident tolerance and still
         // contain an open endpoint seam. Profile may consume ONLY exact
@@ -726,6 +731,8 @@ int main() {
         CHECK(!withFix->lines.back().fixed);
         CHECK(withFix->constraints.size() == 2U);
         CHECK(withFix->constraints.back().kind == sk::ConstraintKind::fix);
+        CHECK(withFix->equations.size() == 1U);
+        CHECK(withFix->equations.front().kind == sk::ConstraintKind::horizontal);
     }
 
     // Owner-approved sixth relation: Fix(Line) locks both endpoints in the
@@ -762,6 +769,7 @@ int main() {
         const auto solvedInput = sk::prepareLocalSolveProblem(model.state());
         CHECK(solvedInput && solvedInput->lines.size() == 2U);
         CHECK(solvedInput->constraints.size() == 1U);
+        CHECK(solvedInput->equations.empty()); // Fix is not a solver equation
         CHECK(solvedInput->fixed_lines.size() == 1U);
         CHECK(solvedInput->fixed_lines.front() == locked);
         CHECK(solvedInput->lines.front().fixed);
