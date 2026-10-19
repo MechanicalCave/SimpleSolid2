@@ -499,7 +499,7 @@ LocalSolveGatewayResult evaluateLocalSolve(
         result.residuals = reviewLocalSolveCandidate(
             *canonical, *backend_result.candidate, policy);
         switch (result.residuals.status) {
-        case LocalResidualStatus::residuals_satisfied:
+        case LocalResidualStatus::residuals_satisfied: {
             // The caller-owned tolerance may admit a sub-ULP/1e-12
             // Coincident residual, but Profile must never consume a seam.
             // Close ONLY explicit endpoint groups in derived candidate
@@ -542,6 +542,7 @@ LocalSolveGatewayResult evaluateLocalSolve(
             result.candidate = std::move(*closed);
             result.degrees_of_freedom = backend_result.degrees_of_freedom;
             return result;
+        }
         case LocalResidualStatus::residual_violation:
             result.status = LocalSolveGatewayStatus::residual_violation;
             for (const auto& value : result.residuals.constraints) {
