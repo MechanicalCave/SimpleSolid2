@@ -12,6 +12,7 @@ target_compile_features(simplesolid2_core PUBLIC cxx_std_20)
 add_library(simplesolid2_sketch STATIC
     sketch/entity_id.cpp
     sketch/interaction_state.cpp
+    sketch/local_solver.cpp
     sketch/region_analysis.cpp
     sketch/snap.cpp
     sketch/sketch_id.cpp
