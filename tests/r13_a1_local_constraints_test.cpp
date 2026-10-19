@@ -1783,6 +1783,61 @@ int main() {
         part::BodyEvaluationStatus::up_to_date);
     CHECK(backend.calls == 4U);
 
+    // The SAME Part Feature scheduler and SAME region resolver must also
+    // execute a REAL OCCT full Revolve. The built-in Y axis lies outside
+    // the 5..15 mm rectangle, so this is an annular, one-solid body.
+    auto revolve_state = session.document().state();
+    const auto revolve_id = revolve_state.body.next_feature_id.allocate();
+    CHECK(revolve_id);
+    revolve_state.body.features.push_back(part::PartFeature{
+        *revolve_id,
+        "R13StageRevolve",
+        false,
+        part::RevolveFeature{
+            *profile.profile_id,
+            part::AxisReference{
+                part::BuiltinOriginAxisReference{
+                    core::BuiltinReferenceRole::y_axis}},
+            part::RevolveOperation::add,
+            part::OneSidedRevolveExtent{
+                core::AngleValue{2.0 * std::numbers::pi_v<double>},
+                false}}});
+    const auto revolve_document = part::PartDocument::restore(
+        session.document().documentId(),
+        std::move(revolve_state), session.document().revision());
+    CHECK(revolve_document.ok() && revolve_document.document);
+    const auto legacy_revolve =
+        part::evaluatePart(*revolve_document.document, provider);
+    CHECK(legacy_revolve.features.size() == 1U);
+    CHECK(legacy_revolve.features.front().status ==
+        part::FeatureEvaluationStatus::blocked);
+    backend.seam_offset = 5.0e-13;
+    const auto evaluated_revolve = part::evaluatePartWithLocalSolve(
+        *revolve_document.document, provider, policy, backend);
+    CHECK(evaluated_revolve.source_revision ==
+        revolve_document.document->revision());
+    CHECK(evaluated_revolve.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(evaluated_revolve.features.size() == 1U);
+    CHECK(evaluated_revolve.features.front().feature_id == *revolve_id);
+    CHECK(evaluated_revolve.features.front().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(evaluated_revolve.features.front().result_topology);
+    CHECK(evaluated_revolve.features.front().result_topology->complete());
+    CHECK(evaluated_revolve.body_solid != nullptr);
+    CHECK(evaluated_revolve.current_topology);
+    CHECK(evaluated_revolve.current_topology->complete());
+    CHECK(backend.calls == 5U);
+    backend.seam_offset = 5.0e-12;
+    const auto rejected_revolve = part::evaluatePartWithLocalSolve(
+        *revolve_document.document, provider, policy, backend);
+    CHECK(rejected_revolve.features.size() == 1U);
+    CHECK(rejected_revolve.features.front().status ==
+        part::FeatureEvaluationStatus::blocked);
+    CHECK(rejected_revolve.body_status !=
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(backend.calls == 6U);
+
     std::cout << "R13_A1_OCCT_PASS exact_seam=1"
               << " extrude_solid=1 revolve_solid=1"
               << " stale_profile_publication=0\n";
