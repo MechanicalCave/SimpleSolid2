@@ -1929,6 +1929,66 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
     return {Status::detached, true};
 }
 
+AddSketchConstraintResult DocumentSession::execute(
+    const AddHorizontalSketchConstraintCommand& command) {
+    if (document_.revision() != command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Horizontal relation command has stale DocumentRevision", path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+    auto after = document_.state();
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (target == nullptr ||
+        target->model.findLine(command.line_id) == nullptr ||
+        std::any_of(
+            target->projection_bindings.cbegin(),
+            target->projection_bindings.cend(),
+            [id = command.line_id](const part::ProjectedEdgeBinding& binding) {
+                return binding.target_entity == id;
+            })) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Horizontal relation requires an authored, unlinked Line", path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+
+    const auto id = target->model.addHorizontal(command.line_id);
+    if (!id) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Horizontal relation is duplicate or ConstraintId allocation failed", path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+    const auto committed = commitCommandState(
+        std::move(after), "Part transaction failed while creating Horizontal relation");
+    if (!committed.ok() || !committed.changed) {
+        return {false, std::nullopt, committed.diagnostic};
+    }
+    return {true, *id, {}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EraseSketchConstraintCommand& command) {
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Erase Sketch relation command has stale DocumentRevision", path_);
+    }
+    auto after = document_.state();
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (target == nullptr ||
+        !target->model.eraseConstraint(command.constraint_id)) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Erase Sketch relation requires a current local ConstraintId", path_);
+    }
+    return commitCommandState(
+        std::move(after), "Part transaction failed while deleting Sketch relation");
+}
+
 DocumentSessionResult DocumentSession::execute(
     const SetSketchEntityRoleCommand& command) {
     if (command.entity_ids.empty()) {
