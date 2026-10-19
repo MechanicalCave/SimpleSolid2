@@ -84,7 +84,7 @@ The precise D2 acceptance of this draft approves: the five relation kinds, typed
 
 The independent Owner must still decide: (a) PlaneGCS 0.8.0 DLL/STATIC licensed packaging or approved alternative before third-party import; (b) actual schema successor version/field ownership before writing it; (c) A1 UI layout after the requested joint UX review. These are finite, precisely deferred decisions, not permission for uncontrolled architecture changes.
 
-## 6. Documentation impact
+## Documentation impact
 
 Internal docs: **required** (authored constraints, evaluation ownership, commands and native migration).
 User/Product docs: **required** (once five relations appear in UI; PL/EN canonical Markdown and generated Browser).
