@@ -827,7 +827,10 @@ int main() {
         CHECK(!blocked.isFixedLine(offset));
         const auto earlierIntent = blocked.addConstraint(
             K::horizontal, {offset, E::line});
-        CHECK(!earlierIntent); // offset has a slope; but it is still FREE!
+        CHECK(earlierIntent); // free Line can be solved later
+        const auto beforeImpossibleFix = blocked.state();
+        CHECK(!blocked.addConstraint(K::fix, {offset, E::line}));
+        CHECK(blocked.state() == beforeImpossibleFix);
     }
 
     // Fix is an ordinary undoable revision-bound DocumentSession relation;
