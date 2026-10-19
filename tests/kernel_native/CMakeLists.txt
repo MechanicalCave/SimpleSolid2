@@ -54,6 +54,9 @@ add_test(
 set_tests_properties(r13a1.occt_profile_closure PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-sketch;subsystem-application;native"
     TIMEOUT 90
+    # Fail if the native binary exits successfully without executing BOTH
+    # displacement witnesses on the real OCCT runtime Body meshes.
+    PASS_REGULAR_EXPRESSION "R13_A1_OCCT_PASS exact_seam=1 extrude_solid=1 revolve_solid=1 stale_profile_publication=0 derived_extrude_x_shift=2mm derived_revolve_radii_shift=2mm"
 )
 
 add_executable(pm00a_profile_cold_rebuild_test
