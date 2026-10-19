@@ -1,3 +1,4 @@
+#include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
 
 #include <cstdlib>
@@ -86,6 +87,66 @@ int main() {
     broken = snapshot;
     broken.next_constraint_id = *sk::ConstraintIdCursor::parse("1");
     CHECK(!sk::SketchModel::restore(broken));
+
+    // Native DocumentSession: one atomic command, revision guard and exact Undo/Redo.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(
+            app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto lineMade = session.execute(
+            app::AddSketchLineCommand{*made.sketch_id, {2.0, 3.0}, {7.0, 5.0}});
+        CHECK(lineMade.ok() && lineMade.entity_id);
+        const auto rev = session.document().revision();
+        const auto historyBefore = session.undoDepth();
+        const auto created = session.execute(app::AddHorizontalSketchConstraintCommand{
+            *made.sketch_id, rev, *lineMade.entity_id});
+        CHECK(created.ok() && created.changed && created.constraint_id);
+        CHECK(created.constraint_id->serialized() == "1");
+        CHECK(session.undoDepth() == historyBefore + 1U);
+        CHECK(session.needsSave());
+        CHECK(session.document().findSketch(*made.sketch_id)->model
+            .findConstraint(*created.constraint_id) != nullptr);
+
+        const auto duplicate = session.execute(app::AddHorizontalSketchConstraintCommand{
+            *made.sketch_id, session.document().revision(), *lineMade.entity_id});
+        CHECK(!duplicate.ok() && !duplicate.changed);
+        CHECK(duplicate.diagnostic.code == app::DocumentSessionErrorCode::invalid_command);
+        CHECK(session.undoDepth() == historyBefore + 1U);
+
+        const auto stale = session.execute(app::AddHorizontalSketchConstraintCommand{
+            *made.sketch_id, rev, *lineMade.entity_id});
+        CHECK(!stale.ok());
+        CHECK(stale.diagnostic.code == app::DocumentSessionErrorCode::revision_diverged);
+
+        CHECK(session.undo().changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 0U);
+        CHECK(session.redo().changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model
+            .findConstraint(*created.constraint_id) != nullptr);
+
+        CHECK(session.undo().changed);
+        // A new branch after Undo must not recycle even a retired local ConstraintId.
+        const auto forked = session.execute(app::AddHorizontalSketchConstraintCommand{
+            *made.sketch_id, session.document().revision(), *lineMade.entity_id});
+        CHECK(forked.ok() && forked.changed && forked.constraint_id);
+        CHECK(forked.constraint_id->serialized() == "2");
+        CHECK(!session.canRedo());
+
+        const auto deleted = session.execute(app::EraseSketchConstraintCommand{
+            *made.sketch_id, session.document().revision(), *forked.constraint_id});
+        CHECK(deleted.ok() && deleted.changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 0U);
+        CHECK(session.undo().changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model
+            .findConstraint(*forked.constraint_id) != nullptr);
+        CHECK(session.redo().changed);
+        CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 0U);
+    }
 
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
 }
