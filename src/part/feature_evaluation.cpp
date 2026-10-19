@@ -6726,15 +6726,19 @@ evaluateEffectiveSketchProjection(
     if (!authored) {
         return std::nullopt;
     }
+    // Projection providers can re-enter DocumentSession and invalidate
+    // all pointers/references into PartAuthoredState. Keep a local copy.
+    const auto authored_model = authored->model;
+    const auto bindings = authored->projection_bindings;
     EffectiveSketchProjection result;
-    result.model = authored->model;
-    result.outcomes.reserve(authored->projection_bindings.size());
-    if (authored->projection_bindings.empty()) {
+    result.model = authored_model;
+    result.outcomes.reserve(bindings.size());
+    if (bindings.empty()) {
         return result;
     }
     const auto frame = resolveCurrentProjectionSketchFrame(
         document, sketch_id, prefix);
-    for (const auto& binding : authored->projection_bindings) {
+    for (const auto& binding : bindings) {
         ProjectedSketchOutcome outcome{
             binding.target_entity,
             ProjectedSketchSourceStatus::invalid_support};
@@ -6742,6 +6746,11 @@ evaluateEffectiveSketchProjection(
             const auto projection = projectStrictMaterialEdge(
                 document, binding.source, prefix, query,
                 *frame, consuming_feature);
+            // Never consume geometry observed across a reentrant revision
+            // advance, even if the provider reported a valid projection.
+            if (prefix.source_revision != document.revision()) {
+                return std::nullopt;
+            }
             outcome.status = projection.status;
             if (projection.resolved()) {
                 const auto point = [](const kernel::Point2& p) {
@@ -6750,7 +6759,7 @@ evaluateEffectiveSketchProjection(
                 bool applied = false;
                 if (const auto* line =
                         std::get_if<kernel::Line2>(&*projection.curve)) {
-                    applied = authored->model.findLine(
+                    applied = authored_model.findLine(
                                   binding.target_entity) != nullptr &&
                         result.model.updateLine(
                             binding.target_entity,
@@ -6758,7 +6767,7 @@ evaluateEffectiveSketchProjection(
                 } else if (const auto* circle =
                                std::get_if<kernel::Circle2>(
                                    &*projection.curve)) {
-                    applied = authored->model.findCircle(
+                    applied = authored_model.findCircle(
                                   binding.target_entity) != nullptr &&
                         result.model.updateCircle(
                             binding.target_entity,
@@ -6766,7 +6775,7 @@ evaluateEffectiveSketchProjection(
                 } else if (const auto* arc =
                                std::get_if<kernel::Arc2>(
                                    &*projection.curve)) {
-                    applied = authored->model.findArc(
+                    applied = authored_model.findArc(
                                   binding.target_entity) != nullptr &&
                         result.model.updateArc(
                             binding.target_entity,
@@ -6785,7 +6794,9 @@ evaluateEffectiveSketchProjection(
         }
         result.outcomes.push_back(outcome);
     }
-    return result;
+    return prefix.source_revision == document.revision()
+        ? std::optional<EffectiveSketchProjection>{std::move(result)}
+        : std::nullopt;
 }
 
 } // namespace simplesolid2::part
