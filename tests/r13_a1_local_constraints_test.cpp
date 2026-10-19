@@ -1947,6 +1947,177 @@ int main() {
         part::BodyEvaluationStatus::up_to_date);
     CHECK(backend.calls == 8U);
 
+    // Two scheduled Feature stages in ONE native Part evaluation:
+    // first Extrude uses an ordinary unconstrained Profile; the second
+    // is a constrained inner rectangle cut through the live upstream
+    // OCCT solid. Only the second stage is authorized to call the
+    // numerical backend. Rejecting that solve may not publish the
+    // downstream Cut, erase the valid prefix or mutate either Sketch.
+    {
+        app::DocumentSession chain_session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto parent_sketch = chain_session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(parent_sketch.ok() && parent_sketch.sketch_id);
+        const auto parent_rectangle = chain_session.execute(
+            app::AddSketchRectangleCommand{
+                *parent_sketch.sketch_id,
+                chain_session.document().revision(),
+                {5.0, 0.0}, {15.0, 8.0},
+                sk::EntityRole::regular, false});
+        CHECK(parent_rectangle.ok());
+        const auto parent_regions = sk::analyzeRegions(
+            chain_session.document().findSketch(
+                *parent_sketch.sketch_id)->model);
+        CHECK(parent_regions.complete());
+        CHECK(parent_regions.regions.size() == 1U);
+        const auto parent_intent =
+            part::makeProfileRegionIntent(parent_regions.regions.front());
+        CHECK(parent_intent);
+        const auto parent_profile = chain_session.execute(
+            app::CreateProfileCommand{
+                *parent_sketch.sketch_id,
+                chain_session.document().revision(), *parent_intent});
+        CHECK(parent_profile.ok() && parent_profile.profile_id);
+
+        const auto cut_sketch = chain_session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(cut_sketch.ok() && cut_sketch.sketch_id);
+        const auto cut_rectangle = chain_session.execute(
+            app::AddSketchRectangleCommand{
+                *cut_sketch.sketch_id,
+                chain_session.document().revision(),
+                {7.0, 2.0}, {9.0, 6.0},
+                sk::EntityRole::regular, false});
+        CHECK(cut_rectangle.ok());
+        const auto cut_model = chain_session.document()
+            .findSketch(*cut_sketch.sketch_id)->model.state();
+        CHECK(cut_model.lines.size() == 4U);
+        const auto cut_regions = sk::analyzeRegions(
+            chain_session.document().findSketch(
+                *cut_sketch.sketch_id)->model);
+        CHECK(cut_regions.complete());
+        CHECK(cut_regions.regions.size() == 1U);
+        const auto cut_intent =
+            part::makeProfileRegionIntent(cut_regions.regions.front());
+        CHECK(cut_intent);
+        const auto cut_profile = chain_session.execute(
+            app::CreateProfileCommand{
+                *cut_sketch.sketch_id,
+                chain_session.document().revision(), *cut_intent});
+        CHECK(cut_profile.ok() && cut_profile.profile_id);
+        const auto cut_constraint = chain_session.execute(
+            app::AddSketchRelationCommand{
+                *cut_sketch.sketch_id,
+                chain_session.document().revision(),
+                sk::ConstraintKind::coincident,
+                {cut_model.lines[0].id, sk::ConstraintElement::line_end},
+                {cut_model.lines[1].id, sk::ConstraintElement::line_start}});
+        CHECK(cut_constraint.ok() && cut_constraint.constraint_id);
+
+        auto chained_state = chain_session.document().state();
+        const auto parent_feature_id =
+            chained_state.body.next_feature_id.allocate();
+        const auto cut_feature_id =
+            chained_state.body.next_feature_id.allocate();
+        CHECK(parent_feature_id && cut_feature_id);
+        chained_state.body.features.push_back(part::PartFeature{
+            *parent_feature_id, "NativePrefixExtrude", false,
+            part::ExtrudeFeature{
+                *parent_profile.profile_id, part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0}, false}}});
+        chained_state.body.features.push_back(part::PartFeature{
+            *cut_feature_id, "NativeStageCut", false,
+            part::ExtrudeFeature{
+                *cut_profile.profile_id, part::ExtrudeOperation::cut,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0}, false}}});
+        const auto chained_document = part::PartDocument::restore(
+            chain_session.document().documentId(),
+            std::move(chained_state),
+            chain_session.document().revision());
+        CHECK(chained_document.ok() && chained_document.document);
+        const auto& authored_chain = *chained_document.document;
+        const auto legacy_chain = part::evaluatePart(authored_chain, provider);
+        CHECK(legacy_chain.features.size() == 2U);
+        CHECK(legacy_chain.features[0].feature_id == *parent_feature_id);
+        CHECK(legacy_chain.features[0].status ==
+            part::FeatureEvaluationStatus::up_to_date);
+        CHECK(legacy_chain.features[1].feature_id == *cut_feature_id);
+        CHECK(legacy_chain.features[1].status ==
+            part::FeatureEvaluationStatus::blocked);
+        CHECK(legacy_chain.body_status !=
+            part::BodyEvaluationStatus::up_to_date);
+        CHECK(legacy_chain.resolved_prefix_solid != nullptr);
+        CHECK(legacy_chain.resolved_prefix_topology);
+        CHECK(legacy_chain.resolved_prefix_topology->complete());
+
+        ControlledSolver chain_backend;
+        const auto solved_chain = part::evaluatePartWithLocalSolve(
+            authored_chain, provider, policy, chain_backend);
+        CHECK(solved_chain.source_document_id == authored_chain.documentId());
+        CHECK(solved_chain.source_revision == authored_chain.revision());
+        CHECK(solved_chain.body_status ==
+            part::BodyEvaluationStatus::up_to_date);
+        CHECK(solved_chain.features.size() == 2U);
+        CHECK(solved_chain.features[0].feature_id == *parent_feature_id);
+        CHECK(solved_chain.features[0].status ==
+            part::FeatureEvaluationStatus::up_to_date);
+        CHECK(solved_chain.features[1].feature_id == *cut_feature_id);
+        CHECK(solved_chain.features[1].status ==
+            part::FeatureEvaluationStatus::up_to_date);
+        CHECK(solved_chain.features[1].result_topology);
+        CHECK(solved_chain.features[1].result_topology->complete());
+        CHECK(solved_chain.current_topology);
+        CHECK(solved_chain.current_topology->complete());
+        CHECK(solved_chain.body_solid != nullptr);
+        CHECK(chain_backend.calls == 1U);
+        const auto cut_mesh = provider.presentationMesh(
+            solved_chain.body_solid);
+        CHECK(cut_mesh.ok());
+        bool has_cut_inner_corner = false;
+        for (const auto& triangle : cut_mesh.mesh.triangles) {
+            for (const auto& point :
+                 {triangle.first, triangle.second, triangle.third}) {
+                has_cut_inner_corner |=
+                    std::abs(point.x - 7.0) < 0.01 &&
+                    std::abs(point.y - 2.0) < 0.01;
+            }
+        }
+        CHECK(has_cut_inner_corner);
+
+        chain_backend.seam_offset = 5.0e-12;
+        const auto bad_chain = part::evaluatePartWithLocalSolve(
+            authored_chain, provider, policy, chain_backend);
+        CHECK(bad_chain.features.size() == 2U);
+        CHECK(bad_chain.features[0].status ==
+            part::FeatureEvaluationStatus::up_to_date);
+        CHECK(bad_chain.features[1].status ==
+            part::FeatureEvaluationStatus::blocked);
+        CHECK(bad_chain.body_status !=
+            part::BodyEvaluationStatus::up_to_date);
+        CHECK(bad_chain.body_solid == nullptr);
+        CHECK(bad_chain.current_topology == std::nullopt);
+        CHECK(bad_chain.resolved_prefix_solid != nullptr);
+        CHECK(bad_chain.resolved_prefix_topology);
+        CHECK(bad_chain.resolved_prefix_topology->complete());
+        CHECK(bad_chain.resolved_prefix_topology->stage.feature_id ==
+            *parent_feature_id);
+        CHECK(chain_backend.calls == 2U);
+        CHECK(authored_chain.findSketch(*cut_sketch.sketch_id)
+            ->model.state().lines == cut_model.lines);
+        CHECK(authored_chain.findSketch(*cut_sketch.sketch_id)
+            ->model.state().constraints.size() == 1U);
+        CHECK(authored_chain.findSketch(*cut_sketch.sketch_id)
+            ->model.state().constraints.front().id ==
+            *cut_constraint.constraint_id);
+        CHECK(authored_chain.findProfile(*parent_profile.profile_id));
+        CHECK(authored_chain.findProfile(*cut_profile.profile_id));
+    }
+
     std::cout << "R13_A1_OCCT_PASS exact_seam=1"
               << " extrude_solid=1 revolve_solid=1"
               << " stale_profile_publication=0"
