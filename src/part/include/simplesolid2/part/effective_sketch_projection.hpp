@@ -3,6 +3,7 @@
 #include <simplesolid2/kernel/edge_projection.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
+#include <simplesolid2/sketch/local_solver.hpp>
 
 #include <optional>
 #include <vector>
@@ -84,6 +85,19 @@ projectStrictMaterialEdge(
 // B3 must consume this derived model instead of raw Sketch authored seeds.
 [[nodiscard]] std::optional<EffectiveSketchProjection>
 evaluateEffectiveSketchProjection(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    std::optional<FeatureId> consuming_feature = std::nullopt);
+
+// Stage- and owner-bound Part→SS2 solver bridge. Runs the existing PG-01
+// projection resolver first and uses ONLY its current ephemeral geometry.
+// Every resolved projected Line is fixed in the resulting solver problem;
+// a missing or unsupported projection must fail, never use authored seeds.
+// This prepares an input problem only. It does NOT solve or publish geometry.
+[[nodiscard]] std::optional<sketch::LocalSolveProblem>
+prepareStageLocalSolveProblem(
     const PartDocument& document,
     const sketch::SketchId& sketch_id,
     const PartEvaluation& evaluated_prefix,
