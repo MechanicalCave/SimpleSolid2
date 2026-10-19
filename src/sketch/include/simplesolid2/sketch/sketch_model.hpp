@@ -115,6 +115,11 @@ public:
     [[nodiscard]] bool erase(
         EntityId id) noexcept;
 
+    // Semantic manual constraint authorship only; solving remains downstream.
+    [[nodiscard]] std::optional<ConstraintId> addConstraint(
+        ConstraintKind kind,
+        ConstraintReference first,
+        ConstraintReference second = {});
     [[nodiscard]] std::optional<ConstraintId> addHorizontal(EntityId line);
     [[nodiscard]] const SketchConstraintState* findConstraint(ConstraintId id) const noexcept;
     [[nodiscard]] bool eraseConstraint(ConstraintId id) noexcept;
