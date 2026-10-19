@@ -2246,7 +2246,8 @@ int main() {
               << " stale_profile_publication=0"
               << " derived_extrude_x_shift=2mm"
               << " derived_revolve_radii_shift=2mm"
-              << " stage_prefix_cut=1\n";
+              << " stage_prefix_cut=1"
+              << " pg01_reentrant_stale=0\n";
     return EXIT_SUCCESS;
 }
 #endif
