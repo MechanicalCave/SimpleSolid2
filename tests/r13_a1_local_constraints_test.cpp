@@ -5,6 +5,7 @@
 #include <simplesolid2/sketch/sketch_model.hpp>
 #include <simplesolid2/sketch/local_solver.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
