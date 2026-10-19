@@ -444,10 +444,10 @@ int main() {
             *problem, corrupt, policy).status ==
             sk::LocalResidualStatus::invalid_candidate);
 
-        CHECK(!sk::LocalSolverAcceptancePolicy{0.0, 1.0e-6}.valid());
-        CHECK(!sk::LocalSolverAcceptancePolicy{1.0e-7, 0.0}.valid());
-        CHECK(!sk::LocalSolverAcceptancePolicy{
-            std::numeric_limits<double>::infinity(), 1.0e-6}.valid());
+        CHECK((!sk::LocalSolverAcceptancePolicy{0.0, 1.0e-6}.valid()));
+        CHECK((!sk::LocalSolverAcceptancePolicy{1.0e-7, 0.0}.valid()));
+        CHECK((!sk::LocalSolverAcceptancePolicy{
+            std::numeric_limits<double>::infinity(), 1.0e-6}.valid()));
         CHECK(sk::reviewLocalSolveCandidate(
             *problem, authoredState,
             sk::LocalSolverAcceptancePolicy{0.0, 1.0e-6}).status ==
