@@ -30,6 +30,31 @@ set_tests_properties(pm00a.kernel_native_smoke PROPERTIES
     LABELS "tier-fast;subsystem-kernel;native"
 )
 
+# R13-A1 exact current-stage Sketch -> existing Profile -> TRUE OCCT
+# Face/Extrude/Revolve regression. Compile the already allowlisted native
+# test source in a separate kernel-native target; no additional test path,
+# no PlaneGCS dependency, no Qt/desktop target.
+add_executable(r13_a1_occt_profile_closure_test
+    ${PROJECT_SOURCE_DIR}/tests/r13_a1_local_constraints_test.cpp
+)
+target_compile_definitions(r13_a1_occt_profile_closure_test
+    PRIVATE SS2_R13_A1_OCCT_EVIDENCE=1)
+target_link_libraries(r13_a1_occt_profile_closure_test PRIVATE
+    simplesolid2_application
+    simplesolid2_sketch
+    simplesolid2_kernel
+    simplesolid2_kernel_occt
+    simplesolid2_part
+)
+target_compile_features(r13_a1_occt_profile_closure_test PRIVATE cxx_std_20)
+add_test(
+    NAME r13a1.occt_profile_closure
+    COMMAND r13_a1_occt_profile_closure_test
+)
+set_tests_properties(r13a1.occt_profile_closure PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-sketch;native"
+)
+
 add_executable(pm00a_profile_cold_rebuild_test
     pm00a_profile_cold_rebuild_test.cpp
 )
@@ -738,6 +763,7 @@ set_tests_properties(pm05f.fillet_curved_edge PROPERTIES
 
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
+        r13_a1_occt_profile_closure_test
         pm00a_kernel_native_smoke_test
         pm00a_profile_cold_rebuild_test
         pm00a_e01_extrude_evidence_test
