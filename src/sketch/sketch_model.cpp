@@ -76,6 +76,29 @@ constexpr double full_turn =
            lhs.first == rhs.second && lhs.second == rhs.first;
 }
 
+// Only mathematically unconditional contradictions belong at this layer.
+// Geometric residuals, redundant systems and fixed-reference feasibility
+// are determined later by the proven donor numerical adapter.
+[[nodiscard]] bool directConflict(
+    const SketchConstraintState& lhs,
+    const SketchConstraintState& rhs) noexcept {
+    const bool hv =
+        (lhs.kind == ConstraintKind::horizontal &&
+         rhs.kind == ConstraintKind::vertical) ||
+        (lhs.kind == ConstraintKind::vertical &&
+         rhs.kind == ConstraintKind::horizontal);
+    if (hv && lhs.first.entity == rhs.first.entity) return true;
+
+    const bool pair_conflict =
+        (lhs.kind == ConstraintKind::parallel &&
+         rhs.kind == ConstraintKind::perpendicular) ||
+        (lhs.kind == ConstraintKind::perpendicular &&
+         rhs.kind == ConstraintKind::parallel);
+    return pair_conflict &&
+           ((lhs.first == rhs.first && lhs.second == rhs.second) ||
+            (lhs.first == rhs.second && lhs.second == rhs.first));
+}
+
 } // namespace
 
 EntityId SketchModel::allocateEntityId() {
@@ -343,7 +366,8 @@ std::optional<ConstraintId> SketchModel::addConstraint(
     const auto duplicate = std::find_if(
         constraints_.cbegin(), constraints_.cend(),
         [&candidate](const SketchConstraintState& existing) {
-            return sameConstraintMeaning(existing, candidate);
+            return sameConstraintMeaning(existing, candidate) ||
+                   directConflict(existing, candidate);
         });
     if (duplicate != constraints_.cend()) {
         return std::nullopt;
@@ -564,7 +588,8 @@ std::optional<SketchModel> SketchModel::restore(
             std::any_of(
                 seen_meanings.cbegin(), seen_meanings.cend(),
                 [&item](const SketchConstraintState& existing) {
-                    return sameConstraintMeaning(item, existing);
+                    return sameConstraintMeaning(item, existing) ||
+                           directConflict(item, existing);
                 })) {
             return std::nullopt;
         }
