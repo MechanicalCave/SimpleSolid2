@@ -2280,6 +2280,17 @@ DocumentSession::execute(
             failed.diagnostic};
     }
 
+    if (target->model.isFixedLine(command.target)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Trim cannot modify a Fix(Line) target; remove Fix first", path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
     // Structural-edit evaluators use authored Sketch input today, not
     // the current provider-derived Sketch. Reject linked targets AND linked
     // reference boundaries rather than accidentally using a stale seed.
@@ -2389,6 +2400,17 @@ DocumentSession::execute(
             failed.diagnostic};
     }
 
+    if (target->model.isFixedLine(command.target)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend cannot modify a Fix(Line) target; remove Fix first", path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
     // Structural-edit evaluators use authored Sketch input today, not
     // the current provider-derived Sketch. Reject linked targets AND linked
     // reference boundaries rather than accidentally using a stale seed.
@@ -2494,6 +2516,18 @@ DocumentSession::execute(
         return {
             false,
             sketch::StructuralEditStatus::missing_entity,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    if (target->model.isFixedLine(command.first_line) ||
+        target->model.isFixedLine(command.second_line)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend Both cannot modify Fix(Line) targets; remove Fix first", path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
             std::nullopt,
             failed.diagnostic};
     }
