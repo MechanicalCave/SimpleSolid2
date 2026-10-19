@@ -55,7 +55,7 @@ target_link_libraries(sk04a_line_commit_protocol_test PRIVATE simplesolid2_appli
 
 # R13-A1: first registered semantic RED before implementation.
 ss2_core_only_test(r13_a1_local_constraints_test r13a1.local_horizontal r13_a1_local_constraints_test.cpp)
-target_link_libraries(r13_a1_local_constraints_test PRIVATE simplesolid2_sketch)
+target_link_libraries(r13_a1_local_constraints_test PRIVATE simplesolid2_application simplesolid2_sketch)
 set_tests_properties(r13a1.local_horizontal PROPERTIES LABELS "tier-fast;subsystem-sketch;native")
 
 ss2_core_only_test(sk05a_line_geometry_command_test sk05a.line_geometry_command sk05a_line_geometry_command_test.cpp)
