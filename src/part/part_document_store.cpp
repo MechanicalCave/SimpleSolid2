@@ -4135,6 +4135,20 @@ std::optional<std::string> buildPartBytes(
             path);
         return std::nullopt;
     }
+    // R13-A1: v20 does not encode authored local relations. Never
+    // declare Save successful while silently losing their semantic intent.
+    if (std::any_of(
+            document.sketches().cbegin(),
+            document.sketches().cend(),
+            [](const PartSketch& hosted) {
+                return hosted.model.constraintCount() != 0U;
+            })) {
+        failure_result = saveFailure(
+            PartStoreErrorCode::unsupported_schema,
+            "Horizontal constraints require an approved native successor schema",
+            path);
+        return std::nullopt;
+    }
     const auto authored =
         serializeAuthored(document);
     const auto built =
