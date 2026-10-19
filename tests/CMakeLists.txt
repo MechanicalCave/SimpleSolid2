@@ -2637,6 +2637,12 @@ function(ss2_resolve_test_build_target test_name out_var)
         return()
     endif()
 
+    # R13-A1: keep the shorter CTest name mapped to its real executable.
+    if(test_name STREQUAL "r13a1.local_horizontal")
+        set(${out_var} "r13_a1_local_constraints_test" PARENT_SCOPE)
+        return()
+    endif()
+
     if(test_name STREQUAL "ph01.app_smoke")
         set(${out_var} "simplesolid2" PARENT_SCOPE)
         return()
