@@ -336,6 +336,9 @@ bool SketchModel::erase(
         });
     if (line != lines_.end()) {
         lines_.erase(line);
+        std::erase_if(constraints_, [id](const SketchConstraintState& relation) {
+            return relation.first.entity == id || relation.second.entity == id;
+        });
         return true;
     }
 
@@ -347,6 +350,9 @@ bool SketchModel::erase(
         });
     if (circle != circles_.end()) {
         circles_.erase(circle);
+        std::erase_if(constraints_, [id](const SketchConstraintState& relation) {
+            return relation.first.entity == id || relation.second.entity == id;
+        });
         return true;
     }
 
@@ -358,6 +364,9 @@ bool SketchModel::erase(
         });
     if (arc != arcs_.end()) {
         arcs_.erase(arc);
+        std::erase_if(constraints_, [id](const SketchConstraintState& relation) {
+            return relation.first.entity == id || relation.second.entity == id;
+        });
         return true;
     }
 
@@ -375,6 +384,8 @@ SketchModelState SketchModel::state() const {
     SketchModelState result;
     result.next_entity_id =
         EntityIdCursor{next_entity_value_};
+    result.next_constraint_id = ConstraintIdCursor{next_constraint_value_};
+    result.constraints = constraints_;
     result.lines.reserve(lines_.size());
     result.circles.reserve(circles_.size());
     result.arcs.reserve(arcs_.size());
