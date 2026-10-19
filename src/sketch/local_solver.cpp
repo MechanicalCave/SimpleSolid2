@@ -288,6 +288,61 @@ LocalSolveGatewayResult evaluateLocalSolve(
         }
     }
 
+    // A backend must not smuggle an evaluated candidate into a conflict,
+    // unsupported or failed response; these are diagnostic-only outcomes.
+    if ((backend_result.status != LocalBackendStatus::converged &&
+         backend_result.candidate.has_value()) ||
+        (backend_result.status != LocalBackendStatus::conflict &&
+         !backend_result.conflicting_constraints.empty())) {
+        result.status = LocalSolveGatewayStatus::invalid_backend_response;
+        return result;
+    }
+
+    bool redundant = false;
+    std::set<ConstraintId> diagnostic_ids;
+    for (const auto& diagnostic : backend_result.diagnostics) {
+        if (diagnostic.constraint) {
+            const auto id = *diagnostic.constraint;
+            const auto found = std::find_if(
+                problem.constraints.cbegin(), problem.constraints.cend(),
+                [id](const SketchConstraintState& c) { return c.id == id; });
+            if (!id.valid() || found == problem.constraints.cend() ||
+                !diagnostic_ids.insert(id).second) {
+                result.status = LocalSolveGatewayStatus::invalid_backend_response;
+                return result;
+            }
+        }
+
+        // A successful numeric answer may report redundancy but never a
+        // conflict or failure. Redundant intent is rejected atomically,
+        // rather than silently publishing an underdetermined solution.
+        bool compatible = false;
+        switch (diagnostic.kind) {
+        case LocalBackendDiagnosticKind::redundant_constraint:
+            redundant = true;
+            compatible = backend_result.status == LocalBackendStatus::converged &&
+                         diagnostic.constraint.has_value();
+            break;
+        case LocalBackendDiagnosticKind::conflicting_constraint:
+            compatible = backend_result.status == LocalBackendStatus::conflict &&
+                         diagnostic.constraint.has_value();
+            break;
+        case LocalBackendDiagnosticKind::unsupported_constraint:
+            compatible = backend_result.status == LocalBackendStatus::unsupported;
+            break;
+        case LocalBackendDiagnosticKind::no_convergence:
+        case LocalBackendDiagnosticKind::backend_failure:
+        case LocalBackendDiagnosticKind::residual_violation:
+            compatible = backend_result.status == LocalBackendStatus::failed;
+            break;
+        }
+        if (!compatible) {
+            result.status = LocalSolveGatewayStatus::invalid_backend_response;
+            return result;
+        }
+    }
+    result.diagnostics = backend_result.diagnostics;
+
     switch (backend_result.status) {
     case LocalBackendStatus::conflict:
         result.status = LocalSolveGatewayStatus::conflict;
@@ -307,6 +362,10 @@ LocalSolveGatewayResult evaluateLocalSolve(
             !backend_result.conflicting_constraints.empty()) {
             break;
         }
+        if (redundant) {
+            result.status = LocalSolveGatewayStatus::redundant_constraint;
+            return result;
+        }
         result.residuals = reviewLocalSolveCandidate(
             *canonical, *backend_result.candidate, policy);
         switch (result.residuals.status) {
@@ -314,9 +373,17 @@ LocalSolveGatewayResult evaluateLocalSolve(
             result.status = LocalSolveGatewayStatus::candidate_accepted;
             // A COPY, not a live mutable reference to authored state.
             result.candidate = std::move(backend_result.candidate);
+            result.degrees_of_freedom = backend_result.degrees_of_freedom;
             return result;
         case LocalResidualStatus::residual_violation:
             result.status = LocalSolveGatewayStatus::residual_violation;
+            for (const auto& value : result.residuals.constraints) {
+                if (!value.accepted) {
+                    result.diagnostics.push_back(LocalBackendDiagnostic{
+                        LocalBackendDiagnosticKind::residual_violation,
+                        value.constraint_id});
+                }
+            }
             return result;
         case LocalResidualStatus::invalid_candidate:
             result.status = LocalSolveGatewayStatus::invalid_candidate;
