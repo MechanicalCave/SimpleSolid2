@@ -492,8 +492,26 @@ std::optional<SketchModel> SketchModel::restore(
                 item.role});
     }
 
-    model.next_entity_value_ =
-        state.next_entity_id.next_value_;
+    // Only Horizontal(Line) is executable in this first A1.1 slice.
+    // Reject corrupt IDs, unsupported kinds, duplicates or dangling references.
+    std::set<ConstraintId> seen_constraints;
+    std::set<EntityId> horizontal_lines;
+    for (const auto& item : state.constraints) {
+        if (!item.id.valid() ||
+            item.id.value_ >= state.next_constraint_id.next_value_ ||
+            !seen_constraints.insert(item.id).second ||
+            item.kind != ConstraintKind::horizontal ||
+            item.first.element != ConstraintElement::line ||
+            !item.first.entity.valid() ||
+            item.second != ConstraintReference{} ||
+            model.findLine(item.first.entity) == nullptr ||
+            !horizontal_lines.insert(item.first.entity).second) {
+            return std::nullopt;
+        }
+    }
+    model.constraints_ = std::move(state.constraints);
+    model.next_constraint_value_ = state.next_constraint_id.next_value_;
+    model.next_entity_value_ = state.next_entity_id.next_value_;
     return model;
 }
 
