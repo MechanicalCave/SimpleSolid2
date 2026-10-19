@@ -2118,6 +2118,122 @@ int main() {
         CHECK(authored_chain.findProfile(*cut_profile.profile_id));
     }
 
+    // A legitimate PG-01 projected Line triggers an external provider call
+    // *inside* prepareStageLocalSolveProblem. Reentering DocumentSession
+    // through that provider must not leave any borrowed authored pointers
+    // dangling or allow an obsolete problem to escape standalone prepare.
+    {
+        const auto cloned = part::PartDocument::restore(
+            authored_chain.documentId(), authored_chain.state(),
+            authored_chain.revision());
+        CHECK(cloned.ok() && cloned.document);
+        app::DocumentSession projected_session{
+            {}, std::move(*cloned.document)};
+        const auto projected_sketch = projected_session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(projected_sketch.ok() && projected_sketch.sketch_id);
+        auto current_prefix = part::evaluatePart(
+            projected_session.document(), provider);
+        CHECK(current_prefix.features.size() == 2U);
+        CHECK(current_prefix.features.front().status ==
+            part::FeatureEvaluationStatus::up_to_date);
+        CHECK(current_prefix.features.front().result_solid);
+        CHECK(current_prefix.features.front().result_topology);
+        const auto frame = part::resolveCurrentProjectionSketchFrame(
+            projected_session.document(), *projected_sketch.sketch_id,
+            current_prefix);
+        CHECK(frame);
+
+        std::optional<part::MaterialEdgeReference> source;
+        for (const auto& edge :
+             current_prefix.features.front().result_topology->edges) {
+            const auto material = part::authorMaterialEdgeReference(
+                *current_prefix.features.front().result_topology,
+                edge.runtime_token);
+            if (!material.ok()) continue;
+            const auto bound = provider.bindEdgeToBody(
+                current_prefix.features.front().result_solid,
+                edge.runtime_token);
+            if (!bound) continue;
+            const auto projected_edge = provider.projectEdgeToPlane(
+                current_prefix.features.front().result_solid,
+                *bound, *frame);
+            if (projected_edge.ok() &&
+                std::holds_alternative<kernel::Line2>(
+                    *projected_edge.curve)) {
+                source = *material.reference;
+                break;
+            }
+        }
+        CHECK(source);
+        const auto linked = projected_session.execute(
+            app::CreateProjectedSketchEdgesCommand{
+                *projected_sketch.sketch_id,
+                projected_session.document().revision(), {*source},
+                sk::EntityRole::regular},
+            provider);
+        CHECK(linked.ok());
+        CHECK(linked.entity_ids.size() == 1U);
+        current_prefix = part::evaluatePart(
+            projected_session.document(), provider);
+        const auto valid_problem = part::prepareStageLocalSolveProblem(
+            projected_session.document(), *projected_sketch.sketch_id,
+            current_prefix, provider);
+        CHECK(valid_problem);
+        CHECK(valid_problem->fixed_lines.size() == 1U);
+        CHECK(valid_problem->fixed_lines.front() == linked.entity_ids.front());
+
+        struct ReentrantQuery final : kernel::IEdgeProjectionQuery {
+            occt::OcctSolidModelingKernel& native;
+            app::DocumentSession& session;
+            sk::SketchId sketch_id;
+            unsigned projections{};
+            bool mutated{};
+
+            std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+                kernel::RuntimeSolidHandle body,
+                kernel::RuntimeEdgeToken edge) noexcept override {
+                return native.bindEdgeToBody(std::move(body), edge);
+            }
+            kernel::EdgeProjectionResult projectEdgeToPlane(
+                kernel::RuntimeSolidHandle body,
+                const kernel::ScopedProjectionEdge& bound,
+                const kernel::Frame3& target) noexcept override {
+                ++projections;
+                auto value = native.projectEdgeToPlane(
+                    std::move(body), bound, target);
+                if (value.ok()) {
+                    const auto edit = session.execute(
+                        app::AddSketchLineCommand{
+                            sketch_id, {21.0, 2.0}, {24.0, 2.0}});
+                    CHECK(edit.ok() && edit.changed);
+                    mutated = true;
+                }
+                return value;
+            }
+        } reentrant{provider, projected_session,
+                    *projected_sketch.sketch_id};
+
+        CHECK(!part::prepareStageLocalSolveProblem(
+            projected_session.document(), *projected_sketch.sketch_id,
+            current_prefix, reentrant));
+        CHECK(reentrant.projections == 1U);
+        CHECK(reentrant.mutated);
+        CHECK(current_prefix.source_revision !=
+            projected_session.document().revision());
+        CHECK(!part::prepareStageLocalSolveProblem(
+            projected_session.document(), *projected_sketch.sketch_id,
+            current_prefix, provider));
+        current_prefix = part::evaluatePart(
+            projected_session.document(), provider);
+        const auto restored = part::prepareStageLocalSolveProblem(
+            projected_session.document(), *projected_sketch.sketch_id,
+            current_prefix, provider);
+        CHECK(restored && restored->lines.size() == 2U);
+        CHECK(restored->fixed_lines.size() == 1U);
+    }
+
     std::cout << "R13_A1_OCCT_PASS exact_seam=1"
               << " extrude_solid=1 revolve_solid=1"
               << " stale_profile_publication=0"
