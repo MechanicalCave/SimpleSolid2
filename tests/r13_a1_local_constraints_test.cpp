@@ -786,6 +786,50 @@ int main() {
         CHECK(!model.isFixedLine(locked));
     }
 
+    // Contradictions between immutable Fix coordinates and new geometric
+    // intent must reject before allocating an ID or calling a solver.
+    // Restore also rejects malformed/impossible authored combinations.
+    {
+        using K = sk::ConstraintKind;
+        using E = sk::ConstraintElement;
+        sk::SketchModel blocked;
+        const auto diagonal = blocked.addLine({0.0, 0.0}, {3.0, 4.0});
+        const auto parallel = blocked.addLine({1.0, 1.0}, {7.0, 9.0});
+        const auto offset = blocked.addLine({0.0, 1.0}, {3.0, 5.0});
+        const auto af = blocked.addConstraint(K::fix, {diagonal, E::line});
+        CHECK(af);
+        const auto preserved = blocked.state();
+        CHECK(!blocked.addConstraint(K::horizontal, {diagonal, E::line}));
+        CHECK(!blocked.addConstraint(K::vertical, {diagonal, E::line}));
+        CHECK(blocked.state() == preserved);
+        CHECK(blocked.constraintIdCursor().serialized() == "2");
+        CHECK(blocked.addConstraint(K::fix, {parallel, E::line}));
+        const auto twoFixed = blocked.state();
+        CHECK(!blocked.addConstraint(
+            K::parallel, {diagonal, E::line}, {parallel, E::line}));
+        CHECK(!blocked.addConstraint(
+            K::perpendicular, {diagonal, E::line}, {parallel, E::line}));
+        CHECK(!blocked.addConstraint(
+            K::coincident, {diagonal, E::line_start}, {parallel, E::line_start}));
+        CHECK(blocked.state() == twoFixed);
+        auto corrupt = twoFixed;
+        corrupt.constraints.push_back(sk::SketchConstraintState{
+            *sk::ConstraintId::parse("3"), K::horizontal,
+            {diagonal, E::line}, {}});
+        corrupt.next_constraint_id = *sk::ConstraintIdCursor::parse("4");
+        CHECK(!sk::SketchModel::restore(corrupt));
+        corrupt = twoFixed;
+        corrupt.constraints.push_back(sk::SketchConstraintState{
+            *sk::ConstraintId::parse("3"), K::parallel,
+            {diagonal, E::line}, {parallel, E::line}});
+        corrupt.next_constraint_id = *sk::ConstraintIdCursor::parse("4");
+        CHECK(!sk::SketchModel::restore(corrupt));
+        CHECK(!blocked.isFixedLine(offset));
+        const auto earlierIntent = blocked.addConstraint(
+            K::horizontal, {offset, E::line});
+        CHECK(!earlierIntent); // offset has a slope; but it is still FREE!
+    }
+
     // Fix is an ordinary undoable revision-bound DocumentSession relation;
     // attempts to mutate it must fail atomically, without dirty/history
     // changes, and become possible only after explicit Unfix.
