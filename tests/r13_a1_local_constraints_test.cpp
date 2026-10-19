@@ -775,9 +775,11 @@ int main() {
         CHECK(solvedInput->lines.front().fixed);
         CHECK(!solvedInput->lines.back().fixed);
         const sk::LocalSolverAcceptancePolicy policy{1.0e-7, 1.0e-6};
-        CHECK(sk::reviewLocalSolveCandidate(
-            *solvedInput, model.state(), policy).status ==
+        const auto fixedOnlyReview = sk::reviewLocalSolveCandidate(
+            *solvedInput, model.state(), policy);
+        CHECK(fixedOnlyReview.status ==
             sk::LocalResidualStatus::residuals_satisfied);
+        CHECK(fixedOnlyReview.constraints.empty()); // Fix has no equation residual
         auto movedFixed = model.state();
         movedFixed.lines.front().start.u += 1.0e-9;
         CHECK(sk::reviewLocalSolveCandidate(
