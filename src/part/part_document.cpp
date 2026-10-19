@@ -338,6 +338,13 @@ PartDocument::evaluateProfile(
     if (source == nullptr) {
         return std::nullopt;
     }
+    // R13-A1 A1.1: authored relations are not evaluated geometry.
+    // A Profile cannot consume the persisted seed as a solved snapshot.
+    // The solver adapter must replace this fence with a validated,
+    // same-stage evaluated Sketch before constraints become consumable.
+    if (source->model.constraintCount() != 0U) {
+        return std::nullopt;
+    }
     // PG-01B/B1 safety fence: never use stale authored seed as current
     // geometric truth for a Profile that consumes linked source geometry.
     // B2/B3 will replace this with pure effective Sketch evaluation.
