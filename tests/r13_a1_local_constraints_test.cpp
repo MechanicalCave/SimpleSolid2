@@ -1687,6 +1687,42 @@ int main() {
     CHECK(session.document().findSketch(*sketch.sketch_id)
         ->model.state().lines == seed.lines);
 
+    // A refused candidate must not poison either the authored intent or
+    // the old Profile/OCCT path. Undo the ONLY new Coincident relation;
+    // the exact same ProfileId must immediately work through the original
+    // public resolver and produce a genuine native solid again.
+    CHECK(session.undo().changed);
+    const auto* unconstrained =
+        session.document().findProfile(*profile.profile_id);
+    CHECK(unconstrained != nullptr);
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.state().constraints.empty());
+    const auto original_profile =
+        part::resolveKernelProfileInput(session.document(),
+                                       *profile.profile_id);
+    CHECK(original_profile.ok());
+    kernel::LinearExtrudeInput after_undo = extrude_input;
+    after_undo.profile = *original_profile.input;
+    const auto restored_solid = provider.extrude(after_undo);
+    CHECK(restored_solid.ok());
+    CHECK(restored_solid.brep_valid);
+    CHECK(restored_solid.solid_count == 1U);
+
+    // Redo restores the exact authored relation identity and fail-closed
+    // unsolved Profile state; no stale OCCT or solver result is reused.
+    CHECK(session.redo().changed);
+    CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
+    const auto after_redo =
+        session.document().findSketch(*sketch.sketch_id)->model.state();
+    CHECK(after_redo.lines == seed.lines);
+    CHECK(after_redo.constraints.size() == 1U);
+    CHECK(after_redo.constraints.front().id == *coincide.constraint_id);
+    CHECK(part::resolveKernelProfileInput(
+        session.document(), *profile.profile_id).status ==
+        part::ProfileKernelInputStatus::unresolved_profile);
+    CHECK(!session.document().evaluateProfile(*profile.profile_id));
+    CHECK(backend.calls == 2U);
+
     std::cout << "R13_A1_OCCT_PASS exact_seam=1"
               << " extrude_solid=1 revolve_solid=1"
               << " stale_profile_publication=0\n";
