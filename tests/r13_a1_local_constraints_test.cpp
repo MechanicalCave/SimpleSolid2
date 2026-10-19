@@ -707,6 +707,25 @@ int main() {
         CHECK(updated->constraints.size() == 1U);
         CHECK(!part::prepareStageLocalSolveProblem(
             session.document(), sk::SketchId::generate(), prefix, provider));
+
+        // Manual Fix needs NO projected edge or upstream Body at all.
+        // The same production Part bridge must supply a frozen Line.
+        const auto fix = session.execute(app::AddSketchRelationCommand{
+            *made.sketch_id, session.document().revision(),
+            sk::ConstraintKind::fix,
+            {*line.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(fix.ok() && fix.constraint_id);
+        CHECK(!part::prepareStageLocalSolveProblem(
+            session.document(), *made.sketch_id, prefix, provider));
+        prefix.source_revision = session.document().revision();
+        const auto withFix = part::prepareStageLocalSolveProblem(
+            session.document(), *made.sketch_id, prefix, provider);
+        CHECK(withFix && withFix->fixed_lines.size() == 1U);
+        CHECK(withFix->fixed_lines.front() == *line.entity_id);
+        CHECK(withFix->lines.front().fixed);
+        CHECK(!withFix->lines.back().fixed);
+        CHECK(withFix->constraints.size() == 2U);
+        CHECK(withFix->constraints.back().kind == sk::ConstraintKind::fix);
     }
 
     // Owner-approved sixth relation: Fix(Line) locks both endpoints in the
