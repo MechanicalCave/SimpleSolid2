@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <iostream>
 #include <array>
+#include <cmath>
 #include <limits>
 #include <stdexcept>
 
@@ -739,6 +740,109 @@ int main() {
             sk::LocalSolveGatewayStatus::residual_violation);
         CHECK(!coupledResult.candidate);
         CHECK(coupled.state() == coupledState);
+
+        // Same authored semantic constraints in different record order
+        // must produce the SAME evaluated vertex, not a history-dependent
+        // sequence of pairwise 1e-12 tolerance welds.
+        sk::SketchModel ordered;
+        const auto oa = ordered.addLine({0.0, 0.0}, {10.0, 0.0});
+        const auto ob = ordered.addLine({10.0 + 4.0e-13, 0.0}, {11.0, 1.0});
+        const auto oc = ordered.addLine({10.0 + 8.0e-13, 0.0}, {12.0, 2.0});
+        CHECK(ordered.addConstraint(sk::ConstraintKind::coincident,
+            {oa, sk::ConstraintElement::line_end},
+            {ob, sk::ConstraintElement::line_start}));
+        CHECK(ordered.addConstraint(sk::ConstraintKind::coincident,
+            {ob, sk::ConstraintElement::line_start},
+            {oc, sk::ConstraintElement::line_start}));
+        const auto orderedState = ordered.state();
+        auto reversedState = orderedState;
+        std::reverse(reversedState.constraints.begin(),
+                     reversedState.constraints.end());
+        CHECK(sk::SketchModel::restore(reversedState));
+        const auto inputOrdered = sk::prepareLocalSolveProblem(orderedState);
+        const auto inputReversed = sk::prepareLocalSolveProblem(reversedState);
+        CHECK(inputOrdered && inputReversed);
+        ScriptedBackend orderedBackend;
+        ScriptedBackend reversedBackend;
+        orderedBackend.candidate = orderedState;
+        reversedBackend.candidate = reversedState;
+        const auto solvedOrdered = sk::evaluateLocalSolve(
+            *inputOrdered, precise, orderedBackend);
+        const auto solvedReversed = sk::evaluateLocalSolve(
+            *inputReversed, precise, reversedBackend);
+        CHECK(solvedOrdered.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(solvedReversed.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(solvedOrdered.candidate && solvedReversed.candidate);
+        CHECK(solvedOrdered.candidate->lines ==
+            solvedReversed.candidate->lines);
+        CHECK(solvedOrdered.candidate->lines[0].end ==
+            solvedOrdered.candidate->lines[1].start);
+        CHECK(solvedOrdered.candidate->lines[1].start ==
+            solvedOrdered.candidate->lines[2].start);
+        CHECK(ordered.state() == orderedState);
+
+        // A stage may supply two independently frozen projected Lines.
+        // A near-but-unequal authored Coincident cannot move EITHER
+        // projected source even when both residues fit the numeric budget.
+        sk::SketchModel twoProjected;
+        const auto p1 = twoProjected.addLine({0.0, 0.0}, {2.0, 0.0});
+        const auto p2 = twoProjected.addLine(
+            {2.0 + 5.0e-13, 0.0}, {2.0 + 5.0e-13, 3.0});
+        CHECK(twoProjected.addConstraint(sk::ConstraintKind::coincident,
+            {p1, sk::ConstraintElement::line_end},
+            {p2, sk::ConstraintElement::line_start}));
+        const auto twoProjectedState = twoProjected.state();
+        const std::array<sk::EntityId, 2> projectedFixed{p1, p2};
+        const auto twoProjectedInput = sk::prepareLocalSolveProblem(
+            twoProjectedState, projectedFixed);
+        CHECK(twoProjectedInput);
+        ScriptedBackend twoProjectedBackend;
+        twoProjectedBackend.candidate = twoProjectedState;
+        const auto incompatibleFixed = sk::evaluateLocalSolve(
+            *twoProjectedInput, precise, twoProjectedBackend);
+        CHECK(incompatibleFixed.status ==
+            sk::LocalSolveGatewayStatus::coincident_not_closed);
+        CHECK(!incompatibleFixed.candidate);
+        CHECK(twoProjected.state() == twoProjectedState);
+
+        // At 100 metres one binary64 ULP is > 1e-12 mm. Reject a
+        // representably separate candidate under a strict 1e-12 budget;
+        // do not pretend that absolute target is attainable at any scale.
+        // A distinct, explicit caller-owned budget may accept one ULP.
+        const double large = 100000.0;
+        const double oneUlp = std::nextafter(
+            large, std::numeric_limits<double>::infinity()) - large;
+        CHECK(oneUlp > precise.distance_tolerance);
+        sk::SketchModel largeModel;
+        const auto largeA = largeModel.addLine(
+            {large - 1.0, 0.0}, {large, 0.0});
+        const auto largeB = largeModel.addLine(
+            {large + oneUlp, 0.0}, {large + 1.0, 1.0});
+        CHECK(largeModel.addConstraint(sk::ConstraintKind::coincident,
+            {largeA, sk::ConstraintElement::line_end},
+            {largeB, sk::ConstraintElement::line_start}));
+        const auto largeAuthored = largeModel.state();
+        const auto largeInput = sk::prepareLocalSolveProblem(largeAuthored);
+        CHECK(largeInput);
+        ScriptedBackend largeBackend;
+        largeBackend.candidate = largeAuthored;
+        const auto strictLarge = sk::evaluateLocalSolve(
+            *largeInput, precise, largeBackend);
+        CHECK(strictLarge.status ==
+            sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!strictLarge.candidate);
+        const sk::LocalSolverAcceptancePolicy explicitOneUlp{
+            2.0 * oneUlp, precise.angular_tolerance_radians};
+        const auto calibratedLarge = sk::evaluateLocalSolve(
+            *largeInput, explicitOneUlp, largeBackend);
+        CHECK(calibratedLarge.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(calibratedLarge.candidate);
+        CHECK(calibratedLarge.candidate->lines[0].end ==
+            calibratedLarge.candidate->lines[1].start);
+        CHECK(largeModel.state() == largeAuthored);
 
     }
 
