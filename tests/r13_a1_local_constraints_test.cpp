@@ -604,9 +604,9 @@ int main() {
               sk::LocalSolveGatewayStatus::invalid_problem);
         CHECK(backend.calls == calls);
 
-        // A candidate can meet a numerical Coincident tolerance and still
-        // contain an open endpoint seam. Profile may consume ONLY exact
-        // evaluated equality, never a tolerance-welded fiction.
+        // Explicit Coincident uses a caller-owned 1e-12 model-distance
+        // policy. A numerically converged seam must have one EXACT shared
+        // evaluated vertex, not two almost-equal Profile coordinates.
         sk::SketchModel seamModel;
         const auto s1 = seamModel.addLine({0.0, 0.0}, {2.0, 0.0});
         const auto s2 = seamModel.addLine({2.0, 0.0}, {2.0, 4.0});
@@ -618,28 +618,86 @@ int main() {
         const auto seamAuthor = seamModel.state();
         const auto seamProblem = sk::prepareLocalSolveProblem(seamAuthor);
         CHECK(seamProblem);
+        const sk::LocalSolverAcceptancePolicy precise{1.0e-12, 1.0e-12};
         ScriptedBackend seamBackend;
         seamBackend.candidate = seamAuthor;
-        seamBackend.candidate->lines[1].start.u += 1.0e-10;
+        seamBackend.candidate->lines[1].start.u += 5.0e-13;
         const auto seamNear = sk::evaluateLocalSolve(
-            *seamProblem, policy, seamBackend);
-        CHECK(seamNear.residuals.status ==
-            sk::LocalResidualStatus::residuals_satisfied);
+            *seamProblem, precise, seamBackend);
         CHECK(seamNear.status ==
-            sk::LocalSolveGatewayStatus::coincident_not_closed);
-        CHECK(!seamNear.candidate);
-        CHECK(seamNear.diagnostics.size() == 1U);
-        CHECK(seamNear.diagnostics.front().constraint == seamId);
-        CHECK(seamModel.state() == seamAuthor);
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(seamNear.candidate);
+        CHECK(seamNear.candidate->lines[0].end ==
+            seamNear.candidate->lines[1].start);
+        CHECK(seamNear.candidate->lines[0].end == seamAuthor.lines[0].end);
+        CHECK(seamModel.state() == seamAuthor); // authored never welded
 
-        // An exactly equal disposable candidate may cross the gateway,
-        // but it still cannot publish to Part until stage/revision checks.
+        // Real gaps outside the caller-owned precision remain open.
+        seamBackend.candidate = seamAuthor;
+        seamBackend.candidate->lines[1].start.u += 5.0e-12;
+        const auto seamTooWide = sk::evaluateLocalSolve(
+            *seamProblem, precise, seamBackend);
+        CHECK(seamTooWide.status ==
+            sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!seamTooWide.candidate);
+
+        // An exactly equal disposable candidate remains valid.
         seamBackend.candidate = seamAuthor;
         const auto exactlyClosed = sk::evaluateLocalSolve(
-            *seamProblem, policy, seamBackend);
+            *seamProblem, precise, seamBackend);
         CHECK(exactlyClosed.status ==
             sk::LocalSolveGatewayStatus::candidate_accepted);
         CHECK(exactlyClosed.candidate);
+
+        // Fixed sources are authoritative, even when the free seed is
+        // only numerically Coincident. Never move a Fix/PG-01 anchor.
+        sk::SketchModel anchored;
+        const auto anchor = anchored.addLine({0.0, 0.0}, {2.0, 0.0});
+        const auto free = anchored.addLine({2.0 + 5.0e-13, 0.0}, {2.0, 4.0});
+        CHECK(anchored.addConstraint(sk::ConstraintKind::fix,
+            {anchor, sk::ConstraintElement::line}));
+        CHECK(anchored.addConstraint(sk::ConstraintKind::coincident,
+            {anchor, sk::ConstraintElement::line_end},
+            {free, sk::ConstraintElement::line_start}));
+        const auto anchoredState = anchored.state();
+        const auto anchoredInput = sk::prepareLocalSolveProblem(anchoredState);
+        CHECK(anchoredInput);
+        ScriptedBackend anchoredBackend;
+        anchoredBackend.candidate = anchoredState;
+        const auto anchoredResult = sk::evaluateLocalSolve(
+            *anchoredInput, precise, anchoredBackend);
+        CHECK(anchoredResult.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(anchoredResult.candidate);
+        CHECK(anchoredResult.candidate->lines[0] == anchoredState.lines[0]);
+        CHECK(anchoredResult.candidate->lines[1].start ==
+            anchoredState.lines[0].end);
+        CHECK(anchored.state() == anchoredState);
+
+        // A multi-relation chain cannot accumulate pairwise tolerances
+        // into a larger displacement from the canonical vertex.
+        sk::SketchModel chained;
+        const auto ca = chained.addLine({0.0, 0.0}, {2.0, 0.0});
+        const auto cb = chained.addLine({2.0 + 8.0e-13, 0.0}, {3.0, 1.0});
+        const auto cc = chained.addLine({2.0 + 1.6e-12, 0.0}, {4.0, 2.0});
+        CHECK(chained.addConstraint(sk::ConstraintKind::coincident,
+            {ca, sk::ConstraintElement::line_end},
+            {cb, sk::ConstraintElement::line_start}));
+        CHECK(chained.addConstraint(sk::ConstraintKind::coincident,
+            {cb, sk::ConstraintElement::line_start},
+            {cc, sk::ConstraintElement::line_start}));
+        const auto chainedState = chained.state();
+        const auto chainedInput = sk::prepareLocalSolveProblem(chainedState);
+        CHECK(chainedInput);
+        ScriptedBackend chainedBackend;
+        chainedBackend.candidate = chainedState;
+        const auto chainedRejected = sk::evaluateLocalSolve(
+            *chainedInput, precise, chainedBackend);
+        CHECK(chainedRejected.status ==
+            sk::LocalSolveGatewayStatus::coincident_not_closed);
+        CHECK(!chainedRejected.candidate);
+        CHECK(chained.state() == chainedState);
+
     }
 
 
