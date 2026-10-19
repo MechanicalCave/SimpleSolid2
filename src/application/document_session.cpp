@@ -2133,6 +2133,7 @@ DocumentSessionResult DocumentSession::execute(
             line.start == line.end ||
             !unique.insert(line.entity_id).second ||
             is_linked(line.entity_id) ||
+            target->model.isFixedLine(line.entity_id) ||
             target->model.findLine(line.entity_id) ==
                 nullptr) {
             return failure(
