@@ -6131,6 +6131,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
     }
     auto adjusted_expected =
         expected_current;
+    applySketchConstraintIdCursors(adjusted_expected);
     applyAxisIdCursor(
         adjusted_expected);
     applyDatumIdCursor(
@@ -6148,6 +6149,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     auto adjusted_target = target;
     applySketchEntityIdCursors(adjusted_target);
+    applySketchConstraintIdCursors(adjusted_target);
     applyAxisIdCursor(adjusted_target);
     applyDatumIdCursor(adjusted_target);
     applyProfileIdCursor(adjusted_target);
@@ -6222,6 +6224,36 @@ void DocumentSession::applySketchEntityIdCursors(
 
         hosted.model.preserveEntityIdCursor(
             found->second);
+    }
+}
+
+void DocumentSession::absorbSketchConstraintIdCursors(
+    SketchConstraintIdCursorMap& cursors,
+    const part::PartAuthoredState& state) {
+    for (const auto& hosted : state.sketches) {
+        const auto observed = hosted.model.constraintIdCursor();
+        const auto found = cursors.find(hosted.id);
+        if (found == cursors.end()) {
+            cursors.emplace(hosted.id, observed);
+        } else if (observed > found->second) {
+            found->second = observed;
+        }
+    }
+}
+
+void DocumentSession::absorbSketchConstraintIdCursors(
+    const part::PartAuthoredState& state) {
+    absorbSketchConstraintIdCursors(
+        sketch_constraint_id_cursors_, state);
+}
+
+void DocumentSession::applySketchConstraintIdCursors(
+    part::PartAuthoredState& state) const {
+    for (auto& hosted : state.sketches) {
+        const auto found = sketch_constraint_id_cursors_.find(hosted.id);
+        if (found != sketch_constraint_id_cursors_.end()) {
+            hosted.model.preserveConstraintIdCursor(found->second);
+        }
     }
 }
 
