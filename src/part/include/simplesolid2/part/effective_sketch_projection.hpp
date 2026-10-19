@@ -152,4 +152,18 @@ resolveStageSolvedProfileKernelInput(
     const DatumEvaluation* datum_evaluation = nullptr,
     std::optional<FeatureId> consuming_feature = std::nullopt);
 
+
+// Explicit opt-in evaluation using the SAME existing Part Feature scheduler
+// and SAME ProfileRegionIntent resolver. A caller-owned native numerical
+// backend supplies ephemeral stage-bound Sketch solutions. This overload is
+// NOT selected by existing application evaluation callers; missing provider,
+// failed solve, or stale revision must still block Feature publication.
+// No implicit PlaneGCS dependency, default solver, persistent geometry,
+// alternate Profile, or new Body/Feature implementation.
+[[nodiscard]] PartEvaluation evaluatePartWithLocalSolve(
+    const PartDocument& document,
+    kernel::ISolidModelingKernel& modeling_kernel,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend);
+
 } // namespace simplesolid2::part
