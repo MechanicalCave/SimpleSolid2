@@ -51,7 +51,8 @@ private:
     friend class SketchModel;
 };
 
-enum class ConstraintKind { horizontal, vertical, coincident, parallel, perpendicular };
+// Append-only enum: preserve the identity of the five previously authored kinds.
+enum class ConstraintKind { horizontal, vertical, coincident, parallel, perpendicular, fix };
 enum class ConstraintElement { none, line, line_start, line_end };
 
 struct ConstraintReference final {
