@@ -284,6 +284,13 @@ bool SketchModel::setEntityRole(
     return false;
 }
 
+void SketchModel::preserveConstraintIdCursor(
+    ConstraintIdCursor cursor) noexcept {
+    if (cursor.next_value_ > next_constraint_value_) {
+        next_constraint_value_ = cursor.next_value_;
+    }
+}
+
 std::optional<ConstraintId> SketchModel::addHorizontal(EntityId line) {
     if (findLine(line) == nullptr ||
         next_constraint_value_ == std::numeric_limits<std::uint64_t>::max()) {
