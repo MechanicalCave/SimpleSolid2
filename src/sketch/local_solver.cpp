@@ -56,6 +56,11 @@ struct ResidualValue final {
     const SketchModelState& state,
     const SketchConstraintState& constraint) noexcept {
     switch (constraint.kind) {
+    case ConstraintKind::fix: {
+        // The actual invariant is enforced by exact fixed-line equality
+        // below; Fix needs no artificial distance/angular equation.
+        return ResidualValue{LocalResidualUnit::model_distance, 0.0};
+    }
     case ConstraintKind::horizontal:
     case ConstraintKind::vertical: {
         const auto* line = findLineState(state, constraint.first.entity);
@@ -139,6 +144,15 @@ std::optional<LocalSolveProblem> prepareLocalSolveProblem(
     result.authored = authored;
     result.constraints = authored.constraints;
     result.fixed_lines.assign(fixed_lines.begin(), fixed_lines.end());
+    // A user-authored Fix(Line) is as strong as a fixed PG-01 source,
+    // without requiring any Body projection. Preserve both forms of
+    // grounding in the same canonical frozen input, without duplicates.
+    for (const auto& relation : authored.constraints) {
+        if (relation.kind != ConstraintKind::fix) continue;
+        if (seen.insert(relation.first.entity).second) {
+            result.fixed_lines.push_back(relation.first.entity);
+        }
+    }
     result.lines.reserve(authored.lines.size());
     for (const auto& line : authored.lines) {
         result.lines.push_back(LocalSolveLineInput{
@@ -167,8 +181,11 @@ LocalResidualReport reviewLocalSolveCandidate(
         result.status = LocalResidualStatus::invalid_candidate;
         return result;
     }
-    if (!SketchModel::restore(problem.authored) ||
-        problem.constraints != problem.authored.constraints ||
+    const auto canonical = prepareLocalSolveProblem(
+        problem.authored, std::span<const EntityId>{problem.fixed_lines});
+    if (!canonical ||
+        canonical->constraints != problem.constraints ||
+        canonical->fixed_lines != problem.fixed_lines ||
         problem.lines.size() != problem.authored.lines.size() ||
         !sameNonGeometryState(problem.authored, candidate)) {
         result.status = LocalResidualStatus::stale_semantics;
