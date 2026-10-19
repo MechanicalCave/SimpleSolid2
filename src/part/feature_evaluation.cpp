@@ -6694,11 +6694,21 @@ StrictProjectedEdgeGeometry projectStrictMaterialEdge(
     }
     const auto bound = query.bindEdgeToBody(
         stage->result_solid, ref->current_edges.front());
+    // Both provider hooks may reenter DocumentSession. Do not proceed to
+    // projection on a retired Part stage, even if binding appeared valid.
+    if (prefix.source_revision != document.revision()) {
+        return fail(Status::invalid_dependency);
+    }
     if (!bound || !bound->valid()) {
         return fail(Status::provider_failure);
     }
     const auto projected = query.projectEdgeToPlane(
         stage->result_solid, *bound, frame);
+    // This lower-level public resolver must itself refuse stale output;
+    // do not rely solely on downstream effective-Sketch checks.
+    if (prefix.source_revision != document.revision()) {
+        return fail(Status::invalid_dependency);
+    }
     if (!projected.ok()) {
         switch (projected.status) {
         case kernel::EdgeProjectionStatus::unsupported_curve:
