@@ -439,6 +439,25 @@ int main() {
         CHECK(acceptedProfile.ok());
         CHECK(acceptedProfile.input->outer.boundary.size() == 4U);
         CHECK(acceptedProfile.input->holes.empty());
+        // The existing Kernel adapter must carry the EXACT same canonical
+        // shared point, not reintroduce an epsilon-sized seam in the OCCT
+        // wire's source curves. Use semantic provenance, not loop order.
+        const kernel::Line2* first_curve = nullptr;
+        const kernel::Line2* second_curve = nullptr;
+        for (const auto& use : acceptedProfile.input->outer.boundary) {
+            if (use.provenance.source_entity ==
+                before.lines[0].id.serialized()) {
+                first_curve = std::get_if<kernel::Line2>(&use.curve);
+            }
+            if (use.provenance.source_entity ==
+                before.lines[1].id.serialized()) {
+                second_curve = std::get_if<kernel::Line2>(&use.curve);
+            }
+        }
+        CHECK(first_curve != nullptr && second_curve != nullptr);
+        CHECK(first_curve->end == second_curve->start);
+        CHECK(first_curve->end.u == before.lines[0].end.u);
+        CHECK(first_curve->end.v == before.lines[0].end.v);
         CHECK(backend.calls == 2U);
         // The observed Profile remains authored, with stable identity.
         CHECK(session.document().findProfile(*profile.profile_id));
