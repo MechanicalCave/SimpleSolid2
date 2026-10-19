@@ -62,7 +62,10 @@ All paths below are **conditional**, for the purposes stated, with no generic di
 - `tests/sk03a_part_viewport_controller_test.cpp` **UI-gated**
 - `tests/sk04c_part_sketch_interaction_controller_test.cpp` **UI-gated**
 - `tests/r13_a1_local_constraints_test.cpp` (new native registered test)
-- `CMakeLists.txt` (target/test registration only if no existing build registration path; no unrelated settings/CI rewrite)
+- `src/CMakeLists.txt` (register new SS2-owned Sketch source only)
+- `tests/core_only/CMakeLists.txt` (register the first real RED semantic test in Core)
+- `tests/CMakeLists.txt` (desktop integration test registration only when applicable)
+- `tests/kernel_native/CMakeLists.txt` (native Part/OCCT integration test registration only when applicable)
 
 **As-built documentation and DOC-01 (exact existing file paths to be certified before activation):** omitted from this initial executable allowlist intentionally; if internal ownership/native schema or product UI changes require DOC-01 updates, accept a finite D2 addendum listing the confirmed existing Markdown paths and generated Browser before production completion. The absence is **not** permission to skip mandatory docs.
 
