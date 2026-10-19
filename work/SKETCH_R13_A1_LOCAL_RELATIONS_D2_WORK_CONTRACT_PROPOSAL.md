@@ -86,8 +86,8 @@ The independent Owner must still decide: (a) PlaneGCS 0.8.0 DLL/STATIC licensed 
 
 ## Documentation impact
 
-Internal docs: **required** (authored constraints, evaluation ownership, commands and native migration).
-User/Product docs: **required** (once five relations appear in UI; PL/EN canonical Markdown and generated Browser).
+Internal docs: required
+User/Product docs: required
 Reason: meaningful persistent CAD intent and a new user-facing capability. Identify and separately approve **exact** documentation paths before documentation mutation; no G0 documentation files are repurposed.
 
 ## 7. Handoff / status
