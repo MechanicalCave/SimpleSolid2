@@ -231,6 +231,7 @@ int main() {
         struct ProfileSolver final : sk::ILocalSketchSolver {
             unsigned calls{};
             bool fail{false};
+            double translation_u{};
             std::optional<app::DocumentSession*> edit_session;
             std::optional<sk::SketchId> edit_sketch;
             sk::LocalBackendSolveResult solve(
@@ -246,8 +247,16 @@ int main() {
                     return {sk::LocalBackendStatus::failed,
                         std::nullopt, {}, {}, std::nullopt};
                 }
+                // Scripted native test double: deliberately return a
+                // different, still-valid solved rectangle so that the
+                // Kernel Profile proves it consumes DERIVED coordinates.
+                auto geometry = problem.authored;
+                for (auto& line : geometry.lines) {
+                    line.start.u += translation_u;
+                    line.end.u += translation_u;
+                }
                 return {sk::LocalBackendStatus::converged,
-                    problem.authored, {}, {}, 1U};
+                    std::move(geometry), {}, {}, 1U};
             }
         } backend;
         const sk::LocalSolverAcceptancePolicy accurate{1.0e-12, 1.0e-12};
@@ -261,6 +270,30 @@ int main() {
         CHECK(proved.input->outer.boundary.size() == 4U);
         CHECK(proved.input->holes.empty());
         CHECK(backend.calls == 1U);
+
+        // Same durable ProfileIntent, but solver-produced coordinates
+        // differ from the authored seed by 2 mm. This is the existing
+        // Profile/Kernel adapter, not a second region resolver.
+        backend.translation_u = 2.0;
+        const auto shifted = part::resolveStageSolvedProfileKernelInput(
+            session.document(), *profile.profile_id, prefix, query,
+            accurate, backend);
+        CHECK(shifted.ok());
+        CHECK(backend.calls == 2U);
+        CHECK(shifted.input != proved.input);
+        CHECK(shifted.input->outer.boundary.size() ==
+            proved.input->outer.boundary.size());
+        for (std::size_t i = 0; i < proved.input->outer.boundary.size(); ++i) {
+            const auto& before = std::get<simplesolid2::kernel::Line2>(
+                proved.input->outer.boundary[i].curve);
+            const auto& after = std::get<simplesolid2::kernel::Line2>(
+                shifted.input->outer.boundary[i].curve);
+            CHECK(after.start.u == before.start.u + 2.0);
+            CHECK(after.end.u == before.end.u + 2.0);
+            CHECK(after.start.v == before.start.v);
+            CHECK(after.end.v == before.end.v);
+        }
+        backend.translation_u = 0.0;
         CHECK(!session.document().evaluateProfile(*profile.profile_id));
         // Existing untrusted entrypoint remains strictly fenced even if a
         // caller passes its own arbitrary model that looks solved.
@@ -276,24 +309,27 @@ int main() {
         CHECK(!part::resolveStageSolvedProfileKernelInput(
             session.document(), *profile.profile_id, foreign, query,
             accurate, backend).ok());
-        CHECK(backend.calls == 1U);
+        CHECK(backend.calls == 2U);
         backend.fail = true;
         CHECK(!part::resolveStageSolvedProfileKernelInput(
             session.document(), *profile.profile_id, prefix, query,
             accurate, backend).ok());
-        CHECK(backend.calls == 2U);
+        CHECK(backend.calls == 3U);
         backend.fail = false;
         backend.edit_session = &session;
         backend.edit_sketch = *made.sketch_id;
         CHECK(!part::resolveStageSolvedProfileKernelInput(
             session.document(), *profile.profile_id, prefix, query,
             accurate, backend).ok());
-        CHECK(backend.calls == 3U);
+        CHECK(backend.calls == 4U);
         CHECK(prefix.source_revision != session.document().revision());
         CHECK(!part::resolveStageSolvedProfileKernelInput(
             session.document(), *profile.profile_id, prefix, query,
             accurate, backend).ok());
-        CHECK(backend.calls == 3U);
+        CHECK(backend.calls == 4U);
+        // First undo only the reentrant backend test edit; the next Undo
+        // must still target the original Horizontal relation.
+        CHECK(session.undo().changed);
 
         // Undo revives the previously valid Profile; Redo blocks it again
         // without mutating the authored Profile or Sketch line coordinates.
