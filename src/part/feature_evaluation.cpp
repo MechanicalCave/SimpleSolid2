@@ -758,14 +758,18 @@ makeKernelExtrudeInput(
         feature);
 }
 
-RevolveKernelInputResult
-resolveKernelRevolveInput(
+// One existing Revolve axis/semantic/Kernel path. The optional profile
+// input is granted ONLY by the current-revision Part-owned local-solver
+// gateway; public callers still resolve by the legacy fail-closed path.
+[[nodiscard]] static RevolveKernelInputResult
+resolveKernelRevolveInputImpl(
     const PartDocument& document,
     const RevolveFeature& feature,
     const PartEvaluation* prefix_evaluation,
     const DatumEvaluation* datum_evaluation,
     const sketch::SketchModel* effective_sketch,
-    kernel::IExactBoundedEdgeGeometryQuery* exact_edge_provider) {
+    kernel::IExactBoundedEdgeGeometryQuery* exact_edge_provider,
+    const kernel::PlanarProfileInput* stage_solved_profile) {
     RevolveKernelInputResult result;
 
     if (!revolveFeatureStructurallyValid(
@@ -792,12 +796,14 @@ resolveKernelRevolveInput(
             profile->id,
             prefix_evaluation);
     auto materialized =
-        resolveKernelProfileInput(
-            document,
-            profile->id,
-            support_topology,
-            datum_evaluation,
-            effective_sketch);
+        stage_solved_profile
+            ? ProfileKernelInputResult{
+                  ProfileKernelInputStatus::resolved,
+                  SketchSupportResolutionDiagnostic::none,
+                  *stage_solved_profile}
+            : resolveKernelProfileInput(
+                  document, profile->id, support_topology,
+                  datum_evaluation, effective_sketch);
     if (!materialized.ok()) {
         result.status =
             materialized.status ==
@@ -873,6 +879,20 @@ resolveKernelRevolveInput(
     result.input =
         std::move(input);
     return result;
+}
+
+// Original provider-aware public ABI: no numerical trust is accepted
+// through an arbitrary effective SketchModel or pre-supplied Kernel profile.
+RevolveKernelInputResult resolveKernelRevolveInput(
+    const PartDocument& document,
+    const RevolveFeature& feature,
+    const PartEvaluation* prefix_evaluation,
+    const DatumEvaluation* datum_evaluation,
+    const sketch::SketchModel* effective_sketch,
+    kernel::IExactBoundedEdgeGeometryQuery* exact_edge_provider) {
+    return resolveKernelRevolveInputImpl(
+        document, feature, prefix_evaluation, datum_evaluation,
+        effective_sketch, exact_edge_provider, nullptr);
 }
 
 // Keep the original five-argument public ABI for all existing
@@ -5823,9 +5843,13 @@ PartEvaluation::findFeature(
         : &*found;
 }
 
-PartEvaluation evaluatePart(
+// A single Part Feature scheduler for legacy callers and opt-in current
+// stage numeric evaluation. The default no-solver public ABI is unchanged.
+[[nodiscard]] static PartEvaluation evaluatePartImpl(
     const PartDocument& document,
-    kernel::ISolidModelingKernel& modeling_kernel) {
+    kernel::ISolidModelingKernel& modeling_kernel,
+    const sketch::LocalSolverAcceptancePolicy* numeric_policy,
+    sketch::ILocalSketchSolver* numeric_backend) {
     PartEvaluation result;
     result.source_revision =
         document.revision();
@@ -6075,16 +6099,48 @@ PartEvaluation evaluatePart(
                     ? &effective_profile_sketch->model
                     : nullptr;
 
+            // The opt-in backend is invoked exclusively for source
+            // Sketches with authored local relations. It must consume the
+            // exact current prefix before THIS Feature. Legacy callers
+            // never enter this path and retain their strict v20 fence.
+            std::optional<ProfileKernelInputResult> stage_solved_profile;
+            if (numeric_policy && numeric_backend) {
+                if (const auto* source_sketch =
+                        document.findSketch(profile->source_sketch_id);
+                    source_sketch &&
+                    source_sketch->model.constraintCount() != 0U) {
+                    if (auto* projection_query = dynamic_cast<
+                            kernel::IEdgeProjectionQuery*>(
+                                &modeling_kernel)) {
+                        stage_solved_profile =
+                            resolveStageSolvedProfileKernelInput(
+                                document, profile->id, result,
+                                *projection_query, *numeric_policy,
+                                *numeric_backend,
+                                support_topology,
+                                support_datums ? &*support_datums : nullptr,
+                                authored.id);
+                    } else {
+                        // No provider authority: NEVER fall back to
+                        // supposedly solved authored Sketch seed data.
+                        stage_solved_profile = ProfileKernelInputResult{
+                            ProfileKernelInputStatus::unresolved_profile};
+                    }
+                }
+            }
+
             if (extrude != nullptr) {
                 auto materialized_profile =
-                    resolveKernelProfileInput(
-                        document,
-                        profile->id,
-                        support_topology,
-                        support_datums
-                            ? &*support_datums
-                            : nullptr,
-                        evaluated_model);
+                    stage_solved_profile
+                        ? std::move(*stage_solved_profile)
+                        : resolveKernelProfileInput(
+                              document,
+                              profile->id,
+                              support_topology,
+                              support_datums
+                                  ? &*support_datums
+                                  : nullptr,
+                              evaluated_model);
                 if (!materialized_profile.ok()) {
                     evaluated.status =
                         materialized_profile.status ==
@@ -6160,18 +6216,26 @@ PartEvaluation evaluatePart(
                     continue;
                 }
 
+                auto* exact_edge_provider = dynamic_cast<
+                    kernel::IExactBoundedEdgeGeometryQuery*>(
+                        &modeling_kernel);
                 const auto resolved =
-                    resolveKernelRevolveInput(
-                        document,
-                        *revolve,
-                        &result,
-                        support_datums
-                            ? &*support_datums
-                            : nullptr,
-                        evaluated_model,
-                        dynamic_cast<
-                            kernel::IExactBoundedEdgeGeometryQuery*>(
-                                &modeling_kernel));
+                    stage_solved_profile
+                        ? (stage_solved_profile->ok()
+                               ? resolveKernelRevolveInputImpl(
+                                     document, *revolve, &result,
+                                     support_datums
+                                         ? &*support_datums : nullptr,
+                                     nullptr, exact_edge_provider,
+                                     &*stage_solved_profile->input)
+                               : RevolveKernelInputResult{
+                                     RevolveKernelInputStatus::
+                                         profile_unavailable})
+                        : resolveKernelRevolveInput(
+                              document, *revolve, &result,
+                              support_datums
+                                  ? &*support_datums : nullptr,
+                              evaluated_model, exact_edge_provider);
                 if (!resolved.ok()) {
                     evaluated.status =
                         resolved.status ==
@@ -6506,6 +6570,21 @@ PartEvaluation evaluatePart(
     return result;
 }
 
+// Default production behavior is immutable until a real licensed solver
+// and Owner-visible caller have been separately integrated.
+PartEvaluation evaluatePart(
+    const PartDocument& document,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    return evaluatePartImpl(document, modeling_kernel, nullptr, nullptr);
+}
+
+PartEvaluation evaluatePartWithLocalSolve(
+    const PartDocument& document,
+    kernel::ISolidModelingKernel& modeling_kernel,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend) {
+    return evaluatePartImpl(document, modeling_kernel, &policy, &backend);
+}
 
 std::optional<kernel::Frame3>
 resolveCurrentProjectionSketchFrame(
