@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <numbers>
 #include <set>
 #include <utility>
@@ -122,6 +123,110 @@ struct ResidualValue final {
         }
     }
     return true;
+}
+
+// Canonicalize ONLY explicitly authored Coincident endpoint groups after
+// a backend reports convergence and all pre-normalization residuals pass.
+// The result is a disposable solved candidate, never an authored edit.
+//
+// One canonical point per connected component prevents a chain of locally
+// accepted residuals from drifting beyond the caller's distance tolerance.
+// A Fix/PG-01 point wins over a free point, and fixed geometry never moves.
+// Group representatives are chosen by semantic EntityId + endpoint role,
+// not solver iteration order or relation insertion order.
+[[nodiscard]] std::optional<SketchModelState> closeSolvedCoincidences(
+    const LocalSolveProblem& problem,
+    const SketchModelState& candidate,
+    const LocalSolverAcceptancePolicy& policy) {
+    using EndpointKey = std::pair<EntityId, ConstraintElement>;
+    std::map<EndpointKey, std::size_t> index;
+    std::vector<ConstraintReference> references;
+    std::vector<std::size_t> parent;
+
+    const auto add = [&index, &references, &parent](
+        ConstraintReference reference) -> std::size_t {
+        const EndpointKey key{reference.entity, reference.element};
+        const auto found = index.find(key);
+        if (found != index.end()) return found->second;
+        const std::size_t value = references.size();
+        index.emplace(key, value);
+        references.push_back(reference);
+        parent.push_back(value);
+        return value;
+    };
+    const auto root = [&parent](std::size_t value) {
+        while (parent[value] != value) {
+            parent[value] = parent[parent[value]];
+            value = parent[value];
+        }
+        return value;
+    };
+    for (const auto& equation : problem.equations) {
+        if (equation.kind != ConstraintKind::coincident) continue;
+        const auto a = root(add(equation.first));
+        const auto b = root(add(equation.second));
+        if (a != b) parent[std::max(a, b)] = std::min(a, b);
+    }
+
+    SketchModelState closed = candidate;
+    if (references.empty()) return closed;
+
+    std::vector<std::vector<std::size_t>> groups(references.size());
+    for (std::size_t i = 0; i < references.size(); ++i) {
+        groups[root(i)].push_back(i);
+    }
+    const auto fixed = [&problem, &references](std::size_t i) {
+        return std::find(problem.fixed_lines.begin(),
+                         problem.fixed_lines.end(),
+                         references[i].entity) != problem.fixed_lines.end();
+    };
+    const auto key = [&references](std::size_t i) {
+        return EndpointKey{references[i].entity, references[i].element};
+    };
+
+    for (const auto& group : groups) {
+        if (group.empty()) continue;
+        std::size_t chosen = group.front();
+        for (const auto i : group) {
+            if ((fixed(i) && !fixed(chosen)) ||
+                (fixed(i) == fixed(chosen) && key(i) < key(chosen))) {
+                chosen = i;
+            }
+        }
+        const auto anchor = fixed(chosen)
+            ? endpoint(problem.authored, references[chosen])
+            : endpoint(candidate, references[chosen]);
+        if (!anchor || !anchor->finite()) return std::nullopt;
+
+        for (const auto i : group) {
+            const auto before = endpoint(candidate, references[i]);
+            if (!before ||
+                !std::isfinite(std::hypot(
+                    before->u - anchor->u, before->v - anchor->v)) ||
+                std::hypot(before->u - anchor->u, before->v - anchor->v) >
+                    policy.distance_tolerance) {
+                return std::nullopt;
+            }
+            if (fixed(i)) {
+                if (*before != *anchor) return std::nullopt;
+                continue;
+            }
+            const auto found = std::find_if(
+                closed.lines.begin(), closed.lines.end(),
+                [&reference = references[i]](const SketchLineState& line) {
+                    return line.id == reference.entity;
+                });
+            if (found == closed.lines.end()) return std::nullopt;
+            if (references[i].element == ConstraintElement::line_start) {
+                found->start = *anchor;
+            } else if (references[i].element == ConstraintElement::line_end) {
+                found->end = *anchor;
+            } else {
+                return std::nullopt;
+            }
+        }
+    }
+    return closed;
 }
 
 } // namespace
@@ -395,31 +500,46 @@ LocalSolveGatewayResult evaluateLocalSolve(
             *canonical, *backend_result.candidate, policy);
         switch (result.residuals.status) {
         case LocalResidualStatus::residuals_satisfied:
-            // Coincident topology must be EXACT for downstream Profile
-            // loops; satisfying an approximate solver tolerance alone does
-            // not close the loop. Never tolerance-weld authored geometry.
-            for (const auto& constraint : canonical->constraints) {
-                if (constraint.kind != ConstraintKind::coincident) continue;
-                const auto first = endpoint(
-                    *backend_result.candidate, constraint.first);
-                const auto second = endpoint(
-                    *backend_result.candidate, constraint.second);
-                if (!first || !second) {
-                    result.status = LocalSolveGatewayStatus::invalid_candidate;
-                    return result;
+            // The caller-owned tolerance may admit a sub-ULP/1e-12
+            // Coincident residual, but Profile must never consume a seam.
+            // Close ONLY explicit endpoint groups in derived candidate
+            // geometry; keep Fix/PG-01 anchors and all authored seeds exact.
+            const auto closed = closeSolvedCoincidences(
+                *canonical, *backend_result.candidate, policy);
+            if (!closed) {
+                result.status = LocalSolveGatewayStatus::coincident_not_closed;
+                for (const auto& equation : canonical->equations) {
+                    if (equation.kind == ConstraintKind::coincident) {
+                        result.diagnostics.push_back(LocalBackendDiagnostic{
+                            LocalBackendDiagnosticKind::residual_violation,
+                            equation.id});
+                    }
                 }
-                if (*first != *second) {
-                    result.status =
-                        LocalSolveGatewayStatus::coincident_not_closed;
-                    result.diagnostics.push_back(LocalBackendDiagnostic{
-                        LocalBackendDiagnosticKind::residual_violation,
-                        constraint.id});
-                    return result;
+                return result;
+            }
+            // Canonicalization can change other relations or degenerate a
+            // Line: review the entire candidate again, not just the seam.
+            result.residuals = reviewLocalSolveCandidate(
+                *canonical, *closed, policy);
+            if (result.residuals.status !=
+                LocalResidualStatus::residuals_satisfied) {
+                result.status = LocalSolveGatewayStatus::invalid_candidate;
+                if (result.residuals.status ==
+                    LocalResidualStatus::residual_violation) {
+                    result.status = LocalSolveGatewayStatus::residual_violation;
+                    for (const auto& value : result.residuals.constraints) {
+                        if (!value.accepted) {
+                            result.diagnostics.push_back(LocalBackendDiagnostic{
+                                LocalBackendDiagnosticKind::residual_violation,
+                                value.constraint_id});
+                        }
+                    }
                 }
+                return result;
             }
             result.status = LocalSolveGatewayStatus::candidate_accepted;
-            // A COPY, not a live mutable reference to authored state.
-            result.candidate = std::move(backend_result.candidate);
+            // A COPY of the normalized, stage-disposable candidate only.
+            result.candidate = std::move(*closed);
             result.degrees_of_freedom = backend_result.degrees_of_freedom;
             return result;
         case LocalResidualStatus::residual_violation:
