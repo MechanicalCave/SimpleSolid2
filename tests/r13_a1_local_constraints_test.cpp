@@ -812,7 +812,7 @@ int main() {
         const auto trimBlocked = session.execute(app::TrimSketchCommand{
             *made.sketch_id, fixedRevision, *line.entity_id,
             {*other.entity_id}, {4.0, 5.0}});
-        CHECK(!trimBlocked.changed && !trimBlocked.diagnostic.ok());
+        CHECK(!trimBlocked.changed && !trimBlocked.ok());
         CHECK(trimBlocked.diagnostic.code ==
             app::DocumentSessionErrorCode::invalid_command);
         const auto extendBlocked = session.execute(app::ExtendSketchCommand{
@@ -833,7 +833,10 @@ int main() {
         CHECK(!session.execute(app::AddSketchRelationCommand{
             *made.sketch_id, initialRevision, K::fix,
             {*line.entity_id, E::line}, {}}).ok());
-        CHECK(session.undo().changed);
+        CHECK(session.undo().changed); // retire unrelated second Line first
+        CHECK(session.document().findSketch(*made.sketch_id)->
+            model.isFixedLine(*line.entity_id));
+        CHECK(session.undo().changed); // then undo Fix itself
         CHECK(!session.document().findSketch(*made.sketch_id)->
             model.isFixedLine(*line.entity_id));
         CHECK(session.redo().changed);
