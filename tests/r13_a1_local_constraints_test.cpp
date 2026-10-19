@@ -870,6 +870,33 @@ int main() {
         CHECK(checked.status == sk::LocalResidualStatus::residuals_satisfied);
     }
 
+    // Exact fixed geometry must not become a false conflict because
+    // atan2/remainder accumulates a binary64 angle-roundoff. These
+    // non-axis-aligned integer directions have exact zero dot/cross.
+    {
+        using K = sk::ConstraintKind;
+        using E = sk::ConstraintElement;
+        sk::SketchModel model;
+        const auto first = model.addLine({0.0, 0.0}, {-20.0, 1.0});
+        const auto perpendicular = model.addLine({0.0, 0.0}, {3.0, 60.0});
+        const auto parallel = model.addLine({0.0, 0.0}, {-60.0, 3.0});
+        const auto nearPerpendicular = model.addLine({0.0, 0.0}, {3.0, 59.0});
+        CHECK(model.addConstraint(K::fix, {first, E::line}));
+        CHECK(model.addConstraint(K::fix, {perpendicular, E::line}));
+        CHECK(model.addConstraint(K::fix, {parallel, E::line}));
+        CHECK(model.addConstraint(K::fix, {nearPerpendicular, E::line}));
+        CHECK(model.addConstraint(K::perpendicular,
+            {first, E::line}, {perpendicular, E::line}));
+        CHECK(model.addConstraint(K::parallel,
+            {first, E::line}, {parallel, E::line}));
+        const auto accepted = model.state();
+        CHECK(!model.addConstraint(K::perpendicular,
+            {first, E::line}, {nearPerpendicular, E::line}));
+        CHECK(model.state() == accepted);
+        const auto restored = sk::SketchModel::restore(accepted);
+        CHECK(restored && restored->state() == accepted);
+    }
+
     // Fix is an ordinary undoable revision-bound DocumentSession relation;
     // attempts to mutate it must fail atomically, without dirty/history
     // changes, and become possible only after explicit Unfix.
