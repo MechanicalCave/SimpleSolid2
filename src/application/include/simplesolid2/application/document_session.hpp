@@ -134,6 +134,18 @@ struct BreakProjectedEdgeLinksCommand final {
     core::DocumentRevision expected_revision;
 };
 
+struct AddHorizontalSketchConstraintCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::EntityId line_id;
+};
+
+struct EraseSketchConstraintCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::ConstraintId constraint_id;
+};
+
 struct SetSketchEntityRoleCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
@@ -482,6 +494,16 @@ struct CreatePartSketchResult final {
     }
 };
 
+struct AddSketchConstraintResult final {
+    bool changed{false};
+    std::optional<sketch::ConstraintId> constraint_id;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
 struct AddSketchLineResult final {
     bool changed{false};
     std::optional<sketch::EntityId> entity_id;
@@ -714,6 +736,10 @@ public:
     [[nodiscard]] BreakProjectedEdgeLinkResult execute(
         const BreakProjectedEdgeLinksCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] AddSketchConstraintResult execute(
+        const AddHorizontalSketchConstraintCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EraseSketchConstraintCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const SetSketchEntityRoleCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
@@ -851,6 +877,8 @@ public:
 private:
     using SketchEntityIdCursorMap =
         std::map<sketch::SketchId, sketch::EntityIdCursor>;
+    using SketchConstraintIdCursorMap =
+        std::map<sketch::SketchId, sketch::ConstraintIdCursor>;
 
     struct HistoryEntry final {
         part::PartAuthoredState before;
@@ -910,6 +938,13 @@ private:
         const part::PartAuthoredState& state);
     void applySketchEntityIdCursors(
         part::PartAuthoredState& state) const;
+    static void absorbSketchConstraintIdCursors(
+        SketchConstraintIdCursorMap& cursors,
+        const part::PartAuthoredState& state);
+    void absorbSketchConstraintIdCursors(
+        const part::PartAuthoredState& state);
+    void applySketchConstraintIdCursors(
+        part::PartAuthoredState& state) const;
     void applyAxisIdCursor(
         part::PartAuthoredState& state) const noexcept;
     void applyDatumIdCursor(
@@ -928,6 +963,7 @@ private:
     std::vector<HistoryEntry> history_;
     std::size_t cursor_{0};
     SketchEntityIdCursorMap sketch_entity_id_cursors_;
+    SketchConstraintIdCursorMap sketch_constraint_id_cursors_;
     part::AxisIdCursor axis_id_cursor_;
     part::DatumIdCursor datum_id_cursor_;
     part::ProfileIdCursor profile_id_cursor_;
