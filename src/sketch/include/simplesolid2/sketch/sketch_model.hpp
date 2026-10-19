@@ -120,6 +120,7 @@ public:
     [[nodiscard]] bool eraseConstraint(ConstraintId id) noexcept;
     [[nodiscard]] std::size_t constraintCount() const noexcept { return constraints_.size(); }
     [[nodiscard]] ConstraintIdCursor constraintIdCursor() const noexcept { return ConstraintIdCursor{next_constraint_value_}; }
+    void preserveConstraintIdCursor(ConstraintIdCursor cursor) noexcept;
 
     [[nodiscard]] std::size_t entityCount() const noexcept {
         return lines_.size() +
