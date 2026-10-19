@@ -794,7 +794,7 @@ int main() {
         using E = sk::ConstraintElement;
         sk::SketchModel blocked;
         const auto diagonal = blocked.addLine({0.0, 0.0}, {3.0, 4.0});
-        const auto parallel = blocked.addLine({1.0, 1.0}, {7.0, 9.0});
+        const auto parallel = blocked.addLine({1.0, 1.0}, {7.0, 8.0});
         const auto offset = blocked.addLine({0.0, 1.0}, {3.0, 5.0});
         const auto af = blocked.addConstraint(K::fix, {diagonal, E::line});
         CHECK(af);
