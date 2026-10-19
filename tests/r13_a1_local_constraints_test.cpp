@@ -19,6 +19,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <set>
 
 namespace sk = simplesolid2::sketch;
 
@@ -1618,6 +1619,29 @@ int main() {
     CHECK(extruded.solid_count == 1U);
     CHECK(extruded.face_count >= 6U);
 
+    // Provenance survives the actual OCCT prism, not just the neutral
+    // Profile adapter: each authored boundary yields ONE resolvable side.
+    const auto extrude_evidence =
+        occt::buildProfileExtrudeEvidence(*solved.input, 10.0);
+    CHECK(extrude_evidence.ok());
+    CHECK(extrude_evidence.shape.brep_valid);
+    CHECK(extrude_evidence.shape.solid_count == 1U);
+    CHECK(extrude_evidence.sides.size() == 4U);
+    std::set<std::string> expected_sources;
+    for (const auto& line : seed.lines) {
+        CHECK(expected_sources.insert(line.id.serialized()).second);
+    }
+    std::set<std::string> extruded_sources;
+    for (const auto& side : extrude_evidence.sides) {
+        CHECK(side.status == kernel::ReferenceStatus::resolved);
+        CHECK(side.candidate_face_count == 1U);
+        CHECK(side.provenance);
+        CHECK(!side.provenance->hole);
+        CHECK(extruded_sources.insert(
+            side.provenance->source_entity).second);
+    }
+    CHECK(extruded_sources == expected_sources);
+
     kernel::AngularRevolveInput revolve_input;
     revolve_input.profile = *solved.input;
     revolve_input.axis.origin = {0.0, 0.0, 0.0};
@@ -1630,6 +1654,24 @@ int main() {
     CHECK(revolved.ok());
     CHECK(revolved.solid_count == 1U);
     CHECK(revolved.brep_valid);
+
+    // The *existing* OCCT revolve evidence must map each semantic edge
+    // back to the same durable EntityId. Native periodic seams are not
+    // substitute authored edges and may not be silently used as such.
+    const auto revolve_evidence = occt::buildProfileFullRevolveEvidence(
+        *solved.input, {0.0, 0.0}, {0.0, 1.0});
+    CHECK(revolve_evidence.ok());
+    CHECK(revolve_evidence.shape.brep_valid);
+    CHECK(revolve_evidence.shape.solid_count == 1U);
+    CHECK(revolve_evidence.boundary_faces.size() == 4U);
+    std::set<std::string> revolved_sources;
+    for (const auto& boundary : revolve_evidence.boundary_faces) {
+        CHECK(boundary.status == kernel::ReferenceStatus::resolved);
+        CHECK(boundary.candidate_face_count == 1U);
+        CHECK(revolved_sources.insert(
+            boundary.provenance.source_entity).second);
+    }
+    CHECK(revolved_sources == expected_sources);
 
     // The numerical bridge alone authorizes the provider calls above.
     // A representably open seam outside 1e-12 must never reach OCCT.
