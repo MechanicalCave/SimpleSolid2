@@ -1,5 +1,6 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/profile_kernel_input.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
 #include <simplesolid2/sketch/local_solver.hpp>
@@ -634,6 +635,78 @@ int main() {
         CHECK(exactlyClosed.status ==
             sk::LocalSolveGatewayStatus::candidate_accepted);
         CHECK(exactlyClosed.candidate);
+    }
+
+
+    // R13-A1.2 Part-owned native bridge: a solver problem must come
+    // from the exact PartDocument owner/revision and current stage;
+    // PG-01 projection must never fall back to stale authored seeds.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        namespace kernel = simplesolid2::kernel;
+        struct RefusingProjectionProvider final : kernel::IEdgeProjectionQuery {
+            std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+                kernel::RuntimeSolidHandle,
+                kernel::RuntimeEdgeToken) noexcept override {
+                return std::nullopt;
+            }
+            kernel::EdgeProjectionResult projectEdgeToPlane(
+                kernel::RuntimeSolidHandle,
+                const kernel::ScopedProjectionEdge&,
+                const kernel::Frame3&) noexcept override {
+                return {};
+            }
+        } provider;
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(
+            app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto line = session.execute(
+            app::AddSketchLineCommand{*made.sketch_id, {1.0, 2.0}, {3.0, 2.0}});
+        CHECK(line.ok() && line.entity_id);
+        const auto relation = session.execute(
+            app::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, session.document().revision(), *line.entity_id});
+        CHECK(relation.ok() && relation.constraint_id);
+
+        part::PartEvaluation prefix;
+        prefix.source_document_id = session.document().documentId();
+        prefix.source_revision = session.document().revision();
+        const auto input = part::prepareStageLocalSolveProblem(
+            session.document(), *made.sketch_id, prefix, provider);
+        CHECK(input && input->constraints.size() == 1U);
+        CHECK(input->authored == session.document().findSketch(*made.sketch_id)->model.state());
+        CHECK(input->fixed_lines.empty()); // no projected bindings on this Sketch
+
+        auto invalidOwner = prefix;
+        invalidOwner.source_document_id = core::DocumentId::generate();
+        CHECK(!part::prepareStageLocalSolveProblem(
+            session.document(), *made.sketch_id, invalidOwner, provider));
+        auto invalidRevision = prefix;
+        invalidRevision.source_revision = {};
+        CHECK(!part::prepareStageLocalSolveProblem(
+            session.document(), *made.sketch_id, invalidRevision, provider));
+        invalidOwner = prefix;
+        invalidOwner.source_document_id.reset();
+        CHECK(!part::prepareStageLocalSolveProblem(
+            session.document(), *made.sketch_id, invalidOwner, provider));
+
+        // Subsequent real Part mutation retires the previous prefix.
+        const auto added = session.execute(
+            app::AddSketchLineCommand{*made.sketch_id, {10.0, 1.0}, {12.0, 1.0}});
+        CHECK(added.ok());
+        CHECK(!part::prepareStageLocalSolveProblem(
+            session.document(), *made.sketch_id, prefix, provider));
+        prefix.source_revision = session.document().revision();
+        const auto updated = part::prepareStageLocalSolveProblem(
+            session.document(), *made.sketch_id, prefix, provider);
+        CHECK(updated && updated->lines.size() == 2U);
+        CHECK(updated->constraints.size() == 1U);
+        CHECK(!part::prepareStageLocalSolveProblem(
+            session.document(), {}, prefix, provider));
     }
 
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
