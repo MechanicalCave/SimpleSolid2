@@ -2187,8 +2187,10 @@ int main() {
             occt::OcctSolidModelingKernel& native;
             app::DocumentSession& session;
             sk::SketchId sketch_id;
+            unsigned bindings{};
             unsigned projections{};
             bool mutated{};
+            bool mutate_on_bind{};
 
             ReentrantQuery(
                 occt::OcctSolidModelingKernel& native_provider,
@@ -2200,7 +2202,17 @@ int main() {
             std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
                 kernel::RuntimeSolidHandle body,
                 kernel::RuntimeEdgeToken edge) noexcept override {
-                return native.bindEdgeToBody(std::move(body), edge);
+                ++bindings;
+                auto bound = native.bindEdgeToBody(
+                    std::move(body), edge);
+                if (mutate_on_bind && bound && bound->valid()) {
+                    const auto edit = session.execute(
+                        app::AddSketchLineCommand{
+                            sketch_id, {27.0, 2.0}, {31.0, 2.0}});
+                    CHECK(edit.ok() && edit.changed);
+                    mutated = true;
+                }
+                return bound;
             }
             kernel::EdgeProjectionResult projectEdgeToPlane(
                 kernel::RuntimeSolidHandle body,
@@ -2238,6 +2250,28 @@ int main() {
             current_prefix, provider);
         CHECK(restored && restored->lines.size() == 2U);
         CHECK(restored->fixed_lines.size() == 1U);
+
+        // A mutation while BINDING the real native Edge must abort
+        // BEFORE the second projection callback. Even a valid scoped
+        // OCCT edge cannot authorize use of an obsolete Part revision.
+        ReentrantQuery bind_reentrant{
+            provider, projected_session, *projected_sketch.sketch_id};
+        bind_reentrant.mutate_on_bind = true;
+        CHECK(!part::prepareStageLocalSolveProblem(
+            projected_session.document(), *projected_sketch.sketch_id,
+            current_prefix, bind_reentrant));
+        CHECK(bind_reentrant.bindings == 1U);
+        CHECK(bind_reentrant.projections == 0U);
+        CHECK(bind_reentrant.mutated);
+        CHECK(current_prefix.source_revision !=
+            projected_session.document().revision());
+        const auto after_binding_edit = part::evaluatePart(
+            projected_session.document(), provider);
+        const auto accepted_again = part::prepareStageLocalSolveProblem(
+            projected_session.document(), *projected_sketch.sketch_id,
+            after_binding_edit, provider);
+        CHECK(accepted_again && accepted_again->lines.size() == 3U);
+        CHECK(accepted_again->fixed_lines.size() == 1U);
         }
     }
 
@@ -2247,7 +2281,8 @@ int main() {
               << " derived_extrude_x_shift=2mm"
               << " derived_revolve_radii_shift=2mm"
               << " stage_prefix_cut=1"
-              << " pg01_reentrant_stale=0\n";
+              << " pg01_reentrant_stale=0"
+              << " pg01_reentrant_bind_stale=0\n";
     return EXIT_SUCCESS;
 }
 #endif
