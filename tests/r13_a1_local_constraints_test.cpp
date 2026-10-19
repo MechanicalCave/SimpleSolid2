@@ -9,6 +9,7 @@
 #include <iostream>
 #include <array>
 #include <limits>
+#include <stdexcept>
 
 namespace sk = simplesolid2::sketch;
 
@@ -460,6 +461,97 @@ int main() {
         CHECK(!sk::prepareLocalSolveProblem(authoredState, repeated));
         CHECK(!sk::prepareLocalSolveProblem(
             sk::SketchModelState{}, fixed));
+    }
+
+    // SS1-style backend gateway RED: do not mistake a backend's declared
+    // convergence for a trustworthy solved Sketch or Part authority.
+    // Scripted backend tests the boundary; it is NOT a production solver.
+    {
+        struct ScriptedBackend final : sk::ILocalSketchSolver {
+            sk::LocalBackendStatus status{sk::LocalBackendStatus::converged};
+            std::optional<sk::SketchModelState> candidate;
+            std::vector<sk::ConstraintId> conflicts;
+            bool throw_on_solve{false};
+            unsigned calls{};
+
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem&) override {
+                ++calls;
+                if (throw_on_solve) {
+                    throw std::runtime_error{"synthetic backend failure"};
+                }
+                return {status, candidate, conflicts};
+            }
+        };
+
+        sk::SketchModel seed;
+        const auto line = seed.addLine({0.0, 0.0}, {10.0, 0.0});
+        const auto relation = seed.addHorizontal(line);
+        CHECK(relation);
+        const auto state = seed.state();
+        const auto input = sk::prepareLocalSolveProblem(state);
+        CHECK(input);
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-6};
+        ScriptedBackend backend;
+        backend.candidate = state;
+        const auto accepted = sk::evaluateLocalSolve(*input, policy, backend);
+        CHECK(accepted.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(accepted.candidate && *accepted.candidate == state);
+        CHECK(accepted.residuals.status == sk::LocalResidualStatus::residuals_satisfied);
+        CHECK(backend.calls == 1U);
+        CHECK(seed.state() == state);
+
+        backend.candidate->lines.front().end.v = 0.25;
+        const auto residualRejected = sk::evaluateLocalSolve(*input, policy, backend);
+        CHECK(residualRejected.status == sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!residualRejected.candidate);
+        CHECK(residualRejected.residuals.status == sk::LocalResidualStatus::residual_violation);
+
+        backend.candidate = state;
+        backend.status = sk::LocalBackendStatus::conflict;
+        backend.conflicts = {*relation};
+        const auto conflict = sk::evaluateLocalSolve(*input, policy, backend);
+        CHECK(conflict.status == sk::LocalSolveGatewayStatus::conflict);
+        CHECK(!conflict.candidate);
+        CHECK(conflict.conflicting_constraints == backend.conflicts);
+
+        backend.conflicts = {*sk::ConstraintId::parse("9999")};
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.conflicts.clear();
+        backend.status = sk::LocalBackendStatus::unsupported;
+        const auto unsupported = sk::evaluateLocalSolve(*input, policy, backend);
+        CHECK(unsupported.status == sk::LocalSolveGatewayStatus::unsupported);
+        CHECK(!unsupported.candidate);
+        backend.status = sk::LocalBackendStatus::failed;
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::backend_failure);
+
+        backend.status = sk::LocalBackendStatus::converged;
+        backend.candidate.reset();
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.candidate = state;
+        backend.conflicts = {*relation};
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        backend.conflicts.clear();
+
+        backend.throw_on_solve = true;
+        CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::backend_failure);
+        backend.throw_on_solve = false;
+        const auto calls = backend.calls;
+        CHECK(sk::evaluateLocalSolve(
+            *input, sk::LocalSolverAcceptancePolicy{0.0, 1.0e-6},
+            backend).status == sk::LocalSolveGatewayStatus::invalid_policy);
+        CHECK(backend.calls == calls);
+
+        auto spoofed = *input;
+        spoofed.constraints.clear();
+        CHECK(sk::evaluateLocalSolve(spoofed, policy, backend).status ==
+              sk::LocalSolveGatewayStatus::invalid_problem);
+        CHECK(backend.calls == calls);
     }
 
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
