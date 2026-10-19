@@ -56,11 +56,11 @@ struct ResidualValue final {
     const SketchModelState& state,
     const SketchConstraintState& constraint) noexcept {
     switch (constraint.kind) {
-    case ConstraintKind::fix: {
-        // The actual invariant is enforced by exact fixed-line equality
-        // below; Fix needs no artificial distance/angular equation.
-        return ResidualValue{LocalResidualUnit::model_distance, 0.0};
-    }
+    case ConstraintKind::fix:
+        // Fix is an immutable-parameter declaration. It must never reach
+        // scalar equation residual evaluation; fixed-line equality is
+        // checked separately and exactly.
+        return std::nullopt;
     case ConstraintKind::horizontal:
     case ConstraintKind::vertical: {
         const auto* line = findLineState(state, constraint.first.entity);
@@ -232,7 +232,7 @@ LocalResidualReport reviewLocalSolveCandidate(
 
     bool all_accepted = true;
     result.constraints.reserve(problem.constraints.size());
-    for (const auto& constraint : problem.constraints) {
+    for (const auto& constraint : problem.equations) {
         const auto value = residual(candidate, constraint);
         if (!value) {
             result.status = LocalResidualStatus::invalid_candidate;
