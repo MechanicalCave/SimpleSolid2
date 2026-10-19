@@ -597,6 +597,43 @@ int main() {
         CHECK(sk::evaluateLocalSolve(spoofed, policy, backend).status ==
               sk::LocalSolveGatewayStatus::invalid_problem);
         CHECK(backend.calls == calls);
+
+        // A candidate can meet a numerical Coincident tolerance and still
+        // contain an open endpoint seam. Profile may consume ONLY exact
+        // evaluated equality, never a tolerance-welded fiction.
+        sk::SketchModel seamModel;
+        const auto s1 = seamModel.addLine({0.0, 0.0}, {2.0, 0.0});
+        const auto s2 = seamModel.addLine({2.0, 0.0}, {2.0, 4.0});
+        const auto seamId = seamModel.addConstraint(
+            sk::ConstraintKind::coincident,
+            {s1, sk::ConstraintElement::line_end},
+            {s2, sk::ConstraintElement::line_start});
+        CHECK(seamId);
+        const auto seamAuthor = seamModel.state();
+        const auto seamProblem = sk::prepareLocalSolveProblem(seamAuthor);
+        CHECK(seamProblem);
+        ScriptedBackend seamBackend;
+        seamBackend.candidate = seamAuthor;
+        seamBackend.candidate->lines[1].start.u += 1.0e-10;
+        const auto seamNear = sk::evaluateLocalSolve(
+            *seamProblem, policy, seamBackend);
+        CHECK(seamNear.residuals.status ==
+            sk::LocalResidualStatus::residuals_satisfied);
+        CHECK(seamNear.status ==
+            sk::LocalSolveGatewayStatus::coincident_not_closed);
+        CHECK(!seamNear.candidate);
+        CHECK(seamNear.diagnostics.size() == 1U);
+        CHECK(seamNear.diagnostics.front().constraint == seamId);
+        CHECK(seamModel.state() == seamAuthor);
+
+        // An exactly equal disposable candidate may cross the gateway,
+        // but it still cannot publish to Part until stage/revision checks.
+        seamBackend.candidate = seamAuthor;
+        const auto exactlyClosed = sk::evaluateLocalSolve(
+            *seamProblem, policy, seamBackend);
+        CHECK(exactlyClosed.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(exactlyClosed.candidate);
     }
 
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
