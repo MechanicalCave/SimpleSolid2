@@ -1699,13 +1699,6 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
             DocumentSessionErrorCode::invalid_command,
             "Project Sketch Edges needs nonempty sources and valid role");
     }
-    const auto* authored =
-        document_.findSketch(command.sketch_id);
-    if (!authored) {
-        return reject(
-            DocumentSessionErrorCode::invalid_command,
-            "Project Sketch Edges target SketchId is missing");
-    }
     auto* query = dynamic_cast<kernel::IEdgeProjectionQuery*>(
         &modeling_kernel);
     if (!query) {
@@ -1715,6 +1708,20 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
     }
     const auto prefix = part::evaluatePart(
         document_, modeling_kernel);
+    // The modeling provider may re-enter this DocumentSession while
+    // evaluating the upstream Body. Validate the original command revision
+    // before borrowing any authored Sketch data from that result.
+    if (document_.revision() != command.expected_revision) {
+        return reject(
+            DocumentSessionErrorCode::revision_diverged,
+            "Project Sketch Edges document changed during Body evaluation");
+    }
+    const auto* authored = document_.findSketch(command.sketch_id);
+    if (!authored) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Project Sketch Edges target SketchId is missing");
+    }
     const auto frame = part::resolveCurrentProjectionSketchFrame(
         document_, command.sketch_id, prefix);
     if (!frame) {
@@ -1755,6 +1762,15 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
         const auto& source = command.sources[i];
         const auto projected = part::projectStrictMaterialEdge(
             document_, source, prefix, *query, *frame);
+        // The query can edit the live DocumentSession at EITHER native
+        // binding or projection callback. Our temporary after-state is
+        // obsolete even if the provider returned a valid curve.
+        if (document_.revision() != command.expected_revision) {
+            return reject(
+                DocumentSessionErrorCode::revision_diverged,
+                "Project Sketch Edges document changed during projection",
+                i);
+        }
         if (!projected.resolved()) {
             return reject(
                 DocumentSessionErrorCode::invalid_command,
@@ -1808,6 +1824,14 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
            const part::ProjectedEdgeBinding& b) {
             return a.target_entity < b.target_entity;
         });
+    // commitCommandState checks its own latest expected_revision_, which a
+    // nested command may already have advanced. Compare against THIS
+    // outer request before any state/history/cursor publication.
+    if (document_.revision() != command.expected_revision) {
+        return reject(
+            DocumentSessionErrorCode::revision_diverged,
+            "Project Sketch Edges document changed before commit");
+    }
     const auto result = commitCommandState(
         std::move(after),
         "Part transaction failed creating linked Sketch Edge batch");
