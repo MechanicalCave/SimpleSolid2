@@ -616,6 +616,7 @@ DocumentSession::DocumentSession(
       saved_state_{document_.state()},
       expected_revision_{document_.revision()} {
     absorbSketchEntityIdCursors(document_.state());
+    absorbSketchConstraintIdCursors(document_.state());
     axis_id_cursor_.preserve(
         document_.state().next_axis_id);
     datum_id_cursor_.preserve(
@@ -643,6 +644,7 @@ DocumentSession::DocumentSession(
             "DocumentSession file checkpoint DocumentId mismatch"};
     }
     absorbSketchEntityIdCursors(document_.state());
+    absorbSketchConstraintIdCursors(document_.state());
     axis_id_cursor_.preserve(
         document_.state().next_axis_id);
     datum_id_cursor_.preserve(
@@ -673,6 +675,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     }
 
     applySketchEntityIdCursors(after);
+    applySketchConstraintIdCursors(after);
     applyAxisIdCursor(after);
     applyDatumIdCursor(after);
     applyProfileIdCursor(after);
@@ -697,6 +700,8 @@ DocumentSessionResult DocumentSession::commitCommandState(
     absorbSketchEntityIdCursors(
         prepared_entity_id_cursors,
         pending.after);
+    auto prepared_constraint_id_cursors = sketch_constraint_id_cursors_;
+    absorbSketchConstraintIdCursors(prepared_constraint_id_cursors, pending.after);
     auto prepared_axis_id_cursor =
         axis_id_cursor_;
     prepared_axis_id_cursor.preserve(
@@ -743,6 +748,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     cursor_ = history_.size();
     sketch_entity_id_cursors_.swap(
         prepared_entity_id_cursors);
+    sketch_constraint_id_cursors_.swap(prepared_constraint_id_cursors);
     axis_id_cursor_ =
         prepared_axis_id_cursor;
     datum_id_cursor_ =
@@ -6160,6 +6166,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     expected_revision_ = document_.revision();
     absorbSketchEntityIdCursors(document_.state());
+    absorbSketchConstraintIdCursors(document_.state());
     axis_id_cursor_.preserve(
         document_.state().next_axis_id);
     datum_id_cursor_.preserve(
