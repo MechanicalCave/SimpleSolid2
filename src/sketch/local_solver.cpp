@@ -370,6 +370,28 @@ LocalSolveGatewayResult evaluateLocalSolve(
             *canonical, *backend_result.candidate, policy);
         switch (result.residuals.status) {
         case LocalResidualStatus::residuals_satisfied:
+            // Coincident topology must be EXACT for downstream Profile
+            // loops; satisfying an approximate solver tolerance alone does
+            // not close the loop. Never tolerance-weld authored geometry.
+            for (const auto& constraint : canonical->constraints) {
+                if (constraint.kind != ConstraintKind::coincident) continue;
+                const auto first = endpoint(
+                    *backend_result.candidate, constraint.first);
+                const auto second = endpoint(
+                    *backend_result.candidate, constraint.second);
+                if (!first || !second) {
+                    result.status = LocalSolveGatewayStatus::invalid_candidate;
+                    return result;
+                }
+                if (*first != *second) {
+                    result.status =
+                        LocalSolveGatewayStatus::coincident_not_closed;
+                    result.diagnostics.push_back(LocalBackendDiagnostic{
+                        LocalBackendDiagnosticKind::residual_violation,
+                        constraint.id});
+                    return result;
+                }
+            }
             result.status = LocalSolveGatewayStatus::candidate_accepted;
             // A COPY, not a live mutable reference to authored state.
             result.candidate = std::move(backend_result.candidate);
