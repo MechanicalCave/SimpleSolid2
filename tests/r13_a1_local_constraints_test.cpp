@@ -2122,7 +2122,8 @@ int main() {
               << " extrude_solid=1 revolve_solid=1"
               << " stale_profile_publication=0"
               << " derived_extrude_x_shift=2mm"
-              << " derived_revolve_radii_shift=2mm\n";
+              << " derived_revolve_radii_shift=2mm"
+              << " stage_prefix_cut=1\n";
     return EXIT_SUCCESS;
 }
 #endif
