@@ -210,6 +210,91 @@ int main() {
         CHECK(unresolved.status == part::ProfileKernelInputStatus::unresolved_profile);
         CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
 
+        // RED A1.3: a REAL Part-owned same-stage solver gateway must let
+        // the EXISTING region-intent/Kernel Profile resolver consume its
+        // accepted, derived geometry; no second Profile implementation.
+        struct EmptyProjectionQuery final : simplesolid2::kernel::IEdgeProjectionQuery {
+            std::optional<simplesolid2::kernel::ScopedProjectionEdge>
+            bindEdgeToBody(
+                simplesolid2::kernel::RuntimeSolidHandle,
+                simplesolid2::kernel::RuntimeEdgeToken) noexcept override {
+                return std::nullopt;
+            }
+            simplesolid2::kernel::EdgeProjectionResult
+            projectEdgeToPlane(
+                simplesolid2::kernel::RuntimeSolidHandle,
+                const simplesolid2::kernel::ScopedProjectionEdge&,
+                const simplesolid2::kernel::Frame3&) noexcept override {
+                return {};
+            }
+        } query;
+        struct ProfileSolver final : sk::ILocalSketchSolver {
+            unsigned calls{};
+            bool fail{false};
+            std::optional<app::DocumentSession*> edit_session;
+            std::optional<sk::SketchId> edit_sketch;
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                if (edit_session && edit_sketch) {
+                    const auto edit = (*edit_session)->execute(
+                        app::AddSketchLineCommand{
+                            *edit_sketch, {20.0, 20.0}, {21.0, 21.0}});
+                    CHECK(edit.ok() && edit.changed);
+                }
+                if (fail) {
+                    return {sk::LocalBackendStatus::failed,
+                        std::nullopt, {}, {}, std::nullopt};
+                }
+                return {sk::LocalBackendStatus::converged,
+                    problem.authored, {}, {}, 1U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy accurate{1.0e-12, 1.0e-12};
+        part::PartEvaluation prefix;
+        prefix.source_document_id = session.document().documentId();
+        prefix.source_revision = session.document().revision();
+        const auto proved = part::resolveStageSolvedProfileKernelInput(
+            session.document(), *profile.profile_id, prefix, query,
+            accurate, backend);
+        CHECK(proved.ok());
+        CHECK(proved.input->outer.boundary.size() == 4U);
+        CHECK(proved.input->holes.empty());
+        CHECK(backend.calls == 1U);
+        CHECK(!session.document().evaluateProfile(*profile.profile_id));
+        // Existing untrusted entrypoint remains strictly fenced even if a
+        // caller passes its own arbitrary model that looks solved.
+        const auto untrusted = sk::SketchModel::restore(
+            session.document().findSketch(*made.sketch_id)->model.state());
+        CHECK(untrusted);
+        CHECK(part::resolveKernelProfileInput(
+            session.document(), *profile.profile_id,
+            nullptr, nullptr, &*untrusted).status ==
+            part::ProfileKernelInputStatus::unresolved_profile);
+        auto foreign = prefix;
+        foreign.source_document_id = core::DocumentId::generate();
+        CHECK(!part::resolveStageSolvedProfileKernelInput(
+            session.document(), *profile.profile_id, foreign, query,
+            accurate, backend).ok());
+        CHECK(backend.calls == 1U);
+        backend.fail = true;
+        CHECK(!part::resolveStageSolvedProfileKernelInput(
+            session.document(), *profile.profile_id, prefix, query,
+            accurate, backend).ok());
+        CHECK(backend.calls == 2U);
+        backend.fail = false;
+        backend.edit_session = &session;
+        backend.edit_sketch = *made.sketch_id;
+        CHECK(!part::resolveStageSolvedProfileKernelInput(
+            session.document(), *profile.profile_id, prefix, query,
+            accurate, backend).ok());
+        CHECK(backend.calls == 3U);
+        CHECK(prefix.source_revision != session.document().revision());
+        CHECK(!part::resolveStageSolvedProfileKernelInput(
+            session.document(), *profile.profile_id, prefix, query,
+            accurate, backend).ok());
+        CHECK(backend.calls == 3U);
+
         // Undo revives the previously valid Profile; Redo blocks it again
         // without mutating the authored Profile or Sketch line coordinates.
         CHECK(session.undo().changed);
