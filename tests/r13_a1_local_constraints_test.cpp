@@ -938,6 +938,74 @@ int main() {
         CHECK(withFix->constraints.back().kind == sk::ConstraintKind::fix);
         CHECK(withFix->equations.size() == 1U);
         CHECK(withFix->equations.front().kind == sk::ConstraintKind::horizontal);
+
+        // A1.2 Part-owned, current-stage evaluation gateway: never call
+        // a backend for stale/foreign Part evidence and never advertise
+        // a candidate whose source revision changed DURING solve.
+        struct StageBackend final : sk::ILocalSketchSolver {
+            unsigned calls{};
+            app::DocumentSession* mutate_session{};
+            std::optional<sk::SketchId> mutate_sketch;
+
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                if (mutate_session && mutate_sketch) {
+                    const auto edit = mutate_session->execute(
+                        app::AddSketchLineCommand{
+                            *mutate_sketch, {15.0, 1.0}, {17.0, 1.0}});
+                    CHECK(edit.ok() && edit.changed);
+                }
+                return {sk::LocalBackendStatus::converged,
+                    problem.authored, {}, {}, 2U};
+            }
+        } stageBackend;
+
+        const sk::LocalSolverAcceptancePolicy tight{1.0e-12, 1.0e-12};
+        const auto stageSolved = part::evaluateStageLocalSolve(
+            session.document(), *made.sketch_id, prefix, provider,
+            tight, stageBackend);
+        CHECK(stageSolved);
+        CHECK(stageSolved->source_document_id ==
+              session.document().documentId());
+        CHECK(stageSolved->source_revision == session.document().revision());
+        CHECK(stageSolved->source_sketch_id == *made.sketch_id);
+        CHECK(!stageSolved->consuming_feature);
+        CHECK(stageSolved->solution.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(stageSolved->solution.candidate);
+        CHECK(stageSolved->solution.candidate->lines.size() == 2U);
+        CHECK(stageSolved->solution.candidate->lines.front() ==
+            withFix->authored.lines.front());
+        CHECK(stageBackend.calls == 1U);
+
+        auto wrongStage = prefix;
+        wrongStage.source_document_id = core::DocumentId::generate();
+        CHECK(!part::evaluateStageLocalSolve(
+            session.document(), *made.sketch_id, wrongStage, provider,
+            tight, stageBackend));
+        CHECK(!part::evaluateStageLocalSolve(
+            session.document(), sk::SketchId::generate(), prefix, provider,
+            tight, stageBackend));
+        CHECK(!part::evaluateStageLocalSolve(
+            session.document(), *made.sketch_id, prefix, provider,
+            sk::LocalSolverAcceptancePolicy{0.0, tight.angular_tolerance_radians},
+            stageBackend));
+        CHECK(stageBackend.calls == 1U);
+
+        // A real DocumentSession mutation during a reentrant adapter call
+        // retires this stage even if that backend declares convergence.
+        stageBackend.mutate_session = &session;
+        stageBackend.mutate_sketch = *made.sketch_id;
+        CHECK(!part::evaluateStageLocalSolve(
+            session.document(), *made.sketch_id, prefix, provider,
+            tight, stageBackend));
+        CHECK(stageBackend.calls == 2U);
+        CHECK(session.document().revision() != prefix.source_revision);
+        CHECK(!part::evaluateStageLocalSolve(
+            session.document(), *made.sketch_id, prefix, provider,
+            tight, stageBackend));
+        CHECK(stageBackend.calls == 2U);
     }
 
     // Owner-approved sixth relation: Fix(Line) locks both endpoints in the
