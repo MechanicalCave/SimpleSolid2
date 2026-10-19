@@ -91,10 +91,30 @@ enum class LocalBackendStatus {
     unsupported
 };
 
+// Backend-neutral diagnostics, mirroring the tested SS1 distinction between
+// failure classification and the numerical candidate snapshot.
+enum class LocalBackendDiagnosticKind {
+    redundant_constraint,
+    conflicting_constraint,
+    unsupported_constraint,
+    no_convergence,
+    backend_failure,
+    residual_violation
+};
+
+struct LocalBackendDiagnostic final {
+    LocalBackendDiagnosticKind kind{LocalBackendDiagnosticKind::backend_failure};
+    std::optional<ConstraintId> constraint;
+    friend bool operator==(
+        const LocalBackendDiagnostic&, const LocalBackendDiagnostic&) = default;
+};
+
 struct LocalBackendSolveResult final {
     LocalBackendStatus status{LocalBackendStatus::failed};
     std::optional<SketchModelState> candidate;
     std::vector<ConstraintId> conflicting_constraints;
+    std::vector<LocalBackendDiagnostic> diagnostics;
+    std::optional<std::size_t> degrees_of_freedom;
 };
 
 class ILocalSketchSolver {
@@ -111,6 +131,7 @@ enum class LocalSolveGatewayStatus {
     invalid_policy,
     invalid_problem,
     invalid_backend_response,
+    redundant_constraint,
     conflict,
     unsupported,
     backend_failure,
@@ -125,6 +146,8 @@ struct LocalSolveGatewayResult final {
     std::optional<SketchModelState> candidate;
     LocalResidualReport residuals;
     std::vector<ConstraintId> conflicting_constraints;
+    std::vector<LocalBackendDiagnostic> diagnostics;
+    std::optional<std::size_t> degrees_of_freedom;
 };
 
 // SS1 donor-aligned orchestration: only an explicit converged backend response
