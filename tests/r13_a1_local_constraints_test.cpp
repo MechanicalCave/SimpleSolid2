@@ -833,6 +833,33 @@ int main() {
         CHECK(blocked.state() == beforeImpossibleFix);
     }
 
+    // Do not confuse a genuinely compatible set of fixed references
+    // with a contradiction; the backend still owns DoF/redundancy.
+    {
+        using K = sk::ConstraintKind;
+        using E = sk::ConstraintElement;
+        sk::SketchModel model;
+        const auto horizontal = model.addLine({0.0, 0.0}, {4.0, 0.0});
+        const auto vertical = model.addLine({4.0, 0.0}, {4.0, 5.0});
+        CHECK(model.addConstraint(K::fix, {horizontal, E::line}));
+        CHECK(model.addConstraint(K::fix, {vertical, E::line}));
+        CHECK(model.addConstraint(K::horizontal, {horizontal, E::line}));
+        CHECK(model.addConstraint(K::vertical, {vertical, E::line}));
+        CHECK(model.addConstraint(K::coincident,
+            {horizontal, E::line_end}, {vertical, E::line_start}));
+        CHECK(model.addConstraint(K::perpendicular,
+            {horizontal, E::line}, {vertical, E::line}));
+        const auto current = model.state();
+        const auto restored = sk::SketchModel::restore(current);
+        CHECK(restored && restored->state() == current);
+        const auto prepared = sk::prepareLocalSolveProblem(current);
+        CHECK(prepared && prepared->fixed_lines.size() == 2U);
+        CHECK(prepared->lines[0].fixed && prepared->lines[1].fixed);
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-6};
+        const auto checked = sk::reviewLocalSolveCandidate(*prepared, current, policy);
+        CHECK(checked.status == sk::LocalResidualStatus::residuals_satisfied);
+    }
+
     // Fix is an ordinary undoable revision-bound DocumentSession relation;
     // attempts to mutate it must fail atomically, without dirty/history
     // changes, and become possible only after explicit Unfix.
