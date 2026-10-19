@@ -20,6 +20,7 @@
 #include <limits>
 #include <stdexcept>
 #include <set>
+#include <utility>
 
 namespace sk = simplesolid2::sketch;
 
@@ -1534,7 +1535,9 @@ int main() {
 // Real Windows kernel-native evidence: existing authored ProfileRegionIntent,
 // actual Part-stage numerical acceptance and the REAL OCCT solid provider.
 // A scripted backend stands in for the still-unlicensed PlaneGCS solver.
-// Nothing in this test is a production solver, feature scheduler or save path.
+// This test does exercise the production Feature scheduler with an explicit
+// TEST-ONLY backend. It does not install PlaneGCS, alter default evaluation,
+// write a native file or provide a vNext persistence proof.
 int main() {
     namespace app = simplesolid2::application;
     namespace part = simplesolid2::part;
@@ -1733,7 +1736,7 @@ int main() {
     CHECK(!session.document().evaluateProfile(*profile.profile_id));
     CHECK(backend.calls == 2U);
 
-    // A1.3 RED: from SAME persisted ProfileIntent/ConstraintId into the
+    // A1.3 RED->GREEN: from SAME persisted ProfileIntent/ConstraintId into the
     // REAL existing Part Feature scheduler (not a naked OCCT adapter).
     // The original product evaluatePart must remain fail-closed until a
     // native numeric solver is explicitly supplied.
