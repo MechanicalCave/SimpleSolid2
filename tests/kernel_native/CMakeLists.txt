@@ -53,6 +53,7 @@ add_test(
 )
 set_tests_properties(r13a1.occt_profile_closure PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-sketch;subsystem-application;native"
+    TIMEOUT 90
 )
 
 add_executable(pm00a_profile_cold_rebuild_test
