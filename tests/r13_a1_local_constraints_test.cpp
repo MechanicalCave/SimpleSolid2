@@ -698,6 +698,48 @@ int main() {
         CHECK(!chainedRejected.candidate);
         CHECK(chained.state() == chainedState);
 
+        // No authored Coincident means no implicit global gap welding,
+        // even though the gap is inside the same numerical error budget.
+        sk::SketchModel separate;
+        const auto sep1 = separate.addLine({0.0, 0.0}, {2.0, 0.0});
+        separate.addLine({2.0 + 5.0e-13, 0.0}, {3.0, 1.0});
+        CHECK(separate.addHorizontal(sep1));
+        const auto separateState = separate.state();
+        const auto separateInput = sk::prepareLocalSolveProblem(separateState);
+        CHECK(separateInput);
+        ScriptedBackend separateBackend;
+        separateBackend.candidate = separateState;
+        const auto separateResult = sk::evaluateLocalSolve(
+            *separateInput, precise, separateBackend);
+        CHECK(separateResult.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(separateResult.candidate);
+        CHECK(separateResult.candidate->lines[0].end !=
+            separateResult.candidate->lines[1].start);
+
+        // A local snapping decision must not break a previously accepted
+        // Vertical residual: the ENTIRE candidate is checked again.
+        sk::SketchModel coupled;
+        const auto cs = coupled.addLine({0.0, 0.0}, {2.0, 0.0});
+        const auto ct = coupled.addLine(
+            {2.0 + 5.0e-13, 0.0}, {2.0 + 1.2e-12, 4.0});
+        CHECK(coupled.addConstraint(sk::ConstraintKind::coincident,
+            {cs, sk::ConstraintElement::line_end},
+            {ct, sk::ConstraintElement::line_start}));
+        CHECK(coupled.addConstraint(sk::ConstraintKind::vertical,
+            {ct, sk::ConstraintElement::line}));
+        const auto coupledState = coupled.state();
+        const auto coupledInput = sk::prepareLocalSolveProblem(coupledState);
+        CHECK(coupledInput);
+        ScriptedBackend coupledBackend;
+        coupledBackend.candidate = coupledState;
+        const auto coupledResult = sk::evaluateLocalSolve(
+            *coupledInput, precise, coupledBackend);
+        CHECK(coupledResult.status ==
+            sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!coupledResult.candidate);
+        CHECK(coupled.state() == coupledState);
+
     }
 
 
