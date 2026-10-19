@@ -706,7 +706,7 @@ int main() {
         CHECK(updated && updated->lines.size() == 2U);
         CHECK(updated->constraints.size() == 1U);
         CHECK(!part::prepareStageLocalSolveProblem(
-            session.document(), {}, prefix, provider));
+            session.document(), sk::SketchId::generate(), prefix, provider));
     }
 
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
