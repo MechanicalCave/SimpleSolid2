@@ -121,6 +121,9 @@ public:
         ConstraintReference first,
         ConstraintReference second = {});
     [[nodiscard]] std::optional<ConstraintId> addHorizontal(EntityId line);
+    // An authored Fix(Line) freezes its current endpoints; it may be removed
+    // by EraseSketchConstraintCommand or cascaded when the Line is deleted.
+    [[nodiscard]] bool isFixedLine(EntityId line) const noexcept;
     [[nodiscard]] const SketchConstraintState* findConstraint(ConstraintId id) const noexcept;
     [[nodiscard]] bool eraseConstraint(ConstraintId id) noexcept;
     [[nodiscard]] std::size_t constraintCount() const noexcept { return constraints_.size(); }
