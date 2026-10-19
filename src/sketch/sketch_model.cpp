@@ -49,6 +49,7 @@ constexpr double full_turn =
     switch (kind) {
     case ConstraintKind::horizontal:
     case ConstraintKind::vertical:
+    case ConstraintKind::fix:
         return first.element == ConstraintElement::line &&
                second == ConstraintReference{};
     case ConstraintKind::coincident:
@@ -73,6 +74,7 @@ constexpr double full_turn =
     if (lhs.first == rhs.first && lhs.second == rhs.second) return true;
     return lhs.kind != ConstraintKind::horizontal &&
            lhs.kind != ConstraintKind::vertical &&
+           lhs.kind != ConstraintKind::fix &&
            lhs.first == rhs.second && lhs.second == rhs.first;
 }
 
@@ -265,7 +267,7 @@ bool SketchModel::updateLine(
             return line.id() == id;
         });
 
-    if (found == lines_.end()) {
+    if (found == lines_.end() || isFixedLine(id)) {
         return false;
     }
 
@@ -376,6 +378,16 @@ std::optional<ConstraintId> SketchModel::addConstraint(
     constraints_.push_back(candidate);
     ++next_constraint_value_;
     return candidate.id;
+}
+
+bool SketchModel::isFixedLine(EntityId line) const noexcept {
+    if (!line.valid()) return false;
+    return std::any_of(
+        constraints_.cbegin(), constraints_.cend(),
+        [line](const SketchConstraintState& relation) {
+            return relation.kind == ConstraintKind::fix &&
+                relation.first.entity == line;
+        });
 }
 
 std::optional<ConstraintId> SketchModel::addHorizontal(EntityId line) {
@@ -572,7 +584,7 @@ std::optional<SketchModel> SketchModel::restore(
                 item.role});
     }
 
-    // Restore all five explicit kinds; no malformed, stale, duplicate,
+    // Restore all six explicit kinds; no malformed, stale, duplicate,
     // same-entity pair or unrecognised future kind may enter owned state.
     std::set<ConstraintId> seen_constraints;
     std::vector<SketchConstraintState> seen_meanings;
