@@ -2,6 +2,7 @@
 #include <simplesolid2/sketch/sketch_model.hpp>
 
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 
 namespace sk = simplesolid2::sketch;
@@ -109,6 +110,15 @@ int main() {
         CHECK(created.constraint_id->serialized() == "1");
         CHECK(session.undoDepth() == historyBefore + 1U);
         CHECK(session.needsSave());
+        // Strict v20 native store does not yet carry authored constraints.
+        // Save must fail closed; a future A1 successor schema will enable it.
+        part::PartDocumentStore store;
+        const auto blockedSave = store.createNew(
+            std::filesystem::temp_directory_path() /
+                "r13a1_unpersistable_constraints.ss2part",
+            session.document());
+        CHECK(!blockedSave.ok());
+        CHECK(blockedSave.diagnostic.code == part::PartStoreErrorCode::unsupported_schema);
         CHECK(session.document().findSketch(*made.sketch_id)->model
             .findConstraint(*created.constraint_id) != nullptr);
 
