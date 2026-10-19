@@ -2272,6 +2272,166 @@ int main() {
             after_binding_edit, provider);
         CHECK(accepted_again && accepted_again->lines.size() == 3U);
         CHECK(accepted_again->fixed_lines.size() == 1U);
+
+        // The DOCUMENT SESSION command is a different publication
+        // boundary from prepareStageLocalSolveProblem. An older outer
+        // Project Edge request must not overwrite the newer document
+        // committed by an adversarial callback during the native query.
+        const auto command_sketch = projected_session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(command_sketch.ok() && command_sketch.sketch_id);
+        const app::CreateProjectedSketchEdgesCommand request{
+            *command_sketch.sketch_id,
+            projected_session.document().revision(), {*source},
+            sk::EntityRole::regular};
+
+        struct CommandReentrantKernel final
+            : kernel::ISolidModelingKernel,
+              kernel::IEdgeProjectionQuery {
+            enum class Hook { bind, project };
+
+            occt::OcctSolidModelingKernel& native;
+            app::DocumentSession& session;
+            sk::SketchId sketch_id;
+            Hook hook;
+            unsigned binds{};
+            unsigned projections{};
+            bool mutated{};
+
+            CommandReentrantKernel(
+                occt::OcctSolidModelingKernel& provider,
+                app::DocumentSession& owner,
+                sk::SketchId target,
+                Hook phase)
+                : native{provider}, session{owner},
+                  sketch_id{target}, hook{phase} {}
+
+            kernel::SolidModelingResult extrude(
+                const kernel::LinearExtrudeInput& input,
+                kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+                return native.extrude(input, std::move(upstream));
+            }
+            kernel::SolidModelingResult revolve(
+                const kernel::AngularRevolveInput& input,
+                kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+                return native.revolve(input, std::move(upstream));
+            }
+            kernel::SolidModelingResult edgeFeature(
+                const kernel::EdgeFeatureInput& input,
+                kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+                return native.edgeFeature(input, std::move(upstream));
+            }
+            kernel::BodyPresentationResult bodyPresentation(
+                kernel::RuntimeSolidHandle body) noexcept override {
+                return native.bodyPresentation(std::move(body));
+            }
+            kernel::SolidPresentationResult presentationMesh(
+                kernel::RuntimeSolidHandle body) noexcept override {
+                return native.presentationMesh(std::move(body));
+            }
+            void editNested() noexcept {
+                CHECK(!mutated);
+                const auto edit = session.execute(
+                    app::AddSketchLineCommand{
+                        sketch_id, {27.0, 3.0}, {30.0, 3.0}});
+                CHECK(edit.ok() && edit.changed);
+                mutated = true;
+            }
+            std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+                kernel::RuntimeSolidHandle body,
+                kernel::RuntimeEdgeToken edge) noexcept override {
+                ++binds;
+                auto bound = native.bindEdgeToBody(
+                    std::move(body), edge);
+                if (hook == Hook::bind && bound && bound->valid()) {
+                    editNested();
+                }
+                return bound;
+            }
+            kernel::EdgeProjectionResult projectEdgeToPlane(
+                kernel::RuntimeSolidHandle body,
+                const kernel::ScopedProjectionEdge& bound,
+                const kernel::Frame3& target) noexcept override {
+                ++projections;
+                auto result = native.projectEdgeToPlane(
+                    std::move(body), bound, target);
+                if (hook == Hook::project && result.ok()) {
+                    editNested();
+                }
+                return result;
+            }
+        };
+
+        // First, reenter at the scoped binding step. The second provider
+        // hook must never run. The nested edit survives; the old outer
+        // command must not create a binding or consume a second Undo.
+        const auto baseline_undo = projected_session.undoDepth();
+        CommandReentrantKernel bind_command{
+            provider, projected_session, *command_sketch.sketch_id,
+            CommandReentrantKernel::Hook::bind};
+        const auto stale_bind = projected_session.execute(
+            request, bind_command);
+        CHECK(!stale_bind.ok() && !stale_bind.changed);
+        CHECK(stale_bind.diagnostic.code ==
+            app::DocumentSessionErrorCode::revision_diverged);
+        CHECK(bind_command.mutated && bind_command.binds == 1U);
+        CHECK(bind_command.projections == 0U);
+        CHECK(projected_session.undoDepth() == baseline_undo + 1U);
+        const auto* first_after =
+            projected_session.document().findSketch(
+                *command_sketch.sketch_id);
+        CHECK(first_after != nullptr);
+        CHECK(first_after->model.state().lines.size() == 1U);
+        CHECK(first_after->projection_bindings.empty());
+
+        // The next valid request uses the newly committed revision.
+        // Reenter DURING the geometric projection this time; again no
+        // obsolete outer commit, no lost nested edit or invented history.
+        const app::CreateProjectedSketchEdgesCommand next_request{
+            *command_sketch.sketch_id,
+            projected_session.document().revision(), {*source},
+            sk::EntityRole::regular};
+        const auto second_undo = projected_session.undoDepth();
+        CommandReentrantKernel project_command{
+            provider, projected_session, *command_sketch.sketch_id,
+            CommandReentrantKernel::Hook::project};
+        const auto stale_project = projected_session.execute(
+            next_request, project_command);
+        CHECK(!stale_project.ok() && !stale_project.changed);
+        CHECK(stale_project.diagnostic.code ==
+            app::DocumentSessionErrorCode::revision_diverged);
+        CHECK(project_command.mutated &&
+            project_command.binds == 1U &&
+            project_command.projections == 1U);
+        CHECK(projected_session.undoDepth() == second_undo + 1U);
+        const auto* second_after =
+            projected_session.document().findSketch(
+                *command_sketch.sketch_id);
+        CHECK(second_after != nullptr);
+        CHECK(second_after->model.state().lines.size() == 2U);
+        CHECK(second_after->projection_bindings.empty());
+
+        // A normal, same-revision native OCCT call must still commit
+        // exactly one target/binding as one Undoable transaction.
+        const auto clean_revision = projected_session.document().revision();
+        const auto clean_undo = projected_session.undoDepth();
+        const auto clean_project = projected_session.execute(
+            app::CreateProjectedSketchEdgesCommand{
+                *command_sketch.sketch_id, clean_revision, {*source},
+                sk::EntityRole::regular},
+            provider);
+        CHECK(clean_project.ok() && clean_project.changed);
+        CHECK(clean_project.entity_ids.size() == 1U);
+        CHECK(projected_session.undoDepth() == clean_undo + 1U);
+        const auto* clean_after =
+            projected_session.document().findSketch(
+                *command_sketch.sketch_id);
+        CHECK(clean_after != nullptr);
+        CHECK(clean_after->model.state().lines.size() == 3U);
+        CHECK(clean_after->projection_bindings.size() == 1U);
+        CHECK(clean_after->projection_bindings.front().target_entity ==
+            clean_project.entity_ids.front());
         }
     }
 
@@ -2282,7 +2442,8 @@ int main() {
               << " derived_revolve_radii_shift=2mm"
               << " stage_prefix_cut=1"
               << " pg01_reentrant_stale=0"
-              << " pg01_reentrant_bind_stale=0\n";
+              << " pg01_reentrant_bind_stale=0"
+              << " pg01_command_atomic_reentry=1\n";
     return EXIT_SUCCESS;
 }
 #endif
