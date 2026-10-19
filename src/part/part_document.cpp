@@ -1,4 +1,5 @@
 #include <simplesolid2/part/part_document.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <algorithm>
 
@@ -1252,6 +1253,51 @@ PartCommitResult PartDocumentTransaction::commit() {
     return document_->commitState(
         base_revision_,
         std::move(staged_));
+}
+
+std::optional<sketch::LocalSolveProblem>
+prepareStageLocalSolveProblem(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    std::optional<FeatureId> consuming_feature) {
+    // Do not accept a timestamp or a plausible prefix from another document.
+    // Part owns both revision and source-identity evidence.
+    if (!evaluated_prefix.source_document_id ||
+        *evaluated_prefix.source_document_id != document.documentId() ||
+        evaluated_prefix.source_revision != document.revision()) {
+        return std::nullopt;
+    }
+    const auto* authored = document.findSketch(sketch_id);
+    if (authored == nullptr) return std::nullopt;
+
+    // Existing Part-owned PG-01 resolver rejects missing/ambiguous stages,
+    // unsupported geometry and stale sources, without mutating Sketch seeds.
+    const auto evaluated = evaluateEffectiveSketchProjection(
+        document, sketch_id, evaluated_prefix, query, consuming_feature);
+    if (!evaluated || !evaluated->allResolved() ||
+        evaluated->outcomes.size() != authored->projection_bindings.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<sketch::EntityId> fixed_lines;
+    fixed_lines.reserve(authored->projection_bindings.size());
+    for (std::size_t i = 0; i < authored->projection_bindings.size(); ++i) {
+        const auto id = authored->projection_bindings[i].target_entity;
+        const auto& resolved = evaluated->outcomes[i];
+        if (!resolved.resolved() ||
+            resolved.target_entity != id ||
+            authored->model.findLine(id) == nullptr ||
+            evaluated->model.findLine(id) == nullptr) {
+            // This A1 solver accepts Line-only fixed sources. A fixed Circle
+            // or Arc needs a separate explicitly authorized solver mapping.
+            return std::nullopt;
+        }
+        fixed_lines.push_back(id);
+    }
+    return sketch::prepareLocalSolveProblem(
+        evaluated->model.state(), fixed_lines);
 }
 
 } // namespace simplesolid2::part
