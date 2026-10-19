@@ -1,3 +1,9 @@
+#if defined(SS2_R13_A1_OCCT_EVIDENCE)
+#include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
+#include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
+#include <numbers>
+#endif
+
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/part/effective_sketch_projection.hpp>
@@ -27,6 +33,7 @@ void check(bool condition, const char* expression, int line) {
 #define CHECK(x) check(static_cast<bool>(x), #x, __LINE__)
 } // namespace
 
+#if !defined(SS2_R13_A1_OCCT_EVIDENCE)
 int main() {
     CHECK(!sk::ConstraintId::parse("0"));
     CHECK(!sk::ConstraintId::parse("01"));
@@ -1517,3 +1524,130 @@ int main() {
 
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
 }
+
+#else
+
+// Real Windows kernel-native evidence: existing authored ProfileRegionIntent,
+// actual Part-stage numerical acceptance and the REAL OCCT solid provider.
+// A scripted backend stands in for the still-unlicensed PlaneGCS solver.
+// Nothing in this test is a production solver, feature scheduler or save path.
+int main() {
+    namespace app = simplesolid2::application;
+    namespace part = simplesolid2::part;
+    namespace core = simplesolid2::core;
+    namespace kernel = simplesolid2::kernel;
+    namespace occt = simplesolid2::kernel_occt;
+
+    struct ControlledSolver final : sk::ILocalSketchSolver {
+        double seam_offset{5.0e-13};
+        unsigned calls{};
+
+        sk::LocalBackendSolveResult solve(
+            const sk::LocalSolveProblem& problem) override {
+            ++calls;
+            auto solved = problem.authored;
+            CHECK(solved.lines.size() == 4U);
+            // The explicit Coincident tolerates the residual, but
+            // the downstream Profile/OCCT needs ONE exact vertex.
+            solved.lines[1].start.u += seam_offset;
+            return {sk::LocalBackendStatus::converged,
+                    std::move(solved), {}, {}, 3U};
+        }
+    } backend;
+    occt::OcctSolidModelingKernel provider;
+    app::DocumentSession session{
+        {}, part::PartDocument::create(core::DocumentId::generate())};
+    const auto sketch = session.execute(
+        app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+    CHECK(sketch.ok() && sketch.sketch_id);
+
+    // All x > 0 permits both a normal OCCT Extrude and full Revolve
+    // around the unmodified global Y-axis (an annular solid).
+    const auto rectangle = session.execute(app::AddSketchRectangleCommand{
+        *sketch.sketch_id, session.document().revision(),
+        {5.0, 0.0}, {15.0, 8.0}, sk::EntityRole::regular, false});
+    CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+
+    const auto* original = session.document().findSketch(*sketch.sketch_id);
+    CHECK(original != nullptr);
+    const auto seed = original->model.state();
+    CHECK(seed.lines.size() == 4U);
+    CHECK(seed.lines[0].end == seed.lines[1].start);
+    const auto analysis = sk::analyzeRegions(original->model);
+    CHECK(analysis.complete() && analysis.regions.size() == 1U);
+    const auto intent = part::makeProfileRegionIntent(analysis.regions.front());
+    CHECK(intent);
+    const auto profile = session.execute(app::CreateProfileCommand{
+        *sketch.sketch_id, session.document().revision(), *intent});
+    CHECK(profile.ok() && profile.profile_id);
+    const auto coincide = session.execute(app::AddSketchRelationCommand{
+        *sketch.sketch_id, session.document().revision(),
+        sk::ConstraintKind::coincident,
+        {seed.lines[0].id, sk::ConstraintElement::line_end},
+        {seed.lines[1].id, sk::ConstraintElement::line_start}});
+    CHECK(coincide.ok() && coincide.constraint_id);
+
+    CHECK(!session.document().evaluateProfile(*profile.profile_id));
+    CHECK(part::resolveKernelProfileInput(
+        session.document(), *profile.profile_id).status ==
+        part::ProfileKernelInputStatus::unresolved_profile);
+
+    part::PartEvaluation current;
+    current.source_document_id = session.document().documentId();
+    current.source_revision = session.document().revision();
+    const sk::LocalSolverAcceptancePolicy policy{1.0e-12, 1.0e-12};
+    const auto solved = part::resolveStageSolvedProfileKernelInput(
+        session.document(), *profile.profile_id, current,
+        provider, policy, backend);
+    CHECK(solved.ok() && solved.input);
+    CHECK(backend.calls == 1U);
+    CHECK(solved.input->outer.boundary.size() == 4U);
+
+    // Verify genuine Profile→OCCT Face construction before Extrude.
+    const auto face = occt::buildProfileFaceEvidence(*solved.input);
+    CHECK(face.brep_valid);
+    CHECK(face.solid_count == 0U); // planar Face, not already a Body
+
+    kernel::LinearExtrudeInput extrude_input;
+    extrude_input.profile = *solved.input;
+    extrude_input.start_offset_mm = 0.0;
+    extrude_input.end_offset_mm = 10.0;
+    CHECK(extrude_input.valid());
+    const auto extruded = provider.extrude(extrude_input);
+    CHECK(extruded.ok());
+    CHECK(extruded.solid_count == 1U);
+    CHECK(extruded.face_count >= 6U);
+
+    kernel::AngularRevolveInput revolve_input;
+    revolve_input.profile = *solved.input;
+    revolve_input.axis.origin = {0.0, 0.0, 0.0};
+    revolve_input.axis.direction = {0.0, 1.0, 0.0};
+    revolve_input.start_angle_radians = 0.0;
+    revolve_input.end_angle_radians =
+        2.0 * std::numbers::pi_v<double>;
+    CHECK(revolve_input.valid());
+    const auto revolved = provider.revolve(revolve_input);
+    CHECK(revolved.ok());
+    CHECK(revolved.solid_count == 1U);
+    CHECK(revolved.brep_valid);
+
+    // The numerical bridge alone authorizes the provider calls above.
+    // A representably open seam outside 1e-12 must never reach OCCT.
+    backend.seam_offset = 5.0e-12;
+    const auto rejected = part::resolveStageSolvedProfileKernelInput(
+        session.document(), *profile.profile_id, current,
+        provider, policy, backend);
+    CHECK(rejected.status ==
+        part::ProfileKernelInputStatus::unresolved_profile);
+    CHECK(!rejected.input);
+    CHECK(backend.calls == 2U);
+    CHECK(session.document().findProfile(*profile.profile_id));
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.state().lines == seed.lines);
+
+    std::cout << "R13_A1_OCCT_PASS exact_seam=1"
+              << " extrude_solid=1 revolve_solid=1"
+              << " stale_profile_publication=0\n";
+    return EXIT_SUCCESS;
+}
+#endif
