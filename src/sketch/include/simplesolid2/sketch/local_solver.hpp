@@ -24,8 +24,12 @@ struct LocalSolveLineInput final {
 struct LocalSolveProblem final {
     SketchModelState authored;
     std::vector<LocalSolveLineInput> lines;
+    // Complete authored records, including Fix for identity/diagnostics.
     std::vector<SketchConstraintState> constraints;
     std::vector<EntityId> fixed_lines;
+    // Explicit equation inventory for the donor backend: five geometric
+    // kinds only. Fix(Line) is encoded solely by fixed_lines.
+    std::vector<SketchConstraintState> equations;
 };
 
 // Fail closed on corrupt semantic intent, duplicate/missing/non-Line fixed
