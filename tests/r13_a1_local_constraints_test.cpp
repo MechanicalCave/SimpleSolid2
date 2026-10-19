@@ -1883,6 +1883,60 @@ int main() {
     CHECK(evaluated_revolve.current_topology);
     CHECK(evaluated_revolve.current_topology->complete());
     CHECK(backend.calls == 6U);
+
+    // Extrude's +2 mm X shift alone is insufficient: a full Revolve
+    // around the built-in Y axis must change BOTH the annulus's inner
+    // AND outer radii in the actual OCCT Body, not just report success.
+    // Sample the provider's runtime presentation only as an independent
+    // output-location witness; triangulation is NOT CAD identity and its
+    // looser measurement tolerance never modifies the 1e-12 solver
+    // acceptance budget or the exact Coincident vertex.
+    const auto radial_bounds = [](const kernel::SolidPresentationMesh& mesh) {
+        double inner = std::numeric_limits<double>::infinity();
+        double outer = -std::numeric_limits<double>::infinity();
+        for (const auto& triangle : mesh.triangles) {
+            for (const auto& point :
+                 {triangle.first, triangle.second, triangle.third}) {
+                const double radius = std::hypot(point.x, point.z);
+                inner = std::min(inner, radius);
+                outer = std::max(outer, radius);
+            }
+        }
+        return std::pair{inner, outer};
+    };
+    const auto base_revolve_mesh =
+        provider.presentationMesh(evaluated_revolve.body_solid);
+    CHECK(base_revolve_mesh.ok());
+    const auto initial_radii = radial_bounds(base_revolve_mesh.mesh);
+    CHECK(std::isfinite(initial_radii.first));
+    CHECK(std::isfinite(initial_radii.second));
+    CHECK(std::abs(initial_radii.first - 5.0) < 0.1);
+    CHECK(std::abs(initial_radii.second - 15.0) < 0.1);
+
+    backend.translated_u = 2.0;
+    const auto shifted_revolve = part::evaluatePartWithLocalSolve(
+        *revolve_document.document, provider, policy, backend);
+    CHECK(shifted_revolve.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(shifted_revolve.features.size() == 1U);
+    CHECK(shifted_revolve.features.front().feature_id == *revolve_id);
+    CHECK(shifted_revolve.features.front().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(shifted_revolve.body_solid != nullptr);
+    CHECK(shifted_revolve.current_topology);
+    CHECK(shifted_revolve.current_topology->complete());
+    const auto shifted_revolve_mesh =
+        provider.presentationMesh(shifted_revolve.body_solid);
+    CHECK(shifted_revolve_mesh.ok());
+    const auto derived_radii = radial_bounds(shifted_revolve_mesh.mesh);
+    CHECK(std::abs(derived_radii.first -
+        initial_radii.first - 2.0) < 0.1);
+    CHECK(std::abs(derived_radii.second -
+        initial_radii.second - 2.0) < 0.1);
+    CHECK(backend.calls == 7U);
+    CHECK(revolve_document.document->findSketch(*sketch.sketch_id)
+        ->model.state().lines == seed.lines);
+    backend.translated_u = 0.0;
     backend.seam_offset = 5.0e-12;
     const auto rejected_revolve = part::evaluatePartWithLocalSolve(
         *revolve_document.document, provider, policy, backend);
@@ -1891,11 +1945,13 @@ int main() {
         part::FeatureEvaluationStatus::blocked);
     CHECK(rejected_revolve.body_status !=
         part::BodyEvaluationStatus::up_to_date);
-    CHECK(backend.calls == 7U);
+    CHECK(backend.calls == 8U);
 
     std::cout << "R13_A1_OCCT_PASS exact_seam=1"
               << " extrude_solid=1 revolve_solid=1"
-              << " stale_profile_publication=0\n";
+              << " stale_profile_publication=0"
+              << " derived_extrude_x_shift=2mm"
+              << " derived_revolve_radii_shift=2mm\n";
     return EXIT_SUCCESS;
 }
 #endif
