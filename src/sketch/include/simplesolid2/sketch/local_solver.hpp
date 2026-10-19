@@ -82,4 +82,58 @@ struct LocalResidualReport final {
     const SketchModelState& candidate,
     const LocalSolverAcceptancePolicy& policy);
 
+// Narrow SS1 ISketchSolver-style injection point. A real vendor-backed
+// implementation still requires separate SHA/license/Windows approval.
+enum class LocalBackendStatus {
+    converged,
+    conflict,
+    failed,
+    unsupported
+};
+
+struct LocalBackendSolveResult final {
+    LocalBackendStatus status{LocalBackendStatus::failed};
+    std::optional<SketchModelState> candidate;
+    std::vector<ConstraintId> conflicting_constraints;
+};
+
+class ILocalSketchSolver {
+public:
+    virtual ~ILocalSketchSolver() = default;
+
+    // Returns a disposable candidate, never mutates authoritative SketchModel.
+    [[nodiscard]] virtual LocalBackendSolveResult solve(
+        const LocalSolveProblem& problem) = 0;
+};
+
+enum class LocalSolveGatewayStatus {
+    candidate_accepted, // ONLY an ephemeral valid candidate; no Part publication
+    invalid_policy,
+    invalid_problem,
+    invalid_backend_response,
+    conflict,
+    unsupported,
+    backend_failure,
+    residual_violation,
+    invalid_candidate,
+    stale_semantics,
+    fixed_entity_changed
+};
+
+struct LocalSolveGatewayResult final {
+    LocalSolveGatewayStatus status{LocalSolveGatewayStatus::invalid_problem};
+    std::optional<SketchModelState> candidate;
+    LocalResidualReport residuals;
+    std::vector<ConstraintId> conflicting_constraints;
+};
+
+// SS1 donor-aligned orchestration: only an explicit converged backend response
+// plus independently checked unchanged semantics/fixed anchors and acceptable
+// numeric residuals yields a disposable candidate. No hidden tolerance,
+// no automatic publish to SketchModel, DocumentSession, Profile or Kernel.
+[[nodiscard]] LocalSolveGatewayResult evaluateLocalSolve(
+    const LocalSolveProblem& problem,
+    const LocalSolverAcceptancePolicy& policy,
+    ILocalSketchSolver& backend);
+
 } // namespace simplesolid2::sketch
