@@ -104,4 +104,32 @@ prepareStageLocalSolveProblem(
     kernel::IEdgeProjectionQuery& query,
     std::optional<FeatureId> consuming_feature = std::nullopt);
 
+// A disposable numerical result can be handed between Part consumers only
+// with an explicit immutable owner/stage label. It is NOT a published Profile,
+// OCCT input, persistence record or authorization to reuse a later revision.
+struct StageLocalSolveEvaluation final {
+    core::DocumentId source_document_id;
+    core::DocumentRevision source_revision;
+    sketch::SketchId source_sketch_id;
+    std::optional<FeatureId> consuming_feature;
+    sketch::LocalSolveGatewayResult solution;
+};
+
+// Compose the existing strict same-stage PG-01/Sketch preparation with the
+// solver-neutral gateway. Never invoke backend for absent/stale owner, stage,
+// sketch or invalid caller policy. Recheck revision AFTER backend invocation,
+// which may re-enter a DocumentSession; stale numerical answers are discarded.
+// Returns nullopt for invalid/stale Part context. Backend conflicts/failure
+// remain typed in solution, never promoted to accepted geometry.
+// No mutation, profile publication, vendor import or global solve cache.
+[[nodiscard]] std::optional<StageLocalSolveEvaluation>
+evaluateStageLocalSolve(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend,
+    std::optional<FeatureId> consuming_feature = std::nullopt);
+
 } // namespace simplesolid2::part
