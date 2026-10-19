@@ -151,6 +151,13 @@ resolveKernelProfileInput(
                 missing_source_sketch};
     }
 
+    // No native R13 solver/evaluated-snapshot authority yet. Even when
+    // an effective projection Sketch is supplied, authored relations
+    // must not be mistaken for solved coordinates at the Part boundary.
+    if (source->model.constraintCount() != 0U) {
+        return {ProfileKernelInputStatus::unresolved_profile};
+    }
+
     const bool datum_backed =
         datumPlaneIdForSketchSupport(
             source->support)
