@@ -136,6 +136,7 @@ enum class LocalSolveGatewayStatus {
     unsupported,
     backend_failure,
     residual_violation,
+    coincident_not_closed,
     invalid_candidate,
     stale_semantics,
     fixed_entity_changed
