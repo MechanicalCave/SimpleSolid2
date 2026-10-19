@@ -345,6 +345,119 @@ int main() {
     }
 
 
+    // R13-A1: the production Part -> accepted numerical candidate ->
+    // EXISTING ProfileRegionIntent/Kernel bridge must close an explicit
+    // Coincident at 1e-12 precision BEFORE region and wire conversion.
+    // This test uses a scripted backend, not a native PlaneGCS solver.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        namespace kernel = simplesolid2::kernel;
+        struct NoProjection final : kernel::IEdgeProjectionQuery {
+            std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+                kernel::RuntimeSolidHandle,
+                kernel::RuntimeEdgeToken) noexcept override {
+                return std::nullopt;
+            }
+            kernel::EdgeProjectionResult projectEdgeToPlane(
+                kernel::RuntimeSolidHandle,
+                const kernel::ScopedProjectionEdge&,
+                const kernel::Frame3&) noexcept override {
+                return {};
+            }
+        } projection;
+        struct SeamBackend final : sk::ILocalSketchSolver {
+            double offset{};
+            unsigned calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 4U);
+                candidate.lines[1].start.u += offset;
+                return {sk::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, 3U};
+            }
+        } backend;
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(
+            app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto rectangle = session.execute(
+            app::AddSketchRectangleCommand{
+                *made.sketch_id, session.document().revision(),
+                {0.0, 0.0}, {10.0, 8.0},
+                sk::EntityRole::regular, false});
+        CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+        const auto before = session.document()
+            .findSketch(*made.sketch_id)->model.state();
+        CHECK(before.lines.size() == 4U);
+        CHECK(before.lines[0].end == before.lines[1].start);
+        const auto regions = sk::analyzeRegions(
+            session.document().findSketch(*made.sketch_id)->model);
+        CHECK(regions.complete() && regions.regions.size() == 1U);
+        const auto intent = part::makeProfileRegionIntent(
+            regions.regions.front());
+        CHECK(intent);
+        const auto profile = session.execute(
+            app::CreateProfileCommand{
+                *made.sketch_id, session.document().revision(), *intent});
+        CHECK(profile.ok() && profile.profile_id);
+        const auto relation = session.execute(app::AddSketchRelationCommand{
+            *made.sketch_id, session.document().revision(),
+            sk::ConstraintKind::coincident,
+            {before.lines[0].id, sk::ConstraintElement::line_end},
+            {before.lines[1].id, sk::ConstraintElement::line_start}});
+        CHECK(relation.ok() && relation.constraint_id);
+        CHECK(!session.document().evaluateProfile(*profile.profile_id));
+        CHECK(part::resolveKernelProfileInput(
+            session.document(), *profile.profile_id).status ==
+            part::ProfileKernelInputStatus::unresolved_profile);
+
+        const sk::LocalSolverAcceptancePolicy precise{1.0e-12, 1.0e-12};
+        part::PartEvaluation prefix;
+        prefix.source_document_id = session.document().documentId();
+        prefix.source_revision = session.document().revision();
+        backend.offset = 5.0e-13;
+        const auto stage = part::evaluateStageLocalSolve(
+            session.document(), *made.sketch_id, prefix,
+            projection, precise, backend);
+        CHECK(stage);
+        CHECK(stage->solution.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(stage->solution.candidate);
+        CHECK(stage->solution.candidate->lines[0].end ==
+            stage->solution.candidate->lines[1].start);
+        CHECK(stage->solution.candidate->lines[1].start ==
+            before.lines[1].start);
+        const auto acceptedProfile =
+            part::resolveStageSolvedProfileKernelInput(
+                session.document(), *profile.profile_id, prefix,
+                projection, precise, backend);
+        CHECK(acceptedProfile.ok());
+        CHECK(acceptedProfile.input->outer.boundary.size() == 4U);
+        CHECK(acceptedProfile.input->holes.empty());
+        CHECK(backend.calls == 2U);
+        // The observed Profile remains authored, with stable identity.
+        CHECK(session.document().findProfile(*profile.profile_id));
+        CHECK(session.document().findSketch(*made.sketch_id)->model
+            .state().lines == before.lines);
+
+        // Out-of-policy local Coincident gaps must never be promoted into
+        // a repaired Profile via the new staged wrapper.
+        backend.offset = 5.0e-12;
+        const auto refused = part::resolveStageSolvedProfileKernelInput(
+            session.document(), *profile.profile_id, prefix,
+            projection, precise, backend);
+        CHECK(!refused.ok());
+        CHECK(refused.status ==
+            part::ProfileKernelInputStatus::unresolved_profile);
+        CHECK(backend.calls == 3U);
+        CHECK(session.document().findProfile(*profile.profile_id));
+    }
+
     // R13-A1: explicit five-relation authored semantics (not numeric solve).
     {
         sk::SketchModel relations;
