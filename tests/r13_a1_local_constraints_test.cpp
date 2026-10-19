@@ -2,10 +2,13 @@
 #include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
+#include <simplesolid2/sketch/local_solver.hpp>
 
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <array>
+#include <limits>
 
 namespace sk = simplesolid2::sketch;
 
@@ -359,6 +362,104 @@ int main() {
         CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 4U);
         CHECK(session.undo().changed);
         CHECK(session.document().findSketch(*made.sketch_id)->model.constraintCount() == 5U);
+    }
+
+
+    // R13-A1.2 RED: donor-aligned, pure numeric acceptance bridge.
+    // It checks candidate geometry; it does not solve equations or publish Part.
+    {
+        using K = sk::ConstraintKind;
+        using E = sk::ConstraintElement;
+        sk::SketchModel authored;
+        const auto a = authored.addLine({0.0, 0.0}, {4.0, 0.0});
+        const auto b = authored.addLine({4.0, 0.0}, {4.0, 3.0});
+        const auto c = authored.addLine({1.0, 2.0}, {3.0, 2.0});
+        CHECK(authored.addConstraint(K::horizontal, {a, E::line}));
+        CHECK(authored.addConstraint(K::vertical, {b, E::line}));
+        CHECK(authored.addConstraint(K::coincident,
+            {a, E::line_end}, {b, E::line_start}));
+        CHECK(authored.addConstraint(K::parallel,
+            {a, E::line}, {c, E::line}));
+        CHECK(authored.addConstraint(K::perpendicular,
+            {b, E::line}, {c, E::line}));
+
+        const std::array<sk::EntityId, 1> fixed{b};
+        const auto authoredState = authored.state();
+        const auto problem = sk::prepareLocalSolveProblem(authoredState, fixed);
+        CHECK(problem.has_value());
+        CHECK(problem->authored == authoredState);
+        CHECK(problem->lines.size() == 3U);
+        CHECK(problem->constraints.size() == 5U);
+        CHECK(problem->fixed_lines.size() == 1U);
+        CHECK(problem->fixed_lines.front() == b);
+        CHECK(problem->lines[1].fixed);
+        CHECK(!problem->lines[0].fixed);
+        CHECK(!problem->lines[2].fixed);
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-7, 1.0e-6};
+        CHECK(policy.valid());
+        const auto good = sk::reviewLocalSolveCandidate(
+            *problem, authoredState, policy);
+        CHECK(good.status == sk::LocalResidualStatus::residuals_satisfied);
+        CHECK(good.constraints.size() == 5U);
+        for (const auto& result : good.constraints) {
+            CHECK(result.constraint_id.valid());
+            CHECK(result.accepted);
+            CHECK(result.residual == 0.0);
+        }
+        CHECK(good.constraints[0].unit == sk::LocalResidualUnit::model_distance);
+        CHECK(good.constraints[1].unit == sk::LocalResidualUnit::model_distance);
+        CHECK(good.constraints[2].unit == sk::LocalResidualUnit::model_distance);
+        CHECK(good.constraints[3].unit == sk::LocalResidualUnit::radians);
+        CHECK(good.constraints[4].unit == sk::LocalResidualUnit::radians);
+
+        auto badGeometry = authoredState;
+        badGeometry.lines[0].end.v = 0.1; // horizontal, coincident, parallel fail
+        const auto bad = sk::reviewLocalSolveCandidate(
+            *problem, badGeometry, policy);
+        CHECK(bad.status == sk::LocalResidualStatus::residual_violation);
+        CHECK(!bad.constraints[0].accepted);
+        CHECK(!bad.constraints[2].accepted);
+        CHECK(!bad.constraints[3].accepted);
+        CHECK(authored.state() == authoredState); // no authored mutation
+
+        auto fixedChanged = authoredState;
+        fixedChanged.lines[1].start.u += 1.0e-8;
+        CHECK(sk::reviewLocalSolveCandidate(
+            *problem, fixedChanged, policy).status ==
+            sk::LocalResidualStatus::fixed_entity_changed);
+
+        auto corrupt = authoredState;
+        corrupt.constraints.clear();
+        CHECK(sk::reviewLocalSolveCandidate(
+            *problem, corrupt, policy).status ==
+            sk::LocalResidualStatus::stale_semantics);
+        corrupt = authoredState;
+        corrupt.lines[0].role = sk::EntityRole::construction;
+        CHECK(sk::reviewLocalSolveCandidate(
+            *problem, corrupt, policy).status ==
+            sk::LocalResidualStatus::stale_semantics);
+        corrupt = authoredState;
+        corrupt.lines[0].end.u = std::numeric_limits<double>::infinity();
+        CHECK(sk::reviewLocalSolveCandidate(
+            *problem, corrupt, policy).status ==
+            sk::LocalResidualStatus::invalid_candidate);
+
+        CHECK(!sk::LocalSolverAcceptancePolicy{0.0, 1.0e-6}.valid());
+        CHECK(!sk::LocalSolverAcceptancePolicy{1.0e-7, 0.0}.valid());
+        CHECK(!sk::LocalSolverAcceptancePolicy{
+            std::numeric_limits<double>::infinity(), 1.0e-6}.valid());
+        CHECK(sk::reviewLocalSolveCandidate(
+            *problem, authoredState,
+            sk::LocalSolverAcceptancePolicy{0.0, 1.0e-6}).status ==
+            sk::LocalResidualStatus::invalid_policy);
+
+        const std::array<sk::EntityId, 1> missing{
+            *sk::EntityId::parse("9999")};
+        const std::array<sk::EntityId, 2> repeated{b, b};
+        CHECK(!sk::prepareLocalSolveProblem(authoredState, missing));
+        CHECK(!sk::prepareLocalSolveProblem(authoredState, repeated));
+        CHECK(!sk::prepareLocalSolveProblem(
+            sk::SketchModelState{}, fixed));
     }
 
     std::cout << "R13-A1 Horizontal authored-state test PASS\n";
