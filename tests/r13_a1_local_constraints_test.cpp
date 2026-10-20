@@ -2596,6 +2596,19 @@ int main() {
         };
         check_stale_profile_edit(CommandReentrantKernel::Hook::bind);
         check_stale_profile_edit(CommandReentrantKernel::Hook::project);
+
+        // Positive same-revision Edit Profile remains a no-op when the
+        // authored RegionIntent is unchanged; no spurious Undo/dirty write.
+        const auto fresh_revision = projected_session.document().revision();
+        const auto edit_undo = projected_session.undoDepth();
+        const auto clean_edit = projected_session.execute(
+            app::ReplaceProfileRegionIntentCommand{
+                *good_profile.profile_id, fresh_revision,
+                *profile_intent},
+            provider);
+        CHECK(clean_edit.ok() && !clean_edit.changed);
+        CHECK(projected_session.document().revision() == fresh_revision);
+        CHECK(projected_session.undoDepth() == edit_undo);
         }
     }
 
