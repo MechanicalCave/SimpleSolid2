@@ -1575,6 +1575,83 @@ int main() {
         CHECK(cross.diagnostic.code ==
               part::PartStoreErrorCode::malformed_document);
         CHECK(!cross.document);
+
+        // P21-04: binary meaning is commutative even if authored JSON
+        // keeps the exact input order. Two distinct, valid ConstraintIds
+        // cannot circumvent duplicate detection by swapping endpoints.
+        const auto authoredSix = packageSix.package->authored_json;
+        const auto firstConstraints = authoredSix.find("\"constraints\":");
+        CHECK(firstConstraints != std::string::npos);
+        const auto firstArrayOpen = authoredSix.find('[', firstConstraints);
+        const auto firstArrayClose = authoredSix.find(']', firstArrayOpen);
+        CHECK(firstArrayOpen != std::string::npos &&
+              firstArrayClose != std::string::npos);
+        auto reversedDuplicate = authoredSix;
+        reversedDuplicate.replace(
+            firstArrayOpen, firstArrayClose - firstArrayOpen + 1U,
+            R"([{"id":"1","kind":"coincident","first":{"entity_id":"1","element":"line_end"},"second":{"entity_id":"2","element":"line_start"}},{"id":"2","kind":"coincident","first":{"entity_id":"2","element":"line_start"},"second":{"entity_id":"1","element":"line_end"}}])");
+        const auto reversedPath =
+            temp.path / "P21ReversedBinaryDuplicate.ss2part";
+        writeBytes(reversedPath, buildPartPackage(
+            multi.document().documentId(), 21, reversedDuplicate));
+        const auto reversed = store.load(reversedPath);
+        CHECK(!reversed.ok());
+        CHECK(reversed.diagnostic.code ==
+              part::PartStoreErrorCode::malformed_document);
+        CHECK(!reversed.document);
+
+        // The JSON is structurally valid, with legitimate Line IDs and
+        // a valid cursor, but the native authored Line has zero length.
+        // Never publish even the unaffected second Sketch.
+        CHECK(firstState.lines[0].start ==
+              (sketch::Point2{0.0, 0.0}));
+        CHECK(firstState.lines[0].end ==
+              (sketch::Point2{10.0, 0.0}));
+        const auto startAt = authoredSix.find("\"start\":");
+        CHECK(startAt != std::string::npos);
+        const auto startOpen = authoredSix.find('[', startAt);
+        const auto startClose = authoredSix.find(']', startOpen);
+        CHECK(startOpen != std::string::npos &&
+              startClose != std::string::npos);
+        auto zeroLength = authoredSix;
+        zeroLength.replace(
+            startOpen, startClose - startOpen + 1U, "[10.0, 0.0]");
+        const auto zeroPath =
+            temp.path / "P21InvalidSeedZeroLength.ss2part";
+        writeBytes(zeroPath, buildPartPackage(
+            multi.document().documentId(), 21, zeroLength));
+        const auto zero = store.load(zeroPath);
+        CHECK(!zero.ok());
+        CHECK(zero.diagnostic.code ==
+              part::PartStoreErrorCode::malformed_document);
+        CHECK(!zero.document);
+
+        // A nonnumeric coordinate is invalid even if the rest of this
+        // multi-Sketch native document and all its relations are healthy.
+        auto invalidCoordinate = authoredSix;
+        invalidCoordinate.replace(
+            startOpen, startClose - startOpen + 1U, "[false, 0.0]");
+        const auto coordinatePath =
+            temp.path / "P21InvalidSeedCoordinateType.ss2part";
+        writeBytes(coordinatePath, buildPartPackage(
+            multi.document().documentId(), 21, invalidCoordinate));
+        const auto coordinate = store.load(coordinatePath);
+        CHECK(!coordinate.ok());
+        CHECK(coordinate.diagnostic.code ==
+              part::PartStoreErrorCode::malformed_document);
+        CHECK(!coordinate.document);
+
+        // This writer supports v21, not an unknown future v22. Do not
+        // guess a future schema from an otherwise valid current payload.
+        const auto futurePath =
+            temp.path / "P21FutureDomainSchemaRejected.ss2part";
+        writeBytes(futurePath, buildPartPackage(
+            multi.document().documentId(), 22, authoredSix));
+        const auto future = store.load(futurePath);
+        CHECK(!future.ok());
+        CHECK(future.diagnostic.code ==
+              part::PartStoreErrorCode::unsupported_schema);
+        CHECK(!future.document);
     }
 
     // P21-08: the Owner's original linked PG-01 native v16 Part fixture
