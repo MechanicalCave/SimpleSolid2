@@ -1360,6 +1360,107 @@ int main() {
         CHECK(emptySketch->model.findLine(*fourth.entity_id));
     }
 
+    // P21-05: after Undo the abandoned constraint ID is retired for the
+    // lifetime of this DocumentSession, including when a new branch
+    // truncates Redo. A subsequent native v21 Save must persist the new
+    // cursor and never resurrect the abandoned authored relation.
+    {
+        application::DocumentSession original{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = original.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto a = original.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {0.0, 0.0}, {3.0, 1.0}});
+        const auto b = original.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {1.0, 2.0}, {4.0, 3.0}});
+        const auto c = original.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {2.0, 4.0}, {6.0, 5.0}});
+        CHECK(a.ok() && a.entity_id &&
+              b.ok() && b.entity_id &&
+              c.ok() && c.entity_id);
+        const auto first = original.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, original.document().revision(),
+                *a.entity_id});
+        CHECK(first.ok() && first.constraint_id);
+        CHECK(first.constraint_id->serialized() == "1");
+        const auto path =
+            temp.path / "P21AbandonedUndoBranchCold.ss2part";
+        CHECK(store.createNew(path, original.document()).ok());
+        auto saved = store.load(path);
+        CHECK(saved.ok());
+        application::DocumentSession branch{
+            path, std::move(*saved.document), *saved.checkpoint};
+        const auto oldRevision = branch.document().revision();
+        const auto abandoned = branch.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, branch.document().revision(),
+                *b.entity_id});
+        CHECK(abandoned.ok() && abandoned.constraint_id);
+        CHECK(abandoned.constraint_id->serialized() == "2");
+        CHECK(branch.document().findSketch(*made.sketch_id)
+            ->model.constraintIdCursor().serialized() == "3");
+        CHECK(branch.undo().changed);
+        CHECK(branch.canRedo());
+        CHECK(branch.document().findSketch(*made.sketch_id)
+            ->model.constraintCount() == 1U);
+        CHECK(branch.document().findSketch(*made.sketch_id)
+            ->model.constraintIdCursor().serialized() == "3");
+        const auto beforeBad = branch.document().state();
+        const auto depthBeforeBad = branch.undoDepth();
+
+        // Duplicate intent and stale optimistic revision both fail
+        // without mutating authored state, cursor or Undo/Redo history.
+        const auto duplicate = branch.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, branch.document().revision(),
+                *a.entity_id});
+        CHECK(!duplicate.ok() && !duplicate.changed);
+        const auto stale = branch.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, oldRevision, *c.entity_id});
+        CHECK(!stale.ok() && !stale.changed);
+        CHECK(stale.diagnostic.code ==
+              application::DocumentSessionErrorCode::revision_diverged);
+        CHECK(branch.document().state() == beforeBad);
+        CHECK(branch.undoDepth() == depthBeforeBad);
+        CHECK(branch.canRedo());
+
+        // A NEW history branch must allocate 3 instead of resurrecting
+        // undone relation ID 2. Redo history must be invalidated.
+        const auto replacement = branch.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, branch.document().revision(),
+                *c.entity_id});
+        CHECK(replacement.ok() && replacement.constraint_id);
+        CHECK(replacement.constraint_id->serialized() == "3");
+        CHECK(!branch.canRedo());
+        const auto branched = branch.document().findSketch(*made.sketch_id)
+            ->model.state();
+        CHECK(branched.constraints.size() == 2U);
+        CHECK(branched.constraints[0].id == *first.constraint_id);
+        CHECK(branched.constraints[1].id == *replacement.constraint_id);
+        CHECK(branched.next_constraint_id.serialized() == "4");
+        CHECK(branch.save().ok());
+
+        const auto cold = store.load(path);
+        CHECK(cold.ok());
+        CHECK(cold.document->documentId() == original.document().documentId());
+        const auto* sketchAfter =
+            cold.document->findSketch(*made.sketch_id);
+        CHECK(sketchAfter != nullptr);
+        CHECK(sketchAfter->model.state() == branched);
+        CHECK(sketchAfter->model.findConstraint(*first.constraint_id));
+        CHECK(!sketchAfter->model.findConstraint(*abandoned.constraint_id));
+        CHECK(sketchAfter->model.findConstraint(*replacement.constraint_id));
+        CHECK(sketchAfter->model.constraintIdCursor().serialized() == "4");
+    }
+
     // P21-01: every A1 kind (including immutable Fix and endpoint
     // Coincident) survives a real cold native Part round trip with exact
     // authored order and semantic IDs; independent Sketches may BOTH own
