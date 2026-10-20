@@ -494,6 +494,76 @@ int main() {
         ->model.state() == authored);
     CHECK(session.document().findSketch(*sketch.sketch_id)
         ->model.state() == authored);
+
+    // A1.3 geometry-delete cascade: deleting the top Line retires its
+    // Horizontal and two Coincident intents in ONE DocumentSession command.
+    // Dependent durable Profile/Feature identities must survive, but
+    // their derived BRep must become blocked, never stale-current.
+    const auto eraseTop = session.execute(app::EraseSketchEntityCommand{
+        *sketch.sketch_id, L[2].id});
+    CHECK(eraseTop.ok() && eraseTop.changed);
+    CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
+    const auto* withoutTop =
+        session.document().findSketch(*sketch.sketch_id);
+    CHECK(withoutTop != nullptr);
+    CHECK(withoutTop->model.state().lines.size() == 3U);
+    CHECK(withoutTop->model.constraintCount() == 5U);
+    CHECK(withoutTop->model.findConstraint(horizontal_id) == nullptr);
+    CHECK(!part::prepareStageLocalSolveProblem(
+        session.document(), *sketch.sketch_id, replayPrefix, provider));
+
+    const auto evaluateCurrentExtrude = [&]() {
+        auto featureState = session.document().state();
+        const auto durableFeatureId = featureState.body.next_feature_id.allocate();
+        CHECK(durableFeatureId && *durableFeatureId == *feature);
+        featureState.body.features.push_back(part::PartFeature{
+            *durableFeatureId, "PlaneGCSRealExtrude", false,
+            part::ExtrudeFeature{*profile.profile_id,
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{core::LengthValue{10.0}, false}}});
+        const auto staged = part::PartDocument::restore(
+            session.document().documentId(), std::move(featureState),
+            session.document().revision());
+        CHECK(staged.ok() && staged.document);
+        CHECK(staged.document->findProfile(*profile.profile_id) != nullptr);
+        return part::evaluatePartWithLocalSolve(
+            *staged.document, provider, policy, native);
+    };
+    const auto brokenBody = evaluateCurrentExtrude();
+    CHECK(brokenBody.features.size() == 1U);
+    CHECK(brokenBody.features.front().feature_id == *feature);
+    CHECK(brokenBody.features.front().status !=
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(brokenBody.body_status !=
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(brokenBody.body_solid == nullptr);
+
+    CHECK(session.undo().changed);
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
+    const auto revivedBody = evaluateCurrentExtrude();
+    CHECK(revivedBody.features.size() == 1U);
+    CHECK(revivedBody.features.front().feature_id == *feature);
+    CHECK(revivedBody.features.front().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(revivedBody.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(revivedBody.body_solid != nullptr);
+    CHECK(provider.presentationMesh(revivedBody.body_solid).ok());
+
+    CHECK(session.redo().changed);
+    CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.constraintCount() == 5U);
+    const auto rebrokenBody = evaluateCurrentExtrude();
+    CHECK(rebrokenBody.features.size() == 1U);
+    CHECK(rebrokenBody.features.front().feature_id == *feature);
+    CHECK(rebrokenBody.features.front().status !=
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(rebrokenBody.body_status !=
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(rebrokenBody.body_solid == nullptr);
     std::cout<<"R13_A1_ORIGINAL_PLANEGCS_OCCT_PASS real_solver=1"
              <<" profile_face=1 extrude_solid=1 fixed_line=1"
              <<" corrected_geometry=1 source_unchanged=1\n";
