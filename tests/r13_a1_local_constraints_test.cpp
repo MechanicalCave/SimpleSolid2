@@ -2295,6 +2295,7 @@ int main() {
             app::DocumentSession& session;
             sk::SketchId sketch_id;
             Hook hook;
+            sk::EntityRole nested_role{sk::EntityRole::regular};
             unsigned binds{};
             unsigned projections{};
             bool mutated{};
@@ -2334,7 +2335,8 @@ int main() {
                 CHECK(!mutated);
                 const auto edit = session.execute(
                     app::AddSketchLineCommand{
-                        sketch_id, {27.0, 3.0}, {30.0, 3.0}});
+                        sketch_id, {27.0, 3.0}, {30.0, 3.0},
+                        nested_role});
                 CHECK(edit.ok() && edit.changed);
                 mutated = true;
             }
@@ -2535,6 +2537,7 @@ int main() {
                 .findSketch(*profile_sketch.sketch_id)->model.state().lines.size();
             CommandReentrantKernel reentry{
                 provider, projected_session, *profile_sketch.sketch_id, hook};
+            reentry.nested_role = sk::EntityRole::construction;
             const auto created = projected_session.execute(
                 app::CreateProfileCommand{
                     *profile_sketch.sketch_id, original_revision,
@@ -2575,6 +2578,7 @@ int main() {
                 .findProfile(*good_profile.profile_id)->region_intent;
             CommandReentrantKernel reentry{
                 provider, projected_session, *profile_sketch.sketch_id, hook};
+            reentry.nested_role = sk::EntityRole::construction;
             const auto changed = projected_session.execute(
                 app::ReplaceProfileRegionIntentCommand{
                     *good_profile.profile_id, original_revision,
