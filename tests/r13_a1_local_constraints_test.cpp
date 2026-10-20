@@ -2491,6 +2491,111 @@ int main() {
         CHECK(detached->projection_bindings.empty());
         CHECK(detached->model.findLine(linked_id) != nullptr);
         CHECK(detached->model.state().lines.size() == final_lines);
+
+        // PG-01 Create/Edit Profile are revision-bound semantic Commands
+        // too. A provider callback may reenter the session after the
+        // commands captured their prospective PartAuthoredState. A stale
+        // original command must return revision_diverged, not silently
+        // report an unrelated broken RegionIntent or publish obsolete
+        // Profile state over the genuine nested edit.
+        const auto profile_sketch = projected_session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(profile_sketch.ok() && profile_sketch.sketch_id);
+        const auto profile_linked = projected_session.execute(
+            app::CreateProjectedSketchEdgesCommand{
+                *profile_sketch.sketch_id,
+                projected_session.document().revision(), {*source},
+                sk::EntityRole::construction},
+            provider);
+        CHECK(profile_linked.ok());
+        CHECK(profile_linked.entity_ids.size() == 1U);
+        const auto rectangle = projected_session.execute(
+            app::AddSketchRectangleCommand{
+                *profile_sketch.sketch_id,
+                projected_session.document().revision(),
+                {50.0, 20.0}, {56.0, 26.0},
+                sk::EntityRole::regular, false});
+        CHECK(rectangle.ok());
+        const auto* profile_model = projected_session.document()
+            .findSketch(*profile_sketch.sketch_id);
+        CHECK(profile_model != nullptr);
+        const auto profile_regions = sk::analyzeRegions(profile_model->model);
+        CHECK(profile_regions.complete());
+        CHECK(profile_regions.regions.size() == 1U);
+        const auto profile_intent = part::makeProfileRegionIntent(
+            profile_regions.regions.front());
+        CHECK(profile_intent);
+
+        const auto check_stale_profile_create = [&](CommandReentrantKernel::Hook hook) {
+            const auto original_revision = projected_session.document().revision();
+            const auto undo_before = projected_session.undoDepth();
+            const auto profile_count = projected_session.document().state().profiles.size();
+            const auto before_count = projected_session.document()
+                .findSketch(*profile_sketch.sketch_id)->model.state().lines.size();
+            CommandReentrantKernel reentry{
+                provider, projected_session, *profile_sketch.sketch_id, hook};
+            const auto created = projected_session.execute(
+                app::CreateProfileCommand{
+                    *profile_sketch.sketch_id, original_revision,
+                    *profile_intent},
+                reentry);
+            CHECK(!created.ok() && !created.changed);
+            CHECK(created.diagnostic.code ==
+                app::DocumentSessionErrorCode::revision_diverged);
+            CHECK(reentry.mutated && reentry.binds == 1U);
+            CHECK(reentry.projections ==
+                (hook == CommandReentrantKernel::Hook::bind ? 0U : 1U));
+            CHECK(projected_session.undoDepth() == undo_before + 1U);
+            CHECK(projected_session.document().state().profiles.size() ==
+                profile_count);
+            const auto* live = projected_session.document().findSketch(
+                *profile_sketch.sketch_id);
+            CHECK(live != nullptr);
+            CHECK(live->model.state().lines.size() == before_count + 1U);
+            CHECK(live->projection_bindings.size() == 1U);
+        };
+        check_stale_profile_create(CommandReentrantKernel::Hook::bind);
+        check_stale_profile_create(CommandReentrantKernel::Hook::project);
+
+        const auto good_profile = projected_session.execute(
+            app::CreateProfileCommand{
+                *profile_sketch.sketch_id,
+                projected_session.document().revision(), *profile_intent},
+            provider);
+        CHECK(good_profile.ok() && good_profile.profile_id);
+        CHECK(projected_session.document().findProfile(*good_profile.profile_id));
+
+        const auto check_stale_profile_edit = [&](CommandReentrantKernel::Hook hook) {
+            const auto original_revision = projected_session.document().revision();
+            const auto undo_before = projected_session.undoDepth();
+            const auto before_count = projected_session.document()
+                .findSketch(*profile_sketch.sketch_id)->model.state().lines.size();
+            const auto before_intent = projected_session.document()
+                .findProfile(*good_profile.profile_id)->region_intent;
+            CommandReentrantKernel reentry{
+                provider, projected_session, *profile_sketch.sketch_id, hook};
+            const auto changed = projected_session.execute(
+                app::ReplaceProfileRegionIntentCommand{
+                    *good_profile.profile_id, original_revision,
+                    *profile_intent},
+                reentry);
+            CHECK(!changed.ok() && !changed.changed);
+            CHECK(changed.diagnostic.code ==
+                app::DocumentSessionErrorCode::revision_diverged);
+            CHECK(reentry.mutated && reentry.binds == 1U);
+            CHECK(reentry.projections ==
+                (hook == CommandReentrantKernel::Hook::bind ? 0U : 1U));
+            CHECK(projected_session.undoDepth() == undo_before + 1U);
+            const auto* live = projected_session.document().findSketch(
+                *profile_sketch.sketch_id);
+            CHECK(live != nullptr);
+            CHECK(live->model.state().lines.size() == before_count + 1U);
+            CHECK(projected_session.document().findProfile(
+                *good_profile.profile_id)->region_intent == before_intent);
+        };
+        check_stale_profile_edit(CommandReentrantKernel::Hook::bind);
+        check_stale_profile_edit(CommandReentrantKernel::Hook::project);
         }
     }
 
