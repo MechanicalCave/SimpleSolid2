@@ -24,7 +24,46 @@ Actual program output: **11/11 local smoke assertions PASS**: Horizontal, Vertic
 
 **Material upstream acceptance trap reproduced with real source:** fully fixed `(0,0) → (5,2)` line + `Horizontal(Line)` constraint returns native upstream `SolveStatus::Success=0`, `DoF=0`, **zero conflicting/redundant tags**, despite horizontal vertical-error = **2.0 model units** (fixed geometry unchanged). Thus a naïve adapter trusting PlaneGCS status or `diagnose()` can incorrectly accept an impossible solve. Existing SS2 `sketch::reviewLocalSolveCandidate` and `sketch::evaluateLocalSolve` on product Draft PR #506 already independently reject residual violation / enforce fixed inputs, and Sketch model rejects this exact impossible authored `Fix+Horizontal` upfront; **these explicit guards are production requirements, not optional hardening**. The future genuine adapter must map native response to an SS2 candidate only after independent, unit-aware residual and semantic-ID review.
 
-The reproducible author-owned C++ smoke harness and local execution/report were created outside SS2; **no upstream code, binaries or unapproved tests were committed**. This result is **REAL native PlaneGCS LOCAL LINUX PASS**, not SS2 Windows/MSVC/OCCT, not a DLL ABI or install test and not LGPL release signoff. B0-A remains PASS, B0-B import-rights review + D2 per-file allowlist remain open, B1 SS2 real solver **NOT PASSED**. Next scope: minimal approved developer native backend → manual Sketch test → A2/A3; defer distro/VM/install/replacement work to actual release.
+The reproducible author-owned C++ smoke harness and local execution/report were created outside SS2; **no upstream code, binaries or unapproved tests were committed**. This result is **REAL native PlaneGCS LOCAL LINUX PASS**, not SS2 Windows/MSVC/OCCT, not a DLL ABI or install test and not LGPL release signoff. B0-A remains PASS, B0-B import-rights review + D2 per-file allowlist remain open, B1 SS2 real solver **NOT PASSED at the time of this earlier isolated Linux-only proof**; the later Windows B1a external PASS is recorded above. Next scope: minimal approved developer native backend → manual Sketch test → A2/A3; defer distro/VM/install/replacement work to actual release.
+
+## Windows MSVC DEV B1a native bridge — Owner-executed PASS (2026-10-20)
+
+**Current evidence takes precedence over earlier chronological statements in this proposal that Windows native integration was not executed.** Owner reported actual execution from the existing clean `D:\\SimpleSolid2` checkout, temporarily switched to exact PR #506 commit `d7e5491723e983b2b1505214a15fdde6e80abed2`. An **external**, untracked harness compiled original pinned PlaneGCS C++ sources under **Visual Studio 2022 / MSVC 19.38 x64**, using actual SS2 `simplesolid2_sketch`, `LocalSolveProblem`, `ILocalSketchSolver` and `evaluateLocalSolve` at that commit. Independently SHA-verified original 0.8.0 TAR; locally installed Eigen and Boost headers were reused (no new dependency install). External harness-only corrections during setup involved Git object fetch, Windows/PowerShell `$HOME` collision and CMake Windows path escaping; these **were not product code mutations**.
+
+**Owner-provided Windows transcript excerpt (operator-attested, not a separately uploaded complete machine log):**
+
+```text
+PASS Horizontal numerical residual
+PASS Vertical real gateway accepted
+PASS Parallel real gateway accepted
+PASS Perpendicular real gateway accepted
+PASS Coincident real gateway accepted
+PASS Coincident exact SS2 endpoint closure
+PASS Coincident original fixed line unchanged
+PASS Coincident authored sketch unchanged
+PASS Fix(Line) authorship
+PASS Fix encoded only as fixed mask, zero equations
+PASS Fix candidate accepted through real SS2 gateway
+PASS Fix exact coordinates unchanged
+PASS Fix authored sketch unchanged
+PASS Contradictory Fix + Horizontal rejected before native solve
+SS2_B1A_REAL_GATEWAY_PASS=32
+B1A_DEV_MSVC_REAL_GATEWAY_PASS (no app source/import/installer changed)
+[GIT RESTORED] HEAD=47bcd16f2b75b845b14fc5d9fecf5ffe8e553178
+```
+
+The 32 are **harness assertion PASS**, not 32 separately registered CTest product tests. The native proof covers the five geometric relations plus `Fix(Line)` mask, immutability of authored state and PG-01-like fixed references. It **does not** prove registered SS2 native test-graph behavior, complete conflict/redundancy/DoF classification, independently injected original PlaneGCS false-success rejection, Part→OCCT Extrude/Revolve, Qt interaction, Save/Close/Reopen or persistence, installed DLL replacement, release rights or installer compliance. **B1a external MSVC native feasibility = PASS; A1 product-integration B1a/B1a2 and A1 technical FINAL = OPEN.**
+
+**Storage discipline verified with Owner's CMake cache inventory:** `D:\\SS2Build` contains the CI-owned persistent desktop/core/kernel trees and must not be borrowed; `D:\\SimpleSolid2\\build\\dev` is the existing app cache with `CMAKE_HOME_DIRECTORY=D:/SimpleSolid2`, and must not be overwritten by the external root-CMake harness. Exactly one Git checkout `D:\\SimpleSolid2` is used. Disposable experiment sources/build/logs live under `D:\\SimpleSolid2\\build\\b1a` only; helper archive of approximately 188 KB was read from a pre-existing temporary path without a new heavy installation on C:. Do not create a second worktree or clone. The Windows operator reported successful restoration to original detached `47bcd16f` after test. These rules remain mandatory for the next development step.
+
+### Next bounded integration gate — exact authority remains pending
+
+1. **D2-A independent decision:** update the *active frozen A1 Work Contract* to append `Fix(Line)` as the sixth authored relation, with fixed endpoints rather than a sixth numerical equation. PR #506 existing Fix code is evidence, not a substitute for normative acceptance.
+2. **D2-B1a developer-only decision:** review/approve the **six exact candidate files and conditional purposes** in the table below, a build-option default OFF and an *externally provisioned* original source path. No `third_party/**`, root CMake, CI, installer, release source packaging or system-wide dependencies; no automatic network access. This is **not** an approval to copy upstream PlaneGCS sources into the repository. A narrowly adequate independent third-party rights/provenance review is still required before the repository tracks an adapter or vendor-aware build source.
+3. **First product RED→GREEN:** after both applicable accepted decisions and governance activation, register native MSVC Core tests for the actual SS2 API using the original five translation units; explicitly exercise false upstream success with immutable geometry, residual/fixed guards, preservation of semantic `ConstraintId` and no Part publication. Then independently add Core+Kernel Profile→OCCT stage/revision tests under authorized paths. Reuse existing vcpkg Eigen/Boost on D: without installing new dependencies.
+4. **Manual Sketch milestone requires its own exact UI path approval:** native local solve and inspect/edit interaction in current developer executable, Undo/Redo and eventual cold Save/Reopen with separately approved persistence schema; no release packaging detour. Only after that begin separately bounded R13-A2 driving Length/Radius/Diameter and R13-A3 reference-versus-driving.
+
+**Decision interpretation:** Owner's conversational `akceptuje - kontynuuj` confirms the direction of work after Windows B1a PASS. It is **not** automatically the two independent exact-text D2-A and D2-B1a mutations or guarded-squash merge authorization. Until those gates are explicitly accepted and made operative, keep production and third-party files untouched; governance evidence edits to this one-file Draft PR may proceed.
 
 ## R13-A1 DEV-only B1a exact-path proposal — real `ILocalSketchSolver` first (2026-10-20)
 
@@ -124,7 +163,7 @@ Mandatory staged gates:
 - Every TAR member is a **regular file**, all under the `planegcs-0.8.0/` prefix, without absolute or parent-traversal paths, symbolic links, hard links or special members. Total uncompressed file data 1,022,611 bytes. **B0 byte/source-inventory check = INDEPENDENTLY VERIFIED PASS**.
 - Strong independent upstream provenance proof: read the frozen GitHub `spookylukey/planegcs@5a60d5328bedd85f1e4aef81b9b57f5c4410ae52` Git tree via API and compared actual **Git blob SHA-1 calculated from 21 archive member contents**; **21/21 MATCH**. Includes all five native solver `.cpp` files and headers, `Util.h`, `SketcherGlobal.h`, four shim headers, `src/wrapper.h`, `src/bindings.cpp`, `LICENSE`, `pyproject.toml` and `CMakeLists.txt`. This is byte identity for those exact paths, not a native compile/ABI test.
 - **Licensing STOP remains in force:** actual archive `LICENSE` has only 627 bytes, a short LGPL 2.1 header/link and FreeCAD notice, NOT the full license terms. No separate `COPYING`, `COPYING.LIB` or `NOTICE` member. The 11 main `Constraints/GCS/Geo/SubSystem/qp_eq` C++ sources/headers plus `Util.h` contain `SPDX-License-Identifier: LGPL-2.1-or-later`; older body comments reference “GNU Library General Public License version 2 or later”, requiring provenance/wording review. `src/wrapper.h`, `src/bindings.cpp`, `SketcherGlobal.h` and the four shims have no own SPDX markers; **this does NOT alone imply prohibited licensing**, but their actual distribution rights and notice obligations require independent counsel/compliance review.
-- The original `CMakeLists.txt` builds a `pybind11_add_module(_planegcs)` using Eigen/Boost, not the replaceable SS2 native C ABI DLL. Windows MSVC isolated adapter/replacement, five relations + fixed PG-01 / conflict/DoF and legal/installer compliance **NOT EXECUTED**.
+- The original `CMakeLists.txt` builds a `pybind11_add_module(_planegcs)` using Eigen/Boost, not the replaceable SS2 native C ABI DLL. At the time of this B0-A review, Windows MSVC isolated adapter/replacement, five relations + fixed PG-01 / conflict/DoF and legal/installer compliance **had NOT been executed**; the later Windows external B1a solver-bridge PASS is recorded above, while replaceable DLL, complete conflict/DoF, packaging and legal signoff remain OPEN.
 
 **Precise gates now:** `B0-A` original tarball checksum, structural inventory and core upstream source correspondence = **PASS / INDEPENDENTLY VERIFIED**. `B0-B` complete LGPL notices/rights, provenance, dynamic library replacement and packaging legal review = **OPEN STOP** before any vendor/import or real build target. `B1` actual MSVC DLL/caller and `B2` installed offline release/persistence/UI/DOC-01 remain **NOT EXECUTED**. D2-A Fix and D2-B ABI choice remain separate Owner decisions. No archive, DLL, vendor, schema, application or `main` mutation is authorized by this factual addendum.
 
