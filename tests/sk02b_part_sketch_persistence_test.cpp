@@ -869,8 +869,8 @@ int main() {
         const auto invalidCursor = [&](std::string name,
                                        const std::string& cursor) {
             auto authored = original;
-            replaceOnce(authored, "\"next_constraint_id\":\"2\"",
-                "\"next_constraint_id\":\"" + cursor + "\"");
+            replaceOnce(authored, "\"next_constraint_id\": \"2\"",
+                "\"next_constraint_id\": \"" + cursor + "\"");
             const auto badPath = temp.path / (name + ".ss2part");
             writeBytes(badPath, buildPartPackage(
                 constraint_session.document().documentId(), 21, authored));
@@ -891,8 +891,8 @@ int main() {
             persistence::readNativeDocumentContainer(constraint_path);
         CHECK(savedWithoutRelation.ok());
         auto v20Authored = savedWithoutRelation.package->authored_json;
-        replaceOnce(v20Authored, "\"constraints\":[],", "");
-        replaceOnce(v20Authored, ",\"next_constraint_id\":\"2\"", "");
+        replaceOnce(v20Authored, "\"constraints\": [],\n", "");
+        replaceOnce(v20Authored, "\"next_constraint_id\": \"2\",\n", "");
         const auto v20Path = temp.path / "P21V20Migration.ss2part";
         writeBytes(v20Path, buildPartPackage(
             constraint_session.document().documentId(), 20, v20Authored));
@@ -916,7 +916,7 @@ int main() {
         CHECK(upgraded.ok());
         CHECK(upgraded.package->descriptor.domain_schema_version == 21);
         CHECK(upgraded.package->authored_json.find(
-            "\"next_constraint_id\":\"1\"") != std::string::npos);
+            "\"next_constraint_id\": \"1\"") != std::string::npos);
         const auto reopenedV21 = store.load(v20Path);
         CHECK(reopenedV21.ok());
         CHECK(reopenedV21.document->findSketch(*created.sketch_id)
