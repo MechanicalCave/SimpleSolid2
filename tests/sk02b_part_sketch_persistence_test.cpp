@@ -1089,6 +1089,144 @@ int main() {
         CHECK(afterRejectBytes == tamperedBytes);
     }
 
+    // P21-09 remaining checkpoint classes on a genuinely constrained v21
+    // document: busy guard, missing target, replaced file object with
+    // IDENTICAL bytes, and a newly written foreign DocumentId. These are
+    // independent cases (not an in-memory mocked save) and must preserve
+    // dirty authored intent, Undo/Redo and the original checkpoint.
+    for (int failureCase = 0; failureCase != 4; ++failureCase) {
+        const auto conflictPath = temp.path /
+            ("P21NativeCheckpointCase" +
+             std::to_string(failureCase) + ".ss2part");
+        const auto originalId = core::DocumentId::generate();
+        auto owned = part::PartDocument::create(originalId);
+        const auto firstPublished = store.createNew(conflictPath, owned);
+        CHECK(firstPublished.ok());
+        application::DocumentSession dirty{
+            conflictPath, std::move(owned), *firstPublished.checkpoint};
+        const auto made = dirty.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto line = dirty.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {1.0, 2.0}, {8.0, 3.0}});
+        CHECK(line.ok() && line.entity_id);
+        const auto relation = dirty.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, dirty.document().revision(),
+                *line.entity_id});
+        CHECK(relation.ok() && relation.constraint_id);
+        CHECK(dirty.save().ok());
+        CHECK(!dirty.needsSave());
+        const auto originalPackage =
+            persistence::readNativeDocumentContainer(conflictPath);
+        CHECK(originalPackage.ok());
+        CHECK(originalPackage.package->descriptor.domain_schema_version ==
+              21);
+        std::ifstream originalInput{conflictPath, std::ios::binary};
+        CHECK(static_cast<bool>(originalInput));
+        const std::string originalBytes{
+            std::istreambuf_iterator<char>{originalInput},
+            std::istreambuf_iterator<char>{}};
+        originalInput.close();
+        CHECK(!originalBytes.empty());
+
+        const auto more = dirty.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {10.0, 3.0}, {15.0, 4.0}});
+        CHECK(more.ok() && more.entity_id && dirty.needsSave());
+        const auto authoredBefore = dirty.document().state();
+        const auto revisionBefore = dirty.document().revision();
+        const auto checkpointBefore = dirty.fileCheckpoint();
+        const auto undoBefore = dirty.undoDepth();
+        const auto redoBefore = dirty.redoDepth();
+        CHECK(checkpointBefore);
+
+        application::DocumentSessionResult rejected;
+        part::PartStoreErrorCode expectedCode{};
+        const auto relocated =
+            temp.path / ("P21NativeCheckpointOld" +
+                         std::to_string(failureCase) + ".ss2part");
+        if (failureCase == 0) {
+            const auto guard =
+                persistence::acquireCooperativeSaveGuard(conflictPath);
+            CHECK(guard.ok());
+            expectedCode = part::PartStoreErrorCode::save_conflict_busy;
+            rejected = dirty.save();
+        } else if (failureCase == 1) {
+            CHECK(std::filesystem::exists(conflictPath));
+            std::filesystem::rename(conflictPath, relocated);
+            CHECK(!std::filesystem::exists(conflictPath));
+            expectedCode =
+                part::PartStoreErrorCode::save_conflict_target_missing;
+            rejected = dirty.save();
+        } else if (failureCase == 2) {
+            // A different NTFS file identity carrying identical contents
+            // must still be rejected; a digest match alone is not enough.
+            std::filesystem::rename(conflictPath, relocated);
+            writeBytes(conflictPath, originalBytes);
+            expectedCode =
+                part::PartStoreErrorCode::save_conflict_file_replaced;
+            rejected = dirty.save();
+        } else {
+            // Same NTFS file object, but a checksum-valid v21 container
+            // with a different actual document ID, must reject before
+            // an optimistic content-change classification.
+            writeBytes(conflictPath, buildPartPackage(
+                core::DocumentId::generate(), 21,
+                originalPackage.package->authored_json));
+            expectedCode = part::PartStoreErrorCode::
+                save_conflict_document_identity_changed;
+            rejected = dirty.save();
+        }
+        CHECK(!rejected.ok());
+        CHECK(rejected.diagnostic.code ==
+              application::DocumentSessionErrorCode::save_conflict);
+        CHECK(rejected.diagnostic.store_code == expectedCode);
+        CHECK(dirty.needsSave());
+        CHECK(dirty.document().state() == authoredBefore);
+        CHECK(dirty.document().revision() == revisionBefore);
+        CHECK(dirty.fileCheckpoint() == checkpointBefore);
+        CHECK(dirty.undoDepth() == undoBefore);
+        CHECK(dirty.redoDepth() == redoBefore);
+        CHECK(dirty.document().findSketch(*made.sketch_id)->model
+            .findConstraint(*relation.constraint_id) != nullptr);
+
+        if (failureCase == 1) {
+            CHECK(!std::filesystem::exists(conflictPath));
+            std::ifstream kept{relocated, std::ios::binary};
+            CHECK(static_cast<bool>(kept));
+            const std::string keptBytes{
+                std::istreambuf_iterator<char>{kept},
+                std::istreambuf_iterator<char>{}};
+            CHECK(keptBytes == originalBytes);
+        } else {
+            std::ifstream kept{conflictPath, std::ios::binary};
+            CHECK(static_cast<bool>(kept));
+            const std::string keptBytes{
+                std::istreambuf_iterator<char>{kept},
+                std::istreambuf_iterator<char>{}};
+            if (failureCase == 3) {
+                CHECK(keptBytes != originalBytes);
+                const auto foreign =
+                    persistence::readNativeDocumentContainer(conflictPath);
+                CHECK(foreign.ok());
+                CHECK(foreign.package->descriptor.document_id !=
+                      std::string{originalId.value()});
+            } else {
+                CHECK(keptBytes == originalBytes);
+            }
+        }
+        CHECK(dirty.undo().changed);
+        CHECK(dirty.document().findSketch(*made.sketch_id)->model
+            .findConstraint(*relation.constraint_id) != nullptr);
+        CHECK(dirty.redo().changed);
+        CHECK(dirty.document().state() == authoredBefore);
+        CHECK(dirty.needsSave());
+        CHECK(dirty.fileCheckpoint() == checkpointBefore);
+    }
+
     // P21-01: every A1 kind (including immutable Fix and endpoint
     // Coincident) survives a real cold native Part round trip with exact
     // authored order and semantic IDs; independent Sketches may BOTH own
