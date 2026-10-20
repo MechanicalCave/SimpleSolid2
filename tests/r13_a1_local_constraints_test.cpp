@@ -784,6 +784,49 @@ int main() {
             sk::LocalBackendDiagnosticKind::residual_violation);
         CHECK(residualRejected.diagnostics.front().constraint == relation);
 
+        // The original PlaneGCS 0.8.0 fully fixed diagonal false-success
+        // witness: raw native Success and DoF=0 can be returned for a
+        // 0,0 -> 5,2 Line with a Horizontal equation, even though its
+        // 2 mm residual is impossible to eliminate without moving the
+        // caller's projected source. The SS2 gateway, not the backend
+        // status, must reject that disposable candidate.
+        sk::SketchModel sourceAnchored;
+        const auto diagonal = sourceAnchored.addLine(
+            {0.0, 0.0}, {5.0, 2.0});
+        const auto diagonalHorizontal = sourceAnchored.addHorizontal(diagonal);
+        CHECK(diagonalHorizontal);
+        const auto diagonalAuthored = sourceAnchored.state();
+        const std::array<sk::EntityId, 1> projectedDiagonal{diagonal};
+        const auto impossibleInput = sk::prepareLocalSolveProblem(
+            diagonalAuthored, projectedDiagonal);
+        CHECK(impossibleInput);
+        CHECK(impossibleInput->fixed_lines.size() == 1U);
+        CHECK(impossibleInput->lines.front().fixed);
+        ScriptedBackend upstreamFalseSuccess;
+        upstreamFalseSuccess.candidate = diagonalAuthored;
+        upstreamFalseSuccess.degrees_of_freedom = 0U;
+        const auto falselyConverged = sk::evaluateLocalSolve(
+            *impossibleInput, policy, upstreamFalseSuccess);
+        CHECK(upstreamFalseSuccess.calls == 1U);
+        CHECK(falselyConverged.status ==
+            sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!falselyConverged.candidate);
+        CHECK(falselyConverged.residuals.status ==
+            sk::LocalResidualStatus::residual_violation);
+        CHECK(falselyConverged.residuals.constraints.size() == 1U);
+        CHECK(falselyConverged.residuals.constraints.front().constraint_id ==
+            diagonalHorizontal);
+        CHECK(falselyConverged.residuals.constraints.front().unit ==
+            sk::LocalResidualUnit::model_distance);
+        CHECK(falselyConverged.residuals.constraints.front().residual == 2.0);
+        CHECK(!falselyConverged.residuals.constraints.front().accepted);
+        CHECK(falselyConverged.diagnostics.size() == 1U);
+        CHECK(falselyConverged.diagnostics.front().kind ==
+            sk::LocalBackendDiagnosticKind::residual_violation);
+        CHECK(falselyConverged.diagnostics.front().constraint ==
+            diagonalHorizontal);
+        CHECK(sourceAnchored.state() == diagonalAuthored);
+
         backend.candidate = state;
         backend.diagnostics = {{sk::LocalBackendDiagnosticKind::redundant_constraint, relation}};
         const auto redundancy = sk::evaluateLocalSolve(*input, policy, backend);
