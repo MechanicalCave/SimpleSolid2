@@ -362,6 +362,75 @@ int main() {
     CHECK(std::abs(xmin-5.0)<0.01 && std::abs(xmax-15.0)<0.01);
     CHECK(owned.document->findSketch(*sketch.sketch_id)->model.state()==authored);
     CHECK(session.document().findSketch(*sketch.sketch_id)->model.state()==authored);
+
+    // A1.3 native lifecycle: erase an authored constraint through the
+    // revision-bound DocumentSession, then Undo/Redo/Undo its SAME semantic
+    // ConstraintId. A previous Part-stage prefix must never be reused.
+    const auto horizontal = std::find_if(
+        authored.constraints.begin(), authored.constraints.end(),
+        [](const auto& relation) { return relation.kind == K::horizontal; });
+    CHECK(horizontal != authored.constraints.end());
+    const auto horizontal_id = horizontal->id;
+    const auto erased = session.execute(app::EraseSketchConstraintCommand{
+        *sketch.sketch_id, session.document().revision(), horizontal_id});
+    CHECK(erased.ok() && erased.changed);
+    CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
+    const auto* afterErase = session.document().findSketch(*sketch.sketch_id);
+    CHECK(afterErase && afterErase->model.constraintCount() == 7U);
+    CHECK(afterErase->model.findConstraint(horizontal_id) == nullptr);
+    CHECK(afterErase->model.state().lines == authored.lines);
+    CHECK(!part::prepareStageLocalSolveProblem(
+        session.document(), *sketch.sketch_id, prefix, provider));
+    CHECK(!part::resolveStageSolvedProfileKernelInput(
+        session.document(), *profile.profile_id, prefix,
+        provider, policy, native).ok());
+
+    CHECK(session.undo().changed);
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.findConstraint(horizontal_id) != nullptr);
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(session.redo().changed);
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.findConstraint(horizontal_id) == nullptr);
+    CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
+    CHECK(session.undo().changed);
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+
+    // Re-evaluate the original real PlaneGCS → Profile → OCCT solid on
+    // the NEW revision. The persisted authored intent and ProfileId are
+    // unchanged; only the disposable numerical candidate is rebuilt.
+    part::PartEvaluation replayPrefix;
+    replayPrefix.source_document_id = session.document().documentId();
+    replayPrefix.source_revision = session.document().revision();
+    const auto replayProfile = part::resolveStageSolvedProfileKernelInput(
+        session.document(), *profile.profile_id, replayPrefix,
+        provider, policy, native);
+    CHECK(replayProfile.ok() && replayProfile.input);
+    CHECK(occt::buildProfileFaceEvidence(*replayProfile.input).brep_valid);
+    auto replayState = session.document().state();
+    const auto replayFeatureId = replayState.body.next_feature_id.allocate();
+    CHECK(replayFeatureId && *replayFeatureId == *feature);
+    replayState.body.features.push_back(part::PartFeature{
+        *replayFeatureId, "PlaneGCSRealExtrude", false,
+        part::ExtrudeFeature{*profile.profile_id, part::ExtrudeOperation::add,
+            part::OneSidedExtrudeExtent{core::LengthValue{10.0}, false}}});
+    const auto replayOwned = part::PartDocument::restore(
+        session.document().documentId(), std::move(replayState),
+        session.document().revision());
+    CHECK(replayOwned.ok() && replayOwned.document);
+    const auto replayEvaluated = part::evaluatePartWithLocalSolve(
+        *replayOwned.document, provider, policy, native);
+    CHECK(replayEvaluated.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(replayEvaluated.features.size() == 1U);
+    CHECK(replayEvaluated.features.front().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(replayEvaluated.body_solid != nullptr);
+    CHECK(provider.presentationMesh(replayEvaluated.body_solid).ok());
+    CHECK(replayOwned.document->findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
     std::cout<<"R13_A1_ORIGINAL_PLANEGCS_OCCT_PASS real_solver=1"
              <<" profile_face=1 extrude_solid=1 fixed_line=1"
              <<" corrected_geometry=1 source_unchanged=1\n";
