@@ -827,6 +827,24 @@ int main() {
             diagonalHorizontal);
         CHECK(sourceAnchored.state() == diagonalAuthored);
 
+        // A false-success backend may attempt to satisfy the Horizontal
+        // equation by moving the projected, immutable PG-01 source.
+        // Residual 0 is NOT sufficient: the fixed anchor must win and
+        // the gateway must reject the purportedly converged candidate.
+        upstreamFalseSuccess.candidate = diagonalAuthored;
+        upstreamFalseSuccess.candidate->lines.front().end.v = 0.0;
+        CHECK(upstreamFalseSuccess.candidate->lines.front().start.v ==
+              upstreamFalseSuccess.candidate->lines.front().end.v);
+        const auto movedProjectedSource = sk::evaluateLocalSolve(
+            *impossibleInput, policy, upstreamFalseSuccess);
+        CHECK(upstreamFalseSuccess.calls == 2U);
+        CHECK(movedProjectedSource.status ==
+            sk::LocalSolveGatewayStatus::fixed_entity_changed);
+        CHECK(movedProjectedSource.residuals.status ==
+            sk::LocalResidualStatus::fixed_entity_changed);
+        CHECK(!movedProjectedSource.candidate);
+        CHECK(sourceAnchored.state() == diagonalAuthored);
+
         // Upstream PlaneGCS can also report numeric Success for
         // Horizontal+Vertical while collapsing the same Line to a point.
         // Such an authored H+V pair is rejected earlier by SketchModel;
