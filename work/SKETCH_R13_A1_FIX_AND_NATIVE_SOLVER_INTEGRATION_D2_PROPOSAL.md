@@ -26,6 +26,39 @@ Actual program output: **11/11 local smoke assertions PASS**: Horizontal, Vertic
 
 The reproducible author-owned C++ smoke harness and local execution/report were created outside SS2; **no upstream code, binaries or unapproved tests were committed**. This result is **REAL native PlaneGCS LOCAL LINUX PASS**, not SS2 Windows/MSVC/OCCT, not a DLL ABI or install test and not LGPL release signoff. B0-A remains PASS, B0-B import-rights review + D2 per-file allowlist remain open, B1 SS2 real solver **NOT PASSED**. Next scope: minimal approved developer native backend → manual Sketch test → A2/A3; defer distro/VM/install/replacement work to actual release.
 
+## R13-A1 DEV-only B1a exact-path proposal — real `ILocalSketchSolver` first (2026-10-20)
+
+**Status:** REVIEW-READY PROPOSED D2 ADDENDUM ONLY. Not an amendment to the active/frozen A1 Work Contract; **no import or product source/build mutation authority until separate exact-text Owner approval and the required guarded governance activation**. Owner's direction is *small usable CAD features*, not a shippable installer. Nothing below approves a public DLL ABI, future release packaging, native schema, Qt controls or R13-A2/A3 implementation.
+
+**Purpose:** bind original pinned `planegcs 0.8.0` C++ core to existing `sketch::ILocalSketchSolver` for a **developer-only optional** Windows MSVC test. The original archive SHA `09e77e6e3a27fa77d3b5a69065ea4c82ae6ed35753246a2e518b1a6005fea162` and 77 TAR records are independently proven; 21 core source/metadata files match upstream. Use an *external locally provisioned* path, never `FetchContent`, runtime download, copying source into SS2 or a production deliverable. LGPL rights review for **developer source use and modifications** remains a pre-implementation gate distinct from later product release packaging.
+
+### Minimum exact changed-file list for one small B1a slice
+
+| Exact path | Action / only permitted purpose |
+|---|---|
+| `src/sketch/include/simplesolid2/sketch/planegcs_dev_solver.hpp` | NEW: one subclass declaration of existing `ILocalSketchSolver`, no public Kernel/Part API |
+| `src/sketch/planegcs_dev_solver.cpp` | NEW: map `LocalSolveProblem` semantic IDs, five equations and `fixed_lines` to original PlaneGCS native C++; map native diagnostics and ephemeral solved candidate back to unchanged Sketch state |
+| `src/CMakeLists.txt` | EXISTING: add **OFF-by-default** `SS2_R13_PLANEGCS_DEV` branch and narrowly registered, separate DEV-only original-source/core adapter targets; source path supplied by user (e.g. `SS2_PLANEGCS_080_SOURCE_DIR`), hard fail if option ON but path/license-prerequisites missing |
+| `tests/r13_a1_local_constraints_test.cpp` | EXISTING: opt-in registered native RED-first fixtures calling actual `PlaneGcsDevSolver` through existing `evaluateLocalSolve` rather than scripted backend |
+| `tests/core_only/CMakeLists.txt` | EXISTING: compile/link the opt-in core-only test path only under DEV flag; maintain all default CI and non-GCS test registrations |
+| `tests/kernel_native/CMakeLists.txt` | EXISTING, **conditional B1a2 only**: after Core PASS, real stage-fixed PG-01 → Profile → OCCT native witness through the same DEV backend |
+
+No root CMake, `.github/**`, `third_party/**`, `cmake/**`, new vendor tree, installer, UI, documentation generator, persistence or Kernel SDK paths. No wildcard approval. `src/CMakeLists.txt` was in A1's allowlist solely for SS2-owned Sketch source registration; it needs **explicit expanded D2 approval** for third-party-aware DEV CMake wiring. Any new include/license file or unsupported transitive dependency requires a separately stated finite D2 path extension before implementation. Adopt the sixth `Fix(Line)` only after independent D2-A frozen-contract amendment.
+
+### Native RED→GREEN contract (small, real)
+
+1. **Core binary** actually linked to all five original `planegcs` .cpp TUs under VS2022 MSVC x64, no Python. Only DEV flag builds the adapter. Add true registered failures before production adapter changes. Horizontal, Vertical, Coincident 2 endpoints, Parallel, Perpendicular and fixed PG-01/Owner Fix as masks; keep the existing exactly authored seeds and IDs.
+2. The backend only proposes a disposable candidate. Existing `evaluateLocalSolve` MUST independently verify finite/nondegenerate geometry, original fixed lines and five equation residuals; exact Coincident closure remains SS2-owned. A test must reproduce original upstream false-success **fully fixed diagonal + Horizontal** and assert `residual_violation`, no accepted candidate or Part publication. A redundant duplicate maps to exact `ConstraintId`, with no publish; DoF passes through as diagnostic, not a separate solver acceptance guarantee.
+3. **B1a2 after Core PASS:** same exact Part-stage PG-01 fixed projection → current Profile → actual OCCT Extrude/Revolve using real solver, including Undo/revision/callback guards already proven on PR #506. Never re-author solved geometry into Sketch seeds.
+4. **Owner short manual run:** developer build (not installer): create/edit a rectangle and free Line, set/remove geometric relations and Fix, observe recalculation and existing Profile/Extrude; capture defects then continue to separate R13-A2 dimensions.
+5. Default production/offline CI lane builds identically to previous HEAD when option OFF. No automatic source fetch, and **no installed-package/VM/user-replacement requirement for this DEV milestone**.
+
+### Independent local proof (not a Windows or SS2 product PASS)
+
+Compiled a concrete `PlaneGcsDevSolver::solve(const LocalSolveProblem&)` source candidate against a small temporary header **matching the existing SS2 DTO/API shapes**, and linked against the same five unchanged original PlaneGCS 0.8.0 native C++ object files. On Linux/Clang17, **12/12 executable tests PASS**: five relation kinds, fixed endpoint immutability, Fix mask, false-success remain unsafe (the SS2 gateway must reject), redundant native tag remapped to semantic ID, missing references, malformed Fix equation, DoF=4, degenerate candidate blocked. Header/source/test/log were supplied separately as dev-only preview: SHA-256 **`303aa8dd...` / `9f3a0d8e...` / `64b9cfdf...` / `54a33624...`** respectively. This test **did not** compile actual SS2 headers, link SS2 `evaluateLocalSolve`, use MSVC or test Qt/OCCT. It is engineering preparatory evidence, not B1a approval or completion.
+
+**Owner decision needed to start actual Windows work:** separately accept D2-A `Fix(Line)` contract alignment and this **finite B1a developer-only source/CMake test path** plus basic source/IP review. Do not require production DLL architecture or installer signoff to start B1a, but do not assume general “continue” overrides D2.
+
 ## 0. Authority and disposition
 
 Constitution → Foundation/Architecture → accepted ADR → Sketch Roadmap 1.11 / companion Part v1.35 → active A1 Work Contract → code/tests; DOC-01 applies. `Fix(Line)` was explicitly approved by Owner as a sixth local relation in the PR #506 conversation; that is a **product scope decision**, not a retroactive change to the frozen original five-relation contract text. A1's accepted §3 finite file allowlist does not include a vendor tree, native DLL ABI, LGPL notices, installer or arbitrary documentation. The separate Owner confirmation that **proprietary/offline SS2 may distribute LGPL library-only sources** does not approve a particular linkage mechanism or source delivery implementation.
