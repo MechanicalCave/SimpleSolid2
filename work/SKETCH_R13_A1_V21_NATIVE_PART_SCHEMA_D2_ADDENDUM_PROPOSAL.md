@@ -27,7 +27,7 @@
 
 Only the `model` nested inside a normal v20-compatible Part Sketch record is shown below. This is a **schema illustration**, not a container payload or a benchmark assertion.
 
-`json
+```json
 {
   "next_entity_id": "4",
   "entities": [
@@ -42,7 +42,7 @@ Only the `model` nested inside a normal v20-compatible Part Sketch record is sho
     {"id":"3","kind":"horizontal","first":{"entity_id":"3","element":"line"},"second":null}
   ]
 }
-`
+```
 
 **Exact grammar:**
 - `next_entity_id`: unchanged v20 canonical typed decimal-string cursor, with unchanged entity rules.
