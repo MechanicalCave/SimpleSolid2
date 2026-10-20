@@ -827,6 +827,41 @@ int main() {
             diagonalHorizontal);
         CHECK(sourceAnchored.state() == diagonalAuthored);
 
+        // Upstream PlaneGCS can also report numeric Success for
+        // Horizontal+Vertical while collapsing the same Line to a point.
+        // Such an authored H+V pair is rejected earlier by SketchModel;
+        // nevertheless a single valid Horizontal problem must be robust
+        // against a backend that proposes a collapsed (zero-length) Line
+        // whose equation residual misleadingly equals exactly zero.
+        sk::SketchModel collapseModel;
+        const auto collapsible = collapseModel.addLine(
+            {0.0, 0.0}, {5.0, 2.0});
+        const auto collapsedHorizontal = collapseModel.addHorizontal(
+            collapsible);
+        CHECK(collapsedHorizontal);
+        const auto collapseAuthored = collapseModel.state();
+        const auto collapseInput = sk::prepareLocalSolveProblem(
+            collapseAuthored);
+        CHECK(collapseInput);
+        ScriptedBackend collapsingNative;
+        collapsingNative.candidate = collapseAuthored;
+        collapsingNative.candidate->lines.front().end =
+            collapsingNative.candidate->lines.front().start;
+        collapsingNative.degrees_of_freedom = 0U;
+        const auto collapsedReview = sk::reviewLocalSolveCandidate(
+            *collapseInput, *collapsingNative.candidate, policy);
+        CHECK(collapsedReview.status ==
+            sk::LocalResidualStatus::invalid_candidate);
+        const auto collapsedSolve = sk::evaluateLocalSolve(
+            *collapseInput, policy, collapsingNative);
+        CHECK(collapsingNative.calls == 1U);
+        CHECK(collapsedSolve.status ==
+            sk::LocalSolveGatewayStatus::invalid_candidate);
+        CHECK(collapsedSolve.residuals.status ==
+            sk::LocalResidualStatus::invalid_candidate);
+        CHECK(!collapsedSolve.candidate);
+        CHECK(collapseModel.state() == collapseAuthored);
+
         backend.candidate = state;
         backend.diagnostics = {{sk::LocalBackendDiagnosticKind::redundant_constraint, relation}};
         const auto redundancy = sk::evaluateLocalSolve(*input, policy, backend);
