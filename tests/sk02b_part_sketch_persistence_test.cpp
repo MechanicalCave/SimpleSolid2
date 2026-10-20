@@ -1799,6 +1799,110 @@ int main() {
         CHECK(!future.document);
     }
 
+    // D2-P21-01/04: a Sketch may own Line, Circle and Arc entities, but
+    // A1 local relations are Line-only. A valid Line relation must cold-
+    // persist WITHOUT filtering/renumbering other entity kinds; a v21
+    // relation pointing to the real Circle/Arc ID must fail the entire
+    // Load rather than treating any existing EntityId as a Line.
+    {
+        application::DocumentSession mixed{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto sketch = mixed.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(sketch.ok() && sketch.sketch_id);
+        const auto line = mixed.execute(
+            application::AddSketchLineCommand{
+                *sketch.sketch_id, {0.0, 0.0}, {8.0, 1.0}});
+        const auto circle = mixed.execute(
+            application::AddSketchCircleCommand{
+                *sketch.sketch_id, {15.0, 15.0}, 4.0});
+        const auto arc = mixed.execute(
+            application::AddSketchArcCommand{
+                *sketch.sketch_id, {25.0, 25.0}, 3.0, 0.0, 1.0});
+        CHECK(line.ok() && line.entity_id &&
+              circle.ok() && circle.entity_id &&
+              arc.ok() && arc.entity_id);
+        CHECK(line.entity_id->serialized() == "1");
+        CHECK(circle.entity_id->serialized() == "2");
+        CHECK(arc.entity_id->serialized() == "3");
+        const auto horizontal = mixed.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *sketch.sketch_id, mixed.document().revision(),
+                *line.entity_id});
+        CHECK(horizontal.ok() && horizontal.constraint_id);
+        CHECK(horizontal.constraint_id->serialized() == "1");
+        const auto mixedState =
+            mixed.document().findSketch(*sketch.sketch_id)->model.state();
+        CHECK(mixedState.lines.size() == 1U);
+        CHECK(mixedState.circles.size() == 1U);
+        CHECK(mixedState.arcs.size() == 1U);
+        CHECK(mixedState.constraints.size() == 1U);
+        CHECK(mixedState.next_constraint_id.serialized() == "2");
+        CHECK(mixedState.next_entity_id.serialized() == "4");
+        const auto path =
+            temp.path / "P21MixedLineCircleArcNative.ss2part";
+        CHECK(store.createNew(path, mixed.document()).ok());
+        const auto original =
+            persistence::readNativeDocumentContainer(path);
+        CHECK(original.ok());
+        CHECK(original.package->descriptor.domain_schema_version == 21);
+        auto cold = store.load(path);
+        CHECK(cold.ok());
+        const auto* coldSketch =
+            cold.document->findSketch(*sketch.sketch_id);
+        CHECK(coldSketch != nullptr);
+        CHECK(coldSketch->model.state() == mixedState);
+        CHECK(coldSketch->model.findLine(*line.entity_id));
+        CHECK(coldSketch->model.findCircle(*circle.entity_id));
+        CHECK(coldSketch->model.findArc(*arc.entity_id));
+        CHECK(coldSketch->model.findConstraint(*horizontal.constraint_id));
+        CHECK(store.save(path, *cold.document, *cold.checkpoint).ok());
+        const auto coldAgain = store.load(path);
+        CHECK(coldAgain.ok());
+        CHECK(coldAgain.document->findSketch(*sketch.sketch_id)
+            ->model.state() == mixedState);
+
+        const auto& bytes = original.package->authored_json;
+        const auto constraintKey = bytes.find("\"constraints\":");
+        CHECK(constraintKey != std::string::npos);
+        CHECK(bytes.find("\"constraints\":",
+            constraintKey + 1U) == std::string::npos);
+        const auto arrayOpen = bytes.find('[', constraintKey);
+        const auto arrayClose = bytes.find(']', arrayOpen);
+        CHECK(arrayOpen != std::string::npos &&
+              arrayClose != std::string::npos);
+        const auto mustRejectNonLine =
+            [&](const std::string& suffix,
+                const std::string& relationArray) {
+                auto malformed = bytes;
+                malformed.replace(arrayOpen,
+                    arrayClose - arrayOpen + 1U, relationArray);
+                const auto badPath =
+                    temp.path / ("P21RefTo" + suffix + ".ss2part");
+                writeBytes(badPath, buildPartPackage(
+                    mixed.document().documentId(), 21, malformed));
+                const auto bad = store.load(badPath);
+                CHECK(!bad.ok());
+                CHECK(bad.diagnostic.code ==
+                      part::PartStoreErrorCode::malformed_document);
+                CHECK(!bad.document);
+                CHECK(!bad.checkpoint);
+            };
+        mustRejectNonLine("CircleUnary",
+            R"([{"id":"1","kind":"horizontal","first":{"entity_id":"2","element":"line"},"second":null}])");
+        mustRejectNonLine("ArcUnary",
+            R"([{"id":"1","kind":"vertical","first":{"entity_id":"3","element":"line"},"second":null}])");
+        mustRejectNonLine("CircleBinary",
+            R"([{"id":"1","kind":"parallel","first":{"entity_id":"1","element":"line"},"second":{"entity_id":"2","element":"line"}}])");
+        mustRejectNonLine("ArcBinary",
+            R"([{"id":"1","kind":"perpendicular","first":{"entity_id":"1","element":"line"},"second":{"entity_id":"3","element":"line"}}])");
+        const auto intact = store.load(path);
+        CHECK(intact.ok());
+        CHECK(intact.document->findSketch(*sketch.sketch_id)
+            ->model.state() == mixedState);
+    }
+
     // P21-08: the Owner's original linked PG-01 native v16 Part fixture
     // provides REAL cross-Feature projected Edge bindings. The old
     // modeling-semantics v1 is intentionally unsupported by current v2;
