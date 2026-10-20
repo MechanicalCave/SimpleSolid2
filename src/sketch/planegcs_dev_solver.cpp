@@ -145,9 +145,15 @@ LocalBackendSolveResult PlaneGcsDevSolver::solve(
         std::set<ConstraintId> diagnosed;
         const auto append = [&](const std::vector<int>& tags,
                                 LocalBackendDiagnosticKind kind) {
+            std::set<ConstraintId> seen_in_category;
             for (const int tag : tags) {
                 const auto it = tagToId.find(tag);
-                if (it == tagToId.end()) return false;
+                if (it == tagToId.end() ||
+                    !seen_in_category.insert(it->second).second) {
+                    // A duplicate inside the SAME upstream category is
+                    // malformed even when categories may overlap.
+                    return false;
+                }
 
                 // Upstream diagnose() may put a constraint in both its
                 // conflict and redundancy categories. Conflict must win:
