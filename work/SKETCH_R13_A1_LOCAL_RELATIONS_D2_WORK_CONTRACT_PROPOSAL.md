@@ -84,6 +84,40 @@ The precise D2 acceptance of this draft approves: the five relation kinds, typed
 
 The independent Owner must still decide: (a) PlaneGCS 0.8.0 DLL/STATIC licensed packaging or approved alternative before third-party import; (b) actual schema successor version/field ownership before writing it; (c) A1 UI layout after the requested joint UX review. These are finite, precisely deferred decisions, not permission for uncontrolled architecture changes.
 
+## 5A. Owner-accepted Fix(Line) and DEV B1a amendment — precise two-item D2
+
+**Approval and activation distinction (2026-10-20):** following Owner review of the specific two-part D2-A / D2-B1a proposal in [governance PR #507](https://github.com/MechanicalCave/SimpleSolid2/pull/507), and the external Windows MSVC real PlaneGCS→SS2 bridge proof `SS2_B1A_REAL_GATEWAY_PASS=32` at exact product Draft [PR #506](https://github.com/MechanicalCave/SimpleSolid2/pull/506) head `d7e5491723e983b2b1505214a15fdde6e80abed2`, Owner explicitly answered **“akceptuje - kontynuuj pracę”** to the individually named D2-A and finite D2-B1a decisions. These **two design/scope decisions are Owner accepted**, but this appendix becomes a **normative amendment only after this separate one-file governance PR passes its exact-head Windows CLOSURE and is merged to protected main under separately granted guarded-squash authorization**. The existing `work/ACTIVE.yaml` already points at this contract: no second workspace/checkout and no speculative ACTIVE pointer transition. Historical pre-acceptance descriptions elsewhere in this document remain as chronological baseline; this appendix controls only the two narrow accepted additions after activation.
+
+**D2-A — sixth authored manual `Fix(Line)`:**
+
+1. Append `ConstraintKind::fix` after the original five ordinal kinds, preserving existing serialized identity, typed Sketch-local monotonic `ConstraintId` and canonical Line identity. Both authored endpoints of the Line are grounded at their original Sketch-local coordinates. One fixed **parameter mask**, **not** a sixth numeric constraint equation.
+2. `Fix` joins real PG-01 projected fixed Line inputs as immutable solver parameters, but PG-01 projections are **not** automatically authored Fix relations. Validate `Fix` references, duplicate/contradictory intent and fixed incompatibilities atomically before solving. Preserve IDs/cursors/Undo on rejection.
+3. Updating, Trim, Extend or ExtendBoth on a fixed Line must reject changes; using it as a geometrical reference is allowed. Erasing `Fix` ungrounds that Line only. Deleting the Line cascades its owned Sketch relations but **never silently deletes Part Profile/Feature records**. Part and `DocumentSession` revisions, atomic Undo/Redo, stale-stage guards, authored/evaluated distinction and exact Coincident closure remain mandatory.
+4. No persistence schema change, Qt controls or A2/A3 dimensions are approved by D2-A. Strict native store v20 must continue fail-closed on unsupported constrained Sketch until an independently accepted next schema and cold round-trip tests.
+
+**D2-B1a — developer-only actual PlaneGCS backend, conditional exact file extension:**
+
+Use existing neutral `sketch::ILocalSketchSolver` and `evaluateLocalSolve` from PR #506, with original pinned upstream PlaneGCS 0.8.0 five native C++ translation units from externally provisioned source at SHA-256 `09e77e6e3a27fa77d3b5a69065ea4c82ae6ed35753246a2e518b1a6005fea162`. Add no vendor copies, second CMake project in SS2, auto-fetch, Python/pybind11 runtime, installed application or DLL deployment. The **only additional/existing file edit locations and purposes** permitted after this amendment is operative and the below rights gate is satisfied are:
+
+| Exact repo-relative file path | Narrow approved B1a purpose |
+| --- | --- |
+| `src/sketch/include/simplesolid2/sketch/planegcs_dev_solver.hpp` | **NEW**, one DEV-only SS2 `ILocalSketchSolver` subclass declaration; no new public Kernel/Part API |
+| `src/sketch/planegcs_dev_solver.cpp` | **NEW**, real PlaneGCS 0.8.0 native equation/fixed-point bridge; translate semantic `EntityId`/`ConstraintId`, diagnostics and disposable candidate, never publish authored model changes |
+| `src/CMakeLists.txt` | Extend its existing A1 permission **only** for OFF-by-default `SS2_R13_PLANEGCS_DEV` opt-in native source/core adapter build with explicit `SS2_PLANEGCS_080_SOURCE_DIR`; verify exact local prerequisites and fail closed when missing; no network |
+| `tests/r13_a1_local_constraints_test.cpp` | Extend existing actual native SS2 test with RED→GREEN real backend fixtures, independently asserting fixed/source preservation, semantic residuals, Coincident exact closure, conflicts/redundancy/DoF, and upstream raw Success false-positive refusal |
+| `tests/core_only/CMakeLists.txt` | Only opt-in test graph registration/link; no default test count/name change and no duplicate test for identical assertions |
+| `tests/kernel_native/CMakeLists.txt` | **DEFERRED B1a2 AFTER CORE PASS**, existing Part-stage + true OCCT Profile/Extrude/Revolve route through real adapter, respecting revision/stale publication and existing registered kernel target |
+
+**Operational isolation:**
+
+- Existing single working checkout `D:\SimpleSolid2`; **no** `git worktree add`, second clone or forced reconfiguration. Existing `D:\SimpleSolid2\build\dev` remains production developer CMake cache. `D:\SS2Build` is CI-owned and must not be borrowed or cleaned.
+- Original PlaneGCS archive and already installed `D:\SimpleSolid2\.simplesolid-env` Eigen/Boost may be reused; disposable DEV build/sources/output restricted to existing Git-ignored `D:\SimpleSolid2\build\b1a`. No heavy dependency installation on C:. Always verify current working-tree cleanliness and restore exact original detached HEAD after external test. This operational evidence is not authority to mutate protected main.
+- The Owner-executed original external MSVC 19.38 harness yielded 32/32 named PASS assertions for five geometric kinds, Fix mask, fixed projected references, exact Coincident and unchanged authored Sketch. This is **external DEV native API feasibility**, not a registered SS2 CTest/Part/OCCT/UI/schema/release PASS and not an imported product solver.
+- **Mandatory independent source/IP gate before tracked adapter/CMake integration:** examine upstream LGPL-2.1-or-later core rights, actual absent full license text from original 0.8.0 sdist, FreeCAD copyright/provenance and non-SPDX `src/wrapper.h` / shim files that the bridge necessarily includes. Archive-byte/hash inventory B0-A PASS does **not** settle B0-B rights. Record reviewer and narrow legal-compliance disposition before tracking any vendor-aware code. Only then run real registered native MSVC RED→GREEN with caller-owned tolerances, fixed guards, residual rejection and exact semantic IDs.
+- Existing five original A1 source, Part/DocumentSession and tests remain conditional only for their already-accepted purposes, with no broader dependency path privilege. **STOP outside these six additional/existing paths:** `third_party/**`, `cmake/**`, root `CMakeLists.txt`, `.github/**`, `docs/**`, `work/ACTIVE.yaml`, Qt UI, schema, Python packaging, installer, consumer DLL replacement, automatic online dependency fetch or new release obligations. Any additional file needs its own exact Owner D2.
+
+**Next explicit gates:** once this amendment has passed Windows governance CLOSURE and separately authorized merge/readback, pass narrow B0-B developer source-rights review, then register product MSVC Core test/adapter RED→GREEN; B1a2 Kernel/OCCT only after Core PASS, Owner Sketch manual UI walkthrough only after its separate exact UI path acceptance, native cold Save/Reopen only after its separate schema contract. A2 Driving dimensions and A3 Reference/Driving remain separate bounded phases. A native DEV pass never proves installer/LGPL distribution compliance and never permits merging Draft PR #506 without independent Owner product technical acceptance and guarded merge authorization.
+
 ## Documentation impact
 
 Internal docs: required
