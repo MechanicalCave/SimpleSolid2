@@ -6,8 +6,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <string>
+#include <thread>
 
 using namespace simplesolid2;
 
@@ -1149,11 +1151,25 @@ int main() {
             temp.path / ("P21NativeCheckpointOld" +
                          std::to_string(failureCase) + ".ss2part");
         if (failureCase == 0) {
-            const auto guard =
-                persistence::acquireCooperativeSaveGuard(conflictPath);
-            CHECK(guard.ok());
+            // Win32 mutexes are RECURSIVE for their owning thread. A
+            // same-thread second acquisition is NOT a concurrency
+            // conflict. Hold the guard in another thread instead.
+            std::promise<void> readySignal;
+            std::promise<void> releaseSignal;
+            auto ready = readySignal.get_future();
+            auto release = releaseSignal.get_future();
+            std::thread otherWriter{[&]() {
+                const auto guard =
+                    persistence::acquireCooperativeSaveGuard(conflictPath);
+                CHECK(guard.ok());
+                readySignal.set_value();
+                release.wait();
+            }};
+            ready.wait();
             expectedCode = part::PartStoreErrorCode::save_conflict_busy;
             rejected = dirty.save();
+            releaseSignal.set_value();
+            otherWriter.join();
         } else if (failureCase == 1) {
             CHECK(std::filesystem::exists(conflictPath));
             std::filesystem::rename(conflictPath, relocated);
