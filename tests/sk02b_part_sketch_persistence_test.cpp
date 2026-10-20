@@ -1243,6 +1243,123 @@ int main() {
         CHECK(dirty.fileCheckpoint() == checkpointBefore);
     }
 
+    // P21-02: a REAL native file must preserve historical ID gaps, not
+    // compact the live constraint array or reconstruct the cursor from it.
+    // Reopen with IDs 1 and 3, create 4, then retire EVERY live relation.
+    // An empty array must continue to carry next_constraint_id = 5.
+    {
+        application::DocumentSession authored{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = authored.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto first = authored.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {0.0, 0.0}, {3.0, 1.0}});
+        const auto second = authored.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {1.0, 2.0}, {5.0, 4.0}});
+        const auto third = authored.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {3.0, 6.0}, {8.0, 7.0}});
+        CHECK(first.ok() && first.entity_id &&
+              second.ok() && second.entity_id &&
+              third.ok() && third.entity_id);
+        const auto addHorizontal = [&](sketch::EntityId line) {
+            return authored.execute(
+                application::AddHorizontalSketchConstraintCommand{
+                    *made.sketch_id, authored.document().revision(), line});
+        };
+        const auto id1 = addHorizontal(*first.entity_id);
+        const auto id2 = addHorizontal(*second.entity_id);
+        const auto id3 = addHorizontal(*third.entity_id);
+        CHECK(id1.ok() && id1.constraint_id &&
+              id2.ok() && id2.constraint_id &&
+              id3.ok() && id3.constraint_id);
+        CHECK(id1.constraint_id->serialized() == "1");
+        CHECK(id2.constraint_id->serialized() == "2");
+        CHECK(id3.constraint_id->serialized() == "3");
+        CHECK(authored.execute(application::EraseSketchConstraintCommand{
+            *made.sketch_id, authored.document().revision(),
+            *id2.constraint_id}).ok());
+        const auto gapState =
+            authored.document().findSketch(*made.sketch_id)->model.state();
+        CHECK(gapState.constraints.size() == 2U);
+        CHECK(gapState.constraints[0].id == *id1.constraint_id);
+        CHECK(gapState.constraints[1].id == *id3.constraint_id);
+        CHECK(gapState.next_constraint_id.serialized() == "4");
+        const auto gapPath =
+            temp.path / "P21GappedCursorColdPersistence.ss2part";
+        CHECK(store.createNew(gapPath, authored.document()).ok());
+
+        auto loadedGap = store.load(gapPath);
+        CHECK(loadedGap.ok());
+        const auto* coldGap =
+            loadedGap.document->findSketch(*made.sketch_id);
+        CHECK(coldGap != nullptr);
+        CHECK(coldGap->model.state() == gapState);
+        CHECK(coldGap->model.findConstraint(*id2.constraint_id) == nullptr);
+        CHECK(coldGap->model.constraintIdCursor().serialized() == "4");
+        application::DocumentSession reopened{
+            gapPath, std::move(*loadedGap.document), *loadedGap.checkpoint};
+        const auto fourth = reopened.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {9.0, 5.0}, {15.0, 8.0}});
+        CHECK(fourth.ok() && fourth.entity_id);
+        const auto id4 = reopened.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, reopened.document().revision(),
+                *fourth.entity_id});
+        CHECK(id4.ok() && id4.constraint_id);
+        CHECK(id4.constraint_id->serialized() == "4");
+        CHECK(reopened.save().ok());
+        auto loadedWithFour = store.load(gapPath);
+        CHECK(loadedWithFour.ok());
+        const auto* afterFour =
+            loadedWithFour.document->findSketch(*made.sketch_id);
+        CHECK(afterFour != nullptr);
+        CHECK(afterFour->model.constraintCount() == 3U);
+        CHECK(afterFour->model.findConstraint(*id1.constraint_id));
+        CHECK(!afterFour->model.findConstraint(*id2.constraint_id));
+        CHECK(afterFour->model.findConstraint(*id3.constraint_id));
+        CHECK(afterFour->model.findConstraint(*id4.constraint_id));
+        CHECK(afterFour->model.constraintIdCursor().serialized() == "5");
+
+        application::DocumentSession emptied{
+            gapPath, std::move(*loadedWithFour.document),
+            *loadedWithFour.checkpoint};
+        for (const auto id : {
+            *id1.constraint_id, *id3.constraint_id, *id4.constraint_id}) {
+            const auto erased = emptied.execute(
+                application::EraseSketchConstraintCommand{
+                    *made.sketch_id, emptied.document().revision(), id});
+            CHECK(erased.ok() && erased.changed);
+        }
+        CHECK(emptied.document().findSketch(*made.sketch_id)
+            ->model.constraintCount() == 0U);
+        CHECK(emptied.document().findSketch(*made.sketch_id)
+            ->model.constraintIdCursor().serialized() == "5");
+        CHECK(emptied.save().ok());
+        const auto emptyPackage =
+            persistence::readNativeDocumentContainer(gapPath);
+        CHECK(emptyPackage.ok());
+        CHECK(emptyPackage.package->descriptor.domain_schema_version == 21);
+        const auto emptyCold = store.load(gapPath);
+        CHECK(emptyCold.ok());
+        const auto* emptySketch =
+            emptyCold.document->findSketch(*made.sketch_id);
+        CHECK(emptySketch != nullptr);
+        CHECK(emptySketch->model.constraintCount() == 0U);
+        CHECK(emptySketch->model.state().constraints.empty());
+        CHECK(emptySketch->model.constraintIdCursor().serialized() == "5");
+        CHECK(emptySketch->model.state().lines.size() == 4U);
+        CHECK(emptySketch->model.findLine(*first.entity_id));
+        CHECK(emptySketch->model.findLine(*second.entity_id));
+        CHECK(emptySketch->model.findLine(*third.entity_id));
+        CHECK(emptySketch->model.findLine(*fourth.entity_id));
+    }
+
     // P21-01: every A1 kind (including immutable Fix and endpoint
     // Coincident) survives a real cold native Part round trip with exact
     // authored order and semantic IDs; independent Sketches may BOTH own
