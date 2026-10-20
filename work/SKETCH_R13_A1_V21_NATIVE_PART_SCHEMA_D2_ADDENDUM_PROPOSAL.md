@@ -1,10 +1,10 @@
 # R13-A1 / D2-P21 — strict native Part v21 relation persistence — ADDENDUM PROPOSAL
 
-**Status: OWNER REVIEW DRAFT ONLY — NOT ACCEPTED, NOT IMPLEMENTATION AUTHORIZATION, NOT MERGE AUTHORIZATION.**
+**Status: OWNER-ACCEPTED EXACT D2-P21-1 / D2-P21-2 / D2-P21-3 (2026-10-20). GOVERNANCE PR DRAFT / NOT MERGED. NO IMPLEMENTATION OR MERGE AUTHORIZATION.**
 **Date:** 2026-10-20. **Decision owner:** SimpleSolid2 Owner.
 **Governance base:** protected `main@66d36af5a327a62a19c45869df150e223edcd818`, with `work/ACTIVE.yaml` pointing to `work/SKETCH_R13_A1_LOCAL_RELATIONS_D2_WORK_CONTRACT_PROPOSAL.md` (active R13-A1; retain the historical heading of that contract as history). **Product implementation evidence:** Draft PR #506 at `9e3fa46210032246a6ed9455764aebd6470e59e4`, **not merged**. Original PlaneGCS 0.8.0 native and OCCT tests 2/2 plus normal Windows FAST 94/94 PASS at this product HEAD, Windows PR gate #3902. Those PASS results are **not v21 persistence evidence**.
 
-**Approval requested now:** Owner review of the exact v21 on-disk contract and the ONE additional product source path in §8. This document is a governance proposal, not a mutation of the active Work Contract, its allowlist or `ACTIVE.yaml`. Future incorporation/activation and any production commit remain separately gated.
+**Owner acceptance record:** Owner reviewed this exact substantive proposal at PR #511 head `4ae4a712cfe7080f40b353fa45d8e36b2488875a`, and responded **“akceptuję - kontynuuj pracę”**, accepting all three exact D2-P21 decisions. [Auditable PR comment](https://github.com/MechanicalCave/SimpleSolid2/pull/511#issuecomment-6295923290). This status-only update changes no accepted schema or test fields. The proposal remains governance-only and does not mutate the active Work Contract, its allowlist or `work/ACTIVE.yaml`; effective incorporation/activation and any product edit require their separate gates.
 
 ## 0. Existing authorities and concrete reason for v21
 
@@ -157,4 +157,4 @@ The following are **separate** decisions; none is silently accepted by approving
 - **D2-P21-2:** accept/amend/reject the **single additional conditional product source file** `src/part/include/simplesolid2/part/part_document_store.hpp` as limited in §8. Other A1 conditional paths keep their original approved limits.
 - **D2-P21-3:** accept/amend/reject exact RED→GREEN, cold Save/Close/Reopen, negative, migration, repair and Windows gates §§4–7. Documentation exact paths, UI layout, LGPL/source packaging and final product merge remain **independent approvals**.
 
-**Current proposal status: DRAFT / AWAITING EXACT OWNER REVIEW.** Merely creating this proposal or passing a governance CI does NOT flip schema version, authorize v21 implementation, change `ACTIVE.yaml`, finish R13-A1, accept release of PlaneGCS, or authorize guarded squash of any PR. Incorporation of the reviewed and explicitly accepted D2 text into the active contract is itself a separate governance/readback step. Product PR #506 remains independent and Draft until its own completion and permission.
+**Current decision status: exact D2-P21 Owner ACCEPTED; governance Draft PR #511 remains unmerged and awaits its separate explicit guarded-squash merge permission.** This acceptance and any governance CI do NOT flip schema version, authorize v21 implementation, change `ACTIVE.yaml`, finish R13-A1, accept release of PlaneGCS, or authorize guarded squash of any PR. Incorporation of the reviewed and explicitly accepted D2 text into the active contract is itself a separate governance/readback step. Product PR #506 remains independent and Draft until its own completion and permission.
