@@ -1101,5 +1101,111 @@ int main() {
         CHECK(coldSix.document->documentId() == multi.document().documentId());
     }
 
+    // P21-08: the Owner's original linked PG-01 native v16 Part fixture
+    // provides REAL cross-Feature projected Edge bindings. The old
+    // modeling-semantics v1 is intentionally unsupported by current v2;
+    // convert a TEST-ONLY COPY (same method as pm02jr2), never rewrite the
+    // checked-in fixture or relax the production policy. A v21 relation
+    // authored in that bound Sketch must not unlink or rewrite its sources.
+    {
+        const auto fixture = std::filesystem::path{__FILE__}
+            .parent_path() / "fixtures" /
+            "pg01d_same_domain_extrude_add_v16.ss2part";
+        CHECK(std::filesystem::exists(fixture));
+        const auto originalFixture =
+            persistence::readNativeDocumentContainer(fixture);
+        CHECK(originalFixture.ok());
+        CHECK(originalFixture.package->descriptor.domain_schema_version == 16);
+        auto converted = originalFixture.package->authored_json;
+        const std::string semanticsKey = "\"modeling_semantics_version\"";
+        const auto keyAt = converted.find(semanticsKey);
+        CHECK(keyAt != std::string::npos);
+        CHECK(converted.find(semanticsKey, keyAt + semanticsKey.size()) ==
+              std::string::npos);
+        const auto colon = converted.find(':', keyAt + semanticsKey.size());
+        CHECK(colon != std::string::npos);
+        const auto valueAt = converted.find_first_not_of(
+            " \t\r\n", colon + 1U);
+        CHECK(valueAt != std::string::npos && converted[valueAt] == '1');
+        CHECK(valueAt + 1U < converted.size());
+        CHECK(converted[valueAt + 1U] == ',' ||
+              converted[valueAt + 1U] == '\n' ||
+              converted[valueAt + 1U] == '\r');
+        converted.replace(valueAt, 1U,
+            std::to_string(part::current_modeling_semantics_version.value));
+        const auto legacyCopy = temp.path / "P21Pg01OwnerV16V2Copy.ss2part";
+        writeBytes(legacyCopy, buildPartPackage(
+            *core::DocumentId::parse(
+                originalFixture.package->descriptor.document_id),
+            16, converted));
+        auto oldProjection = store.load(legacyCopy);
+        CHECK(oldProjection.ok());
+        CHECK(oldProjection.document->state().sketches.size() >= 2U);
+        const auto& boundSketch =
+            oldProjection.document->state().sketches[1];
+        CHECK(boundSketch.projection_bindings.size() == 4U);
+        const auto linkedId = boundSketch.id;
+        const auto beforeBindings = boundSketch.projection_bindings;
+        const auto beforeSupport = boundSketch.support;
+        const auto beforeSources = boundSketch.model.state();
+        const auto beforeBody = oldProjection.document->state().body;
+        const auto oldDocumentId = oldProjection.document->documentId();
+
+        // Add a NEW regular user Line and local relation to this Sketch,
+        // NOT a constraint referencing/rewriting a projected source.
+        application::DocumentSession projectedSession{
+            legacyCopy, std::move(*oldProjection.document),
+            *oldProjection.checkpoint};
+        const auto userLine = projectedSession.execute(
+            application::AddSketchLineCommand{
+                linkedId, {21.0, 22.0}, {27.0, 23.0}});
+        CHECK(userLine.ok() && userLine.entity_id);
+        const auto horizontal = projectedSession.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                linkedId, projectedSession.document().revision(),
+                *userLine.entity_id});
+        CHECK(horizontal.ok() && horizontal.constraint_id);
+        CHECK(horizontal.constraint_id->serialized() == "1");
+        CHECK(projectedSession.document().findSketch(linkedId)
+            ->projection_bindings == beforeBindings);
+        CHECK(projectedSession.document().findSketch(linkedId)
+            ->support == beforeSupport);
+        CHECK(projectedSession.save().ok());
+
+        // Explicit Save migrates the v16 TEST COPY to v21, while the
+        // checked-in original retains its historical v16 bytes.
+        const auto upgraded = persistence::readNativeDocumentContainer(
+            legacyCopy);
+        CHECK(upgraded.ok());
+        CHECK(upgraded.package->descriptor.domain_schema_version == 21);
+        const auto originalAfter =
+            persistence::readNativeDocumentContainer(fixture);
+        CHECK(originalAfter.ok());
+        CHECK(originalAfter.package->descriptor.domain_schema_version == 16);
+        CHECK(originalAfter.package->authored_json ==
+              originalFixture.package->authored_json);
+        const auto cold = store.load(legacyCopy);
+        CHECK(cold.ok());
+        CHECK(cold.document->documentId() == oldDocumentId);
+        CHECK(cold.document->state().body == beforeBody);
+        const auto* coldBound = cold.document->findSketch(linkedId);
+        CHECK(coldBound != nullptr);
+        CHECK(coldBound->support == beforeSupport);
+        CHECK(coldBound->projection_bindings == beforeBindings);
+        CHECK(coldBound->model.constraintCount() == 1U);
+        CHECK(coldBound->model.findConstraint(*horizontal.constraint_id));
+        CHECK(coldBound->model.constraintIdCursor().serialized() == "2");
+        CHECK(coldBound->model.state().lines.size() ==
+              beforeSources.lines.size() + 1U);
+        for (const auto& prior : beforeSources.lines) {
+            const auto* preserved = coldBound->model.findLine(prior.id);
+            CHECK(preserved != nullptr);
+            CHECK(preserved->state() == prior);
+        }
+        // A stored projected source is ONLY a durable binding/seed.
+        // This test does not invent a successful current-stage resolver
+        // and does not claim an OCCT projection has been recalculated.
+    }
+
     return EXIT_SUCCESS;
 }
