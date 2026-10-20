@@ -880,6 +880,100 @@ int main() {
         CHECK(!collapsedSolve.candidate);
         CHECK(collapseModel.state() == collapseAuthored);
 
+        // Auto-registered SS2 rectangle regression: four lines, four
+        // Coincident seams, right/left Vertical and top Horizontal.
+        // The bottom is a fixed projected source, never a solver unknown.
+        // This tests real SS2 model/gateway/CTest behavior with a scripted
+        // candidate; it is NOT a real PlaneGCS native backend test.
+        sk::SketchModel rectangle;
+        const auto bottom = rectangle.addLine(
+            {0.0, 0.0}, {4.0, 0.0});
+        const auto right = rectangle.addLine(
+            {4.2, 0.1}, {4.1, 3.1});
+        const auto top = rectangle.addLine(
+            {4.3, 3.0}, {-0.2, 3.2});
+        const auto left = rectangle.addLine(
+            {0.1, 3.1}, {0.1, 0.2});
+        using Ref = sk::ConstraintElement;
+        CHECK(rectangle.addConstraint(sk::ConstraintKind::coincident,
+            {bottom, Ref::line_end}, {right, Ref::line_start}));
+        const auto rightTop = rectangle.addConstraint(
+            sk::ConstraintKind::coincident,
+            {right, Ref::line_end}, {top, Ref::line_start});
+        CHECK(rightTop);
+        CHECK(rectangle.addConstraint(sk::ConstraintKind::coincident,
+            {top, Ref::line_end}, {left, Ref::line_start}));
+        CHECK(rectangle.addConstraint(sk::ConstraintKind::coincident,
+            {left, Ref::line_end}, {bottom, Ref::line_start}));
+        CHECK(rectangle.addConstraint(sk::ConstraintKind::vertical,
+            {right, Ref::line}));
+        CHECK(rectangle.addConstraint(sk::ConstraintKind::horizontal,
+            {top, Ref::line}));
+        CHECK(rectangle.addConstraint(sk::ConstraintKind::vertical,
+            {left, Ref::line}));
+        const auto rectangleAuthored = rectangle.state();
+        const std::array<sk::EntityId, 1> rectangleFixed{bottom};
+        const auto rectangleInput = sk::prepareLocalSolveProblem(
+            rectangleAuthored, rectangleFixed);
+        CHECK(rectangleInput);
+        CHECK(rectangleInput->constraints.size() == 7U);
+        CHECK(rectangleInput->equations.size() == 7U);
+        CHECK(rectangleInput->fixed_lines == std::vector<sk::EntityId>{bottom});
+        CHECK(rectangleInput->lines.size() == 4U);
+        CHECK(rectangleInput->lines.front().fixed);
+        for (std::size_t i = 1; i < rectangleInput->lines.size(); ++i) {
+            CHECK(!rectangleInput->lines[i].fixed);
+        }
+
+        auto rectangleCandidate = rectangleAuthored;
+        rectangleCandidate.lines[1].start = {4.0, 0.0};
+        rectangleCandidate.lines[1].end = {4.0, 3.0};
+        rectangleCandidate.lines[2].start = {4.0, 3.0};
+        rectangleCandidate.lines[2].end = {0.0, 3.0};
+        rectangleCandidate.lines[3].start = {0.0, 3.0};
+        rectangleCandidate.lines[3].end = {0.0, 0.0};
+        ScriptedBackend rectangleBackend;
+        rectangleBackend.candidate = rectangleCandidate;
+        rectangleBackend.degrees_of_freedom = 1U;
+        const auto rectangleGateway = sk::evaluateLocalSolve(
+            *rectangleInput, policy, rectangleBackend);
+        CHECK(rectangleBackend.calls == 1U);
+        CHECK(rectangleGateway.status ==
+            sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(rectangleGateway.candidate);
+        CHECK(rectangleGateway.degrees_of_freedom == 1U);
+        CHECK(rectangleGateway.residuals.status ==
+            sk::LocalResidualStatus::residuals_satisfied);
+        CHECK(rectangleGateway.residuals.constraints.size() == 7U);
+        for (const auto& residual : rectangleGateway.residuals.constraints) {
+            CHECK(residual.accepted);
+        }
+        const auto& rectangleLines = rectangleGateway.candidate->lines;
+        CHECK(rectangleLines.size() == 4U);
+        CHECK(rectangleLines[0] == rectangleAuthored.lines[0]);
+        CHECK(rectangleLines[0].end == rectangleLines[1].start);
+        CHECK(rectangleLines[1].end == rectangleLines[2].start);
+        CHECK(rectangleLines[2].end == rectangleLines[3].start);
+        CHECK(rectangleLines[3].end == rectangleLines[0].start);
+        CHECK(rectangleLines[1].start.u == rectangleLines[1].end.u);
+        CHECK(rectangleLines[2].start.v == rectangleLines[2].end.v);
+        CHECK(rectangleLines[3].start.u == rectangleLines[3].end.u);
+        CHECK(rectangle.state() == rectangleAuthored);
+
+        // A backend's spurious Success must not publish an open seam.
+        rectangleBackend.candidate = rectangleCandidate;
+        rectangleBackend.candidate->lines[1].end.v += 0.25;
+        const auto openRectangle = sk::evaluateLocalSolve(
+            *rectangleInput, policy, rectangleBackend);
+        CHECK(rectangleBackend.calls == 2U);
+        CHECK(openRectangle.status ==
+            sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!openRectangle.candidate);
+        CHECK(openRectangle.residuals.constraints.size() == 7U);
+        CHECK(!openRectangle.residuals.constraints[1].accepted);
+        CHECK(openRectangle.residuals.constraints[1].constraint_id == rightTop);
+        CHECK(rectangle.state() == rectangleAuthored);
+
         backend.candidate = state;
         backend.diagnostics = {{sk::LocalBackendDiagnosticKind::redundant_constraint, relation}};
         const auto redundancy = sk::evaluateLocalSolve(*input, policy, backend);
