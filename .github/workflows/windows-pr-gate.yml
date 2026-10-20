@@ -544,6 +544,96 @@ jobs:
           .\scripts\ss2-docs.ps1 -Check -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+  native_planegcs:
+    name: windows-planegcs-native-core
+    needs: classify
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 506
+    runs-on: [self-hosted, windows, x64, simplesolid2-native]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact native test revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.classify.outputs.head_sha }}
+          persist-credentials: false
+          clean: true
+      - name: Run original PlaneGCS 0.8.0 DEV Core CTest
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD).Trim() -ne '${{ needs.classify.outputs.head_sha }}') { throw 'Wrong PR HEAD' }
+          if (-not $env:GITHUB_WORKSPACE.StartsWith('D:\', [StringComparison]::OrdinalIgnoreCase)) { throw 'D: checkout required' }
+          $source = 'D:\SimpleSolid2\build\b1a\SS2_PlaneGCS_DEV_B1a_OnD\planegcs-source\planegcs-0.8.0'
+          $headers = 'D:\SimpleSolid2\.simplesolid-env\vcpkg-installed\00c5775211f45cd08b37fce0484b4cb940e422ab-x64-windows\x64-windows\include'
+          if (-not (Test-Path -LiteralPath (Join-Path $source 'src\wrapper.h'))) { throw 'Original PlaneGCS 0.8.0 unavailable on runner D:' }
+          if (-not (Test-Path -LiteralPath (Join-Path $headers 'boost\graph\adjacency_list.hpp'))) { throw 'Boost headers unavailable on runner D:' }
+          $eigen = Join-Path $headers 'eigen3'
+          if (-not (Test-Path -LiteralPath (Join-Path $eigen 'Eigen\Core'))) { throw 'Eigen3 headers unavailable on runner D:' }
+          $build = Join-Path $env:GITHUB_WORKSPACE 'build\b1a\ci-native'
+          & cmake -S . -B $build -G 'Visual Studio 17 2022' -A x64 '-DSS2_BUILD_DESKTOP=OFF' '-DSS2_BUILD_KERNEL_NATIVE=OFF' '-DSS2_R13_PLANEGCS_DEV=ON' "-DSS2_PLANEGCS_080_SOURCE_DIR=$source" "-DSS2_PLANEGCS_EIGEN_INCLUDE_DIR=$eigen" "-DSS2_PLANEGCS_BOOST_INCLUDE_DIR=$headers"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & cmake --build $build --config Release --target r13_a1_planegcs_native_test --parallel 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ctest --test-dir $build -C Release -R '^r13a1[.]planegcs_native    name: windows-msvc
+    if: >
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    needs:
+      - classify
+      - focused
+      - fast
+      - full
+      - docs
+      - closure
+      - native_planegcs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require selected verification tier
+        shell: bash
+        env:
+          MODE: ${{ needs.classify.outputs.mode }}
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          FOCUSED_RESULT: ${{ needs.focused.result }}
+          FAST_RESULT: ${{ needs.fast.result }}
+          FULL_RESULT: ${{ needs.full.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          CLOSURE_RESULT: ${{ needs.closure.result }}
+          NATIVE_RESULT: ${{ needs.native_planegcs.result }}
+          NATIVE_REQUIRED: ${{ github.event.pull_request.number == 506 }}
+          TRUSTED_FULL_SHA: ${{ needs.classify.outputs.trusted_full_sha }}
+          CLEAN_FULL: ${{ needs.classify.outputs.clean_full }}
+        run: |
+          set -euo pipefail
+          echo "[gate] mode=$MODE"
+          echo "[gate] trusted_full_sha=$TRUSTED_FULL_SHA"
+          echo "[gate] clean_full=$CLEAN_FULL"
+          echo "[gate] classify=$CLASSIFY_RESULT focused=$FOCUSED_RESULT fast=$FAST_RESULT full=$FULL_RESULT docs=$DOCS_RESULT closure=$CLOSURE_RESULT"
+          if [[ "$CLASSIFY_RESULT" != "success" ]]; then
+            echo "Classifier did not succeed." >&2
+            exit 1
+          fi
+          case "$MODE" in
+            focused) selected="$FOCUSED_RESULT" ;;
+            fast) selected="$FAST_RESULT" ;;
+            full) selected="$FULL_RESULT" ;;
+            docs) selected="$DOCS_RESULT" ;;
+            closure) selected="$CLOSURE_RESULT" ;;
+            *) echo "Unknown gate mode: $MODE" >&2; exit 1 ;;
+          esac
+          if [[ "$selected" != "success" ]]; then
+            echo "Selected $MODE tier did not succeed: $selected" >&2
+            exit 1
+          fi
+          echo "[gate] selected $MODE tier succeeded"
+          if [[ "$NATIVE_REQUIRED" == "true" && "$NATIVE_RESULT" != "success" ]]; then
+            echo "Required original PlaneGCS test did not pass: $NATIVE_RESULT" >&2
+            exit 1
+          fi
+ --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host 'R13_A1_ORIGINAL_PLANEGCS_WINDOWS_NATIVE_CI_PASS'
+
   gate:
     name: windows-msvc
     if: >
