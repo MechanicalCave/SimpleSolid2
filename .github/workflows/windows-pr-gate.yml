@@ -629,12 +629,17 @@ jobs:
           if (-not (Test-Path -LiteralPath (Join-Path $headers 'boost\graph\adjacency_list.hpp'))) { throw 'Boost headers unavailable on runner D:' }
           $eigen = Join-Path $headers 'eigen3'
           if (-not (Test-Path -LiteralPath (Join-Path $eigen 'Eigen\Core'))) { throw 'Eigen3 headers unavailable on runner D:' }
+          # Reuse verified existing D: OCCT; only checkout-ignored setup.
+          & .\ss2.ps1 setup -QtRoot 'D:\Qt' -OcctRoot 'D:\SimpleSolid2\.simplesolid-env'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          . .\scripts\ss2-common.ps1
+          Import-SS2LocalEnvironment
           $build = Join-Path $env:GITHUB_WORKSPACE 'build\b1a\ci-native'
-          & $cmake -S . -B $build -G 'Visual Studio 17 2022' -A x64 '-DSS2_BUILD_DESKTOP=OFF' '-DSS2_BUILD_KERNEL_NATIVE=OFF' '-DSS2_R13_PLANEGCS_DEV=ON' "-DSS2_PLANEGCS_080_SOURCE_DIR=$source" "-DSS2_PLANEGCS_EIGEN_INCLUDE_DIR=$eigen" "-DSS2_PLANEGCS_BOOST_INCLUDE_DIR=$headers"
+          & $cmake -S . -B $build -G 'Visual Studio 17 2022' -A x64 '-DSS2_BUILD_DESKTOP=OFF' '-DSS2_BUILD_KERNEL_NATIVE=ON' '-DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE' '-DSS2_R13_PLANEGCS_DEV=ON' "-DSS2_PLANEGCS_080_SOURCE_DIR=$source" "-DSS2_PLANEGCS_EIGEN_INCLUDE_DIR=$eigen" "-DSS2_PLANEGCS_BOOST_INCLUDE_DIR=$headers"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $cmake --build $build --config Release --target r13_a1_planegcs_native_test --parallel 4
+          & $cmake --build $build --config Release --target r13_a1_planegcs_native_test r13_a1_planegcs_occt_native_test --parallel 4
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $ctest --test-dir $build -C Release -R '^r13a1[.]planegcs_native$' --output-on-failure
+          & $ctest --test-dir $build -C Release --no-tests=error -R '^r13a1[.]planegcs_(native|occt_native)$' --output-on-failure
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host 'R13_A1_ORIGINAL_PLANEGCS_WINDOWS_NATIVE_CI_PASS'
 

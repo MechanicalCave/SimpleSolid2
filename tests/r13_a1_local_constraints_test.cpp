@@ -1,7 +1,9 @@
-#if defined(SS2_R13_A1_PLANEGCS_NATIVE_EVIDENCE)
+#if defined(SS2_R13_A1_PLANEGCS_NATIVE_EVIDENCE) || \
+    defined(SS2_R13_A1_PLANEGCS_OCCT_EVIDENCE)
 #include <simplesolid2/sketch/planegcs_dev_solver.hpp>
 #endif
-#if defined(SS2_R13_A1_OCCT_EVIDENCE)
+#if defined(SS2_R13_A1_OCCT_EVIDENCE) || \
+    defined(SS2_R13_A1_PLANEGCS_OCCT_EVIDENCE)
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <numbers>
@@ -230,6 +232,139 @@ int main() {
 
     CHECK(passed==10U);
     std::cout<<"R13_A1_ORIGINAL_PLANEGCS_NATIVE_PASS cases="<<passed<<'\n';
+    return EXIT_SUCCESS;
+}
+
+#elif defined(SS2_R13_A1_PLANEGCS_OCCT_EVIDENCE)
+// This is the ORIGINAL numeric PlaneGCS backend, the actual production
+// Part stage and real OCCT, not a scripted Sketch/Feature candidate.
+int main() {
+    namespace app=simplesolid2::application;
+    namespace part=simplesolid2::part;
+    namespace core=simplesolid2::core;
+    namespace occt=simplesolid2::kernel_occt;
+    using E=sk::ConstraintElement;
+    using K=sk::ConstraintKind;
+    occt::OcctSolidModelingKernel provider;
+    sk::PlaneGcsDevSolver native;
+    app::DocumentSession session{
+        {},part::PartDocument::create(core::DocumentId::generate())};
+    const auto sketch=session.execute(
+        app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+    CHECK(sketch.ok() && sketch.sketch_id);
+    const auto rectangle=session.execute(app::AddSketchRectangleCommand{
+        *sketch.sketch_id,session.document().revision(),
+        {5.0,0.0},{15.0,8.0},sk::EntityRole::regular,false});
+    CHECK(rectangle.ok() && rectangle.entity_ids.size()==4U);
+    const auto initial=session.document().findSketch(
+        *sketch.sketch_id)->model.state();
+    CHECK(initial.lines.size()==4U);
+    // A skewed, CLOSED authored profile, with x=15.4 and x=4.5 at top,
+    // must be numerically solved to the fixed base x=5..15.
+    const auto edit=session.execute(app::UpdateSketchGeometryCommand{
+        *sketch.sketch_id,session.document().revision(),
+        {
+            {initial.lines[1].id,initial.lines[1].start,{15.4,8.2}},
+            {initial.lines[2].id,{15.4,8.2},{4.5,8.1}},
+            {initial.lines[3].id,{4.5,8.1},initial.lines[3].end}
+        },{},{}}); 
+    CHECK(edit.ok() && edit.changed);
+    const auto skew=session.document().findSketch(
+        *sketch.sketch_id)->model.state();
+    CHECK(skew.lines.size()==4U && skew.lines[0]==initial.lines[0]);
+    CHECK(skew.lines[1].end.u==15.4 && skew.lines[2].end.u==4.5);
+    const auto regions=sk::analyzeRegions(
+        session.document().findSketch(*sketch.sketch_id)->model);
+    CHECK(regions.complete() && regions.regions.size()==1U);
+    const auto intent=part::makeProfileRegionIntent(regions.regions.front());
+    CHECK(intent);
+    const auto profile=session.execute(app::CreateProfileCommand{
+        *sketch.sketch_id,session.document().revision(),*intent});
+    CHECK(profile.ok() && profile.profile_id);
+    const auto add=[&](K kind,sk::ConstraintReference first,
+                       sk::ConstraintReference second={}) {
+        const auto rel=session.execute(app::AddSketchRelationCommand{
+            *sketch.sketch_id,session.document().revision(),kind,first,second});
+        CHECK(rel.ok() && rel.constraint_id);
+    };
+    const auto& L=skew.lines;
+    add(K::fix,{L[0].id,E::line});
+    add(K::coincident,{L[0].id,E::line_end},{L[1].id,E::line_start});
+    add(K::coincident,{L[1].id,E::line_end},{L[2].id,E::line_start});
+    add(K::coincident,{L[2].id,E::line_end},{L[3].id,E::line_start});
+    add(K::coincident,{L[3].id,E::line_end},{L[0].id,E::line_start});
+    add(K::vertical,{L[1].id,E::line});
+    add(K::horizontal,{L[2].id,E::line});
+    add(K::vertical,{L[3].id,E::line});
+    const auto authored=session.document().findSketch(
+        *sketch.sketch_id)->model.state();
+    CHECK(authored.constraints.size()==8U && authored.lines==skew.lines);
+    part::PartEvaluation prefix;
+    prefix.source_document_id=session.document().documentId();
+    prefix.source_revision=session.document().revision();
+    const auto input=part::prepareStageLocalSolveProblem(
+        session.document(),*sketch.sketch_id,prefix,provider);
+    CHECK(input && input->constraints.size()==8U);
+    CHECK(input->equations.size()==7U);
+    CHECK(input->fixed_lines.size()==1U && input->fixed_lines[0]==L[0].id);
+    const sk::LocalSolverAcceptancePolicy policy{1.0e-7,1.0e-6};
+    const auto accepted=sk::evaluateLocalSolve(*input,policy,native);
+    CHECK(accepted.status==sk::LocalSolveGatewayStatus::candidate_accepted);
+    CHECK(accepted.candidate);
+    CHECK(accepted.degrees_of_freedom && *accepted.degrees_of_freedom==1U);
+    const auto& solved=accepted.candidate->lines;
+    CHECK(solved.size()==4U && solved[0]==authored.lines[0]);
+    CHECK(solved[0].end==solved[1].start);
+    CHECK(solved[1].end==solved[2].start);
+    CHECK(solved[2].end==solved[3].start);
+    CHECK(solved[3].end==solved[0].start);
+    CHECK(std::abs(solved[1].end.u-15.0)<1.0e-5);
+    CHECK(std::abs(solved[2].end.u-5.0)<1.0e-5);
+    CHECK(solved[1].end.u!=authored.lines[1].end.u);
+    CHECK(!part::resolveKernelProfileInput(
+        session.document(),*profile.profile_id).ok());
+    const auto resolved=part::resolveStageSolvedProfileKernelInput(
+        session.document(),*profile.profile_id,prefix,provider,policy,native);
+    CHECK(resolved.ok() && resolved.input);
+    CHECK(resolved.input->outer.boundary.size()==4U);
+    CHECK(occt::buildProfileFaceEvidence(*resolved.input).brep_valid);
+    auto state=session.document().state();
+    const auto feature=state.body.next_feature_id.allocate();
+    CHECK(feature);
+    state.body.features.push_back(part::PartFeature{
+        *feature,"PlaneGCSRealExtrude",false,
+        part::ExtrudeFeature{*profile.profile_id,part::ExtrudeOperation::add,
+            part::OneSidedExtrudeExtent{core::LengthValue{10.0},false}}});
+    const auto owned=part::PartDocument::restore(
+        session.document().documentId(),std::move(state),
+        session.document().revision());
+    CHECK(owned.ok() && owned.document);
+    const auto legacy=part::evaluatePart(*owned.document,provider);
+    CHECK(legacy.features.size()==1U);
+    CHECK(legacy.features.front().status==part::FeatureEvaluationStatus::blocked);
+    const auto partEval=part::evaluatePartWithLocalSolve(
+        *owned.document,provider,policy,native);
+    CHECK(partEval.body_status==part::BodyEvaluationStatus::up_to_date);
+    CHECK(partEval.features.size()==1U);
+    CHECK(partEval.features.front().status==part::FeatureEvaluationStatus::up_to_date);
+    CHECK(partEval.body_solid!=nullptr);
+    const auto mesh=provider.presentationMesh(partEval.body_solid);
+    CHECK(mesh.ok());
+    double xmin=std::numeric_limits<double>::infinity();
+    double xmax=-std::numeric_limits<double>::infinity();
+    for(const auto& tri:mesh.mesh.triangles) {
+        for(const auto& vertex:{tri.first,tri.second,tri.third}) {
+            xmin=std::min(xmin,vertex.x);
+            xmax=std::max(xmax,vertex.x);
+        }
+    }
+    CHECK(std::isfinite(xmin) && std::isfinite(xmax));
+    CHECK(std::abs(xmin-5.0)<0.01 && std::abs(xmax-15.0)<0.01);
+    CHECK(owned.document->findSketch(*sketch.sketch_id)->model.state()==authored);
+    CHECK(session.document().findSketch(*sketch.sketch_id)->model.state()==authored);
+    std::cout<<"R13_A1_ORIGINAL_PLANEGCS_OCCT_PASS real_solver=1"
+             <<" profile_face=1 extrude_solid=1 fixed_line=1"
+             <<" corrected_geometry=1 source_unchanged=1\n";
     return EXIT_SUCCESS;
 }
 #elif !defined(SS2_R13_A1_OCCT_EVIDENCE)

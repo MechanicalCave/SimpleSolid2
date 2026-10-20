@@ -59,6 +59,24 @@ set_tests_properties(r13a1.occt_profile_closure PROPERTIES
     PASS_REGULAR_EXPRESSION "R13_A1_OCCT_PASS exact_seam=1 extrude_solid=1 revolve_solid=1 stale_profile_publication=0 derived_extrude_x_shift=2mm derived_revolve_radii_shift=2mm stage_prefix_cut=1 pg01_reentrant_stale=0 pg01_reentrant_bind_stale=0 pg01_command_atomic_reentry=1 pg01_break_atomic_reentry=1 pg01_profile_command_reentry=1"
 )
 
+# B1a2 actual original PlaneGCS through real OCCT/Part. DEV only.
+if(SS2_R13_PLANEGCS_DEV)
+    add_executable(r13_a1_planegcs_occt_native_test
+        ${PROJECT_SOURCE_DIR}/tests/r13_a1_local_constraints_test.cpp)
+    target_compile_definitions(r13_a1_planegcs_occt_native_test PRIVATE
+        SS2_R13_A1_PLANEGCS_OCCT_EVIDENCE=1)
+    target_link_libraries(r13_a1_planegcs_occt_native_test PRIVATE
+        ss2_r13_planegcs_dev simplesolid2_application
+        simplesolid2_sketch simplesolid2_kernel
+        simplesolid2_kernel_occt simplesolid2_part)
+    target_compile_features(r13_a1_planegcs_occt_native_test PRIVATE cxx_std_20)
+    add_test(NAME r13a1.planegcs_occt_native COMMAND r13_a1_planegcs_occt_native_test)
+    set_tests_properties(r13a1.planegcs_occt_native PROPERTIES
+        LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-sketch;native"
+        TIMEOUT 90
+        PASS_REGULAR_EXPRESSION "R13_A1_ORIGINAL_PLANEGCS_OCCT_PASS real_solver=1 profile_face=1 extrude_solid=1 fixed_line=1 corrected_geometry=1 source_unchanged=1")
+endif()
+
 add_executable(pm00a_profile_cold_rebuild_test
     pm00a_profile_cold_rebuild_test.cpp
 )
