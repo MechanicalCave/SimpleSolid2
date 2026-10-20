@@ -708,12 +708,20 @@ int main() {
     CHECK(coldRepaired.document->state().body.features.size() == 1U);
     CHECK(coldRepaired.document->state().body.features.front().id ==
         *feature);
-    // A prefix from before the Save/Undo repair is not valid evidence
-    // for this new revision, irrespective of any cached topology.
+    // This decoder currently resets an in-memory DocumentRevision on
+    // each cold Load. A raw PartEvaluation from a different cold
+    // incarnation could coincidentally have the SAME numeric revision:
+    // that cross-session epoch guarantee is NOT proved here. An explicit
+    // wrong-revision prefix, however, must still be rejected.
     occt::OcctSolidModelingKernel recoveredProvider;
+    auto invalidRevisionPrefix = reopenedBroken;
+    invalidRevisionPrefix.source_revision =
+        core::DocumentRevision{std::numeric_limits<std::uint64_t>::max()};
+    CHECK(invalidRevisionPrefix.source_revision !=
+          coldRepaired.document->revision());
     CHECK(!part::prepareStageLocalSolveProblem(
         *coldRepaired.document, *sketch.sketch_id,
-        reopenedBroken, recoveredProvider));
+        invalidRevisionPrefix, recoveredProvider));
     const auto repairedLegacy = part::evaluatePart(
         *coldRepaired.document, recoveredProvider);
     CHECK(repairedLegacy.features.size() == 1U);
