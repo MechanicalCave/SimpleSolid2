@@ -665,15 +665,23 @@ int main() {
         CHECK(created.constraint_id->serialized() == "1");
         CHECK(session.undoDepth() == historyBefore + 1U);
         CHECK(session.needsSave());
-        // Strict v20 native store does not yet carry authored constraints.
-        // Save must fail closed; a future A1 successor schema will enable it.
+        // v21 persists authored relations; cold reopen proves identity.
         part::PartDocumentStore store;
-        const auto blockedSave = store.createNew(
-            std::filesystem::temp_directory_path() /
-                "r13a1_unpersistable_constraints.ss2part",
-            session.document());
-        CHECK(!blockedSave.ok());
-        CHECK(blockedSave.diagnostic.code == part::PartStoreErrorCode::unsupported_schema);
+        const auto path = std::filesystem::temp_directory_path() /
+            ("r13a1_v21_" +
+                std::string{session.document().documentId().value()} +
+                ".ss2part");
+        const auto saved = store.createNew(path, session.document());
+        CHECK(saved.ok());
+        const auto loaded = store.load(path);
+        CHECK(loaded.ok());
+        const auto* coldSketch = loaded.document->findSketch(*made.sketch_id);
+        CHECK(coldSketch != nullptr);
+        CHECK(coldSketch->model.state() ==
+              session.document().findSketch(*made.sketch_id)->model.state());
+        CHECK(coldSketch->model.findConstraint(*created.constraint_id) != nullptr);
+        CHECK(coldSketch->model.constraintIdCursor().serialized() == "2");
+        CHECK(std::filesystem::remove(path));
         CHECK(session.document().findSketch(*made.sketch_id)->model
             .findConstraint(*created.constraint_id) != nullptr);
 
