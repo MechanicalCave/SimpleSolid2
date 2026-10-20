@@ -558,7 +558,10 @@ jobs:
           persist-credentials: false
           clean: true
       - name: Run original PlaneGCS 0.8.0 DEV Core CTest
-        shell: powershell
+        shell: >-
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+          -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
         run: |
           $ErrorActionPreference = 'Stop'
           if ((git rev-parse HEAD).Trim() -ne '${{ needs.classify.outputs.head_sha }}') { throw 'Wrong PR HEAD' }
