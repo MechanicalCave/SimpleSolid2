@@ -666,12 +666,79 @@ int main() {
     CHECK(reopenedBroken.body_status !=
         part::BodyEvaluationStatus::up_to_date);
     CHECK(reopenedBroken.body_solid == nullptr);
-    CHECK(std::filesystem::remove(brokenPath));
 
     CHECK(session.undo().changed);
     CHECK(session.document().findSketch(*sketch.sketch_id)
         ->model.state() == authored);
     CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
+
+    // P21-07: repair the same previously cold-opened BROKEN native Part
+    // through a real successful DocumentSession Undo history command.
+    // Publish that recovered authored state to the EXISTING native file
+    // using its cold-read optimistic checkpoint, then cold-reopen again.
+    // The Profile and Feature are stable owner identities; no prior BRep
+    // or numerical PlaneGCS candidate is treated as current.
+    auto repairedState = session.document().state();
+    const auto repairedFeatureId =
+        repairedState.body.next_feature_id.allocate();
+    CHECK(repairedFeatureId && *repairedFeatureId == *feature);
+    repairedState.body.features.push_back(part::PartFeature{
+        *repairedFeatureId, "PlaneGCSRealExtrude", false,
+        part::ExtrudeFeature{*profile.profile_id,
+            part::ExtrudeOperation::add,
+            part::OneSidedExtrudeExtent{core::LengthValue{10.0}, false}}});
+    const auto repairedOwned = part::PartDocument::restore(
+        session.document().documentId(), std::move(repairedState),
+        session.document().revision());
+    CHECK(repairedOwned.ok() && repairedOwned.document);
+    CHECK(repairedOwned.document->state().body.features.front().id ==
+        *feature);
+    const auto repairSaved = coldStore.save(
+        brokenPath, *repairedOwned.document, *coldBroken.checkpoint);
+    CHECK(repairSaved.ok());
+    const auto coldRepaired = coldStore.load(brokenPath);
+    CHECK(coldRepaired.ok());
+    CHECK(coldRepaired.document->documentId() ==
+        coldBroken.document->documentId());
+    CHECK(coldRepaired.document->state() ==
+        repairedOwned.document->state());
+    CHECK(coldRepaired.document->findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(coldRepaired.document->findProfile(*profile.profile_id) != nullptr);
+    CHECK(coldRepaired.document->state().body.features.size() == 1U);
+    CHECK(coldRepaired.document->state().body.features.front().id ==
+        *feature);
+    // A prefix from before the Save/Undo repair is not valid evidence
+    // for this new revision, irrespective of any cached topology.
+    occt::OcctSolidModelingKernel recoveredProvider;
+    CHECK(!part::prepareStageLocalSolveProblem(
+        *coldRepaired.document, *sketch.sketch_id,
+        reopenedBroken, recoveredProvider));
+    const auto repairedLegacy = part::evaluatePart(
+        *coldRepaired.document, recoveredProvider);
+    CHECK(repairedLegacy.features.size() == 1U);
+    CHECK(repairedLegacy.features.front().status ==
+        part::FeatureEvaluationStatus::blocked);
+    CHECK(repairedLegacy.body_solid == nullptr);
+    const auto repairedNative = part::evaluatePartWithLocalSolve(
+        *coldRepaired.document, recoveredProvider, policy, native);
+    CHECK(repairedNative.source_revision ==
+        coldRepaired.document->revision());
+    CHECK(repairedNative.features.size() == 1U);
+    CHECK(repairedNative.features.front().feature_id == *feature);
+    CHECK(repairedNative.features.front().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(repairedNative.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(repairedNative.body_solid != nullptr);
+    CHECK(repairedNative.current_topology);
+    CHECK(repairedNative.current_topology->complete());
+    CHECK(recoveredProvider.presentationMesh(
+        repairedNative.body_solid).ok());
+    CHECK(coldRepaired.document->findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(std::filesystem::remove(brokenPath));
+
     const auto revivedBody = evaluateCurrentExtrude();
     CHECK(revivedBody.features.size() == 1U);
     CHECK(revivedBody.features.front().feature_id == *feature);
