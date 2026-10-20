@@ -1529,6 +1529,83 @@ int main() {
         CHECK(sketchAfter->model.constraintIdCursor().serialized() == "4");
     }
 
+    // D2-P21-1 / P21-04 numerical-vs-authored boundary: a structurally
+    // valid local relation system MUST remain loadable even when the
+    // solver cannot make its equations simultaneously true. Horizontal(A)
+    // and Vertical(B) plus Parallel(A,B) cannot be satisfied by two
+    // nondegenerate Lines; core invariants intentionally do not run
+    // numeric feasibility during authored-state restoration or Part Load.
+    {
+        application::DocumentSession contradictory{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = contradictory.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto horizontalLine = contradictory.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {0.0, 0.0}, {8.0, 0.0}});
+        const auto verticalLine = contradictory.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {2.0, 2.0}, {2.0, 7.0}});
+        CHECK(horizontalLine.ok() && horizontalLine.entity_id);
+        CHECK(verticalLine.ok() && verticalLine.entity_id);
+        auto state = contradictory.document().state();
+        CHECK(state.sketches.size() == 1U);
+        auto& authoredModel = state.sketches.front().model;
+        using K = sketch::ConstraintKind;
+        using E = sketch::ConstraintElement;
+        const auto a = sketch::ConstraintReference{
+            *horizontalLine.entity_id, E::line};
+        const auto b = sketch::ConstraintReference{
+            *verticalLine.entity_id, E::line};
+        const auto horizontal = authoredModel.addConstraint(
+            K::horizontal, a);
+        const auto vertical = authoredModel.addConstraint(K::vertical, b);
+        const auto parallel = authoredModel.addConstraint(
+            K::parallel, a, b);
+        CHECK(horizontal && vertical && parallel);
+        CHECK(horizontal->serialized() == "1");
+        CHECK(vertical->serialized() == "2");
+        CHECK(parallel->serialized() == "3");
+        const auto originalState = authoredModel.state();
+        CHECK(originalState.constraints.size() == 3U);
+        CHECK(originalState.next_constraint_id.serialized() == "4");
+        const auto owned = part::PartDocument::restore(
+            contradictory.document().documentId(), std::move(state),
+            contradictory.document().revision());
+        CHECK(owned.ok() && owned.document);
+        const auto path =
+            temp.path / "P21NumericallyImpossibleAuthoredIntent.ss2part";
+        CHECK(store.createNew(path, *owned.document).ok());
+        const auto native =
+            persistence::readNativeDocumentContainer(path);
+        CHECK(native.ok());
+        CHECK(native.package->descriptor.domain_schema_version == 21);
+        const auto cold = store.load(path);
+        CHECK(cold.ok());
+        CHECK(cold.document->documentId() ==
+              contradictory.document().documentId());
+        const auto* coldSketch =
+            cold.document->findSketch(*made.sketch_id);
+        CHECK(coldSketch != nullptr);
+        CHECK(coldSketch->model.state() == originalState);
+        CHECK(coldSketch->model.findConstraint(*horizontal));
+        CHECK(coldSketch->model.findConstraint(*vertical));
+        CHECK(coldSketch->model.findConstraint(*parallel));
+        CHECK(coldSketch->model.constraintIdCursor().serialized() == "4");
+        // Explicit Save can persist this authored intent again without
+        // deleting an unsolved constraint or claiming a solver solution.
+        CHECK(store.save(path, *cold.document, *cold.checkpoint).ok());
+        const auto coldAgain = store.load(path);
+        CHECK(coldAgain.ok());
+        CHECK(coldAgain.document->findSketch(*made.sketch_id)
+            ->model.state() == originalState);
+        // This is a *persistence/semantic* test. Numeric solver status,
+        // Profile/Feature blocking and no-stale-BRep are tested through
+        // separate ORIGINAL PlaneGCS + OCCT native execution.
+    }
+
     // P21-01: every A1 kind (including immutable Fix and endpoint
     // Coincident) survives a real cold native Part round trip with exact
     // authored order and semantic IDs; independent Sketches may BOTH own
