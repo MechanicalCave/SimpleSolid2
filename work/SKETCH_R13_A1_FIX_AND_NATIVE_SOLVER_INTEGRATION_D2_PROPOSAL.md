@@ -61,6 +61,57 @@ Mandatory staged gates:
 | **B1 — before native backend acceptance** | Actual MSVC VS2022 x64 Release exported ABI, clean SS2 native caller, missing/incompatible/replacement DLL tests; five geometric equations + Fix grounding, fixed PG-01, conflict/redundant/DoF and finite residuals, successful real Profile→OCCT Feature, revision/stage; registered RED→GREEN / FULL | **NOT A1.2 PASS** |
 | **B2 — before product FINAL / release** | Accepted new native persistent schema with v20 migration and corrupted-record rejection, cold constrained Save/Reopen, real 3D UI Owner walkthrough, offline installer/VM, LGPL corresponding source/notices/replacement verified, DOC-01 PL/EN/internal and regenerated Browser, independent technical FINAL | **NOT READY / DO NOT MERGE** |
 
+### B0 operator runbook — original sdist byte verification (proposal, unexecuted)
+
+**Environment:** a network-permitted, controlled Windows workstation or CI audit host, *outside* SS2 source/build/vendor trees. This recipe obtains **only** the original publisher URL, verifies the exact published SHA and records the archive member list without extracting or executing the package. Neither a successful HTTPS request nor a matching checksum alone equals legal/compliance acceptance. It is not an SS2 application dependency or build step.
+
+Official release metadata: [PyPI planegcs 0.8.0](https://pypi.org/project/planegcs/0.8.0/), uploaded 2026-06-22; original sdist URL was read from that release's explicit download link on 2026-10-20. Verify the source URL against current PyPI metadata before executing:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$expected = '09e77e6e3a27fa77d3b5a69065ea4c82ae6ed35753246a2e518b1a6005fea162'
+$url = 'https://files.pythonhosted.org/packages/6c/6d/2ae123c5913387f52ab5b969f25bbc513d41f04546ecc5662ab86464a495/planegcs-0.8.0.tar.gz'
+$root = Join-Path $env:TEMP ('ss2-planegcs-b0-' + [Guid]::NewGuid().ToString('N'))
+New-Item -Path $root -ItemType Directory | Out-Null
+$archive = Join-Path $root 'planegcs-0.8.0.tar.gz'
+Invoke-WebRequest -Uri $url -OutFile $archive
+$size = (Get-Item -LiteralPath $archive).Length
+if ($size -le 0 -or $size -gt 10000000) { throw "Unexpected archive length: $size" }
+$actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -cne $expected) { throw "B0 FAIL: SHA mismatch, expected $expected, actual $actual" }
+$members = @(& tar -tzf $archive)
+if ($LASTEXITCODE -ne 0 -or $members.Count -eq 0) { throw 'B0 FAIL: cannot inventory tar' }
+foreach ($member in $members) {
+    $normalized = $member.Replace('\', '/')
+    if ($normalized -match '(^/|^[A-Za-z]:/|(^|/)\.\.(/|$))') {
+        throw "B0 FAIL: suspicious tar member path: $member"
+    }
+}
+$members | Set-Content -LiteralPath (Join-Path $root 'archive-members.txt') -Encoding UTF8
+[ordered]@{
+    source_url = $url
+    sha256 = $actual
+    bytes = $size
+    archive_members = $members.Count
+    observed_utc = [DateTime]::UtcNow.ToString('o')
+} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'archive-evidence.json') -Encoding UTF8
+Write-Output "B0 BYTE-HASH VERIFIED; inspect archive-evidence.json and archive-members.txt in $root"
+```
+
+**Evidence handling:** retain `archive-evidence.json`, complete `archive-members.txt`, original sdist bytes in an isolated quarantine, and exact host/tool provenance. Compare the actual member inventory against required files, detect links/duplicate member names and suspicious size/metadata before any extraction; a safe extraction requires a separate isolation decision. Independently review the actual extracted `LICENSE`, full LGPL-2.1 text/COPYING.LIB availability, attribution/modified-file notices, any Python wrapper/shim provenance and transitive Eigen/Boost license materials. A hash-matching archive with incomplete license materials is **B0 legal STOP**, not automatic permission to vendor. Do not commit downloaded bytes, local paths, evidence secrets or extracted source to PR #507 or SS2 product branch.
+
+**Observed 2026-10-20 from this assistant environment:** fetching `https://pypi.org/pypi/planegcs/0.8.0/json` via Python HTTPS failed with `URLError [Errno -3] Temporary failure in name resolution`; a separate direct artifact download tool failed as well. The exact PyPI webpage, file URL, SHA and attestation were nevertheless independently read as **publisher metadata**. Thus the PowerShell procedure above is **UNEXECUTED**, original TAR bytes **NOT POSSESSED**, sha256 **NOT independently computed**, member list **NOT audited**. GitHub source-tree listing is never a substitute for this proof.
+
+### Frozen upstream native include dependency audit (2026-10-20, source-only)
+
+A read of the pinned upstream `spookylukey/planegcs@5a60d5328bedd85f1e4aef81b9b57f5c4410ae52` (NOT the original TAR) confirms:
+
+- Five C++ translation units and five same-stem public-internal headers contain per-file `SPDX-License-Identifier` identifiers; `Util.h` also contains an SPDX identifier.
+- `Constraints.cpp` uses Boost Graph; `GCS.cpp` uses `<Eigen/OrderingMethods>`, `<Eigen/Sparse>`, Boost Graph and FreeCAD `<Base/Console.h>` / `<FCConfig.h>` shims. `qp_eq.cpp` uses `<Eigen/QR>`; the internal `Geo.h` pulls `<boost/math/constants/constants.hpp>`. **Both Eigen and Boost are real native compile-time dependencies, not Python-only packaging details.**
+- The exact `SketcherGlobal.h`, `shims/FCConfig.h`, `shims/FCGlobal.h`, `shims/Base/Console.h` and `shims/boost_graph_adjacency_list.hpp` have **no individual SPDX line in their checked source content**; this is a provenance question to resolve, **not a conclusion that their use is forbidden**.
+- The upstream `src/wrapper.h` facade also lacks an individual SPDX header and exposes a large C++ API. The proposed narrow SS2-side C ABI is new design work requiring its own license allocation/technical review, not a preexisting exported upstream contract.
+- Compilation/ABI portability, completeness of archive source inventory, static/dynamic linker outcome and Windows dependency redistribution remain **UNTESTED**. No direct MSVC DLL build has been performed.
+
 ### Candidate *future* source paths, NOT an approved mutation allowlist
 
 Only to support B0 review of the pinned Git tree; actual original sdist inventory can differ:
