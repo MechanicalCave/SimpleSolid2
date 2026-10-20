@@ -2806,6 +2806,170 @@ int main() {
         }
     }
 
+    // Fixed-base constrained rectangle through actual OCCT Part evaluation.
+    // This exercises eight authored local relations (seven numeric equations
+    // plus Fix(Line)) as ONE live Sketch -> Profile -> Extrude Feature, with
+    // the user-fixed bottom untouched and the free height changed by an
+    // injected test backend. It is NOT a native PlaneGCS backend claim.
+    {
+        app::DocumentSession rect_session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto rect_sketch = rect_session.execute(
+            app::CreatePartSketchCommand{core::BuiltinReferenceRole::xy_plane});
+        CHECK(rect_sketch.ok() && rect_sketch.sketch_id);
+        const auto rectangle = rect_session.execute(
+            app::AddSketchRectangleCommand{
+                *rect_sketch.sketch_id, rect_session.document().revision(),
+                {5.0, 0.0}, {15.0, 8.0},
+                sk::EntityRole::regular, false});
+        CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+        const auto original_rect = rect_session.document().findSketch(
+            *rect_sketch.sketch_id)->model.state();
+        CHECK(original_rect.lines.size() == 4U);
+        const auto regions = sk::analyzeRegions(
+            rect_session.document().findSketch(*rect_sketch.sketch_id)->model);
+        CHECK(regions.complete() && regions.regions.size() == 1U);
+        const auto intent = part::makeProfileRegionIntent(regions.regions.front());
+        CHECK(intent);
+        const auto profile = rect_session.execute(
+            app::CreateProfileCommand{
+                *rect_sketch.sketch_id,
+                rect_session.document().revision(), *intent});
+        CHECK(profile.ok() && profile.profile_id);
+
+        using E = sk::ConstraintElement;
+        const auto add_relation = [&](
+            sk::ConstraintKind kind,
+            sk::ConstraintReference first,
+            sk::ConstraintReference second = {}) {
+            const auto result = rect_session.execute(
+                app::AddSketchRelationCommand{
+                    *rect_sketch.sketch_id,
+                    rect_session.document().revision(),
+                    kind, first, second});
+            CHECK(result.ok() && result.constraint_id);
+        };
+        const auto& a = original_rect.lines;
+        add_relation(sk::ConstraintKind::fix, {a[0].id, E::line});
+        add_relation(sk::ConstraintKind::coincident,
+            {a[0].id, E::line_end}, {a[1].id, E::line_start});
+        add_relation(sk::ConstraintKind::coincident,
+            {a[1].id, E::line_end}, {a[2].id, E::line_start});
+        add_relation(sk::ConstraintKind::coincident,
+            {a[2].id, E::line_end}, {a[3].id, E::line_start});
+        add_relation(sk::ConstraintKind::coincident,
+            {a[3].id, E::line_end}, {a[0].id, E::line_start});
+        add_relation(sk::ConstraintKind::vertical, {a[1].id, E::line});
+        add_relation(sk::ConstraintKind::horizontal, {a[2].id, E::line});
+        add_relation(sk::ConstraintKind::vertical, {a[3].id, E::line});
+
+        const auto authored = rect_session.document().findSketch(
+            *rect_sketch.sketch_id)->model.state();
+        CHECK(authored.constraints.size() == 8U);
+        CHECK(authored.lines == original_rect.lines);
+        part::PartEvaluation prefix;
+        prefix.source_document_id = rect_session.document().documentId();
+        prefix.source_revision = rect_session.document().revision();
+        const auto input = part::prepareStageLocalSolveProblem(
+            rect_session.document(), *rect_sketch.sketch_id, prefix, provider);
+        CHECK(input);
+        CHECK(input->constraints.size() == 8U);
+        CHECK(input->equations.size() == 7U);
+        CHECK(input->fixed_lines.size() == 1U);
+        CHECK(input->fixed_lines.front() == a[0].id);
+        CHECK(input->lines.front().fixed);
+        for (std::size_t i = 1; i < input->lines.size(); ++i) {
+            CHECK(!input->lines[i].fixed);
+        }
+        CHECK(!part::resolveKernelProfileInput(
+            rect_session.document(), *profile.profile_id).ok());
+
+        struct FixedBaseRectangleSolver final : sk::ILocalSketchSolver {
+            bool move_fixed{};
+            unsigned calls{};
+
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                CHECK(problem.constraints.size() == 8U);
+                CHECK(problem.equations.size() == 7U);
+                CHECK(problem.fixed_lines.size() == 1U);
+                CHECK(problem.lines.size() == 4U);
+                auto candidate = problem.authored;
+                candidate.lines[1].end.v = 10.0;
+                candidate.lines[2].start.v = 10.0;
+                candidate.lines[2].end.v = 10.0;
+                candidate.lines[3].start.v = 10.0;
+                if (move_fixed) candidate.lines[0].end.u += 0.5;
+                return {sk::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, 1U};
+            }
+        } rect_backend;
+
+        const sk::LocalSolverAcceptancePolicy rect_policy{1.0e-12, 1.0e-12};
+        const auto solved_input = part::resolveStageSolvedProfileKernelInput(
+            rect_session.document(), *profile.profile_id, prefix,
+            provider, rect_policy, rect_backend);
+        CHECK(solved_input.ok() && solved_input.input);
+        CHECK(solved_input.input->outer.boundary.size() == 4U);
+        CHECK(rect_backend.calls == 1U);
+        CHECK(occt::buildProfileFaceEvidence(*solved_input.input).brep_valid);
+
+        auto with_feature = rect_session.document().state();
+        const auto feature_id = with_feature.body.next_feature_id.allocate();
+        CHECK(feature_id);
+        with_feature.body.features.push_back(part::PartFeature{
+            *feature_id, "R13EightRelationsExtrude", false,
+            part::ExtrudeFeature{
+                *profile.profile_id, part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0}, false}}});
+        const auto owning = part::PartDocument::restore(
+            rect_session.document().documentId(), std::move(with_feature),
+            rect_session.document().revision());
+        CHECK(owning.ok() && owning.document);
+        const auto blocked = part::evaluatePart(*owning.document, provider);
+        CHECK(blocked.features.size() == 1U);
+        CHECK(blocked.features.front().status ==
+            part::FeatureEvaluationStatus::blocked);
+        const auto extruded = part::evaluatePartWithLocalSolve(
+            *owning.document, provider, rect_policy, rect_backend);
+        CHECK(extruded.body_status ==
+            part::BodyEvaluationStatus::up_to_date);
+        CHECK(extruded.features.size() == 1U);
+        CHECK(extruded.features.front().status ==
+            part::FeatureEvaluationStatus::up_to_date);
+        CHECK(extruded.body_solid != nullptr);
+        CHECK(rect_backend.calls == 2U);
+        const auto mesh = provider.presentationMesh(extruded.body_solid);
+        CHECK(mesh.ok());
+        double max_y = -std::numeric_limits<double>::infinity();
+        for (const auto& triangle : mesh.mesh.triangles) {
+            for (const auto& point :
+                 {triangle.first, triangle.second, triangle.third}) {
+                max_y = std::max(max_y, point.y);
+            }
+        }
+        CHECK(std::isfinite(max_y));
+        CHECK(std::abs(max_y - 10.0) < 0.01);
+        CHECK(owning.document->findSketch(*rect_sketch.sketch_id)
+            ->model.state() == authored);
+
+        // Even a zero numeric residual cannot license movement of the
+        // authored fixed base; no current OCCT Body may be published.
+        rect_backend.move_fixed = true;
+        const auto refused = part::evaluatePartWithLocalSolve(
+            *owning.document, provider, rect_policy, rect_backend);
+        CHECK(refused.body_status !=
+            part::BodyEvaluationStatus::up_to_date);
+        CHECK(refused.features.size() == 1U);
+        CHECK(refused.features.front().status ==
+            part::FeatureEvaluationStatus::blocked);
+        CHECK(rect_backend.calls == 3U);
+        CHECK(owning.document->findSketch(*rect_sketch.sketch_id)
+            ->model.state() == authored);
+    }
+
     std::cout << "R13_A1_OCCT_PASS exact_seam=1"
               << " extrude_solid=1 revolve_solid=1"
               << " stale_profile_publication=0"
