@@ -2935,6 +2935,12 @@ int main() {
     // ONLY ControlledSolver; original upstream PlaneGCS is exercised in
     // its separate independently gated Windows native evidence tests.
     {
+        const auto authoredRevolve =
+            revolve_document.document->findSketch(*sketch.sketch_id)
+                ->model.state();
+        CHECK(authoredRevolve.constraints.size() == 1U);
+        CHECK(authoredRevolve.constraints.front().id ==
+              *coincide.constraint_id);
         const auto coldPath = std::filesystem::temp_directory_path() /
             ("r13_a1_p21_native_revolve_" +
              std::string{revolve_document.document->documentId().value()} +
@@ -2952,7 +2958,7 @@ int main() {
         const auto* coldSketch =
             cold.document->findSketch(*sketch.sketch_id);
         CHECK(coldSketch != nullptr);
-        CHECK(coldSketch->model.state() == seed);
+        CHECK(coldSketch->model.state() == authoredRevolve);
         CHECK(coldSketch->model.findConstraint(*coincide.constraint_id));
         CHECK(cold.document->findProfile(*profile.profile_id));
         CHECK(cold.document->state().body.features.size() == 1U);
@@ -2987,7 +2993,7 @@ int main() {
         CHECK(std::abs(coldRadii.first - initial_radii.first) < 0.1);
         CHECK(std::abs(coldRadii.second - initial_radii.second) < 0.1);
         CHECK(cold.document->findSketch(*sketch.sketch_id)
-            ->model.state() == seed);
+            ->model.state() == authoredRevolve);
 
         // A second explicit Save and independent Load must not persist
         // either previous OCCT body or the numerical solved endpoints.
@@ -3000,7 +3006,7 @@ int main() {
         CHECK(again.document->state() ==
               revolve_document.document->state());
         CHECK(again.document->findSketch(*sketch.sketch_id)
-            ->model.state() == seed);
+            ->model.state() == authoredRevolve);
         occt::OcctSolidModelingKernel againProvider;
         ControlledSolver againSolver;
         const auto recomputed = part::evaluatePartWithLocalSolve(
