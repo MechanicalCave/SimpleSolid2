@@ -857,6 +857,60 @@ int main() {
         invalidArray("P21InvalidFirstType", "[" +
             makeRelation("1", "horizontal", "null", "null") + "]");
         invalidArray("P21WrongArrayType", "{}");
+        invalidArray("P21UnknownElement", "[" +
+            makeRelation("1", "horizontal",
+                R"({"entity_id":"1","element":"future"})", "null") + "]");
+        invalidArray("P21ForbiddenNoneElement", "[" +
+            makeRelation("1", "horizontal",
+                R"({"entity_id":"1","element":"none"})", "null") + "]");
+        invalidArray("P21MissingRefField", "[" +
+            makeRelation("1", "horizontal",
+                R"({"entity_id":"1"})", "null") + "]");
+        invalidArray("P21WrongRefEntityType", "[" +
+            makeRelation("1", "horizontal",
+                R"({"entity_id":1,"element":"line"})", "null") + "]");
+        invalidArray("P21SameLineBinaryPair", "[" +
+            makeRelation("1", "parallel", lineRef, lineRef) + "]");
+        invalidArray("P21CoincidentWholeLine", "[" +
+            makeRelation("1", "coincident", lineRef, endpointRef) + "]");
+        invalidArray("P21NegativeId", "[" +
+            makeRelation("-1", "horizontal", lineRef, "null") + "]");
+        invalidArray("P21OverflowId", "[" +
+            makeRelation("18446744073709551616", "horizontal",
+                lineRef, "null") + "]");
+
+        // Both IDs and cursor are valid here. Reject semantic duplication
+        // and real authored contradictions, not merely a bad cursor.
+        const auto invalidPair = [&](std::string name,
+                                     const std::string& second) {
+            auto authored = original;
+            const auto first = makeRelation(
+                "1", "horizontal", lineRef, "null");
+            authored.replace(arrayStart, arrayEnd - arrayStart + 1U,
+                "[" + first + "," + second + "]");
+            const std::string cursorOld =
+                "\"next_constraint_id\": \"2\"";
+            const auto at = authored.find(cursorOld);
+            CHECK(at != std::string::npos);
+            CHECK(authored.find(cursorOld, at + cursorOld.size()) ==
+                  std::string::npos);
+            authored.replace(at, cursorOld.size(),
+                "\"next_constraint_id\": \"3\"");
+            const auto path = temp.path / (name + ".ss2part");
+            writeBytes(path, buildPartPackage(
+                constraint_session.document().documentId(), 21, authored));
+            const auto result = store.load(path);
+            CHECK(!result.ok());
+            CHECK(result.diagnostic.code ==
+                  part::PartStoreErrorCode::malformed_document);
+            CHECK(!result.document);
+        };
+        invalidPair("P21DuplicateMeaningDifferentId",
+            makeRelation("2", "horizontal", lineRef, "null"));
+        invalidPair("P21HorizontalVerticalConflict",
+            makeRelation("2", "vertical", lineRef, "null"));
+        invalidPair("P21FixedNonHorizontalConflict",
+            makeRelation("2", "fix", lineRef, "null"));
 
         const auto replaceOnce = [](std::string& value,
                                     const std::string& from,
@@ -882,6 +936,31 @@ int main() {
         invalidCursor("P21IdAtCursor", "1");
         invalidCursor("P21NonCanonicalCursor", "01");
         invalidCursor("P21ZeroCursor", "0");
+        invalidCursor("P21OverflowCursor", "18446744073709551616");
+        invalidCursor("P21NegativeCursor", "-1");
+
+        const auto invalidModel = [&](std::string name,
+                                      const std::string& before,
+                                      const std::string& after) {
+            auto authored = original;
+            replaceOnce(authored, before, after);
+            const auto badPath = temp.path / (name + ".ss2part");
+            writeBytes(badPath, buildPartPackage(
+                constraint_session.document().documentId(), 21, authored));
+            const auto failed = store.load(badPath);
+            CHECK(!failed.ok());
+            CHECK(failed.diagnostic.code ==
+                  part::PartStoreErrorCode::malformed_document);
+            CHECK(!failed.document);
+        };
+        invalidModel("P21MissingModelCursor",
+            "\"next_constraint_id\": \"2\",\n", "");
+        invalidModel("P21ExtraModelField",
+            "\"next_constraint_id\": \"2\"",
+            "\"next_constraint_id\": \"2\", \"future_field\": true");
+        invalidModel("P21CursorAsNumber",
+            "\"next_constraint_id\": \"2\"",
+            "\"next_constraint_id\": 2");
 
         // P21-03: a REAL native v20 container must retain its exact
         // two-key Sketch model on Load and upgrade only by explicit Save.
@@ -1099,6 +1178,31 @@ int main() {
         CHECK(firstCold->model.constraintIdCursor().serialized() == "7");
         CHECK(secondCold->model.constraintIdCursor().serialized() == "2");
         CHECK(coldSix.document->documentId() == multi.document().documentId());
+
+        // An EntityId belonging ONLY to a different Sketch cannot satisfy
+        // a reference in this Sketch, even when the numeric token exists
+        // elsewhere in the same Part. Restore must reject the WHOLE file.
+        CHECK(b.entity_id->serialized() == "2");
+        CHECK(secondState.lines.size() == 1U);
+        CHECK(secondState.lines.front().id.serialized() == "1");
+        auto nonlocal = packageSix.package->authored_json;
+        const auto secondConstraints = nonlocal.rfind("\"constraints\":");
+        CHECK(secondConstraints != std::string::npos);
+        const auto arrayOpen = nonlocal.find('[', secondConstraints);
+        const auto arrayClose = nonlocal.find(']', arrayOpen);
+        CHECK(arrayOpen != std::string::npos &&
+              arrayClose != std::string::npos);
+        nonlocal.replace(arrayOpen, arrayClose - arrayOpen + 1U,
+            R"([{"id":"1","kind":"horizontal","first":{"entity_id":"2","element":"line"},"second":null}])");
+        const auto crossPath =
+            temp.path / "P21NonlocalSketchEntityReference.ss2part";
+        writeBytes(crossPath, buildPartPackage(
+            multi.document().documentId(), 21, nonlocal));
+        const auto cross = store.load(crossPath);
+        CHECK(!cross.ok());
+        CHECK(cross.diagnostic.code ==
+              part::PartStoreErrorCode::malformed_document);
+        CHECK(!cross.document);
     }
 
     // P21-08: the Owner's original linked PG-01 native v16 Part fixture
