@@ -364,6 +364,84 @@ int main() {
     CHECK(owned.document->findSketch(*sketch.sketch_id)->model.state()==authored);
     CHECK(session.document().findSketch(*sketch.sketch_id)->model.state()==authored);
 
+    // D2-P21-1/P21-06: valid authored intent is NOT the same as a
+    // numerically feasible profile. Take the verified real OCCT Extrude
+    // and introduce one more legitimate, nonduplicate Sketch relation:
+    // fixed horizontal base PARALLEL to a vertical right wall. This
+    // cannot produce a nondegenerate four-Line closed rectangle, but
+    // remains a valid v21 authored relation that MUST cold-load intact.
+    {
+        auto impossibleState = owned.document->state();
+        CHECK(impossibleState.sketches.size() == 1U);
+        auto& impossibleModel = impossibleState.sketches.front().model;
+        const auto impossibleRelation = impossibleModel.addConstraint(
+            K::parallel, {L[0].id,E::line}, {L[1].id,E::line});
+        CHECK(impossibleRelation);
+        CHECK(impossibleRelation->serialized() == "9");
+        const auto impossibleAuthored = impossibleModel.state();
+        CHECK(impossibleAuthored.constraints.size() == 9U);
+        CHECK(impossibleAuthored.next_constraint_id.serialized() == "10");
+        const auto impossibleOwned = part::PartDocument::restore(
+            owned.document->documentId(), std::move(impossibleState),
+            owned.document->revision());
+        CHECK(impossibleOwned.ok() && impossibleOwned.document);
+        const auto impossiblePath = std::filesystem::temp_directory_path() /
+            ("r13a1_p21_numerically_unsatisfied_" +
+             std::string{owned.document->documentId().value()} +
+             ".ss2part");
+        part::PartDocumentStore impossibleStore;
+        CHECK(impossibleStore.createNew(
+            impossiblePath, *impossibleOwned.document).ok());
+        const auto impossibleCold = impossibleStore.load(impossiblePath);
+        CHECK(impossibleCold.ok() && impossibleCold.document);
+        CHECK(impossibleCold.document->state() ==
+              impossibleOwned.document->state());
+        CHECK(impossibleCold.document->findSketch(*sketch.sketch_id)
+            ->model.state() == impossibleAuthored);
+        CHECK(impossibleCold.document->findProfile(*profile.profile_id));
+        CHECK(impossibleCold.document->state().body.features.size() == 1U);
+        CHECK(impossibleCold.document->state().body.features.front().id ==
+              *feature);
+
+        occt::OcctSolidModelingKernel impossibleProvider;
+        part::PartEvaluation impossiblePrefix;
+        impossiblePrefix.source_document_id =
+            impossibleCold.document->documentId();
+        impossiblePrefix.source_revision =
+            impossibleCold.document->revision();
+        const auto impossibleProblem = part::prepareStageLocalSolveProblem(
+            *impossibleCold.document, *sketch.sketch_id,
+            impossiblePrefix, impossibleProvider);
+        CHECK(impossibleProblem);
+        CHECK(impossibleProblem->constraints.size() == 9U);
+        CHECK(impossibleProblem->equations.size() == 8U);
+        const auto impossibleResult =
+            sk::evaluateLocalSolve(*impossibleProblem, policy, native);
+        CHECK(impossibleResult.status !=
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(!impossibleResult.candidate);
+        CHECK(impossibleCold.document->findSketch(*sketch.sketch_id)
+            ->model.state() == impossibleAuthored);
+        const auto impossibleDefault =
+            part::evaluatePart(*impossibleCold.document, impossibleProvider);
+        CHECK(impossibleDefault.features.size() == 1U);
+        CHECK(impossibleDefault.features.front().status ==
+              part::FeatureEvaluationStatus::blocked);
+        CHECK(impossibleDefault.body_solid == nullptr);
+        const auto impossibleEvaluated = part::evaluatePartWithLocalSolve(
+            *impossibleCold.document, impossibleProvider, policy, native);
+        CHECK(impossibleEvaluated.features.size() == 1U);
+        CHECK(impossibleEvaluated.features.front().feature_id == *feature);
+        CHECK(impossibleEvaluated.features.front().status !=
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(impossibleEvaluated.body_status !=
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(impossibleEvaluated.body_solid == nullptr);
+        CHECK(impossibleCold.document->findSketch(*sketch.sketch_id)
+            ->model.state() == impossibleAuthored);
+        CHECK(std::filesystem::remove(impossiblePath));
+    }
+
     // A1.3 native lifecycle: erase an authored constraint through the
     // revision-bound DocumentSession, then Undo/Redo/Undo its SAME semantic
     // ConstraintId. A previous Part-stage prefix must never be reused.
