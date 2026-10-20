@@ -933,6 +933,83 @@ int main() {
               part::PartStoreErrorCode::malformed_document);
     }
 
+    // P21-09: a real v21 relation-bearing native file uses the SAME
+    // optimistic Save checkpoint protocol; external in-place modification
+    // cannot be silently overwritten and cannot clear unsaved Undo history.
+    {
+        const auto conflictPath =
+            temp.path / "P21RelationCheckpointConflict.ss2part";
+        CHECK(store.createNew(
+            conflictPath, part::PartDocument::create(
+                core::DocumentId::generate())).ok());
+        auto firstLoad = store.load(conflictPath);
+        CHECK(firstLoad.ok());
+        application::DocumentSession conflictSession{
+            conflictPath, std::move(*firstLoad.document),
+            *firstLoad.checkpoint};
+        const auto made = conflictSession.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto line = conflictSession.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {1.0, 2.0}, {5.0, 3.0}});
+        CHECK(line.ok() && line.entity_id);
+        const auto relation = conflictSession.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *made.sketch_id, conflictSession.document().revision(),
+                *line.entity_id});
+        CHECK(relation.ok() && relation.constraint_id);
+        CHECK(conflictSession.save().ok());
+        CHECK(!conflictSession.needsSave());
+
+        // Add another line so a conflict is checked against genuinely
+        // dirty authored intent while retaining the existing relation.
+        const auto more = conflictSession.execute(
+            application::AddSketchLineCommand{
+                *made.sketch_id, {6.0, 4.0}, {9.0, 5.0}});
+        CHECK(more.ok() && more.entity_id);
+        CHECK(conflictSession.needsSave());
+        const auto beforeConflict = conflictSession.document().state();
+        const auto revisionBefore = conflictSession.document().revision();
+        const auto undoBefore = conflictSession.undoDepth();
+
+        // Append without replacing the NTFS file object. Same identity but
+        // different bytes must map to save_conflict_content_changed.
+        {
+            std::ofstream tamper{conflictPath,
+                std::ios::binary | std::ios::app};
+            CHECK(static_cast<bool>(tamper));
+            tamper.put('X');
+            CHECK(static_cast<bool>(tamper));
+        }
+        std::ifstream tamperedStream{conflictPath, std::ios::binary};
+        CHECK(static_cast<bool>(tamperedStream));
+        const std::string tamperedBytes{
+            std::istreambuf_iterator<char>{tamperedStream},
+            std::istreambuf_iterator<char>{}};
+        CHECK(!tamperedBytes.empty() && tamperedBytes.back() == 'X');
+
+        const auto rejected = conflictSession.save();
+        CHECK(!rejected.ok());
+        CHECK(rejected.diagnostic.code ==
+            application::DocumentSessionErrorCode::save_conflict);
+        CHECK(rejected.diagnostic.store_code ==
+            part::PartStoreErrorCode::save_conflict_content_changed);
+        CHECK(conflictSession.needsSave());
+        CHECK(conflictSession.document().state() == beforeConflict);
+        CHECK(conflictSession.document().revision() == revisionBefore);
+        CHECK(conflictSession.undoDepth() == undoBefore);
+        CHECK(conflictSession.document().findSketch(*made.sketch_id)
+            ->model.findConstraint(*relation.constraint_id) != nullptr);
+        std::ifstream postReject{conflictPath, std::ios::binary};
+        CHECK(static_cast<bool>(postReject));
+        const std::string afterRejectBytes{
+            std::istreambuf_iterator<char>{postReject},
+            std::istreambuf_iterator<char>{}};
+        CHECK(afterRejectBytes == tamperedBytes);
+    }
+
     // P21-01: every A1 kind (including immutable Fix and endpoint
     // Coincident) survives a real cold native Part round trip with exact
     // authored order and semantic IDs; independent Sketches may BOTH own
