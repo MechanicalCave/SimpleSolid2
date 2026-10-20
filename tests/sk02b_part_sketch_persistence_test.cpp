@@ -1200,7 +1200,10 @@ int main() {
         for (const auto& prior : beforeSources.lines) {
             const auto* preserved = coldBound->model.findLine(prior.id);
             CHECK(preserved != nullptr);
-            CHECK(preserved->state() == prior);
+            CHECK(preserved->id() == prior.id);
+            CHECK(preserved->start() == prior.start);
+            CHECK(preserved->end() == prior.end);
+            CHECK(preserved->role() == prior.role);
         }
         // A stored projected source is ONLY a durable binding/seed.
         // This test does not invent a successful current-stage resolver
