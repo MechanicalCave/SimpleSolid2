@@ -846,9 +846,9 @@ int main() {
         invalidArray("P21DuplicateId", "[" +
             makeRelation("1", "horizontal", lineRef, "null") + "," +
             makeRelation("1", "horizontal", lineRef, "null") + "]");
-        invalidArray("P21MissingRequiredField", "[" +
+        invalidArray("P21MissingRequiredField", std::string{"["} +
             R"({"id":"1","kind":"horizontal","first":{"entity_id":"1","element":"line"}})" + "]");
-        invalidArray("P21ExtraField", "[" +
+        invalidArray("P21ExtraField", std::string{"["} +
             R"({"id":"1","kind":"horizontal","first":{"entity_id":"1","element":"line"},"second":null,"future":7})" + "]");
         invalidArray("P21WrongRefShape", "[" +
             makeRelation("1", "horizontal",
