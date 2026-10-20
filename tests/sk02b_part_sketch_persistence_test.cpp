@@ -772,6 +772,68 @@ int main() {
             "\"next_constraint_id\"") != std::string::npos);
         CHECK(raw.package->authored_json.find(
             "\"constraints\"") != std::string::npos);
+
+        // P21-09 native-container integrity checks on an ACTUAL v21
+        // persisted relation (not an integrity-valid malformed JSON).
+        // One damaged ZIP header and one truncated native file must
+        // reject the WHOLE Part before publishing even a partial Sketch.
+        std::ifstream intactStream{constraint_path, std::ios::binary};
+        CHECK(static_cast<bool>(intactStream));
+        const std::string intactBytes{
+            std::istreambuf_iterator<char>{intactStream},
+            std::istreambuf_iterator<char>{}};
+        intactStream.close();
+        CHECK(intactBytes.size() > 100U);
+        CHECK(intactBytes[0] == 'P' && intactBytes[1] == 'K');
+        const auto damagedPath =
+            temp.path / "P21RelationCorruptZipHeader.ss2part";
+        auto damagedBytes = intactBytes;
+        damagedBytes[0] = 'X';
+        writeBytes(damagedPath, damagedBytes);
+        const auto corrupted = store.load(damagedPath);
+        CHECK(!corrupted.ok());
+        CHECK(corrupted.diagnostic.code ==
+              part::PartStoreErrorCode::malformed_document);
+        CHECK(!corrupted.document);
+        CHECK(!corrupted.checkpoint);
+
+        const auto truncatedPath =
+            temp.path / "P21RelationTruncatedZip.ss2part";
+        writeBytes(truncatedPath, intactBytes.substr(0U, 20U));
+        const auto truncated = store.load(truncatedPath);
+        CHECK(!truncated.ok());
+        CHECK(truncated.diagnostic.code ==
+              part::PartStoreErrorCode::malformed_document);
+        CHECK(!truncated.document);
+        CHECK(!truncated.checkpoint);
+
+        // Enforce the existing 64 MiB bounded-read protocol BEFORE ZIP
+        // allocation/decode: no partial session on an oversized file.
+        const auto hugePath =
+            temp.path / "P21RelationOversizedContainer.ss2part";
+        std::filesystem::copy_file(constraint_path, hugePath);
+        std::filesystem::resize_file(
+            hugePath,
+            persistence::maximum_native_document_container_bytes + 1U);
+        const auto oversizedNative =
+            persistence::readNativeDocumentContainer(hugePath);
+        CHECK(!oversizedNative.ok());
+        CHECK(oversizedNative.diagnostic.code ==
+              persistence::NativeContainerErrorCode::too_large);
+        const auto oversized = store.load(hugePath);
+        CHECK(!oversized.ok());
+        CHECK(oversized.diagnostic.code ==
+              part::PartStoreErrorCode::malformed_document);
+        CHECK(!oversized.document);
+        CHECK(!oversized.checkpoint);
+        // These three negative reads MUST NOT alter the real v21 file.
+        std::ifstream afterFailedReads{constraint_path, std::ios::binary};
+        CHECK(static_cast<bool>(afterFailedReads));
+        const std::string afterBytes{
+            std::istreambuf_iterator<char>{afterFailedReads},
+            std::istreambuf_iterator<char>{}};
+        CHECK(afterBytes == intactBytes);
+
         auto cold = store.load(constraint_path);
         CHECK(cold.ok());
         CHECK(cold.document->documentId() ==
