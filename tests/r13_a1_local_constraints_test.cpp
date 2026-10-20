@@ -167,7 +167,64 @@ int main() {
         ++passed;
     }
 
-    CHECK(passed==8U);
+    // Two projected PG-01 sources can be mutually immovable even when
+    // their authored Coincident relation is unsatisfiable. The original
+    // pinned PlaneGCS diagnose()/solve() returns Success, DoF=0 and no
+    // conflict for the 0.25-unit gap; only the SS2 semantic residual
+    // checker detects it. Never move either source or publish a candidate.
+    {
+        sk::SketchModel model;
+        const auto first=model.addLine({0.0,0.0},{4.0,0.0});
+        const auto second=model.addLine({4.25,0.0},{4.25,3.0});
+        const auto seam=model.addConstraint(
+            K::coincident,{first,T},{second,S});
+        CHECK(seam);
+        const auto authored=model.state();
+        const std::array<sk::EntityId,2> frozen{first,second};
+        const auto problem=sk::prepareLocalSolveProblem(authored,frozen);
+        CHECK(problem && problem->fixed_lines.size()==2U);
+        CHECK(problem->equations.size()==1U);
+        const auto rejected=sk::evaluateLocalSolve(*problem,policy,native);
+        CHECK(rejected.status==
+            sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!rejected.candidate);
+        CHECK(rejected.residuals.constraints.size()==1U);
+        CHECK(rejected.residuals.constraints.front().constraint_id==*seam);
+        CHECK(rejected.residuals.constraints.front().residual==0.25);
+        CHECK(!rejected.residuals.constraints.front().accepted);
+        CHECK(model.state()==authored);
+        ++passed;
+    }
+
+    // Original PlaneGCS 0.8.0 identifies the second equation as redundant:
+    // Vertical on a free Line duplicates Perpendicular to a fixed
+    // Horizontal source. The bridge must translate its native tag back
+    // to the precise SS2 ConstraintId and refuse to publish a candidate.
+    {
+        sk::SketchModel model;
+        const auto base=model.addLine({0.0,0.0},{5.0,0.0});
+        const auto freeLine=model.addLine({1.0,2.0},{4.0,4.0});
+        CHECK(model.addConstraint(K::vertical,{freeLine,L}));
+        const auto extra=model.addConstraint(
+            K::perpendicular,{base,L},{freeLine,L});
+        CHECK(extra);
+        const auto authored=model.state();
+        const std::array<sk::EntityId,1> projected{base};
+        const auto problem=sk::prepareLocalSolveProblem(authored,projected);
+        CHECK(problem && problem->equations.size()==2U);
+        const auto rejected=sk::evaluateLocalSolve(*problem,policy,native);
+        CHECK(rejected.status==
+            sk::LocalSolveGatewayStatus::redundant_constraint);
+        CHECK(!rejected.candidate);
+        CHECK(rejected.diagnostics.size()==1U);
+        CHECK(rejected.diagnostics.front().kind==
+            sk::LocalBackendDiagnosticKind::redundant_constraint);
+        CHECK(rejected.diagnostics.front().constraint==*extra);
+        CHECK(model.state()==authored);
+        ++passed;
+    }
+
+    CHECK(passed==10U);
     std::cout<<"R13_A1_ORIGINAL_PLANEGCS_NATIVE_PASS cases="<<passed<<'\n';
     return EXIT_SUCCESS;
 }
