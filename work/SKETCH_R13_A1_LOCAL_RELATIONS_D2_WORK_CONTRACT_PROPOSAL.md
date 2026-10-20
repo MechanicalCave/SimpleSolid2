@@ -118,6 +118,28 @@ Use existing neutral `sketch::ILocalSketchSolver` and `evaluateLocalSolve` from 
 
 **Next explicit gates:** once this amendment has passed Windows governance CLOSURE and separately authorized merge/readback, pass narrow B0-B developer source-rights review, then register product MSVC Core test/adapter RED→GREEN; B1a2 Kernel/OCCT only after Core PASS, Owner Sketch manual UI walkthrough only after its separate exact UI path acceptance, native cold Save/Reopen only after its separate schema contract. A2 Driving dimensions and A3 Reference/Driving remain separate bounded phases. A native DEV pass never proves installer/LGPL distribution compliance and never permits merging Draft PR #506 without independent Owner product technical acceptance and guarded merge authorization.
 
+## 5B. Owner-accepted D2-C — source-backed original PlaneGCS Windows PR CI (2026-10-20)
+
+**Approval:** Owner explicitly answered “akceptuję - kontynuuj pracę” to the specific single-path D2-C proposal presented in the conversation and in [governance PR #507](https://github.com/MechanicalCave/SimpleSolid2/pull/507). This accepts only the conditional edit permission below. It is **not** a protected-main merge authorization, **not** an independent third-party rights/legal signoff, **not** approval to copy original source/vendor or alter any product UI/schema, and **not** evidence that original PlaneGCS is already running inside PR CI. This addition becomes operative **only after** this one-file contract PR passes its exact-head Windows CLOSURE and receives a **separate Owner guarded-squash merge decision**.
+
+**One and only one newly permitted file:**
+
+| Exact repo-relative path | Conditional permitted purpose |
+| --- | --- |
+| `.github/workflows/windows-pr-gate.yml` | Add a named, source-backed Windows/MSVC **original PlaneGCS 0.8.0** native Core CTest job, and gate relevant PRs on its non-skipped result, but **only after** B0-B independent reviewer approval and green actual D2-B1a DEV adapter + native Core test |
+
+No changes to other `.github/**`, `scripts/**`, `cmake/**`, `third_party/**`, root `CMakeLists.txt`, `work/ACTIVE.yaml`, Qt, strict persistence schema, installer or release. Previously frozen D2-B1a six source/test paths retain their own exact purposes and dependencies.
+
+**Future implementation contract (when all prerequisites are satisfied):**
+
+1. Preserve current self-hosted Windows labels, exact PR-head checkout and existing FAST/FOCUSED/FULL/CLOSURE classifier. Preserve **all** `D:\SS2Build` persistent Core/desktop/kernel caches and the owner's `D:\SimpleSolid2\build\dev` and `build\b1a` independently. Build in one disposable ignored subdirectory of the CI runner's *existing single checkout* on D:. No second clone/worktree, C: heavyweight installation, cleanup of other build trees, network fetch or CMake FetchContent.
+2. Verify the **runner-specific**, already-provisioned original 0.8.0 source TAR SHA-256 `09e77e6e3a27fa77d3b5a69065ea4c82ae6ed35753246a2e518b1a6005fea162`, original upstream pin `5a60d5328bedd85f1e4aef81b9b57f5c4410ae52`, five native C++ translation units, original wrapper/shims, Eigen3 and Boost headers. The human owner's D:-drive inventory is **not** proof of CI runner provisioning; obtain read-only inventory before wiring paths. Wrong/missing source, include path or commit in explicitly enabled native mode must **FAIL** rather than SKIP, mock, or download.
+3. Opt into `SS2_R13_PLANEGCS_DEV=ON` plus explicit `SS2_PLANEGCS_080_SOURCE_DIR`; compile/link actual original PlaneGCS and SS2-owned `ILocalSketchSolver` adapter with `simplesolid2_sketch`. Give the real native CTest a **distinct name** from scripted `r13a1.local_horizontal` and scripted-backend `r13a1.occt_profile_closure`.
+4. Real numerical fixtures must cover six authored kinds (five geometric, `Fix(Line)` as fixed mask), seven-equation fixed-base rectangle, immutable PG-01 source geometry, exact Coincident closure, semantic IDs and diagnostics, DoF/conflict/redundancy classification, independent residual acceptance, and original upstream false-Success/degenerate-candidate rejection. Only **after native Core PASS** proceed to D2-B1a2 OCCT/Profile/Extrude/Revolve native caller evidence.
+5. Add the extra job to the required aggregate `windows-msvc` only for PRs where it is in scope; if the job is expected, absence/skipping/false-green must fail the gate. Ordinary unrelated PRs must continue through current modes. Never label scripted backend PASS, Windows FAST or governance CLOSURE as original PlaneGCS native PASS. Record exact PR SHA, source SHA, runner D: paths, actual test log and reviewer disposition.
+
+**STOP until prerequisites:** (a) independent named B0-B rights/provenance reviewer records a written narrow PASS for pinned exact originals, including FreeCAD lineage, `wrapper.h`, shims, full LGPL 2.1 licensing terms and existing Eigen/Boost dependencies; (b) actual tracked DEV adapter + Core native CTest is green under effective D2-B1a; (c) CI D:-resident original source/dependency paths are confirmed. Only then implement the single workflow edit. Release LGPL replaceability/distribution, v21 file format and UI remain independent decisions. **Original PlaneGCS PR-native gate today: NOT RUN.**
+
 ## Documentation impact
 
 Internal docs: required
