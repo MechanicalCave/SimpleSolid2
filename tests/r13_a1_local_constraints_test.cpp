@@ -431,6 +431,69 @@ int main() {
     CHECK(provider.presentationMesh(replayEvaluated.body_solid).ok());
     CHECK(replayOwned.document->findSketch(*sketch.sketch_id)
         ->model.state() == authored);
+
+    // The SAME original PlaneGCS 0.8.0 adapter must also produce a real
+    // Revolve through the Part-owned stage and existing feature scheduler.
+    // A controlled fake backend or a naked provider.revolve() is not proof.
+    auto revolveState = session.document().state();
+    const auto revolveId = revolveState.body.next_feature_id.allocate();
+    CHECK(revolveId && *revolveId == *feature);
+    revolveState.body.features.push_back(part::PartFeature{
+        *revolveId, "PlaneGCSRealRevolve", false,
+        part::RevolveFeature{
+            *profile.profile_id,
+            part::AxisReference{part::BuiltinOriginAxisReference{
+                core::BuiltinReferenceRole::y_axis}},
+            part::RevolveOperation::add,
+            part::OneSidedRevolveExtent{
+                core::AngleValue{2.0 * std::numbers::pi_v<double>},
+                false}}});
+    const auto revolveOwned = part::PartDocument::restore(
+        session.document().documentId(), std::move(revolveState),
+        session.document().revision());
+    CHECK(revolveOwned.ok() && revolveOwned.document);
+    CHECK(revolveOwned.document->findProfile(*profile.profile_id) != nullptr);
+    const auto unsolvedRevolve =
+        part::evaluatePart(*revolveOwned.document, provider);
+    CHECK(unsolvedRevolve.features.size() == 1U);
+    CHECK(unsolvedRevolve.features.front().status ==
+        part::FeatureEvaluationStatus::blocked);
+    const auto realRevolve = part::evaluatePartWithLocalSolve(
+        *revolveOwned.document, provider, policy, native);
+    CHECK(realRevolve.source_revision == revolveOwned.document->revision());
+    CHECK(realRevolve.body_status == part::BodyEvaluationStatus::up_to_date);
+    CHECK(realRevolve.features.size() == 1U);
+    CHECK(realRevolve.features.front().feature_id == *revolveId);
+    CHECK(realRevolve.features.front().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(realRevolve.features.front().result_topology);
+    CHECK(realRevolve.features.front().result_topology->complete());
+    CHECK(realRevolve.body_solid != nullptr);
+    CHECK(realRevolve.current_topology);
+    CHECK(realRevolve.current_topology->complete());
+
+    // The Y-axis stays OUTSIDE the fixed 5..15 mm rectangle: a true
+    // annular Revolve must have the expected inner and outer radii.
+    // Presentation-mesh bounds are an independent geometry witness,
+    // never a replacement for stable semantic identity or residuals.
+    const auto revolveMesh = provider.presentationMesh(realRevolve.body_solid);
+    CHECK(revolveMesh.ok());
+    double inner = std::numeric_limits<double>::infinity();
+    double outer = -std::numeric_limits<double>::infinity();
+    for (const auto& tri : revolveMesh.mesh.triangles) {
+        for (const auto& vertex : {tri.first, tri.second, tri.third}) {
+            const double radius = std::hypot(vertex.x, vertex.z);
+            inner = std::min(inner, radius);
+            outer = std::max(outer, radius);
+        }
+    }
+    CHECK(std::isfinite(inner) && std::isfinite(outer));
+    CHECK(std::abs(inner - 5.0) < 0.1);
+    CHECK(std::abs(outer - 15.0) < 0.1);
+    CHECK(revolveOwned.document->findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(session.document().findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
     std::cout<<"R13_A1_ORIGINAL_PLANEGCS_OCCT_PASS real_solver=1"
              <<" profile_face=1 extrude_solid=1 fixed_line=1"
              <<" corrected_geometry=1 source_unchanged=1\n";
