@@ -797,6 +797,140 @@ int main() {
         CHECK(erased_state->model.constraintCount() == 0U);
         CHECK(erased_state->model.constraintIdCursor().serialized() == "2");
         CHECK(erased_state->model.state().lines == authored_state.lines);
+
+        // P21-04: checksum-valid native packages with malformed authored
+        // relation records must fail atomically at strict Part Load.
+        const auto original = raw.package->authored_json;
+        const auto arrayKey = original.find("\"constraints\":");
+        CHECK(arrayKey != std::string::npos);
+        const auto arrayStart = original.find('[', arrayKey);
+        const auto arrayEnd = original.find(']', arrayStart);
+        CHECK(arrayStart != std::string::npos &&
+              arrayEnd != std::string::npos);
+        const auto invalidArray = [&](std::string name,
+                                      const std::string& replacement) {
+            auto authored = original;
+            authored.replace(arrayStart, arrayEnd - arrayStart + 1U,
+                             replacement);
+            const auto badPath = temp.path / (name + ".ss2part");
+            writeBytes(badPath, buildPartPackage(
+                constraint_session.document().documentId(), 21, authored));
+            const auto failed = store.load(badPath);
+            CHECK(!failed.ok());
+            CHECK(failed.diagnostic.code ==
+                  part::PartStoreErrorCode::malformed_document);
+            CHECK(failed.document == std::nullopt);
+        };
+        const std::string lineRef =
+            R"({"entity_id":"1","element":"line"})";
+        const std::string endpointRef =
+            R"({"entity_id":"1","element":"line_end"})";
+        const auto makeRelation = [](std::string id, std::string kind,
+                                     std::string first, std::string second) {
+            return "{\"id\":\"" + id + "\",\"kind\":\"" + kind +
+                "\",\"first\":" + first + ",\"second\":" + second + "}";
+        };
+        invalidArray("P21UnknownKind", "[" +
+            makeRelation("1", "future", lineRef, "null") + "]");
+        invalidArray("P21NonCanonicalId", "[" +
+            makeRelation("01", "horizontal", lineRef, "null") + "]");
+        invalidArray("P21MissingLine", "[" +
+            makeRelation("1", "horizontal",
+                R"({"entity_id":"999","element":"line"})", "null") + "]");
+        invalidArray("P21WrongHorizontalReference", "[" +
+            makeRelation("1", "horizontal", endpointRef, "null") + "]");
+        invalidArray("P21UnaryHasSecond", "[" +
+            makeRelation("1", "horizontal", lineRef, lineRef) + "]");
+        invalidArray("P21BinaryMissingSecond", "[" +
+            makeRelation("1", "parallel", lineRef, "null") + "]");
+        invalidArray("P21DuplicateId", "[" +
+            makeRelation("1", "horizontal", lineRef, "null") + "," +
+            makeRelation("1", "horizontal", lineRef, "null") + "]");
+        invalidArray("P21MissingRequiredField", "[" +
+            R"({"id":"1","kind":"horizontal","first":{"entity_id":"1","element":"line"}})" + "]");
+        invalidArray("P21ExtraField", "[" +
+            R"({"id":"1","kind":"horizontal","first":{"entity_id":"1","element":"line"},"second":null,"future":7})" + "]");
+        invalidArray("P21WrongRefShape", "[" +
+            makeRelation("1", "horizontal",
+                R"({"entity_id":"1","element":"line","extra":true})", "null") +
+            "]");
+        invalidArray("P21InvalidFirstType", "[" +
+            makeRelation("1", "horizontal", "null", "null") + "]");
+        invalidArray("P21WrongArrayType", "{}");
+
+        const auto replaceOnce = [](std::string& value,
+                                    const std::string& from,
+                                    const std::string& to) {
+            const auto at = value.find(from);
+            CHECK(at != std::string::npos);
+            CHECK(value.find(from, at + from.size()) == std::string::npos);
+            value.replace(at, from.size(), to);
+        };
+        const auto invalidCursor = [&](std::string name,
+                                       const std::string& cursor) {
+            auto authored = original;
+            replaceOnce(authored, "\"next_constraint_id\":\"2\"",
+                "\"next_constraint_id\":\"" + cursor + "\"");
+            const auto badPath = temp.path / (name + ".ss2part");
+            writeBytes(badPath, buildPartPackage(
+                constraint_session.document().documentId(), 21, authored));
+            const auto failed = store.load(badPath);
+            CHECK(!failed.ok());
+            CHECK(failed.diagnostic.code ==
+                  part::PartStoreErrorCode::malformed_document);
+        };
+        invalidCursor("P21IdAtCursor", "1");
+        invalidCursor("P21NonCanonicalCursor", "01");
+        invalidCursor("P21ZeroCursor", "0");
+
+        // P21-03: a REAL native v20 container must retain its exact
+        // two-key Sketch model on Load and upgrade only by explicit Save.
+        // Reconstruct the old v20 model bytes from this fixture's identical
+        // authored seed after the constraint is erased. No solver runs.
+        const auto savedWithoutRelation =
+            persistence::readNativeDocumentContainer(constraint_path);
+        CHECK(savedWithoutRelation.ok());
+        auto v20Authored = savedWithoutRelation.package->authored_json;
+        replaceOnce(v20Authored, "\"constraints\":[],", "");
+        replaceOnce(v20Authored, ",\"next_constraint_id\":\"2\"", "");
+        const auto v20Path = temp.path / "P21V20Migration.ss2part";
+        writeBytes(v20Path, buildPartPackage(
+            constraint_session.document().documentId(), 20, v20Authored));
+        auto oldLoaded = store.load(v20Path);
+        CHECK(oldLoaded.ok());
+        const auto oldSketch =
+            oldLoaded.document->findSketch(*created.sketch_id);
+        CHECK(oldSketch != nullptr);
+        CHECK(oldSketch->model.constraintCount() == 0U);
+        CHECK(oldSketch->model.constraintIdCursor().serialized() == "1");
+        CHECK(oldSketch->model.state().lines == authored_state.lines);
+        const auto preSave =
+            persistence::readNativeDocumentContainer(v20Path);
+        CHECK(preSave.ok());
+        CHECK(preSave.package->descriptor.domain_schema_version == 20);
+        CHECK(preSave.package->authored_json == v20Authored);
+        CHECK(store.save(
+            v20Path, *oldLoaded.document, *oldLoaded.checkpoint).ok());
+        const auto upgraded =
+            persistence::readNativeDocumentContainer(v20Path);
+        CHECK(upgraded.ok());
+        CHECK(upgraded.package->descriptor.domain_schema_version == 21);
+        CHECK(upgraded.package->authored_json.find(
+            "\"next_constraint_id\":\"1\"") != std::string::npos);
+        const auto reopenedV21 = store.load(v20Path);
+        CHECK(reopenedV21.ok());
+        CHECK(reopenedV21.document->findSketch(*created.sketch_id)
+            ->model.state().lines == authored_state.lines);
+
+        // A v20 label must NEVER allow invisible v21 relations to disappear.
+        const auto mislabeled = temp.path / "P21V20RejectSmuggledFields.ss2part";
+        writeBytes(mislabeled, buildPartPackage(
+            constraint_session.document().documentId(), 20,
+            savedWithoutRelation.package->authored_json));
+        const auto smuggled = store.load(mislabeled);
+        CHECK(!smuggled.ok());
+        CHECK(smuggled.diagnostic.code ==
+              part::PartStoreErrorCode::malformed_document);
     }
 
     return EXIT_SUCCESS;
