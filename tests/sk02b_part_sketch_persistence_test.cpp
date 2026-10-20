@@ -933,5 +933,96 @@ int main() {
               part::PartStoreErrorCode::malformed_document);
     }
 
+    // P21-01: every A1 kind (including immutable Fix and endpoint
+    // Coincident) survives a real cold native Part round trip with exact
+    // authored order and semantic IDs; independent Sketches may BOTH own
+    // their own ConstraintId "1" without any global ID collision.
+    {
+        application::DocumentSession multi{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto xy = multi.execute(application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        const auto xz = multi.execute(application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xz_plane});
+        CHECK(xy.ok() && xy.sketch_id && xz.ok() && xz.sketch_id);
+        const auto a = multi.execute(application::AddSketchLineCommand{
+            *xy.sketch_id, {0.0, 0.0}, {10.0, 0.0}});
+        const auto b = multi.execute(application::AddSketchLineCommand{
+            *xy.sketch_id, {10.0, 0.0}, {10.0, 8.0}});
+        const auto c = multi.execute(application::AddSketchLineCommand{
+            *xy.sketch_id, {5.0, 5.0}, {15.0, 5.0}});
+        const auto outside = multi.execute(application::AddSketchLineCommand{
+            *xz.sketch_id, {0.0, 0.0}, {8.0, 2.0}});
+        CHECK(a.ok() && a.entity_id && b.ok() && b.entity_id &&
+              c.ok() && c.entity_id &&
+              outside.ok() && outside.entity_id);
+        auto multiState = multi.document().state();
+        CHECK(multiState.sketches.size() == 2U);
+        CHECK(multiState.sketches[0].id == *xy.sketch_id);
+        CHECK(multiState.sketches[1].id == *xz.sketch_id);
+        auto& authored = multiState.sketches[0].model;
+        const auto ref = [](sketch::EntityId id,
+                            sketch::ConstraintElement element) {
+            return sketch::ConstraintReference{id, element};
+        };
+        const auto whole = sketch::ConstraintElement::line;
+        const auto start = sketch::ConstraintElement::line_start;
+        const auto end = sketch::ConstraintElement::line_end;
+        CHECK(authored.addConstraint(
+            sketch::ConstraintKind::horizontal, ref(*a.entity_id, whole)));
+        CHECK(authored.addConstraint(
+            sketch::ConstraintKind::vertical, ref(*b.entity_id, whole)));
+        CHECK(authored.addConstraint(
+            sketch::ConstraintKind::coincident, ref(*a.entity_id, end),
+            ref(*b.entity_id, start)));
+        CHECK(authored.addConstraint(
+            sketch::ConstraintKind::parallel, ref(*a.entity_id, whole),
+            ref(*c.entity_id, whole)));
+        CHECK(authored.addConstraint(
+            sketch::ConstraintKind::perpendicular, ref(*a.entity_id, whole),
+            ref(*b.entity_id, whole)));
+        CHECK(authored.addConstraint(
+            sketch::ConstraintKind::fix, ref(*a.entity_id, whole)));
+        CHECK(authored.constraintCount() == 6U);
+        CHECK(authored.isFixedLine(*a.entity_id));
+        CHECK(authored.constraintIdCursor().serialized() == "7");
+        auto& secondModel = multiState.sketches[1].model;
+        const auto separate = secondModel.addHorizontal(*outside.entity_id);
+        CHECK(separate && separate->serialized() == "1");
+        const auto firstState = authored.state();
+        const auto secondState = secondModel.state();
+        CHECK(firstState.constraints.front().id.serialized() == "1");
+        const auto restored = part::PartDocument::restore(
+            multi.document().documentId(), std::move(multiState),
+            multi.document().revision());
+        CHECK(restored.ok() && restored.document);
+        const auto pathSix =
+            temp.path / "P21AllSixRelationsTwoSketches.ss2part";
+        CHECK(store.createNew(pathSix, *restored.document).ok());
+        const auto packageSix =
+            persistence::readNativeDocumentContainer(pathSix);
+        CHECK(packageSix.ok());
+        CHECK(packageSix.package->descriptor.domain_schema_version == 21);
+        for (const std::string kind : {
+            "horizontal", "vertical", "coincident",
+            "parallel", "perpendicular", "fix"}) {
+            CHECK(packageSix.package->authored_json.find(
+                "\"kind\": \"" + kind + "\"") != std::string::npos);
+        }
+        const auto coldSix = store.load(pathSix);
+        CHECK(coldSix.ok());
+        const auto* firstCold =
+            coldSix.document->findSketch(*xy.sketch_id);
+        const auto* secondCold =
+            coldSix.document->findSketch(*xz.sketch_id);
+        CHECK(firstCold && secondCold);
+        CHECK(firstCold->model.state() == firstState);
+        CHECK(secondCold->model.state() == secondState);
+        CHECK(firstCold->model.isFixedLine(*a.entity_id));
+        CHECK(firstCold->model.constraintIdCursor().serialized() == "7");
+        CHECK(secondCold->model.constraintIdCursor().serialized() == "2");
+        CHECK(coldSix.document->documentId() == multi.document().documentId());
+    }
+
     return EXIT_SUCCESS;
 }
