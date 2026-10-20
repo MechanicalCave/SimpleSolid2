@@ -770,7 +770,7 @@ int main() {
             "\"next_constraint_id\"") != std::string::npos);
         CHECK(raw.package->authored_json.find(
             "\"constraints\"") != std::string::npos);
-        const auto cold = store.load(constraint_path);
+        auto cold = store.load(constraint_path);
         CHECK(cold.ok());
         CHECK(cold.document->documentId() ==
               constraint_session.document().documentId());
