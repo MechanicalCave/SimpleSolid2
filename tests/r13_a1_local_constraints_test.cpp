@@ -7,10 +7,14 @@
 #include <numbers>
 #endif
 
+// The original-source native Core-only target cannot depend on the
+// Application/Part headers. The normal Sketch/Part/OCCT tests retain them.
+#if !defined(SS2_R13_A1_PLANEGCS_NATIVE_EVIDENCE)
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
+#endif
 #include <simplesolid2/sketch/sketch_model.hpp>
 #include <simplesolid2/sketch/local_solver.hpp>
 
