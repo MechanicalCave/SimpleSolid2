@@ -6,6 +6,7 @@
     defined(SS2_R13_A1_PLANEGCS_OCCT_EVIDENCE)
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
 #include <numbers>
 #endif
 
@@ -432,6 +433,43 @@ int main() {
     CHECK(replayOwned.document->findSketch(*sketch.sketch_id)
         ->model.state() == authored);
 
+    // P21-06: real native Part file cold reopen of the SAME eight-constraint
+    // authored Sketch, durable ProfileId and Part-owned Extrude FeatureId.
+    // No cached solver candidate/BRep may be restored as current state.
+    part::PartDocumentStore coldStore;
+    const auto coldBase = std::filesystem::temp_directory_path() /
+        ("r13a1_v21_real_part_" +
+         std::string{session.document().documentId().value()});
+    const auto goodPath = coldBase.string() + "_good.ss2part";
+    CHECK(coldStore.createNew(goodPath, *replayOwned.document).ok());
+    const auto goodLoaded = coldStore.load(goodPath);
+    CHECK(goodLoaded.ok());
+    CHECK(goodLoaded.document->documentId() ==
+          replayOwned.document->documentId());
+    CHECK(goodLoaded.document->findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(goodLoaded.document->findProfile(*profile.profile_id) != nullptr);
+    CHECK(goodLoaded.document->state().body.features.size() == 1U);
+    CHECK(goodLoaded.document->state().body.features.front().id == *feature);
+    CHECK(goodLoaded.document->state() == replayOwned.document->state());
+    const auto coldLegacy = part::evaluatePart(*goodLoaded.document, provider);
+    CHECK(coldLegacy.features.size() == 1U);
+    CHECK(coldLegacy.features.front().status ==
+        part::FeatureEvaluationStatus::blocked);
+    CHECK(coldLegacy.body_solid == nullptr);
+    const auto coldSolved = part::evaluatePartWithLocalSolve(
+        *goodLoaded.document, provider, policy, native);
+    CHECK(coldSolved.body_status == part::BodyEvaluationStatus::up_to_date);
+    CHECK(coldSolved.features.size() == 1U);
+    CHECK(coldSolved.features.front().feature_id == *feature);
+    CHECK(coldSolved.features.front().status ==
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(coldSolved.body_solid != nullptr);
+    CHECK(provider.presentationMesh(coldSolved.body_solid).ok());
+    CHECK(goodLoaded.document->findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(std::filesystem::remove(goodPath));
+
     // The SAME original PlaneGCS 0.8.0 adapter must also produce a real
     // Revolve through the Part-owned stage and existing feature scheduler.
     // A controlled fake backend or a naked provider.revolve() is not proof.
@@ -537,6 +575,43 @@ int main() {
     CHECK(brokenBody.body_status !=
         part::BodyEvaluationStatus::up_to_date);
     CHECK(brokenBody.body_solid == nullptr);
+
+    // P21-07: persist the BROKEN current Part as a real v21 document.
+    // Cold reopen must preserve authored ProfileId/FeatureId and the
+    // cascade-retired relation IDs, without resurrecting a stale solid.
+    auto brokenState = session.document().state();
+    const auto brokenFeatureId =
+        brokenState.body.next_feature_id.allocate();
+    CHECK(brokenFeatureId && *brokenFeatureId == *feature);
+    brokenState.body.features.push_back(part::PartFeature{
+        *brokenFeatureId, "PlaneGCSRealExtrude", false,
+        part::ExtrudeFeature{*profile.profile_id,
+            part::ExtrudeOperation::add,
+            part::OneSidedExtrudeExtent{core::LengthValue{10.0}, false}}});
+    const auto brokenOwned = part::PartDocument::restore(
+        session.document().documentId(), std::move(brokenState),
+        session.document().revision());
+    CHECK(brokenOwned.ok() && brokenOwned.document);
+    const auto brokenPath = coldBase.string() + "_broken.ss2part";
+    CHECK(coldStore.createNew(brokenPath, *brokenOwned.document).ok());
+    const auto coldBroken = coldStore.load(brokenPath);
+    CHECK(coldBroken.ok());
+    CHECK(coldBroken.document->state() == brokenOwned.document->state());
+    CHECK(coldBroken.document->findProfile(*profile.profile_id) != nullptr);
+    CHECK(coldBroken.document->state().body.features.size() == 1U);
+    CHECK(coldBroken.document->state().body.features.front().id == *feature);
+    CHECK(coldBroken.document->findSketch(*sketch.sketch_id)
+        ->model.constraintCount() == 5U);
+    const auto reopenedBroken = part::evaluatePartWithLocalSolve(
+        *coldBroken.document, provider, policy, native);
+    CHECK(reopenedBroken.features.size() == 1U);
+    CHECK(reopenedBroken.features.front().feature_id == *feature);
+    CHECK(reopenedBroken.features.front().status !=
+        part::FeatureEvaluationStatus::up_to_date);
+    CHECK(reopenedBroken.body_status !=
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(reopenedBroken.body_solid == nullptr);
+    CHECK(std::filesystem::remove(brokenPath));
 
     CHECK(session.undo().changed);
     CHECK(session.document().findSketch(*sketch.sketch_id)
