@@ -533,6 +533,61 @@ int main() {
     CHECK(session.document().findSketch(*sketch.sketch_id)
         ->model.state() == authored);
 
+    // P21-06 native Revolve cold cycle: the authored Sketch/Profile/Axis/
+    // Feature is persistent, never the transient PlaneGCS candidate or
+    // OCCT BRep. Recompute on the reopened revision and check real topology.
+    const auto revolvePath = coldBase.string() + "_revolve.ss2part";
+    CHECK(coldStore.createNew(revolvePath, *revolveOwned.document).ok());
+    const auto revolveLoaded = coldStore.load(revolvePath);
+    CHECK(revolveLoaded.ok());
+    CHECK(revolveLoaded.document->documentId() ==
+          revolveOwned.document->documentId());
+    CHECK(revolveLoaded.document->state() == revolveOwned.document->state());
+    CHECK(revolveLoaded.document->findProfile(*profile.profile_id) != nullptr);
+    CHECK(revolveLoaded.document->findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(revolveLoaded.document->state().body.features.size() == 1U);
+    CHECK(revolveLoaded.document->state().body.features.front().id ==
+          *revolveId);
+    const auto unsolvedColdRevolve =
+        part::evaluatePart(*revolveLoaded.document, provider);
+    CHECK(unsolvedColdRevolve.features.size() == 1U);
+    CHECK(unsolvedColdRevolve.features.front().status ==
+          part::FeatureEvaluationStatus::blocked);
+    CHECK(unsolvedColdRevolve.body_solid == nullptr);
+    const auto solvedColdRevolve = part::evaluatePartWithLocalSolve(
+        *revolveLoaded.document, provider, policy, native);
+    CHECK(solvedColdRevolve.source_revision ==
+          revolveLoaded.document->revision());
+    CHECK(solvedColdRevolve.body_status ==
+          part::BodyEvaluationStatus::up_to_date);
+    CHECK(solvedColdRevolve.features.size() == 1U);
+    CHECK(solvedColdRevolve.features.front().feature_id == *revolveId);
+    CHECK(solvedColdRevolve.features.front().status ==
+          part::FeatureEvaluationStatus::up_to_date);
+    CHECK(solvedColdRevolve.features.front().result_topology);
+    CHECK(solvedColdRevolve.features.front().result_topology->complete());
+    CHECK(solvedColdRevolve.current_topology);
+    CHECK(solvedColdRevolve.current_topology->complete());
+    CHECK(solvedColdRevolve.body_solid != nullptr);
+    const auto coldRevolveMesh =
+        provider.presentationMesh(solvedColdRevolve.body_solid);
+    CHECK(coldRevolveMesh.ok());
+    double coldInner = std::numeric_limits<double>::infinity();
+    double coldOuter = -std::numeric_limits<double>::infinity();
+    for (const auto& tri : coldRevolveMesh.mesh.triangles) {
+        for (const auto& vertex : {tri.first, tri.second, tri.third}) {
+            const double radius = std::hypot(vertex.x, vertex.z);
+            coldInner = std::min(coldInner, radius);
+            coldOuter = std::max(coldOuter, radius);
+        }
+    }
+    CHECK(std::abs(coldInner - 5.0) < 0.1);
+    CHECK(std::abs(coldOuter - 15.0) < 0.1);
+    CHECK(revolveLoaded.document->findSketch(*sketch.sketch_id)
+        ->model.state() == authored);
+    CHECK(std::filesystem::remove(revolvePath));
+
     // A1.3 geometry-delete cascade: deleting the top Line retires its
     // Horizontal and two Coincident intents in ONE DocumentSession command.
     // Dependent durable Profile/Feature identities must survive, but
