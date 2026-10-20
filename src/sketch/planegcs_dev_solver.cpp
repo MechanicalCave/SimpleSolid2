@@ -147,8 +147,20 @@ LocalBackendSolveResult PlaneGcsDevSolver::solve(
                                 LocalBackendDiagnosticKind kind) {
             for (const int tag : tags) {
                 const auto it = tagToId.find(tag);
-                if (it == tagToId.end() ||
-                    !diagnosed.insert(it->second).second) return false;
+                if (it == tagToId.end()) return false;
+
+                // Upstream diagnose() may put a constraint in both its
+                // conflict and redundancy categories. Conflict must win:
+                // failing generically would discard the exact semantic
+                // ConstraintId that the Sketch UI needs to diagnose it.
+                // Treat a repeated lower-priority redundancy as already
+                // reported; never invent or duplicate an SS2 diagnostic.
+                if (!diagnosed.insert(it->second).second) {
+                    if (kind == LocalBackendDiagnosticKind::redundant_constraint) {
+                        continue;
+                    }
+                    return false;
+                }
                 out.diagnostics.push_back({kind,it->second});
                 if (kind == LocalBackendDiagnosticKind::conflicting_constraint) {
                     out.conflicting_constraints.push_back(it->second);
