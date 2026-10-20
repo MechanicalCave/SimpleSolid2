@@ -1,3 +1,6 @@
+#if defined(SS2_R13_A1_PLANEGCS_NATIVE_EVIDENCE)
+#include <simplesolid2/sketch/planegcs_dev_solver.hpp>
+#endif
 #if defined(SS2_R13_A1_OCCT_EVIDENCE)
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
@@ -35,7 +38,140 @@ void check(bool condition, const char* expression, int line) {
 #define CHECK(x) check(static_cast<bool>(x), #x, __LINE__)
 } // namespace
 
-#if !defined(SS2_R13_A1_OCCT_EVIDENCE)
+#if defined(SS2_R13_A1_PLANEGCS_NATIVE_EVIDENCE)
+int main() {
+    using K = sk::ConstraintKind;
+    using E = sk::ConstraintElement;
+    constexpr E L=E::line, S=E::line_start, T=E::line_end;
+    const sk::LocalSolverAcceptancePolicy policy{1.0e-7,1.0e-6};
+    sk::PlaneGcsDevSolver native;
+    unsigned passed = 0;
+
+    for (const auto kind : {K::horizontal,K::vertical}) {
+        sk::SketchModel model;
+        const auto line = model.addLine({0.0,0.0},{5.0,2.0});
+        CHECK(model.addConstraint(kind,{line,L}));
+        const auto authored = model.state();
+        const auto problem = sk::prepareLocalSolveProblem(authored);
+        CHECK(problem && problem->equations.size() == 1U);
+        const auto r = sk::evaluateLocalSolve(*problem,policy,native);
+        CHECK(r.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(r.candidate);
+        const auto& s = r.candidate->lines.front();
+        CHECK(kind == K::horizontal
+            ? std::abs(s.start.v-s.end.v) < policy.distance_tolerance
+            : std::abs(s.start.u-s.end.u) < policy.distance_tolerance);
+        CHECK(model.state() == authored);
+        ++passed;
+    }
+
+    for (const auto kind : {K::parallel,K::perpendicular}) {
+        sk::SketchModel model;
+        const auto base = model.addLine({0.0,0.0},{5.0,0.0});
+        const auto line = model.addLine({1.0,2.0},{4.0,4.0});
+        CHECK(model.addConstraint(kind,{base,L},{line,L}));
+        const auto authored = model.state();
+        const std::array<sk::EntityId,1> fixed{base};
+        const auto problem = sk::prepareLocalSolveProblem(authored,fixed);
+        CHECK(problem && problem->fixed_lines.size() == 1U);
+        const auto r = sk::evaluateLocalSolve(*problem,policy,native);
+        CHECK(r.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(r.candidate && r.candidate->lines[0] == authored.lines[0]);
+        CHECK(model.state() == authored);
+        ++passed;
+    }
+
+    {
+        sk::SketchModel model;
+        const auto a = model.addLine({0.0,0.0},{2.0,2.0});
+        const auto b = model.addLine({2.1,2.1},{6.0,4.0});
+        CHECK(model.addConstraint(K::coincident,{a,T},{b,S}));
+        const auto authored = model.state();
+        const std::array<sk::EntityId,1> fixed{a};
+        const auto problem = sk::prepareLocalSolveProblem(authored,fixed);
+        CHECK(problem);
+        const auto r = sk::evaluateLocalSolve(*problem,policy,native);
+        CHECK(r.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(r.candidate);
+        CHECK(r.candidate->lines[0].end == r.candidate->lines[1].start);
+        CHECK(r.candidate->lines[0] == authored.lines[0]);
+        CHECK(model.state() == authored);
+        ++passed;
+    }
+
+    {
+        sk::SketchModel model;
+        const auto a = model.addLine({0.0,0.0},{5.0,2.0});
+        CHECK(model.addConstraint(K::fix,{a,L}));
+        const auto authored = model.state();
+        const auto problem = sk::prepareLocalSolveProblem(authored);
+        CHECK(problem && problem->equations.empty() &&
+              problem->fixed_lines.size() == 1U);
+        const auto r = sk::evaluateLocalSolve(*problem,policy,native);
+        CHECK(r.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(r.candidate && r.candidate->lines[0] == authored.lines[0]);
+        CHECK(!model.addConstraint(K::horizontal,{a,L}));
+        CHECK(model.state() == authored);
+        ++passed;
+    }
+
+    // Original native PlaneGCS must solve all seven equations at once,
+    // returning a disposable and precisely closed four-Line rectangle.
+    {
+        sk::SketchModel model;
+        const auto b=model.addLine({0.0,0.0},{4.0,0.0});
+        const auto r=model.addLine({4.2,0.1},{4.1,3.1});
+        const auto t=model.addLine({4.3,3.0},{-0.2,3.2});
+        const auto l=model.addLine({0.1,3.1},{0.1,0.2});
+        CHECK(model.addConstraint(K::coincident,{b,T},{r,S}));
+        CHECK(model.addConstraint(K::coincident,{r,T},{t,S}));
+        CHECK(model.addConstraint(K::coincident,{t,T},{l,S}));
+        CHECK(model.addConstraint(K::coincident,{l,T},{b,S}));
+        CHECK(model.addConstraint(K::vertical,{r,L}));
+        CHECK(model.addConstraint(K::horizontal,{t,L}));
+        CHECK(model.addConstraint(K::vertical,{l,L}));
+        const auto authored=model.state();
+        const std::array<sk::EntityId,1> fixed{b};
+        const auto problem=sk::prepareLocalSolveProblem(authored,fixed);
+        CHECK(problem && problem->equations.size()==7U);
+        CHECK(problem->fixed_lines.size()==1U);
+        const auto solved=sk::evaluateLocalSolve(*problem,policy,native);
+        CHECK(solved.status==sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(solved.candidate);
+        CHECK(solved.degrees_of_freedom && *solved.degrees_of_freedom==1U);
+        CHECK(solved.residuals.constraints.size()==7U);
+        const auto& lines=solved.candidate->lines;
+        CHECK(lines[0]==authored.lines[0]);
+        CHECK(lines[0].end==lines[1].start);
+        CHECK(lines[1].end==lines[2].start);
+        CHECK(lines[2].end==lines[3].start);
+        CHECK(lines[3].end==lines[0].start);
+        CHECK(model.state()==authored);
+        ++passed;
+    }
+
+    // The original solver can report Success on an impossible fixed
+    // diagonal + Horizontal. The real SS2 gateway must still reject it.
+    {
+        sk::SketchModel model;
+        const auto a=model.addLine({0.0,0.0},{5.0,2.0});
+        CHECK(model.addConstraint(K::horizontal,{a,L}));
+        const auto authored=model.state();
+        const std::array<sk::EntityId,1> fixed{a};
+        const auto problem=sk::prepareLocalSolveProblem(authored,fixed);
+        CHECK(problem);
+        const auto refused=sk::evaluateLocalSolve(*problem,policy,native);
+        CHECK(refused.status != sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(!refused.candidate);
+        CHECK(model.state()==authored);
+        ++passed;
+    }
+
+    CHECK(passed==8U);
+    std::cout<<"R13_A1_ORIGINAL_PLANEGCS_NATIVE_PASS cases="<<passed<<'\n';
+    return EXIT_SUCCESS;
+}
+#elif !defined(SS2_R13_A1_OCCT_EVIDENCE)
 int main() {
     // Native MSVC RED: a caller-owned solver may drive the actual Part
     // feature scheduler, without changing the legacy evaluatePart API.

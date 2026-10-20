@@ -28,6 +28,55 @@ target_include_directories(simplesolid2_sketch
 
 target_compile_features(simplesolid2_sketch PUBLIC cxx_std_20)
 
+# Optional original-source-backed PlaneGCS 0.8.0 DEV native test.
+# Never fetch, vendor, install or enable for normal application builds.
+option(SS2_R13_PLANEGCS_DEV "Opt in to real original PlaneGCS 0.8.0 native DEV CTest" OFF)
+if(SS2_R13_PLANEGCS_DEV)
+    set(SS2_PLANEGCS_080_SOURCE_DIR "" CACHE PATH "Verified existing PlaneGCS 0.8.0 source root")
+    set(SS2_PLANEGCS_EIGEN_INCLUDE_DIR "" CACHE PATH "Existing Eigen3 include directory")
+    set(SS2_PLANEGCS_BOOST_INCLUDE_DIR "" CACHE PATH "Existing Boost include directory")
+    set(_pg_src "${SS2_PLANEGCS_080_SOURCE_DIR}")
+    set(_pg_native "${_pg_src}/src/planegcs")
+    if(NOT EXISTS "${_pg_src}/src/wrapper.h" OR
+       NOT EXISTS "${_pg_src}/pyproject.toml")
+        message(FATAL_ERROR "SS2_R13_PLANEGCS_DEV requires external original PlaneGCS 0.8.0 source")
+    endif()
+    file(READ "${_pg_src}/pyproject.toml" _pg_version)
+    if(NOT _pg_version MATCHES "version = \"0[.]8[.]0\"")
+        message(FATAL_ERROR "Expected exactly original PlaneGCS version 0.8.0")
+    endif()
+    if(NOT EXISTS "${SS2_PLANEGCS_EIGEN_INCLUDE_DIR}/Eigen/Core")
+        message(FATAL_ERROR "SS2_PLANEGCS_EIGEN_INCLUDE_DIR must contain Eigen/Core")
+    endif()
+    if(NOT EXISTS "${SS2_PLANEGCS_BOOST_INCLUDE_DIR}/boost/graph/adjacency_list.hpp")
+        message(FATAL_ERROR "SS2_PLANEGCS_BOOST_INCLUDE_DIR must contain Boost Graph")
+    endif()
+    foreach(_pg_tu Constraints.cpp GCS.cpp Geo.cpp SubSystem.cpp qp_eq.cpp)
+        if(NOT EXISTS "${_pg_native}/${_pg_tu}")
+            message(FATAL_ERROR "Original 0.8.0 PlaneGCS source missing: ${_pg_tu}")
+        endif()
+    endforeach()
+    add_library(ss2_r13_planegcs_dev STATIC
+        sketch/planegcs_dev_solver.cpp
+        "${_pg_native}/Constraints.cpp"
+        "${_pg_native}/GCS.cpp"
+        "${_pg_native}/Geo.cpp"
+        "${_pg_native}/SubSystem.cpp"
+        "${_pg_native}/qp_eq.cpp")
+    target_compile_features(ss2_r13_planegcs_dev PUBLIC cxx_std_20)
+    target_link_libraries(ss2_r13_planegcs_dev PUBLIC simplesolid2_sketch)
+    target_include_directories(ss2_r13_planegcs_dev
+        PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/sketch/include"
+        PRIVATE "${_pg_src}" "${_pg_src}/src"
+                "${_pg_native}" "${_pg_native}/shims")
+    target_include_directories(ss2_r13_planegcs_dev SYSTEM PRIVATE
+        "${SS2_PLANEGCS_EIGEN_INCLUDE_DIR}"
+        "${SS2_PLANEGCS_BOOST_INCLUDE_DIR}")
+    if(MSVC)
+        target_compile_options(ss2_r13_planegcs_dev PRIVATE /W0)
+    endif()
+endif()
+
 add_library(simplesolid2_miniz STATIC
     ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2/miniz.c
     ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2/miniz_zip.c
