@@ -731,5 +731,73 @@ int main() {
         persistence::NativeContainerErrorCode::
             invalid_authored_json);
 
+    // P21-01/P21-02 RED-first: actual native Part file persistence,
+    // not SketchModel-only restoration or an in-memory copied state.
+    // v20 intentionally fails to save this intent; accepted v21 must
+    // survive a completely new PartDocumentStore::load and session.
+    {
+        const auto constraint_path =
+            temp.path / "R13A1V21ColdRelationPersistence.ss2part";
+        application::DocumentSession constraint_session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = constraint_session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto first = constraint_session.execute(
+            application::AddSketchLineCommand{
+                *created.sketch_id, {0.0, 0.0}, {10.0, 2.0}});
+        CHECK(first.ok() && first.entity_id);
+        const auto relation = constraint_session.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                *created.sketch_id,
+                constraint_session.document().revision(), *first.entity_id});
+        CHECK(relation.ok() && relation.constraint_id);
+        CHECK(relation.constraint_id->serialized() == "1");
+        const auto* before =
+            constraint_session.document().findSketch(*created.sketch_id);
+        CHECK(before != nullptr);
+        const auto authored_state = before->model.state();
+        CHECK(authored_state.next_constraint_id.serialized() == "2");
+        const auto persisted = store.createNew(
+            constraint_path, constraint_session.document());
+        CHECK(persisted.ok());
+        const auto raw =
+            persistence::readNativeDocumentContainer(constraint_path);
+        CHECK(raw.ok());
+        CHECK(raw.package->descriptor.domain_schema_version == 21);
+        CHECK(raw.package->authored_json.find(
+            "\"next_constraint_id\"") != std::string::npos);
+        CHECK(raw.package->authored_json.find(
+            "\"constraints\"") != std::string::npos);
+        const auto cold = store.load(constraint_path);
+        CHECK(cold.ok());
+        CHECK(cold.document->documentId() ==
+              constraint_session.document().documentId());
+        const auto* after = cold.document->findSketch(*created.sketch_id);
+        CHECK(after != nullptr);
+        CHECK(after->model.state() == authored_state);
+        CHECK(after->model.findConstraint(*relation.constraint_id) != nullptr);
+        CHECK(after->model.constraintIdCursor().serialized() == "2");
+
+        // Deleted relation IDs never recycle, including after cold reopen.
+        application::DocumentSession reopened{
+            constraint_path, std::move(*cold.document), *cold.checkpoint};
+        const auto erased = reopened.execute(
+            application::EraseSketchConstraintCommand{
+                *created.sketch_id, reopened.document().revision(),
+                *relation.constraint_id});
+        CHECK(erased.ok() && erased.changed);
+        CHECK(reopened.save().ok());
+        const auto cold_again = store.load(constraint_path);
+        CHECK(cold_again.ok());
+        const auto* erased_state =
+            cold_again.document->findSketch(*created.sketch_id);
+        CHECK(erased_state != nullptr);
+        CHECK(erased_state->model.constraintCount() == 0U);
+        CHECK(erased_state->model.constraintIdCursor().serialized() == "2");
+        CHECK(erased_state->model.state().lines == authored_state.lines);
+    }
+
     return EXIT_SUCCESS;
 }
