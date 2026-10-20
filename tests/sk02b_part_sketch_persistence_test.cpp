@@ -836,6 +836,9 @@ int main() {
             std::istreambuf_iterator<char>{afterFailedReads},
             std::istreambuf_iterator<char>{}};
         CHECK(afterBytes == intactBytes);
+        // On Windows, the open read handle may prevent atomic replace of
+        // this same native file during the later real DocumentSession Save.
+        afterFailedReads.close();
 
         auto cold = store.load(constraint_path);
         CHECK(cold.ok());
