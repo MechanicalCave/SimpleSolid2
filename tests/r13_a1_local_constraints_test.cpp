@@ -3184,6 +3184,11 @@ int main() {
                 unsigned binds{};
                 unsigned projections{};
 
+                DenyingColdProjection(
+                    occt::OcctSolidModelingKernel& provider,
+                    bool deny_binding)
+                    : native{provider}, deny_on_bind{deny_binding} {}
+
                 std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
                     kernel::RuntimeSolidHandle solid,
                     kernel::RuntimeEdgeToken token) noexcept override {
