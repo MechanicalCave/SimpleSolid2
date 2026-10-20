@@ -822,8 +822,11 @@ int main() {
               persistence::NativeContainerErrorCode::too_large);
         const auto oversized = store.load(hugePath);
         CHECK(!oversized.ok());
+        // PartDocumentStore first reads a bounded FileSnapshot; this
+        // boundary maps the over-limit snapshot to io_failure BEFORE
+        // the native ZIP parser is called. It cannot publish a Part.
         CHECK(oversized.diagnostic.code ==
-              part::PartStoreErrorCode::malformed_document);
+              part::PartStoreErrorCode::io_failure);
         CHECK(!oversized.document);
         CHECK(!oversized.checkpoint);
         // These three negative reads MUST NOT alter the real v21 file.
