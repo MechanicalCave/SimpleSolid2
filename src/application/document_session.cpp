@@ -2894,8 +2894,25 @@ CreateProfileResult DocumentSession::executeCreateProfile(
         }
         const auto prefix =
             part::evaluatePart(document_, *modeling_kernel);
+        // Body evaluation may call a provider that reenters this session.
+        // The original authored request, not the latest mutable session
+        // expectation, owns publication authority.
+        if (document_.revision() != command.expected_revision) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::revision_diverged,
+                "Create Profile document changed during Body evaluation",
+                path_);
+            return {false, std::nullopt, failed.diagnostic};
+        }
         effective = part::evaluateEffectiveSketchProjection(
             document_, command.source_sketch_id, prefix, *query);
+        if (document_.revision() != command.expected_revision) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::revision_diverged,
+                "Create Profile document changed during projection",
+                path_);
+            return {false, std::nullopt, failed.diagnostic};
+        }
         if (!effective) {
             const auto failed = failure(
                 DocumentSessionErrorCode::invalid_command,
@@ -2944,6 +2961,14 @@ CreateProfileResult DocumentSession::executeCreateProfile(
             part::ProfileVisibilityPolicy::automatic,
             command.region_intent});
 
+    // No older staged Profile may overwrite a successful nested command.
+    if (document_.revision() != command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Create Profile document changed before commit",
+            path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
     const auto committed =
         commitCommandState(
             std::move(after),
@@ -3026,9 +3051,21 @@ DocumentSessionResult DocumentSession::executeEditProfile(
         }
         const auto prefix =
             part::evaluatePart(document_, *modeling_kernel);
+        if (document_.revision() != command.expected_revision) {
+            return failure(
+                DocumentSessionErrorCode::revision_diverged,
+                "Edit Profile document changed during Body evaluation",
+                path_);
+        }
         effective = part::evaluateEffectiveSketchProjection(
             document_, profile->source_sketch_id,
             prefix, *query);
+        if (document_.revision() != command.expected_revision) {
+            return failure(
+                DocumentSessionErrorCode::revision_diverged,
+                "Edit Profile document changed during projection",
+                path_);
+        }
         if (!effective) {
             return failure(
                 DocumentSessionErrorCode::invalid_command,
@@ -3051,6 +3088,12 @@ DocumentSessionResult DocumentSession::executeEditProfile(
 
     profile->region_intent =
         command.region_intent;
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Edit Profile document changed before commit",
+            path_);
+    }
     return commitCommandState(
         std::move(after),
         "Part transaction failed while editing Profile");
