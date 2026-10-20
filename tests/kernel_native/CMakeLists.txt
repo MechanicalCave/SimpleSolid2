@@ -56,7 +56,7 @@ set_tests_properties(r13a1.occt_profile_closure PROPERTIES
     TIMEOUT 90
     # Fail if the native binary exits successfully without executing BOTH
     # displacement witnesses on the real OCCT runtime Body meshes.
-    PASS_REGULAR_EXPRESSION "R13_A1_OCCT_PASS exact_seam=1 extrude_solid=1 revolve_solid=1 stale_profile_publication=0 derived_extrude_x_shift=2mm derived_revolve_radii_shift=2mm stage_prefix_cut=1 pg01_reentrant_stale=0 pg01_reentrant_bind_stale=0 pg01_command_atomic_reentry=1 pg01_break_atomic_reentry=1"
+    PASS_REGULAR_EXPRESSION "R13_A1_OCCT_PASS exact_seam=1 extrude_solid=1 revolve_solid=1 stale_profile_publication=0 derived_extrude_x_shift=2mm derived_revolve_radii_shift=2mm stage_prefix_cut=1 pg01_reentrant_stale=0 pg01_reentrant_bind_stale=0 pg01_command_atomic_reentry=1 pg01_break_atomic_reentry=1 pg01_profile_command_reentry=1"
 )
 
 add_executable(pm00a_profile_cold_rebuild_test
