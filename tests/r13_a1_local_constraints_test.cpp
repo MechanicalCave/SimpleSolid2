@@ -3045,6 +3045,134 @@ int main() {
         CHECK(valid_problem->fixed_lines.size() == 1U);
         CHECK(valid_problem->fixed_lines.front() == linked.entity_ids.front());
 
+        // P21-08 current-stage PG-01: persist the SAME real OCCT Edge
+        // binding with an authored A1 relation on a different local Line,
+        // then re-evaluate with a NEW provider after native cold reopen.
+        // A deliberately stale projected seed makes any fallback visible.
+        {
+            auto coldState = projected_session.document().state();
+            const auto target = std::find_if(
+                coldState.sketches.begin(), coldState.sketches.end(),
+                [&](const part::PartSketch& item) {
+                    return item.id == *projected_sketch.sketch_id;
+                });
+            CHECK(target != coldState.sketches.end());
+            CHECK(target->projection_bindings.size() == 1U);
+            const auto oldBindings = target->projection_bindings;
+            const auto projectedId = linked.entity_ids.front();
+            CHECK(target->model.updateLine(
+                projectedId, {180.0, 180.0}, {190.0, 180.0}));
+            const auto restoredDoc = part::PartDocument::restore(
+                projected_session.document().documentId(),
+                std::move(coldState),
+                projected_session.document().revision());
+            CHECK(restoredDoc.ok() && restoredDoc.document);
+            app::DocumentSession authoredPg{
+                {}, std::move(*restoredDoc.document)};
+            const auto userLine = authoredPg.execute(
+                app::AddSketchLineCommand{
+                    *projected_sketch.sketch_id,
+                    {21.0, 22.0}, {27.0, 23.0}});
+            CHECK(userLine.ok() && userLine.entity_id);
+            const auto relation = authoredPg.execute(
+                app::AddHorizontalSketchConstraintCommand{
+                    *projected_sketch.sketch_id,
+                    authoredPg.document().revision(), *userLine.entity_id});
+            CHECK(relation.ok() && relation.constraint_id);
+            const auto* authoredPgSketch = authoredPg.document().findSketch(
+                *projected_sketch.sketch_id);
+            CHECK(authoredPgSketch != nullptr);
+            CHECK(authoredPgSketch->projection_bindings == oldBindings);
+            const auto authoredPgState = authoredPg.document().state();
+            const auto pgPath =
+                std::filesystem::temp_directory_path() /
+                ("r13a1_p21_pg01_stage_" +
+                 std::string{authoredPg.document().documentId().value()} +
+                 ".ss2part");
+            part::PartDocumentStore pgStore;
+            CHECK(pgStore.createNew(pgPath, authoredPg.document()).ok());
+            const auto pgCold = pgStore.load(pgPath);
+            CHECK(pgCold.ok() && pgCold.document);
+            CHECK(pgCold.document->documentId() ==
+                  authoredPg.document().documentId());
+            CHECK(pgCold.document->state() == authoredPgState);
+            const auto* coldPgSketch = pgCold.document->findSketch(
+                *projected_sketch.sketch_id);
+            CHECK(coldPgSketch != nullptr);
+            CHECK(coldPgSketch->projection_bindings == oldBindings);
+            CHECK(coldPgSketch->model.findConstraint(
+                *relation.constraint_id) != nullptr);
+            CHECK(coldPgSketch->model.constraintIdCursor().serialized() ==
+                  "2");
+            CHECK(coldPgSketch->model.findLine(projectedId)->start() ==
+                  (sk::Point2{180.0, 180.0}));
+
+            // Fresh OCCT ownership and runtime Edge tokens: only the new
+            // evaluated prefix at the cold document's exact revision can
+            // resolve these durable PG-01 material semantic references.
+            occt::OcctSolidModelingKernel freshPgProvider;
+            const auto freshPrefix =
+                part::evaluatePart(*pgCold.document, freshPgProvider);
+            CHECK(freshPrefix.source_revision ==
+                  pgCold.document->revision());
+            CHECK(freshPrefix.features.size() == 2U);
+            CHECK(freshPrefix.features.front().status ==
+                  part::FeatureEvaluationStatus::up_to_date);
+            CHECK(freshPrefix.features.front().result_solid);
+            CHECK(!part::prepareStageLocalSolveProblem(
+                *pgCold.document, *projected_sketch.sketch_id,
+                current_prefix, freshPgProvider));
+            auto foreign = freshPrefix;
+            foreign.source_document_id = core::DocumentId::generate();
+            CHECK(!part::prepareStageLocalSolveProblem(
+                *pgCold.document, *projected_sketch.sketch_id,
+                foreign, freshPgProvider));
+            auto stale = freshPrefix;
+            stale.source_revision = {};
+            CHECK(!part::prepareStageLocalSolveProblem(
+                *pgCold.document, *projected_sketch.sketch_id,
+                stale, freshPgProvider));
+            const auto effective = part::evaluateEffectiveSketchProjection(
+                *pgCold.document, *projected_sketch.sketch_id,
+                freshPrefix, freshPgProvider);
+            CHECK(effective && effective->allResolved());
+            CHECK(effective->outcomes.size() == 1U);
+            CHECK(effective->outcomes.front().target_entity == projectedId);
+            const auto effectiveLine = effective->model.findLine(projectedId);
+            CHECK(effectiveLine);
+            CHECK(effectiveLine->start() !=
+                  (sk::Point2{180.0, 180.0}));
+
+            const auto freshProblem = part::prepareStageLocalSolveProblem(
+                *pgCold.document, *projected_sketch.sketch_id,
+                freshPrefix, freshPgProvider);
+            CHECK(freshProblem);
+            CHECK(freshProblem->authored == coldPgSketch->model.state());
+            CHECK(freshProblem->lines.size() == 2U);
+            CHECK(freshProblem->fixed_lines.size() == 1U);
+            CHECK(freshProblem->fixed_lines.front() == projectedId);
+            const auto projectedSolverLine = std::find_if(
+                freshProblem->lines.cbegin(), freshProblem->lines.cend(),
+                [projectedId](const sk::LocalSolveLineInput& line) {
+                    return line.id == projectedId;
+                });
+            CHECK(projectedSolverLine != freshProblem->lines.cend());
+            CHECK(projectedSolverLine->fixed);
+            CHECK(projectedSolverLine->start == effectiveLine->start());
+            CHECK(projectedSolverLine->end == effectiveLine->end());
+            CHECK(freshProblem->constraints.size() == 1U);
+            CHECK(freshProblem->constraints.front().id ==
+                  *relation.constraint_id);
+            CHECK(freshProblem->constraints.front().kind ==
+                  sk::ConstraintKind::horizontal);
+            CHECK(freshProblem->equations.size() == 1U);
+            CHECK(freshProblem->equations.front().first.entity ==
+                  *userLine.entity_id);
+            CHECK(coldPgSketch->model.findLine(projectedId)->start() ==
+                  (sk::Point2{180.0, 180.0}));
+            CHECK(std::filesystem::remove(pgPath));
+        }
+
         struct ReentrantQuery final : kernel::IEdgeProjectionQuery {
             occt::OcctSolidModelingKernel& native;
             app::DocumentSession& session;
