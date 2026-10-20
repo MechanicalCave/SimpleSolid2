@@ -2928,6 +2928,96 @@ int main() {
     CHECK(std::abs(initial_radii.first - 5.0) < 0.1);
     CHECK(std::abs(initial_radii.second - 15.0) < 0.1);
 
+    // D2-P21-06: unlike a restored in-memory Part, this is a real native
+    // v21 Save -> Close -> Reopen of a constrained Sketch/owned Profile
+    // and a full Revolve Feature. Derived solver candidates, BRep and
+    // topology are NOT persisted. This OCCT test has an explicit TEST-
+    // ONLY ControlledSolver; original upstream PlaneGCS is exercised in
+    // its separate independently gated Windows native evidence tests.
+    {
+        const auto coldPath = std::filesystem::temp_directory_path() /
+            ("r13_a1_p21_native_revolve_" +
+             std::string{revolve_document.document->documentId().value()} +
+             ".ss2part");
+        part::PartDocumentStore coldStore;
+        const auto firstSave =
+            coldStore.createNew(coldPath, *revolve_document.document);
+        CHECK(firstSave.ok());
+        auto cold = coldStore.load(coldPath);
+        CHECK(cold.ok() && cold.document && cold.checkpoint);
+        CHECK(cold.document->documentId() ==
+              revolve_document.document->documentId());
+        CHECK(cold.document->state() ==
+              revolve_document.document->state());
+        const auto* coldSketch =
+            cold.document->findSketch(*sketch.sketch_id);
+        CHECK(coldSketch != nullptr);
+        CHECK(coldSketch->model.state() == seed);
+        CHECK(coldSketch->model.findConstraint(*coincide.constraint_id));
+        CHECK(cold.document->findProfile(*profile.profile_id));
+        CHECK(cold.document->state().body.features.size() == 1U);
+        CHECK(cold.document->state().body.features.front().id == *revolve_id);
+
+        occt::OcctSolidModelingKernel coldProvider;
+        const auto noSolver =
+            part::evaluatePart(*cold.document, coldProvider);
+        CHECK(noSolver.features.size() == 1U);
+        CHECK(noSolver.features.front().status ==
+              part::FeatureEvaluationStatus::blocked);
+        CHECK(noSolver.body_solid == nullptr);
+        ControlledSolver coldSolver;
+        const auto coldResult = part::evaluatePartWithLocalSolve(
+            *cold.document, coldProvider, policy, coldSolver);
+        CHECK(coldResult.source_document_id == cold.document->documentId());
+        CHECK(coldResult.source_revision == cold.document->revision());
+        CHECK(coldResult.features.size() == 1U);
+        CHECK(coldResult.features.front().feature_id == *revolve_id);
+        CHECK(coldResult.features.front().status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(coldResult.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(coldResult.body_solid != nullptr);
+        CHECK(coldResult.current_topology);
+        CHECK(coldResult.current_topology->complete());
+        CHECK(coldSolver.calls == 1U);
+        const auto coldMesh =
+            coldProvider.presentationMesh(coldResult.body_solid);
+        CHECK(coldMesh.ok());
+        const auto coldRadii = radial_bounds(coldMesh.mesh);
+        CHECK(std::abs(coldRadii.first - initial_radii.first) < 0.1);
+        CHECK(std::abs(coldRadii.second - initial_radii.second) < 0.1);
+        CHECK(cold.document->findSketch(*sketch.sketch_id)
+            ->model.state() == seed);
+
+        // A second explicit Save and independent Load must not persist
+        // either previous OCCT body or the numerical solved endpoints.
+        CHECK(coldStore.save(
+            coldPath, *cold.document, *cold.checkpoint).ok());
+        const auto again = coldStore.load(coldPath);
+        CHECK(again.ok() && again.document);
+        CHECK(again.document->documentId() ==
+              revolve_document.document->documentId());
+        CHECK(again.document->state() ==
+              revolve_document.document->state());
+        CHECK(again.document->findSketch(*sketch.sketch_id)
+            ->model.state() == seed);
+        occt::OcctSolidModelingKernel againProvider;
+        ControlledSolver againSolver;
+        const auto recomputed = part::evaluatePartWithLocalSolve(
+            *again.document, againProvider, policy, againSolver);
+        CHECK(recomputed.features.size() == 1U);
+        CHECK(recomputed.features.front().feature_id == *revolve_id);
+        CHECK(recomputed.features.front().status ==
+              part::FeatureEvaluationStatus::up_to_date);
+        CHECK(recomputed.body_status ==
+              part::BodyEvaluationStatus::up_to_date);
+        CHECK(recomputed.body_solid != nullptr);
+        CHECK(recomputed.current_topology);
+        CHECK(recomputed.current_topology->complete());
+        CHECK(againSolver.calls == 1U);
+        CHECK(std::filesystem::remove(coldPath));
+    }
+
     backend.translated_u = 2.0;
     const auto shifted_revolve = part::evaluatePartWithLocalSolve(
         *revolve_document.document, provider, policy, backend);
