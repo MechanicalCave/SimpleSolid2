@@ -3170,6 +3170,85 @@ int main() {
                   *userLine.entity_id);
             CHECK(coldPgSketch->model.findLine(projectedId)->start() ==
                   (sk::Point2{180.0, 180.0}));
+
+            // P21-08 negative cold-stage controls: even on an EXACT
+            // source document/revision and a valid persisted binding,
+            // the runtime OCCT provider can lose the scoped Edge while
+            // binding or refuse the geometric projection afterwards.
+            // Neither path may substitute authored seed coordinates,
+            // permit solver admission or change the durable model/IDs.
+            struct DenyingColdProjection final
+                : kernel::IEdgeProjectionQuery {
+                occt::OcctSolidModelingKernel& native;
+                bool deny_on_bind{};
+                unsigned binds{};
+                unsigned projections{};
+
+                std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+                    kernel::RuntimeSolidHandle solid,
+                    kernel::RuntimeEdgeToken token) noexcept override {
+                    ++binds;
+                    if (deny_on_bind) return std::nullopt;
+                    return native.bindEdgeToBody(std::move(solid), token);
+                }
+
+                kernel::EdgeProjectionResult projectEdgeToPlane(
+                    kernel::RuntimeSolidHandle,
+                    const kernel::ScopedProjectionEdge&,
+                    const kernel::Frame3&) noexcept override {
+                    ++projections;
+                    // Return a typed provider failure, not a stale curve
+                    // masquerading as live OCCT geometry.
+                    return {};
+                }
+            };
+            const auto authoredBeforeFailure = coldPgSketch->model.state();
+            const auto partBeforeFailure = pgCold.document->state();
+            DenyingColdProjection unavailable{
+                freshPgProvider, true};
+            const auto noBinding = part::evaluateEffectiveSketchProjection(
+                *pgCold.document, *projected_sketch.sketch_id,
+                freshPrefix, unavailable);
+            CHECK(!noBinding || !noBinding->allResolved());
+            CHECK(unavailable.binds == 1U);
+            CHECK(unavailable.projections == 0U);
+            CHECK(!part::prepareStageLocalSolveProblem(
+                *pgCold.document, *projected_sketch.sketch_id,
+                freshPrefix, unavailable));
+            CHECK(unavailable.projections == 0U);
+
+            DenyingColdProjection cannotProject{
+                freshPgProvider, false};
+            const auto noProjection = part::evaluateEffectiveSketchProjection(
+                *pgCold.document, *projected_sketch.sketch_id,
+                freshPrefix, cannotProject);
+            CHECK(!noProjection || !noProjection->allResolved());
+            CHECK(cannotProject.binds == 1U);
+            CHECK(cannotProject.projections == 1U);
+            CHECK(!part::prepareStageLocalSolveProblem(
+                *pgCold.document, *projected_sketch.sketch_id,
+                freshPrefix, cannotProject));
+            CHECK(cannotProject.projections >= 2U);
+            CHECK(coldPgSketch->model.state() == authoredBeforeFailure);
+            CHECK(pgCold.document->state() == partBeforeFailure);
+            CHECK(coldPgSketch->model.findConstraint(
+                *relation.constraint_id) != nullptr);
+            CHECK(coldPgSketch->model.findLine(projectedId)->start() ==
+                  (sk::Point2{180.0, 180.0}));
+
+            // Once the live provider is available again on the SAME
+            // revision, recompute succeeds without repairing the seed.
+            const auto afterProviderRecovery =
+                part::prepareStageLocalSolveProblem(
+                    *pgCold.document, *projected_sketch.sketch_id,
+                    freshPrefix, freshPgProvider);
+            CHECK(afterProviderRecovery);
+            CHECK(afterProviderRecovery->fixed_lines.size() == 1U);
+            CHECK(afterProviderRecovery->fixed_lines.front() == projectedId);
+            CHECK(afterProviderRecovery->constraints.size() == 1U);
+            CHECK(afterProviderRecovery->constraints.front().id ==
+                  *relation.constraint_id);
+            CHECK(pgCold.document->state() == partBeforeFailure);
             CHECK(std::filesystem::remove(pgPath));
         }
 
