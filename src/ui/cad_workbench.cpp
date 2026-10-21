@@ -3052,6 +3052,11 @@ void CadWorkbench::buildUi() {
         {"Radius", "sketchDimensionRadiusButton"},
         {"Diameter", "sketchDimensionDiameterButton"},
     };
+    constexpr std::array dimension_kinds_for_ui{
+        sketch::DrivingDimensionToolKind::length,
+        sketch::DrivingDimensionToolKind::radius,
+        sketch::DrivingDimensionToolKind::diameter,
+    };
     int dimension_index = 0;
     for (const auto& spec : dimension_kinds) {
         auto* control = new QPushButton(
@@ -3061,7 +3066,21 @@ void CadWorkbench::buildUi() {
         control->setCheckable(true);
         control->setEnabled(false);
         control->setToolTip(QStringLiteral(
-            "A2.1/A2.2: numeric solver, native v22 and 3D labels pending."));
+            "Dimension type selection only. Numeric v22 authoring not yet enabled."));
+        sketch_dimension_kind_buttons_[static_cast<std::size_t>(
+            dimension_index)] = control;
+        const auto selected_kind = dimension_kinds_for_ui[
+            static_cast<std::size_t>(dimension_index)];
+        QObject::connect(control, &QPushButton::clicked, this,
+            [this, selected_kind] {
+                if (!sketch_interaction_controller_ ||
+                    !sketch_interaction_controller_->selectDimensionKind(
+                        selected_kind)) {
+                    setStatusText(QStringLiteral(
+                        "Could not select dimension kind in current Sketch context."));
+                    syncSketchInteractionUi();
+                }
+            });
         dimensions_grid->addWidget(
             control, dimension_index / 2, dimension_index % 2);
         ++dimension_index;
@@ -17187,6 +17206,22 @@ void CadWorkbench::syncSketchInteractionUi() {
     }
     if (sketch_dimensions_operations_widget_ != nullptr) {
         sketch_dimensions_operations_widget_->setVisible(dimensions_mode);
+    }
+    const auto selected_dimension =
+        editing ? sketch_interaction_controller_->dimensionKind()
+                : std::optional<sketch::DrivingDimensionToolKind>{};
+    constexpr std::array dimension_kinds_for_mode{
+        sketch::DrivingDimensionToolKind::length,
+        sketch::DrivingDimensionToolKind::radius,
+        sketch::DrivingDimensionToolKind::diameter,
+    };
+    for (std::size_t i = 0; i < sketch_dimension_kind_buttons_.size(); ++i) {
+        if (auto* button = sketch_dimension_kind_buttons_[i]) {
+            button->setEnabled(dimensions_mode);
+            button->setChecked(
+                dimensions_mode && selected_dimension &&
+                *selected_dimension == dimension_kinds_for_mode[i]);
+        }
     }
     if (sketch_a2_visibility_widget_ != nullptr) {
         // Visibility is an Operations preference throughout Sketch Edit,
