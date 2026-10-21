@@ -66,10 +66,29 @@ void writeBytes(
     CHECK(static_cast<bool>(out));
 }
 
+
+void stripEmptyV21SketchRelations(nlohmann::json& authored) {
+    // Synthetic old-schema fixtures only; never discard actual constraints.
+    for (auto& sketch : authored.at("sketches")) {
+        auto& model = sketch.at("model");
+        CHECK(model.at("constraints").is_array());
+        CHECK(model.at("constraints").empty());
+        CHECK(model.at("next_constraint_id") == "1");
+        model.erase("constraints");
+        model.erase("next_constraint_id");
+    }
+}
+
 std::string repackage(
     const persistence::NativeDocumentPackage& package,
     int schema_version,
     std::string authored_json) {
+    if (schema_version < 21) {
+        auto authored = nlohmann::json::parse(authored_json, nullptr, false);
+        CHECK(authored.is_object());
+        stripEmptyV21SketchRelations(authored);
+        authored_json = authored.dump(2) + "\n";
+    }
     if (schema_version < 18) {
         auto authored = nlohmann::json::parse(
             authored_json,nullptr,false);
@@ -704,7 +723,7 @@ void verifyPg01bB1BindingStructure(
     const auto native =
         persistence::readNativeDocumentContainer(saved_path);
     CHECK(native.ok());
-    CHECK(native.package->descriptor.domain_schema_version == 20);
+    CHECK(native.package->descriptor.domain_schema_version == 21);
     const auto original_authored =
         nlohmann::json::parse(
             native.package->authored_json);
@@ -818,7 +837,7 @@ void verifyPg01bB1BindingStructure(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        20);
+        21);
 
     const auto fixture = makeFixture();
     verifyPg01bB1BindingStructure(fixture);
@@ -971,7 +990,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     const auto authored =
         nlohmann::json::parse(
@@ -1077,7 +1096,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     // New Edge Feature records are schema-v14-only and must fail closed when
     // deliberately mislabeled as a legacy v13 payload.

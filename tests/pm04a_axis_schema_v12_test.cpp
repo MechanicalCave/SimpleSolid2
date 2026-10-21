@@ -89,11 +89,25 @@ bool near(double lhs, double rhs) {
     return std::abs(lhs - rhs) < 1.0e-12;
 }
 
+
+void stripEmptyV21SketchRelations(nlohmann::json& authored) {
+    // Synthetic old-schema fixtures only; never discard actual constraints.
+    for (auto& sketch : authored.at("sketches")) {
+        auto& model = sketch.at("model");
+        CHECK(model.at("constraints").is_array());
+        CHECK(model.at("constraints").empty());
+        CHECK(model.at("next_constraint_id") == "1");
+        model.erase("constraints");
+        model.erase("next_constraint_id");
+    }
+}
+
 std::string schema11FromCurrent(
     const persistence::NativeDocumentPackage& package) {
     auto authored =
         nlohmann::json::parse(
             package.authored_json);
+    stripEmptyV21SketchRelations(authored);
     CHECK(authored.contains("next_axis_id"));
     CHECK(authored.contains("axes"));
     authored.erase("next_axis_id");
@@ -137,7 +151,7 @@ std::string schema11FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        20);
+        21);
 
     part::AxisIdCursor cursor;
     const auto first = cursor.allocate();
@@ -402,7 +416,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     const auto authored =
         nlohmann::json::parse(
@@ -433,6 +447,7 @@ int main() {
         const nlohmann::json& axis_source,
         const char* filename) {
         auto malformed_authored = authored;
+        stripEmptyV21SketchRelations(malformed_authored);
         auto& first_axis = malformed_authored["axes"].at(0);
         first_axis.erase("source_sketch_id");
         first_axis.erase("source_entity_id");
@@ -464,7 +479,9 @@ int main() {
     // A real v19 native Part with legacy Sketch Line sources must retain
     // its exact Axis records and stable AxisId under the new v20 reader.
     // Only the subsequent writer upgrade changes the file descriptor.
-    auto legacy_v19_text = authored.dump(2);
+    auto legacy_v19_authored = authored;
+    stripEmptyV21SketchRelations(legacy_v19_authored);
+    auto legacy_v19_text = legacy_v19_authored.dump(2);
     legacy_v19_text.push_back('\n');
     const auto old_container =
         persistence::buildNativeDocumentContainer(
@@ -486,7 +503,7 @@ int main() {
     const auto rewritten_v19 =
         persistence::readNativeDocumentContainer(old_path);
     CHECK(rewritten_v19.ok());
-    CHECK(rewritten_v19.package->descriptor.domain_schema_version == 20);
+    CHECK(rewritten_v19.package->descriptor.domain_schema_version == 21);
     const auto rewritten_v19_authored = nlohmann::json::parse(
         rewritten_v19.package->authored_json);
     CHECK(rewritten_v19_authored.at("axes") ==
@@ -581,7 +598,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);

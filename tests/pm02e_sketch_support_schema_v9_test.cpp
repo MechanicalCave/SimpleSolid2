@@ -207,6 +207,19 @@ nlohmann::json legacyPlacementFor(
     };
 }
 
+
+void stripEmptyV21SketchRelations(nlohmann::json& authored) {
+    // Synthetic old-schema fixtures only; never discard actual constraints.
+    for (auto& sketch : authored.at("sketches")) {
+        auto& model = sketch.at("model");
+        CHECK(model.at("constraints").is_array());
+        CHECK(model.at("constraints").empty());
+        CHECK(model.at("next_constraint_id") == "1");
+        model.erase("constraints");
+        model.erase("next_constraint_id");
+    }
+}
+
 std::string buildSchema8FromCurrentOriginDocument(
     const persistence::NativeDocumentPackage& package,
     bool corrupt_placement = false) {
@@ -214,6 +227,7 @@ std::string buildSchema8FromCurrentOriginDocument(
         nlohmann::json::parse(
             package.authored_json);
     CHECK(authored.contains("sketches"));
+    stripEmptyV21SketchRelations(authored);
     // Current schema may contain later-domain fields. An exact v8 payload
     // must remove everything introduced after v8 before adding legacy
     // authored placement.
@@ -271,6 +285,7 @@ std::string buildSchema9FromCurrentDocument(
     auto authored =
         nlohmann::json::parse(
             package.authored_json);
+    stripEmptyV21SketchRelations(authored);
     CHECK(authored.contains("next_datum_id"));
     CHECK(authored.contains("datum_planes"));
     CHECK(authored.contains("next_axis_id"));
@@ -391,7 +406,7 @@ int main() {
     CHECK(current_package.ok());
     CHECK(
         current_package.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
     CHECK(
         current_package.package->authored_json.find(
             "\"placement\"") ==
@@ -507,7 +522,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
     CHECK(
         rewritten.package->authored_json.find(
             "\"placement\"") ==
@@ -622,7 +637,7 @@ int main() {
     CHECK(body_package.ok());
     CHECK(
         body_package.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
     CHECK(
         body_package.package->authored_json.find(
             "\"body_planar_surface\"") !=
