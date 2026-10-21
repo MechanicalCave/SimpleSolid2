@@ -30,6 +30,8 @@ enum class SketchTool : std::uint8_t {
     trim,
     extend,
     extend_both,
+    relations, // R13-A2 explicit relation mode, no inference authoring
+    dimensions, // R13-A2 explicit driving-dimension mode
 };
 
 enum class MeasureRelationAcceptOutcome : std::uint8_t {
@@ -515,6 +517,8 @@ public:
     void activateCircle() noexcept;
     void activateArc() noexcept;
     void activateRectangle() noexcept;
+    void activateRelations() noexcept;
+    void activateDimensions() noexcept;
     void activateMeasure(const SketchModel& model) noexcept;
     [[nodiscard]] std::optional<EntityId>
     measureTarget() const noexcept {
