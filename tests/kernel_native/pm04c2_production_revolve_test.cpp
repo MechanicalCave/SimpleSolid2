@@ -994,9 +994,29 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
         CHECK(restored.ok());
         const part::AxisReference authored{
             part::AuthoredAxisReference{*id}};
-        const auto resolved = part::resolveAxisReference(
+        // A restored Part with identical DocumentId, revision and authored
+        // bytes is a DIFFERENT runtime incarnation. The source evaluation
+        // must fail closed; only a freshly evaluated restored Part may
+        // resolve this persisted semantic Face Axis.
+        CHECK(restored.document->documentId() == document.documentId());
+        CHECK(restored.document->revision() == document.revision());
+        CHECK(restored.document->incarnationToken() !=
+              document.incarnationToken());
+        const auto rejectedForeign = part::resolveAxisReference(
             *restored.document, authored,
             &evaluation, nullptr, nullptr, &provider);
+        CHECK(rejectedForeign.status ==
+              part::AxisEvaluationStatus::blocked);
+        CHECK(rejectedForeign.diagnostic ==
+              part::AxisEvaluationDiagnostic::stale_part_evaluation);
+        CHECK(!rejectedForeign.line);
+        const auto localEvaluation =
+            part::evaluatePart(*restored.document, provider);
+        CHECK(part::ownsCurrentPartEvaluation(
+            *restored.document, localEvaluation));
+        const auto resolved = part::resolveAxisReference(
+            *restored.document, authored,
+            &localEvaluation, nullptr, nullptr, &provider);
         CHECK(resolved.status ==
               part::AxisEvaluationStatus::resolved);
         CHECK(resolved.valid());
