@@ -2377,6 +2377,20 @@ bool PartSketchInteractionController::selectRelationKind(
     return true;
 }
 
+bool PartSketchInteractionController::selectDimensionKind(
+    sketch::DrivingDimensionToolKind kind) {
+    if (!active() || profile_session_ ||
+        !interaction_.setDimensionKind(kind)) {
+        return false;
+    }
+    projectInteraction();
+    notifyStateChanged();
+    reportStatus(
+        "DIMENSIONS: type selected. Authoring is blocked pending "
+        "strict v22 and a native driving solver; no Part change.");
+    return true;
+}
+
 void PartSketchInteractionController::activateDimensions() {
     if (!active()) return;
     resetProfileRuntime();
