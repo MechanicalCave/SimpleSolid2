@@ -2993,14 +2993,15 @@ void CadWorkbench::buildUi() {
     struct A2Option final {
         const char* label;
         const char* object_name;
+        sketch::ConstraintKind relation_kind{sketch::ConstraintKind::horizontal};
     };
     constexpr A2Option relation_kinds[] = {
-        {"Horizontal", "sketchRelationHorizontalButton"},
-        {"Vertical", "sketchRelationVerticalButton"},
-        {"Coincident", "sketchRelationCoincidentButton"},
-        {"Parallel", "sketchRelationParallelButton"},
-        {"Perpendicular", "sketchRelationPerpendicularButton"},
-        {"Fix", "sketchRelationFixButton"},
+        {"Horizontal", "sketchRelationHorizontalButton", sketch::ConstraintKind::horizontal},
+        {"Vertical", "sketchRelationVerticalButton", sketch::ConstraintKind::vertical},
+        {"Coincident", "sketchRelationCoincidentButton", sketch::ConstraintKind::coincident},
+        {"Parallel", "sketchRelationParallelButton", sketch::ConstraintKind::parallel},
+        {"Perpendicular", "sketchRelationPerpendicularButton", sketch::ConstraintKind::perpendicular},
+        {"Fix", "sketchRelationFixButton", sketch::ConstraintKind::fix},
     };
     int relation_index = 0;
     for (const auto& spec : relation_kinds) {
@@ -3011,7 +3012,19 @@ void CadWorkbench::buildUi() {
         control->setCheckable(true);
         control->setEnabled(false);
         control->setToolTip(QStringLiteral(
-            "A2.0: requires current-stage numerical authoring gateway."));
+            "Relation type selection only. Numerical authoring not yet enabled."));
+        sketch_relation_kind_buttons_[static_cast<std::size_t>(relation_index)] = control;
+        const auto selected_kind = spec.relation_kind;
+        QObject::connect(control, &QPushButton::clicked, this,
+            [this, selected_kind] {
+                if (!sketch_interaction_controller_ ||
+                    !sketch_interaction_controller_->selectRelationKind(
+                        selected_kind)) {
+                    setStatusText(QStringLiteral(
+                        "Could not select relation kind in current Sketch context."));
+                    syncSketchInteractionUi();
+                }
+            });
         relations_grid->addWidget(
             control, relation_index / 2, relation_index % 2);
         ++relation_index;
@@ -17152,6 +17165,25 @@ void CadWorkbench::syncSketchInteractionUi() {
     }
     if (sketch_relations_operations_widget_ != nullptr) {
         sketch_relations_operations_widget_->setVisible(relations_mode);
+    }
+    const auto selected_relation =
+        editing ? sketch_interaction_controller_->relationKind()
+                : std::optional<sketch::ConstraintKind>{};
+    constexpr std::array relation_kinds_for_ui{
+        sketch::ConstraintKind::horizontal,
+        sketch::ConstraintKind::vertical,
+        sketch::ConstraintKind::coincident,
+        sketch::ConstraintKind::parallel,
+        sketch::ConstraintKind::perpendicular,
+        sketch::ConstraintKind::fix,
+    };
+    for (std::size_t i = 0; i < sketch_relation_kind_buttons_.size(); ++i) {
+        if (auto* button = sketch_relation_kind_buttons_[i]) {
+            button->setEnabled(relations_mode);
+            button->setChecked(
+                relations_mode && selected_relation &&
+                *selected_relation == relation_kinds_for_ui[i]);
+        }
     }
     if (sketch_dimensions_operations_widget_ != nullptr) {
         sketch_dimensions_operations_widget_->setVisible(dimensions_mode);
