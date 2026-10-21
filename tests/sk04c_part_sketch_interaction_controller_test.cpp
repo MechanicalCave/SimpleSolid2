@@ -70,7 +70,7 @@ public:
     std::optional<viewer::ViewportPoint2> projectWorldPoint(
         viewer::Point3 point) const override {
         if (!enable_point_projection_ ||
-            !point.valid()) return std::nullopt;
+            !viewer::finite(point)) return std::nullopt;
         // Stub projective frame is explicit, deterministic and opt-in:
         // 10 screen logical pixels per unit in the Sketch XY plane.
         return viewer::ViewportPoint2{
