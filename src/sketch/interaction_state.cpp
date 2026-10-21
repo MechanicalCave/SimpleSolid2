@@ -1355,6 +1355,36 @@ void SketchInteractionState::activateRectangle() noexcept {
     resetRectangleStage();
 }
 
+void SketchInteractionState::activateRelations() noexcept {
+    // Mode activation is transient Sketch-owned state. No constraint may
+    // be committed by a Qt button or from ordinary snap/inference.
+    resetStructuralEdit();
+    resetMeasure();
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    tool_ = SketchTool::relations;
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    resetRectangleStage();
+}
+
+void SketchInteractionState::activateDimensions() noexcept {
+    resetStructuralEdit();
+    resetMeasure();
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    tool_ = SketchTool::dimensions;
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    resetRectangleStage();
+}
+
 void SketchInteractionState::activateMeasure(
     const SketchModel& model) noexcept {
     resetStructuralEdit();
