@@ -1137,6 +1137,48 @@ int main() {
         CHECK(!session.execute(wrong_owner, policy, backend).ok());
         CHECK(backend.calls == 1);
 
+        // Reusing valid identifiers in another document is not enough.
+        const app::AddSolvedSketchRelationCommand wrong_document{
+            sid, core::DocumentId::generate(),
+            session.document().revision(),
+            session.document().incarnationToken(),
+            sk::ConstraintKind::vertical,
+            {id, sk::ConstraintElement::line}, {}};
+        const auto wrong_document_undo = session.undoDepth();
+        CHECK(!session.execute(wrong_document, policy, backend).ok());
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == wrong_document_undo);
+
+        // Numerically impossible horizontal request on a skew free Line:
+        // echo backend falsely claims convergence. Independent residual
+        // review must reject it with typed diagnostics and ZERO Part change.
+        const auto skew_line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {10.0, 10.0}, {15.0, 12.0}});
+        CHECK(skew_line.ok() && skew_line.entity_id);
+        const auto skew_before =
+            session.document().findSketch(sid)->model.state();
+        const auto skew_rev = session.document().revision();
+        const auto skew_undo = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand impossible{
+            sid, session.document().documentId(), skew_rev,
+            session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {*skew_line.entity_id, sk::ConstraintElement::line}, {}};
+        const auto refused_solve =
+            session.execute(impossible, policy, backend);
+        CHECK(!refused_solve.ok() && !refused_solve.changed);
+        CHECK(!refused_solve.constraint_id);
+        CHECK(refused_solve.preflight_status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(refused_solve.solver_status ==
+              sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().revision() == skew_rev);
+        CHECK(session.undoDepth() == skew_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              skew_before);
+
         // Stale backend result re-entry cannot overwrite a newer Part.
         const auto next_line = session.execute(
             app::AddSketchLineCommand{
