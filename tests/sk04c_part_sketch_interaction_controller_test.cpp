@@ -2429,6 +2429,45 @@ int main(int argc, char* argv[]) {
         CHECK(a2_session.undoDepth() == original_undo);
         CHECK(a2_session.document().findSketch(sid)->model.state() ==
               original_sketch);
+
+        // Selection-first: two previously selected local Lines fill the
+        // Parallel transient intent when the kind is selected, without
+        // another click, solver bypass or Part Undo entry.
+        a2_interaction.activateSelect();
+        CHECK(a2_viewport.sketch_scene_.lines.size() == 2U);
+        a2_viewport.point_query_ = {
+            true, a2_viewport.sketch_scene_.lines[0].token};
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_release,
+            125.0, 100.0, 2.5, 0.0));
+        a2_viewport.point_query_ = {
+            true, a2_viewport.sketch_scene_.lines[1].token};
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_release,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(a2_interaction.selectedCount() == 2U);
+        a2_interaction.activateRelations();
+        CHECK(a2_interaction.selectRelationKind(
+            sketch::ConstraintKind::parallel));
+        CHECK(a2_interaction.relationKind() ==
+              sketch::ConstraintKind::parallel);
+        CHECK(!a2_interaction.firstRelationTarget());
+        CHECK(a2_session.document().revision() == original_revision);
+        CHECK(a2_session.undoDepth() == original_undo);
+        CHECK(a2_session.document().findSketch(sid)->model.state() ==
+              original_sketch);
+
+        // Preselected line identities do not determine Coincident
+        // endpoint roles; they may not be silently guessed.
+        CHECK(a2_interaction.selectRelationKind(
+            sketch::ConstraintKind::coincident));
+        CHECK(!a2_interaction.firstRelationTarget());
         a2_interaction.end();
     }
 
