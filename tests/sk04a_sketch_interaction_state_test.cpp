@@ -592,9 +592,17 @@ int main() {
     CHECK(!acquire.setRelationKind(static_cast<RK>(255)));
     CHECK(acquire.relationKind() == RK::fix);
     CHECK(relation_model.state() == relation_before);
+    CHECK(!acquire.setDimensionKind(sketch::DrivingDimensionToolKind::length));
     acquire.activateDimensions();
     CHECK(acquire.tool() == sketch::SketchTool::dimensions);
     CHECK(!acquire.relationKind());
+    CHECK(!acquire.dimensionKind());
+    CHECK(acquire.setDimensionKind(sketch::DrivingDimensionToolKind::length));
+    CHECK(acquire.dimensionKind() == sketch::DrivingDimensionToolKind::length);
+    CHECK(acquire.setDimensionKind(sketch::DrivingDimensionToolKind::diameter));
+    CHECK(acquire.dimensionKind() == sketch::DrivingDimensionToolKind::diameter);
+    CHECK(!acquire.setDimensionKind(static_cast<sketch::DrivingDimensionToolKind>(255)));
+    CHECK(acquire.dimensionKind() == sketch::DrivingDimensionToolKind::diameter);
     CHECK(acquire.acceptRelationTarget(
         relation_model, first_line
     ).outcome == RO::inactive);
