@@ -637,6 +637,7 @@ private:
     QLabel* operations_placeholder_{};
     QWidget* sketch_relations_operations_widget_{};
     QWidget* sketch_dimensions_operations_widget_{};
+    QWidget* sketch_a2_visibility_widget_{};
     QCheckBox* sketch_show_constraints_check_{};
     QCheckBox* sketch_show_dimensions_check_{};
     QWidget* precision_operations_widget_{};
