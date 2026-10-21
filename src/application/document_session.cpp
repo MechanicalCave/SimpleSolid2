@@ -2025,6 +2025,103 @@ AddSketchConstraintResult DocumentSession::execute(
     return {true, *id, {}};
 }
 
+AddSolvedSketchRelationResult DocumentSession::execute(
+    const AddSolvedSketchRelationCommand& command,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend) {
+    const auto reject = [this](
+        DocumentSessionErrorCode code,
+        const char* message) -> AddSolvedSketchRelationResult {
+        const auto error = failure(code, message, path_);
+        return {false, std::nullopt, std::nullopt, std::nullopt,
+                {}, error.diagnostic};
+    };
+
+    // The exact live runtime incarnation is part of this command's
+    // provenance, not a serialized DocumentId or provider handle.
+    const auto current_incarnation = document_.incarnationToken();
+    const auto expected_incarnation = command.expected_incarnation.lock();
+    if (!expected_incarnation || !current_incarnation ||
+        expected_incarnation != current_incarnation ||
+        command.expected_document_id != document_.documentId()) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Part incarnation / DocumentId mismatch");
+    }
+    if (document_.revision() != command.expected_revision) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation command has stale DocumentRevision");
+    }
+    if (command.kind == sketch::ConstraintKind::fix) {
+        // Fix Current Position must first capture the verified *effective*
+        // solved endpoints, not just the unsolved authored seeds.
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position needs a separate evaluated-position command");
+    }
+
+    // The first bounded numeric writer accepts only built-in origin-plane
+    // Sketches with zero PG-01 links. No provider or upstream stage can be
+    // silently reconstructed from authored projected seeds. Other support
+    // kinds require an explicit stage/provider-bound D2 extension.
+    const auto before = document_.state();
+    auto after = before;
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (!target ||
+        !part::builtinOriginPlaneForSketchSupport(target->support) ||
+        !target->projection_bindings.empty()) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation requires an unlinked current builtin-plane Sketch");
+    }
+
+    const auto preflight = sketch::preflightLocalRelation(
+        target->model.state(), command.kind,
+        command.first, command.second, {}, policy, backend);
+    // A backend may re-enter the session. Check both semantic state and
+    // identity AFTER solve; never publish a now-stale candidate.
+    if (document_.revision() != command.expected_revision ||
+        document_.documentId() != command.expected_document_id ||
+        document_.incarnationToken() != expected_incarnation ||
+        document_.state() != before) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation Part context changed during numeric evaluation");
+    }
+
+    if (preflight.status !=
+            sketch::LocalRelationPreflightStatus::candidate_accepted ||
+        !preflight.proposed_authored ||
+        !preflight.provisional_constraint_id) {
+        const auto error = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Solved relation rejected by semantic or numeric validation",
+            path_);
+        return {false, std::nullopt, preflight.status,
+                preflight.solve.status, preflight.solve.diagnostics,
+                error.diagnostic};
+    }
+
+    // Reconstruct the fully validated authored proposal in a temporary
+    // Part state. The accepted *derived* solution remains ephemeral:
+    // it must never replace authored seeds or enter native persistence.
+    auto model = sketch::SketchModel::restore(
+        *preflight.proposed_authored);
+    if (!model) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation accepted an invalid temporary Sketch model");
+    }
+    target->model = std::move(*model);
+    const auto committed = commitCommandState(
+        std::move(after),
+        "Part transaction failed while adding numerically solved Sketch relation");
+    if (!committed.ok() || !committed.changed) {
+        return {false, std::nullopt, preflight.status,
+                preflight.solve.status, preflight.solve.diagnostics,
+                committed.diagnostic};
+    }
+    return {true, preflight.provisional_constraint_id,
+            preflight.status, preflight.solve.status,
+            preflight.solve.diagnostics, {}};
+}
+
 AddSketchConstraintResult DocumentSession::execute(
     const AddHorizontalSketchConstraintCommand& command) {
     return execute(AddSketchRelationCommand{
