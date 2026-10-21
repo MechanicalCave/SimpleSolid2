@@ -2355,6 +2355,8 @@ int main(int argc, char* argv[]) {
     auto* show_dimensions = workbench.findChild<QCheckBox*>(
         QStringLiteral("sketchShowDimensionsCheck"));
     CHECK(show_constraints && show_dimensions);
+    CHECK(!show_constraints->isHidden());
+    CHECK(!show_dimensions->isHidden());
     CHECK(operations->parentWidget()->isAncestorOf(show_constraints));
     CHECK(operations->parentWidget()->isAncestorOf(show_dimensions));
     auto* relation_operations = workbench.findChild<QWidget*>(
