@@ -599,14 +599,19 @@ LocalRelationPreflightResult preflightLocalRelation(
         return result;
     }
 
-    result.provisional_constraint_id = *provisional_id;
-    result.proposed_authored = draft;
     result.solve = evaluateLocalSolve(*prepared, policy, backend);
-    result.status =
-        result.solve.status == LocalSolveGatewayStatus::candidate_accepted &&
-        result.solve.candidate.has_value()
-            ? LocalRelationPreflightStatus::candidate_accepted
-            : LocalRelationPreflightStatus::solver_rejected;
+    // A rejected numerical proposal must not expose any authored draft
+    // or provisional identity that a future caller could accidentally
+    // publish. Diagnostics remain available separately in result.solve.
+    if (result.solve.status ==
+            LocalSolveGatewayStatus::candidate_accepted &&
+        result.solve.candidate.has_value()) {
+        result.status = LocalRelationPreflightStatus::candidate_accepted;
+        result.provisional_constraint_id = *provisional_id;
+        result.proposed_authored = std::move(draft);
+    } else {
+        result.status = LocalRelationPreflightStatus::solver_rejected;
+    }
     // No DocumentSession command, no model write and no revision/lease
     // capture occurs here. A real writer MUST solve the authoritative
     // revision again within a single guarded Part transaction.
