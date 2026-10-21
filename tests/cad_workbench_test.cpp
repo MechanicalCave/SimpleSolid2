@@ -2357,6 +2357,30 @@ int main(int argc, char* argv[]) {
     CHECK(show_constraints && show_dimensions);
     CHECK(operations->parentWidget()->isAncestorOf(show_constraints));
     CHECK(operations->parentWidget()->isAncestorOf(show_dimensions));
+    auto* relation_operations = workbench.findChild<QWidget*>(
+        QStringLiteral("sketchRelationsOperations"));
+    auto* dimension_operations = workbench.findChild<QWidget*>(
+        QStringLiteral("sketchDimensionsOperations"));
+    CHECK(relation_operations && dimension_operations);
+    CHECK(relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+    relations_tool->click();
+    QApplication::processEvents();
+    CHECK(relations_tool->isChecked());
+    CHECK(!dimensions_tool->isChecked());
+    CHECK(!relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+    CHECK(!finish_sketch->isHidden());
+    dimensions_tool->click();
+    QApplication::processEvents();
+    CHECK(dimensions_tool->isChecked());
+    CHECK(!relations_tool->isChecked());
+    CHECK(relation_operations->isHidden());
+    CHECK(!dimension_operations->isHidden());
+    select_tool->click();
+    QApplication::processEvents();
+    CHECK(relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
 
     CHECK(mirror_keep_original->isHidden());
     CHECK(operations->parentWidget()->isAncestorOf(
