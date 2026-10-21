@@ -10,6 +10,7 @@
 #include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/sketch/local_solver.hpp>
 #include <simplesolid2/sketch/structural_edit.hpp>
 #include <simplesolid2/sketch/transform.hpp>
 
@@ -139,6 +140,20 @@ struct BreakProjectedEdgeLinksCommand final {
 struct AddSketchRelationCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
+    sketch::ConstraintKind kind;
+    sketch::ConstraintReference first;
+    sketch::ConstraintReference second;
+};
+
+// A2.0 origin-plane-only solver-validated transaction prototype.
+// This API is not connected to Qt or normal release builds until the
+// original PlaneGCS end-user distribution/relink requirements are cleared.
+// Caller must supply the actual Part incarnation and exact revision.
+struct AddSolvedSketchRelationCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentId expected_document_id;
+    core::DocumentRevision expected_revision;
+    std::weak_ptr<const part::PartRuntimeIncarnation> expected_incarnation;
     sketch::ConstraintKind kind;
     sketch::ConstraintReference first;
     sketch::ConstraintReference second;
@@ -514,6 +529,19 @@ struct AddSketchConstraintResult final {
     }
 };
 
+struct AddSolvedSketchRelationResult final {
+    bool changed{false};
+    std::optional<sketch::ConstraintId> constraint_id;
+    std::optional<sketch::LocalRelationPreflightStatus> preflight_status;
+    std::optional<sketch::LocalSolveGatewayStatus> solver_status;
+    std::vector<sketch::LocalBackendDiagnostic> solver_diagnostics;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
 struct AddSketchLineResult final {
     bool changed{false};
     std::optional<sketch::EntityId> entity_id;
@@ -750,6 +778,10 @@ public:
         const AddSketchRelationCommand& command);
     [[nodiscard]] AddSketchConstraintResult execute(
         const AddHorizontalSketchConstraintCommand& command);
+    [[nodiscard]] AddSolvedSketchRelationResult execute(
+        const AddSolvedSketchRelationCommand& command,
+        const sketch::LocalSolverAcceptancePolicy& policy,
+        sketch::ILocalSketchSolver& backend);
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchConstraintCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
