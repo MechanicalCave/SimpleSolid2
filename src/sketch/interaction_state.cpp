@@ -3879,6 +3879,10 @@ void SketchInteractionState::resetMeasure() noexcept {
 void SketchInteractionState::resetStructuralEdit() noexcept {
     structural_boundaries_.clear();
     extend_both_first_line_.reset();
+    // Every other Sketch tool activates through this shared transient
+    // cleanup path. Never carry half-acquired A2 references across tools.
+    relation_kind_.reset();
+    relation_first_.reset();
 }
 
 } // namespace simplesolid2::sketch
