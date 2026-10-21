@@ -930,6 +930,84 @@ int main() {
     CHECK(!sk::ConstraintId::parse("-1"));
     CHECK(!sk::ConstraintId::parse("18446744073709551616"));
 
+    // R13-A2.0 registered FAST proof: caller-injected backend cannot
+    // mutate the authoritative current-stage Sketch during preflight.
+    // An echo backend exercises the stage-neutral gateway, NOT an
+    // installed/redistributable numerical product solver.
+    {
+        struct EchoBackend final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, 3U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        sk::SketchModel flat;
+        const auto line = flat.addLine({0.0, 3.0}, {5.0, 3.0});
+        const auto before = flat.state();
+        const sk::ConstraintReference ref{
+            line, sk::ConstraintElement::line};
+        const auto accepted = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            ref, {}, {}, policy, backend);
+        CHECK(accepted.status ==
+              sk::LocalRelationPreflightStatus::candidate_accepted);
+        CHECK(accepted.provisional_constraint_id);
+        CHECK(accepted.proposed_authored);
+        CHECK(accepted.proposed_authored->constraints.size() == 1U);
+        CHECK(accepted.solve.candidate);
+        CHECK(accepted.solve.degrees_of_freedom == 3U);
+        CHECK(flat.state() == before);
+        CHECK(backend.calls == 1);
+
+        const auto duplicate = sk::preflightLocalRelation(
+            *accepted.proposed_authored, sk::ConstraintKind::horizontal,
+            ref, {}, {}, policy, backend);
+        CHECK(duplicate.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!duplicate.provisional_constraint_id);
+        CHECK(backend.calls == 1);
+
+        const auto nonexistent = sk::EntityId::parse("9999");
+        CHECK(nonexistent);
+        const auto missing = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            {*nonexistent, sk::ConstraintElement::line}, {},
+            {}, policy, backend);
+        CHECK(missing.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(backend.calls == 1);
+
+        const std::array<sk::EntityId, 2> invalid_fixed{line, line};
+        const auto bad_stage = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            ref, {}, invalid_fixed, policy, backend);
+        CHECK(bad_stage.status ==
+              sk::LocalRelationPreflightStatus::invalid_problem);
+        CHECK(!bad_stage.provisional_constraint_id);
+        CHECK(!bad_stage.proposed_authored);
+        CHECK(backend.calls == 1);
+
+        sk::SketchModel skew;
+        const auto skew_line = skew.addLine(
+            {0.0, 0.0}, {5.0, 2.0});
+        const auto skew_before = skew.state();
+        const auto rejected = sk::preflightLocalRelation(
+            skew_before, sk::ConstraintKind::horizontal,
+            {skew_line, sk::ConstraintElement::line}, {},
+            {}, policy, backend);
+        CHECK(rejected.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(rejected.solve.status ==
+              sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!rejected.solve.candidate);
+        CHECK(skew.state() == skew_before);
+        CHECK(backend.calls == 2);
+    }
+
     sk::SketchModel model;
     const auto line = model.addLine({1.0, 2.0}, {5.0, 4.0});
     const auto seed = model.state();
