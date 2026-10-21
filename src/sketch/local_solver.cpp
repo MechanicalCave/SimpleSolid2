@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <limits>
 #include <numbers>
 #include <set>
 #include <utility>
@@ -403,6 +404,25 @@ LocalSolveGatewayResult evaluateLocalSolve(
     } catch (...) {
         result.status = LocalSolveGatewayStatus::backend_failure;
         return result;
+    }
+
+    // An externally supplied DoF is diagnostic evidence, not solver
+    // authority. It cannot exceed the number of mutable scalar inputs:
+    // a free Line has exactly four U/V endpoint coordinates; a Fix or
+    // stage-fixed Line has zero. This is an upper-bound sanity check,
+    // not a claim that DoF rank/redundancy is independently computed.
+    if (backend_result.degrees_of_freedom) {
+        const auto free_lines = static_cast<std::size_t>(
+            std::count_if(canonical->lines.cbegin(),
+                          canonical->lines.cend(),
+                          [](const LocalSolveLineInput& line) {
+                              return !line.fixed;
+                          }));
+        if (free_lines > std::numeric_limits<std::size_t>::max() / 4U ||
+            *backend_result.degrees_of_freedom > 4U * free_lines) {
+            result.status = LocalSolveGatewayStatus::invalid_backend_response;
+            return result;
+        }
     }
 
     // Backend diagnostics cannot invent new ConstraintIds or repeat IDs.
