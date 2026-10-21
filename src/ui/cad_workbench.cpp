@@ -1853,6 +1853,28 @@ void CadWorkbench::buildUi() {
         6,
         rectangle_sketch_button_);
 
+    // R13-A2: TWO ordinary buttons within existing Sketch Create group.
+    // Kind selection belongs exclusively in right-side Operations,
+    // never toolbar dropdowns or a second command surface.
+    relations_sketch_button_ =
+        new QPushButton(QStringLiteral("Relations"), shell_);
+    relations_sketch_button_->setObjectName(
+        QStringLiteral("relationsSketchToolButton"));
+    relations_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(
+            rectangle_sketch_button_) + 1,
+        relations_sketch_button_);
+    dimensions_sketch_button_ =
+        new QPushButton(QStringLiteral("Dimensions"), shell_);
+    dimensions_sketch_button_->setObjectName(
+        QStringLiteral("dimensionsSketchToolButton"));
+    dimensions_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        shell_->editorToolsLayout().indexOf(
+            relations_sketch_button_) + 1,
+        dimensions_sketch_button_);
+
     project_edge_button_ =
         new QPushButton(
             QStringLiteral("Project Geometry"),
@@ -2952,6 +2974,113 @@ void CadWorkbench::buildUi() {
         QStringLiteral("operationsPlaceholder"));
     operations_placeholder_->setWordWrap(true);
     operations_layout->addWidget(operations_placeholder_);
+
+    // A2.0 initial native UI surface. The kind controls are explicitly
+    // disabled until staged semantic acquisition and a production-accepted
+    // native numerical gateway exist. This draft must not imply successful
+    // constraint/dimension authoring merely because UI widgets exist.
+    sketch_relations_operations_widget_ =
+        new QWidget(operations_content);
+    sketch_relations_operations_widget_->setObjectName(
+        QStringLiteral("sketchRelationsOperations"));
+    auto* relations_layout =
+        new QVBoxLayout(sketch_relations_operations_widget_);
+    relations_layout->setContentsMargins(0, 0, 0, 0);
+    relations_layout->addWidget(
+        new QLabel(QStringLiteral("Relation type"),
+                   sketch_relations_operations_widget_));
+    auto* relations_grid = new QGridLayout;
+    struct A2Option final {
+        const char* label;
+        const char* object_name;
+    };
+    constexpr A2Option relation_kinds[] = {
+        {"Horizontal", "sketchRelationHorizontalButton"},
+        {"Vertical", "sketchRelationVerticalButton"},
+        {"Coincident", "sketchRelationCoincidentButton"},
+        {"Parallel", "sketchRelationParallelButton"},
+        {"Perpendicular", "sketchRelationPerpendicularButton"},
+        {"Fix", "sketchRelationFixButton"},
+    };
+    int relation_index = 0;
+    for (const auto& spec : relation_kinds) {
+        auto* control = new QPushButton(
+            QString::fromLatin1(spec.label),
+            sketch_relations_operations_widget_);
+        control->setObjectName(QString::fromLatin1(spec.object_name));
+        control->setCheckable(true);
+        control->setEnabled(false);
+        control->setToolTip(QStringLiteral(
+            "A2.0: requires current-stage numerical authoring gateway."));
+        relations_grid->addWidget(
+            control, relation_index / 2, relation_index % 2);
+        ++relation_index;
+    }
+    relations_layout->addLayout(relations_grid);
+    relations_layout->addWidget(new QLabel(
+        QStringLiteral("Numeric relation authoring is not enabled in this draft."),
+        sketch_relations_operations_widget_));
+    operations_layout->addWidget(sketch_relations_operations_widget_);
+    sketch_relations_operations_widget_->setVisible(false);
+
+    sketch_dimensions_operations_widget_ =
+        new QWidget(operations_content);
+    sketch_dimensions_operations_widget_->setObjectName(
+        QStringLiteral("sketchDimensionsOperations"));
+    auto* dimensions_layout =
+        new QVBoxLayout(sketch_dimensions_operations_widget_);
+    dimensions_layout->setContentsMargins(0, 0, 0, 0);
+    dimensions_layout->addWidget(
+        new QLabel(QStringLiteral("Dimension type"),
+                   sketch_dimensions_operations_widget_));
+    auto* dimensions_grid = new QGridLayout;
+    constexpr A2Option dimension_kinds[] = {
+        {"Length", "sketchDimensionLengthButton"},
+        {"Radius", "sketchDimensionRadiusButton"},
+        {"Diameter", "sketchDimensionDiameterButton"},
+    };
+    int dimension_index = 0;
+    for (const auto& spec : dimension_kinds) {
+        auto* control = new QPushButton(
+            QString::fromLatin1(spec.label),
+            sketch_dimensions_operations_widget_);
+        control->setObjectName(QString::fromLatin1(spec.object_name));
+        control->setCheckable(true);
+        control->setEnabled(false);
+        control->setToolTip(QStringLiteral(
+            "A2.1/A2.2: numeric solver, native v22 and 3D labels pending."));
+        dimensions_grid->addWidget(
+            control, dimension_index / 2, dimension_index % 2);
+        ++dimension_index;
+    }
+    dimensions_layout->addLayout(dimensions_grid);
+    dimensions_layout->addWidget(new QLabel(
+        QStringLiteral("Driving dimensions are not enabled in this draft."),
+        sketch_dimensions_operations_widget_));
+    operations_layout->addWidget(sketch_dimensions_operations_widget_);
+    sketch_dimensions_operations_widget_->setVisible(false);
+
+    sketch_a2_visibility_widget_ = new QWidget(operations_content);
+    sketch_a2_visibility_widget_->setObjectName(
+        QStringLiteral("sketchA2VisibilityOperations"));
+    auto* visibility_layout = new QVBoxLayout(sketch_a2_visibility_widget_);
+    visibility_layout->setContentsMargins(0, 0, 0, 0);
+    sketch_show_constraints_check_ =
+        new QCheckBox(QStringLiteral("Show Constraints"),
+                      sketch_a2_visibility_widget_);
+    sketch_show_constraints_check_->setObjectName(
+        QStringLiteral("sketchShowConstraintsCheck"));
+    sketch_show_constraints_check_->setEnabled(false);
+    visibility_layout->addWidget(sketch_show_constraints_check_);
+    sketch_show_dimensions_check_ =
+        new QCheckBox(QStringLiteral("Show Dimensions"),
+                      sketch_a2_visibility_widget_);
+    sketch_show_dimensions_check_->setObjectName(
+        QStringLiteral("sketchShowDimensionsCheck"));
+    sketch_show_dimensions_check_->setEnabled(false);
+    visibility_layout->addWidget(sketch_show_dimensions_check_);
+    operations_layout->addWidget(sketch_a2_visibility_widget_);
+    sketch_a2_visibility_widget_->setVisible(false);
 
     precision_operations_widget_ =
         new QWidget(operations_content);
@@ -4917,6 +5046,16 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchRectangle(); });
+    QObject::connect(
+        relations_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchRelations(); });
+    QObject::connect(
+        dimensions_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchDimensions(); });
     QObject::connect(
         create_construction_button_,
         &QPushButton::clicked,
@@ -13248,6 +13387,24 @@ void CadWorkbench::activateSketchRectangle() {
     if (viewport_widget_ != nullptr) {
         viewport_widget_->setFocus(
             Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchRelations() {
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->activateRelations();
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchDimensions() {
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->activateDimensions();
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
     }
 }
 
