@@ -17,6 +17,17 @@
 #include <utility>
 
 namespace simplesolid2::part {
+
+bool ownsCurrentPartEvaluation(
+    const PartDocument& owner,
+    const PartEvaluation& evaluation) noexcept {
+    return evaluation.source_document_id &&
+           *evaluation.source_document_id == owner.documentId() &&
+           evaluation.source_revision == owner.revision() &&
+           evaluation.source_incarnation &&
+           evaluation.source_incarnation == owner.incarnationToken();
+}
+
 namespace {
 
 [[nodiscard]] FeatureEvaluationDiagnosticCode
@@ -676,8 +687,7 @@ profileSupportTopology(
         return nullptr;
     }
     if (prefix_evaluation == nullptr ||
-        prefix_evaluation->source_revision !=
-            document.revision() ||
+        !ownsCurrentPartEvaluation(document, *prefix_evaluation) ||
         surface->stage.kind !=
             BodyStageKind::after_feature ||
         !surface->stage.feature_id) {
@@ -4361,9 +4371,7 @@ admitSelectedEdgeEndStage(
     const PartDocument& owner,
     const PartEvaluation& evaluation,
     const BodyStageRef& source_stage) {
-    if (!evaluation.source_document_id ||
-        *evaluation.source_document_id != owner.documentId() ||
-        evaluation.source_revision != owner.revision() ||
+    if (!ownsCurrentPartEvaluation(owner, evaluation) ||
         !source_stage.valid() ||
         source_stage.kind != BodyStageKind::after_feature ||
         !source_stage.feature_id ||
@@ -4704,9 +4712,7 @@ resolveSelectedMaterialEdgeEnd(
     // A historically valid, now deleted producer is semantically Missing,
     // not a license to rebind to a same-XYZ replacement Feature. Cross-
     // document/stale evaluation context still has higher failure precedence.
-    if (evaluation.source_document_id &&
-        *evaluation.source_document_id == owning_document.documentId() &&
-        evaluation.source_revision == owning_document.revision() &&
+    if (ownsCurrentPartEvaluation(owning_document, evaluation) &&
         authored.source_edge.stage.feature_id &&
         owning_document.findFeature(
             *authored.source_edge.stage.feature_id) == nullptr) {
@@ -4897,9 +4903,7 @@ resolveSelectedMaterialEdgeMid(
     // Distinguish a vanished producer from an invalid owner/revision:
     // identical replacement geometry and old token numbers never repair
     // a deleted authored Feature's semantic identity.
-    if (evaluation.source_document_id &&
-        *evaluation.source_document_id == owning_document.documentId() &&
-        evaluation.source_revision == owning_document.revision() &&
+    if (ownsCurrentPartEvaluation(owning_document, evaluation) &&
         authored.source_edge.stage.feature_id &&
         owning_document.findFeature(
             *authored.source_edge.stage.feature_id) == nullptr) {
@@ -5854,6 +5858,7 @@ PartEvaluation::findFeature(
     result.source_revision =
         document.revision();
     result.source_document_id = document.documentId();
+    result.source_incarnation = document.incarnationToken();
     result.features.reserve(
         document.body().features.size());
 
@@ -6591,7 +6596,7 @@ resolveCurrentProjectionSketchFrame(
     const PartDocument& document,
     const sketch::SketchId& sketch_id,
     const PartEvaluation& prefix) {
-    if (prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, prefix)) {
         return std::nullopt;
     }
     const auto* authored = document.findSketch(sketch_id);
@@ -6646,7 +6651,7 @@ StrictProjectedEdgeGeometry projectStrictMaterialEdge(
     const auto fail = [](Status s) {
         return StrictProjectedEdgeGeometry{s, std::nullopt};
     };
-    if (prefix.source_revision != document.revision() ||
+    if (!ownsCurrentPartEvaluation(document, prefix) ||
         !frame.valid() || !source.valid() ||
         !source.stage.feature_id) {
         return fail(Status::invalid_dependency);
@@ -6696,7 +6701,7 @@ StrictProjectedEdgeGeometry projectStrictMaterialEdge(
         stage->result_solid, ref->current_edges.front());
     // Both provider hooks may reenter DocumentSession. Do not proceed to
     // projection on a retired Part stage, even if binding appeared valid.
-    if (prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, prefix)) {
         return fail(Status::invalid_dependency);
     }
     if (!bound || !bound->valid()) {
@@ -6706,7 +6711,7 @@ StrictProjectedEdgeGeometry projectStrictMaterialEdge(
         stage->result_solid, *bound, frame);
     // This lower-level public resolver must itself refuse stale output;
     // do not rely solely on downstream effective-Sketch checks.
-    if (prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, prefix)) {
         return fail(Status::invalid_dependency);
     }
     if (!projected.ok()) {
@@ -6729,7 +6734,7 @@ evaluateEffectiveSketchProjection(
     const PartEvaluation& prefix,
     kernel::IEdgeProjectionQuery& query,
     std::optional<FeatureId> consuming_feature) {
-    if (prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, prefix)) {
         return std::nullopt;
     }
     const auto* authored = document.findSketch(sketch_id);
@@ -6758,7 +6763,7 @@ evaluateEffectiveSketchProjection(
                 *frame, consuming_feature);
             // Never consume geometry observed across a reentrant revision
             // advance, even if the provider reported a valid projection.
-            if (prefix.source_revision != document.revision()) {
+            if (!ownsCurrentPartEvaluation(document, prefix)) {
                 return std::nullopt;
             }
             outcome.status = projection.status;
@@ -6804,7 +6809,7 @@ evaluateEffectiveSketchProjection(
         }
         result.outcomes.push_back(outcome);
     }
-    return prefix.source_revision == document.revision()
+    return ownsCurrentPartEvaluation(document, prefix)
         ? std::optional<EffectiveSketchProjection>{std::move(result)}
         : std::nullopt;
 }
