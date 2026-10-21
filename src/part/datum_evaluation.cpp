@@ -103,9 +103,7 @@ enum class VisitState {
         return unresolved(datum.id, status, diagnostic, required);
     };
     if (!threePointDatumPlaneStructurallyValid(datum) ||
-        !evaluation.source_document_id ||
-        *evaluation.source_document_id != document.documentId() ||
-        evaluation.source_revision != document.revision())
+        !ownsCurrentPartEvaluation(document, evaluation))
         return fail(DatumPlaneEvaluationStatus::blocked,
                     DatumPlaneEvaluationDiagnostic::stale_part_evaluation);
 
@@ -253,8 +251,7 @@ private:
         const auto required_stage =
             std::optional<BodyStageRef>{reference.stage};
 
-        if (part_evaluation_.source_revision !=
-            document_.revision()) {
+        if (!ownsCurrentPartEvaluation(document_, part_evaluation_)) {
             return unresolved(
                 datum.id,
                 DatumPlaneEvaluationStatus::blocked,
@@ -590,6 +587,9 @@ bool DatumEvaluation::valid() const noexcept {
 DatumEvaluation evaluateDatums(
     const PartDocument& document,
     const PartEvaluation& part_evaluation) noexcept {
+    if (!ownsCurrentPartEvaluation(document, part_evaluation)) {
+        return DatumEvaluation{document.revision(), {}};
+    }
     auto result =
         Evaluator{
             document,
@@ -610,6 +610,9 @@ DatumEvaluation evaluateDatums(
     // Edge-local source Datums have no parent Datum dependency, so they
     // can be appended after all Offset results without changing legacy
     // scheduling or relying on cached native geometry.
+    if (!ownsCurrentPartEvaluation(document, part_evaluation)) {
+        return DatumEvaluation{document.revision(), {}};
+    }
     auto result = evaluateDatums(document,part_evaluation);
     for (const auto& datum : document.edgePointDatumPlanes()) {
         const BodyStageRef stage = std::visit(
@@ -618,6 +621,11 @@ DatumEvaluation evaluateDatums(
         const auto required = std::optional<BodyStageRef>{stage};
         const auto frame = resolveEdgePointDatumFrame(
             document,datum,part_evaluation,provider);
+        // The query can reenter DocumentSession and replace authored
+        // state. Never publish a partially current Datum evaluation.
+        if (!ownsCurrentPartEvaluation(document, part_evaluation)) {
+            return DatumEvaluation{document.revision(), {}};
+        }
         if (frame.resolved()) {
             result.planes.push_back(resolved(
                 datum.id,*frame.frame,required));
