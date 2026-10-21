@@ -3957,6 +3957,150 @@ handleStructuralEditPointer(
             : "EXTEND committed.");
 }
 
+void PartSketchInteractionController::handleRelationsPointer(
+    const SketchPointerInput& input) {
+    // R13-A2.0 transient, command-first semantic target capture only.
+    // It NEVER calls the old headless AddSketchRelationCommand: numerical
+    // convergence, stage provenance and atomic Part transaction are
+    // separate hard acceptance gates.
+    if (input.phase != viewer::SpatialPointerPhase::primary_press ||
+        !input.viewport_position.valid() ||
+        !interaction_.relationKind() ||
+        !sketch_id_) {
+        return;
+    }
+
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    const auto* hosted = activeSketch();
+    if (current_model == nullptr || hosted == nullptr) {
+        reportStatus("RELATIONS: current-stage Sketch is unavailable.");
+        return;
+    }
+
+    std::optional<sketch::ConstraintReference> target;
+    if (*interaction_.relationKind() ==
+        sketch::ConstraintKind::coincident) {
+        // The existing editable GripScene is restricted to SELECT and
+        // selected entities. Project BOTH semantic endpoints from the
+        // current effective Sketch instead, regardless of preselection.
+        // The Qt/OCCT native grip hit tolerance is 9 logical pixels
+        // (DPR-aware provider projection), not a model-space epsilon.
+        constexpr double native_endpoint_hit_pixels = 9.0;
+        std::vector<sketch::RelationEndpointScreenCandidate> candidates;
+        const auto snapshot = current_model->state();
+        candidates.reserve(snapshot.lines.size() * 2U);
+        for (const auto& line : snapshot.lines) {
+            const auto start =
+                viewport_controller_->projectSketchPointToViewport(
+                    line.start);
+            const auto end =
+                viewport_controller_->projectSketchPointToViewport(
+                    line.end);
+            if (!start || !end ||
+                !start->valid() || !end->valid()) {
+                reportStatus(
+                    "RELATIONS: current-stage endpoint projection failed.");
+                return;
+            }
+            candidates.push_back({
+                {line.id, sketch::ConstraintElement::line_start},
+                {start->x, start->y}});
+            candidates.push_back({
+                {line.id, sketch::ConstraintElement::line_end},
+                {end->x, end->y}});
+        }
+        const auto hit = sketch::resolveRelationEndpointHit(
+            *current_model,
+            {input.viewport_position.x, input.viewport_position.y},
+            candidates,
+            native_endpoint_hit_pixels);
+        switch (hit.status) {
+        case sketch::RelationEndpointHitStatus::hit:
+            target = hit.reference;
+            break;
+        case sketch::RelationEndpointHitStatus::miss:
+            reportStatus(
+                "COINCIDENT: select the actual Start/End endpoint, "
+                "not an arbitrary location on a Line.");
+            return;
+        case sketch::RelationEndpointHitStatus::ambiguous:
+            reportStatus(
+                "COINCIDENT: multiple endpoints under pointer; "
+                "zoom or disambiguate before picking.");
+            return;
+        case sketch::RelationEndpointHitStatus::invalid_input:
+            reportStatus(
+                "COINCIDENT: stale or invalid current-stage endpoint "
+                "projection; no Part change.");
+            return;
+        }
+    } else {
+        const auto hit = viewport_controller_->querySketchEntityAt(
+            input.viewport_position);
+        if (!hit.completed) {
+            reportStatus("RELATIONS: current-stage Line hit query failed.");
+            return;
+        }
+        if (!hit.hit) {
+            reportStatus("RELATIONS: point to the required Line.");
+            return;
+        }
+        if (hit.hit->sketch_id != *sketch_id_) {
+            reportStatus("RELATIONS: stale SketchId in Line pick.");
+            return;
+        }
+        if (current_model->findLine(hit.hit->entity_id) == nullptr) {
+            reportStatus("RELATIONS: selected entity is not a Line.");
+            return;
+        }
+        target = sketch::ConstraintReference{
+            hit.hit->entity_id, sketch::ConstraintElement::line};
+    }
+
+    if (!target) return;
+    // A1 has not authorized numerical constraints on PG-01 linked
+    // sources. Reject any such target *before* consuming a draft pick.
+    const auto linked = std::any_of(
+        hosted->projection_bindings.begin(),
+        hosted->projection_bindings.end(),
+        [target](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == target->entity;
+        });
+    if (linked) {
+        reportStatus(
+            "RELATIONS: linked projection requires a separate "
+            "fixed-source solver gate; nothing authored.");
+        return;
+    }
+    const auto accepted =
+        interaction_.acceptRelationTarget(*current_model, *target);
+    switch (accepted.outcome) {
+    case sketch::RelationTargetOutcome::inactive:
+        return;
+    case sketch::RelationTargetOutcome::invalid_target:
+        reportStatus(
+            "RELATIONS: target role rejected. Keep the current "
+            "first target and choose a compatible one.");
+        return;
+    case sketch::RelationTargetOutcome::first_target_accepted:
+        reportStatus(
+            "RELATIONS: first target accepted; choose the "
+            "second distinct Line/endpoint.");
+        notifyStateChanged();
+        return;
+    case sketch::RelationTargetOutcome::ready:
+        // A fully acquired intent is intentionally ephemeral. A real
+        // numerical solve and atomic revision-bound Part command must
+        // become the sole path to authoring later.
+        reportStatus(
+            "RELATIONS: semantic targets ready; native numerical "
+            "authoring is not yet enabled. No Part change.");
+        notifyStateChanged();
+        return;
+    }
+}
+
 void PartSketchInteractionController::onPointer(
     const SketchPointerInput& input) {
     if (!active() ||
@@ -3996,10 +4140,11 @@ void PartSketchInteractionController::onPointer(
         handleMeasurePointer(input);
         break;
     case sketch::SketchTool::relations:
+        handleRelationsPointer(input);
+        break;
     case sketch::SketchTool::dimensions:
-        // Until the licensed numerical authoring gateway and strict
-        // target-acquisition state are active, pointer picks are inert.
-        // Never fall through to geometry edit or author unsolved A1.
+        // Strict v22 numeric authoring is still blocked. Selecting a
+        // dimension kind alone never changes the current Part.
         break;
     case sketch::SketchTool::trim:
     case sketch::SketchTool::extend:
