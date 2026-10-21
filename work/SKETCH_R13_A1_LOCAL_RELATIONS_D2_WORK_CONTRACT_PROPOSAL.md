@@ -234,6 +234,37 @@ Every already allowlisted A1 path retains its existing conditional permission an
 
 **Conditional acceptance:** after separate Owner exact D2 yes/no on these six files, guarded CLOSURE and merge/readback of this single-contract amendment, repair the existing *product* Draft PR #506; run compiled CTest/Windows exact HEAD with original native PlaneGCS, both Core/Kernel/Qt FULL, and assess original v20→v21 fixture. Keep Draft until exact-head tests and DOC-01 are complete; historical writer executable provenance remains explicitly open, even with a valid v20-format Owner fixture. No automatic product merge.
 
+## 5F. R13-A1 D2-V21 Windows FULL Desktop test closure — finite exact-path acceptance (2026-10-21)
+
+**Owner all-scoped-work authorization and new exact-path guard:** This addendum is a single-contract proposal awaiting its **own exact-head Windows governance CLOSURE, guarded squash into protected main, and protected-main readback** before the eight additional tests may be edited. It does not expand product source/UI/Native Writer/reader, CI config, vendor, documentation, fixture, or schema authority. Product Draft PR #506 remains unmerged.
+
+**Verified observed RED:** Draft #506 head `d283e08b17d8f13d8bfecd5e96fe8fde0f764b2e`, [Windows workflow #39568661440](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39568661440), COMPLETED / FAILURE. Compiled Release original PlaneGCS native Core PASS, Core CTest **26/26**, standalone Kernel-native CTest **59/59** (the previous independent cold same-ID/same-rev Axis test is now correct), but Qt/desktop FULL CTest **110/118** with exactly eight failures. No compiler or OCCT failure in these three suites. Seven failures stop at **assertions that current v21 writer output equals v20**, and the eighth uses manually built PartEvaluation without CP1 owner identity:
+- `pm02e.sketch_support_schema_v9` `tests/pm02e_sketch_support_schema_v9_test.cpp:394`.
+- `pm03a.datum_schema_v10` `tests/pm03a_datum_schema_v10_test.cpp:169`.
+- `pm04a.axis_schema_v12` `tests/pm04a_axis_schema_v12_test.cpp:140`.
+- `pm05b3.generated_surface_reference_v14` `tests/pm05b3_generated_surface_reference_v14_test.cpp:483`.
+- `pm05b1.edge_feature_schema_v14` `tests/pm05b1_edge_feature_schema_v14_test.cpp:821`.
+- `pm04e1.revolve_persistence` `tests/pm04e1_revolve_persistence_test.cpp:281`.
+- `pm03e.datum_backed_sketch` `tests/pm03e_datum_backed_sketch_test.cpp:389`.
+- `pm03b.datum_evaluation` `tests/pm03b_datum_evaluation_test.cpp:518`: `makePartEvaluation` manually supplies only numeric revision and a fake stage catalog; CP1 `ownsCurrentPartEvaluation` intentionally rejects missing `source_document_id` and `source_incarnation`. Bind its deliberately synthesized stage evaluation to the **exact same** `fixture.document`, retaining all surface-status cases; add an explicit independently restored same-ID/same-revision foreign token negative requiring a typed `stale_part_evaluation`, without relaxing production Datum gate.
+
+**Conditional exact additional eight-path test-only allowlist:**
+
+| Newly enabled path after separate guarded merge | Bounded action |
+|---|---|
+| `tests/pm02e_sketch_support_schema_v9_test.cpp` | Only current-writer v21 expectations, strict nonvacuous legacy v8/v9 fixture helper |
+| `tests/pm03a_datum_schema_v10_test.cpp` | Current writer v21 and explicit old v16/v17 Save→v21 expectations, nonvacuous old-format helper |
+| `tests/pm04a_axis_schema_v12_test.cpp` | Current writer v21; preserve historical v11/v19 reader expectations/legacy fixture semantics |
+| `tests/pm05b3_generated_surface_reference_v14_test.cpp` | Current writer v21 and strict legacy helper with no authored relation loss |
+| `tests/pm05b1_edge_feature_schema_v14_test.cpp` | Current writer v21; preserve legacy v13/v14 fixtures/typed failure cases |
+| `tests/pm04e1_revolve_persistence_test.cpp` | Current writer v21; preserve actual v12/v13 Revolve/Axis historical semantics |
+| `tests/pm03e_datum_backed_sketch_test.cpp` | Current writer v21; preserve Datum support semantics |
+| `tests/pm03b_datum_evaluation_test.cpp` | Exact-runtime-incarnation binding of test-manufactured PartEvaluation and same-ID/revision-zero negative |
+
+**Nonvacuous legacy format migration guard:** Existing test builders intentionally synthesize old v8–v19 containers from the **current writer** JSON. When constructing such negative or migration seed JSON, remove the v21-only Sketch-model keys `constraints` and `next_constraint_id` **only after asserting** that every such `constraints` collection is empty and `next_constraint_id` is canonical `"1"`; never discard valid authored constraint intent. Earlier schema-version-specific removals must remain exact and previous negative cases must still fail for their intended typed semantic source, not solely for extraneous new v21 keys. This permission applies to the existing eight tests' local fixture helpers only; no product parser relaxation, mass JSON rewriting or v21 writer downgrade.
+
+**Stop gates:** Beyond the eight named test files, stop for fresh exact-path governance; keep prior §§5D/5E authorizations unchanged. Once protected-main merge/readback is confirmed, modify the minimum lines and retain all historical fixture tests; run exact product HEAD Windows FULL (real original PlaneGCS, native OCCT, full Desktop/Qt), plus appropriate DOC-01 and Owner acceptance before any guarded product merge. Historical v20 writer executable/source provenance remains OPEN even if the provided v20 file was verified to be a valid native container and reads correctly.
+
 ## Documentation impact
 
 Internal docs: required
