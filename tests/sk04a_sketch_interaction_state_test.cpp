@@ -608,6 +608,7 @@ int main() {
     ).outcome == RO::inactive);
     acquire.finishTool();
     CHECK(acquire.tool() == sketch::SketchTool::select);
+    CHECK(!acquire.dimensionKind());
     acquire.activateRelations();
     CHECK(acquire.setRelationKind(RK::parallel));
     CHECK(acquire.acceptRelationTarget(
