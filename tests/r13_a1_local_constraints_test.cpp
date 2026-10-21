@@ -1022,16 +1022,17 @@ int main() {
         struct EchoNumeric final : sk::ILocalSketchSolver {
             int calls{};
             app::DocumentSession* reenter{};
-            sk::SketchId sketch_id;
+            std::optional<sk::SketchId> sketch_id;
             bool reentered{};
             sk::LocalBackendSolveResult solve(
                 const sk::LocalSolveProblem& problem) override {
                 ++calls;
                 if (reenter && !reentered) {
                     reentered = true;
+                    CHECK(sketch_id);
                     const auto changed = reenter->execute(
                         app::AddSketchLineCommand{
-                            sketch_id, {30.0, 30.0}, {34.0, 31.0}});
+                            *sketch_id, {30.0, 30.0}, {34.0, 31.0}});
                     CHECK(changed.ok() && changed.changed);
                 }
                 return {sk::LocalBackendStatus::converged,
