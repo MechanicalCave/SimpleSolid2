@@ -1383,10 +1383,24 @@ void SketchInteractionState::activateDimensions() noexcept {
     tool_ = SketchTool::dimensions;
     relation_kind_.reset();
     relation_first_.reset();
+    dimension_kind_.reset();
     resetLineStage();
     resetCircleStage();
     resetArcStage();
     resetRectangleStage();
+}
+
+bool SketchInteractionState::setDimensionKind(
+    DrivingDimensionToolKind kind) noexcept {
+    if (tool_ != SketchTool::dimensions) return false;
+    switch (kind) {
+    case DrivingDimensionToolKind::length:
+    case DrivingDimensionToolKind::radius:
+    case DrivingDimensionToolKind::diameter:
+        dimension_kind_ = kind;
+        return true;
+    }
+    return false;
 }
 
 bool SketchInteractionState::setRelationKind(
@@ -3792,6 +3806,7 @@ void SketchInteractionState::resetToSelect() noexcept {
     resetMeasure();
     relation_kind_.reset();
     relation_first_.reset();
+    dimension_kind_.reset();
     tool_ = SketchTool::select;
     resetLineStage();
     resetCircleStage();
@@ -3883,6 +3898,7 @@ void SketchInteractionState::resetStructuralEdit() noexcept {
     // cleanup path. Never carry half-acquired A2 references across tools.
     relation_kind_.reset();
     relation_first_.reset();
+    dimension_kind_.reset();
 }
 
 } // namespace simplesolid2::sketch
