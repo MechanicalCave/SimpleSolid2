@@ -2361,6 +2361,22 @@ void PartSketchInteractionController::activateRelations() {
     reportStatus("RELATIONS: numeric production solver and semantic targets are not yet enabled. No relation is authored.");
 }
 
+bool PartSketchInteractionController::selectRelationKind(
+    sketch::ConstraintKind kind) {
+    if (!active() || profile_session_ ||
+        !interaction_.setRelationKind(kind)) {
+        return false;
+    }
+    projectInteraction();
+    notifyStateChanged();
+    // Kind selection is a legitimate transient command step. It must
+    // not create an A1 relation ahead of numerical acceptance.
+    reportStatus(
+        "RELATIONS: kind selected. Authoring is blocked pending "
+        "current-stage native numerical validation; no Part change.");
+    return true;
+}
+
 void PartSketchInteractionController::activateDimensions() {
     if (!active()) return;
     resetProfileRuntime();
