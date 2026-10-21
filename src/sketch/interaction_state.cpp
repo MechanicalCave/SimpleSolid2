@@ -1403,6 +1403,57 @@ bool SketchInteractionState::setDimensionKind(
     return false;
 }
 
+RelationEndpointHit resolveRelationEndpointHit(
+    const SketchModel& current_model,
+    Point2 pointer_screen,
+    std::span<const RelationEndpointScreenCandidate> candidates,
+    double native_hit_tolerance_pixels) noexcept {
+    const RelationEndpointHit invalid{
+        RelationEndpointHitStatus::invalid_input, std::nullopt};
+    if (!pointer_screen.finite() ||
+        !std::isfinite(native_hit_tolerance_pixels) ||
+        native_hit_tolerance_pixels <= 0.0) {
+        return invalid;
+    }
+
+    const double tolerance_sq =
+        native_hit_tolerance_pixels * native_hit_tolerance_pixels;
+    if (!std::isfinite(tolerance_sq)) return invalid;
+
+    std::optional<ConstraintReference> found;
+    for (std::size_t index = 0; index < candidates.size(); ++index) {
+        const auto& candidate = candidates[index];
+        const auto reference = candidate.reference;
+        if (!reference.entity.valid() ||
+            (reference.element != ConstraintElement::line_start &&
+             reference.element != ConstraintElement::line_end) ||
+            current_model.findLine(reference.entity) == nullptr ||
+            !candidate.screen_point.finite()) {
+            return invalid;
+        }
+        for (std::size_t other = 0; other < index; ++other) {
+            if (candidates[other].reference == reference) {
+                // A duplicated candidate is not a second user-selectable
+                // endpoint, and is a caller projection/capture error.
+                return invalid;
+            }
+        }
+        const double du = pointer_screen.u - candidate.screen_point.u;
+        const double dv = pointer_screen.v - candidate.screen_point.v;
+        const double distance_sq = du * du + dv * dv;
+        if (!std::isfinite(distance_sq)) return invalid;
+        if (distance_sq > tolerance_sq) continue;
+        if (found) {
+            return {RelationEndpointHitStatus::ambiguous, std::nullopt};
+        }
+        found = reference;
+    }
+
+    return found
+        ? RelationEndpointHit{RelationEndpointHitStatus::hit, found}
+        : RelationEndpointHit{RelationEndpointHitStatus::miss, std::nullopt};
+}
+
 bool SketchInteractionState::setRelationKind(
     ConstraintKind kind) noexcept {
     if (tool_ != SketchTool::relations) return false;
