@@ -17157,8 +17157,9 @@ void CadWorkbench::syncSketchInteractionUi() {
         sketch_dimensions_operations_widget_->setVisible(dimensions_mode);
     }
     if (sketch_a2_visibility_widget_ != nullptr) {
-        sketch_a2_visibility_widget_->setVisible(
-            relations_mode || dimensions_mode);
+        // Visibility is an Operations preference throughout Sketch Edit,
+        // not a sub-option requiring an active Relations/Dimensions tool.
+        sketch_a2_visibility_widget_->setVisible(editing);
     }
     if (create_construction_button_ != nullptr) {
         create_construction_button_->setChecked(
