@@ -2347,5 +2347,90 @@ int main(int argc, char* argv[]) {
         extend_interaction.end();
     }
 
+    // R13-A2.0 native controller proves command-first Coincident does NOT
+    // depend on preselected/visible editable grips and never calls an
+    // unsolved Part Add command. Screen projection is opt-in in this stub.
+    {
+        auto a2_document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession a2_session{
+            {}, std::move(a2_document)};
+        const auto created_a2 = a2_session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created_a2.ok() && created_a2.sketch_id);
+        const auto sid = *created_a2.sketch_id;
+        const auto a = a2_session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = a2_session.execute(
+            application::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        QTreeWidget a2_tree;
+        ui::PartDocumentTreeController a2_tree_controller{a2_tree};
+        TestViewport a2_viewport;
+        a2_viewport.enable_point_projection_ = true;
+        ui::PartViewportController a2_viewport_controller{
+            a2_tree_controller, &a2_viewport};
+        a2_viewport_controller.setDocumentSession(&a2_session);
+        a2_viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController a2_interaction{
+            a2_viewport_controller};
+        a2_interaction.begin(a2_session, sid);
+        CHECK(a2_interaction.selectedCount() == 0U);
+        a2_interaction.activateRelations();
+        CHECK(a2_interaction.selectRelationKind(
+            sketch::ConstraintKind::coincident));
+        const auto original_revision =
+            a2_session.document().revision();
+        const auto original_undo = a2_session.undoDepth();
+        const auto original_sketch =
+            a2_session.document().findSketch(sid)->model.state();
+
+        // End of first Line is at (150,100) in test screen frame.
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            150.0, 100.0, 5.0, 0.0));
+        CHECK(a2_interaction.firstRelationTarget() ==
+              (sketch::ConstraintReference{
+                  *a.entity_id, sketch::ConstraintElement::line_end}));
+        // Mid-line body click is not silently converted into Start/End.
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(a2_interaction.firstRelationTarget() ==
+              (sketch::ConstraintReference{
+                  *a.entity_id, sketch::ConstraintElement::line_end}));
+        // Second endpoint completes ONLY a semantic request: no write.
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            200.0, 100.0, 10.0, 0.0));
+        CHECK(!a2_interaction.firstRelationTarget());
+        CHECK(a2_interaction.relationKind() ==
+              sketch::ConstraintKind::coincident);
+        CHECK(a2_session.document().revision() == original_revision);
+        CHECK(a2_session.undoDepth() == original_undo);
+        CHECK(a2_session.document().findSketch(sid)->model.state() ==
+              original_sketch);
+
+        // One body click is sufficient for Horizontal target capture,
+        // even without a preselected Line, but not a solver commit.
+        CHECK(a2_interaction.selectRelationKind(
+            sketch::ConstraintKind::horizontal));
+        CHECK(!a2_viewport.sketch_scene_.lines.empty());
+        a2_viewport.point_query_ = {
+            true, a2_viewport.sketch_scene_.lines.front().token};
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(a2_session.document().revision() == original_revision);
+        CHECK(a2_session.undoDepth() == original_undo);
+        CHECK(a2_session.document().findSketch(sid)->model.state() ==
+              original_sketch);
+        a2_interaction.end();
+    }
+
     return EXIT_SUCCESS;
 }
