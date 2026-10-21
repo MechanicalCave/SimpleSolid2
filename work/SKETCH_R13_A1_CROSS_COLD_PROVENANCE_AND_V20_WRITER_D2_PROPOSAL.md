@@ -13,6 +13,40 @@
 4. The existing P21-03 test in `tests/sk02b_part_sketch_persistence_test.cpp` generates a labeled v20 container by removing the `constraints` and `next_constraint_id` fields from a **v21-writer-produced** Sketch JSON. It checks strict v20 read and explicit-Save upgrade, but is **not** an independent historical-v20-writer compatibility artifact.
 5. Protected `main@6080e7774a44d6b8a50d32fedd085405bc81d038` still declares `PartDocumentStore::current_schema_version = 20` and therefore offers a pinned historical writer source candidate. Existing named `tests/fixtures/*.ss2part` must **not** be relabeled as writer-v20 evidence without inspecting their decoded descriptors and provenance. V16 fixtures are not substitutes.
 
+## 1A. Read-only forensic inventory / precise admission-path audit (2026-10-21)
+
+**Binary evidence, not filenames:** at protected `main@6080e7774a44d6b8a50d32fedd085405bc81d038`, recursive tree inventory found exactly **five tracked `.ss2part` fixtures**. Their literal native `manifest.json` entries were independently extracted from the committed ZIP/container bytes (not inferred from file names):
+
+| Exact tracked fixture | Decoded `domain_schema_version` | Git blob SHA-1 |
+|---|---:|---|
+| `tests/fixtures/edge_picking_r1_select_edge_test_01.ss2part` | 16 | `0e6d9398c30bfc58cb3c926409dff80460869c11` |
+| `tests/fixtures/pm05f_r2_part008_sanitized.ss2part` | 14 | `767de28a6f8a403e491b939319a0ccc7a526d3b4` |
+| `tests/fixtures/pm05f_r2_part013_sanitized.ss2part` | 14 | `8bc625b18b2ee9c64989f266ba7e159b1ec0780c` |
+| `tests/fixtures/pg01d_same_domain_extrude_add_v16.ss2part` | 16 | `4d80930b5bf27de1dcd197e425c8b8d2334a809c` |
+| `tests/fixtures/pg01d_same_domain_extrude_revolve_add_v16.ss2part` | 16 | `431da0032e41d400b5efaad47c2f0c56bc34981a` |
+
+**Consequence:** none of the five existing committed files is a schema-v20 fixture. Their decoded manifest establishes a file *schema*, but not independently the identity of its original executable writer. A genuine v20 writer artifact must still be obtained; no fixture was synthesized, written or committed during this audit.
+
+**Read-only concrete runtime admission inventory at Draft PR #506 @ `f7eef9805bec267efed8cf4b1be9b9f55ca7c02e`:**
+
+| Source and representative lines | Actual current admission | Required CP1 behavior after explicit D2 activation |
+|---|---|---|
+| `src/part/feature_evaluation.cpp:5853-5857` | Result captures revision + DocumentId | Capture incarnation at evaluator result creation |
+| `src/part/feature_evaluation.cpp:4362-4387` | Strict selected Edge stage compares owner ID + revision + stage | Include incarnation before considering topology |
+| `src/part/feature_evaluation.cpp:4707-4715,4900-4908` | Special deleted-producer status uses ID + revision | Missing producer classification must **not** bypass incarnation gate |
+| `src/part/feature_evaluation.cpp:679-681` | Existing profile-supported stage examines numeric revision | Reject alien incarnation prior to stage access |
+| `src/part/feature_evaluation.cpp:6590-6600` | Sketch support/frame resolution checks numeric revision only | Reject foreign prefix despite equal revision |
+| `src/part/feature_evaluation.cpp:6642-6653` | Strict projection source checks numeric revision only | Reject before calling provider |
+| `src/part/feature_evaluation.cpp:6693-6712` | Provider **reentry** checks revision before proceeding | Recheck **full** owner/incarnation/revision authority after each callback |
+| `src/part/feature_evaluation.cpp:6727-6738,6806-6809` | Effective projection entry/return checks numeric revision only | Reject mismatched incarnation even for empty bindings or valid frame |
+| `src/part/part_document.cpp:1259-1352` | Stage solve checks ID + revision before and after backend | Enforce the same incarnation pre/post backend, with zero invocations on initial failure |
+| `src/part/profile_kernel_input.cpp:315-345` | Consumer trusts evaluated `StageLocalSolveEvaluation` ID + revision | Validate the original evaluated prefix and stage authority, avoid exposed forged stage |
+| `src/application/document_session.cpp:1259-1275,4862-4870` and other preview paths | Command validation reconstructs a **fresh temporary** `PartDocument` with current numeric revision | New incarnation is correct for the temporary candidate, but it must receive its **own fresh** evaluator; any old live-session prefix is rejected |
+| `src/application/document_session.cpp:6348-6380` | Undo/Redo commits through a transaction on **existing** `document_` | Keep the existing incarnation and advance revision on commit; old revisions remain invalid |
+| `src/part/part_document_store.cpp:4472-4475` | Cold load restores without revision argument, default zero | Each independent cold load yields new incarnation while keeping file schema and DocumentId unchanged |
+
+The line numbers are diagnostic reference points for the **exact inspected Draft PR #506 head**; re-audit changed call sites before any implementation. In particular, an ID/revision-only check hidden inside `resolveCurrentProjectionSketchFrame`, `projectStrictMaterialEdge` or the empty-bindings return of `evaluateEffectiveSketchProjection` is unacceptable after CP1: the new predicate must dominate these paths. No approval to edit `src/application/document_session.cpp` is implied by observing the existing scratch-restore lifecycle.
+
 ## 2. D2-CP1 — proposed disposable runtime incarnation authority (independent YES/NO)
 
 **Owner decision requested:** accept a nonpersistent, unique-on-create/restore **Part runtime incarnation identity** as an additional required authority witness for any caller-supplied `PartEvaluation`, without changing durable `DocumentId`, numeric `DocumentRevision`, feature IDs, native file schema, semantic geometry IDs, or kernel topology tokens.
