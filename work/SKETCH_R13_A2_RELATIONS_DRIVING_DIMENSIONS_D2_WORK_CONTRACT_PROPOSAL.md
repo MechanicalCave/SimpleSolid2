@@ -1,7 +1,7 @@
 # SimpleSolid 2.0 — Sketcher R13-A2
-## Relations UI + Driving Dimensions — D2 Work Contract (governance DRAFT)
+## Relations UI + Driving Dimensions — D2 Work Contract (Owner accepted)
 
-**Status:** **OWNER-ACCEPTED D2 DESIGN AND CONDITIONAL EXECUTION SCOPE (2026-10-21), GOVERNANCE INTEGRATION PENDING**. Owner explicitly accepted the post-audit D2 dispositions and requested continuation (`akceptuję - kontynuuj`). This status records product/architecture acceptance, **not** an authorization to guarded-squash merge, activate `ACTIVE.yaml`, ship PlaneGCS or modify production files. The additional strict v22 codec, solver distribution and real viewer interface proofs below remain independent technical gates.  
+**Status:** **OWNER-ACCEPTED D2 CONTRACT / MERGED GOVERNANCE (PR #521, 2026-10-21)**. The Owner separately authorized guarded squash and A2 activation sequence; PR #521 was verified merged as `12901abb2fbfc6372cb9ab9ba50a3463bb265c63`. The present DOC-01 errata is a separate one-file governance change. A2 product mutation remains conditioned on a verified independent ACTIVE-only merge and the further strict v22 codec, solver distribution and real 3D viewer interface gates.  
 **Prepared:** 2026-10-21 (Europe/Warsaw).  
 **SS2 authoritative readback:** `MechanicalCave/SimpleSolid2`, protected `main@30a17150552fe67e30fe84a7f17e0dce30ef619c`; `work/ACTIVE.yaml` still points to completed `work/SKETCH_R13_A1_LOCAL_RELATIONS_D2_WORK_CONTRACT_PROPOSAL.md`.  
 **Program:** `work/SKETCH_ROADMAP.md` v1.11; companion Part Modeling roadmap v1.35; R13-A2 after technically accepted/merged R13-A1 PR #506.  
@@ -249,7 +249,7 @@ The unmerged historical PR #493 remains non-authoritative for any conflicting ol
 
 ## 7. Closure statement
 
-This is an **Owner-accepted D2 work-contract design in an unmerged governance PR**, not an activated executable contract. It makes **no representation** that `ACTIVE.yaml` changed or that production solver licensing/build/Windows tests passed for A2. This draft governance PR changes only this `work/` contract; no product source, tests, CI, as-built/product documentation, `ACTIVE.yaml` or CAD document is altered.
+This is an **Owner-accepted and merged D2 Work Contract**. Product execution becomes effective only after independently approved, passing and merged A2 ACTIVE-only activation; specific solver/schema/GUI gates remain binding. It makes **no representation** that `ACTIVE.yaml` changed or that production solver licensing/build/Windows tests passed for A2. This draft governance PR changes only this `work/` contract; no product source, tests, CI, as-built/product documentation, `ACTIVE.yaml` or CAD document is altered.
 
 ### Primary references
 
