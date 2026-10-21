@@ -67,6 +67,17 @@ public:
     bool setProjection(viewer::CameraProjection) override { return true; }
     void fitAll() override {}
 
+    std::optional<viewer::ViewportPoint2> projectWorldPoint(
+        viewer::Point3 point) const override {
+        if (!enable_point_projection_ ||
+            !point.valid()) return std::nullopt;
+        // Stub projective frame is explicit, deterministic and opt-in:
+        // 10 screen logical pixels per unit in the Sketch XY plane.
+        return viewer::ViewportPoint2{
+            100.0 + point.x * 10.0,
+            100.0 + point.y * 10.0};
+    }
+
     bool setReferenceScene(const viewer::ReferenceScene& scene) override {
         return scene.valid();
     }
@@ -176,6 +187,7 @@ public:
         cursor_mode_ = mode;
     }
 
+    bool enable_point_projection_{false};
     viewer::CameraState camera_;
     viewer::SketchScene sketch_scene_;
     viewer::ProfileScene profile_scene_;
