@@ -1058,9 +1058,9 @@ int main() {
             CHECK(nativeV20.ok());
             CHECK(nativeV20.package->descriptor.domain_schema_version == 20);
             CHECK(nativeV20.package->authored_json.find(
-                "\\"next_constraint_id\\"") == std::string::npos);
+                "\"next_constraint_id\"") == std::string::npos);
             CHECK(nativeV20.package->authored_json.find(
-                "\\"constraints\\"") == std::string::npos);
+                "\"constraints\"") == std::string::npos);
             const auto coldPath = temp.path / "IndependentOriginalV20.ss2part";
             writeBytes(coldPath, originalBytes);
             const auto coldV20 = store.load(coldPath);
@@ -1088,9 +1088,9 @@ int main() {
             CHECK(upgradedNative.package->descriptor.domain_schema_version
                   == 21);
             CHECK(upgradedNative.package->authored_json.find(
-                "\\"next_constraint_id\\": \\"1\\"") != std::string::npos);
+                "\"next_constraint_id\": \"1\"") != std::string::npos);
             CHECK(upgradedNative.package->authored_json.find(
-                "\\"constraints\\": []") != std::string::npos);
+                "\"constraints\": []") != std::string::npos);
             CHECK(readExactBytes(goldenSource) == originalBytes);
             const auto reopenedOriginal = store.load(coldPath);
             CHECK(reopenedOriginal.ok() && reopenedOriginal.document);
