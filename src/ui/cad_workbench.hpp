@@ -638,6 +638,7 @@ private:
     QWidget* sketch_relations_operations_widget_{};
     std::array<QPushButton*, 6> sketch_relation_kind_buttons_{};
     QWidget* sketch_dimensions_operations_widget_{};
+    std::array<QPushButton*, 3> sketch_dimension_kind_buttons_{};
     QWidget* sketch_a2_visibility_widget_{};
     QCheckBox* sketch_show_constraints_check_{};
     QCheckBox* sketch_show_dimensions_check_{};
