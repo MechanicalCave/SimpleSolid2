@@ -542,8 +542,13 @@ void verifyPg01bB2EffectiveSketch(
     stage.result_topology = catalog;
     part::PartEvaluation prefix;
     prefix.source_revision = document.document->revision();
+    // Synthesized stage topology is local to THIS newly restored Part.
+    // Durable ID and revision alone do not authorize provider geometry.
+    prefix.source_document_id = document.document->documentId();
+    prefix.source_incarnation = document.document->incarnationToken();
     prefix.features.push_back(std::move(stage));
     FakeQuery query;
+    CHECK(part::ownsCurrentPartEvaluation(*document.document, prefix));
     const auto derived =
         part::evaluateEffectiveSketchProjection(
             *document.document, sketch_id, prefix,
@@ -551,6 +556,23 @@ void verifyPg01bB2EffectiveSketch(
     CHECK(derived);
     CHECK(derived->allResolved());
     CHECK(derived->outcomes.size() == 1U);
+    // Independent cold restore with IDENTICAL ID/revision cannot borrow
+    // the original's topology even when both authored states match.
+    const auto foreign = part::PartDocument::restore(
+        document.document->documentId(),
+        document.document->state(),
+        document.document->revision());
+    CHECK(foreign.ok() && foreign.document);
+    CHECK(foreign.document->documentId() ==
+          document.document->documentId());
+    CHECK(foreign.document->revision() ==
+          document.document->revision());
+    CHECK(foreign.document->incarnationToken() !=
+          document.document->incarnationToken());
+    CHECK(!part::ownsCurrentPartEvaluation(*foreign.document, prefix));
+    CHECK(!part::evaluateEffectiveSketchProjection(
+        *foreign.document, sketch_id, prefix,
+        query, fixture.fillet_id));
     const auto* current = derived->model.findLine(id);
     CHECK(current != nullptr);
     CHECK(current->start().u == 100.0);
@@ -579,6 +601,8 @@ void verifyPg01bB2EffectiveSketch(
 
     part::PartEvaluation no_stage;
     no_stage.source_revision = prefix.source_revision;
+    no_stage.source_document_id = prefix.source_document_id;
+    no_stage.source_incarnation = prefix.source_incarnation;
     const auto missing =
         part::evaluateEffectiveSketchProjection(
             *document.document, sketch_id, no_stage,
