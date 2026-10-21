@@ -964,6 +964,30 @@ int main() {
         CHECK(flat.state() == before);
         CHECK(backend.calls == 1);
 
+        // RED (R13-A2.0): a backend cannot claim more free scalar
+        // parameters than the Line-only solver problem actually owns.
+        // One unfixed Line has four endpoint coordinates, not five.
+        // This must fail closed even when the backend says Converged
+        // and all independent geometric residuals are satisfied.
+        struct ImpossibleDofBackend final : sk::ILocalSketchSolver {
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, 5U};
+            }
+        } impossible_dof;
+        const auto invalid_dof = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            ref, {}, {}, policy, impossible_dof);
+        CHECK(invalid_dof.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(invalid_dof.solve.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!invalid_dof.proposed_authored);
+        CHECK(!invalid_dof.provisional_constraint_id);
+        CHECK(!invalid_dof.solve.candidate);
+        CHECK(flat.state() == before);
+
         const auto duplicate = sk::preflightLocalRelation(
             *accepted.proposed_authored, sk::ConstraintKind::horizontal,
             ref, {}, {}, policy, backend);
