@@ -13562,6 +13562,12 @@ void CadWorkbench::finishSketchLine() {
         setStatusText(
             QStringLiteral("Rectangle finished — Select active."));
         break;
+    case sketch::SketchTool::relations:
+        setStatusText(QStringLiteral("Relations finished — Select active."));
+        break;
+    case sketch::SketchTool::dimensions:
+        setStatusText(QStringLiteral("Dimensions finished — Select active."));
+        break;
     case sketch::SketchTool::move:
         setStatusText(
             QStringLiteral("Move finished — Select active."));
@@ -13632,6 +13638,12 @@ void CadWorkbench::cancelSketchLine() {
         setStatusText(
             QStringLiteral(
                 "Rectangle cancelled — committed geometry preserved."));
+        break;
+    case sketch::SketchTool::relations:
+        setStatusText(QStringLiteral("Relations cancelled — no constraint authored."));
+        break;
+    case sketch::SketchTool::dimensions:
+        setStatusText(QStringLiteral("Dimensions cancelled — no dimension authored."));
         break;
     case sketch::SketchTool::move:
         setStatusText(
@@ -17122,6 +17134,32 @@ void CadWorkbench::syncSketchInteractionUi() {
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::rectangle);
     }
+    const bool relations_mode =
+        editing && !sketch_interaction_controller_->profileToolActive() &&
+        sketch_interaction_controller_->tool() ==
+            sketch::SketchTool::relations;
+    const bool dimensions_mode =
+        editing && !sketch_interaction_controller_->profileToolActive() &&
+        sketch_interaction_controller_->tool() ==
+            sketch::SketchTool::dimensions;
+    if (relations_sketch_button_ != nullptr) {
+        relations_sketch_button_->setVisible(editing);
+        relations_sketch_button_->setChecked(relations_mode);
+    }
+    if (dimensions_sketch_button_ != nullptr) {
+        dimensions_sketch_button_->setVisible(editing);
+        dimensions_sketch_button_->setChecked(dimensions_mode);
+    }
+    if (sketch_relations_operations_widget_ != nullptr) {
+        sketch_relations_operations_widget_->setVisible(relations_mode);
+    }
+    if (sketch_dimensions_operations_widget_ != nullptr) {
+        sketch_dimensions_operations_widget_->setVisible(dimensions_mode);
+    }
+    if (sketch_a2_visibility_widget_ != nullptr) {
+        sketch_a2_visibility_widget_->setVisible(
+            relations_mode || dimensions_mode);
+    }
     if (create_construction_button_ != nullptr) {
         create_construction_button_->setChecked(
             editing &&
@@ -18347,6 +18385,8 @@ void CadWorkbench::syncActionState() {
         editing_sketch);
     rectangle_sketch_button_->setVisible(
         editing_sketch);
+    relations_sketch_button_->setVisible(editing_sketch);
+    dimensions_sketch_button_->setVisible(editing_sketch);
     modify_tools_label_->setVisible(
         editing_sketch);
     trim_sketch_button_->setVisible(
