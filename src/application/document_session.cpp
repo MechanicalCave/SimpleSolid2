@@ -4121,11 +4121,15 @@ DocumentSession::evaluateRevolveDraft(
                 preview_upstream_ready = true;
             }
 
+            // The upstream candidate is a separate Part incarnation.
+            // Its evaluated solid is suitable as the preview operand,
+            // but its PartEvaluation is NOT authority to resolve the
+            // target candidate's Sketch, Datum or Axis references.
             const auto datums =
                 evaluateDatumsWithProvider(
-                    *candidate.document,prefix_evaluation,modeling_kernel);
-            // Preview uses the identical current effective Sketch as
-            // candidate Feature evaluation, never linked authored seeds.
+                    *candidate.document,evaluation,modeling_kernel);
+            // Preview uses candidate-owned current stage geometry, never
+            // linked authored seeds or foreign upstream-stage provenance.
             std::optional<part::EffectiveSketchProjection>
                 preview_effective_sketch;
             if (const auto* profile =
@@ -4144,7 +4148,7 @@ DocumentSession::evaluateRevolveDraft(
                             part::evaluateEffectiveSketchProjection(
                                 *candidate.document,
                                 profile->source_sketch_id,
-                                prefix_evaluation,
+                                evaluation,
                                 *projection_query,
                                 target_id);
                     }
@@ -4154,7 +4158,7 @@ DocumentSession::evaluateRevolveDraft(
                 part::resolveKernelRevolveInput(
                     *candidate.document,
                     definition,
-                    &prefix_evaluation,
+                    &evaluation,
                     &datums,
                     preview_effective_sketch
                         ? &preview_effective_sketch->model
