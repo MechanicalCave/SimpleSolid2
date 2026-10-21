@@ -509,5 +509,97 @@ int main() {
     CHECK(state.selectedEntities().empty());
     CHECK(!state.primarySelection().has_value());
 
+    // R13-A2.0 typed Sketch-owned selection grammar; no Qt-generated
+    // constraint ID and no authored Sketch mutation during collection.
+    sketch::SketchModel relation_model;
+    const auto relation_a = relation_model.addLine(
+        {0.0, 0.0}, {5.0, 0.0});
+    const auto relation_b = relation_model.addLine(
+        {0.0, 3.0}, {5.0, 4.0});
+    const auto relation_circle = relation_model.addCircle(
+        {1.0, 1.0}, 2.0);
+    const auto relation_before = relation_model.state();
+    sketch::SketchInteractionState acquire;
+    using RK = sketch::ConstraintKind;
+    using RE = sketch::ConstraintElement;
+    using RO = sketch::RelationTargetOutcome;
+    const sketch::ConstraintReference first_line{
+        relation_a, RE::line};
+    const sketch::ConstraintReference second_line{
+        relation_b, RE::line};
+    const sketch::ConstraintReference a_end{
+        relation_a, RE::line_end};
+    const sketch::ConstraintReference b_start{
+        relation_b, RE::line_start};
+    CHECK(!acquire.setRelationKind(RK::parallel));
+    acquire.replaceSelection(relation_a);
+    acquire.activateRelations();
+    CHECK(acquire.tool() == sketch::SketchTool::relations);
+    CHECK(acquire.selectedEntities().size() == 1U);
+    CHECK(acquire.selectedEntities().front() == relation_a);
+    CHECK(acquire.setRelationKind(RK::horizontal));
+    const auto horizontal = acquire.acceptRelationTarget(
+        relation_model, first_line);
+    CHECK(horizontal.outcome == RO::ready);
+    CHECK(horizontal.draft.has_value());
+    CHECK(horizontal.draft->kind == RK::horizontal);
+    CHECK(horizontal.draft->first == first_line);
+    CHECK(!horizontal.draft->second.entity.valid());
+
+    CHECK(acquire.setRelationKind(RK::coincident));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line).outcome == RO::invalid_target);
+    const auto first = acquire.acceptRelationTarget(
+        relation_model, a_end);
+    CHECK(first.outcome == RO::first_target_accepted);
+    CHECK(acquire.firstRelationTarget() == a_end);
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, {relation_a, RE::line_start}
+    ).outcome == RO::invalid_target);
+    CHECK(acquire.firstRelationTarget() == a_end);
+    const auto coincident = acquire.acceptRelationTarget(
+        relation_model, b_start);
+    CHECK(coincident.outcome == RO::ready);
+    CHECK(coincident.draft.has_value());
+    CHECK(coincident.draft->first == a_end);
+    CHECK(coincident.draft->second == b_start);
+    CHECK(!acquire.firstRelationTarget());
+    CHECK(acquire.relationKind() == RK::coincident);
+
+    CHECK(acquire.setRelationKind(RK::parallel));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::first_target_accepted);
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, {relation_circle, RE::line}
+    ).outcome == RO::invalid_target);
+    CHECK(acquire.cancelRelationTarget());
+    CHECK(!acquire.firstRelationTarget());
+    CHECK(!acquire.cancelRelationTarget());
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::first_target_accepted);
+    const auto parallel = acquire.acceptRelationTarget(
+        relation_model, second_line);
+    CHECK(parallel.outcome == RO::ready);
+    CHECK(parallel.draft->kind == RK::parallel);
+    CHECK(parallel.draft->first.entity != parallel.draft->second.entity);
+
+    CHECK(acquire.setRelationKind(RK::fix));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::ready);
+    CHECK(!acquire.setRelationKind(static_cast<RK>(255)));
+    CHECK(acquire.relationKind() == RK::fix);
+    CHECK(relation_model.state() == relation_before);
+    acquire.activateDimensions();
+    CHECK(acquire.tool() == sketch::SketchTool::dimensions);
+    CHECK(!acquire.relationKind());
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::inactive);
+    acquire.finishTool();
+    CHECK(acquire.tool() == sketch::SketchTool::select);
+
     return EXIT_SUCCESS;
 }
