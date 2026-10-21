@@ -970,10 +970,11 @@ int main() {
         // This must fail closed even when the backend says Converged
         // and all independent geometric residuals are satisfied.
         struct ImpossibleDofBackend final : sk::ILocalSketchSolver {
+            std::size_t claimed_dof{5U};
             sk::LocalBackendSolveResult solve(
                 const sk::LocalSolveProblem& problem) override {
                 return {sk::LocalBackendStatus::converged,
-                        problem.authored, {}, {}, 5U};
+                        problem.authored, {}, {}, claimed_dof};
             }
         } impossible_dof;
         const auto invalid_dof = sk::preflightLocalRelation(
@@ -986,6 +987,22 @@ int main() {
         CHECK(!invalid_dof.proposed_authored);
         CHECK(!invalid_dof.provisional_constraint_id);
         CHECK(!invalid_dof.solve.candidate);
+        CHECK(flat.state() == before);
+
+        // A fixed Line has no editable scalar parameters at all,
+        // regardless of how many coordinates its geometry contains.
+        impossible_dof.claimed_dof = 1U;
+        const std::array<sk::EntityId, 1> stage_fixed{line};
+        const auto invalid_fixed_dof = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            ref, {}, stage_fixed, policy, impossible_dof);
+        CHECK(invalid_fixed_dof.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(invalid_fixed_dof.solve.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!invalid_fixed_dof.proposed_authored);
+        CHECK(!invalid_fixed_dof.provisional_constraint_id);
+        CHECK(!invalid_fixed_dof.solve.candidate);
         CHECK(flat.state() == before);
 
         const auto duplicate = sk::preflightLocalRelation(
