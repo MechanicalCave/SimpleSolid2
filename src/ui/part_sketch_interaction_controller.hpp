@@ -364,6 +364,11 @@ public:
     void activateRectangle();
     void activateRelations();
     void activateDimensions();
+    [[nodiscard]] bool selectRelationKind(sketch::ConstraintKind kind);
+    [[nodiscard]] std::optional<sketch::ConstraintKind>
+    relationKind() const noexcept {
+        return interaction_.relationKind();
+    }
     [[nodiscard]] bool activateTrim();
     [[nodiscard]] bool activateExtend();
     void activateExtendBoth();
