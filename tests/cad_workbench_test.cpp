@@ -2321,6 +2321,43 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(part_axis_tool->isHidden());
     CHECK(!mirror_tool->isHidden());
+
+    // R13-A2.0 native registered desktop RED: Sketch Create exposes
+    // two ordinary (non-popup) tools. Every semantic type and the
+    // view-only visibility toggles live under the existing Operations.
+    // A2.0 is not green merely because a headless A1 solver exists.
+    auto* relations_tool = workbench.findChild<QPushButton*>(
+        QStringLiteral("relationsSketchToolButton"));
+    auto* dimensions_tool = workbench.findChild<QPushButton*>(
+        QStringLiteral("dimensionsSketchToolButton"));
+    CHECK(relations_tool != nullptr);
+    CHECK(dimensions_tool != nullptr);
+    CHECK(!relations_tool->isHidden());
+    CHECK(!dimensions_tool->isHidden());
+    for (const char* name : {
+        "sketchRelationHorizontalButton",
+        "sketchRelationVerticalButton",
+        "sketchRelationCoincidentButton",
+        "sketchRelationParallelButton",
+        "sketchRelationPerpendicularButton",
+        "sketchRelationFixButton",
+        "sketchDimensionLengthButton",
+        "sketchDimensionRadiusButton",
+        "sketchDimensionDiameterButton"
+    }) {
+        auto* option = workbench.findChild<QPushButton*>(
+            QString::fromLatin1(name));
+        CHECK(option != nullptr);
+        CHECK(operations->parentWidget()->isAncestorOf(option));
+    }
+    auto* show_constraints = workbench.findChild<QCheckBox*>(
+        QStringLiteral("sketchShowConstraintsCheck"));
+    auto* show_dimensions = workbench.findChild<QCheckBox*>(
+        QStringLiteral("sketchShowDimensionsCheck"));
+    CHECK(show_constraints && show_dimensions);
+    CHECK(operations->parentWidget()->isAncestorOf(show_constraints));
+    CHECK(operations->parentWidget()->isAncestorOf(show_dimensions));
+
     CHECK(mirror_keep_original->isHidden());
     CHECK(operations->parentWidget()->isAncestorOf(
         mirror_keep_original));
