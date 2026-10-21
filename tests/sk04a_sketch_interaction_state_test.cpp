@@ -532,7 +532,7 @@ int main() {
     const sketch::ConstraintReference b_start{
         relation_b, RE::line_start};
     CHECK(!acquire.setRelationKind(RK::parallel));
-    acquire.replaceSelection(relation_a);
+    CHECK(acquire.replaceSelection(relation_a));
     acquire.activateRelations();
     CHECK(acquire.tool() == sketch::SketchTool::relations);
     CHECK(acquire.selectedEntities().size() == 1U);
