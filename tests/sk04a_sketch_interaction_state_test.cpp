@@ -620,6 +620,25 @@ int main() {
     CHECK(!acquire.firstRelationTarget());
     CHECK(relation_model.state() == relation_before);
 
+    acquire.activateRelations();
+    CHECK(acquire.setRelationKind(RK::parallel));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::first_target_accepted);
+    CHECK(acquire.escape());
+    CHECK(acquire.tool() == sketch::SketchTool::relations);
+    CHECK(acquire.relationKind() == RK::parallel);
+    CHECK(!acquire.firstRelationTarget());
+    CHECK(acquire.escape());
+    CHECK(acquire.tool() == sketch::SketchTool::select);
+    CHECK(!acquire.relationKind());
+    acquire.activateDimensions();
+    CHECK(acquire.setDimensionKind(sketch::DrivingDimensionToolKind::radius));
+    CHECK(acquire.escape());
+    CHECK(acquire.tool() == sketch::SketchTool::select);
+    CHECK(!acquire.dimensionKind());
+    CHECK(relation_model.state() == relation_before);
+
     // Native viewport screen-space R13-A2 Coincident endpoint grammar:
     // input is a disposable projection from the *current* Sketch stage.
     // It does not need visible/selected editable grips and cannot write CAD.
