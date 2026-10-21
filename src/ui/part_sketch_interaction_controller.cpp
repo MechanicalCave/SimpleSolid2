@@ -1550,6 +1550,12 @@ bool PartSketchInteractionController::activateCadInputSemanticTool(
     case sketch::SketchTool::rectangle:
         activateRectangle();
         return this->tool() == tool;
+    case sketch::SketchTool::relations:
+        activateRelations();
+        return this->tool() == tool;
+    case sketch::SketchTool::dimensions:
+        activateDimensions();
+        return this->tool() == tool;
     case sketch::SketchTool::measure:
         return activateMeasure();
     case sketch::SketchTool::move:
@@ -2007,6 +2013,8 @@ bool PartSketchInteractionController::repeatLastCommand() {
     case sketch::SketchTool::mirror:
         return activateMirror();
     case sketch::SketchTool::measure:
+    case sketch::SketchTool::relations:
+    case sketch::SketchTool::dimensions:
     case sketch::SketchTool::select:
     case sketch::SketchTool::trim:
     case sketch::SketchTool::extend:
@@ -2333,6 +2341,42 @@ void PartSketchInteractionController::activateRectangle() {
     last_repeatable_command_ =
         sketch::SketchTool::rectangle;
     notifyStateChanged();
+}
+
+void PartSketchInteractionController::activateRelations() {
+    if (!active()) return;
+    resetProfileRuntime();
+    interaction_.activateRelations();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    rectangle_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    reportStatus("RELATIONS: numeric production solver and semantic targets are not yet enabled. No relation is authored.");
+}
+
+void PartSketchInteractionController::activateDimensions() {
+    if (!active()) return;
+    resetProfileRuntime();
+    interaction_.activateDimensions();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    rectangle_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    reportStatus("DIMENSIONS: native driving-dimension solver and v22 schema are not yet enabled. No dimension is authored.");
 }
 
 bool PartSketchInteractionController::activateTrim() {
@@ -3920,6 +3964,12 @@ void PartSketchInteractionController::onPointer(
         break;
     case sketch::SketchTool::measure:
         handleMeasurePointer(input);
+        break;
+    case sketch::SketchTool::relations:
+    case sketch::SketchTool::dimensions:
+        // Until the licensed numerical authoring gateway and strict
+        // target-acquisition state are active, pointer picks are inert.
+        // Never fall through to geometry edit or author unsolved A1.
         break;
     case sketch::SketchTool::trim:
     case sketch::SketchTool::extend:
