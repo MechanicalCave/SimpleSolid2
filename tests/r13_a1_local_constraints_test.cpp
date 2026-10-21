@@ -102,7 +102,8 @@ int main() {
             fixed, policy, native);
         CHECK(conflict.status ==
               sk::LocalRelationPreflightStatus::solver_rejected);
-        CHECK(conflict.provisional_constraint_id);
+        CHECK(!conflict.provisional_constraint_id);
+        CHECK(!conflict.proposed_authored);
         CHECK(!conflict.solve.candidate);
         CHECK(current.state() == baseline);
 
@@ -1003,6 +1004,8 @@ int main() {
               sk::LocalRelationPreflightStatus::solver_rejected);
         CHECK(rejected.solve.status ==
               sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!rejected.provisional_constraint_id);
+        CHECK(!rejected.proposed_authored);
         CHECK(!rejected.solve.candidate);
         CHECK(skew.state() == skew_before);
         CHECK(backend.calls == 2);
