@@ -365,6 +365,11 @@ public:
     void activateRelations();
     void activateDimensions();
     [[nodiscard]] bool selectRelationKind(sketch::ConstraintKind kind);
+    [[nodiscard]] bool selectDimensionKind(sketch::DrivingDimensionToolKind kind);
+    [[nodiscard]] std::optional<sketch::DrivingDimensionToolKind>
+    dimensionKind() const noexcept {
+        return interaction_.dimensionKind();
+    }
     [[nodiscard]] std::optional<sketch::ConstraintKind>
     relationKind() const noexcept {
         return interaction_.relationKind();
