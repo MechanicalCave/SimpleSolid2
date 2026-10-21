@@ -3462,7 +3462,13 @@ int main() {
                 *pgCold.document, *projected_sketch.sketch_id,
                 freshPrefix, freshPgProvider);
             CHECK(freshProblem);
-            CHECK(freshProblem->authored == coldPgSketch->model.state());
+            // The solver receives disposable CURRENT projected geometry,
+            // not the stale authored Line seed saved in the native file.
+            // The immutable Part source retains its own complete seed state.
+            CHECK(freshProblem->authored == effective->model.state());
+            CHECK(freshProblem->authored != coldPgSketch->model.state());
+            CHECK(coldPgSketch->model.findLine(projectedId)->start() ==
+                  (sk::Point2{180.0, 180.0}));
             CHECK(freshProblem->lines.size() == 2U);
             CHECK(freshProblem->fixed_lines.size() == 1U);
             CHECK(freshProblem->fixed_lines.front() == projectedId);
