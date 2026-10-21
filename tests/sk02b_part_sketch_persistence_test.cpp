@@ -1032,6 +1032,73 @@ int main() {
             "\"next_constraint_id\": \"2\"",
             "\"next_constraint_id\": 2");
 
+        // D2-V20: independent Owner-supplied ORIGINAL native v20 bytes.
+        // This is not a container synthesized from a v21 writer; preserve
+        // exact input bytes until the requested explicit checkpointed Save.
+        // Exact historical executable SHA is separate provenance evidence.
+        {
+            const auto goldenSource =
+                std::filesystem::path{__FILE__}.parent_path() /
+                "fixtures/r13a1_native_part_v20_writer_golden.ss2part";
+            const auto readExactBytes = [](const std::filesystem::path& path) {
+                std::ifstream in{path, std::ios::binary};
+                CHECK(static_cast<bool>(in));
+                const auto length = std::filesystem::file_size(path);
+                std::string bytes(static_cast<std::size_t>(length), '\0');
+                in.read(bytes.data(),
+                    static_cast<std::streamsize>(bytes.size()));
+                CHECK(in.gcount() ==
+                      static_cast<std::streamsize>(bytes.size()));
+                return bytes;
+            };
+            const auto originalBytes = readExactBytes(goldenSource);
+            CHECK(originalBytes.size() == 1475U);
+            const auto nativeV20 =
+                persistence::readNativeDocumentContainer(goldenSource);
+            CHECK(nativeV20.ok());
+            CHECK(nativeV20.package->descriptor.domain_schema_version == 20);
+            CHECK(nativeV20.package->authored_json.find(
+                "\\"next_constraint_id\\"") == std::string::npos);
+            CHECK(nativeV20.package->authored_json.find(
+                "\\"constraints\\"") == std::string::npos);
+            const auto coldPath = temp.path / "IndependentOriginalV20.ss2part";
+            writeBytes(coldPath, originalBytes);
+            const auto coldV20 = store.load(coldPath);
+            CHECK(coldV20.ok() && coldV20.document && coldV20.checkpoint);
+            CHECK(readExactBytes(coldPath) == originalBytes);
+            CHECK(coldV20.document->documentId().value() ==
+                  "78548a7a-6370-4df7-ba3c-d6c69ede0d47");
+            CHECK(coldV20.document->sketches().size() == 1U);
+            CHECK(coldV20.document->profiles().size() == 2U);
+            CHECK(coldV20.document->body().features.empty());
+            const auto& oldModel = coldV20.document->sketches().front().model;
+            CHECK(oldModel.state().lines.size() == 11U);
+            CHECK(oldModel.state().arcs.size() == 2U);
+            CHECK(oldModel.entityIdCursor().serialized() == "16");
+            CHECK(oldModel.constraintCount() == 0U);
+            CHECK(oldModel.constraintIdCursor().serialized() == "1");
+            CHECK(coldV20.document->profiles()[0].id.serialized() == "1");
+            CHECK(coldV20.document->profiles()[1].id.serialized() == "2");
+            const auto originalState = coldV20.document->state();
+            CHECK(store.save(coldPath, *coldV20.document,
+                             *coldV20.checkpoint).ok());
+            const auto upgradedNative =
+                persistence::readNativeDocumentContainer(coldPath);
+            CHECK(upgradedNative.ok());
+            CHECK(upgradedNative.package->descriptor.domain_schema_version
+                  == 21);
+            CHECK(upgradedNative.package->authored_json.find(
+                "\\"next_constraint_id\\": \\"1\\"") != std::string::npos);
+            CHECK(upgradedNative.package->authored_json.find(
+                "\\"constraints\\": []") != std::string::npos);
+            CHECK(readExactBytes(goldenSource) == originalBytes);
+            const auto reopenedOriginal = store.load(coldPath);
+            CHECK(reopenedOriginal.ok() && reopenedOriginal.document);
+            CHECK(reopenedOriginal.document->documentId() ==
+                  coldV20.document->documentId());
+            CHECK(reopenedOriginal.document->state() == originalState);
+        }
+
         // P21-03: a REAL native v20 container must retain its exact
         // two-key Sketch model on Load and upgrade only by explicit Save.
         // Reconstruct the old v20 model bytes from this fixture's identical
