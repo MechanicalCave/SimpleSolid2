@@ -54,6 +54,71 @@ int main() {
     sk::PlaneGcsDevSolver native;
     unsigned passed = 0;
 
+    // R13-A2.0 real original-source PlaneGCS numerical preflight:
+    // one click may prepare, but never publish an unsolved Part relation.
+    {
+        sk::SketchModel current;
+        const auto line = current.addLine({0.0,0.0},{5.0,2.0});
+        const auto baseline = current.state();
+        const auto first = sk::ConstraintReference{line,L};
+        const auto preview = sk::preflightLocalRelation(
+            baseline, K::horizontal, first, {},
+            {}, policy, native);
+        CHECK(preview.status ==
+              sk::LocalRelationPreflightStatus::candidate_accepted);
+        CHECK(preview.provisional_constraint_id);
+        CHECK(preview.proposed_authored);
+        CHECK(preview.solve.candidate);
+        CHECK(preview.solve.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(preview.proposed_authored->constraints.size() == 1U);
+        CHECK(preview.proposed_authored->constraints.front().id ==
+              *preview.provisional_constraint_id);
+        CHECK(preview.proposed_authored->constraints.front().kind ==
+              K::horizontal);
+        CHECK(std::abs(preview.solve.candidate->lines.front().start.v -
+                       preview.solve.candidate->lines.front().end.v) <
+              policy.distance_tolerance);
+        CHECK(current.state() == baseline);
+        CHECK(baseline.constraints.empty());
+        CHECK(baseline.next_constraint_id == current.state().next_constraint_id);
+
+        // A semantic duplicate is rejected before the backend is invoked.
+        const auto duplicate = sk::preflightLocalRelation(
+            *preview.proposed_authored, K::horizontal, first, {},
+            {}, policy, native);
+        CHECK(duplicate.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!duplicate.provisional_constraint_id);
+        CHECK(!duplicate.proposed_authored);
+        CHECK(!duplicate.solve.candidate);
+
+        // A horizontal equation on an immovable skew Line is impossible.
+        // A naive residual or "backend says success" shortcut must not
+        // authorize this candidate, nor alter original authored seeds.
+        const std::array<sk::EntityId,1> fixed{line};
+        const auto conflict = sk::preflightLocalRelation(
+            baseline, K::horizontal, first, {},
+            fixed, policy, native);
+        CHECK(conflict.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(conflict.provisional_constraint_id);
+        CHECK(!conflict.solve.candidate);
+        CHECK(current.state() == baseline);
+
+        // Invalid non-existing Line semantic identity never publishes a
+        // candidate, even before the solver sees the proposal.
+        const auto absent = sk::EntityId::parse("99");
+        CHECK(absent);
+        const auto invalid = sk::preflightLocalRelation(
+            baseline, K::horizontal, {*absent,L}, {},
+            {}, policy, native);
+        CHECK(invalid.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!invalid.provisional_constraint_id);
+        CHECK(current.state() == baseline);
+    }
+
     for (const auto kind : {K::horizontal,K::vertical}) {
         sk::SketchModel model;
         const auto line = model.addLine({0.0,0.0},{5.0,2.0});
