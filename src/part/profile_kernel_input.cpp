@@ -322,6 +322,10 @@ resolveStageSolvedProfileKernelInput(
     const BodyStageTopologyCatalog* support_topology,
     const DatumEvaluation* datum_evaluation,
     std::optional<FeatureId> consuming_feature) {
+    // Reject foreign cold-incarnation evidence before solver or provider work.
+    if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
+        return {ProfileKernelInputStatus::unresolved_profile};
+    }
     const auto* profile = document.findProfile(profile_id);
     if (!profile) {
         return {ProfileKernelInputStatus::missing_profile};
@@ -336,6 +340,7 @@ resolveStageSolvedProfileKernelInput(
         document, profile->source_sketch_id, evaluated_prefix,
         query, policy, backend, consuming_feature);
     if (!stage ||
+        !ownsCurrentPartEvaluation(document, evaluated_prefix) ||
         stage->source_document_id != document.documentId() ||
         stage->source_revision != document.revision() ||
         stage->source_sketch_id != profile->source_sketch_id ||
