@@ -1011,6 +1011,150 @@ int main() {
         CHECK(backend.calls == 2);
     }
 
+
+    // R13-A2.0 application-level atomic numeric transaction prototype.
+    // The backend is injected by the test. Nothing is linked to the
+    // unapproved consumer PlaneGCS package or Qt authoring path.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct EchoNumeric final : sk::ILocalSketchSolver {
+            int calls{};
+            app::DocumentSession* reenter{};
+            sk::SketchId sketch_id;
+            bool reentered{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                if (reenter && !reentered) {
+                    reentered = true;
+                    const auto changed = reenter->execute(
+                        app::AddSketchLineCommand{
+                            sketch_id, {30.0, 30.0}, {34.0, 31.0}});
+                    CHECK(changed.ok() && changed.changed);
+                }
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, 3U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line_result = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 4.0}, {7.0, 4.0}});
+        CHECK(line_result.ok() && line_result.entity_id);
+        const auto id = *line_result.entity_id;
+        const auto authored_before =
+            session.document().findSketch(sid)->model.state();
+        const auto starting_rev = session.document().revision();
+        const auto starting_undo = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand command{
+            sid, session.document().documentId(), starting_rev,
+            session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {id, sk::ConstraintElement::line}, {}};
+        auto accepted = session.execute(command, policy, backend);
+        CHECK(accepted.ok() && accepted.changed &&
+              accepted.constraint_id);
+        CHECK(accepted.preflight_status ==
+              sk::LocalRelationPreflightStatus::candidate_accepted);
+        CHECK(accepted.solver_status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == starting_undo + 1U);
+        CHECK(session.document().findSketch(sid)
+              ->model.constraintCount() == 1U);
+        CHECK(session.document().findSketch(sid)
+              ->model.state().lines == authored_before.lines);
+        CHECK(session.undo().ok());
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              authored_before);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)
+              ->model.findConstraint(*accepted.constraint_id));
+
+        // Reusing the previous revision cannot re-execute a command.
+        auto stale = session.execute(command, policy, backend);
+        CHECK(!stale.ok() && !stale.changed);
+        CHECK(backend.calls == 1);
+
+        // Duplicate semantic intent cannot consume another constraint ID.
+        const app::AddSolvedSketchRelationCommand repeat{
+            sid, session.document().documentId(),
+            session.document().revision(),
+            session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {id, sk::ConstraintElement::line}, {}};
+        const auto undo_before_repeat = session.undoDepth();
+        auto duplicate = session.execute(repeat, policy, backend);
+        CHECK(!duplicate.ok() && !duplicate.changed);
+        CHECK(duplicate.preflight_status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!duplicate.constraint_id && backend.calls == 1);
+        CHECK(session.undoDepth() == undo_before_repeat);
+
+        // Fix Current Position must be implemented with current
+        // *effective* solved geometry, not this raw-authored endpoint path.
+        const app::AddSolvedSketchRelationCommand fix{
+            sid, session.document().documentId(),
+            session.document().revision(),
+            session.document().incarnationToken(),
+            sk::ConstraintKind::fix,
+            {id, sk::ConstraintElement::line}, {}};
+        CHECK(!session.execute(fix, policy, backend).ok());
+        CHECK(backend.calls == 1);
+
+        // A forged weak incarnation from a separate cold reconstruction
+        // of the same DocumentId/revision is never enough to commit.
+        const auto cold = part::PartDocument::restore(
+            session.document().documentId(), session.document().state(),
+            session.document().revision());
+        CHECK(cold.ok() && cold.document);
+        const app::AddSolvedSketchRelationCommand wrong_owner{
+            sid, session.document().documentId(),
+            session.document().revision(),
+            cold.document->incarnationToken(),
+            sk::ConstraintKind::vertical,
+            {id, sk::ConstraintElement::line}, {}};
+        CHECK(!session.execute(wrong_owner, policy, backend).ok());
+        CHECK(backend.calls == 1);
+
+        // Stale backend result re-entry cannot overwrite a newer Part.
+        const auto next_line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {5.0, 7.0}, {8.0, 7.0}});
+        CHECK(next_line.ok() && next_line.entity_id);
+        const auto extra = *next_line.entity_id;
+        const auto before_reentry = session.document().revision();
+        const auto undo_before_reentry = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand reentrant{
+            sid, session.document().documentId(),
+            before_reentry, session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {extra, sk::ConstraintElement::line}, {}};
+        backend.reenter = &session;
+        backend.sketch_id = sid;
+        const auto refused = session.execute(reentrant, policy, backend);
+        CHECK(!refused.ok() && !refused.changed);
+        CHECK(!refused.constraint_id);
+        CHECK(backend.reentered);
+        CHECK(session.document().revision() != before_reentry);
+        CHECK(session.undoDepth() == undo_before_reentry + 1U);
+        CHECK(session.document().findSketch(sid)
+              ->model.findConstraint(*accepted.constraint_id) != nullptr);
+        CHECK(session.document().findSketch(sid)
+              ->model.constraintCount() == 1U);
+        CHECK(session.document().findSketch(sid)
+              ->model.findLine(extra) != nullptr);
+    }
+
     sk::SketchModel model;
     const auto line = model.addLine({1.0, 2.0}, {5.0, 4.0});
     const auto seed = model.state();
