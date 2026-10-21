@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace simplesolid2::sketch {
@@ -62,6 +63,36 @@ struct RelationTargetResult final {
      RelationTargetOutcome outcome{RelationTargetOutcome::inactive};
      std::optional<RelationTargetDraft> draft;
  };
+
+// Provider-neutral EXACT endpoint hit resolver for command-first
+// Coincident. Caller supplies screen-projected semantic references for
+// the CURRENT evaluated Sketch stage. No Qt/OCCT tokens or authoring.
+// Multiple endpoints inside the native viewer tolerance are AMBIGUOUS:
+// do not pick by incidental EntityId or iteration order.
+struct RelationEndpointScreenCandidate final {
+    ConstraintReference reference;
+    Point2 screen_point;
+    friend bool operator==(
+        const RelationEndpointScreenCandidate&,
+        const RelationEndpointScreenCandidate&) = default;
+};
+enum class RelationEndpointHitStatus : std::uint8_t {
+    hit,
+    miss,
+    ambiguous,
+    invalid_input
+};
+struct RelationEndpointHit final {
+    RelationEndpointHitStatus status{
+        RelationEndpointHitStatus::invalid_input};
+    std::optional<ConstraintReference> reference;
+};
+
+[[nodiscard]] RelationEndpointHit resolveRelationEndpointHit(
+    const SketchModel& current_model,
+    Point2 pointer_screen,
+    std::span<const RelationEndpointScreenCandidate> candidates,
+    double native_hit_tolerance_pixels) noexcept;
 
 enum class MeasureRelationAcceptOutcome : std::uint8_t {
     inactive,
