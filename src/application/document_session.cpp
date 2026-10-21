@@ -616,6 +616,7 @@ DocumentSession::DocumentSession(
       saved_state_{document_.state()},
       expected_revision_{document_.revision()} {
     absorbSketchEntityIdCursors(document_.state());
+    absorbSketchConstraintIdCursors(document_.state());
     axis_id_cursor_.preserve(
         document_.state().next_axis_id);
     datum_id_cursor_.preserve(
@@ -643,6 +644,7 @@ DocumentSession::DocumentSession(
             "DocumentSession file checkpoint DocumentId mismatch"};
     }
     absorbSketchEntityIdCursors(document_.state());
+    absorbSketchConstraintIdCursors(document_.state());
     axis_id_cursor_.preserve(
         document_.state().next_axis_id);
     datum_id_cursor_.preserve(
@@ -673,6 +675,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     }
 
     applySketchEntityIdCursors(after);
+    applySketchConstraintIdCursors(after);
     applyAxisIdCursor(after);
     applyDatumIdCursor(after);
     applyProfileIdCursor(after);
@@ -697,6 +700,8 @@ DocumentSessionResult DocumentSession::commitCommandState(
     absorbSketchEntityIdCursors(
         prepared_entity_id_cursors,
         pending.after);
+    auto prepared_constraint_id_cursors = sketch_constraint_id_cursors_;
+    absorbSketchConstraintIdCursors(prepared_constraint_id_cursors, pending.after);
     auto prepared_axis_id_cursor =
         axis_id_cursor_;
     prepared_axis_id_cursor.preserve(
@@ -743,6 +748,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     cursor_ = history_.size();
     sketch_entity_id_cursors_.swap(
         prepared_entity_id_cursors);
+    sketch_constraint_id_cursors_.swap(prepared_constraint_id_cursors);
     axis_id_cursor_ =
         prepared_axis_id_cursor;
     datum_id_cursor_ =
@@ -1693,13 +1699,6 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
             DocumentSessionErrorCode::invalid_command,
             "Project Sketch Edges needs nonempty sources and valid role");
     }
-    const auto* authored =
-        document_.findSketch(command.sketch_id);
-    if (!authored) {
-        return reject(
-            DocumentSessionErrorCode::invalid_command,
-            "Project Sketch Edges target SketchId is missing");
-    }
     auto* query = dynamic_cast<kernel::IEdgeProjectionQuery*>(
         &modeling_kernel);
     if (!query) {
@@ -1709,6 +1708,20 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
     }
     const auto prefix = part::evaluatePart(
         document_, modeling_kernel);
+    // The modeling provider may re-enter this DocumentSession while
+    // evaluating the upstream Body. Validate the original command revision
+    // before borrowing any authored Sketch data from that result.
+    if (document_.revision() != command.expected_revision) {
+        return reject(
+            DocumentSessionErrorCode::revision_diverged,
+            "Project Sketch Edges document changed during Body evaluation");
+    }
+    const auto* authored = document_.findSketch(command.sketch_id);
+    if (!authored) {
+        return reject(
+            DocumentSessionErrorCode::invalid_command,
+            "Project Sketch Edges target SketchId is missing");
+    }
     const auto frame = part::resolveCurrentProjectionSketchFrame(
         document_, command.sketch_id, prefix);
     if (!frame) {
@@ -1749,6 +1762,15 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
         const auto& source = command.sources[i];
         const auto projected = part::projectStrictMaterialEdge(
             document_, source, prefix, *query, *frame);
+        // The query can edit the live DocumentSession at EITHER native
+        // binding or projection callback. Our temporary after-state is
+        // obsolete even if the provider returned a valid curve.
+        if (document_.revision() != command.expected_revision) {
+            return reject(
+                DocumentSessionErrorCode::revision_diverged,
+                "Project Sketch Edges document changed during projection",
+                i);
+        }
         if (!projected.resolved()) {
             return reject(
                 DocumentSessionErrorCode::invalid_command,
@@ -1802,6 +1824,14 @@ CreateProjectedSketchEdgesResult DocumentSession::execute(
            const part::ProjectedEdgeBinding& b) {
             return a.target_entity < b.target_entity;
         });
+    // commitCommandState checks its own latest expected_revision_, which a
+    // nested command may already have advanced. Compare against THIS
+    // outer request before any state/history/cursor publication.
+    if (document_.revision() != command.expected_revision) {
+        return reject(
+            DocumentSessionErrorCode::revision_diverged,
+            "Project Sketch Edges document changed before commit");
+    }
     const auto result = commitCommandState(
         std::move(after),
         "Part transaction failed creating linked Sketch Edge batch");
@@ -1862,10 +1892,20 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
     // Never materialize a subset when a source is unavailable.
     const auto current_prefix =
         part::evaluatePart(document_, modeling_kernel);
+    // The kernel may execute a nested DocumentSession command. An
+    // evaluation belonging to the old request cannot authorize detachment.
+    if (document_.revision() != command.expected_revision) {
+        return {Status::stale_revision};
+    }
     const auto effective =
         part::evaluateEffectiveSketchProjection(
             document_, command.sketch_id,
             current_prefix, *projection_query);
+    // The exact projection query may itself mutate the owning session.
+    // Report the stale original request before a generic source failure.
+    if (document_.revision() != command.expected_revision) {
+        return {Status::stale_revision};
+    }
     if (!effective) {
         return {Status::source_unavailable};
     }
@@ -1911,6 +1951,11 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
         [&unique](const part::ProjectedEdgeBinding& item) {
             return unique.contains(item.target_entity);
         });
+    // commitCommandState guards its mutable session expectation; nested
+    // commands may have advanced it. Guard THIS command's original revision.
+    if (document_.revision() != command.expected_revision) {
+        return {Status::stale_revision};
+    }
     const auto committed = commitCommandState(
         std::move(after),
         "Part transaction failed while breaking Projected Edge Links");
@@ -1921,6 +1966,93 @@ BreakProjectedEdgeLinkResult DocumentSession::execute(
             committed.diagnostic};
     }
     return {Status::detached, true};
+}
+
+AddSketchConstraintResult DocumentSession::execute(
+    const AddSketchRelationCommand& command) {
+    if (document_.revision() != command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Sketch relation command has stale DocumentRevision", path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Sketch relation target SketchId does not exist", path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+
+    // PG-01 projected sketch geometry is not ordinary editable user line
+    // authorship. Require a later explicit fixed-reference solver gate.
+    const auto projected = [target](sketch::EntityId entity) {
+        return std::any_of(
+            target->projection_bindings.cbegin(),
+            target->projection_bindings.cend(),
+            [entity](const part::ProjectedEdgeBinding& binding) {
+                return binding.target_entity == entity;
+            });
+    };
+    if (projected(command.first.entity) ||
+        (command.second.entity.valid() &&
+         projected(command.second.entity))) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Sketch relation references linked projection without a fixed-reference solver",
+            path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+
+    const auto id = target->model.addConstraint(
+        command.kind, command.first, command.second);
+    if (!id) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Sketch relation has invalid references, duplicate intent or exhausted IDs",
+            path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
+
+    const auto committed = commitCommandState(
+        std::move(after), "Part transaction failed while creating Sketch relation");
+    if (!committed.ok() || !committed.changed) {
+        return {false, std::nullopt, committed.diagnostic};
+    }
+    return {true, *id, {}};
+}
+
+AddSketchConstraintResult DocumentSession::execute(
+    const AddHorizontalSketchConstraintCommand& command) {
+    return execute(AddSketchRelationCommand{
+        command.sketch_id,
+        command.expected_revision,
+        sketch::ConstraintKind::horizontal,
+        {command.line_id, sketch::ConstraintElement::line},
+        {}});
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EraseSketchConstraintCommand& command) {
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Erase Sketch relation command has stale DocumentRevision", path_);
+    }
+    auto after = document_.state();
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (target == nullptr ||
+        !target->model.eraseConstraint(command.constraint_id)) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Erase Sketch relation requires a current local ConstraintId", path_);
+    }
+    return commitCommandState(
+        std::move(after), "Part transaction failed while deleting Sketch relation");
 }
 
 DocumentSessionResult DocumentSession::execute(
@@ -2040,6 +2172,7 @@ DocumentSessionResult DocumentSession::execute(
             line.start == line.end ||
             !unique.insert(line.entity_id).second ||
             is_linked(line.entity_id) ||
+            target->model.isFixedLine(line.entity_id) ||
             target->model.findLine(line.entity_id) ==
                 nullptr) {
             return failure(
@@ -2186,6 +2319,17 @@ DocumentSession::execute(
             failed.diagnostic};
     }
 
+    if (target->model.isFixedLine(command.target)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Trim cannot modify a Fix(Line) target; remove Fix first", path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
     // Structural-edit evaluators use authored Sketch input today, not
     // the current provider-derived Sketch. Reject linked targets AND linked
     // reference boundaries rather than accidentally using a stale seed.
@@ -2295,6 +2439,17 @@ DocumentSession::execute(
             failed.diagnostic};
     }
 
+    if (target->model.isFixedLine(command.target)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend cannot modify a Fix(Line) target; remove Fix first", path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
     // Structural-edit evaluators use authored Sketch input today, not
     // the current provider-derived Sketch. Reject linked targets AND linked
     // reference boundaries rather than accidentally using a stale seed.
@@ -2400,6 +2555,18 @@ DocumentSession::execute(
         return {
             false,
             sketch::StructuralEditStatus::missing_entity,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    if (target->model.isFixedLine(command.first_line) ||
+        target->model.isFixedLine(command.second_line)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend Both cannot modify Fix(Line) targets; remove Fix first", path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
             std::nullopt,
             failed.diagnostic};
     }
@@ -2727,8 +2894,25 @@ CreateProfileResult DocumentSession::executeCreateProfile(
         }
         const auto prefix =
             part::evaluatePart(document_, *modeling_kernel);
+        // Body evaluation may call a provider that reenters this session.
+        // The original authored request, not the latest mutable session
+        // expectation, owns publication authority.
+        if (document_.revision() != command.expected_revision) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::revision_diverged,
+                "Create Profile document changed during Body evaluation",
+                path_);
+            return {false, std::nullopt, failed.diagnostic};
+        }
         effective = part::evaluateEffectiveSketchProjection(
             document_, command.source_sketch_id, prefix, *query);
+        if (document_.revision() != command.expected_revision) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::revision_diverged,
+                "Create Profile document changed during projection",
+                path_);
+            return {false, std::nullopt, failed.diagnostic};
+        }
         if (!effective) {
             const auto failed = failure(
                 DocumentSessionErrorCode::invalid_command,
@@ -2777,6 +2961,14 @@ CreateProfileResult DocumentSession::executeCreateProfile(
             part::ProfileVisibilityPolicy::automatic,
             command.region_intent});
 
+    // No older staged Profile may overwrite a successful nested command.
+    if (document_.revision() != command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Create Profile document changed before commit",
+            path_);
+        return {false, std::nullopt, failed.diagnostic};
+    }
     const auto committed =
         commitCommandState(
             std::move(after),
@@ -2859,9 +3051,21 @@ DocumentSessionResult DocumentSession::executeEditProfile(
         }
         const auto prefix =
             part::evaluatePart(document_, *modeling_kernel);
+        if (document_.revision() != command.expected_revision) {
+            return failure(
+                DocumentSessionErrorCode::revision_diverged,
+                "Edit Profile document changed during Body evaluation",
+                path_);
+        }
         effective = part::evaluateEffectiveSketchProjection(
             document_, profile->source_sketch_id,
             prefix, *query);
+        if (document_.revision() != command.expected_revision) {
+            return failure(
+                DocumentSessionErrorCode::revision_diverged,
+                "Edit Profile document changed during projection",
+                path_);
+        }
         if (!effective) {
             return failure(
                 DocumentSessionErrorCode::invalid_command,
@@ -2884,6 +3088,12 @@ DocumentSessionResult DocumentSession::executeEditProfile(
 
     profile->region_intent =
         command.region_intent;
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Edit Profile document changed before commit",
+            path_);
+    }
     return commitCommandState(
         std::move(after),
         "Part transaction failed while editing Profile");
@@ -3911,11 +4121,15 @@ DocumentSession::evaluateRevolveDraft(
                 preview_upstream_ready = true;
             }
 
+            // The upstream candidate is a separate Part incarnation.
+            // Its evaluated solid is suitable as the preview operand,
+            // but its PartEvaluation is NOT authority to resolve the
+            // target candidate's Sketch, Datum or Axis references.
             const auto datums =
                 evaluateDatumsWithProvider(
-                    *candidate.document,prefix_evaluation,modeling_kernel);
-            // Preview uses the identical current effective Sketch as
-            // candidate Feature evaluation, never linked authored seeds.
+                    *candidate.document,evaluation,modeling_kernel);
+            // Preview uses candidate-owned current stage geometry, never
+            // linked authored seeds or foreign upstream-stage provenance.
             std::optional<part::EffectiveSketchProjection>
                 preview_effective_sketch;
             if (const auto* profile =
@@ -3934,7 +4148,7 @@ DocumentSession::evaluateRevolveDraft(
                             part::evaluateEffectiveSketchProjection(
                                 *candidate.document,
                                 profile->source_sketch_id,
-                                prefix_evaluation,
+                                evaluation,
                                 *projection_query,
                                 target_id);
                     }
@@ -3944,7 +4158,7 @@ DocumentSession::evaluateRevolveDraft(
                 part::resolveKernelRevolveInput(
                     *candidate.document,
                     definition,
-                    &prefix_evaluation,
+                    &evaluation,
                     &datums,
                     preview_effective_sketch
                         ? &preview_effective_sketch->model
@@ -6125,6 +6339,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
     }
     auto adjusted_expected =
         expected_current;
+    applySketchConstraintIdCursors(adjusted_expected);
     applyAxisIdCursor(
         adjusted_expected);
     applyDatumIdCursor(
@@ -6142,6 +6357,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     auto adjusted_target = target;
     applySketchEntityIdCursors(adjusted_target);
+    applySketchConstraintIdCursors(adjusted_target);
     applyAxisIdCursor(adjusted_target);
     applyDatumIdCursor(adjusted_target);
     applyProfileIdCursor(adjusted_target);
@@ -6160,6 +6376,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     expected_revision_ = document_.revision();
     absorbSketchEntityIdCursors(document_.state());
+    absorbSketchConstraintIdCursors(document_.state());
     axis_id_cursor_.preserve(
         document_.state().next_axis_id);
     datum_id_cursor_.preserve(
@@ -6215,6 +6432,36 @@ void DocumentSession::applySketchEntityIdCursors(
 
         hosted.model.preserveEntityIdCursor(
             found->second);
+    }
+}
+
+void DocumentSession::absorbSketchConstraintIdCursors(
+    SketchConstraintIdCursorMap& cursors,
+    const part::PartAuthoredState& state) {
+    for (const auto& hosted : state.sketches) {
+        const auto observed = hosted.model.constraintIdCursor();
+        const auto found = cursors.find(hosted.id);
+        if (found == cursors.end()) {
+            cursors.emplace(hosted.id, observed);
+        } else if (observed > found->second) {
+            found->second = observed;
+        }
+    }
+}
+
+void DocumentSession::absorbSketchConstraintIdCursors(
+    const part::PartAuthoredState& state) {
+    absorbSketchConstraintIdCursors(
+        sketch_constraint_id_cursors_, state);
+}
+
+void DocumentSession::applySketchConstraintIdCursors(
+    part::PartAuthoredState& state) const {
+    for (auto& hosted : state.sketches) {
+        const auto found = sketch_constraint_id_cursors_.find(hosted.id);
+        if (found != sketch_constraint_id_cursors_.end()) {
+            hosted.model.preserveConstraintIdCursor(found->second);
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 #include <simplesolid2/part/profile_kernel_input.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <simplesolid2/part/datum_evaluation.hpp>
 
@@ -124,8 +125,12 @@ convertLoop(
 
 } // namespace
 
-ProfileKernelInputResult
-resolveKernelProfileInput(
+// Private shared implementation of the ONE existing Profile resolver.
+// Legacy callers can never authorize a constrained Sketch merely by
+// submitting arbitrary "effective" coordinates. Only the stage-bound
+// numerical gateway below can set this internal permission.
+[[nodiscard]] static ProfileKernelInputResult
+resolveKernelProfileInputImpl(
     const PartDocument& document,
     ProfileId profile_id,
     const BodyStageTopologyCatalog*
@@ -133,7 +138,8 @@ resolveKernelProfileInput(
     const DatumEvaluation*
         datum_evaluation,
     const sketch::SketchModel*
-        effective_sketch) {
+        effective_sketch,
+    bool solver_candidate_accepted) {
     const auto* profile =
         document.findProfile(profile_id);
     if (!profile) {
@@ -149,6 +155,16 @@ resolveKernelProfileInput(
         return {
             ProfileKernelInputStatus::
                 missing_source_sketch};
+    }
+
+    // The normal public resolver remains fail-closed for any authored
+    // relation, even with a caller-provided effective Sketch pointer.
+    // The ONLY exception is a validated candidate from the Part-owned
+    // same-stage numerical gateway below. It is deliberately not a
+    // public boolean or a second Profile algorithm.
+    if (source->model.constraintCount() != 0U &&
+        (!solver_candidate_accepted || effective_sketch == nullptr)) {
+        return {ProfileKernelInputStatus::unresolved_profile};
     }
 
     const bool datum_backed =
@@ -281,6 +297,69 @@ resolveKernelProfileInput(
         ProfileKernelInputStatus::resolved,
         support.diagnostic,
         std::move(input)};
+}
+
+ProfileKernelInputResult
+resolveKernelProfileInput(
+    const PartDocument& document,
+    ProfileId profile_id,
+    const BodyStageTopologyCatalog* support_topology,
+    const DatumEvaluation* datum_evaluation,
+    const sketch::SketchModel* effective_sketch) {
+    return resolveKernelProfileInputImpl(
+        document, profile_id, support_topology, datum_evaluation,
+        effective_sketch, false);
+}
+
+ProfileKernelInputResult
+resolveStageSolvedProfileKernelInput(
+    const PartDocument& document,
+    ProfileId profile_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend,
+    const BodyStageTopologyCatalog* support_topology,
+    const DatumEvaluation* datum_evaluation,
+    std::optional<FeatureId> consuming_feature) {
+    // Reject foreign cold-incarnation evidence before solver or provider work.
+    if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
+        return {ProfileKernelInputStatus::unresolved_profile};
+    }
+    const auto* profile = document.findProfile(profile_id);
+    if (!profile) {
+        return {ProfileKernelInputStatus::missing_profile};
+    }
+    if (!document.findSketch(profile->source_sketch_id)) {
+        return {ProfileKernelInputStatus::missing_source_sketch};
+    }
+
+    // Only this call site owns the whole proof chain. Never trust a
+    // caller-created StageLocalSolveEvaluation or naked SketchModel.
+    const auto stage = evaluateStageLocalSolve(
+        document, profile->source_sketch_id, evaluated_prefix,
+        query, policy, backend, consuming_feature);
+    if (!stage ||
+        !ownsCurrentPartEvaluation(document, evaluated_prefix) ||
+        stage->source_document_id != document.documentId() ||
+        stage->source_revision != document.revision() ||
+        stage->source_sketch_id != profile->source_sketch_id ||
+        stage->solution.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !stage->solution.candidate) {
+        return {ProfileKernelInputStatus::unresolved_profile};
+    }
+    // Rebuild only a disposable evaluated model. SketchModel::restore
+    // rejects invalid geometry, broken IDs or altered relation identity.
+    // Authored state stays exclusively in the owning PartDocument.
+    auto solved = sketch::SketchModel::restore(
+        std::move(*stage->solution.candidate));
+    if (!solved) {
+        return {ProfileKernelInputStatus::unresolved_profile};
+    }
+    return resolveKernelProfileInputImpl(
+        document, profile_id, support_topology, datum_evaluation,
+        &*solved, true);
 }
 
 std::optional<kernel::PlanarProfileInput>

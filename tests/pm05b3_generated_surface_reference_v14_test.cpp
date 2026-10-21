@@ -65,12 +65,26 @@ void writeBytes(
     CHECK(static_cast<bool>(out));
 }
 
+
+void stripEmptyV21SketchRelations(nlohmann::json& authored) {
+    // Synthetic old-schema fixtures only; never discard actual constraints.
+    for (auto& sketch : authored.at("sketches")) {
+        auto& model = sketch.at("model");
+        CHECK(model.at("constraints").is_array());
+        CHECK(model.at("constraints").empty());
+        CHECK(model.at("next_constraint_id") == "1");
+        model.erase("constraints");
+        model.erase("next_constraint_id");
+    }
+}
+
 std::string repackage(
     const persistence::NativeDocumentPackage& package,
     std::string authored_json) {
     auto legacy_json = nlohmann::json::parse(
         authored_json,nullptr,false);
     CHECK(legacy_json.is_object());
+    stripEmptyV21SketchRelations(legacy_json);
     CHECK(legacy_json.contains("three_point_datum_planes"));
     CHECK(legacy_json.at("three_point_datum_planes").is_array());
     // Native schema v14 cannot silently inherit v18 authored 3-Point intent.
@@ -480,7 +494,7 @@ Fixture makeFixture() {
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        20);
+        21);
 
     const auto fixture =
         makeFixture();
@@ -502,7 +516,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     auto authored =
         nlohmann::json::parse(

@@ -66,10 +66,29 @@ void writeBytes(
     CHECK(static_cast<bool>(out));
 }
 
+
+void stripEmptyV21SketchRelations(nlohmann::json& authored) {
+    // Synthetic old-schema fixtures only; never discard actual constraints.
+    for (auto& sketch : authored.at("sketches")) {
+        auto& model = sketch.at("model");
+        CHECK(model.at("constraints").is_array());
+        CHECK(model.at("constraints").empty());
+        CHECK(model.at("next_constraint_id") == "1");
+        model.erase("constraints");
+        model.erase("next_constraint_id");
+    }
+}
+
 std::string repackage(
     const persistence::NativeDocumentPackage& package,
     int schema_version,
     std::string authored_json) {
+    if (schema_version < 21) {
+        auto authored = nlohmann::json::parse(authored_json, nullptr, false);
+        CHECK(authored.is_object());
+        stripEmptyV21SketchRelations(authored);
+        authored_json = authored.dump(2) + "\n";
+    }
     if (schema_version < 18) {
         auto authored = nlohmann::json::parse(
             authored_json,nullptr,false);
@@ -523,8 +542,13 @@ void verifyPg01bB2EffectiveSketch(
     stage.result_topology = catalog;
     part::PartEvaluation prefix;
     prefix.source_revision = document.document->revision();
+    // Synthesized stage topology is local to THIS newly restored Part.
+    // Durable ID and revision alone do not authorize provider geometry.
+    prefix.source_document_id = document.document->documentId();
+    prefix.source_incarnation = document.document->incarnationToken();
     prefix.features.push_back(std::move(stage));
     FakeQuery query;
+    CHECK(part::ownsCurrentPartEvaluation(*document.document, prefix));
     const auto derived =
         part::evaluateEffectiveSketchProjection(
             *document.document, sketch_id, prefix,
@@ -532,6 +556,23 @@ void verifyPg01bB2EffectiveSketch(
     CHECK(derived);
     CHECK(derived->allResolved());
     CHECK(derived->outcomes.size() == 1U);
+    // Independent cold restore with IDENTICAL ID/revision cannot borrow
+    // the original's topology even when both authored states match.
+    const auto foreign = part::PartDocument::restore(
+        document.document->documentId(),
+        document.document->state(),
+        document.document->revision());
+    CHECK(foreign.ok() && foreign.document);
+    CHECK(foreign.document->documentId() ==
+          document.document->documentId());
+    CHECK(foreign.document->revision() ==
+          document.document->revision());
+    CHECK(foreign.document->incarnationToken() !=
+          document.document->incarnationToken());
+    CHECK(!part::ownsCurrentPartEvaluation(*foreign.document, prefix));
+    CHECK(!part::evaluateEffectiveSketchProjection(
+        *foreign.document, sketch_id, prefix,
+        query, fixture.fillet_id));
     const auto* current = derived->model.findLine(id);
     CHECK(current != nullptr);
     CHECK(current->start().u == 100.0);
@@ -560,6 +601,8 @@ void verifyPg01bB2EffectiveSketch(
 
     part::PartEvaluation no_stage;
     no_stage.source_revision = prefix.source_revision;
+    no_stage.source_document_id = prefix.source_document_id;
+    no_stage.source_incarnation = prefix.source_incarnation;
     const auto missing =
         part::evaluateEffectiveSketchProjection(
             *document.document, sketch_id, no_stage,
@@ -704,7 +747,7 @@ void verifyPg01bB1BindingStructure(
     const auto native =
         persistence::readNativeDocumentContainer(saved_path);
     CHECK(native.ok());
-    CHECK(native.package->descriptor.domain_schema_version == 20);
+    CHECK(native.package->descriptor.domain_schema_version == 21);
     const auto original_authored =
         nlohmann::json::parse(
             native.package->authored_json);
@@ -818,7 +861,7 @@ void verifyPg01bB1BindingStructure(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        20);
+        21);
 
     const auto fixture = makeFixture();
     verifyPg01bB1BindingStructure(fixture);
@@ -971,7 +1014,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     const auto authored =
         nlohmann::json::parse(
@@ -1077,7 +1120,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     // New Edge Feature records are schema-v14-only and must fail closed when
     // deliberately mislabeled as a legacy v13 payload.

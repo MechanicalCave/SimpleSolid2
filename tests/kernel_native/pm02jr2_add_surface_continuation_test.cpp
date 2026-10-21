@@ -1522,7 +1522,7 @@ void verifyPartIntegration() {
                                     // Legacy v15/v16 rejection fixtures below
                                     // retain their original version semantics.
                                     CHECK(package.package->descriptor
-                                              .domain_schema_version == 20);
+                                              .domain_schema_version == 21);
                                     auto authored = nlohmann::json::parse(
                                         package.package->authored_json);
                                     const auto ref_json =
@@ -1534,6 +1534,24 @@ void verifyPartIntegration() {
                                             const std::filesystem::path&
                                                 output) {
                                             auto legacy_json = document_json;
+                                            if (version < 21) {
+                                                // This helper creates ONLY
+                                                // intentional legacy NEGATIVE
+                                                // fixtures. Do not let new
+                                                // v21-only empty relation
+                                                // keys trigger rejection in
+                                                // place of the tested source.
+                                                for (auto& authored_sketch :
+                                                     legacy_json.at("sketches")) {
+                                                    auto& model =
+                                                        authored_sketch.at("model");
+                                                    CHECK(model.at("constraints").is_array());
+                                                    CHECK(model.at("constraints").empty());
+                                                    CHECK(model.at("next_constraint_id") == "1");
+                                                    model.erase("constraints");
+                                                    model.erase("next_constraint_id");
+                                                }
+                                            }
                                             if (version < 18) {
                                                 CHECK(legacy_json.contains(
                                                     "three_point_datum_planes"));

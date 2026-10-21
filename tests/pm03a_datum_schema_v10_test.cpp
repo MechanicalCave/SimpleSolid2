@@ -94,11 +94,25 @@ part::PartCommitResult replaceState(
     return tx.commit();
 }
 
+
+void stripEmptyV21SketchRelations(nlohmann::json& authored) {
+    // Synthetic old-schema fixtures only; never discard actual constraints.
+    for (auto& sketch : authored.at("sketches")) {
+        auto& model = sketch.at("model");
+        CHECK(model.at("constraints").is_array());
+        CHECK(model.at("constraints").empty());
+        CHECK(model.at("next_constraint_id") == "1");
+        model.erase("constraints");
+        model.erase("next_constraint_id");
+    }
+}
+
 std::string schema9FromCurrent(
     const persistence::NativeDocumentPackage& package) {
     auto authored =
         nlohmann::json::parse(
             package.authored_json);
+    stripEmptyV21SketchRelations(authored);
     CHECK(authored.contains("next_datum_id"));
     CHECK(authored.contains("datum_planes"));
     CHECK(authored.contains("next_axis_id"));
@@ -141,6 +155,7 @@ std::string schema9FromCurrent(
 std::string schema16FromCurrent(
     const persistence::NativeDocumentPackage& package) {
     auto authored = nlohmann::json::parse(package.authored_json);
+    stripEmptyV21SketchRelations(authored);
     // v16 has neither v17 EdgePoint nor v18 ThreePoint authoring.
     // Reject a lossy downgrade before removing v18-only payload fields.
     CHECK(authored.contains("three_point_datum_planes"));
@@ -166,7 +181,7 @@ std::string schema16FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        20);
+        21);
 
     // DatumId follows the existing Part-local canonical positive-decimal and
     // high-water allocation rules.
@@ -343,7 +358,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     const auto authored =
         nlohmann::json::parse(
@@ -398,7 +413,7 @@ int main() {
     const auto upgraded =
         persistence::readNativeDocumentContainer(legacy_v16_path);
     CHECK(upgraded.ok());
-    CHECK(upgraded.package->descriptor.domain_schema_version == 20);
+    CHECK(upgraded.package->descriptor.domain_schema_version == 21);
     const auto upgraded_json =
         nlohmann::json::parse(upgraded.package->authored_json);
     CHECK(upgraded_json.at("datum_planes") ==
@@ -409,6 +424,7 @@ int main() {
     // Genuine v17 Offset+EdgePoint grammar is backward readable and
     // next-save upgrade adds only an EMPTY v18 triple-Point collection.
     auto legacy17_json = authored;
+    stripEmptyV21SketchRelations(legacy17_json);
     CHECK(legacy17_json.at("three_point_datum_planes").empty());
     legacy17_json.erase("three_point_datum_planes");
     const auto legacy17_bytes =
@@ -428,13 +444,14 @@ int main() {
     const auto legacy17_upgraded =
         persistence::readNativeDocumentContainer(legacy17_path);
     CHECK(legacy17_upgraded.ok());
-    CHECK(legacy17_upgraded.package->descriptor.domain_schema_version== 20);
+    CHECK(legacy17_upgraded.package->descriptor.domain_schema_version== 21);
     CHECK(nlohmann::json::parse(
         legacy17_upgraded.package->authored_json)
         .at("three_point_datum_planes").empty());
 
     // v18 unknown 3-Point kind and malformed payload must fail closed.
     auto future18_json=authored;
+    stripEmptyV21SketchRelations(future18_json);
     future18_json["three_point_datum_planes"].push_back({
         {"id","1"},{"kind","future_three_point_plane"},
         {"points",nlohmann::json::array()},
@@ -454,10 +471,12 @@ int main() {
     // kernel-native geometry tests remain independent of JSON internals.
     const auto rejectV18 = [&](const nlohmann::json& state,
                                const std::string& name) {
+        auto strict_v18 = state;
+        stripEmptyV21SketchRelations(strict_v18);
         const auto built = persistence::buildNativeDocumentContainer(
             persistence::NativeDocumentDescriptor{
                 "part",std::string{document.documentId().value()},18},
-            state.dump(2) + "\n");
+            strict_v18.dump(2) + "\n");
         CHECK(built.ok());
         const auto invalid_path = temp.path / (name + ".ss2part");
         writeBytes(invalid_path,*built.bytes);
@@ -529,6 +548,7 @@ int main() {
 
     // Unknown future v17 Datum types must be rejected, not skipped.
     auto future_json = authored;
+    stripEmptyV21SketchRelations(future_json);
     CHECK(future_json.at("three_point_datum_planes").empty());
     future_json.erase("three_point_datum_planes");
     future_json["edge_point_datum_planes"].push_back({
@@ -630,7 +650,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);

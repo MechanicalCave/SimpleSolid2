@@ -9,6 +9,7 @@
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/profile.hpp>
 
+#include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -71,6 +72,11 @@ enum class PartReconstructErrorCode {
 
 struct PartReconstructResult;
 
+// Opaque identity of one runtime Part incarnation; never serialized.
+// A stale evaluator retains its own token so allocator reuse cannot
+// make an unrelated cold-restored Part appear identical.
+struct PartRuntimeIncarnation;
+
 struct PartCommitResult final {
     PartCommitErrorCode code{PartCommitErrorCode::none};
     bool changed{false};
@@ -98,6 +104,8 @@ public:
 
     [[nodiscard]] const core::DocumentId& documentId() const noexcept { return id_; }
     [[nodiscard]] core::DocumentRevision revision() const noexcept { return revision_; }
+    [[nodiscard]] const std::shared_ptr<const PartRuntimeIncarnation>&
+    incarnationToken() const noexcept { return incarnation_token_; }
     [[nodiscard]] const PartAuthoredState& state() const noexcept { return state_; }
     [[nodiscard]] const core::DocumentProperties& properties() const noexcept {
         return state_.properties;
@@ -200,10 +208,7 @@ private:
     PartDocument(
         core::DocumentId id,
         PartAuthoredState state,
-        core::DocumentRevision revision)
-        : id_{std::move(id)},
-          state_{std::move(state)},
-          revision_{revision} {}
+        core::DocumentRevision revision);
 
     [[nodiscard]] static bool validAuthoredState(
         const PartAuthoredState& state) noexcept;
@@ -215,6 +220,7 @@ private:
     core::DocumentId id_;
     PartAuthoredState state_;
     core::DocumentRevision revision_;
+    std::shared_ptr<const PartRuntimeIncarnation> incarnation_token_;
 };
 
 struct PartReconstructResult final {

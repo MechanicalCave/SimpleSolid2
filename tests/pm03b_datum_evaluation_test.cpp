@@ -256,6 +256,8 @@ part::PartEvaluation makePartEvaluation(
     part::PartEvaluation result;
     result.source_revision =
         fixture.document.revision();
+    result.source_document_id = fixture.document.documentId();
+    result.source_incarnation = fixture.document.incarnationToken();
 
     part::FeatureEvaluation feature;
     feature.feature_id =
@@ -659,6 +661,35 @@ int main() {
             downstream.status ==
             part::DatumPlaneEvaluationStatus::blocked);
         CHECK(!downstream.frame.has_value());
+    }
+
+    // Two independent Part lifetimes can share their durable ID and
+    // revision zero without sharing runtime stage authority (D2-CP1).
+    {
+        const auto independent = part::PartDocument::restore(
+            fixture.document.documentId(), fixture.document.state(),
+            fixture.document.revision());
+        CHECK(independent.ok() && independent.document);
+        CHECK(independent.document->documentId() ==
+              fixture.document.documentId());
+        CHECK(independent.document->revision() ==
+              fixture.document.revision());
+        CHECK(independent.document->incarnationToken() !=
+              fixture.document.incarnationToken());
+        const auto foreign = makePartEvaluation(
+            fixture, SurfaceMode::resolved_plane);
+        CHECK(!part::ownsCurrentPartEvaluation(
+            *independent.document, foreign));
+        const auto rejected = part::evaluateDatums(
+            *independent.document, foreign);
+        CHECK(rejected.valid());
+        const auto& origin = requireDatum(rejected, fixture.xy_datum);
+        CHECK(origin.status == part::DatumPlaneEvaluationStatus::resolved);
+        const auto& surface = requireDatum(rejected, fixture.surface_datum);
+        CHECK(surface.status == part::DatumPlaneEvaluationStatus::blocked);
+        CHECK(surface.diagnostic ==
+              part::DatumPlaneEvaluationDiagnostic::stale_part_evaluation);
+        CHECK(!surface.frame.has_value());
     }
 
     // Runtime/provider tokens are disposable. Equivalent fresh semantic

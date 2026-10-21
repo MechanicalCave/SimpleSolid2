@@ -544,6 +544,105 @@ jobs:
           .\scripts\ss2-docs.ps1 -Check -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+  native_planegcs:
+    name: windows-planegcs-native-core
+    needs: classify
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 506
+    runs-on: [self-hosted, windows, x64, simplesolid2-native]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact native test revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.classify.outputs.head_sha }}
+          persist-credentials: false
+          clean: true
+      - name: Run original PlaneGCS 0.8.0 DEV Core CTest
+        shell: >-
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+          -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD).Trim() -ne '${{ needs.classify.outputs.head_sha }}') { throw 'Wrong PR HEAD' }
+          if (-not $env:GITHUB_WORKSPACE.StartsWith('D:\', [StringComparison]::OrdinalIgnoreCase)) { throw 'D: checkout required' }
+          # The human B1a harness and the CI runner do not necessarily use
+          # the same extracted-tree layout. Search ONLY the previously
+          # approved small external D:\SimpleSolid2\build\b1a directory.
+          # Everything below is read-only, except offline extraction into
+          # this job's private, ignored runner checkout build\b1a folder.
+          $b1aRoot = 'D:\SimpleSolid2\build\b1a'
+          if (-not (Test-Path -LiteralPath $b1aRoot -PathType Container)) {
+              throw "Original B1a DEV source area missing on this Windows runner: $b1aRoot"
+          }
+          . .\scripts\ss2-common.ps1
+          $cmake = Find-CMakeExecutable 'D:\Qt'
+          if (-not $cmake) { throw 'Installed CMake was not found by the existing SS2 lookup' }
+          $cmakeBin = Split-Path -Parent $cmake
+          $ctest = Join-Path $cmakeBin 'ctest.exe'
+          if (-not (Test-Path -LiteralPath $ctest -PathType Leaf)) {
+              throw "CTests executable missing alongside installed CMake: $ctest"
+          }
+          $originalWrapperSHA = '42326c01ad1e29c132f2cdb0a5a975a8e147f6d6e2d165ee535309ad158e6e4a'
+          $source = $null
+          $wrapperHits = @(Get-ChildItem -LiteralPath $b1aRoot -Filter 'wrapper.h' -File -Recurse -ErrorAction Stop)
+          Write-Host "[native] candidate wrapper.h files under B1a: $($wrapperHits.Count)"
+          foreach ($wrapper in $wrapperHits) {
+              if ($wrapper.Directory.Name -ne 'src') { continue }
+              if ((Get-FileHash -LiteralPath $wrapper.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $originalWrapperSHA) { continue }
+              $candidateRoot = Split-Path -Parent $wrapper.Directory.FullName
+              if (Test-Path -LiteralPath (Join-Path $candidateRoot 'pyproject.toml') -PathType Leaf) {
+                  $source = $candidateRoot
+                  break
+              }
+          }
+          if (-not $source) {
+              # Existing verified original 188 KB source archive is a valid
+              # offline input. Never download it or mutate the B1a archive.
+              $tarSHA = '09e77e6e3a27fa77d3b5a69065ea4c82ae6ed35753246a2e518b1a6005fea162'
+              $tarFiles = @(Get-ChildItem -LiteralPath $b1aRoot -Filter 'planegcs-0.8.0.tar.gz' -File -Recurse -ErrorAction Stop)
+              Write-Host "[native] candidate original archives under B1a: $($tarFiles.Count)"
+              $archive = $null
+              foreach ($tarFile in $tarFiles) {
+                  if ((Get-FileHash -LiteralPath $tarFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -eq $tarSHA) {
+                      $archive = $tarFile.FullName
+                      break
+                  }
+              }
+              if (-not $archive) {
+                  throw 'No exact original PlaneGCS 0.8.0 wrapper/source or pinned archive is available on runner D:\SimpleSolid2\build\b1a; cannot run native test'
+              }
+              $extractRoot = Join-Path $env:GITHUB_WORKSPACE 'build\b1a\ci-native\upstream-source'
+              New-Item -ItemType Directory -Path $extractRoot -Force | Out-Null
+              Push-Location $extractRoot
+              try {
+                  & $cmake -E tar xzf $archive
+                  if ($LASTEXITCODE -ne 0) { throw 'Offline extraction of pinned original PlaneGCS TAR failed' }
+              } finally { Pop-Location }
+              $source = Join-Path $extractRoot 'planegcs-0.8.0'
+              if (-not (Test-Path -LiteralPath (Join-Path $source 'src\wrapper.h') -PathType Leaf)) {
+                  throw 'Offline extracted pinned PlaneGCS TAR has unexpected layout'
+              }
+          }
+          Write-Host "[native] candidate original PlaneGCS source: $source"
+          $headers = 'D:\SimpleSolid2\.simplesolid-env\vcpkg-installed\00c5775211f45cd08b37fce0484b4cb940e422ab-x64-windows\x64-windows\include'
+          if (-not (Test-Path -LiteralPath (Join-Path $headers 'boost\graph\adjacency_list.hpp'))) { throw 'Boost headers unavailable on runner D:' }
+          $eigen = Join-Path $headers 'eigen3'
+          if (-not (Test-Path -LiteralPath (Join-Path $eigen 'Eigen\Core'))) { throw 'Eigen3 headers unavailable on runner D:' }
+          # Reuse verified existing D: OCCT; only checkout-ignored setup.
+          & .\ss2.ps1 setup -QtRoot 'D:\Qt' -OcctRoot 'D:\SimpleSolid2\.simplesolid-env'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          . .\scripts\ss2-common.ps1
+          Import-SS2LocalEnvironment
+          $build = Join-Path $env:GITHUB_WORKSPACE 'build\b1a\ci-native'
+          & $cmake -S . -B $build -G 'Visual Studio 17 2022' -A x64 '-DSS2_BUILD_DESKTOP=OFF' '-DSS2_BUILD_KERNEL_NATIVE=ON' '-DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE' '-DSS2_R13_PLANEGCS_DEV=ON' "-DSS2_PLANEGCS_080_SOURCE_DIR=$source" "-DSS2_PLANEGCS_EIGEN_INCLUDE_DIR=$eigen" "-DSS2_PLANEGCS_BOOST_INCLUDE_DIR=$headers"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $cmake --build $build --config Release --target r13_a1_planegcs_native_test r13_a1_planegcs_occt_native_test --parallel 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ctest --test-dir $build -C Release --no-tests=error -R '^r13a1[.]planegcs_(native|occt_native)$' --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host 'R13_A1_ORIGINAL_PLANEGCS_WINDOWS_NATIVE_CI_PASS'
+
   gate:
     name: windows-msvc
     if: >
@@ -557,6 +656,7 @@ jobs:
       - full
       - docs
       - closure
+      - native_planegcs
     runs-on: ubuntu-latest
     steps:
       - name: Require selected verification tier
@@ -569,6 +669,8 @@ jobs:
           FULL_RESULT: ${{ needs.full.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
           CLOSURE_RESULT: ${{ needs.closure.result }}
+          NATIVE_RESULT: ${{ needs.native_planegcs.result }}
+          NATIVE_REQUIRED: ${{ github.event.pull_request.number == 506 }}
           TRUSTED_FULL_SHA: ${{ needs.classify.outputs.trusted_full_sha }}
           CLEAN_FULL: ${{ needs.classify.outputs.clean_full }}
         run: |
@@ -594,3 +696,7 @@ jobs:
             exit 1
           fi
           echo "[gate] selected $MODE tier succeeded"
+          if [[ "$NATIVE_REQUIRED" == "true" && "$NATIVE_RESULT" != "success" ]]; then
+            echo "Required original PlaneGCS native CTest did not pass: $NATIVE_RESULT" >&2
+            exit 1
+          fi

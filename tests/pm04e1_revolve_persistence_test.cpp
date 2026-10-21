@@ -236,10 +236,29 @@ Fixture makeFixture() {
         *missing_axis};
 }
 
+
+void stripEmptyV21SketchRelations(nlohmann::json& authored) {
+    // Synthetic old-schema fixtures only; never discard actual constraints.
+    for (auto& sketch : authored.at("sketches")) {
+        auto& model = sketch.at("model");
+        CHECK(model.at("constraints").is_array());
+        CHECK(model.at("constraints").empty());
+        CHECK(model.at("next_constraint_id") == "1");
+        model.erase("constraints");
+        model.erase("next_constraint_id");
+    }
+}
+
 std::string repackage(
     const persistence::NativeDocumentPackage& package,
     int schema_version,
     std::string authored_json) {
+    if (schema_version < 21) {
+        auto authored = nlohmann::json::parse(authored_json, nullptr, false);
+        CHECK(authored.is_object());
+        stripEmptyV21SketchRelations(authored);
+        authored_json = authored.dump(2) + "\n";
+    }
     if (schema_version < 18) {
         auto legacy = nlohmann::json::parse(
             authored_json,nullptr,false);
@@ -278,7 +297,7 @@ std::string repackage(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        20);
+        21);
 
     TempDirectory temp;
     part::PartDocumentStore store;
@@ -298,7 +317,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     const auto authored =
         nlohmann::json::parse(
@@ -514,7 +533,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 20);
+            .domain_schema_version == 21);
 
     // Revolve is a schema-v13 feature kind. Relabeling a v13 Revolve payload
     // as v12 must fail closed rather than silently interpreting future data.

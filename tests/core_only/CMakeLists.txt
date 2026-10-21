@@ -53,6 +53,26 @@ target_link_libraries(pm02f_stage_aware_profile_evaluation_test PRIVATE simpleso
 ss2_core_only_test(sk04a_line_commit_protocol_test sk04a.line_commit_protocol sk04a_line_commit_protocol_test.cpp)
 target_link_libraries(sk04a_line_commit_protocol_test PRIVATE simplesolid2_application simplesolid2_sketch)
 
+# R13-A1: first registered semantic RED before implementation.
+ss2_core_only_test(r13_a1_local_constraints_test r13a1.local_horizontal r13_a1_local_constraints_test.cpp)
+target_link_libraries(r13_a1_local_constraints_test PRIVATE simplesolid2_application simplesolid2_sketch)
+set_tests_properties(r13a1.local_horizontal PROPERTIES LABELS "tier-fast;subsystem-sketch;native")
+
+# Distinct original-source native gateway test; not a second scripted test.
+if(SS2_R13_PLANEGCS_DEV)
+    ss2_core_only_test(r13_a1_planegcs_native_test
+        r13a1.planegcs_native r13_a1_local_constraints_test.cpp)
+    target_compile_definitions(r13_a1_planegcs_native_test PRIVATE
+        SS2_R13_A1_PLANEGCS_NATIVE_EVIDENCE=1)
+    target_link_libraries(r13_a1_planegcs_native_test PRIVATE
+        ss2_r13_planegcs_dev simplesolid2_sketch)
+    set_tests_properties(r13a1.planegcs_native PROPERTIES
+        LABELS "tier-full-only;subsystem-sketch;native"
+        TIMEOUT 60
+        PASS_REGULAR_EXPRESSION "R13_A1_ORIGINAL_PLANEGCS_NATIVE_PASS")
+endif()
+
+
 ss2_core_only_test(sk05a_line_geometry_command_test sk05a.line_geometry_command sk05a_line_geometry_command_test.cpp)
 target_link_libraries(sk05a_line_geometry_command_test PRIVATE simplesolid2_application)
 

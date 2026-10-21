@@ -1612,6 +1612,13 @@ add_test(
 )
 
 
+add_executable(r13_a1_local_constraints_test
+    r13_a1_local_constraints_test.cpp
+)
+target_link_libraries(r13_a1_local_constraints_test PRIVATE simplesolid2_application simplesolid2_sketch)
+target_compile_features(r13_a1_local_constraints_test PRIVATE cxx_std_20)
+add_test(NAME r13a1.local_horizontal COMMAND r13_a1_local_constraints_test)
+
 add_executable(sk04b_viewer_selection_query_contracts_test
     sk04b_viewer_selection_query_contracts_test.cpp
 )
@@ -2194,6 +2201,7 @@ set_tests_properties(sk07f.precision_input_controller PROPERTIES
 # CI-02 test metadata. FULL remains the unfiltered CTest suite.
 # New tests are intentionally not FAST by default; authors classify them explicitly.
 set(_ss2_fast_tests
+    r13a1.local_horizontal
     ph01.project_workspace_metadata
     ph01.project_session
     ph01.recent_project_store
@@ -2269,6 +2277,7 @@ set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
 )
 
 set(_ss2_sketch_tests
+    r13a1.local_horizontal
     sk01.part_sketch_host
     sk01.workbench_sketch_host
     sk02a.shared_2d_core
@@ -2625,6 +2634,12 @@ function(ss2_resolve_test_build_target test_name out_var)
 
     if(TARGET "${_candidate}")
         set(${out_var} "${_candidate}" PARENT_SCOPE)
+        return()
+    endif()
+
+    # R13-A1: keep the shorter CTest name mapped to its real executable.
+    if(test_name STREQUAL "r13a1.local_horizontal")
+        set(${out_var} "r13_a1_local_constraints_test" PARENT_SCOPE)
         return()
     endif()
 

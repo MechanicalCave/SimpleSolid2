@@ -103,9 +103,7 @@ enum class VisitState {
         return unresolved(datum.id, status, diagnostic, required);
     };
     if (!threePointDatumPlaneStructurallyValid(datum) ||
-        !evaluation.source_document_id ||
-        *evaluation.source_document_id != document.documentId() ||
-        evaluation.source_revision != document.revision())
+        !ownsCurrentPartEvaluation(document, evaluation))
         return fail(DatumPlaneEvaluationStatus::blocked,
                     DatumPlaneEvaluationDiagnostic::stale_part_evaluation);
 
@@ -253,8 +251,7 @@ private:
         const auto required_stage =
             std::optional<BodyStageRef>{reference.stage};
 
-        if (part_evaluation_.source_revision !=
-            document_.revision()) {
+        if (!ownsCurrentPartEvaluation(document_, part_evaluation_)) {
             return unresolved(
                 datum.id,
                 DatumPlaneEvaluationStatus::blocked,
@@ -590,6 +587,9 @@ bool DatumEvaluation::valid() const noexcept {
 DatumEvaluation evaluateDatums(
     const PartDocument& document,
     const PartEvaluation& part_evaluation) noexcept {
+    // Preserve typed failures on Body-dependent Datum sources. Origin-only
+    // Offset Datums do not consume any PartEvaluation stage and remain valid.
+    // The actual stage readers in resolveSurface/ThreePoint fail closed.
     auto result =
         Evaluator{
             document,
@@ -610,6 +610,31 @@ DatumEvaluation evaluateDatums(
     // Edge-local source Datums have no parent Datum dependency, so they
     // can be appended after all Offset results without changing legacy
     // scheduling or relying on cached native geometry.
+    // Stage-dependent Datum failures retain their typed diagnostic even
+    // when the prefix belongs to a different cold Part incarnation.
+    // No Edge provider is invoked in that case.
+    const auto rejectStale = [&]() noexcept {
+        auto rejected = evaluateDatums(document, part_evaluation);
+        for (const auto& datum : document.edgePointDatumPlanes()) {
+            const auto stage = std::visit(
+                [](const auto& source) { return source.source_edge.stage; },
+                datum.source);
+            rejected.planes.push_back(unresolved(
+                datum.id,
+                DatumPlaneEvaluationStatus::blocked,
+                DatumPlaneEvaluationDiagnostic::stale_part_evaluation,
+                stage));
+        }
+        for (const auto& datum : document.threePointDatumPlanes()) {
+            rejected.planes.push_back(
+                evaluateThreePointDatum(document, part_evaluation, datum));
+        }
+        return rejected.valid()
+            ? rejected : DatumEvaluation{document.revision(), {}};
+    };
+    if (!ownsCurrentPartEvaluation(document, part_evaluation)) {
+        return rejectStale();
+    }
     auto result = evaluateDatums(document,part_evaluation);
     for (const auto& datum : document.edgePointDatumPlanes()) {
         const BodyStageRef stage = std::visit(
@@ -618,6 +643,11 @@ DatumEvaluation evaluateDatums(
         const auto required = std::optional<BodyStageRef>{stage};
         const auto frame = resolveEdgePointDatumFrame(
             document,datum,part_evaluation,provider);
+        // The query can reenter DocumentSession and replace authored
+        // state. Never publish a partially current Datum evaluation.
+        if (!ownsCurrentPartEvaluation(document, part_evaluation)) {
+            return rejectStale();
+        }
         if (frame.resolved()) {
             result.planes.push_back(resolved(
                 datum.id,*frame.frame,required));

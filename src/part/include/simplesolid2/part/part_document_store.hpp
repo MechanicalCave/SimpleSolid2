@@ -86,7 +86,7 @@ struct PartSaveResult final {
 class PartDocumentStore final {
 public:
     // RG-02C/B1: typed straight Body Edge Axis source; old v18 readers stay.
-    static constexpr int current_schema_version = 20;
+    static constexpr int current_schema_version = 21;
 
     [[nodiscard]] static bool hasNativeExtension(
         const std::filesystem::path& path) noexcept;

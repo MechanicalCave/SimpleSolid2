@@ -1,8 +1,24 @@
 #include <simplesolid2/part/part_document.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <algorithm>
 
 namespace simplesolid2::part {
+
+// The token is intentionally incomplete to consumers: each Part create or
+// independent restore owns a new control block. Copies of PartEvaluation
+// keep retired tokens live, preventing pointer-reuse false acceptance.
+struct PartRuntimeIncarnation final {};
+
+PartDocument::PartDocument(
+    core::DocumentId id,
+    PartAuthoredState state,
+    core::DocumentRevision revision)
+    : id_{std::move(id)},
+      state_{std::move(state)},
+      revision_{revision},
+      incarnation_token_{std::make_shared<const PartRuntimeIncarnation>()} {}
+
 namespace {
 
 struct SemanticProvenanceBounds final {
@@ -336,6 +352,13 @@ PartDocument::evaluateProfile(
     const auto* source =
         findSketch(profile->source_sketch_id);
     if (source == nullptr) {
+        return std::nullopt;
+    }
+    // R13-A1 A1.1: authored relations are not evaluated geometry.
+    // A Profile cannot consume the persisted seed as a solved snapshot.
+    // The solver adapter must replace this fence with a validated,
+    // same-stage evaluated Sketch before constraints become consumable.
+    if (source->model.constraintCount() != 0U) {
         return std::nullopt;
     }
     // PG-01B/B1 safety fence: never use stale authored seed as current
@@ -1245,6 +1268,96 @@ PartCommitResult PartDocumentTransaction::commit() {
     return document_->commitState(
         base_revision_,
         std::move(staged_));
+}
+
+std::optional<sketch::LocalSolveProblem>
+prepareStageLocalSolveProblem(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    std::optional<FeatureId> consuming_feature) {
+    // Do not accept a timestamp or a plausible prefix from another document.
+    // Part owns both revision and source-identity evidence.
+    if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
+        return std::nullopt;
+    }
+    if (document.findSketch(sketch_id) == nullptr) return std::nullopt;
+
+    // Existing Part-owned PG-01 resolver rejects missing/ambiguous stages,
+    // unsupported geometry and stale sources, without mutating Sketch seeds.
+    const auto evaluated = evaluateEffectiveSketchProjection(
+        document, sketch_id, evaluated_prefix, query, consuming_feature);
+    // A provider may re-enter DocumentSession, replacing PartAuthoredState
+    // entirely. Check owner/revision BEFORE dereferencing any authored
+    // reference after projection; no cross-revision mixture may escape.
+    if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
+        return std::nullopt;
+    }
+    const auto* authored = document.findSketch(sketch_id);
+    if (!authored || !evaluated || !evaluated->allResolved() ||
+        evaluated->outcomes.size() != authored->projection_bindings.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<sketch::EntityId> fixed_lines;
+    fixed_lines.reserve(authored->projection_bindings.size());
+    for (std::size_t i = 0; i < authored->projection_bindings.size(); ++i) {
+        const auto id = authored->projection_bindings[i].target_entity;
+        const auto& resolved = evaluated->outcomes[i];
+        if (!resolved.resolved() ||
+            resolved.target_entity != id ||
+            authored->model.findLine(id) == nullptr ||
+            evaluated->model.findLine(id) == nullptr) {
+            // This A1 solver accepts Line-only fixed sources. A fixed Circle
+            // or Arc needs a separate explicitly authorized solver mapping.
+            return std::nullopt;
+        }
+        fixed_lines.push_back(id);
+    }
+    auto problem = sketch::prepareLocalSolveProblem(
+        evaluated->model.state(), fixed_lines);
+    if (!problem ||
+        !ownsCurrentPartEvaluation(document, evaluated_prefix)) {
+        return std::nullopt;
+    }
+    return problem;
+}
+
+
+std::optional<StageLocalSolveEvaluation>
+evaluateStageLocalSolve(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend,
+    std::optional<FeatureId> consuming_feature) {
+    // Fail before any provider/backend work for invalid acceptance policy.
+    if (!policy.valid()) return std::nullopt;
+
+    // This is the ONLY Part-owned source of projected fixed reference
+    // geometry; a failed current stage must not fall back to Sketch seeds.
+    const auto problem = prepareStageLocalSolveProblem(
+        document, sketch_id, evaluated_prefix, query, consuming_feature);
+    if (!problem ||
+        !ownsCurrentPartEvaluation(document, evaluated_prefix)) {
+        return std::nullopt;
+    }
+
+    auto solution = sketch::evaluateLocalSolve(*problem, policy, backend);
+    // The adapter may invoke code that edits DocumentSession. Never return
+    // its otherwise converged, but now stale, derived snapshot to Part.
+    if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
+        return std::nullopt;
+    }
+    return StageLocalSolveEvaluation{
+        document.documentId(),
+        document.revision(),
+        sketch_id,
+        consuming_feature,
+        std::move(solution)};
 }
 
 } // namespace simplesolid2::part

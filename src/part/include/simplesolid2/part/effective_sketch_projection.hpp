@@ -3,6 +3,8 @@
 #include <simplesolid2/kernel/edge_projection.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
+#include <simplesolid2/part/profile_kernel_input.hpp>
+#include <simplesolid2/sketch/local_solver.hpp>
 
 #include <optional>
 #include <vector>
@@ -89,5 +91,79 @@ evaluateEffectiveSketchProjection(
     const PartEvaluation& evaluated_prefix,
     kernel::IEdgeProjectionQuery& query,
     std::optional<FeatureId> consuming_feature = std::nullopt);
+
+// Stage- and owner-bound Part→SS2 solver bridge. Runs the existing PG-01
+// projection resolver first and uses ONLY its current ephemeral geometry.
+// Every resolved projected Line is fixed in the resulting solver problem;
+// a missing or unsupported projection must fail, never use authored seeds.
+// This prepares an input problem only. It does NOT solve or publish geometry.
+[[nodiscard]] std::optional<sketch::LocalSolveProblem>
+prepareStageLocalSolveProblem(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    std::optional<FeatureId> consuming_feature = std::nullopt);
+
+// A disposable numerical result can be handed between Part consumers only
+// with an explicit immutable owner/stage label. It is NOT a published Profile,
+// OCCT input, persistence record or authorization to reuse a later revision.
+struct StageLocalSolveEvaluation final {
+    core::DocumentId source_document_id;
+    core::DocumentRevision source_revision;
+    sketch::SketchId source_sketch_id;
+    std::optional<FeatureId> consuming_feature;
+    sketch::LocalSolveGatewayResult solution;
+};
+
+// Compose the existing strict same-stage PG-01/Sketch preparation with the
+// solver-neutral gateway. Never invoke backend for absent/stale owner, stage,
+// sketch or invalid caller policy. Recheck revision AFTER backend invocation,
+// which may re-enter a DocumentSession; stale numerical answers are discarded.
+// Returns nullopt for invalid/stale Part context. Backend conflicts/failure
+// remain typed in solution, never promoted to accepted geometry.
+// No mutation, profile publication, vendor import or global solve cache.
+[[nodiscard]] std::optional<StageLocalSolveEvaluation>
+evaluateStageLocalSolve(
+    const PartDocument& document,
+    const sketch::SketchId& sketch_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend,
+    std::optional<FeatureId> consuming_feature = std::nullopt);
+
+
+// The ONLY stage-authorized gateway from a constrained Sketch into the
+// existing ProfileRegionIntent -> shared 2D -> Kernel profile machinery.
+// Internally prepares the actual current PG-01 stage, invokes and accepts the
+// solver, and immediately resolves the derived geometry for this Profile.
+// No caller-supplied arbitrary SketchModel can bypass the legacy safety fence.
+// Does NOT publish a Profile, evaluate a Body/OCCT feature, or persist geometry.
+[[nodiscard]] ProfileKernelInputResult
+resolveStageSolvedProfileKernelInput(
+    const PartDocument& document,
+    ProfileId profile_id,
+    const PartEvaluation& evaluated_prefix,
+    kernel::IEdgeProjectionQuery& query,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend,
+    const BodyStageTopologyCatalog* support_topology = nullptr,
+    const DatumEvaluation* datum_evaluation = nullptr,
+    std::optional<FeatureId> consuming_feature = std::nullopt);
+
+
+// Explicit opt-in evaluation using the SAME existing Part Feature scheduler
+// and SAME ProfileRegionIntent resolver. A caller-owned native numerical
+// backend supplies ephemeral stage-bound Sketch solutions. This overload is
+// NOT selected by existing application evaluation callers; missing provider,
+// failed solve, or stale revision must still block Feature publication.
+// No implicit PlaneGCS dependency, default solver, persistent geometry,
+// alternate Profile, or new Body/Feature implementation.
+[[nodiscard]] PartEvaluation evaluatePartWithLocalSolve(
+    const PartDocument& document,
+    kernel::ISolidModelingKernel& modeling_kernel,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend);
 
 } // namespace simplesolid2::part

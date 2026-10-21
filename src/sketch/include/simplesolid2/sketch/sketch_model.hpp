@@ -3,6 +3,7 @@
 #include <simplesolid2/sketch/arc.hpp>
 #include <simplesolid2/sketch/circle.hpp>
 #include <simplesolid2/sketch/line.hpp>
+#include <simplesolid2/sketch/local_constraints.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -51,6 +52,8 @@ struct SketchModelState final {
     std::vector<SketchLineState> lines;
     std::vector<SketchCircleState> circles;
     std::vector<SketchArcState> arcs;
+    ConstraintIdCursor next_constraint_id;
+    std::vector<SketchConstraintState> constraints;
 
     friend bool operator==(
         const SketchModelState&,
@@ -112,6 +115,21 @@ public:
     [[nodiscard]] bool erase(
         EntityId id) noexcept;
 
+    // Semantic manual constraint authorship only; solving remains downstream.
+    [[nodiscard]] std::optional<ConstraintId> addConstraint(
+        ConstraintKind kind,
+        ConstraintReference first,
+        ConstraintReference second = {});
+    [[nodiscard]] std::optional<ConstraintId> addHorizontal(EntityId line);
+    // An authored Fix(Line) freezes its current endpoints; it may be removed
+    // by EraseSketchConstraintCommand or cascaded when the Line is deleted.
+    [[nodiscard]] bool isFixedLine(EntityId line) const noexcept;
+    [[nodiscard]] const SketchConstraintState* findConstraint(ConstraintId id) const noexcept;
+    [[nodiscard]] bool eraseConstraint(ConstraintId id) noexcept;
+    [[nodiscard]] std::size_t constraintCount() const noexcept { return constraints_.size(); }
+    [[nodiscard]] ConstraintIdCursor constraintIdCursor() const noexcept { return ConstraintIdCursor{next_constraint_value_}; }
+    void preserveConstraintIdCursor(ConstraintIdCursor cursor) noexcept;
+
     [[nodiscard]] std::size_t entityCount() const noexcept {
         return lines_.size() +
                circles_.size() +
@@ -135,7 +153,8 @@ public:
         const SketchModel& rhs) noexcept {
         return lhs.lines_ == rhs.lines_ &&
                lhs.circles_ == rhs.circles_ &&
-               lhs.arcs_ == rhs.arcs_;
+               lhs.arcs_ == rhs.arcs_ &&
+               lhs.constraints_ == rhs.constraints_;
     }
 
 private:
@@ -144,7 +163,9 @@ private:
     std::vector<Line> lines_;
     std::vector<Circle> circles_;
     std::vector<Arc> arcs_;
+    std::vector<SketchConstraintState> constraints_;
     std::uint64_t next_entity_value_{1U};
+    std::uint64_t next_constraint_value_{1U};
 };
 
 } // namespace simplesolid2::sketch

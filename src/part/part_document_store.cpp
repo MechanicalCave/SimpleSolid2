@@ -1387,6 +1387,51 @@ std::string serializeAuthored(
                 });
         }
 
+        // v21 authored-only local relations: never persist evaluated points,
+        // backend solver objects, residuals, DoF or OCCT geometry.
+        nlohmann::json relations = nlohmann::json::array();
+        const auto referenceJson = [](sketch::ConstraintReference ref) {
+            const char* element = nullptr;
+            switch (ref.element) {
+            case sketch::ConstraintElement::line:
+                element = "line"; break;
+            case sketch::ConstraintElement::line_start:
+                element = "line_start"; break;
+            case sketch::ConstraintElement::line_end:
+                element = "line_end"; break;
+            case sketch::ConstraintElement::none:
+                return nlohmann::json{};
+            }
+            if (!element || !ref.entity.valid()) return nlohmann::json{};
+            return nlohmann::json{
+                {"entity_id", ref.entity.serialized()}, {"element", element}};
+        };
+        for (const auto& relation : model_state.constraints) {
+            const char* kind = nullptr;
+            switch (relation.kind) {
+            case sketch::ConstraintKind::horizontal: kind = "horizontal"; break;
+            case sketch::ConstraintKind::vertical: kind = "vertical"; break;
+            case sketch::ConstraintKind::coincident: kind = "coincident"; break;
+            case sketch::ConstraintKind::parallel: kind = "parallel"; break;
+            case sketch::ConstraintKind::perpendicular: kind = "perpendicular"; break;
+            case sketch::ConstraintKind::fix: kind = "fix"; break;
+            }
+            if (!kind) return {};
+            const auto first = referenceJson(relation.first);
+            if (!first.is_object()) return {};
+            nlohmann::json second = nullptr;
+            if (relation.second.entity.valid()) {
+                second = referenceJson(relation.second);
+                if (!second.is_object()) return {};
+            }
+            relations.push_back({
+                {"id", relation.id.serialized()},
+                {"kind", kind},
+                {"first", first},
+                {"second", std::move(second)},
+            });
+        }
+
         const auto support_json =
             sketchSupportJson(hosted.support);
         if (support_json.empty()) {
@@ -1403,6 +1448,9 @@ std::string serializeAuthored(
                      {"next_entity_id",
                       model_state.next_entity_id.serialized()},
                      {"entities", std::move(entities)},
+                     {"next_constraint_id",
+                      model_state.next_constraint_id.serialized()},
+                     {"constraints", std::move(relations)},
                  }},
                 {"projected_edges",
                  std::move(projected_edges)},
@@ -1874,13 +1922,19 @@ std::optional<sketch::SketchModel>
 parseSketchModelV4OrV5(
     const nlohmann::json& model_json,
     bool has_entity_role,
+    bool has_constraints,
     std::string& error) {
     if (!model_json.is_object() ||
-        model_json.size() != 2U ||
+        model_json.size() != (has_constraints ? 4U : 2U) ||
         !model_json.contains("next_entity_id") ||
         !model_json.contains("entities") ||
         !model_json["next_entity_id"].is_string() ||
-        !model_json["entities"].is_array()) {
+        !model_json["entities"].is_array() ||
+        (has_constraints &&
+         (!model_json.contains("next_constraint_id") ||
+          !model_json["next_constraint_id"].is_string() ||
+          !model_json.contains("constraints") ||
+          !model_json["constraints"].is_array()))) {
         error =
             "Native Part contains malformed schema-v4 Sketch model";
         return std::nullopt;
@@ -2042,12 +2096,95 @@ parseSketchModelV4OrV5(
         return std::nullopt;
     }
 
+    if (has_constraints) {
+        const auto constraint_cursor = sketch::ConstraintIdCursor::parse(
+            model_json["next_constraint_id"].get<std::string>());
+        if (!constraint_cursor) {
+            error = "Native Part v21 contains invalid next_constraint_id";
+            return std::nullopt;
+        }
+        state.next_constraint_id = *constraint_cursor;
+
+        const auto parseRef = [](const nlohmann::json& item)
+            -> std::optional<sketch::ConstraintReference> {
+            if (!item.is_object() || item.size() != 2U ||
+                !item.contains("entity_id") ||
+                !item["entity_id"].is_string() ||
+                !item.contains("element") ||
+                !item["element"].is_string()) {
+                return std::nullopt;
+            }
+            const auto id = sketch::EntityId::parse(
+                item["entity_id"].get<std::string>());
+            if (!id) return std::nullopt;
+            const auto element = item["element"].get<std::string>();
+            sketch::ConstraintElement typed;
+            if (element == "line") typed = sketch::ConstraintElement::line;
+            else if (element == "line_start")
+                typed = sketch::ConstraintElement::line_start;
+            else if (element == "line_end")
+                typed = sketch::ConstraintElement::line_end;
+            else return std::nullopt;
+            return sketch::ConstraintReference{*id, typed};
+        };
+
+        for (const auto& record : model_json["constraints"]) {
+            if (!record.is_object() || record.size() != 4U ||
+                !record.contains("id") || !record["id"].is_string() ||
+                !record.contains("kind") || !record["kind"].is_string() ||
+                !record.contains("first") || !record.contains("second")) {
+                error = "Native Part v21 contains malformed constraint record";
+                return std::nullopt;
+            }
+            const auto id = sketch::ConstraintId::parse(
+                record["id"].get<std::string>());
+            const auto first = parseRef(record["first"]);
+            const auto kind = record["kind"].get<std::string>();
+            sketch::ConstraintKind typed;
+            bool unary = false;
+            if (kind == "horizontal") {
+                typed = sketch::ConstraintKind::horizontal; unary = true;
+            } else if (kind == "vertical") {
+                typed = sketch::ConstraintKind::vertical; unary = true;
+            } else if (kind == "fix") {
+                typed = sketch::ConstraintKind::fix; unary = true;
+            } else if (kind == "coincident") {
+                typed = sketch::ConstraintKind::coincident;
+            } else if (kind == "parallel") {
+                typed = sketch::ConstraintKind::parallel;
+            } else if (kind == "perpendicular") {
+                typed = sketch::ConstraintKind::perpendicular;
+            } else {
+                error = "Native Part v21 contains unsupported constraint kind";
+                return std::nullopt;
+            }
+            const auto& second_json = record["second"];
+            if (!id || !first ||
+                (unary && !second_json.is_null()) ||
+                (!unary && second_json.is_null())) {
+                error = "Native Part v21 contains invalid constraint references";
+                return std::nullopt;
+            }
+            sketch::ConstraintReference second{};
+            if (!unary) {
+                const auto parsed = parseRef(second_json);
+                if (!parsed) {
+                    error = "Native Part v21 contains invalid second reference";
+                    return std::nullopt;
+                }
+                second = *parsed;
+            }
+            state.constraints.push_back(
+                sketch::SketchConstraintState{*id, typed, *first, second});
+        }
+    }
+
     auto model =
         sketch::SketchModel::restore(
             std::move(state));
     if (!model) {
         error =
-            "Native Part contains inconsistent schema-v4 Sketch model";
+            "Native Part contains inconsistent schema-v21/v4 Sketch model";
         return std::nullopt;
     }
 
@@ -2896,6 +3033,7 @@ bool parseSketches(
                     : parseSketchModelV4OrV5(
                           item["model"],
                           schema_version >= 5,
+                          schema_version >= 21,
                           error);
             if (!parsed_model) {
                 return false;
@@ -4132,6 +4270,22 @@ std::optional<std::string> buildPartBytes(
         failure_result = saveFailure(
             PartStoreErrorCode::unsupported_schema,
             "Native strict cylindrical Face Axis requires schema v20",
+            path);
+        return std::nullopt;
+    }
+    // Fail closed on pre-v21 encoders: never silently drop local intent.
+    // The current v21 writer serializes each complete Sketch relation
+    // before constructing the existing atomic native container.
+    if (PartDocumentStore::current_schema_version < 21 &&
+        std::any_of(
+            document.sketches().cbegin(),
+            document.sketches().cend(),
+            [](const PartSketch& hosted) {
+                return hosted.model.constraintCount() != 0U;
+            })) {
+        failure_result = saveFailure(
+            PartStoreErrorCode::unsupported_schema,
+            "Authored Sketch relations require native Part schema v21",
             path);
         return std::nullopt;
     }

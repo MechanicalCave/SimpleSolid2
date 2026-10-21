@@ -99,8 +99,7 @@ supportTopology(
     }
 
     if (part_evaluation == nullptr ||
-        part_evaluation->source_revision !=
-            document.revision()) {
+        !ownsCurrentPartEvaluation(document, *part_evaluation)) {
         failure = unresolved(
             AxisEvaluationStatus::blocked,
             AxisEvaluationDiagnostic::
@@ -419,9 +418,7 @@ AxisEvaluation resolveStrictCylindricalFaceAxisLine(
             AxisEvaluationStatus::unsupported,
             AxisEvaluationDiagnostic::invalid_reference);
     }
-    if (evaluation.source_revision != document.revision() ||
-        !evaluation.source_document_id ||
-        *evaluation.source_document_id != document.documentId() ||
+    if (!ownsCurrentPartEvaluation(document, evaluation) ||
         // During actual sequential Revolve feature evaluation, prefix
         // Body status is still 'empty', even though earlier Feature stages
         // have real current solids and catalogues. The exact source stage
@@ -534,6 +531,11 @@ AxisEvaluation resolveStrictCylindricalFaceAxisLine(
     // generation; never trust the catalog's token as durable identity.
     const auto native = provider.bindExactCylindricalFaceToBody(
         feature->result_solid, token);
+    if (!ownsCurrentPartEvaluation(document, evaluation)) {
+        return unresolved(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::stale_part_evaluation, source.stage);
+    }
     if (!native || !native->valid()) {
         return unresolved(
             AxisEvaluationStatus::blocked,
@@ -543,6 +545,11 @@ AxisEvaluation resolveStrictCylindricalFaceAxisLine(
     }
     const auto geometry = provider.queryExactCylindricalFaceAxis(
         feature->result_solid, *native);
+    if (!ownsCurrentPartEvaluation(document, evaluation)) {
+        return unresolved(
+            AxisEvaluationStatus::blocked,
+            AxisEvaluationDiagnostic::stale_part_evaluation, source.stage);
+    }
     if (!geometry.ok()) {
         return unresolved(
             geometry.status ==
@@ -595,9 +602,7 @@ authorStrictCylindricalFaceAxisSource(
             AxisEvaluationStatus::unsupported,
             AxisEvaluationDiagnostic::invalid_reference);
     }
-    if (evaluation.source_revision != document.revision() ||
-        !evaluation.source_document_id ||
-        *evaluation.source_document_id != document.documentId() ||
+    if (!ownsCurrentPartEvaluation(document, evaluation) ||
         // During actual sequential Revolve feature evaluation, prefix
         // Body status is still 'empty', even though earlier Feature stages
         // have real current solids and catalogues. The exact source stage

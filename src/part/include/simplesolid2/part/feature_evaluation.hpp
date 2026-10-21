@@ -13,12 +13,14 @@
 #include <compare>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
 namespace simplesolid2::part {
 
 class PartDocument;
+struct PartRuntimeIncarnation;
 struct DatumEvaluation;
 
 enum class FeatureEvaluationStatus {
@@ -564,10 +566,18 @@ struct PartEvaluation final {
     // Runtime-only ownership evidence for exact-stage semantic queries.
     // Appended: existing PartEvaluation aggregate member order is unchanged.
     std::optional<core::DocumentId> source_document_id;
+    // Runtime-only cold-incarnation proof. Missing token cannot authorise
+    // provider queries, even when DocumentId and revision numbers match.
+    std::shared_ptr<const PartRuntimeIncarnation> source_incarnation;
 
     [[nodiscard]] const FeatureEvaluation*
     findFeature(FeatureId id) const noexcept;
 };
+
+// Uniform Part-owned provenance gate, before any stage/provider/solver read.
+[[nodiscard]] bool ownsCurrentPartEvaluation(
+    const PartDocument& owner,
+    const PartEvaluation& evaluation) noexcept;
 
 // Q1 read-only selected-material-Edge END semantics. Every failed query
 // carries no Edge/Vertex/position/tangent observations.

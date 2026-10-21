@@ -17,6 +17,17 @@
 #include <utility>
 
 namespace simplesolid2::part {
+
+bool ownsCurrentPartEvaluation(
+    const PartDocument& owner,
+    const PartEvaluation& evaluation) noexcept {
+    return evaluation.source_document_id &&
+           *evaluation.source_document_id == owner.documentId() &&
+           evaluation.source_revision == owner.revision() &&
+           evaluation.source_incarnation &&
+           evaluation.source_incarnation == owner.incarnationToken();
+}
+
 namespace {
 
 [[nodiscard]] FeatureEvaluationDiagnosticCode
@@ -676,8 +687,7 @@ profileSupportTopology(
         return nullptr;
     }
     if (prefix_evaluation == nullptr ||
-        prefix_evaluation->source_revision !=
-            document.revision() ||
+        !ownsCurrentPartEvaluation(document, *prefix_evaluation) ||
         surface->stage.kind !=
             BodyStageKind::after_feature ||
         !surface->stage.feature_id) {
@@ -758,14 +768,18 @@ makeKernelExtrudeInput(
         feature);
 }
 
-RevolveKernelInputResult
-resolveKernelRevolveInput(
+// One existing Revolve axis/semantic/Kernel path. The optional profile
+// input is granted ONLY by the current-revision Part-owned local-solver
+// gateway; public callers still resolve by the legacy fail-closed path.
+[[nodiscard]] static RevolveKernelInputResult
+resolveKernelRevolveInputImpl(
     const PartDocument& document,
     const RevolveFeature& feature,
     const PartEvaluation* prefix_evaluation,
     const DatumEvaluation* datum_evaluation,
     const sketch::SketchModel* effective_sketch,
-    kernel::IExactBoundedEdgeGeometryQuery* exact_edge_provider) {
+    kernel::IExactBoundedEdgeGeometryQuery* exact_edge_provider,
+    const kernel::PlanarProfileInput* stage_solved_profile) {
     RevolveKernelInputResult result;
 
     if (!revolveFeatureStructurallyValid(
@@ -792,12 +806,14 @@ resolveKernelRevolveInput(
             profile->id,
             prefix_evaluation);
     auto materialized =
-        resolveKernelProfileInput(
-            document,
-            profile->id,
-            support_topology,
-            datum_evaluation,
-            effective_sketch);
+        stage_solved_profile
+            ? ProfileKernelInputResult{
+                  ProfileKernelInputStatus::resolved,
+                  SketchSupportResolutionDiagnostic::none,
+                  *stage_solved_profile}
+            : resolveKernelProfileInput(
+                  document, profile->id, support_topology,
+                  datum_evaluation, effective_sketch);
     if (!materialized.ok()) {
         result.status =
             materialized.status ==
@@ -873,6 +889,20 @@ resolveKernelRevolveInput(
     result.input =
         std::move(input);
     return result;
+}
+
+// Original provider-aware public ABI: no numerical trust is accepted
+// through an arbitrary effective SketchModel or pre-supplied Kernel profile.
+RevolveKernelInputResult resolveKernelRevolveInput(
+    const PartDocument& document,
+    const RevolveFeature& feature,
+    const PartEvaluation* prefix_evaluation,
+    const DatumEvaluation* datum_evaluation,
+    const sketch::SketchModel* effective_sketch,
+    kernel::IExactBoundedEdgeGeometryQuery* exact_edge_provider) {
+    return resolveKernelRevolveInputImpl(
+        document, feature, prefix_evaluation, datum_evaluation,
+        effective_sketch, exact_edge_provider, nullptr);
 }
 
 // Keep the original five-argument public ABI for all existing
@@ -4341,9 +4371,7 @@ admitSelectedEdgeEndStage(
     const PartDocument& owner,
     const PartEvaluation& evaluation,
     const BodyStageRef& source_stage) {
-    if (!evaluation.source_document_id ||
-        *evaluation.source_document_id != owner.documentId() ||
-        evaluation.source_revision != owner.revision() ||
+    if (!ownsCurrentPartEvaluation(owner, evaluation) ||
         !source_stage.valid() ||
         source_stage.kind != BodyStageKind::after_feature ||
         !source_stage.feature_id ||
@@ -4549,6 +4577,8 @@ certifySelectedEdgeTerminal(
 
 [[nodiscard]] SelectedEdgeEndResolution
 materializeSelectedEdgeTerminal(
+    const PartDocument& owner,
+    const PartEvaluation& evaluation,
     const Q1StageView& stage,
     kernel::RuntimeEdgeToken edge,
     const Q1TerminalCertificate& certified,
@@ -4561,6 +4591,10 @@ materializeSelectedEdgeTerminal(
     }
     result.status = SelectedEdgeEndStatus::native_geometry_unavailable;
     const auto bound = provider.bindExactEdgeToBody(stage.solid, edge);
+    if (!ownsCurrentPartEvaluation(owner, evaluation)) {
+        result.status = SelectedEdgeEndStatus::invalid_context;
+        return result;
+    }
     if (!bound || !bound->valid() ||
         bound->sourceBody().get() != stage.solid.get() ||
         bound->edge() != edge) {
@@ -4568,6 +4602,10 @@ materializeSelectedEdgeTerminal(
     }
     const auto current = provider.queryExactBoundedEdge3d(
         stage.solid, *bound);
+    if (!ownsCurrentPartEvaluation(owner, evaluation)) {
+        result.status = SelectedEdgeEndStatus::invalid_context;
+        return result;
+    }
     if (!current.ok()) {
         result.native_error = current.status;
         return result;
@@ -4660,6 +4698,7 @@ authorSelectedMaterialEdgeEnd(
         return result;
     }
     const auto geometry = materializeSelectedEdgeTerminal(
+        owning_document, evaluation,
         *stage, picked_material_edge, certified, provider);
     result.status = geometry.status;
     if (!geometry.resolved()) {
@@ -4684,9 +4723,7 @@ resolveSelectedMaterialEdgeEnd(
     // A historically valid, now deleted producer is semantically Missing,
     // not a license to rebind to a same-XYZ replacement Feature. Cross-
     // document/stale evaluation context still has higher failure precedence.
-    if (evaluation.source_document_id &&
-        *evaluation.source_document_id == owning_document.documentId() &&
-        evaluation.source_revision == owning_document.revision() &&
+    if (ownsCurrentPartEvaluation(owning_document, evaluation) &&
         authored.source_edge.stage.feature_id &&
         owning_document.findFeature(
             *authored.source_edge.stage.feature_id) == nullptr) {
@@ -4716,7 +4753,7 @@ resolveSelectedMaterialEdgeEnd(
         return result;
     }
     return materializeSelectedEdgeTerminal(
-        *stage, edge, certified, provider);
+        owning_document, evaluation, *stage, edge, certified, provider);
 }
 
 namespace {
@@ -4760,6 +4797,8 @@ validBoundedHalfLengthMid(
 
 [[nodiscard]] SelectedEdgeMidResolution
 observeSelectedMaterialEdgeMid(
+    const PartDocument& owner,
+    const PartEvaluation& evaluation,
     const Q1StageView& stage,
     kernel::RuntimeEdgeToken edge,
     kernel::IExactBoundedEdgeGeometryQuery& provider) {
@@ -4772,6 +4811,10 @@ observeSelectedMaterialEdgeMid(
     }
     const auto bound =
         provider.bindExactEdgeToBody(stage.solid, edge);
+    if (!ownsCurrentPartEvaluation(owner, evaluation)) {
+        result.status = SelectedEdgeMidStatus::invalid_context;
+        return result;
+    }
     // This lease belongs to the current Body object, NOT to one OCCT
     // provider-instance address; a different Body must fail atomically.
     if (!bound || !bound->valid() ||
@@ -4781,6 +4824,10 @@ observeSelectedMaterialEdgeMid(
     }
     const auto exact =
         provider.queryExactBoundedEdge3d(stage.solid, *bound);
+    if (!ownsCurrentPartEvaluation(owner, evaluation)) {
+        result.status = SelectedEdgeMidStatus::invalid_context;
+        return result;
+    }
     if (!exact.ok()) {
         result.native_error = exact.status;
         return result;
@@ -4855,6 +4902,7 @@ authorSelectedMaterialEdgeMid(
         return result;
     }
     const auto observation = observeSelectedMaterialEdgeMid(
+        owning_document, evaluation,
         *stage, picked_material_edge, provider);
     result.status = observation.status;
     if (!observation.resolved()) {
@@ -4877,9 +4925,7 @@ resolveSelectedMaterialEdgeMid(
     // Distinguish a vanished producer from an invalid owner/revision:
     // identical replacement geometry and old token numbers never repair
     // a deleted authored Feature's semantic identity.
-    if (evaluation.source_document_id &&
-        *evaluation.source_document_id == owning_document.documentId() &&
-        evaluation.source_revision == owning_document.revision() &&
+    if (ownsCurrentPartEvaluation(owning_document, evaluation) &&
         authored.source_edge.stage.feature_id &&
         owning_document.findFeature(
             *authored.source_edge.stage.feature_id) == nullptr) {
@@ -4901,6 +4947,7 @@ resolveSelectedMaterialEdgeMid(
         return result;
     }
     return observeSelectedMaterialEdgeMid(
+        owning_document, evaluation,
         *stage, current->current_edges.front(), provider);
 }
 
@@ -5823,13 +5870,18 @@ PartEvaluation::findFeature(
         : &*found;
 }
 
-PartEvaluation evaluatePart(
+// A single Part Feature scheduler for legacy callers and opt-in current
+// stage numeric evaluation. The default no-solver public ABI is unchanged.
+[[nodiscard]] static PartEvaluation evaluatePartImpl(
     const PartDocument& document,
-    kernel::ISolidModelingKernel& modeling_kernel) {
+    kernel::ISolidModelingKernel& modeling_kernel,
+    const sketch::LocalSolverAcceptancePolicy* numeric_policy,
+    sketch::ILocalSketchSolver* numeric_backend) {
     PartEvaluation result;
     result.source_revision =
         document.revision();
     result.source_document_id = document.documentId();
+    result.source_incarnation = document.incarnationToken();
     result.features.reserve(
         document.body().features.size());
 
@@ -6075,16 +6127,48 @@ PartEvaluation evaluatePart(
                     ? &effective_profile_sketch->model
                     : nullptr;
 
+            // The opt-in backend is invoked exclusively for source
+            // Sketches with authored local relations. It must consume the
+            // exact current prefix before THIS Feature. Legacy callers
+            // never enter this path and retain their strict v20 fence.
+            std::optional<ProfileKernelInputResult> stage_solved_profile;
+            if (numeric_policy && numeric_backend) {
+                if (const auto* source_sketch =
+                        document.findSketch(profile->source_sketch_id);
+                    source_sketch &&
+                    source_sketch->model.constraintCount() != 0U) {
+                    if (auto* projection_query = dynamic_cast<
+                            kernel::IEdgeProjectionQuery*>(
+                                &modeling_kernel)) {
+                        stage_solved_profile =
+                            resolveStageSolvedProfileKernelInput(
+                                document, profile->id, result,
+                                *projection_query, *numeric_policy,
+                                *numeric_backend,
+                                support_topology,
+                                support_datums ? &*support_datums : nullptr,
+                                authored.id);
+                    } else {
+                        // No provider authority: NEVER fall back to
+                        // supposedly solved authored Sketch seed data.
+                        stage_solved_profile = ProfileKernelInputResult{
+                            ProfileKernelInputStatus::unresolved_profile};
+                    }
+                }
+            }
+
             if (extrude != nullptr) {
                 auto materialized_profile =
-                    resolveKernelProfileInput(
-                        document,
-                        profile->id,
-                        support_topology,
-                        support_datums
-                            ? &*support_datums
-                            : nullptr,
-                        evaluated_model);
+                    stage_solved_profile
+                        ? std::move(*stage_solved_profile)
+                        : resolveKernelProfileInput(
+                              document,
+                              profile->id,
+                              support_topology,
+                              support_datums
+                                  ? &*support_datums
+                                  : nullptr,
+                              evaluated_model);
                 if (!materialized_profile.ok()) {
                     evaluated.status =
                         materialized_profile.status ==
@@ -6160,18 +6244,26 @@ PartEvaluation evaluatePart(
                     continue;
                 }
 
+                auto* exact_edge_provider = dynamic_cast<
+                    kernel::IExactBoundedEdgeGeometryQuery*>(
+                        &modeling_kernel);
                 const auto resolved =
-                    resolveKernelRevolveInput(
-                        document,
-                        *revolve,
-                        &result,
-                        support_datums
-                            ? &*support_datums
-                            : nullptr,
-                        evaluated_model,
-                        dynamic_cast<
-                            kernel::IExactBoundedEdgeGeometryQuery*>(
-                                &modeling_kernel));
+                    stage_solved_profile
+                        ? (stage_solved_profile->ok()
+                               ? resolveKernelRevolveInputImpl(
+                                     document, *revolve, &result,
+                                     support_datums
+                                         ? &*support_datums : nullptr,
+                                     nullptr, exact_edge_provider,
+                                     &*stage_solved_profile->input)
+                               : RevolveKernelInputResult{
+                                     RevolveKernelInputStatus::
+                                         profile_unavailable})
+                        : resolveKernelRevolveInput(
+                              document, *revolve, &result,
+                              support_datums
+                                  ? &*support_datums : nullptr,
+                              evaluated_model, exact_edge_provider);
                 if (!resolved.ok()) {
                     evaluated.status =
                         resolved.status ==
@@ -6506,13 +6598,28 @@ PartEvaluation evaluatePart(
     return result;
 }
 
+// Default production behavior is immutable until a real licensed solver
+// and Owner-visible caller have been separately integrated.
+PartEvaluation evaluatePart(
+    const PartDocument& document,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    return evaluatePartImpl(document, modeling_kernel, nullptr, nullptr);
+}
+
+PartEvaluation evaluatePartWithLocalSolve(
+    const PartDocument& document,
+    kernel::ISolidModelingKernel& modeling_kernel,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend) {
+    return evaluatePartImpl(document, modeling_kernel, &policy, &backend);
+}
 
 std::optional<kernel::Frame3>
 resolveCurrentProjectionSketchFrame(
     const PartDocument& document,
     const sketch::SketchId& sketch_id,
     const PartEvaluation& prefix) {
-    if (prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, prefix)) {
         return std::nullopt;
     }
     const auto* authored = document.findSketch(sketch_id);
@@ -6567,7 +6674,7 @@ StrictProjectedEdgeGeometry projectStrictMaterialEdge(
     const auto fail = [](Status s) {
         return StrictProjectedEdgeGeometry{s, std::nullopt};
     };
-    if (prefix.source_revision != document.revision() ||
+    if (!ownsCurrentPartEvaluation(document, prefix) ||
         !frame.valid() || !source.valid() ||
         !source.stage.feature_id) {
         return fail(Status::invalid_dependency);
@@ -6615,11 +6722,21 @@ StrictProjectedEdgeGeometry projectStrictMaterialEdge(
     }
     const auto bound = query.bindEdgeToBody(
         stage->result_solid, ref->current_edges.front());
+    // Both provider hooks may reenter DocumentSession. Do not proceed to
+    // projection on a retired Part stage, even if binding appeared valid.
+    if (!ownsCurrentPartEvaluation(document, prefix)) {
+        return fail(Status::invalid_dependency);
+    }
     if (!bound || !bound->valid()) {
         return fail(Status::provider_failure);
     }
     const auto projected = query.projectEdgeToPlane(
         stage->result_solid, *bound, frame);
+    // This lower-level public resolver must itself refuse stale output;
+    // do not rely solely on downstream effective-Sketch checks.
+    if (!ownsCurrentPartEvaluation(document, prefix)) {
+        return fail(Status::invalid_dependency);
+    }
     if (!projected.ok()) {
         switch (projected.status) {
         case kernel::EdgeProjectionStatus::unsupported_curve:
@@ -6640,22 +6757,26 @@ evaluateEffectiveSketchProjection(
     const PartEvaluation& prefix,
     kernel::IEdgeProjectionQuery& query,
     std::optional<FeatureId> consuming_feature) {
-    if (prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, prefix)) {
         return std::nullopt;
     }
     const auto* authored = document.findSketch(sketch_id);
     if (!authored) {
         return std::nullopt;
     }
+    // Projection providers can re-enter DocumentSession and invalidate
+    // all pointers/references into PartAuthoredState. Keep a local copy.
+    const auto authored_model = authored->model;
+    const auto bindings = authored->projection_bindings;
     EffectiveSketchProjection result;
-    result.model = authored->model;
-    result.outcomes.reserve(authored->projection_bindings.size());
-    if (authored->projection_bindings.empty()) {
+    result.model = authored_model;
+    result.outcomes.reserve(bindings.size());
+    if (bindings.empty()) {
         return result;
     }
     const auto frame = resolveCurrentProjectionSketchFrame(
         document, sketch_id, prefix);
-    for (const auto& binding : authored->projection_bindings) {
+    for (const auto& binding : bindings) {
         ProjectedSketchOutcome outcome{
             binding.target_entity,
             ProjectedSketchSourceStatus::invalid_support};
@@ -6663,6 +6784,11 @@ evaluateEffectiveSketchProjection(
             const auto projection = projectStrictMaterialEdge(
                 document, binding.source, prefix, query,
                 *frame, consuming_feature);
+            // Never consume geometry observed across a reentrant revision
+            // advance, even if the provider reported a valid projection.
+            if (!ownsCurrentPartEvaluation(document, prefix)) {
+                return std::nullopt;
+            }
             outcome.status = projection.status;
             if (projection.resolved()) {
                 const auto point = [](const kernel::Point2& p) {
@@ -6671,7 +6797,7 @@ evaluateEffectiveSketchProjection(
                 bool applied = false;
                 if (const auto* line =
                         std::get_if<kernel::Line2>(&*projection.curve)) {
-                    applied = authored->model.findLine(
+                    applied = authored_model.findLine(
                                   binding.target_entity) != nullptr &&
                         result.model.updateLine(
                             binding.target_entity,
@@ -6679,7 +6805,7 @@ evaluateEffectiveSketchProjection(
                 } else if (const auto* circle =
                                std::get_if<kernel::Circle2>(
                                    &*projection.curve)) {
-                    applied = authored->model.findCircle(
+                    applied = authored_model.findCircle(
                                   binding.target_entity) != nullptr &&
                         result.model.updateCircle(
                             binding.target_entity,
@@ -6687,7 +6813,7 @@ evaluateEffectiveSketchProjection(
                 } else if (const auto* arc =
                                std::get_if<kernel::Arc2>(
                                    &*projection.curve)) {
-                    applied = authored->model.findArc(
+                    applied = authored_model.findArc(
                                   binding.target_entity) != nullptr &&
                         result.model.updateArc(
                             binding.target_entity,
@@ -6706,7 +6832,9 @@ evaluateEffectiveSketchProjection(
         }
         result.outcomes.push_back(outcome);
     }
-    return result;
+    return ownsCurrentPartEvaluation(document, prefix)
+        ? std::optional<EffectiveSketchProjection>{std::move(result)}
+        : std::nullopt;
 }
 
 } // namespace simplesolid2::part

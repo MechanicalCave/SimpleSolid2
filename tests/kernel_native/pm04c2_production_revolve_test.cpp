@@ -994,9 +994,29 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
         CHECK(restored.ok());
         const part::AxisReference authored{
             part::AuthoredAxisReference{*id}};
-        const auto resolved = part::resolveAxisReference(
+        // A restored Part with identical DocumentId, revision and authored
+        // bytes is a DIFFERENT runtime incarnation. The source evaluation
+        // must fail closed; only a freshly evaluated restored Part may
+        // resolve this persisted semantic Face Axis.
+        CHECK(restored.document->documentId() == document.documentId());
+        CHECK(restored.document->revision() == document.revision());
+        CHECK(restored.document->incarnationToken() !=
+              document.incarnationToken());
+        const auto rejectedForeign = part::resolveAxisReference(
             *restored.document, authored,
             &evaluation, nullptr, nullptr, &provider);
+        CHECK(rejectedForeign.status ==
+              part::AxisEvaluationStatus::blocked);
+        CHECK(rejectedForeign.diagnostic ==
+              part::AxisEvaluationDiagnostic::stale_part_evaluation);
+        CHECK(!rejectedForeign.line);
+        const auto localEvaluation =
+            part::evaluatePart(*restored.document, provider);
+        CHECK(part::ownsCurrentPartEvaluation(
+            *restored.document, localEvaluation));
+        const auto resolved = part::resolveAxisReference(
+            *restored.document, authored,
+            &localEvaluation, nullptr, nullptr, &provider);
         CHECK(resolved.status ==
               part::AxisEvaluationStatus::resolved);
         CHECK(resolved.valid());
@@ -1094,8 +1114,9 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
             static unsigned serial = 0U;
             const auto native_path =
                 std::filesystem::temp_directory_path() /
-                ("ss2_h1_native_face_v20_" +
-                 std::to_string(++serial) + ".ss2part");
+                ("ss2_h1_native_face_v21_" +
+                 std::string{session.document().documentId().value()} +
+                 "_" + std::to_string(++serial) + ".ss2part");
             part::PartDocumentStore store;
             const auto saved =
                 store.createNew(native_path, session.document());
@@ -1104,7 +1125,7 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
                 persistence::readNativeDocumentContainer(
                     native_path);
             CHECK(package.ok());
-            CHECK(package.package->descriptor.domain_schema_version == 20);
+            CHECK(package.package->descriptor.domain_schema_version == 21);
             const auto reopened = store.load(native_path);
             CHECK(reopened.ok());
             CHECK(reopened.document);
@@ -2209,14 +2230,16 @@ int main() {
 
         const auto native_path =
             std::filesystem::temp_directory_path() /
-            "ss2_h1_native_face_axis_revolve_consumer_v20.ss2part";
+            ("ss2_h1_native_face_axis_revolve_consumer_v21_" +
+             std::string{authored.document->documentId().value()} +
+             ".ss2part");
         part::PartDocumentStore store;
         const auto saved = store.createNew(native_path, *authored.document);
         CHECK(saved.ok());
         const auto native =
             persistence::readNativeDocumentContainer(native_path);
         CHECK(native.ok());
-        CHECK(native.package->descriptor.domain_schema_version == 20);
+        CHECK(native.package->descriptor.domain_schema_version == 21);
         const auto reopened = store.load(native_path);
         CHECK(reopened.ok() && reopened.document);
         CHECK(reopened.document->findAxis(axis_id));

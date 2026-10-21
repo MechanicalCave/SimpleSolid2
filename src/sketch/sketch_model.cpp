@@ -40,6 +40,155 @@ constexpr double full_turn =
            std::abs(sweep_angle) < full_turn;
 }
 
+// Exact semantic shape and duplicate identity, without any numeric solve.
+[[nodiscard]] bool validConstraintShape(
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second) noexcept {
+    if (!first.entity.valid()) return false;
+    switch (kind) {
+    case ConstraintKind::horizontal:
+    case ConstraintKind::vertical:
+    case ConstraintKind::fix:
+        return first.element == ConstraintElement::line &&
+               second == ConstraintReference{};
+    case ConstraintKind::coincident:
+        return (first.element == ConstraintElement::line_start ||
+                first.element == ConstraintElement::line_end) &&
+               (second.element == ConstraintElement::line_start ||
+                second.element == ConstraintElement::line_end) &&
+               second.entity.valid() && first.entity != second.entity;
+    case ConstraintKind::parallel:
+    case ConstraintKind::perpendicular:
+        return first.element == ConstraintElement::line &&
+               second.element == ConstraintElement::line &&
+               second.entity.valid() && first.entity != second.entity;
+    }
+    return false; // unknown future enum values fail closed
+}
+
+[[nodiscard]] bool sameConstraintMeaning(
+    const SketchConstraintState& lhs,
+    const SketchConstraintState& rhs) noexcept {
+    if (lhs.kind != rhs.kind) return false;
+    if (lhs.first == rhs.first && lhs.second == rhs.second) return true;
+    return lhs.kind != ConstraintKind::horizontal &&
+           lhs.kind != ConstraintKind::vertical &&
+           lhs.kind != ConstraintKind::fix &&
+           lhs.first == rhs.second && lhs.second == rhs.first;
+}
+
+// Only mathematically unconditional contradictions belong at this layer.
+// Geometric residuals, redundant systems and fixed-reference feasibility
+// are determined later by the proven donor numerical adapter.
+[[nodiscard]] bool directConflict(
+    const SketchConstraintState& lhs,
+    const SketchConstraintState& rhs) noexcept {
+    const bool hv =
+        (lhs.kind == ConstraintKind::horizontal &&
+         rhs.kind == ConstraintKind::vertical) ||
+        (lhs.kind == ConstraintKind::vertical &&
+         rhs.kind == ConstraintKind::horizontal);
+    if (hv && lhs.first.entity == rhs.first.entity) return true;
+
+    const bool pair_conflict =
+        (lhs.kind == ConstraintKind::parallel &&
+         rhs.kind == ConstraintKind::perpendicular) ||
+        (lhs.kind == ConstraintKind::perpendicular &&
+         rhs.kind == ConstraintKind::parallel);
+    return pair_conflict &&
+           ((lhs.first == rhs.first && lhs.second == rhs.second) ||
+            (lhs.first == rhs.second && lhs.second == rhs.first));
+}
+
+// An immutable Fix(Line) cannot be numerically repaired by a later solve.
+// Reject only contradictions whose every required Line is already fixed;
+// other relations remain genuine underconstrained solver intent.
+[[nodiscard]] bool fixedGeometryConflict(
+    const SketchModel& model,
+    const std::vector<SketchConstraintState>& existing,
+    const SketchConstraintState* proposed = nullptr) {
+    std::set<EntityId> fixed;
+    const auto collect = [&fixed](const SketchConstraintState& relation) {
+        if (relation.kind == ConstraintKind::fix) {
+            fixed.insert(relation.first.entity);
+        }
+    };
+    for (const auto& item : existing) collect(item);
+    if (proposed) collect(*proposed);
+
+    const auto contradicts = [&model, &fixed](
+        const SketchConstraintState& relation) {
+        const auto* first = model.findLine(relation.first.entity);
+        if (!first) return true;
+        const bool first_fixed = fixed.contains(relation.first.entity);
+        switch (relation.kind) {
+        case ConstraintKind::fix:
+            return false;
+        case ConstraintKind::horizontal:
+            return first_fixed && first->start().v != first->end().v;
+        case ConstraintKind::vertical:
+            return first_fixed && first->start().u != first->end().u;
+        case ConstraintKind::coincident: {
+            if (!first_fixed || !fixed.contains(relation.second.entity)) {
+                return false;
+            }
+            const auto* second = model.findLine(relation.second.entity);
+            if (!second) return true;
+            const auto a = relation.first.element == ConstraintElement::line_start
+                ? first->start() : first->end();
+            const auto b = relation.second.element == ConstraintElement::line_start
+                ? second->start() : second->end();
+            return a != b;
+        }
+        case ConstraintKind::parallel:
+        case ConstraintKind::perpendicular: {
+            if (!first_fixed || !fixed.contains(relation.second.entity)) {
+                return false;
+            }
+            const auto* second = model.findLine(relation.second.entity);
+            if (!second) return true;
+            // A fixed pair has no adjustable geometry. Use its exact
+            // algebraic parallel/perpendicular relation, not atan2 angle
+            // equality: angle rounding can falsely reject a valid oblique
+            // orthogonal pair even when its dot product is exactly zero.
+            const double au = first->end().u - first->start().u;
+            const double av = first->end().v - first->start().v;
+            const double bu = second->end().u - second->start().u;
+            const double bv = second->end().v - second->start().v;
+            if (!std::isfinite(au) || !std::isfinite(av) ||
+                !std::isfinite(bu) || !std::isfinite(bv)) {
+                return true;
+            }
+            const double p = relation.kind == ConstraintKind::parallel
+                ? au * bv : au * bu;
+            const double q = relation.kind == ConstraintKind::parallel
+                ? av * bu : av * bv;
+            // Overflow or a product rounded all the way to zero despite
+            // nonzero factors cannot certify a fixed compatibility claim.
+            const auto untrusted = [](double x, double y, double product) {
+                return !std::isfinite(product) ||
+                       (x != 0.0 && y != 0.0 && product == 0.0);
+            };
+            if (relation.kind == ConstraintKind::parallel
+                    ? (untrusted(au, bv, p) || untrusted(av, bu, q))
+                    : (untrusted(au, bu, p) || untrusted(av, bv, q))) {
+                return true;
+            }
+            const double error = relation.kind == ConstraintKind::parallel
+                ? p - q : p + q;
+            return !std::isfinite(error) || error != 0.0;
+        }
+        }
+        return true;
+    };
+
+    for (const auto& item : existing) {
+        if (contradicts(item)) return true;
+    }
+    return proposed && contradicts(*proposed);
+}
+
 } // namespace
 
 EntityId SketchModel::allocateEntityId() {
@@ -206,7 +355,7 @@ bool SketchModel::updateLine(
             return line.id() == id;
         });
 
-    if (found == lines_.end()) {
+    if (found == lines_.end() || isFixedLine(id)) {
         return false;
     }
 
@@ -284,6 +433,76 @@ bool SketchModel::setEntityRole(
     return false;
 }
 
+void SketchModel::preserveConstraintIdCursor(
+    ConstraintIdCursor cursor) noexcept {
+    if (cursor.next_value_ > next_constraint_value_) {
+        next_constraint_value_ = cursor.next_value_;
+    }
+}
+
+std::optional<ConstraintId> SketchModel::addConstraint(
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second) {
+    if (!validConstraintShape(kind, first, second) ||
+        findLine(first.entity) == nullptr ||
+        (second.entity.valid() && findLine(second.entity) == nullptr) ||
+        next_constraint_value_ == std::numeric_limits<std::uint64_t>::max()) {
+        return std::nullopt;
+    }
+
+    const SketchConstraintState candidate{
+        ConstraintId{next_constraint_value_}, kind, first, second};
+    const auto duplicate = std::find_if(
+        constraints_.cbegin(), constraints_.cend(),
+        [&candidate](const SketchConstraintState& existing) {
+            return sameConstraintMeaning(existing, candidate) ||
+                   directConflict(existing, candidate);
+        });
+    if (duplicate != constraints_.cend() ||
+        fixedGeometryConflict(*this, constraints_, &candidate)) {
+        return std::nullopt;
+    }
+
+    constraints_.push_back(candidate);
+    ++next_constraint_value_;
+    return candidate.id;
+}
+
+bool SketchModel::isFixedLine(EntityId line) const noexcept {
+    if (!line.valid()) return false;
+    return std::any_of(
+        constraints_.cbegin(), constraints_.cend(),
+        [line](const SketchConstraintState& relation) {
+            return relation.kind == ConstraintKind::fix &&
+                relation.first.entity == line;
+        });
+}
+
+std::optional<ConstraintId> SketchModel::addHorizontal(EntityId line) {
+    return addConstraint(
+        ConstraintKind::horizontal,
+        ConstraintReference{line, ConstraintElement::line});
+}
+
+const SketchConstraintState* SketchModel::findConstraint(ConstraintId id) const noexcept {
+    if (!id.valid()) return nullptr;
+    const auto found = std::find_if(
+        constraints_.cbegin(), constraints_.cend(),
+        [id](const SketchConstraintState& value) { return value.id == id; });
+    return found == constraints_.cend() ? nullptr : &*found;
+}
+
+bool SketchModel::eraseConstraint(ConstraintId id) noexcept {
+    if (!id.valid()) return false;
+    const auto found = std::find_if(
+        constraints_.begin(), constraints_.end(),
+        [id](const SketchConstraintState& value) { return value.id == id; });
+    if (found == constraints_.end()) return false;
+    constraints_.erase(found);
+    return true;
+}
+
 bool SketchModel::erase(
     EntityId id) noexcept {
     if (!id.valid()) {
@@ -298,6 +517,9 @@ bool SketchModel::erase(
         });
     if (line != lines_.end()) {
         lines_.erase(line);
+        std::erase_if(constraints_, [id](const SketchConstraintState& relation) {
+            return relation.first.entity == id || relation.second.entity == id;
+        });
         return true;
     }
 
@@ -309,6 +531,9 @@ bool SketchModel::erase(
         });
     if (circle != circles_.end()) {
         circles_.erase(circle);
+        std::erase_if(constraints_, [id](const SketchConstraintState& relation) {
+            return relation.first.entity == id || relation.second.entity == id;
+        });
         return true;
     }
 
@@ -320,6 +545,9 @@ bool SketchModel::erase(
         });
     if (arc != arcs_.end()) {
         arcs_.erase(arc);
+        std::erase_if(constraints_, [id](const SketchConstraintState& relation) {
+            return relation.first.entity == id || relation.second.entity == id;
+        });
         return true;
     }
 
@@ -337,6 +565,8 @@ SketchModelState SketchModel::state() const {
     SketchModelState result;
     result.next_entity_id =
         EntityIdCursor{next_entity_value_};
+    result.next_constraint_id = ConstraintIdCursor{next_constraint_value_};
+    result.constraints = constraints_;
     result.lines.reserve(lines_.size());
     result.circles.reserve(circles_.size());
     result.arcs.reserve(arcs_.size());
@@ -443,8 +673,35 @@ std::optional<SketchModel> SketchModel::restore(
                 item.role});
     }
 
-    model.next_entity_value_ =
-        state.next_entity_id.next_value_;
+    // Restore all six explicit kinds; no malformed, stale, duplicate,
+    // same-entity pair or unrecognised future kind may enter owned state.
+    std::set<ConstraintId> seen_constraints;
+    std::vector<SketchConstraintState> seen_meanings;
+    seen_meanings.reserve(state.constraints.size());
+    for (const auto& item : state.constraints) {
+        if (!item.id.valid() ||
+            item.id.value_ >= state.next_constraint_id.next_value_ ||
+            !seen_constraints.insert(item.id).second ||
+            !validConstraintShape(item.kind, item.first, item.second) ||
+            model.findLine(item.first.entity) == nullptr ||
+            (item.second.entity.valid() &&
+             model.findLine(item.second.entity) == nullptr) ||
+            std::any_of(
+                seen_meanings.cbegin(), seen_meanings.cend(),
+                [&item](const SketchConstraintState& existing) {
+                    return sameConstraintMeaning(item, existing) ||
+                           directConflict(item, existing);
+                })) {
+            return std::nullopt;
+        }
+        seen_meanings.push_back(item);
+    }
+    model.constraints_ = std::move(state.constraints);
+    if (fixedGeometryConflict(model, model.constraints_)) {
+        return std::nullopt;
+    }
+    model.next_constraint_value_ = state.next_constraint_id.next_value_;
+    model.next_entity_value_ = state.next_entity_id.next_value_;
     return model;
 }
 
