@@ -200,10 +200,13 @@ The `Operations` panel has one active `Relations` or `Dimensions` tool; clicking
 
 **Explicit exclusions:** `work/ACTIVE.yaml` in product PR, unlisted files, third_party vendoring, auto-constraints/inference authoring, A3 Reference + conversions, dimensions beyond three, Arc driver, 2D host replacement, unsupported projected-source relations, novel global parameter graph, Assembly/Drawings, unrelated PM/RG/OCCT topology policy, disabling or removing tests and unrestricted CMake/CI modifications. File candidates are **NOT** a presently accepted path allowlist; enumerate precisely with Owner at freeze and use an explicit addendum for further scope.
 
-## 5. Documentation impact
+## Documentation impact
 
-**Internal docs: required.** Sketch solver numeric ownership, command lifecycle, typed status/DoF, Stage/Part incumbent provenance, strict v22 native format and 3D overlay seam change internal as-built meaning.  
-**User/Product docs: required.** New Relations and Dimensions tool flows, click-to-create, inline label editing, dragging, visibility, Delete/Fix/Undo and failure/repair are user-visible behavior. PL/EN canonical peers must retain matching `doc-id` and ordered `section-id`; generated Product Browser regenerated and verified from Markdown. The old A1 headless-only current-state text must be updated as features actually ship; not falsely before.
+Internal docs: required
+User/Product docs: required
+Reason: R13-A2 changes the as-built Sketch solver/domain ownership, strict native Part file semantics, 3D annotation input, and user-visible Relations/Driving Dimensions authoring. Documentation is updated as product slices become accepted; do not describe unshipped features as current behavior.
+
+Sketch solver numeric ownership, command lifecycle, typed status/DoF, stage/Part incarnation provenance, strict v22 native format and 3D overlay seam require internal as-built updates. New Relations and Dimensions flows, click-to-create, inline label editing, dragging, visibility, Delete/Fix/Undo and repair behavior require PL/EN user documentation. PL/EN canonical peers must retain matching `doc-id` and ordered `section-id`; generated Product Browser regenerated and verified from Markdown. The old A1 headless-only current-state text must be updated as features actually ship; not falsely before.
 
 ## 6. Decisions to separately freeze before D2 execution
 
