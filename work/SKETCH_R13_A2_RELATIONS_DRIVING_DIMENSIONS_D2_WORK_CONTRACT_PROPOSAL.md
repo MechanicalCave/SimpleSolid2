@@ -1,7 +1,7 @@
 # SimpleSolid 2.0 — Sketcher R13-A2
 ## Relations UI + Driving Dimensions — D2 Work Contract (governance DRAFT)
 
-**Status:** Owner accepted the presented A2 D2 contract direction and requested continuation on 2026-10-21 (`akceptuję - kontynuuj`). **GOVERNANCE DRAFT ONLY; NOT ACTIVE; NO production, CI-policy, solver-packaging, guarded-merge or `ACTIVE.yaml` authorization.** Exact execution allowlist and dependencies in §6 retain separate gates.  
+**Status:** **OWNER-ACCEPTED D2 DESIGN AND CONDITIONAL EXECUTION SCOPE (2026-10-21), GOVERNANCE INTEGRATION PENDING**. Owner explicitly accepted the post-audit D2 dispositions and requested continuation (`akceptuję - kontynuuj`). This status records product/architecture acceptance, **not** an authorization to guarded-squash merge, activate `ACTIVE.yaml`, ship PlaneGCS or modify production files. The additional strict v22 codec, solver distribution and real viewer interface proofs below remain independent technical gates.  
 **Prepared:** 2026-10-21 (Europe/Warsaw).  
 **SS2 authoritative readback:** `MechanicalCave/SimpleSolid2`, protected `main@30a17150552fe67e30fe84a7f17e0dce30ef619c`; `work/ACTIVE.yaml` still points to completed `work/SKETCH_R13_A1_LOCAL_RELATIONS_D2_WORK_CONTRACT_PROPOSAL.md`.  
 **Program:** `work/SKETCH_ROADMAP.md` v1.11; companion Part Modeling roadmap v1.35; R13-A2 after technically accepted/merged R13-A1 PR #506.  
@@ -231,9 +231,22 @@ This **non-effective engineering clarification** closes file-path omissions disc
 
 **Independence of permissions**: A2 product execution remains blocked until the exact D2 contract and finite path list are accepted, a governance-only PR is merged with a separate explicit Owner guarded-squash authorization, and a **separate, one-file ACTIVE-only PR** passes closure and merges under its own separate authorization. Product readiness later also requires independent licensing/schema/visual D2 gates and exact-head Windows product tests. A successful governance CLOSURE proves only the governance lane, not the full product test suite.
 
+### 6B. Owner disposition of the D2 audit — ACCEPTED DESIGN, CONDITIONAL FILE SCOPE (2026-10-21)
+
+**Recorded Owner response:** after review of the exact PR #521 audit outcome (one-file governance PR `16aa7c7dd6fa3b63590385e117977523d1d00700`, Windows governance CLOSURE `39655543647` **SUCCESS**), the Owner explicitly answered `akceptuję - kontynuuj`. This accepts the documented A2 workflow, six interactive A1 relations, three Driving dimension kinds, SS1 donor adaptation boundary, **Freeze Current Position / Delete preserves accepted solved geometry**, and the D2 implementation direction of §2, §4 and §6A. For execution, the **finite set of concrete paths named in §4 is accepted as the conditional maximum**, including the audited `interaction_state.hpp/.cpp` and `part_document_store.hpp` additions, existing tests and specifically named new candidate files. This is **NOT** carte blanche for all `src/**`, `tests/**`, `third_party/**` or the complete list to be edited in every slice. Change only those paths necessary for each approved A2 slice; no new paths except a separately Owner-accepted D2 exact-path addendum.
+
+**Acceptance does not assert unproven implementation details:** exact strict v22 nested fields/ordering/precision bounds must be separately reviewed and frozen before modifying the store; v21 remains authoritative until then. The provider-neutral annotation data/selection/focus contract requires its concrete types and validation to be reviewed against the actual native viewer before implementing that seam. PlaneGCS production linking, LGPL notice/relink/source pathway, library pin and installed-consumer run require independent Owner D2 disposition before shipping; `SS2_R13_PLANEGCS_DEV` is not production clearance. All are hard STOP points, not silently resolved by this acceptance.
+
+**Governance activation remains two independent future changes**:
+
+1. This one-file contract PR may be marked **Ready for review** after successful exact-head governance CLOSURE, but **must not** be merged without a *separate, explicit Owner guarded-squash authorization referring to PR #521 and its final HEAD*.
+2. Once the contract is guarded-merged to protected main and read back, propose a **distinct one-file `work/ACTIVE.yaml`** activation PR pointing to the integrated contract (no production source in that PR), obtain its own exact-head governance CLOSURE and **separate explicit Owner guarded-squash authorization**. Only after verified activation may accepted A2.0 product implementation start on its own bounded branch. Subsequent A2.1/A2.2 remain subject to their specific D2/solver/schema/GUI gates and Owner review, even though the full program scope is now accepted.
+
+The unmerged historical PR #493 remains non-authoritative for any conflicting older authoring gesture; this accepted A2 contract expressly supersedes its placement/value-before-create proposal. The already merged A1 implementation is not retroactively treated as a user-facing Qt relations UI.
+
 ## 7. Closure statement
 
-This is an **Owner-reviewed D2 governance draft**, not an activated or merged executable contract. It makes **no representation** that `ACTIVE.yaml` changed or that production solver licensing/build/Windows tests passed for A2. This draft governance PR changes only this `work/` contract; no product source, tests, CI, as-built/product documentation, `ACTIVE.yaml` or CAD document is altered.
+This is an **Owner-accepted D2 work-contract design in an unmerged governance PR**, not an activated executable contract. It makes **no representation** that `ACTIVE.yaml` changed or that production solver licensing/build/Windows tests passed for A2. This draft governance PR changes only this `work/` contract; no product source, tests, CI, as-built/product documentation, `ACTIVE.yaml` or CAD document is altered.
 
 ### Primary references
 
