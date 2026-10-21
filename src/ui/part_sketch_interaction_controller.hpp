@@ -374,6 +374,10 @@ public:
     relationKind() const noexcept {
         return interaction_.relationKind();
     }
+    [[nodiscard]] std::optional<sketch::ConstraintReference>
+    firstRelationTarget() const noexcept {
+        return interaction_.firstRelationTarget();
+    }
     [[nodiscard]] bool activateTrim();
     [[nodiscard]] bool activateExtend();
     void activateExtendBoth();
