@@ -362,6 +362,8 @@ public:
     void activateCircle();
     void activateArc();
     void activateRectangle();
+    void activateRelations();
+    void activateDimensions();
     [[nodiscard]] bool activateTrim();
     [[nodiscard]] bool activateExtend();
     void activateExtendBoth();
