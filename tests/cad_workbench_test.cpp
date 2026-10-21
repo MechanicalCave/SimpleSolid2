@@ -2373,6 +2373,25 @@ int main(int argc, char* argv[]) {
     CHECK(!relation_operations->isHidden());
     CHECK(dimension_operations->isHidden());
     CHECK(!finish_sketch->isHidden());
+    auto* horizontal_relation = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchRelationHorizontalButton"));
+    auto* parallel_relation = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchRelationParallelButton"));
+    CHECK(horizontal_relation && parallel_relation);
+    CHECK(horizontal_relation->isEnabled());
+    CHECK(parallel_relation->isEnabled());
+    const auto before_kind_revision = ux_session->document().revision();
+    const auto before_kind_undo = ux_session->undoDepth();
+    horizontal_relation->click();
+    QApplication::processEvents();
+    CHECK(horizontal_relation->isChecked());
+    CHECK(!parallel_relation->isChecked());
+    parallel_relation->click();
+    QApplication::processEvents();
+    CHECK(!horizontal_relation->isChecked());
+    CHECK(parallel_relation->isChecked());
+    CHECK(ux_session->document().revision() == before_kind_revision);
+    CHECK(ux_session->undoDepth() == before_kind_undo);
     dimensions_tool->click();
     QApplication::processEvents();
     CHECK(dimensions_tool->isChecked());
