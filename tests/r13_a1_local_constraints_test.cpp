@@ -303,6 +303,7 @@ int main() {
     part::PartEvaluation prefix;
     prefix.source_document_id=session.document().documentId();
     prefix.source_revision=session.document().revision();
+        prefix.source_incarnation = session.document().incarnationToken();
     const auto input=part::prepareStageLocalSolveProblem(
         session.document(),*sketch.sketch_id,prefix,provider);
     CHECK(input && input->constraints.size()==8U);
@@ -409,6 +410,7 @@ int main() {
             impossibleCold.document->documentId();
         impossiblePrefix.source_revision =
             impossibleCold.document->revision();
+        impossiblePrefix.source_incarnation = impossibleCold.document->incarnationToken();
         const auto impossibleProblem = part::prepareStageLocalSolveProblem(
             *impossibleCold.document, *sketch.sketch_id,
             impossiblePrefix, impossibleProvider);
@@ -483,6 +485,7 @@ int main() {
     part::PartEvaluation replayPrefix;
     replayPrefix.source_document_id = session.document().documentId();
     replayPrefix.source_revision = session.document().revision();
+        replayPrefix.source_incarnation = session.document().incarnationToken();
     const auto replayProfile = part::resolveStageSolvedProfileKernelInput(
         session.document(), *profile.profile_id, replayPrefix,
         provider, policy, native);
@@ -1100,6 +1103,7 @@ int main() {
         part::PartEvaluation prefix;
         prefix.source_document_id = session.document().documentId();
         prefix.source_revision = session.document().revision();
+        prefix.source_incarnation = session.document().incarnationToken();
         const auto proved = part::resolveStageSolvedProfileKernelInput(
             session.document(), *profile.profile_id, prefix, query,
             accurate, backend);
@@ -1257,6 +1261,7 @@ int main() {
         part::PartEvaluation prefix;
         prefix.source_document_id = session.document().documentId();
         prefix.source_revision = session.document().revision();
+        prefix.source_incarnation = session.document().incarnationToken();
         backend.offset = 5.0e-13;
         const auto stage = part::evaluateStageLocalSolve(
             session.document(), *made.sketch_id, prefix,
@@ -2165,6 +2170,7 @@ int main() {
         part::PartEvaluation prefix;
         prefix.source_document_id = session.document().documentId();
         prefix.source_revision = session.document().revision();
+        prefix.source_incarnation = session.document().incarnationToken();
         const auto input = part::prepareStageLocalSolveProblem(
             session.document(), *made.sketch_id, prefix, provider);
         CHECK(input && input->constraints.size() == 1U);
@@ -2191,6 +2197,7 @@ int main() {
         CHECK(!part::prepareStageLocalSolveProblem(
             session.document(), *made.sketch_id, prefix, provider));
         prefix.source_revision = session.document().revision();
+        prefix.source_incarnation = session.document().incarnationToken();
         const auto updated = part::prepareStageLocalSolveProblem(
             session.document(), *made.sketch_id, prefix, provider);
         CHECK(updated && updated->lines.size() == 2U);
@@ -2208,6 +2215,7 @@ int main() {
         CHECK(!part::prepareStageLocalSolveProblem(
             session.document(), *made.sketch_id, prefix, provider));
         prefix.source_revision = session.document().revision();
+        prefix.source_incarnation = session.document().incarnationToken();
         const auto withFix = part::prepareStageLocalSolveProblem(
             session.document(), *made.sketch_id, prefix, provider);
         CHECK(withFix && withFix->fixed_lines.size() == 1U);
@@ -2624,6 +2632,7 @@ int main() {
     part::PartEvaluation current;
     current.source_document_id = session.document().documentId();
     current.source_revision = session.document().revision();
+        current.source_incarnation = session.document().incarnationToken();
     const sk::LocalSolverAcceptancePolicy policy{1.0e-12, 1.0e-12};
     const auto solved = part::resolveStageSolvedProfileKernelInput(
         session.document(), *profile.profile_id, current,
