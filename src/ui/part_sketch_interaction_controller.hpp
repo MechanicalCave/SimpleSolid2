@@ -426,6 +426,7 @@ private:
     void handleArcPointer(const SketchPointerInput& input);
     void handleRectanglePointer(const SketchPointerInput& input);
     void handleMeasurePointer(const SketchPointerInput& input);
+    void handleRelationsPointer(const SketchPointerInput& input);
     void handleStructuralEditPointer(
         const SketchPointerInput& input);
     [[nodiscard]] std::optional<
