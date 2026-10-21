@@ -1062,6 +1062,7 @@ int main() {
         namespace core = simplesolid2::core;
         struct EchoNumeric final : sk::ILocalSketchSolver {
             int calls{};
+            std::size_t reported_dof{3U};
             app::DocumentSession* reenter{};
             std::optional<sk::SketchId> sketch_id;
             bool reentered{};
@@ -1077,7 +1078,7 @@ int main() {
                     CHECK(changed.ok() && changed.changed);
                 }
                 return {sk::LocalBackendStatus::converged,
-                        problem.authored, {}, {}, 3U};
+                        problem.authored, {}, {}, reported_dof};
             }
         } backend;
         const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
@@ -1233,6 +1234,26 @@ int main() {
             before_reentry, session.document().incarnationToken(),
             sk::ConstraintKind::horizontal,
             {extra, sk::ConstraintElement::line}, {}};
+        // Even an authoritative command must reject impossible backend
+        // DoF without consuming an ID, mutating Part, or creating Undo.
+        // Three free Lines expose at most 12 scalar endpoint parameters.
+        const auto no_write_snapshot =
+            session.document().findSketch(sid)->model.state();
+        backend.reported_dof = 13U;
+        const auto bad_dof_write =
+            session.execute(reentrant, policy, backend);
+        CHECK(!bad_dof_write.ok() && !bad_dof_write.changed);
+        CHECK(!bad_dof_write.constraint_id);
+        CHECK(bad_dof_write.preflight_status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(bad_dof_write.solver_status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(session.undoDepth() == undo_before_reentry);
+        CHECK(session.document().revision() == before_reentry);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              no_write_snapshot);
+
+        backend.reported_dof = 3U;
         backend.reenter = &session;
         backend.sketch_id = sid;
         const auto refused = session.execute(reentrant, policy, backend);
