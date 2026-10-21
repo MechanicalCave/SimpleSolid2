@@ -4065,6 +4065,7 @@ int main() {
         part::PartEvaluation prefix;
         prefix.source_document_id = rect_session.document().documentId();
         prefix.source_revision = rect_session.document().revision();
+        prefix.source_incarnation = rect_session.document().incarnationToken();
         const auto input = part::prepareStageLocalSolveProblem(
             rect_session.document(), *rect_sketch.sketch_id, prefix, provider);
         CHECK(input);
