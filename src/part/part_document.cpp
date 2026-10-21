@@ -1279,9 +1279,7 @@ prepareStageLocalSolveProblem(
     std::optional<FeatureId> consuming_feature) {
     // Do not accept a timestamp or a plausible prefix from another document.
     // Part owns both revision and source-identity evidence.
-    if (!evaluated_prefix.source_document_id ||
-        *evaluated_prefix.source_document_id != document.documentId() ||
-        evaluated_prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
         return std::nullopt;
     }
     if (document.findSketch(sketch_id) == nullptr) return std::nullopt;
@@ -1293,9 +1291,7 @@ prepareStageLocalSolveProblem(
     // A provider may re-enter DocumentSession, replacing PartAuthoredState
     // entirely. Check owner/revision BEFORE dereferencing any authored
     // reference after projection; no cross-revision mixture may escape.
-    if (!evaluated_prefix.source_document_id ||
-        *evaluated_prefix.source_document_id != document.documentId() ||
-        evaluated_prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
         return std::nullopt;
     }
     const auto* authored = document.findSketch(sketch_id);
@@ -1322,9 +1318,7 @@ prepareStageLocalSolveProblem(
     auto problem = sketch::prepareLocalSolveProblem(
         evaluated->model.state(), fixed_lines);
     if (!problem ||
-        !evaluated_prefix.source_document_id ||
-        *evaluated_prefix.source_document_id != document.documentId() ||
-        evaluated_prefix.source_revision != document.revision()) {
+        !ownsCurrentPartEvaluation(document, evaluated_prefix)) {
         return std::nullopt;
     }
     return problem;
@@ -1348,17 +1342,14 @@ evaluateStageLocalSolve(
     const auto problem = prepareStageLocalSolveProblem(
         document, sketch_id, evaluated_prefix, query, consuming_feature);
     if (!problem ||
-        !evaluated_prefix.source_document_id ||
-        *evaluated_prefix.source_document_id != document.documentId() ||
-        evaluated_prefix.source_revision != document.revision()) {
+        !ownsCurrentPartEvaluation(document, evaluated_prefix)) {
         return std::nullopt;
     }
 
     auto solution = sketch::evaluateLocalSolve(*problem, policy, backend);
     // The adapter may invoke code that edits DocumentSession. Never return
     // its otherwise converged, but now stale, derived snapshot to Part.
-    if (*evaluated_prefix.source_document_id != document.documentId() ||
-        evaluated_prefix.source_revision != document.revision()) {
+    if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
         return std::nullopt;
     }
     return StageLocalSolveEvaluation{
