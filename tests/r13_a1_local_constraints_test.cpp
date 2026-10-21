@@ -1074,9 +1074,19 @@ int main() {
               ->model.constraintCount() == 1U);
         CHECK(session.document().findSketch(sid)
               ->model.state().lines == authored_before.lines);
+        const auto committed_state =
+            session.document().findSketch(sid)->model.state();
         CHECK(session.undo().ok());
-        CHECK(session.document().findSketch(sid)->model.state() ==
-              authored_before);
+        const auto after_undo =
+            session.document().findSketch(sid)->model.state();
+        CHECK(after_undo.lines == authored_before.lines);
+        CHECK(after_undo.circles == authored_before.circles);
+        CHECK(after_undo.arcs == authored_before.arcs);
+        CHECK(after_undo.constraints == authored_before.constraints);
+        // Undo removes authorship, never rewinds the semantic high-water
+        // ConstraintId cursor: identity must never be recycled.
+        CHECK(after_undo.next_constraint_id ==
+              committed_state.next_constraint_id);
         CHECK(session.redo().ok());
         CHECK(session.document().findSketch(sid)
               ->model.findConstraint(*accepted.constraint_id));
