@@ -38,6 +38,13 @@ enum class SketchTool : std::uint8_t {
 // A2.0 transient typed relation acquisition. These semantic references
  // are stable Sketch entity+role inputs but are NOT persisted or committed
  // until a separate stage/revision-bound numerical Part command accepts.
+// Transient A2.1 UI intention, not a durable Part constraint record.
+enum class DrivingDimensionToolKind : std::uint8_t {
+    length,
+    radius,
+    diameter,
+};
+
 enum class RelationTargetOutcome : std::uint8_t {
      inactive,
      invalid_target,
@@ -541,6 +548,11 @@ public:
     void activateRectangle() noexcept;
     void activateRelations() noexcept;
     void activateDimensions() noexcept;
+    [[nodiscard]] bool setDimensionKind(DrivingDimensionToolKind kind) noexcept;
+    [[nodiscard]] std::optional<DrivingDimensionToolKind>
+    dimensionKind() const noexcept {
+        return dimension_kind_;
+    }
     [[nodiscard]] bool setRelationKind(ConstraintKind kind) noexcept;
     [[nodiscard]] std::optional<ConstraintKind> relationKind() const noexcept {
         return relation_kind_;
@@ -901,6 +913,7 @@ private:
     SketchTool tool_{SketchTool::select};
     std::optional<ConstraintKind> relation_kind_;
     std::optional<ConstraintReference> relation_first_;
+    std::optional<DrivingDimensionToolKind> dimension_kind_;
 
     LineStage line_stage_{
         LineStage::await_first_point};
