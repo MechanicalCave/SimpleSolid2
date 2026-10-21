@@ -620,5 +620,66 @@ int main() {
     CHECK(!acquire.firstRelationTarget());
     CHECK(relation_model.state() == relation_before);
 
+    // Native viewport screen-space R13-A2 Coincident endpoint grammar:
+    // input is a disposable projection from the *current* Sketch stage.
+    // It does not need visible/selected editable grips and cannot write CAD.
+    using EH = sketch::RelationEndpointHitStatus;
+    const std::vector<sketch::RelationEndpointScreenCandidate> endpoint_hits{
+        {a_end, {40.0, 65.0}},
+        {b_start, {100.0, 90.0}},
+    };
+    const auto endpoint_hit = sketch::resolveRelationEndpointHit(
+        relation_model, {42.0, 63.0}, endpoint_hits, 9.0);
+    CHECK(endpoint_hit.status == EH::hit);
+    CHECK(endpoint_hit.reference == a_end);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {42.0, 63.0}, endpoint_hits, 1.0
+    ).status == EH::miss);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {150.0, 150.0}, endpoint_hits, 9.0
+    ).status == EH::miss);
+
+    // Exact/overlapping projected endpoints must NEVER resolve via
+    // incidental entity ordering, even when one is marginally closer.
+    const std::vector<sketch::RelationEndpointScreenCandidate> overlap{
+        {a_end, {40.0, 65.0}},
+        {b_start, {41.0, 66.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, overlap, 9.0
+    ).status == EH::ambiguous);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, {overlap.data(), overlap.size()}, 9.0
+    ).status == EH::ambiguous);
+    const std::vector<sketch::RelationEndpointScreenCandidate> duplicate{
+        {a_end, {40.0, 65.0}},
+        {a_end, {40.0, 65.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, duplicate, 9.0
+    ).status == EH::invalid_input);
+    const std::vector<sketch::RelationEndpointScreenCandidate> non_endpoint{
+        {first_line, {40.0, 65.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, non_endpoint, 9.0
+    ).status == EH::invalid_input);
+    const std::vector<sketch::RelationEndpointScreenCandidate> non_line{
+        {{relation_circle, RE::line_start}, {40.0, 65.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, non_line, 9.0
+    ).status == EH::invalid_input);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, endpoint_hits,
+        std::numeric_limits<double>::infinity()
+    ).status == EH::invalid_input);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model,
+        {std::numeric_limits<double>::quiet_NaN(), 65.0},
+        endpoint_hits, 9.0
+    ).status == EH::invalid_input);
+    CHECK(relation_model.state() == relation_before);
+
     return EXIT_SUCCESS;
 }
