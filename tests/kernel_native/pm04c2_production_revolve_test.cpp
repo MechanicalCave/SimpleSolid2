@@ -1094,8 +1094,9 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
             static unsigned serial = 0U;
             const auto native_path =
                 std::filesystem::temp_directory_path() /
-                ("ss2_h1_native_face_v20_" +
-                 std::to_string(++serial) + ".ss2part");
+                ("ss2_h1_native_face_v21_" +
+                 std::string{session.document().documentId().value()} +
+                 "_" + std::to_string(++serial) + ".ss2part");
             part::PartDocumentStore store;
             const auto saved =
                 store.createNew(native_path, session.document());
@@ -1104,7 +1105,7 @@ void verifyH1StrictCylindricalFaceAxisAdmission(
                 persistence::readNativeDocumentContainer(
                     native_path);
             CHECK(package.ok());
-            CHECK(package.package->descriptor.domain_schema_version == 20);
+            CHECK(package.package->descriptor.domain_schema_version == 21);
             const auto reopened = store.load(native_path);
             CHECK(reopened.ok());
             CHECK(reopened.document);
@@ -2209,14 +2210,16 @@ int main() {
 
         const auto native_path =
             std::filesystem::temp_directory_path() /
-            "ss2_h1_native_face_axis_revolve_consumer_v20.ss2part";
+            ("ss2_h1_native_face_axis_revolve_consumer_v21_" +
+             std::string{authored.document->documentId().value()} +
+             ".ss2part");
         part::PartDocumentStore store;
         const auto saved = store.createNew(native_path, *authored.document);
         CHECK(saved.ok());
         const auto native =
             persistence::readNativeDocumentContainer(native_path);
         CHECK(native.ok());
-        CHECK(native.package->descriptor.domain_schema_version == 20);
+        CHECK(native.package->descriptor.domain_schema_version == 21);
         const auto reopened = store.load(native_path);
         CHECK(reopened.ok() && reopened.document);
         CHECK(reopened.document->findAxis(axis_id));
