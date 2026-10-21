@@ -549,9 +549,9 @@ int main() {
     CHECK(acquire.setRelationKind(RK::coincident));
     CHECK(acquire.acceptRelationTarget(
         relation_model, first_line).outcome == RO::invalid_target);
-    const auto first = acquire.acceptRelationTarget(
+    const auto first_relation_pick = acquire.acceptRelationTarget(
         relation_model, a_end);
-    CHECK(first.outcome == RO::first_target_accepted);
+    CHECK(first_relation_pick.outcome == RO::first_target_accepted);
     CHECK(acquire.firstRelationTarget() == a_end);
     CHECK(acquire.acceptRelationTarget(
         relation_model, {relation_a, RE::line_start}
