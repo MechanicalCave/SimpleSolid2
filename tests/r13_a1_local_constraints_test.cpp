@@ -3373,7 +3373,7 @@ int main() {
             const auto projectedId = linked.entity_ids.front();
             CHECK(target->model.updateLine(
                 projectedId, {180.0, 180.0}, {190.0, 180.0}));
-            const auto restoredDoc = part::PartDocument::restore(
+            auto restoredDoc = part::PartDocument::restore(
                 projected_session.document().documentId(),
                 std::move(coldState),
                 projected_session.document().revision());
