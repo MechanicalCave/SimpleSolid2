@@ -600,6 +600,16 @@ int main() {
     ).outcome == RO::inactive);
     acquire.finishTool();
     CHECK(acquire.tool() == sketch::SketchTool::select);
+    acquire.activateRelations();
+    CHECK(acquire.setRelationKind(RK::parallel));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::first_target_accepted);
+    acquire.activateLine();
+    CHECK(acquire.tool() == sketch::SketchTool::line);
+    CHECK(!acquire.relationKind());
+    CHECK(!acquire.firstRelationTarget());
+    CHECK(relation_model.state() == relation_before);
 
     return EXIT_SUCCESS;
 }
