@@ -34,6 +34,28 @@ enum class SketchTool : std::uint8_t {
     dimensions, // R13-A2 explicit driving-dimension mode
 };
 
+
+// A2.0 transient typed relation acquisition. These semantic references
+ // are stable Sketch entity+role inputs but are NOT persisted or committed
+ // until a separate stage/revision-bound numerical Part command accepts.
+enum class RelationTargetOutcome : std::uint8_t {
+     inactive,
+     invalid_target,
+     first_target_accepted,
+     ready,
+ };
+struct RelationTargetDraft final {
+     ConstraintKind kind{ConstraintKind::horizontal};
+     ConstraintReference first;
+     ConstraintReference second;
+     friend bool operator==(const RelationTargetDraft&,
+                            const RelationTargetDraft&) = default;
+ };
+struct RelationTargetResult final {
+     RelationTargetOutcome outcome{RelationTargetOutcome::inactive};
+     std::optional<RelationTargetDraft> draft;
+ };
+
 enum class MeasureRelationAcceptOutcome : std::uint8_t {
     inactive,
     invalid_target,
@@ -519,6 +541,17 @@ public:
     void activateRectangle() noexcept;
     void activateRelations() noexcept;
     void activateDimensions() noexcept;
+    [[nodiscard]] bool setRelationKind(ConstraintKind kind) noexcept;
+    [[nodiscard]] std::optional<ConstraintKind> relationKind() const noexcept {
+        return relation_kind_;
+    }
+    [[nodiscard]] std::optional<ConstraintReference>
+    firstRelationTarget() const noexcept {
+        return relation_first_;
+    }
+    [[nodiscard]] RelationTargetResult acceptRelationTarget(
+        const SketchModel& model, ConstraintReference target) noexcept;
+    [[nodiscard]] bool cancelRelationTarget() noexcept;
     void activateMeasure(const SketchModel& model) noexcept;
     [[nodiscard]] std::optional<EntityId>
     measureTarget() const noexcept {
@@ -866,6 +899,8 @@ private:
     void resetStructuralEdit() noexcept;
 
     SketchTool tool_{SketchTool::select};
+    std::optional<ConstraintKind> relation_kind_;
+    std::optional<ConstraintReference> relation_first_;
 
     LineStage line_stage_{
         LineStage::await_first_point};
