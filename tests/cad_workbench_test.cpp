@@ -2398,6 +2398,26 @@ int main(int argc, char* argv[]) {
     CHECK(!relations_tool->isChecked());
     CHECK(relation_operations->isHidden());
     CHECK(!dimension_operations->isHidden());
+    auto* length_kind = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchDimensionLengthButton"));
+    auto* diameter_kind = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchDimensionDiameterButton"));
+    CHECK(length_kind && diameter_kind);
+    CHECK(length_kind->isEnabled());
+    CHECK(diameter_kind->isEnabled());
+    const auto before_dimension_kind_revision =
+        ux_session->document().revision();
+    const auto before_dimension_kind_undo = ux_session->undoDepth();
+    length_kind->click();
+    QApplication::processEvents();
+    CHECK(length_kind->isChecked());
+    CHECK(!diameter_kind->isChecked());
+    diameter_kind->click();
+    QApplication::processEvents();
+    CHECK(!length_kind->isChecked());
+    CHECK(diameter_kind->isChecked());
+    CHECK(ux_session->document().revision() == before_dimension_kind_revision);
+    CHECK(ux_session->undoDepth() == before_dimension_kind_undo);
     select_tool->click();
     QApplication::processEvents();
     CHECK(relation_operations->isHidden());
