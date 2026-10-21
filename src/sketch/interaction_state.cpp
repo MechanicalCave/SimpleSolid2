@@ -1365,6 +1365,8 @@ void SketchInteractionState::activateRelations() noexcept {
     resetCommonTransform();
     clearHover();
     tool_ = SketchTool::relations;
+    relation_kind_.reset();
+    relation_first_.reset();
     resetLineStage();
     resetCircleStage();
     resetArcStage();
@@ -1379,10 +1381,88 @@ void SketchInteractionState::activateDimensions() noexcept {
     resetCommonTransform();
     clearHover();
     tool_ = SketchTool::dimensions;
+    relation_kind_.reset();
+    relation_first_.reset();
     resetLineStage();
     resetCircleStage();
     resetArcStage();
     resetRectangleStage();
+}
+
+bool SketchInteractionState::setRelationKind(
+    ConstraintKind kind) noexcept {
+    if (tool_ != SketchTool::relations) return false;
+    switch (kind) {
+    case ConstraintKind::horizontal:
+    case ConstraintKind::vertical:
+    case ConstraintKind::coincident:
+    case ConstraintKind::parallel:
+    case ConstraintKind::perpendicular:
+    case ConstraintKind::fix:
+        break;
+    default:
+        return false;
+    }
+    relation_kind_ = kind;
+    relation_first_.reset();
+    return true;
+}
+
+RelationTargetResult SketchInteractionState::acceptRelationTarget(
+    const SketchModel& model,
+    ConstraintReference target) noexcept {
+    if (tool_ != SketchTool::relations || !relation_kind_) {
+        return {};
+    }
+
+    const auto kind = *relation_kind_;
+    const bool pair =
+        kind == ConstraintKind::coincident ||
+        kind == ConstraintKind::parallel ||
+        kind == ConstraintKind::perpendicular;
+    const bool line_body =
+        kind != ConstraintKind::coincident;
+    const bool correct_role =
+        line_body
+            ? target.element == ConstraintElement::line
+            : target.element == ConstraintElement::line_start ||
+              target.element == ConstraintElement::line_end;
+    if (!correct_role || !target.entity.valid() ||
+        model.findLine(target.entity) == nullptr) {
+        return {RelationTargetOutcome::invalid_target, std::nullopt};
+    }
+
+    if (!pair) {
+        return {RelationTargetOutcome::ready,
+                RelationTargetDraft{kind, target, {}}};
+    }
+    if (!relation_first_) {
+        relation_first_ = target;
+        return {RelationTargetOutcome::first_target_accepted,
+                std::nullopt};
+    }
+    if (relation_first_->entity == target.entity) {
+        // Coincident cannot close one Line onto itself. Parallel and
+        // perpendicular require two distinct Lines. Preserve first
+        // target so the user can correct the second click without
+        // reopening the command.
+        return {RelationTargetOutcome::invalid_target, std::nullopt};
+    }
+
+    const RelationTargetDraft candidate{
+        kind, *relation_first_, target};
+    relation_first_.reset();
+    // READY is a transient semantic request only. No ID, solver
+    // value, Part revision, persistence or history is mutated here.
+    return {RelationTargetOutcome::ready, candidate};
+}
+
+bool SketchInteractionState::cancelRelationTarget() noexcept {
+    if (tool_ != SketchTool::relations || !relation_first_) {
+        return false;
+    }
+    relation_first_.reset();
+    return true;
 }
 
 void SketchInteractionState::activateMeasure(
@@ -3710,6 +3790,8 @@ SketchInteractionState::deterministicPrimary()
 
 void SketchInteractionState::resetToSelect() noexcept {
     resetMeasure();
+    relation_kind_.reset();
+    relation_first_.reset();
     tool_ = SketchTool::select;
     resetLineStage();
     resetCircleStage();
