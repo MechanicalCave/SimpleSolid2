@@ -4,6 +4,21 @@
 #include <algorithm>
 
 namespace simplesolid2::part {
+
+// The token is intentionally incomplete to consumers: each Part create or
+// independent restore owns a new control block. Copies of PartEvaluation
+// keep retired tokens live, preventing pointer-reuse false acceptance.
+struct PartRuntimeIncarnation final {};
+
+PartDocument::PartDocument(
+    core::DocumentId id,
+    PartAuthoredState state,
+    core::DocumentRevision revision)
+    : id_{std::move(id)},
+      state_{std::move(state)},
+      revision_{revision},
+      incarnation_token_{std::make_shared<const PartRuntimeIncarnation>()} {}
+
 namespace {
 
 struct SemanticProvenanceBounds final {
