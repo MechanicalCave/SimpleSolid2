@@ -2267,6 +2267,59 @@ int main() {
             withFix->authored.lines.front());
         CHECK(stageBackend.calls == 1U);
 
+        // CP1 RED: two independent restores of the SAME authored state have
+        // the same durable DocumentId and numeric revision zero, but must
+        // never accept each other's disposable PartEvaluation. No provider
+        // callback or numerical backend may run on the foreign incarnation.
+        const auto coldFirst = part::PartDocument::restore(
+            session.document().documentId(), session.document().state());
+        const auto coldSecond = part::PartDocument::restore(
+            session.document().documentId(), session.document().state());
+        CHECK(coldFirst.ok() && coldSecond.ok());
+        CHECK(coldFirst.document->documentId() ==
+              coldSecond.document->documentId());
+        CHECK(coldFirst.document->revision() ==
+              coldSecond.document->revision());
+        CHECK(coldFirst.document->incarnationToken() !=
+              coldSecond.document->incarnationToken());
+        part::PartEvaluation oldCold;
+        oldCold.source_document_id = coldFirst.document->documentId();
+        oldCold.source_revision = coldFirst.document->revision();
+        oldCold.source_incarnation = coldFirst.document->incarnationToken();
+        CHECK(!part::ownsCurrentPartEvaluation(*coldSecond.document, oldCold));
+        CHECK(!part::prepareStageLocalSolveProblem(
+            *coldSecond.document, *made.sketch_id, oldCold, provider));
+        CHECK(!part::evaluateEffectiveSketchProjection(
+            *coldSecond.document, *made.sketch_id, oldCold, provider));
+        StageBackend rejectedBackend;
+        CHECK(!part::evaluateStageLocalSolve(
+            *coldSecond.document, *made.sketch_id, oldCold, provider,
+            tight, rejectedBackend));
+        CHECK(rejectedBackend.calls == 0U);
+        auto absentToken = oldCold;
+        absentToken.source_incarnation.reset();
+        CHECK(!part::ownsCurrentPartEvaluation(
+            *coldFirst.document, absentToken));
+        CHECK(!part::prepareStageLocalSolveProblem(
+            *coldFirst.document, *made.sketch_id, absentToken, provider));
+
+        part::PartEvaluation newCold;
+        newCold.source_document_id = coldSecond.document->documentId();
+        newCold.source_revision = coldSecond.document->revision();
+        newCold.source_incarnation = coldSecond.document->incarnationToken();
+        CHECK(part::ownsCurrentPartEvaluation(*coldSecond.document, newCold));
+        CHECK(part::prepareStageLocalSolveProblem(
+            *coldSecond.document, *made.sketch_id, newCold, provider));
+        CHECK(part::evaluateEffectiveSketchProjection(
+            *coldSecond.document, *made.sketch_id, newCold, provider));
+        const auto newColdSolve = part::evaluateStageLocalSolve(
+            *coldSecond.document, *made.sketch_id, newCold, provider,
+            tight, rejectedBackend);
+        CHECK(newColdSolve);
+        CHECK(rejectedBackend.calls == 1U);
+        CHECK(newColdSolve->solution.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+
         auto wrongStage = prefix;
         wrongStage.source_document_id = core::DocumentId::generate();
         CHECK(!part::evaluateStageLocalSolve(
