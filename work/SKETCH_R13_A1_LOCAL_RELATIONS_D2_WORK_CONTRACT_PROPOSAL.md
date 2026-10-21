@@ -265,6 +265,23 @@ Every already allowlisted A1 path retains its existing conditional permission an
 
 **Stop gates:** Beyond the eight named test files, stop for fresh exact-path governance; keep prior §§5D/5E authorizations unchanged. Once protected-main merge/readback is confirmed, modify the minimum lines and retain all historical fixture tests; run exact product HEAD Windows FULL (real original PlaneGCS, native OCCT, full Desktop/Qt), plus appropriate DOC-01 and Owner acceptance before any guarded product merge. Historical v20 writer executable/source provenance remains OPEN even if the provided v20 file was verified to be a valid native container and reads correctly.
 
+## 5G. DOC-01 exact four-path as-built review — conditional D2 proposal (2026-10-21)
+
+**Status: proposed DOC-01 path freeze; not currently active writing authority.** The latest R13-A1 native product code remains unmerged in Draft #506. As-built documentation must not prematurely say that a headless Sketch relation capability has been accepted and shipped. The prior generic D2 scope approvals do not implicitly waive separate **exact-path documentation review**, which remains a §Documentation impact STOP.
+
+**Conditional DOC-01 scope for post-technical closure:** Only after the exact product HEAD passes current Windows native/Qt FULL and the separate Owner acceptance of relevant R13-A1 behavior may the following **four and only four** existing Markdown paths be modified. This is a proposal for those paths, not a unilateral DOC-01 merge:
+
+| Proposed docs path | Current factual correction once product accepted |
+|---|---|
+| `docs/internal/PART_DOCUMENTS.md` | Update current writer **v20→v21**, native historical v20 two-key vs v21 four-key Sketch-model migration, stable local authored 6 Line-only relation kinds/ConstraintId cursor, provenance admission requiring ephemeral refcounted runtime incarnation alongside ID and revision, provider reentry fail-closed, authored vs projected numerical candidate separation |
+| `docs/internal/PERSISTENCE.md` | Document explicit `Load v20 → Save v21 → cold Reopen` semantics, preservation of stable Sketch/Entity/Profile/Constraint IDs and gaps and no implicit on-load rewrite; runtime token/solver result never persisted, no change to existing native checkpoint conflict protection |
+| `docs/product/en/PARTS.md` | Correct obsolete user-facing version v16 text; distinguish **headless internal authored relations and numerical PlaneGCS gate** from later interactive Sketch constraint GUI, dimensional constraints and A2/A3; never claim unsupported UI commands or auto-solving on Load |
+| `docs/product/pl/PARTS.md` | Exact Polish peer of new acceptance boundary; correction of stale native version text and separation of the same headless/internal vs interactive product promises |
+
+**Accuracy gates:** Source must be verified against the merged product implementation, not an unmerged draft alone. Verify legacy accepted schema v20 fixture's 2-key model and native v21 writer's 4-key model; when discussing file origin, state only writer-format/reader proof and **do not claim** original-user-file executable provenance until evidence exists. Preserve `ModelingSemanticsVersion=2` independent of the native schema number, with no implied migration from modeling semantics v1. Do not alter `docs/browser/**`, generated Browser artifacts, workflows or translation tooling unless separately governed. DOC-01 lint/build and bilingual parity require an exact-head independent CI gate.
+
+**Stop:** Until the Owner separately approves these four exact documentation paths and the contract change passes a guarded governance CLOSURE and main readback, do not edit any docs file. Neither this proposal nor any future docs-only CLOSURE grants guarded product merge of #506 or substitutes for native Windows FULL, provenance review and user-facing manual acceptance.
+
 ## Documentation impact
 
 Internal docs: required
