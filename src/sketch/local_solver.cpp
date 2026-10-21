@@ -572,4 +572,45 @@ LocalSolveGatewayResult evaluateLocalSolve(
     return result;
 }
 
+LocalRelationPreflightResult preflightLocalRelation(
+    const SketchModelState& current_stage,
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second,
+    std::span<const EntityId> stage_fixed_lines,
+    const LocalSolverAcceptancePolicy& policy,
+    ILocalSketchSolver& backend) {
+    LocalRelationPreflightResult result;
+
+    // Restore a fresh copy so every rejected draft preserves the original
+    // cursor, semantic refs, geometry and Part-authoring state.
+    auto disposable = SketchModel::restore(current_stage);
+    if (!disposable) return result;
+    const auto provisional_id =
+        disposable->addConstraint(kind, first, second);
+    if (!provisional_id) return result;
+
+    // A malicious/invalid fixed-reference set fails closed before solve.
+    const auto draft = disposable->state();
+    const auto prepared = prepareLocalSolveProblem(
+        draft, stage_fixed_lines);
+    if (!prepared) {
+        result.status = LocalRelationPreflightStatus::invalid_problem;
+        return result;
+    }
+
+    result.provisional_constraint_id = *provisional_id;
+    result.proposed_authored = draft;
+    result.solve = evaluateLocalSolve(*prepared, policy, backend);
+    result.status =
+        result.solve.status == LocalSolveGatewayStatus::candidate_accepted &&
+        result.solve.candidate.has_value()
+            ? LocalRelationPreflightStatus::candidate_accepted
+            : LocalRelationPreflightStatus::solver_rejected;
+    // No DocumentSession command, no model write and no revision/lease
+    // capture occurs here. A real writer MUST solve the authoritative
+    // revision again within a single guarded Part transaction.
+    return result;
+}
+
 } // namespace simplesolid2::sketch
