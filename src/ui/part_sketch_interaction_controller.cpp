@@ -2369,11 +2369,90 @@ bool PartSketchInteractionController::selectRelationKind(
     }
     projectInteraction();
     notifyStateChanged();
-    // Kind selection is a legitimate transient command step. It must
-    // not create an A1 relation ahead of numerical acceptance.
-    reportStatus(
-        "RELATIONS: kind selected. Authoring is blocked pending "
-        "current-stage native numerical validation; no Part change.");
+
+    const auto& selected = interaction_.selectedEntities();
+    if (selected.empty()) {
+        reportStatus(
+            "RELATIONS: choose the required Line/endpoint. "
+            "Numeric authoring is not yet enabled.");
+        return true;
+    }
+    if (kind == sketch::ConstraintKind::coincident) {
+        // Entity-level preselection cannot identify Start vs End.
+        reportStatus(
+            "COINCIDENT: select two exact endpoints; "
+            "preselected Lines do not determine endpoint roles.");
+        return true;
+    }
+
+    const bool pair =
+        kind == sketch::ConstraintKind::parallel ||
+        kind == sketch::ConstraintKind::perpendicular;
+    const auto arity = pair ? 2U : 1U;
+    if (selected.size() > arity) {
+        reportStatus(
+            "RELATIONS: preselection contains too many Lines "
+            "for the selected relation. No target consumed.");
+        return true;
+    }
+    const auto* current =
+        viewport_controller_->currentSketchInteractionModel();
+    const auto* hosted = activeSketch();
+    if (current == nullptr || hosted == nullptr) {
+        reportStatus(
+            "RELATIONS: current-stage preselection unavailable.");
+        return true;
+    }
+
+    // Validate the complete selected set before consuming its first
+    // transient target. Otherwise a linked/missing second entity could
+    // accidentally leave an incomplete constraint draft.
+    for (const auto id : selected) {
+        const bool linked = std::any_of(
+            hosted->projection_bindings.begin(),
+            hosted->projection_bindings.end(),
+            [id](const part::ProjectedEdgeBinding& binding) {
+                return binding.target_entity == id;
+            });
+        if (!id.valid() || linked ||
+            current->findLine(id) == nullptr) {
+            reportStatus(
+                "RELATIONS: preselection is not a local, "
+                "current-stage Line; no target consumed.");
+            return true;
+        }
+    }
+
+    sketch::RelationTargetResult result;
+    for (const auto id : selected) {
+        result = interaction_.acceptRelationTarget(
+            *current,
+            {id, sketch::ConstraintElement::line});
+        if (result.outcome ==
+                sketch::RelationTargetOutcome::invalid_target ||
+            result.outcome ==
+                sketch::RelationTargetOutcome::inactive) {
+            // Should not occur after complete prevalidation; keep the
+            // kind but clear any half-consumed selection, fail closed.
+            static_cast<void>(interaction_.setRelationKind(kind));
+            reportStatus(
+                "RELATIONS: preselected targets were rejected. "
+                "No Part change.");
+            notifyStateChanged();
+            return true;
+        }
+    }
+    notifyStateChanged();
+    if (result.outcome ==
+        sketch::RelationTargetOutcome::first_target_accepted) {
+        reportStatus(
+            "RELATIONS: first preselected Line accepted; "
+            "click one more Line. No Part change.");
+    } else {
+        reportStatus(
+            "RELATIONS: preselected targets are ready, but "
+            "numeric authoring is not yet enabled. No Part change.");
+    }
     return true;
 }
 
