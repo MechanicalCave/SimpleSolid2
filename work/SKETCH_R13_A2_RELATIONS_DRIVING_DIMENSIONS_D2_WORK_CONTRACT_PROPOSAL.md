@@ -136,6 +136,8 @@ The `Operations` panel has one active `Relations` or `Dimensions` tool; clicking
 - `src/sketch/include/simplesolid2/sketch/local_constraints.hpp`
 - `src/sketch/include/simplesolid2/sketch/sketch_model.hpp`
 - `src/sketch/sketch_model.cpp`
+- `src/sketch/include/simplesolid2/sketch/interaction_state.hpp` (**A2 SketchTool semantic modes; discovered by current-code audit**)
+- `src/sketch/interaction_state.cpp` (**candidate only if accepted SketchTool state design requires implementation**)
 - `src/sketch/include/simplesolid2/sketch/local_solver.hpp`
 - `src/sketch/local_solver.cpp`
 - `src/sketch/include/simplesolid2/sketch/planegcs_dev_solver.hpp` (only if approved backend seam remains exactly this)
@@ -147,6 +149,7 @@ The `Operations` panel has one active `Relations` or `Dimensions` tool; clicking
 - `src/application/document_session.cpp`
 - `src/part/part_document.cpp`
 - `src/part/part_document_store.cpp`
+- `src/part/include/simplesolid2/part/part_document_store.hpp` (**current_schema_version=21 is defined here; required v22 change**)
 - `src/part/feature_evaluation.cpp`
 - `src/part/profile_kernel_input.cpp`
 - `src/part/include/simplesolid2/part/effective_sketch_projection.hpp`
@@ -176,6 +179,8 @@ The `Operations` panel has one active `Relations` or `Dimensions` tool; clicking
 - `tests/pm02f_stage_aware_profile_evaluation_test.cpp`
 - `tests/sk03a_part_viewport_controller_test.cpp`
 - `tests/sk04c_part_sketch_interaction_controller_test.cpp`
+- `tests/sk04a_sketch_interaction_state_test.cpp` (**new authoring-mode state regression only if SketchTool extended**)
+- `tests/sk03a_sketch_viewport_mapping_test.cpp` (**existing camera/Sketch frame projection regression candidate**)
 - `tests/cad_workbench_test.cpp`
 - `tests/sk03a_viewer_native_input_test.cpp`
 - `src/CMakeLists.txt`
@@ -207,6 +212,24 @@ The `Operations` panel has one active `Relations` or `Dimensions` tool; clicking
 3. **Annotation input and stage seam:** narrow provider-neutral scene records, exact-hit priority against grips/camera gestures, dimension text focus, viewport label editor widget and current Part incarnation/stage lease; no duplicated ownership.
 4. **Delete/Freeze semantics for *all* relations:** formal Owner D2 extension to currently narrower A1 `EraseSketchConstraintCommand`; must be proven against surviving constraints, projection sources and downstream Body repair.
 5. **Finite exact file-path allowlist + native Windows lanes + manual UX suite**, independently approved governance contract merge, later **ACTIVE-only** switch.
+
+### 6A. Source-audited D2 freeze candidate — separate Owner gate, 2026-10-21
+
+This **non-effective engineering clarification** closes file-path omissions discovered on SS2 `main@30a1715`. It is not production authorization and does not replace independent Owner approval of the exact full §4 allowlist. Evidence: `SketchTool` lives in `src/sketch/include/simplesolid2/sketch/interaction_state.hpp` and its implementation in `src/sketch/interaction_state.cpp`; the strict native file version constant lives in `src/part/include/simplesolid2/part/part_document_store.hpp` (`current_schema_version = 21`). §4 now names those paths and targeted existing tests. An implementation that needs a further path must STOP for an exact D2 addendum rather than silently expand the list.
+
+**Candidate v22 shape, requiring Owner schema freeze before implementation**:
+
+- The five-key `sketches[].model` shape would be exactly `next_entity_id`, `entities`, `next_constraint_id`, `constraints` and `driving_dimension_presentations`. A legacy **v21** record remains **exactly four-key**, and **v20** exactly two-key, with their original strict readers; v21/v20 reads never silently rewrite the file.
+- Existing six A1 relation records retain their exact `{id,kind,first,second}` encoding, including `Fix(Line)`; do not reinterpret an old serialized `kind`. Three **new typed numeric variants** are proposed: `length` targeting one Line; `radius` and `diameter` targeting one Circle. Numeric records would have exact `{id,kind,target,value_mm}` fields. `target` encodes semantic `EntityId` plus `element = line | circle`, never a screen hit, index, OCCT token, projected geometry handle, or duplicated geometry. The numeric unit is an explicitly finite, strictly positive **canonical millimetre** length (also for radial dimensions); no opaque formatted string as numeric truth.
+- `driving_dimension_presentations` would contain one record per numeric `ConstraintId`, with strictly validated typed `format` (Auto or fixed decimal precision) and `placement` (linear along/normal or radial/tangential relative to the referenced source in Sketch U/V). No separate Driving `DimensionId`; records for deleted/missing/non-numeric/wrong-Sketch IDs fail closed, as do duplicates and nonfinite/out-of-range placement or precision. Existing relations without numeric annotations must not fabricate presentations. Explicitly freeze the exact nested serialization grammar, allowed precision limits and record ordering in the dedicated schema addendum; this paragraph proposes the **shape**, not a final codec.
+- `SketchModel::restore`, JSON reader and Part reconstruction validate numeric target kinds, stable monotonic cursor/high-water, one independent Circle size driver, same-Sketch ownership, v21 backward reader, and cold-new-process rebuild. Neither solved geometry, DoF, residuals, runtime Part incarnation, UI visibility preference nor Qt/editor state may be serialized.
+- Deletion requires **one guarded staged command** using current evaluated geometry and current Part incarnation/revision; copy valid local solution seeds first, erase exactly selected constraint and associated presentation, re-evaluate all surviving constraints, then commit or discard the entire candidate. For `Fix Current Position`, copy current valid evaluated local endpoints before authoring a Fix parameter mask. Never mutate projected/linked authored sources, and never save a partial result or stale BRep. Undo restores the original authored seeds and stable IDs.
+
+**A2.0/A2.1 solver and UI dependency split**: Developer-only PlaneGCS-backed Qt tests may provide early evidence, but cannot count as end-user A2 acceptance. A2.0 must demonstrate a real current-stage numerical solve for all six relations; A2.1 additionally requires Line Length and Circle Radius/Diameter mapped through the SS2-neutral solver with independent residual and immutable-source checks. **No shipped claim until an Owner-reviewed Windows packaging/license/relink decision is actually implemented and tested**, independent of A1's optional DEV lane. If licensing is blocked, leave the UI or model slice explicitly provisional and STOP at the product gate.
+
+**Native GUI evidence**: exercise the actual 3D Qt/OCCT viewport, not a synthetic 2D host. Verify creation with one/two clicks, precise Start/End selection, selection-first behavior, same-gesture undo, no popup Apply, repeated authoring, `Esc` without Finish Sketch, label double-click editing, camera navigation vs drag arbitration, overlapping annotation hit-test, focus/Backspace ownership, 100–200% DPI and `Finish Sketch` footer on the screenshot's narrow Operations panel. These scenarios are mandatory before Owner manual acceptance.
+
+**Independence of permissions**: A2 product execution remains blocked until the exact D2 contract and finite path list are accepted, a governance-only PR is merged with a separate explicit Owner guarded-squash authorization, and a **separate, one-file ACTIVE-only PR** passes closure and merges under its own separate authorization. Product readiness later also requires independent licensing/schema/visual D2 gates and exact-head Windows product tests. A successful governance CLOSURE proves only the governance lane, not the full product test suite.
 
 ## 7. Closure statement
 
