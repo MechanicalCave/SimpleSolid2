@@ -3012,6 +3012,21 @@ bool SketchInteractionState::escape() noexcept {
         return true;
     }
 
+    if (tool_ == SketchTool::relations) {
+        // First Esc cancels only an unfinished two-target acquisition.
+        // Second Esc exits Relations. No Part operation/Undo is created.
+        if (cancelRelationTarget()) return true;
+        resetToSelect();
+        clearHover();
+        return true;
+    }
+
+    if (tool_ == SketchTool::dimensions) {
+        resetToSelect();
+        clearHover();
+        return true;
+    }
+
     return false;
 }
 
