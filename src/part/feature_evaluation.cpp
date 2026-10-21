@@ -4577,6 +4577,8 @@ certifySelectedEdgeTerminal(
 
 [[nodiscard]] SelectedEdgeEndResolution
 materializeSelectedEdgeTerminal(
+    const PartDocument& owner,
+    const PartEvaluation& evaluation,
     const Q1StageView& stage,
     kernel::RuntimeEdgeToken edge,
     const Q1TerminalCertificate& certified,
@@ -4589,6 +4591,10 @@ materializeSelectedEdgeTerminal(
     }
     result.status = SelectedEdgeEndStatus::native_geometry_unavailable;
     const auto bound = provider.bindExactEdgeToBody(stage.solid, edge);
+    if (!ownsCurrentPartEvaluation(owner, evaluation)) {
+        result.status = SelectedEdgeEndStatus::invalid_context;
+        return result;
+    }
     if (!bound || !bound->valid() ||
         bound->sourceBody().get() != stage.solid.get() ||
         bound->edge() != edge) {
@@ -4596,6 +4602,10 @@ materializeSelectedEdgeTerminal(
     }
     const auto current = provider.queryExactBoundedEdge3d(
         stage.solid, *bound);
+    if (!ownsCurrentPartEvaluation(owner, evaluation)) {
+        result.status = SelectedEdgeEndStatus::invalid_context;
+        return result;
+    }
     if (!current.ok()) {
         result.native_error = current.status;
         return result;
@@ -4688,6 +4698,7 @@ authorSelectedMaterialEdgeEnd(
         return result;
     }
     const auto geometry = materializeSelectedEdgeTerminal(
+        owning_document, evaluation,
         *stage, picked_material_edge, certified, provider);
     result.status = geometry.status;
     if (!geometry.resolved()) {
@@ -4742,7 +4753,7 @@ resolveSelectedMaterialEdgeEnd(
         return result;
     }
     return materializeSelectedEdgeTerminal(
-        *stage, edge, certified, provider);
+        owning_document, evaluation, *stage, edge, certified, provider);
 }
 
 namespace {
@@ -4786,6 +4797,8 @@ validBoundedHalfLengthMid(
 
 [[nodiscard]] SelectedEdgeMidResolution
 observeSelectedMaterialEdgeMid(
+    const PartDocument& owner,
+    const PartEvaluation& evaluation,
     const Q1StageView& stage,
     kernel::RuntimeEdgeToken edge,
     kernel::IExactBoundedEdgeGeometryQuery& provider) {
@@ -4798,6 +4811,10 @@ observeSelectedMaterialEdgeMid(
     }
     const auto bound =
         provider.bindExactEdgeToBody(stage.solid, edge);
+    if (!ownsCurrentPartEvaluation(owner, evaluation)) {
+        result.status = SelectedEdgeMidStatus::invalid_context;
+        return result;
+    }
     // This lease belongs to the current Body object, NOT to one OCCT
     // provider-instance address; a different Body must fail atomically.
     if (!bound || !bound->valid() ||
@@ -4807,6 +4824,10 @@ observeSelectedMaterialEdgeMid(
     }
     const auto exact =
         provider.queryExactBoundedEdge3d(stage.solid, *bound);
+    if (!ownsCurrentPartEvaluation(owner, evaluation)) {
+        result.status = SelectedEdgeMidStatus::invalid_context;
+        return result;
+    }
     if (!exact.ok()) {
         result.native_error = exact.status;
         return result;
@@ -4881,6 +4902,7 @@ authorSelectedMaterialEdgeMid(
         return result;
     }
     const auto observation = observeSelectedMaterialEdgeMid(
+        owning_document, evaluation,
         *stage, picked_material_edge, provider);
     result.status = observation.status;
     if (!observation.resolved()) {
@@ -4925,6 +4947,7 @@ resolveSelectedMaterialEdgeMid(
         return result;
     }
     return observeSelectedMaterialEdgeMid(
+        owning_document, evaluation,
         *stage, current->current_edges.front(), provider);
 }
 
