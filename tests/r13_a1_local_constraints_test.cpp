@@ -3439,7 +3439,11 @@ int main() {
                 *pgCold.document, *projected_sketch.sketch_id,
                 foreign, freshPgProvider));
             auto stale = freshPrefix;
-            stale.source_revision = {};
+            // Cold Part revision is zero: default revision is CURRENT,
+            // not stale. Use an explicitly different numeric revision.
+            stale.source_revision = core::DocumentRevision{
+                std::numeric_limits<std::uint64_t>::max()};
+            CHECK(stale.source_revision != pgCold.document->revision());
             CHECK(!part::prepareStageLocalSolveProblem(
                 *pgCold.document, *projected_sketch.sketch_id,
                 stale, freshPgProvider));
