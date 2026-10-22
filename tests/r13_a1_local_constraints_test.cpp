@@ -3224,15 +3224,26 @@ int main() {
     // contract; confirm exact input integrity after the callback.
     {
         struct MutateSolverInput final : sk::ILocalSketchSolver {
+            enum class Attack { remove_equation, rewrite_seed_geometry };
+            Attack attack{Attack::remove_equation};
             int calls{};
             sk::LocalBackendSolveResult solve(
                 const sk::LocalSolveProblem& immutable_view) override {
                 ++calls;
                 auto& tampered =
                     const_cast<sk::LocalSolveProblem&>(immutable_view);
-                tampered.authored.constraints.clear();
-                tampered.constraints.clear();
-                tampered.equations.clear();
+                if (attack == Attack::remove_equation) {
+                    tampered.authored.constraints.clear();
+                    tampered.constraints.clear();
+                    tampered.equations.clear();
+                } else {
+                    // Keep the Horizontal equation but counterfeit a
+                    // different, now-horizontal AUTHORED seed as input.
+                    tampered.authored.lines.front().end.v =
+                        tampered.authored.lines.front().start.v;
+                    tampered.lines.front().end.v =
+                        tampered.lines.front().start.v;
+                }
                 return {sk::LocalBackendStatus::converged,
                         tampered.authored, {}, {}, std::nullopt};
             }
@@ -3253,6 +3264,19 @@ int main() {
         CHECK(problem->authored == original);
         CHECK(problem->constraints == original.constraints);
         CHECK(problem->equations.size() == 1U);
+        CHECK(skew.state() == original);
+
+        backend.attack =
+            MutateSolverInput::Attack::rewrite_seed_geometry;
+        const auto geometry_poison = sk::evaluateLocalSolve(
+            *problem, sk::LocalSolverAcceptancePolicy{1.0e-8, 1.0e-8},
+            backend);
+        CHECK(backend.calls == 2);
+        CHECK(geometry_poison.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!geometry_poison.candidate);
+        CHECK(problem->authored == original);
+        CHECK(problem->lines.front().end == original.lines.front().end);
         CHECK(skew.state() == original);
     }
 
