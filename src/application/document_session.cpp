@@ -2277,6 +2277,129 @@ AddSketchConstraintResult DocumentSession::execute(
         {}});
 }
 
+EraseSolvedSketchConstraintResult DocumentSession::execute(
+    const EraseSolvedSketchConstraintCommand& command,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend) {
+    const auto reject = [this](
+        DocumentSessionErrorCode code,
+        const char* message) -> EraseSolvedSketchConstraintResult {
+        const auto failed = failure(code, message, path_);
+        return {false, std::nullopt, {}, failed.diagnostic};
+    };
+    const auto rejectSolve = [this](
+        const sketch::LocalSolveGatewayResult& solve,
+        const char* message) -> EraseSolvedSketchConstraintResult {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command, message, path_);
+        return {false, solve.status, solve.diagnostics,
+                failed.diagnostic};
+    };
+
+    // Never use document identity alone as a stale Part-session lease.
+    const auto current_incarnation = document_.incarnationToken();
+    const auto expected_incarnation = command.expected_incarnation.lock();
+    if (!current_incarnation || !expected_incarnation ||
+        current_incarnation != expected_incarnation ||
+        document_.documentId() != command.expected_document_id) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete Part incarnation / DocumentId mismatch");
+    }
+    if (document_.revision() != command.expected_revision) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation Delete has stale DocumentRevision");
+    }
+
+    const auto before = document_.state();
+    auto after = before;
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (!target ||
+        !part::builtinOriginPlaneForSketchSupport(target->support) ||
+        !target->projection_bindings.empty() ||
+        !command.constraint_id.valid() ||
+        target->model.findConstraint(command.constraint_id) == nullptr) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete requires an existing local constraint "
+            "and unlinked current builtin-plane Sketch");
+    }
+    const auto stillCurrent = [this, &command,
+                              &expected_incarnation, &before]() {
+        return document_.revision() == command.expected_revision &&
+            document_.documentId() == command.expected_document_id &&
+            document_.incarnationToken() == expected_incarnation &&
+            document_.state() == before;
+    };
+
+    // The accepted effective Sketch, not historic authored seeds, is
+    // precisely what must remain after a user removes a solver relation.
+    const auto initial_problem = sketch::prepareLocalSolveProblem(
+        target->model.state());
+    if (!initial_problem) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete current-stage problem is invalid");
+    }
+    const auto effective = sketch::evaluateLocalSolve(
+        *initial_problem, policy, backend);
+    if (!stillCurrent()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation Delete Part changed during initial solver");
+    }
+    if (effective.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !effective.candidate) {
+        return rejectSolve(effective,
+            "Solved relation Delete needs current accepted geometry");
+    }
+
+    // Materialize the entire accepted local Line solution as new authored
+    // seeds, preserve semantic IDs/roles/cursors and erase exactly one
+    // relation. The previously evaluated candidate becomes authored ONLY
+    // through this explicit single semantic Delete command.
+    auto proposed = sketch::SketchModel::restore(*effective.candidate);
+    if (!proposed || !proposed->eraseConstraint(command.constraint_id)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete cannot stage geometry and ConstraintId");
+    }
+
+    // Removing a relation can cause the remaining solver to choose another
+    // valid branch. That is not authority to move geometry during Delete.
+    const auto remaining_problem = sketch::prepareLocalSolveProblem(
+        proposed->state());
+    if (!remaining_problem) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete remaining solver problem is invalid");
+    }
+    const auto verified = sketch::evaluateLocalSolve(
+        *remaining_problem, policy, backend);
+    if (!stillCurrent()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation Delete Part changed during remaining solver");
+    }
+    if (verified.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !verified.candidate) {
+        return rejectSolve(verified,
+            "Solved relation Delete remaining constraints reject solution");
+    }
+    if (effective.candidate->lines != verified.candidate->lines ||
+        effective.candidate->circles != verified.candidate->circles ||
+        effective.candidate->arcs != verified.candidate->arcs) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete would move effective Sketch geometry");
+    }
+
+    target->model = std::move(*proposed);
+    const auto committed = commitCommandState(
+        std::move(after),
+        "Part transaction failed while deleting solved Sketch relation");
+    if (!committed.ok() || !committed.changed) {
+        return {false, verified.status, verified.diagnostics,
+                committed.diagnostic};
+    }
+    return {true, verified.status, verified.diagnostics, {}};
+}
+
 DocumentSessionResult DocumentSession::execute(
     const EraseSketchConstraintCommand& command) {
     if (document_.revision() != command.expected_revision) {
