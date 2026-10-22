@@ -44,10 +44,12 @@ class EchoConvergedRelationSolver final
     : public sketch::ILocalSketchSolver {
 public:
     int calls{};
+    std::function<void()> on_solve;
 
     [[nodiscard]] sketch::LocalBackendSolveResult solve(
         const sketch::LocalSolveProblem& problem) override {
         ++calls;
+        if (on_solve) on_solve();
         // Valid only for the already-horizontal controller fixture. The
         // production acceptance gate must still review every residual.
         return {sketch::LocalBackendStatus::converged,
@@ -3189,6 +3191,58 @@ int main(int argc, char* argv[]) {
               sketch::ConstraintKind::parallel);
         CHECK(after_retry.circles == state.circles);
         controller.end();
+    }
+
+    // R13-A2.0: a solver backend may reenter application/UI code while
+    // performing a numeric solve. Closing the active Sketch tool is not
+    // an authorized license to commit the old in-flight relation, even
+    // if the original Part state/revision remains unchanged.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        CHECK(line.ok() && line.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        controller.activateRelations();
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::horizontal));
+        const auto before_revision = session.document().revision();
+        const auto before_undo = session.undoDepth();
+        const auto before_state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(viewport.sketch_scene_.lines.size() == 1U);
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        backend.on_solve = [&] { controller.end(); };
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(backend.calls == 1);
+        CHECK(!controller.active());
+        CHECK(session.document().revision() == before_revision);
+        CHECK(session.undoDepth() == before_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              before_state);
     }
 
     return EXIT_SUCCESS;
