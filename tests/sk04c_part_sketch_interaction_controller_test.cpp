@@ -3604,7 +3604,9 @@ int main(int argc, char* argv[]) {
               (sketch::ConstraintReference{
                   *second.entity_id,
                   sketch::ConstraintElement::line}));
-        CHECK(status.find("first") != std::string::npos);
+        CHECK(status.find("stale") != std::string::npos);
+        CHECK(status.find("newer edit-context selection preserved") !=
+              std::string::npos);
         CHECK(solver.calls == 0);
         CHECK(session.document().revision() == before_revision);
         CHECK(session.undoDepth() == before_undo);
