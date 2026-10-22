@@ -639,6 +639,59 @@ int main() {
     CHECK(!acquire.dimensionKind());
     CHECK(relation_model.state() == relation_before);
 
+    // A2.0 lifecycle contract: cancelling and switching away from
+    // Relations clears its half-collected target and type, never changes
+    // the Sketch model or leaves a hidden target for a later command.
+    // Esc is intentionally two-stage: first drops the pending hit,
+    // second leaves the Relations mode.
+    {
+        sketch::SketchInteractionState switched;
+        const auto begin = [&]() {
+            switched.activateRelations();
+            CHECK(switched.setRelationKind(RK::parallel));
+            CHECK(switched.acceptRelationTarget(
+                relation_model, first_line).outcome ==
+                RO::first_target_accepted);
+            CHECK(switched.firstRelationTarget() == first_line);
+        };
+        begin();
+        switched.cancelForHistory();
+        CHECK(switched.tool() == sketch::SketchTool::select);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.cancelTool();
+        CHECK(switched.tool() == sketch::SketchTool::select);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.finishTool();
+        CHECK(switched.tool() == sketch::SketchTool::select);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.activateCircle();
+        CHECK(switched.tool() == sketch::SketchTool::circle);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.activateArc();
+        CHECK(switched.tool() == sketch::SketchTool::arc);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.activateRectangle();
+        CHECK(switched.tool() == sketch::SketchTool::rectangle);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.activateDimensions();
+        CHECK(switched.tool() == sketch::SketchTool::dimensions);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        CHECK(relation_model.state() == relation_before);
+    }
+
     // R13-A2.0 RED: a two-hit relation draft must never be READY with a
     // first semantic Line that was deleted between the two user clicks.
     // This is a stale current-model validation failure, not a reason to
@@ -907,6 +960,18 @@ int main() {
         {std::numeric_limits<double>::quiet_NaN(), 65.0},
         endpoint_hits, 9.0
     ).status == EH::invalid_input);
+    // A2.0 RED: finite but distant screen points are valid INPUT and
+    // must return MISS, not INVALID_INPUT. Squaring a 1e160-pixel delta
+    // overflows binary64; this is not a malformed/stale Qt projection.
+    const std::vector<sketch::RelationEndpointScreenCandidate> huge_offset{
+        {a_end, {1.0e160, 1.0e160}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, huge_offset, 9.0
+    ).status == EH::miss);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {1.0e160, -1.0e160}, endpoint_hits, 9.0
+    ).status == EH::miss);
     CHECK(relation_model.state() == relation_before);
 
     return EXIT_SUCCESS;
