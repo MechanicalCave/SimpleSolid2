@@ -1392,6 +1392,96 @@ int main() {
             *accepted.constraint_id) != nullptr);
     }
 
+    // A2.0 connected-component proof: a newly created A--B relation
+    // extends an existing B--C component, so C is part of the legal
+    // proposed graph even though it was not reachable from A before
+    // this create command. Independent constrained D is never part
+    // of that graph. No backend-derived coordinates are persisted.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct ExtendedCreateComponent final : sk::ILocalSketchSolver {
+            bool shift_unrelated{true};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 4U);
+                auto& line = shift_unrelated
+                    ? candidate.lines.back()
+                    : candidate.lines[2];
+                line.start.u += 2.0;
+                line.end.u += 2.0;
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {10.0, 2.0}, {15.0, 2.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {20.0, 4.0}, {25.0, 4.0}});
+        const auto d = session.execute(app::AddSketchLineCommand{
+            sid, {30.0, 6.0}, {35.0, 6.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        CHECK(d.ok() && d.entity_id);
+        using CK = sk::ConstraintKind;
+        using CE = sk::ConstraintElement;
+        const auto bc = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(), CK::parallel,
+            {*b.entity_id, CE::line}, {*c.entity_id, CE::line}});
+        const auto d_h = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(), CK::horizontal,
+            {*d.entity_id, CE::line}, {}});
+        CHECK(bc.ok() && bc.constraint_id);
+        CHECK(d_h.ok() && d_h.constraint_id);
+        const auto original = session.document().findSketch(sid)->model.state();
+        const auto revision = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand ab{
+            sid, session.document().documentId(), revision,
+            session.document().incarnationToken(), CK::parallel,
+            {*a.entity_id, CE::line}, {*b.entity_id, CE::line}};
+
+        const auto rejected = session.execute(ab, policy, backend);
+        CHECK(!rejected.ok() && !rejected.changed && !rejected.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == revision);
+        CHECK(session.undoDepth() == undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        // The new A--B edge joins the existing B--C edge. Translating
+        // C is legal as a derived solution; translating D was not.
+        backend.shift_unrelated = false;
+        const auto accepted = session.execute(ab, policy, backend);
+        CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
+        CHECK(backend.calls == 2);
+        CHECK(session.undoDepth() == undo + 1U);
+        const auto after = session.document().findSketch(sid)->model.state();
+        CHECK(after.lines == original.lines);
+        CHECK(after.constraints.size() == original.constraints.size() + 1U);
+        CHECK(session.undo().ok());
+        const auto undone = session.document().findSketch(sid)->model.state();
+        CHECK(undone.lines == original.lines);
+        CHECK(undone.constraints == original.constraints);
+        CHECK(undone.next_constraint_id == after.next_constraint_id);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.findConstraint(
+            *accepted.constraint_id) != nullptr);
+    }
+
     // A2.0 command-level RED: explicit authoring is not allowed to turn
     // an unrelated free Line's solver-only translation into authored seeds.
     // The generic numerical gateway deliberately remains permissive for
