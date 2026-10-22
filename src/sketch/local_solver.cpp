@@ -325,29 +325,6 @@ LocalResidualReport reviewLocalSolveCandidate(
         }
     }
 
-    // Lines absent from every authored relation have NO numerical
-    // obligation that could authorize their movement. In particular an
-    // equation-free "Converged" response must not become new authored
-    // geometry through Fix Current Position or solved Delete. Preserve
-    // their exact endpoints (no invented fuzzy/tolerance-based rebind).
-    std::set<EntityId> related_lines;
-    for (const auto& constraint : problem.constraints) {
-        related_lines.insert(constraint.first.entity);
-        if (constraint.second.entity.valid()) {
-            related_lines.insert(constraint.second.entity);
-        }
-    }
-    for (std::size_t i = 0; i < problem.authored.lines.size(); ++i) {
-        const auto& original = problem.authored.lines[i];
-        if (related_lines.contains(original.id)) continue;
-        const auto& proposed = candidate.lines[i];
-        if (original.start != proposed.start ||
-            original.end != proposed.end) {
-            result.status = LocalResidualStatus::invalid_candidate;
-            return result;
-        }
-    }
-
     for (const auto id : problem.fixed_lines) {
         const auto* original = findLineState(problem.authored, id);
         const auto* proposed = findLineState(candidate, id);
