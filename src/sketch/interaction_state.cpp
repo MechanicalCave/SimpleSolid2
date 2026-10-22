@@ -1480,6 +1480,17 @@ RelationTargetResult SketchInteractionState::acceptRelationTarget(
         return {};
     }
 
+    // A two-hit transient draft may survive a separate geometry edit,
+    // Undo or stage refresh between pointer events. Never emit READY with
+    // a first Line that no longer belongs to the current Sketch model.
+    // Clear only the stale first pick; preserve the chosen relation kind
+    // so the next click can start a new valid two-target gesture.
+    if (relation_first_ &&
+        model.findLine(relation_first_->entity) == nullptr) {
+        relation_first_.reset();
+        return {RelationTargetOutcome::invalid_target, std::nullopt};
+    }
+
     const auto kind = *relation_kind_;
     const bool pair =
         kind == ConstraintKind::coincident ||
