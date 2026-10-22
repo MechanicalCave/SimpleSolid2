@@ -1148,6 +1148,44 @@ int main() {
         CHECK(solver.calls == 0);
         CHECK(coincident_chain.state() == coincident_before);
 
+        // RED: a contradictory authored parity cycle is NOT evidence
+        // of a redundant request. The source model allows these
+        // independently legal manual relations; only the solver can
+        // reject the globally impossible system. Do not silently label
+        // Vertical(C) as redundant merely because ONE path from C to
+        // the horizontal axis happens to have odd parity.
+        sk::SketchModel contradictory;
+        const auto bad_a = contradictory.addLine(
+            {0.0, 0.0}, {5.0, 0.0});
+        const auto bad_b = contradictory.addLine(
+            {0.0, 3.0}, {5.0, 3.0});
+        const auto bad_c = contradictory.addLine(
+            {0.0, 6.0}, {5.0, 6.0});
+        const sk::ConstraintReference bad_ar{bad_a, CE::line};
+        const sk::ConstraintReference bad_br{bad_b, CE::line};
+        const sk::ConstraintReference bad_cr{bad_c, CE::line};
+        CHECK(contradictory.addConstraint(
+            CK::horizontal, bad_ar, {}));
+        CHECK(contradictory.addConstraint(
+            CK::parallel, bad_ar, bad_br));
+        CHECK(contradictory.addConstraint(
+            CK::parallel, bad_br, bad_cr));
+        CHECK(contradictory.addConstraint(
+            CK::perpendicular, bad_ar, bad_cr));
+        const auto contradictory_before = contradictory.state();
+        const auto prior_solver_calls = solver.calls;
+        const auto conflicting_cycle = sk::preflightLocalRelation(
+            contradictory_before, CK::vertical, bad_cr, {},
+            {}, policy, solver);
+        CHECK(conflicting_cycle.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(conflicting_cycle.solve.status ==
+              sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!conflicting_cycle.proposed_authored);
+        CHECK(!conflicting_cycle.provisional_constraint_id);
+        CHECK(solver.calls == prior_solver_calls + 1);
+        CHECK(contradictory.state() == contradictory_before);
+
         // No false rejection merely because the seed lines happen to be
         // parallel: no authored relation connects Line C yet.
         sk::SketchModel free_third;
