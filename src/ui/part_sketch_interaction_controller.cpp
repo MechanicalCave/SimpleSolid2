@@ -4372,6 +4372,10 @@ void PartSketchInteractionController::handleRelationsPointer(
     auto* const pointer_session = session_;
     const auto pointer_sketch = *sketch_id_;
     const auto pointer_kind = *interaction_.relationKind();
+    // Unlike durable Part provenance, the controller's edit-session
+    // generation also distinguishes end/begin ABA of the same Sketch,
+    // same relation kind and same borrowed backend during a Viewer query.
+    const auto pointer_generation = relation_context_generation_;
     const auto pointer_revision =
         pointer_session->document().revision();
     const auto pointer_document_id = pointer_session->documentId();
@@ -4382,6 +4386,7 @@ void PartSketchInteractionController::handleRelationsPointer(
             sketch_id_ && *sketch_id_ == pointer_sketch &&
             interaction_.tool() == sketch::SketchTool::relations &&
             interaction_.relationKind() == pointer_kind &&
+            relation_context_generation_ == pointer_generation &&
             pointer_session->documentId() == pointer_document_id &&
             pointer_session->document().incarnationToken() ==
                 pointer_incarnation &&
