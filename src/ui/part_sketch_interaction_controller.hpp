@@ -570,6 +570,10 @@ private:
     sketch::ILocalSketchSolver* development_relation_solver_{};
     sketch::LocalSolverAcceptancePolicy development_relation_policy_{};
     std::optional<sketch::SketchId> sketch_id_;
+    // The first semantic target of a two-click relation belongs to one
+    // exact Part revision, even if unrelated edits leave its Line unchanged.
+    // Transient controller lease only; never persisted in SketchModel/Part.
+    std::optional<core::DocumentRevision> relation_first_revision_;
     std::optional<SketchPointerInput> last_pointer_input_;
     sketch::SketchInteractionState interaction_;
 
