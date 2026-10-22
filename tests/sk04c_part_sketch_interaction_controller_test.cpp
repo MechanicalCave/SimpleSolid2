@@ -2544,6 +2544,32 @@ int main(int argc, char* argv[]) {
         CHECK(a2_session.document().findSketch(sid)->model.state()
               .constraints == after_selection.constraints);
 
+        // RED-FIRST borrowed-backend lifecycle: end/begin may switch the
+        // runtime Part incarnation while the old external DEV solver is
+        // destroyed. A newly opened editing context MUST NOT reuse its
+        // previous registration, even on equal durable Sketch/Part IDs.
+        a2_interaction.end();
+        a2_interaction.begin(a2_session, sid);
+        a2_interaction.activateRelations();
+        CHECK(a2_interaction.selectRelationKind(
+            sketch::ConstraintKind::fix));
+        CHECK(a2_viewport.sketch_scene_.lines.size() == 2U);
+        a2_viewport.point_query_ = {
+            true, a2_viewport.sketch_scene_.lines[1].token};
+        const auto before_new_context =
+            a2_session.document().findSketch(sid)->model.state();
+        const auto revision_before_new_context =
+            a2_session.document().revision();
+        const auto undo_before_new_context = a2_session.undoDepth();
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(backend.calls == 2);
+        CHECK(a2_session.document().revision() ==
+              revision_before_new_context);
+        CHECK(a2_session.undoDepth() == undo_before_new_context);
+        CHECK(a2_session.document().findSketch(sid)->model.state() ==
+              before_new_context);
         a2_interaction.end();
     }
 
