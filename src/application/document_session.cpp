@@ -2122,6 +2122,151 @@ AddSolvedSketchRelationResult DocumentSession::execute(
             preflight.solve.diagnostics, {}};
 }
 
+AddSolvedSketchRelationResult DocumentSession::execute(
+    const FixCurrentSketchLineCommand& command,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend) {
+    const auto reject = [this](
+        DocumentSessionErrorCode code,
+        const char* message) -> AddSolvedSketchRelationResult {
+        const auto failed = failure(code, message, path_);
+        return {false, std::nullopt, std::nullopt, std::nullopt,
+                {}, failed.diagnostic};
+    };
+    const auto rejectSolve = [this](
+        const sketch::LocalSolveGatewayResult& solve,
+        const char* message) -> AddSolvedSketchRelationResult {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command, message, path_);
+        return {false, std::nullopt, std::nullopt,
+                solve.status, solve.diagnostics, failed.diagnostic};
+    };
+
+    // The request must address the exact live Part, not merely equal
+    // durable IDs and a coincidentally matching technical revision.
+    const auto incumbent = document_.incarnationToken();
+    const auto expected = command.expected_incarnation.lock();
+    if (!incumbent || !expected || expected != incumbent ||
+        command.expected_document_id != document_.documentId()) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position Part incarnation / DocumentId mismatch");
+    }
+    if (command.expected_revision != document_.revision()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Fix Current Position has stale DocumentRevision");
+    }
+
+    const auto before = document_.state();
+    auto after = before;
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (!target ||
+        !part::builtinOriginPlaneForSketchSupport(target->support) ||
+        !target->projection_bindings.empty() ||
+        !command.line_id.valid() ||
+        target->model.findLine(command.line_id) == nullptr ||
+        target->model.isFixedLine(command.line_id)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position requires an unfixed, unlinked local Line "
+            "in a builtin origin-plane Sketch");
+    }
+
+    const auto stillCurrent = [this, &command, &expected, &before]() {
+        return document_.revision() == command.expected_revision &&
+            document_.documentId() == command.expected_document_id &&
+            document_.incarnationToken() == expected &&
+            document_.state() == before;
+    };
+
+    // Solve the *existing* authored relations. Raw Sketch seeds are never
+    // allowed to stand in for the current accepted effective position.
+    const auto initial_problem = sketch::prepareLocalSolveProblem(
+        target->model.state());
+    if (!initial_problem) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position current-stage solver problem is invalid");
+    }
+    const auto effective = sketch::evaluateLocalSolve(
+        *initial_problem, policy, backend);
+    if (!stillCurrent()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Fix Current Position Part changed during initial solver call");
+    }
+    if (effective.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !effective.candidate) {
+        return rejectSolve(effective,
+            "Fix Current Position has no accepted effective Sketch");
+    }
+
+    const auto found = std::find_if(
+        effective.candidate->lines.cbegin(),
+        effective.candidate->lines.cend(),
+        [&command](const sketch::SketchLineState& line) {
+            return line.id == command.line_id;
+        });
+    if (found == effective.candidate->lines.cend()) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position effective Line identity is missing");
+    }
+
+    // The only authored coordinate change is an explicit one-time capture
+    // of THIS Line's accepted effective endpoints, immediately followed by
+    // its semantic Fix mask; no evaluated solver state is persisted.
+    auto proposed = target->model;
+    if (!proposed.updateLine(
+            command.line_id, found->start, found->end)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position effective Line cannot become authored seed");
+    }
+    const auto fixed_id = proposed.addConstraint(
+        sketch::ConstraintKind::fix,
+        {command.line_id, sketch::ConstraintElement::line}, {});
+    if (!fixed_id) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position conflicts with remaining authored relations");
+    }
+
+    // A frozen line changes the solver's fixed parameter mask. Re-solve
+    // every remaining relation against that mask, and refuse even a valid
+    // alternate solution if it would move any other effective geometry.
+    const auto frozen_problem = sketch::prepareLocalSolveProblem(
+        proposed.state());
+    if (!frozen_problem) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position staged fixed solver problem is invalid");
+    }
+    const auto verified = sketch::evaluateLocalSolve(
+        *frozen_problem, policy, backend);
+    if (!stillCurrent()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Fix Current Position Part changed during frozen solver call");
+    }
+    if (verified.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !verified.candidate) {
+        return rejectSolve(verified,
+            "Fix Current Position remaining relations reject frozen solution");
+    }
+    if (effective.candidate->lines != verified.candidate->lines ||
+        effective.candidate->circles != verified.candidate->circles ||
+        effective.candidate->arcs != verified.candidate->arcs) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position would change unrelated effective geometry");
+    }
+
+    target->model = std::move(proposed);
+    const auto committed = commitCommandState(
+        std::move(after),
+        "Part transaction failed while fixing solved Sketch Line position");
+    if (!committed.ok() || !committed.changed) {
+        return {false, std::nullopt, std::nullopt, verified.status,
+                verified.diagnostics, committed.diagnostic};
+    }
+    return {true, *fixed_id, std::nullopt,
+            verified.status, verified.diagnostics, {}};
+}
+
 AddSketchConstraintResult DocumentSession::execute(
     const AddHorizontalSketchConstraintCommand& command) {
     return execute(AddSketchRelationCommand{
