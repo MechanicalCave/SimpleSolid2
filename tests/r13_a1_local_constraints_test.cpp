@@ -1326,8 +1326,8 @@ int main() {
             session.document().findSketch(sid)->model;
         CHECK(model.isFixedLine(id));
         CHECK(model.findLine(id) != nullptr);
-        CHECK(model.findLine(id)->start() == sk::Point2{0.0, 0.0});
-        CHECK(model.findLine(id)->end() == sk::Point2{5.0, 0.0});
+        CHECK((model.findLine(id)->start() == sk::Point2{0.0, 0.0}));
+        CHECK((model.findLine(id)->end() == sk::Point2{5.0, 0.0}));
         CHECK(model.constraintCount() == 2U);
         CHECK(session.undo().ok());
         CHECK(session.document().findSketch(sid)->model.state().lines ==
@@ -1335,8 +1335,8 @@ int main() {
         CHECK(!session.document().findSketch(sid)->model.isFixedLine(id));
         CHECK(session.redo().ok());
         CHECK(session.document().findSketch(sid)->model.isFixedLine(id));
-        CHECK(session.document().findSketch(sid)->model.findLine(id)->end() ==
-              sk::Point2{5.0, 0.0});
+        CHECK((session.document().findSketch(sid)->model.findLine(id)->end() ==
+              sk::Point2{5.0, 0.0}));
         const auto fixed_rev = session.document().revision();
         const auto fixed_undo = session.undoDepth();
         const auto again = session.execute(
