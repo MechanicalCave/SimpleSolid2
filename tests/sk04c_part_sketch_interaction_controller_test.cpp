@@ -54,6 +54,21 @@ public:
     }
 };
 
+class RejectedRelationSolver final
+    : public sketch::ILocalSketchSolver {
+public:
+    sketch::LocalBackendStatus status{
+        sketch::LocalBackendStatus::conflict};
+    int calls{};
+
+    [[nodiscard]] sketch::LocalBackendSolveResult solve(
+        const sketch::LocalSolveProblem&) override {
+        ++calls;
+        // Valid diagnostic-only backend response; no accepted candidate.
+        return {status, std::nullopt, {}, {}, std::nullopt};
+    }
+};
+
 class NoopKernel final
     : public kernel::ISolidModelingKernel {
 public:
@@ -2603,6 +2618,82 @@ int main(int argc, char* argv[]) {
         CHECK(a2_session.document().findSketch(sid)->model.state()
               .constraints == after_fix.constraints);
         a2_interaction.end();
+    }
+
+    // R13-A2.0: a numerical rejection is a TYPED, actionable Operations
+    // status, not a generic "semantic or numeric validation" message.
+    // Both cases keep the tool active and leave Part/Undo/ID untouched.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 2.0}});
+        CHECK(line.ok() && line.entity_id);
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) {
+                status = message;
+            });
+        controller.begin(session, sid);
+        RejectedRelationSolver solver;
+        controller.setDevelopmentRelationSolver(
+            &solver, {1.0e-7, 1.0e-6});
+        controller.activateRelations();
+
+        const auto initial_revision = session.document().revision();
+        const auto initial_undo = session.undoDepth();
+        const auto initial_state =
+            session.document().findSketch(sid)->model.state();
+
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::horizontal));
+        CHECK(viewport.sketch_scene_.lines.size() == 1U);
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines.front().token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 110.0, 2.5, 1.0));
+        CHECK(solver.calls == 1);
+        CHECK(status.find("conflict") != std::string::npos);
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(session.document().revision() == initial_revision);
+        CHECK(session.undoDepth() == initial_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              initial_state);
+
+        solver.status = sketch::LocalBackendStatus::unsupported;
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::vertical));
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 110.0, 2.5, 1.0));
+        CHECK(solver.calls == 2);
+        CHECK(status.find("unsupported") != std::string::npos);
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::vertical);
+        CHECK(session.document().revision() == initial_revision);
+        CHECK(session.undoDepth() == initial_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              initial_state);
+        controller.end();
     }
 
     return EXIT_SUCCESS;
