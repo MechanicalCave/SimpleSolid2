@@ -2590,8 +2590,15 @@ int main(int argc, char* argv[]) {
         CHECK(after_fix.lines == original_sketch.lines);
         CHECK(a2_session.undoDepth() == undo_before_new_context + 1U);
         CHECK(a2_session.undo().ok());
-        CHECK(a2_session.document().findSketch(sid)->model.state() ==
-              before_new_context);
+        const auto after_fix_undo =
+            a2_session.document().findSketch(sid)->model.state();
+        auto expected_fix_undo = before_new_context;
+        // A1 requires monotonic ConstraintId high-water even across Undo.
+        // Only authored geometry/relations rewind; the retired ID cursor
+        // must not be made available for reuse.
+        expected_fix_undo.next_constraint_id =
+            after_fix.next_constraint_id;
+        CHECK(after_fix_undo == expected_fix_undo);
         CHECK(a2_session.redo().ok());
         CHECK(a2_session.document().findSketch(sid)->model.state()
               .constraints == after_fix.constraints);
