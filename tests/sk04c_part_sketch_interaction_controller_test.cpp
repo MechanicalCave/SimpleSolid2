@@ -3193,10 +3193,10 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
-    // R13-A2.0: a solver backend may reenter application/UI code while
-    // performing a numeric solve. Switching the active Relations kind
-    // must not silently commit the old pending kind even if the exact
-    // Part state/revision remains unchanged.
+    // R13-A2.0: the active development solver can be withdrawn while
+    // a numeric solve is in flight. The old borrowed reference must not
+    // authorize that result on an otherwise unchanged Part revision;
+    // explicit re-registration may authorize a subsequent fresh click.
     {
         auto document =
             part::PartDocument::create(core::DocumentId::generate());
@@ -3234,8 +3234,10 @@ int main(int argc, char* argv[]) {
         viewport.point_query_ = {
             true, viewport.sketch_scene_.lines[0].token};
         backend.on_solve = [&] {
-            CHECK(controller.selectRelationKind(
-                sketch::ConstraintKind::vertical));
+            // Revoke an already-borrowed solver while solve() runs.
+            // This must not authorize the in-flight relation.
+            controller.setDevelopmentRelationSolver(
+                nullptr, {1.0e-7, 1.0e-6});
         };
         controller.onPointer(pointer(
             sid, viewer::SpatialPointerPhase::primary_press,
@@ -3243,7 +3245,7 @@ int main(int argc, char* argv[]) {
         CHECK(backend.calls == 1);
         CHECK(controller.active());
         CHECK(controller.relationKind() ==
-              sketch::ConstraintKind::vertical);
+              sketch::ConstraintKind::horizontal);
         CHECK(session.document().revision() == before_revision);
         CHECK(session.undoDepth() == before_undo);
         CHECK(session.document().findSketch(sid)->model.state() ==
@@ -3252,6 +3254,8 @@ int main(int argc, char* argv[]) {
         // Positive control: same Part/geometry, now with a stable UI
         // context, must genuinely pass solver and commit the same intent.
         backend.on_solve = {};
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
         controller.activateRelations();
         CHECK(controller.selectRelationKind(
             sketch::ConstraintKind::horizontal));
