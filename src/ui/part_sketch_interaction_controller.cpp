@@ -304,6 +304,7 @@ void PartSketchInteractionController::begin(
     // Switching the Part/Sketch edit context revokes an old registration.
     development_relation_solver_ = nullptr;
     development_relation_policy_ = {};
+    relation_first_revision_.reset();
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
     tracking_hover_.reset();
@@ -338,6 +339,7 @@ void PartSketchInteractionController::begin(
 void PartSketchInteractionController::end() {
     development_relation_solver_ = nullptr;
     development_relation_policy_ = {};
+    relation_first_revision_.reset();
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
     tracking_hover_.reset();
@@ -2422,6 +2424,7 @@ void PartSketchInteractionController::activateRelations() {
     if (!active()) return;
     resetProfileRuntime();
     interaction_.activateRelations();
+    relation_first_revision_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -2442,6 +2445,9 @@ bool PartSketchInteractionController::selectRelationKind(
         !interaction_.setRelationKind(kind)) {
         return false;
     }
+    // A type change starts a new semantic acquisition in the current
+    // revision; a former pending pair must not donate its Part lease.
+    relation_first_revision_.reset();
     projectInteraction();
     notifyStateChanged();
 
@@ -2520,12 +2526,14 @@ bool PartSketchInteractionController::selectRelationKind(
     notifyStateChanged();
     if (result.outcome ==
         sketch::RelationTargetOutcome::first_target_accepted) {
+        relation_first_revision_ = session_->document().revision();
         reportStatus(
             "RELATIONS: first preselected Line accepted; "
             "click one more Line. No Part change.");
     } else if (result.outcome ==
                    sketch::RelationTargetOutcome::ready &&
                result.draft) {
+        relation_first_revision_.reset();
         commitReadyRelation(*result.draft);
     }
     return true;
@@ -2995,6 +3003,9 @@ bool PartSketchInteractionController::escape() {
 
     const bool changed = interaction_.escape();
     if (!changed) return false;
+    if (!interaction_.firstRelationTarget()) {
+        relation_first_revision_.reset();
+    }
 
     if (was_manipulating &&
         !interaction_.directManipulationActive()) {
@@ -3475,6 +3486,7 @@ void PartSketchInteractionController::cancelForHistory() {
 
     resetProfileRuntime();
     interaction_.cancelForHistory();
+    relation_first_revision_.reset();
     mirror_keep_original_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
@@ -4181,6 +4193,27 @@ void PartSketchInteractionController::handleRelationsPointer(
         return;
     }
 
+    // Source identity and geometry equality are NOT sufficient to resume
+    // a two-click gesture after another Part transaction. The second
+    // target must be picked in the SAME exact DocumentRevision as the
+    // first. Discard the old first target before any new solver call or
+    // transient allocation; keep the selected kind for a clean retry.
+    if (interaction_.firstRelationTarget()) {
+        if (!relation_first_revision_ ||
+            *relation_first_revision_ !=
+                session_->document().revision()) {
+            static_cast<void>(interaction_.cancelRelationTarget());
+            relation_first_revision_.reset();
+            reportStatus(
+                "RELATIONS: stale two-target gesture after Part revision "
+                "change; select both targets again. No Part change.");
+            notifyStateChanged();
+            return;
+        }
+    } else {
+        relation_first_revision_.reset();
+    }
+
     const auto* current_model =
         viewport_controller_->currentSketchInteractionModel();
     const auto* hosted = activeSketch();
@@ -4290,17 +4323,22 @@ void PartSketchInteractionController::handleRelationsPointer(
     case sketch::RelationTargetOutcome::inactive:
         return;
     case sketch::RelationTargetOutcome::invalid_target:
+        if (!interaction_.firstRelationTarget()) {
+            relation_first_revision_.reset();
+        }
         reportStatus(
-            "RELATIONS: target role rejected. Keep the current "
-            "first target and choose a compatible one.");
+            "RELATIONS: target role rejected or initial Line changed; "
+            "choose current-stage targets again if needed.");
         return;
     case sketch::RelationTargetOutcome::first_target_accepted:
+        relation_first_revision_ = session_->document().revision();
         reportStatus(
             "RELATIONS: first target accepted; choose the "
             "second distinct Line/endpoint.");
         notifyStateChanged();
         return;
     case sketch::RelationTargetOutcome::ready:
+        relation_first_revision_.reset();
         if (!accepted.draft) {
             reportStatus("RELATIONS: incomplete semantic target; no Part change.");
             return;
