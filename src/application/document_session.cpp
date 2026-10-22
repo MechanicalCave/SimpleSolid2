@@ -66,27 +66,63 @@ part::PartSketch* findSketch(
         : &*found;
 }
 
-// Solver candidates are intentionally disposable and may legally carry
-// alternate geometry for evaluation-only consumers (Profile/Kernel).
-// Commands which MATERIALIZE a solution as authored seeds are stricter:
-// an unrelated local Line has no constraint authorizing its movement.
-// This check does not change numerical evaluation policy or tolerance.
-[[nodiscard]] bool unchangedUnrelatedLocalLines(
+// Solver candidates may legally carry alternate *derived* geometry for
+// Profile/Kernel. A Fix/Delete command materializes a candidate into
+// authored geometry and thus cannot also move an independent constraint
+// component. Compute a semantic Line relation graph rooted at the
+// requested operation; do not treat "any constraint exists" as authority.
+// Free unreferenced Lines (including a free requested Fix target) remain
+// exactly at their authored seeds. No tolerance or provider ordinals.
+[[nodiscard]] bool unchangedOutsideRelationComponent(
     const sketch::SketchModelState& authored,
-    const sketch::SketchModelState& candidate) {
-    if (authored.lines.size() != candidate.lines.size()) return false;
-    std::set<sketch::EntityId> constrained;
+    const sketch::SketchModelState& candidate,
+    sketch::EntityId first_root,
+    sketch::EntityId second_root = {}) {
+    if (authored.lines.size() != candidate.lines.size() ||
+        !first_root.valid()) return false;
+
+    std::set<sketch::EntityId> permitted;
+    // Roots only enter the movable component through an actual authored
+    // relation. A completely free Line has no solver equation that can
+    // authorize a different current position before freezing.
     for (const auto& relation : authored.constraints) {
-        constrained.insert(relation.first.entity);
+        const bool touches_root =
+            relation.first.entity == first_root ||
+            relation.second.entity == first_root ||
+            (second_root.valid() &&
+             (relation.first.entity == second_root ||
+              relation.second.entity == second_root));
+        if (!touches_root) continue;
+        if (relation.first.entity.valid()) {
+            permitted.insert(relation.first.entity);
+        }
         if (relation.second.entity.valid()) {
-            constrained.insert(relation.second.entity);
+            permitted.insert(relation.second.entity);
         }
     }
+    // Relations with two Line references form edges. Repeated closure
+    // keeps all geometrically connected constraints in the same component,
+    // while independently constrained Lines never become permitted.
+    bool added;
+    do {
+        added = false;
+        for (const auto& relation : authored.constraints) {
+            if (!permitted.contains(relation.first.entity) &&
+                !permitted.contains(relation.second.entity)) continue;
+            if (relation.first.entity.valid()) {
+                added = permitted.insert(relation.first.entity).second || added;
+            }
+            if (relation.second.entity.valid()) {
+                added = permitted.insert(relation.second.entity).second || added;
+            }
+        }
+    } while (added);
+
     for (std::size_t i = 0; i < authored.lines.size(); ++i) {
         const auto& original = authored.lines[i];
         const auto& solved = candidate.lines[i];
         if (original.id != solved.id) return false;
-        if (constrained.contains(original.id)) continue;
+        if (permitted.contains(original.id)) continue;
         if (original.start != solved.start ||
             original.end != solved.end) {
             return false;
@@ -2227,10 +2263,10 @@ AddSolvedSketchRelationResult DocumentSession::execute(
         return rejectSolve(effective,
             "Fix Current Position has no accepted effective Sketch");
     }
-    if (!unchangedUnrelatedLocalLines(
-            target->model.state(), *effective.candidate)) {
+    if (!unchangedOutsideRelationComponent(
+            target->model.state(), *effective.candidate, command.line_id)) {
         return reject(DocumentSessionErrorCode::invalid_command,
-            "Fix Current Position backend moved a Line without any relation");
+            "Fix Current Position backend moved an unrelated relation component");
     }
 
     const auto found = std::find_if(
@@ -2385,10 +2421,14 @@ EraseSolvedSketchConstraintResult DocumentSession::execute(
         return rejectSolve(effective,
             "Solved relation Delete needs current accepted geometry");
     }
-    if (!unchangedUnrelatedLocalLines(
-            target->model.state(), *effective.candidate)) {
+    const auto* selected =
+        target->model.findConstraint(command.constraint_id);
+    if (!selected ||
+        !unchangedOutsideRelationComponent(
+            target->model.state(), *effective.candidate,
+            selected->first.entity, selected->second.entity)) {
         return reject(DocumentSessionErrorCode::invalid_command,
-            "Solved relation Delete backend moved an unrelated Line");
+            "Solved relation Delete backend moved an unrelated relation component");
     }
 
     // Materialize the entire accepted local Line solution as new authored
