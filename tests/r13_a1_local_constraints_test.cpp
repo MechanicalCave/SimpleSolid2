@@ -1053,6 +1053,60 @@ int main() {
     }
 
 
+    // R13-A2.0 RED: a converged backend may NOT move a Line absent from
+    // every authored constraint. Otherwise an unrelated line can jump when
+    // Fix Current Position or solved Delete materializes effective geometry.
+    {
+        struct MoveUnrelatedLine final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 2U);
+                candidate.lines.back().start.u += 1.0;
+                candidate.lines.back().end.u += 1.0;
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, 7U};
+            }
+        } drift;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        sk::SketchModel authored;
+        const auto constrained = authored.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto unrelated = authored.addLine({10.0, 2.0}, {15.0, 2.0});
+        CHECK(constrained.valid() && unrelated.valid());
+        CHECK(authored.addConstraint(
+            sk::ConstraintKind::horizontal,
+            {constrained, sk::ConstraintElement::line}));
+        const auto before = authored.state();
+        const auto problem = sk::prepareLocalSolveProblem(before);
+        CHECK(problem && problem->equations.size() == 1U);
+        const auto wrong = sk::evaluateLocalSolve(*problem, policy, drift);
+        CHECK(drift.calls == 1);
+        CHECK(wrong.status == sk::LocalSolveGatewayStatus::invalid_candidate);
+        CHECK(!wrong.candidate);
+        CHECK(authored.state() == before);
+
+        // With no equations, none of the seed geometry may drift merely
+        // because a backend reports success and no residual is violated.
+        sk::SketchModel no_constraints;
+        const auto free_a =
+            no_constraints.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto free_b =
+            no_constraints.addLine({10.0, 2.0}, {15.0, 2.0});
+        CHECK(free_a.valid() && free_b.valid());
+        const auto free_state = no_constraints.state();
+        const auto empty_problem = sk::prepareLocalSolveProblem(free_state);
+        CHECK(empty_problem && empty_problem->equations.empty());
+        const auto wrong_empty =
+            sk::evaluateLocalSolve(*empty_problem, policy, drift);
+        CHECK(drift.calls == 2);
+        CHECK(wrong_empty.status ==
+              sk::LocalSolveGatewayStatus::invalid_candidate);
+        CHECK(!wrong_empty.candidate);
+        CHECK(no_constraints.state() == free_state);
+    }
+
     // R13-A2.0 application-level atomic numeric transaction prototype.
     // The backend is injected by the test. Nothing is linked to the
     // unapproved consumer PlaneGCS package or Qt authoring path.
