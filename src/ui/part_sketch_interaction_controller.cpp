@@ -2481,6 +2481,17 @@ bool PartSketchInteractionController::selectRelationKind(
     };
     const auto rejectStaleSelection = [&]() {
         if (stillCurrentSelection()) return false;
+        // An older selection-first callback may have triggered a new
+        // edit of this SAME Part/Sketch and identical relation kind.
+        // The new epoch now owns its first target: neither clear its
+        // pending draft nor replace it with the old selection.
+        if (relation_context_generation_ != selection_generation) {
+            reportStatus(
+                "RELATIONS: stale previous selection-first request ignored; "
+                "newer edit-context selection preserved. No Part change.");
+            notifyStateChanged();
+            return true;
+        }
         // Discard the old draft only in the original active tool;
         // never overwrite a different session or a changed tool.
         if (session_ == selection_session && sketch_id_ &&
