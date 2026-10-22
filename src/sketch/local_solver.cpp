@@ -592,6 +592,126 @@ LocalSolveGatewayResult evaluateLocalSolve(
     return result;
 }
 
+namespace {
+
+// An A2 create command must not depend solely on a backend diagnosing
+// elementary redundant equations: a well-formed Converged response can
+// omit redundancy diagnostics. This detects ONLY logically implied NEW
+// relations, never rewrites an existing Sketch or the generic solver.
+//
+// Parallel/Perpendicular form an undirected parity graph (0 = parallel,
+// 1 = perpendicular). Horizontal is parallel to the single horizontal
+// reference axis; Vertical is perpendicular to it. The graph must be
+// derived from authored constraints, NOT coincident seed coordinates.
+[[nodiscard]] bool authoredRelationsImply(
+    const SketchModelState& authored,
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second) {
+    if (kind == ConstraintKind::coincident) {
+        // Equality is transitive over exact SEMANTIC endpoints, not whole
+        // Line identity or neighboring/nearby model-space coordinates.
+        std::vector<ConstraintReference> reachable{first};
+        for (std::size_t i = 0; i < reachable.size(); ++i) {
+            for (const auto& relation : authored.constraints) {
+                if (relation.kind != ConstraintKind::coincident) continue;
+                ConstraintReference other;
+                if (relation.first == reachable[i]) {
+                    other = relation.second;
+                } else if (relation.second == reachable[i]) {
+                    other = relation.first;
+                } else {
+                    continue;
+                }
+                if (other == second) return true;
+                if (std::find(reachable.cbegin(), reachable.cend(), other)
+                    == reachable.cend()) {
+                    reachable.push_back(other);
+                }
+            }
+        }
+        return false;
+    }
+
+    if (kind != ConstraintKind::horizontal &&
+        kind != ConstraintKind::vertical &&
+        kind != ConstraintKind::parallel &&
+        kind != ConstraintKind::perpendicular) {
+        return false;
+    }
+
+    std::map<EntityId, std::size_t> indices;
+    for (std::size_t i = 0; i < authored.lines.size(); ++i) {
+        indices.emplace(authored.lines[i].id, i);
+    }
+    const auto first_node = indices.find(first.entity);
+    if (first_node == indices.end()) return false;
+    const std::size_t axis = authored.lines.size();
+    const bool unary = kind == ConstraintKind::horizontal ||
+                       kind == ConstraintKind::vertical;
+    std::size_t destination = axis;
+    if (!unary) {
+        const auto second_node = indices.find(second.entity);
+        if (second_node == indices.end()) return false;
+        destination = second_node->second;
+    }
+    const int required = (kind == ConstraintKind::vertical ||
+                          kind == ConstraintKind::perpendicular) ? 1 : 0;
+
+    using Edge = std::pair<std::size_t, int>;
+    std::vector<std::vector<Edge>> connections(axis + 1U);
+    const auto connect = [&connections](
+        std::size_t a, std::size_t b, int parity) {
+        connections[a].push_back({b, parity});
+        connections[b].push_back({a, parity});
+    };
+    for (const auto& relation : authored.constraints) {
+        if (relation.kind == ConstraintKind::fix ||
+            relation.kind == ConstraintKind::coincident) {
+            continue;
+        }
+        const auto a = indices.find(relation.first.entity);
+        if (a == indices.end()) return false;
+        switch (relation.kind) {
+        case ConstraintKind::horizontal:
+            connect(a->second, axis, 0);
+            break;
+        case ConstraintKind::vertical:
+            connect(a->second, axis, 1);
+            break;
+        case ConstraintKind::parallel:
+        case ConstraintKind::perpendicular: {
+            const auto b = indices.find(relation.second.entity);
+            if (b == indices.end()) return false;
+            connect(a->second, b->second,
+                    relation.kind == ConstraintKind::perpendicular ? 1 : 0);
+            break;
+        }
+        case ConstraintKind::coincident:
+        case ConstraintKind::fix:
+            break;
+        }
+    }
+
+    // Find an already-authored implication by parity reachability.
+    // Opposite parity is a potential conflict, left for the complete
+    // solver/diagnostic gate instead of mislabeling it as redundancy.
+    std::vector<int> parity(axis + 1U, -1);
+    std::vector<std::size_t> pending{first_node->second};
+    parity[first_node->second] = 0;
+    for (std::size_t i = 0; i < pending.size(); ++i) {
+        const auto current = pending[i];
+        for (const auto [neighbor, edge_parity] : connections[current]) {
+            if (parity[neighbor] != -1) continue;
+            parity[neighbor] = parity[current] ^ edge_parity;
+            pending.push_back(neighbor);
+        }
+    }
+    return parity[destination] == required;
+}
+
+} // namespace
+
 LocalRelationPreflightResult preflightLocalRelation(
     const SketchModelState& current_stage,
     ConstraintKind kind,
@@ -606,6 +726,13 @@ LocalRelationPreflightResult preflightLocalRelation(
     // cursor, semantic refs, geometry and Part-authoring state.
     auto disposable = SketchModel::restore(current_stage);
     if (!disposable) return result;
+
+    // Fail before allocating even a provisional ID or invoking an
+    // untrustworthy backend if authored semantics already imply intent.
+    if (authoredRelationsImply(current_stage, kind, first, second)) {
+        return result;
+    }
+
     const auto provisional_id =
         disposable->addConstraint(kind, first, second);
     if (!provisional_id) return result;
