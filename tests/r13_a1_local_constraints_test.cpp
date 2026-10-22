@@ -1184,6 +1184,45 @@ int main() {
         CHECK(session.undoDepth() == delete_undo);
         CHECK(session.document().findSketch(sid)->model.state()
               == before_delete);
+
+        // Positive control: the same unconstrained secondary Line is
+        // legal when its exact solved endpoints remain unchanged.
+        struct StableBackend final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, std::nullopt};
+            }
+        } stable;
+        const auto stable_fix = session.execute(
+            app::FixCurrentSketchLineCommand{
+                sid, session.document().documentId(),
+                session.document().revision(),
+                session.document().incarnationToken(), *first.entity_id},
+            policy, stable);
+        CHECK(stable_fix.ok() && stable_fix.changed);
+        CHECK(stable_fix.constraint_id);
+        CHECK(stable.calls == 2);
+        CHECK(session.document().findSketch(sid)
+              ->model.isFixedLine(*first.entity_id));
+        const auto stable_erase = session.execute(
+            app::EraseSolvedSketchConstraintCommand{
+                sid, session.document().documentId(),
+                session.document().revision(),
+                session.document().incarnationToken(), *relation.constraint_id},
+            policy, stable);
+        CHECK(stable_erase.ok() && stable_erase.changed);
+        CHECK(stable.calls == 4);
+        const auto& after_erase = session.document().findSketch(sid)->model;
+        CHECK(after_erase.findConstraint(*relation.constraint_id) == nullptr);
+        CHECK(after_erase.isFixedLine(*first.entity_id));
+        CHECK(after_erase.findLine(*extra.entity_id) != nullptr);
+        CHECK((after_erase.findLine(*extra.entity_id)->start() ==
+               sk::Point2{10.0, 2.0}));
+        CHECK((after_erase.findLine(*extra.entity_id)->end() ==
+               sk::Point2{15.0, 2.0}));
     }
 
     // R13-A2.0 application-level atomic numeric transaction prototype.
