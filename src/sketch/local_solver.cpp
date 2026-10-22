@@ -450,6 +450,7 @@ LocalSolveGatewayResult evaluateLocalSolve(
 
     bool redundant = false;
     std::set<ConstraintId> diagnostic_ids;
+    std::set<ConstraintId> diagnosed_conflicts;
     for (const auto& diagnostic : backend_result.diagnostics) {
         if (diagnostic.constraint) {
             const auto id = *diagnostic.constraint;
@@ -476,6 +477,9 @@ LocalSolveGatewayResult evaluateLocalSolve(
         case LocalBackendDiagnosticKind::conflicting_constraint:
             compatible = backend_result.status == LocalBackendStatus::conflict &&
                          diagnostic.constraint.has_value();
+            if (compatible) {
+                diagnosed_conflicts.insert(*diagnostic.constraint);
+            }
             break;
         case LocalBackendDiagnosticKind::unsupported_constraint:
             compatible = backend_result.status == LocalBackendStatus::unsupported;
@@ -490,6 +494,16 @@ LocalSolveGatewayResult evaluateLocalSolve(
             result.status = LocalSolveGatewayStatus::invalid_backend_response;
             return result;
         }
+    }
+    // Detailed conflict diagnostics identify the exact same semantic
+    // owners as the conflict-ID vector consumed by viewer/UI highlights.
+    // An older backend may return only the conflict vector, but if it
+    // supplies detailed conflict IDs their inventory must be complete
+    // and identical. Never attribute one conflict to another constraint.
+    if (!diagnosed_conflicts.empty() &&
+        diagnosed_conflicts != seen) {
+        result.status = LocalSolveGatewayStatus::invalid_backend_response;
+        return result;
     }
     result.diagnostics = backend_result.diagnostics;
 
