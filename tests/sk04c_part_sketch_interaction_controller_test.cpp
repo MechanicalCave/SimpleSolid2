@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <optional>
 #include <utility>
@@ -179,6 +180,7 @@ public:
     viewer::SketchPointQueryResult querySketchPresentation(
         viewer::ViewportPoint2 point) override {
         if (!point.valid()) return {};
+        if (on_point_query_) on_point_query_();
         return point_query_;
     }
 
@@ -237,6 +239,7 @@ public:
         measure_cue_scene_;
     viewer::PresentationSelection selection_;
     viewer::SketchPointQueryResult point_query_{true, std::nullopt};
+    std::function<void()> on_point_query_;
     viewer::SketchRectangleQueryResult rectangle_query_{true, {}};
     std::optional<viewer::SketchRectangleSelectionRule>
         last_rectangle_rule_;
@@ -2888,6 +2891,99 @@ int main(int argc, char* argv[]) {
         CHECK(state.circles.size() == 1U);
         CHECK(session.document().revision() == revised);
         CHECK(session.undoDepth() == undo_depth);
+        controller.end();
+    }
+
+    // R13-A2.0: native pick provider reentrancy cannot upgrade a
+    // pointer begun on an older Part revision. The provider may invoke
+    // application callbacks while resolving a hit and even return a
+    // valid NEW-scene token after rebuilding that scene.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        CHECK(line.ok() && line.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) { status = message; });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        controller.activateRelations();
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::horizontal));
+        CHECK(viewport.sketch_scene_.lines.size() == 1U);
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines.front().token};
+
+        const auto before = session.document().revision();
+        bool injected = false;
+        viewport.on_point_query_ = [&] {
+            if (injected) return;
+            injected = true;
+            const auto circle = session.execute(
+                application::AddSketchCircleCommand{
+                    sid, {30.0, 30.0}, 2.0});
+            CHECK(circle.ok() && circle.entity_id);
+            viewport_controller.refreshPresentation();
+            CHECK(viewport.sketch_scene_.lines.size() == 1U);
+            // Not a stale token: the provider returns an exact current
+            // hit, but the user's gesture started at the old revision.
+            viewport.point_query_ = {
+                true, viewport.sketch_scene_.lines.front().token};
+        };
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(injected);
+        CHECK(status.find("stale") != std::string::npos);
+        CHECK(backend.calls == 0);
+        CHECK(!controller.firstRelationTarget());
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(session.document().revision() != before);
+        const auto after_injection =
+            session.document().findSketch(sid)->model.state();
+        CHECK(after_injection.constraints.empty());
+        CHECK(after_injection.circles.size() == 1U);
+        const auto stable_revision = session.document().revision();
+        const auto stable_undo = session.undoDepth();
+
+        // With the provider callback disabled, a NEW current-stage
+        // click is valid and authors one guarded revision/Undo.
+        viewport.on_point_query_ = {};
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines.front().token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == stable_undo + 1U);
+        CHECK(session.document().revision() != stable_revision);
+        const auto accepted =
+            session.document().findSketch(sid)->model.state();
+        CHECK(accepted.constraints.size() == 1U);
+        CHECK(accepted.constraints.front().kind ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(accepted.circles == after_injection.circles);
         controller.end();
     }
 
