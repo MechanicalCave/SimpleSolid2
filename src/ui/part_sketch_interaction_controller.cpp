@@ -4399,6 +4399,16 @@ void PartSketchInteractionController::handleRelationsPointer(
             pointer_session->document().revision() == pointer_revision;
     };
     const auto rejectStalePick = [&]() {
+        // An obsolete pointer event must NEVER cancel a first target
+        // acquired reentrantly by a newer edit generation. Same Part,
+        // SketchId and kind after end()/begin() do not make it ours.
+        if (relation_context_generation_ != pointer_generation) {
+            reportStatus(
+                "RELATIONS: stale previous native pick ignored; "
+                "newer edit-context selection preserved. No Part change.");
+            notifyStateChanged();
+            return;
+        }
         if (session_ == pointer_session && sketch_id_ &&
             *sketch_id_ == pointer_sketch &&
             interaction_.tool() == sketch::SketchTool::relations &&
