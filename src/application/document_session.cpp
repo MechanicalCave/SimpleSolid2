@@ -66,6 +66,35 @@ part::PartSketch* findSketch(
         : &*found;
 }
 
+// Solver candidates are intentionally disposable and may legally carry
+// alternate geometry for evaluation-only consumers (Profile/Kernel).
+// Commands which MATERIALIZE a solution as authored seeds are stricter:
+// an unrelated local Line has no constraint authorizing its movement.
+// This check does not change numerical evaluation policy or tolerance.
+[[nodiscard]] bool unchangedUnrelatedLocalLines(
+    const sketch::SketchModelState& authored,
+    const sketch::SketchModelState& candidate) {
+    if (authored.lines.size() != candidate.lines.size()) return false;
+    std::set<sketch::EntityId> constrained;
+    for (const auto& relation : authored.constraints) {
+        constrained.insert(relation.first.entity);
+        if (relation.second.entity.valid()) {
+            constrained.insert(relation.second.entity);
+        }
+    }
+    for (std::size_t i = 0; i < authored.lines.size(); ++i) {
+        const auto& original = authored.lines[i];
+        const auto& solved = candidate.lines[i];
+        if (original.id != solved.id) return false;
+        if (constrained.contains(original.id)) continue;
+        if (original.start != solved.start ||
+            original.end != solved.end) {
+            return false;
+        }
+    }
+    return true;
+}
+
 part::PartAxis* findAxis(
     part::PartAuthoredState& state,
     part::AxisId id) noexcept {
@@ -2198,6 +2227,11 @@ AddSolvedSketchRelationResult DocumentSession::execute(
         return rejectSolve(effective,
             "Fix Current Position has no accepted effective Sketch");
     }
+    if (!unchangedUnrelatedLocalLines(
+            target->model.state(), *effective.candidate)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position backend moved a Line without any relation");
+    }
 
     const auto found = std::find_if(
         effective.candidate->lines.cbegin(),
@@ -2350,6 +2384,11 @@ EraseSolvedSketchConstraintResult DocumentSession::execute(
         !effective.candidate) {
         return rejectSolve(effective,
             "Solved relation Delete needs current accepted geometry");
+    }
+    if (!unchangedUnrelatedLocalLines(
+            target->model.state(), *effective.candidate)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete backend moved an unrelated Line");
     }
 
     // Materialize the entire accepted local Line solution as new authored
