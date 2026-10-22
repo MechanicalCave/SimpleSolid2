@@ -3168,6 +3168,26 @@ int main(int argc, char* argv[]) {
             session.document().findSketch(sid)->model.state();
         CHECK(state.constraints.empty());
         CHECK(state.circles.size() == 1U);
+
+        // After the stale command is rejected, the same two durable
+        // selected Line IDs remain eligible for a NEW selection-first
+        // command on the current revision. No extra Apply/click is needed.
+        const auto revision_before_retry =
+            session.document().revision();
+        const auto undo_before_retry = session.undoDepth();
+        controller.setStateChangedHandler({});
+        CHECK(controller.selectedCount() == 2U);
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::parallel));
+        CHECK(solver.calls == 1);
+        CHECK(session.document().revision() != revision_before_retry);
+        CHECK(session.undoDepth() == undo_before_retry + 1U);
+        const auto after_retry =
+            session.document().findSketch(sid)->model.state();
+        CHECK(after_retry.constraints.size() == 1U);
+        CHECK(after_retry.constraints.front().kind ==
+              sketch::ConstraintKind::parallel);
+        CHECK(after_retry.circles == state.circles);
         controller.end();
     }
 
