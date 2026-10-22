@@ -2459,6 +2459,11 @@ bool PartSketchInteractionController::selectRelationKind(
         selection_session->documentId();
     const auto selection_revision =
         selection_session->document().revision();
+    // A reentrant stateChanged/projectInteraction callback can close
+    // and reopen this exact same Sketch without changing Part identity,
+    // revision, or relation kind. The old selected EntityIds remain
+    // valid by ID but belong to a superseded UI gesture.
+    const auto selection_generation = relation_context_generation_;
     const auto selection_incarnation =
         selection_session->document().incarnationToken();
     const auto selected = interaction_.selectedEntities();
@@ -2467,6 +2472,7 @@ bool PartSketchInteractionController::selectRelationKind(
             sketch_id_ && *sketch_id_ == selection_sketch &&
             interaction_.tool() == sketch::SketchTool::relations &&
             interaction_.relationKind() == kind &&
+            relation_context_generation_ == selection_generation &&
             selection_session->documentId() == selection_document_id &&
             selection_session->document().incarnationToken() ==
                 selection_incarnation &&
