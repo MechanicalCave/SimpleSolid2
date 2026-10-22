@@ -39,6 +39,21 @@ bool near(double first, double second) {
     return std::abs(first - second) <= 1.0e-10;
 }
 
+class EchoConvergedRelationSolver final
+    : public sketch::ILocalSketchSolver {
+public:
+    int calls{};
+
+    [[nodiscard]] sketch::LocalBackendSolveResult solve(
+        const sketch::LocalSolveProblem& problem) override {
+        ++calls;
+        // Valid only for the already-horizontal controller fixture. The
+        // production acceptance gate must still review every residual.
+        return {sketch::LocalBackendStatus::converged,
+                problem.authored, {}, {}, std::nullopt};
+    }
+};
+
 class NoopKernel final
     : public kernel::ISolidModelingKernel {
 public:
@@ -2468,6 +2483,67 @@ int main(int argc, char* argv[]) {
         CHECK(a2_interaction.selectRelationKind(
             sketch::ConstraintKind::coincident));
         CHECK(!a2_interaction.firstRelationTarget());
+
+        // RED-FIRST: connect already acquired native viewport / Operations
+        // semantic targets to the guarded solver-backed Part writer ONLY
+        // when a development backend is explicitly injected. Default
+        // Windows application has no approved production backend.
+        EchoConvergedRelationSolver backend;
+        a2_interaction.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        a2_interaction.activateRelations();
+        CHECK(a2_interaction.selectRelationKind(
+            sketch::ConstraintKind::horizontal));
+        a2_viewport.point_query_ = {
+            true, a2_viewport.sketch_scene_.lines.front().token};
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(backend.calls == 1);
+        CHECK(a2_interaction.relationKind() ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(a2_session.document().revision() != original_revision);
+        CHECK(a2_session.undoDepth() == original_undo + 1U);
+        const auto after_click =
+            a2_session.document().findSketch(sid)->model.state();
+        CHECK(after_click.constraints.size() == 1U);
+        CHECK(after_click.constraints.front().kind ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(after_click.lines == original_sketch.lines);
+
+        // Duplicate creation fails before a second backend invocation,
+        // with neither a revision nor Undo/ConstraintId side effect.
+        const auto committed_revision =
+            a2_session.document().revision();
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(backend.calls == 1);
+        CHECK(a2_session.document().revision() == committed_revision);
+        CHECK(a2_session.undoDepth() == original_undo + 1U);
+        CHECK(a2_session.document().findSketch(sid)->model.state() ==
+              after_click);
+
+        // Selection-first with two existing local Line identities commits
+        // the same validated command without a redundant viewport click.
+        a2_interaction.activateRelations();
+        CHECK(a2_interaction.selectRelationKind(
+            sketch::ConstraintKind::parallel));
+        CHECK(backend.calls == 2);
+        CHECK(a2_session.undoDepth() == original_undo + 2U);
+        const auto after_selection =
+            a2_session.document().findSketch(sid)->model.state();
+        CHECK(after_selection.constraints.size() == 2U);
+        CHECK(after_selection.constraints.back().kind ==
+              sketch::ConstraintKind::parallel);
+        CHECK(after_selection.lines == original_sketch.lines);
+        CHECK(a2_session.undo().ok());
+        CHECK(a2_session.document().findSketch(sid)->model.state()
+              .constraints.size() == 1U);
+        CHECK(a2_session.redo().ok());
+        CHECK(a2_session.document().findSketch(sid)->model.state()
+              .constraints == after_selection.constraints);
+
         a2_interaction.end();
     }
 
