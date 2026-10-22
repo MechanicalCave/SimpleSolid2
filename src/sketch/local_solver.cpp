@@ -383,20 +383,39 @@ LocalSolveGatewayResult evaluateLocalSolve(
     // must never rewrite the very equations used to review its answer.
     const auto canonical = prepareLocalSolveProblem(
         problem.authored, std::span<const EntityId>{problem.fixed_lines});
-    const auto matchesCaller = [&problem, &canonical]() {
-        if (!canonical ||
-            canonical->authored != problem.authored ||
-            canonical->constraints != problem.constraints ||
-            canonical->equations != problem.equations ||
-            canonical->fixed_lines != problem.fixed_lines ||
-            canonical->lines.size() != problem.lines.size()) {
+    if (!canonical) {
+        result.status = LocalSolveGatewayStatus::invalid_problem;
+        return result;
+    }
+    // Independent entry-time authority. Comparing two *live* DTOs after
+    // solve is insufficient: a reentrant adapter can mutate both the
+    // caller problem and its canonical temporary identically. This
+    // snapshot is never exposed to the backend.
+    const LocalSolveProblem original = *canonical;
+    const auto matchesCaller = [&problem, &canonical, &original]() {
+        if (canonical->authored != original.authored ||
+            problem.authored != original.authored ||
+            canonical->constraints != original.constraints ||
+            problem.constraints != original.constraints ||
+            canonical->equations != original.equations ||
+            problem.equations != original.equations ||
+            canonical->fixed_lines != original.fixed_lines ||
+            problem.fixed_lines != original.fixed_lines ||
+            canonical->lines.size() != original.lines.size() ||
+            problem.lines.size() != original.lines.size()) {
             return false;
         }
-        for (std::size_t i = 0; i < problem.lines.size(); ++i) {
-            const auto& a = canonical->lines[i];
-            const auto& b = problem.lines[i];
-            if (a.id != b.id || a.start != b.start ||
-                a.end != b.end || a.fixed != b.fixed) {
+        for (std::size_t i = 0; i < original.lines.size(); ++i) {
+            const auto& expected = original.lines[i];
+            const auto& received = canonical->lines[i];
+            const auto& current = problem.lines[i];
+            const auto matches = [&expected](const LocalSolveLineInput& line) {
+                return expected.id == line.id &&
+                       expected.start == line.start &&
+                       expected.end == line.end &&
+                       expected.fixed == line.fixed;
+            };
+            if (!matches(received) || !matches(current)) {
                 return false;
             }
         }
