@@ -1186,6 +1186,41 @@ int main() {
         CHECK(solver.calls == prior_solver_calls + 1);
         CHECK(contradictory.state() == contradictory_before);
 
+        // A CONSISTENT parity chain carrying the opposite value must
+        // also reach the solver instead of masquerading as redundancy.
+        // Horizontal(A), Perpendicular(A,B), Parallel(B,C) imply that
+        // A and C are perpendicular, not parallel. This new conflicting
+        // Parallel(A,C) should be diagnosed by the numeric residual.
+        sk::SketchModel coherent_opposite;
+        const auto good_a = coherent_opposite.addLine(
+            {0.0, 0.0}, {5.0, 0.0});
+        const auto good_b = coherent_opposite.addLine(
+            {0.0, 3.0}, {0.0, 8.0});
+        const auto good_c = coherent_opposite.addLine(
+            {3.0, 3.0}, {3.0, 8.0});
+        const sk::ConstraintReference good_ar{good_a, CE::line};
+        const sk::ConstraintReference good_br{good_b, CE::line};
+        const sk::ConstraintReference good_cr{good_c, CE::line};
+        CHECK(coherent_opposite.addConstraint(
+            CK::horizontal, good_ar, {}));
+        CHECK(coherent_opposite.addConstraint(
+            CK::perpendicular, good_ar, good_br));
+        CHECK(coherent_opposite.addConstraint(
+            CK::parallel, good_br, good_cr));
+        const auto coherent_before = coherent_opposite.state();
+        const auto coherent_call_count = solver.calls;
+        const auto conflicting_intent = sk::preflightLocalRelation(
+            coherent_before, CK::parallel, good_ar, good_cr,
+            {}, policy, solver);
+        CHECK(conflicting_intent.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(conflicting_intent.solve.status ==
+              sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!conflicting_intent.provisional_constraint_id);
+        CHECK(!conflicting_intent.proposed_authored);
+        CHECK(solver.calls == coherent_call_count + 1);
+        CHECK(coherent_opposite.state() == coherent_before);
+
         // No false rejection merely because the seed lines happen to be
         // parallel: no authored relation connects Line C yet.
         sk::SketchModel free_third;
@@ -1197,13 +1232,14 @@ int main() {
         const sk::ConstraintReference fcr{fc, CE::line};
         CHECK(free_third.addConstraint(CK::parallel, far, fbr));
         const auto free_before = free_third.state();
+        const auto before_independent_calls = solver.calls;
         const auto independent = sk::preflightLocalRelation(
             free_before, CK::parallel, far, fcr, {}, policy, solver);
         CHECK(independent.status ==
               sk::LocalRelationPreflightStatus::candidate_accepted);
         CHECK(independent.provisional_constraint_id);
         CHECK(independent.proposed_authored);
-        CHECK(solver.calls == 1);
+        CHECK(solver.calls == before_independent_calls + 1);
         CHECK(free_third.state() == free_before);
     }
 
