@@ -1053,6 +1053,122 @@ int main() {
     }
 
 
+    // A2.0 RED: an untrustworthy solver's silence about redundancy
+    // cannot authorize a new relation already implied by existing
+    // semantic relations. An implied request must reject BEFORE calling
+    // the backend and must not expose a provisional ConstraintId.
+    {
+        struct SilentRedundancy final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, std::nullopt};
+            }
+        } solver;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        using CK = sk::ConstraintKind;
+        using CE = sk::ConstraintElement;
+
+        sk::SketchModel parallel_chain;
+        const auto a = parallel_chain.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto b = parallel_chain.addLine({0.0, 3.0}, {5.0, 3.0});
+        const auto c = parallel_chain.addLine({0.0, 6.0}, {5.0, 6.0});
+        const sk::ConstraintReference ar{a, CE::line};
+        const sk::ConstraintReference br{b, CE::line};
+        const sk::ConstraintReference cr{c, CE::line};
+        CHECK(parallel_chain.addConstraint(CK::parallel, ar, br));
+        CHECK(parallel_chain.addConstraint(CK::parallel, br, cr));
+        const auto unchanged_parallel = parallel_chain.state();
+        const auto transitive = sk::preflightLocalRelation(
+            unchanged_parallel, CK::parallel, ar, cr, {}, policy, solver);
+        CHECK(transitive.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!transitive.provisional_constraint_id);
+        CHECK(!transitive.proposed_authored);
+        CHECK(solver.calls == 0);
+        CHECK(parallel_chain.state() == unchanged_parallel);
+
+        // Two perpendicular turns give a parallel relation; this is
+        // implied by relation parity, not by seeded geometry alone.
+        sk::SketchModel parity_chain;
+        const auto p = parity_chain.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto q = parity_chain.addLine({0.0, 2.0}, {0.0, 7.0});
+        const auto r = parity_chain.addLine({0.0, 9.0}, {5.0, 9.0});
+        const sk::ConstraintReference pr{p, CE::line};
+        const sk::ConstraintReference qr{q, CE::line};
+        const sk::ConstraintReference rr{r, CE::line};
+        CHECK(parity_chain.addConstraint(CK::perpendicular, pr, qr));
+        CHECK(parity_chain.addConstraint(CK::perpendicular, qr, rr));
+        const auto parity_before = parity_chain.state();
+        const auto double_perpendicular = sk::preflightLocalRelation(
+            parity_before, CK::parallel, pr, rr, {}, policy, solver);
+        CHECK(double_perpendicular.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!double_perpendicular.provisional_constraint_id);
+        CHECK(solver.calls == 0);
+        CHECK(parity_chain.state() == parity_before);
+
+        // Horizontal(A) + Parallel(A,B) already establishes horizontal B.
+        sk::SketchModel anchored;
+        const auto horizontal_a = anchored.addLine({0.0, 1.0}, {5.0, 1.0});
+        const auto horizontal_b = anchored.addLine({0.0, 3.0}, {5.0, 3.0});
+        const sk::ConstraintReference ha{horizontal_a, CE::line};
+        const sk::ConstraintReference hb{horizontal_b, CE::line};
+        CHECK(anchored.addConstraint(CK::horizontal, ha, {}));
+        CHECK(anchored.addConstraint(CK::parallel, ha, hb));
+        const auto anchored_before = anchored.state();
+        const auto inherited_axis = sk::preflightLocalRelation(
+            anchored_before, CK::horizontal, hb, {}, {}, policy, solver);
+        CHECK(inherited_axis.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!inherited_axis.provisional_constraint_id);
+        CHECK(solver.calls == 0);
+        CHECK(anchored.state() == anchored_before);
+
+        // Coincident endpoint closure is transitive across three distinct
+        // Lines and must use endpoint roles, not whole-Line identity.
+        sk::SketchModel coincident_chain;
+        const auto ca = coincident_chain.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto cb = coincident_chain.addLine({5.0, 0.0}, {8.0, 1.0});
+        const auto cc = coincident_chain.addLine({5.0, 0.0}, {7.0, 2.0});
+        const sk::ConstraintReference ca_end{ca, CE::line_end};
+        const sk::ConstraintReference cb_start{cb, CE::line_start};
+        const sk::ConstraintReference cc_start{cc, CE::line_start};
+        CHECK(coincident_chain.addConstraint(CK::coincident, ca_end, cb_start));
+        CHECK(coincident_chain.addConstraint(CK::coincident, cb_start, cc_start));
+        const auto coincident_before = coincident_chain.state();
+        const auto endpoint_closure = sk::preflightLocalRelation(
+            coincident_before, CK::coincident, ca_end, cc_start,
+            {}, policy, solver);
+        CHECK(endpoint_closure.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!endpoint_closure.provisional_constraint_id);
+        CHECK(solver.calls == 0);
+        CHECK(coincident_chain.state() == coincident_before);
+
+        // No false rejection merely because the seed lines happen to be
+        // parallel: no authored relation connects Line C yet.
+        sk::SketchModel free_third;
+        const auto fa = free_third.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto fb = free_third.addLine({0.0, 3.0}, {5.0, 3.0});
+        const auto fc = free_third.addLine({0.0, 6.0}, {5.0, 6.0});
+        const sk::ConstraintReference far{fa, CE::line};
+        const sk::ConstraintReference fbr{fb, CE::line};
+        const sk::ConstraintReference fcr{fc, CE::line};
+        CHECK(free_third.addConstraint(CK::parallel, far, fbr));
+        const auto free_before = free_third.state();
+        const auto independent = sk::preflightLocalRelation(
+            free_before, CK::parallel, far, fcr, {}, policy, solver);
+        CHECK(independent.status ==
+              sk::LocalRelationPreflightStatus::candidate_accepted);
+        CHECK(independent.provisional_constraint_id);
+        CHECK(independent.proposed_authored);
+        CHECK(solver.calls == 1);
+        CHECK(free_third.state() == free_before);
+    }
+
     // The general solver gateway returns disposable derived geometry and
     // can legitimately translate underconstrained lines. Only an AUTHORING
     // command that captures this candidate must guard unrelated seeds.
