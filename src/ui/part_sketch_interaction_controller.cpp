@@ -2448,10 +2448,10 @@ bool PartSketchInteractionController::selectRelationKind(
         reportStatus(
             "RELATIONS: first preselected Line accepted; "
             "click one more Line. No Part change.");
-    } else {
-        reportStatus(
-            "RELATIONS: preselected targets are ready, but "
-            "numeric authoring is not yet enabled. No Part change.");
+    } else if (result.outcome ==
+                   sketch::RelationTargetOutcome::ready &&
+               result.draft) {
+        commitReadyRelation(*result.draft);
     }
     return true;
 }
@@ -4036,6 +4036,67 @@ handleStructuralEditPointer(
             : "EXTEND committed.");
 }
 
+void PartSketchInteractionController::commitReadyRelation(
+    const sketch::RelationTargetDraft& draft) {
+    // This controller never invents a numeric solver. End-user runtime
+    // remains fail-closed until separately approved original PlaneGCS
+    // packaging, linkage and installed-consumer evidence exist.
+    if (!development_relation_solver_ ||
+        !development_relation_policy_.valid() ||
+        session_ == nullptr || !sketch_id_ || !active()) {
+        reportStatus(
+            "RELATIONS: no approved native solver available; "
+            "semantic targets not authored.");
+        return;
+    }
+
+    const auto expected_incarnation =
+        session_->document().incarnationToken();
+    if (!expected_incarnation) {
+        reportStatus("RELATIONS: current Part incarnation unavailable.");
+        return;
+    }
+    const auto expected_document_id = session_->documentId();
+    const auto expected_revision = session_->document().revision();
+
+    // The same owning DocumentSession is used for command-first and
+    // selection-first requests. In particular, never call the old
+    // headless AddSketchRelationCommand as a success shortcut.
+    application::AddSolvedSketchRelationResult committed;
+    if (draft.kind == sketch::ConstraintKind::fix) {
+        committed = session_->execute(
+            application::FixCurrentSketchLineCommand{
+                *sketch_id_, expected_document_id, expected_revision,
+                expected_incarnation, draft.first.entity},
+            development_relation_policy_,
+            *development_relation_solver_);
+    } else {
+        committed = session_->execute(
+            application::AddSolvedSketchRelationCommand{
+                *sketch_id_, expected_document_id, expected_revision,
+                expected_incarnation, draft.kind,
+                draft.first, draft.second},
+            development_relation_policy_,
+            *development_relation_solver_);
+    }
+    if (!committed.ok() || !committed.changed) {
+        reportStatus(
+            "RELATIONS: solver-backed creation rejected; " +
+            (committed.diagnostic.message.empty()
+                ? std::string{"semantic, numerical or stale-stage failure"}
+                : committed.diagnostic.message));
+        return;
+    }
+
+    viewport_controller_->refreshPresentation();
+    projectSelection();
+    projectInteraction();
+    notifyStateChanged();
+    reportStatus(
+        "RELATIONS: accepted by current Part solver and transaction "
+        "(development-only backend).");
+}
+
 void PartSketchInteractionController::handleRelationsPointer(
     const SketchPointerInput& input) {
     // R13-A2.0 transient, command-first semantic target capture only.
@@ -4169,13 +4230,13 @@ void PartSketchInteractionController::handleRelationsPointer(
         notifyStateChanged();
         return;
     case sketch::RelationTargetOutcome::ready:
-        // A fully acquired intent is intentionally ephemeral. A real
-        // numerical solve and atomic revision-bound Part command must
-        // become the sole path to authoring later.
-        reportStatus(
-            "RELATIONS: semantic targets ready; native numerical "
-            "authoring is not yet enabled. No Part change.");
-        notifyStateChanged();
+        if (!accepted.draft) {
+            reportStatus("RELATIONS: incomplete semantic target; no Part change.");
+            return;
+        }
+        // No authoring unless a backend has been explicitly injected;
+        // the DocumentSession command revalidates exact Part provenance.
+        commitReadyRelation(*accepted.draft);
         return;
     }
 }
