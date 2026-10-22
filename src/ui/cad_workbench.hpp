@@ -369,6 +369,8 @@ private:
     void activateSketchCircle();
     void activateSketchArc();
     void activateSketchRectangle();
+    void activateSketchRelations();
+    void activateSketchDimensions();
     void activateSketchTrim();
     void activateSketchExtend();
     void activateSketchExtendBoth();
@@ -633,6 +635,13 @@ private:
     QLabel* topology_geometry_{};
 
     QLabel* operations_placeholder_{};
+    QWidget* sketch_relations_operations_widget_{};
+    std::array<QPushButton*, 6> sketch_relation_kind_buttons_{};
+    QWidget* sketch_dimensions_operations_widget_{};
+    std::array<QPushButton*, 3> sketch_dimension_kind_buttons_{};
+    QWidget* sketch_a2_visibility_widget_{};
+    QCheckBox* sketch_show_constraints_check_{};
+    QCheckBox* sketch_show_dimensions_check_{};
     QWidget* precision_operations_widget_{};
     QLabel* precision_status_label_{};
     QPushButton* object_snap_toggle_button_{};
@@ -679,6 +688,8 @@ private:
     QPushButton* circle_sketch_button_{};
     QPushButton* arc_sketch_button_{};
     QPushButton* rectangle_sketch_button_{};
+    QPushButton* relations_sketch_button_{};
+    QPushButton* dimensions_sketch_button_{};
     QPushButton* create_construction_button_{};
     QPushButton* rectangle_diagonals_button_{};
     QLabel* profile_tools_label_{};

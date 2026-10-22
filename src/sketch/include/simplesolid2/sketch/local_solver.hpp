@@ -164,4 +164,42 @@ struct LocalSolveGatewayResult final {
     const LocalSolverAcceptancePolicy& policy,
     ILocalSketchSolver& backend);
 
+// R13-A2.0: numerical PRE-FLIGHT for one new explicit relation.
+// Operates on a disposable current-stage Sketch snapshot and a caller-
+// injected solver only. This API cannot commit/approve a DocumentRevision,
+// Part incarnation, PG-01 linked reference, native package or UI transaction.
+// An accepted preflight is NOT permission to reuse the provisional ID:
+// authoritative DocumentSession must independently validate + solve the
+// exact current stage in its OWN atomic revision-bound candidate transaction.
+enum class LocalRelationPreflightStatus {
+    invalid_intent,
+    invalid_problem,
+    solver_rejected,
+    candidate_accepted
+};
+
+struct LocalRelationPreflightResult final {
+    LocalRelationPreflightStatus status{
+        LocalRelationPreflightStatus::invalid_intent};
+    // Ephemeral identity from the disposable candidate; MUST NOT be
+    // published, stored or supplied as an authoritative ConstraintId.
+    std::optional<ConstraintId> provisional_constraint_id;
+    std::optional<SketchModelState> proposed_authored;
+    LocalSolveGatewayResult solve;
+};
+
+// Call with the exact stage-resolved Sketch snapshot. Fixed Line declarations
+// come from the caller's current stage; this function does not infer PG-01,
+// source identity or the right to author constraints on projected geometry.
+// Existing Sketch-model duplicate/shape checks happen before any backend
+// invocation; the current authoritative model remains byte-for-byte intact.
+[[nodiscard]] LocalRelationPreflightResult preflightLocalRelation(
+    const SketchModelState& current_stage,
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second,
+    std::span<const EntityId> stage_fixed_lines,
+    const LocalSolverAcceptancePolicy& policy,
+    ILocalSketchSolver& backend);
+
 } // namespace simplesolid2::sketch

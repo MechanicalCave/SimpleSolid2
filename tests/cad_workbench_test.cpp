@@ -2321,6 +2321,108 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(part_axis_tool->isHidden());
     CHECK(!mirror_tool->isHidden());
+
+    // R13-A2.0 native registered desktop RED: Sketch Create exposes
+    // two ordinary (non-popup) tools. Every semantic type and the
+    // view-only visibility toggles live under the existing Operations.
+    // A2.0 is not green merely because a headless A1 solver exists.
+    auto* relations_tool = workbench.findChild<QPushButton*>(
+        QStringLiteral("relationsSketchToolButton"));
+    auto* dimensions_tool = workbench.findChild<QPushButton*>(
+        QStringLiteral("dimensionsSketchToolButton"));
+    CHECK(relations_tool != nullptr);
+    CHECK(dimensions_tool != nullptr);
+    CHECK(!relations_tool->isHidden());
+    CHECK(!dimensions_tool->isHidden());
+    for (const char* name : {
+        "sketchRelationHorizontalButton",
+        "sketchRelationVerticalButton",
+        "sketchRelationCoincidentButton",
+        "sketchRelationParallelButton",
+        "sketchRelationPerpendicularButton",
+        "sketchRelationFixButton",
+        "sketchDimensionLengthButton",
+        "sketchDimensionRadiusButton",
+        "sketchDimensionDiameterButton"
+    }) {
+        auto* option = workbench.findChild<QPushButton*>(
+            QString::fromLatin1(name));
+        CHECK(option != nullptr);
+        CHECK(operations->parentWidget()->isAncestorOf(option));
+    }
+    auto* show_constraints = workbench.findChild<QCheckBox*>(
+        QStringLiteral("sketchShowConstraintsCheck"));
+    auto* show_dimensions = workbench.findChild<QCheckBox*>(
+        QStringLiteral("sketchShowDimensionsCheck"));
+    CHECK(show_constraints && show_dimensions);
+    CHECK(!show_constraints->isHidden());
+    CHECK(!show_dimensions->isHidden());
+    CHECK(operations->parentWidget()->isAncestorOf(show_constraints));
+    CHECK(operations->parentWidget()->isAncestorOf(show_dimensions));
+    auto* relation_operations = workbench.findChild<QWidget*>(
+        QStringLiteral("sketchRelationsOperations"));
+    auto* dimension_operations = workbench.findChild<QWidget*>(
+        QStringLiteral("sketchDimensionsOperations"));
+    CHECK(relation_operations && dimension_operations);
+    CHECK(relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+    relations_tool->click();
+    QApplication::processEvents();
+    CHECK(relations_tool->isChecked());
+    CHECK(!dimensions_tool->isChecked());
+    CHECK(!relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+    CHECK(!finish_sketch->isHidden());
+    auto* horizontal_relation = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchRelationHorizontalButton"));
+    auto* parallel_relation = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchRelationParallelButton"));
+    CHECK(horizontal_relation && parallel_relation);
+    CHECK(horizontal_relation->isEnabled());
+    CHECK(parallel_relation->isEnabled());
+    const auto before_kind_revision = ux_session->document().revision();
+    const auto before_kind_undo = ux_session->undoDepth();
+    horizontal_relation->click();
+    QApplication::processEvents();
+    CHECK(horizontal_relation->isChecked());
+    CHECK(!parallel_relation->isChecked());
+    parallel_relation->click();
+    QApplication::processEvents();
+    CHECK(!horizontal_relation->isChecked());
+    CHECK(parallel_relation->isChecked());
+    CHECK(ux_session->document().revision() == before_kind_revision);
+    CHECK(ux_session->undoDepth() == before_kind_undo);
+    dimensions_tool->click();
+    QApplication::processEvents();
+    CHECK(dimensions_tool->isChecked());
+    CHECK(!relations_tool->isChecked());
+    CHECK(relation_operations->isHidden());
+    CHECK(!dimension_operations->isHidden());
+    auto* length_kind = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchDimensionLengthButton"));
+    auto* diameter_kind = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchDimensionDiameterButton"));
+    CHECK(length_kind && diameter_kind);
+    CHECK(length_kind->isEnabled());
+    CHECK(diameter_kind->isEnabled());
+    const auto before_dimension_kind_revision =
+        ux_session->document().revision();
+    const auto before_dimension_kind_undo = ux_session->undoDepth();
+    length_kind->click();
+    QApplication::processEvents();
+    CHECK(length_kind->isChecked());
+    CHECK(!diameter_kind->isChecked());
+    diameter_kind->click();
+    QApplication::processEvents();
+    CHECK(!length_kind->isChecked());
+    CHECK(diameter_kind->isChecked());
+    CHECK(ux_session->document().revision() == before_dimension_kind_revision);
+    CHECK(ux_session->undoDepth() == before_dimension_kind_undo);
+    select_tool->click();
+    QApplication::processEvents();
+    CHECK(relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+
     CHECK(mirror_keep_original->isHidden());
     CHECK(operations->parentWidget()->isAncestorOf(
         mirror_keep_original));
