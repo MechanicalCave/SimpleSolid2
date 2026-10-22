@@ -2597,17 +2597,11 @@ bool PartSketchInteractionController::selectRelationKind(
     }
     notifyStateChanged();
     // Both a partial pair and a fully preselected ready relation must
-    // pass this gate after UI callbacks and before a Part command. A
-    // revision change is not benign merely because Line seeds match.
-    if (!stillCurrentSelection()) {
-        static_cast<void>(interaction_.cancelRelationTarget());
-        relation_first_revision_.reset();
-        reportStatus(
-            "RELATIONS: stale preselected targets after Part/context "
-            "change; select current-stage targets again. No Part change.");
-        notifyStateChanged();
-        return true;
-    }
+    // pass this gate after UI callbacks and before a Part command. Reuse
+    // the same generation-aware rejection as the *earlier* notifications:
+    // an obsolete selection-first continuation may not cancel a new
+    // edit context's first target even if SketchId/kind/revision match.
+    if (rejectStaleSelection()) return true;
     if (result.outcome ==
         sketch::RelationTargetOutcome::first_target_accepted) {
         reportStatus(
