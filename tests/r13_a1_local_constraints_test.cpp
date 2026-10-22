@@ -1605,6 +1605,117 @@ int main() {
                sk::Point2{22.0, 4.0}));
     }
 
+    // A2.0 mixed-primitive regression: the Line-only native bridge
+    // must never reinterpret Circle/Arc as solver-editable geometry.
+    // Fix/Delete remain atomic with exact, unrelated primitive seeds.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct MixedPrimitiveBackend final : sk::ILocalSketchSolver {
+            enum class Mode { echo, move_circle, resize_arc };
+            Mode mode{Mode::echo};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.circles.size() == 1U);
+                CHECK(candidate.arcs.size() == 1U);
+                if (mode == Mode::move_circle) {
+                    candidate.circles.front().center.u += 1.0;
+                } else if (mode == Mode::resize_arc) {
+                    candidate.arcs.front().radius += 0.5;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto line = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto circle = session.execute(app::AddSketchCircleCommand{
+            sid, {12.0, 3.0}, 2.5});
+        const auto arc = session.execute(app::AddSketchArcCommand{
+            sid, {20.0, 3.0}, 1.5, 0.0, 1.2});
+        CHECK(line.ok() && line.entity_id);
+        CHECK(circle.ok() && circle.entity_id);
+        CHECK(arc.ok() && arc.entity_id);
+        const auto horizontal = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(horizontal.ok() && horizontal.constraint_id);
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        CHECK(original.circles.size() == 1U && original.arcs.size() == 1U);
+        const auto revision = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::FixCurrentSketchLineCommand fix{
+            sid, session.document().documentId(), revision,
+            session.document().incarnationToken(), *line.entity_id};
+        const app::EraseSolvedSketchConstraintCommand erase{
+            sid, session.document().documentId(), revision,
+            session.document().incarnationToken(), *horizontal.constraint_id};
+
+        // Even a Converged answer with satisfied Line residuals must
+        // not publish a Circle/Arc change through a Line-only solver.
+        backend.mode = MixedPrimitiveBackend::Mode::move_circle;
+        const auto bad_fix = session.execute(fix, policy, backend);
+        CHECK(!bad_fix.ok() && !bad_fix.changed && !bad_fix.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == revision);
+        CHECK(session.undoDepth() == undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        backend.mode = MixedPrimitiveBackend::Mode::resize_arc;
+        const auto bad_delete = session.execute(erase, policy, backend);
+        CHECK(!bad_delete.ok() && !bad_delete.changed);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().revision() == revision);
+        CHECK(session.undoDepth() == undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        // Legal unchanged non-Line primitives survive Fix + Delete.
+        backend.mode = MixedPrimitiveBackend::Mode::echo;
+        const auto good_fix = session.execute(fix, policy, backend);
+        CHECK(good_fix.ok() && good_fix.changed && good_fix.constraint_id);
+        CHECK(backend.calls == 4);
+        const auto good_erase = session.execute(
+            app::EraseSolvedSketchConstraintCommand{
+                sid, session.document().documentId(),
+                session.document().revision(),
+                session.document().incarnationToken(),
+                *horizontal.constraint_id},
+            policy, backend);
+        CHECK(good_erase.ok() && good_erase.changed);
+        CHECK(backend.calls == 6);
+        const auto after = session.document().findSketch(sid)->model.state();
+        CHECK(after.circles == original.circles);
+        CHECK(after.arcs == original.arcs);
+        CHECK(after.lines == original.lines);
+        CHECK(after.constraints.size() == 1U);
+        CHECK(session.document().findSketch(sid)->model.isFixedLine(
+            *line.entity_id));
+        CHECK(session.undo().ok());
+        CHECK(session.document().findSketch(sid)->model.state().circles ==
+              original.circles);
+        CHECK(session.document().findSketch(sid)->model.state().arcs ==
+              original.arcs);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.state().circles ==
+              original.circles);
+        CHECK(session.document().findSketch(sid)->model.state().arcs ==
+              original.arcs);
+    }
+
     // A2.0 RED: Fix Current Position must capture current NUMERIC
     // solution, rather than the historical skew authored seed.
     // Source is intentionally local/XY, never a projected or Body-stage Line.
