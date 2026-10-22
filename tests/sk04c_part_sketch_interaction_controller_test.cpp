@@ -102,6 +102,7 @@ public:
         viewer::Point3 point) const override {
         if (!enable_point_projection_ ||
             !viewer::finite(point)) return std::nullopt;
+        if (on_world_projection_) on_world_projection_();
         // Stub projective frame is explicit, deterministic and opt-in:
         // 10 screen logical pixels per unit in the Sketch XY plane.
         return viewer::ViewportPoint2{
@@ -220,6 +221,7 @@ public:
     }
 
     bool enable_point_projection_{false};
+    std::function<void()> on_world_projection_;
     viewer::CameraState camera_;
     viewer::SketchScene sketch_scene_;
     viewer::ProfileScene profile_scene_;
@@ -2984,6 +2986,95 @@ int main(int argc, char* argv[]) {
         CHECK(accepted.constraints.front().kind ==
               sketch::ConstraintKind::horizontal);
         CHECK(accepted.circles == after_injection.circles);
+        controller.end();
+    }
+
+    // R13-A2.0 Coincident uses projected semantic Line endpoints rather
+    // than Viewer Line hit tokens. Even this provider callback can reenter
+    // an independent Part transaction while an old SketchModel pointer
+    // exists in the controller. Reject before dereferencing old topology.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto first = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto second = session.execute(
+            application::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(first.ok() && first.entity_id);
+        CHECK(second.ok() && second.entity_id);
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        viewport.enable_point_projection_ = true;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) {
+                status = message;
+            });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        controller.activateRelations();
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::coincident));
+
+        const auto before_revision = session.document().revision();
+        bool injected = false;
+        viewport.on_world_projection_ = [&] {
+            if (injected) return;
+            injected = true;
+            const auto circle = session.execute(
+                application::AddSketchCircleCommand{
+                    sid, {30.0, 30.0}, 2.0});
+            CHECK(circle.ok() && circle.entity_id);
+            viewport_controller.refreshPresentation();
+        };
+        // First Line End projects to (150,100); provider reenters before
+        // semantic endpoint hit resolution finishes.
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            150.0, 100.0, 5.0, 0.0));
+        CHECK(injected);
+        CHECK(status.find("stale") != std::string::npos);
+        CHECK(!controller.firstRelationTarget());
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::coincident);
+        CHECK(backend.calls == 0);
+        CHECK(session.document().revision() != before_revision);
+        const auto after_injection =
+            session.document().findSketch(sid)->model.state();
+        CHECK(after_injection.constraints.empty());
+        CHECK(after_injection.circles.size() == 1U);
+
+        // A new hit against the current stage is still a valid FIRST
+        // Coincident endpoint, without authoring until second semantic hit.
+        viewport.on_world_projection_ = {};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            150.0, 100.0, 5.0, 0.0));
+        CHECK(controller.firstRelationTarget() ==
+              (sketch::ConstraintReference{
+                  *first.entity_id,
+                  sketch::ConstraintElement::line_end}));
+        CHECK(backend.calls == 0);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              after_injection);
         controller.end();
     }
 
