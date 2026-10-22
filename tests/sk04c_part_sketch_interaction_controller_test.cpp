@@ -3504,6 +3504,17 @@ int main(int argc, char* argv[]) {
             controller.activateRelations();
             CHECK(controller.selectRelationKind(
                 sketch::ConstraintKind::parallel));
+            // New-session command-first acquisition starts DURING the
+            // prior selection-first stateChanged callback.
+            CHECK(viewport.sketch_scene_.lines.size() == 2U);
+            viewport.point_query_ = {
+                true, viewport.sketch_scene_.lines[0].token};
+            controller.onPointer(pointer(
+                sid, viewer::SpatialPointerPhase::primary_press,
+                125.0, 100.0, 2.5, 0.0));
+            CHECK(controller.firstRelationTarget() ==
+                  (sketch::ConstraintReference{
+                      *first.entity_id, sketch::ConstraintElement::line}));
         });
         CHECK(controller.selectRelationKind(
             sketch::ConstraintKind::parallel));
@@ -3513,12 +3524,30 @@ int main(int argc, char* argv[]) {
         CHECK(controller.relationKind() ==
               sketch::ConstraintKind::parallel);
         CHECK(controller.selectedCount() == 0U);
-        CHECK(!controller.firstRelationTarget());
+        CHECK(controller.firstRelationTarget() ==
+              (sketch::ConstraintReference{
+                  *first.entity_id, sketch::ConstraintElement::line}));
         CHECK(backend.calls == 0);
         CHECK(session.document().revision() == revision);
         CHECK(session.undoDepth() == undo_depth);
         CHECK(session.document().findSketch(sid)->model.state() ==
               authored);
+
+        // The old selection-first callback must not destroy the new
+        // context's first target: the second hit creates one transaction.
+        controller.setStateChangedHandler({});
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[1].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == undo_depth + 1U);
+        const auto accepted =
+            session.document().findSketch(sid)->model.state();
+        CHECK(accepted.constraints.size() == 1U);
+        CHECK(accepted.constraints.front().kind ==
+              sketch::ConstraintKind::parallel);
         controller.end();
     }
 
