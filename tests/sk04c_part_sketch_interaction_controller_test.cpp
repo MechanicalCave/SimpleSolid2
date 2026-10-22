@@ -2529,6 +2529,10 @@ int main(int argc, char* argv[]) {
         CHECK(backend.calls == 1);
         CHECK(a2_interaction.relationKind() ==
               sketch::ConstraintKind::horizontal);
+        // A legitimate commit advances Part revision but must still
+        // refresh and acknowledge the current Operations UI context.
+        CHECK(a2_status.find("accepted by current Part solver") !=
+              std::string::npos);
         CHECK(a2_session.document().revision() != original_revision);
         CHECK(a2_session.undoDepth() == original_undo + 1U);
         const auto after_click =
