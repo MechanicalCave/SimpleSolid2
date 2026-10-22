@@ -4246,6 +4246,42 @@ void PartSketchInteractionController::handleRelationsPointer(
         relation_first_revision_.reset();
     }
 
+    // The native Viewer is an external callback boundary. It may reenter
+    // DocumentSession and replace the hosted Part/Sketch while returning
+    // an otherwise valid new-generation hit token. Never dereference a
+    // pre-query SketchModel/PartSketch pointer after that transition.
+    auto* const pointer_session = session_;
+    const auto pointer_sketch = *sketch_id_;
+    const auto pointer_kind = *interaction_.relationKind();
+    const auto pointer_revision =
+        pointer_session->document().revision();
+    const auto pointer_document_id = pointer_session->documentId();
+    const auto pointer_incarnation =
+        pointer_session->document().incarnationToken();
+    const auto stillCurrentPick = [&]() {
+        return session_ == pointer_session &&
+            sketch_id_ && *sketch_id_ == pointer_sketch &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == pointer_kind &&
+            pointer_session->documentId() == pointer_document_id &&
+            pointer_session->document().incarnationToken() ==
+                pointer_incarnation &&
+            pointer_session->document().revision() == pointer_revision;
+    };
+    const auto rejectStalePick = [&]() {
+        if (session_ == pointer_session && sketch_id_ &&
+            *sketch_id_ == pointer_sketch &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == pointer_kind) {
+            static_cast<void>(interaction_.cancelRelationTarget());
+            relation_first_revision_.reset();
+        }
+        reportStatus(
+            "RELATIONS: stale native pick after Part/Sketch revision "
+            "or edit-context change; retry on current stage. No Part change.");
+        notifyStateChanged();
+    };
+
     const auto* current_model =
         viewport_controller_->currentSketchInteractionModel();
     const auto* hosted = activeSketch();
@@ -4273,6 +4309,10 @@ void PartSketchInteractionController::handleRelationsPointer(
             const auto end =
                 viewport_controller_->projectSketchPointToViewport(
                     line.end);
+            if (!stillCurrentPick()) {
+                rejectStalePick();
+                return;
+            }
             if (!start || !end ||
                 !start->valid() || !end->valid()) {
                 reportStatus(
@@ -4285,6 +4325,10 @@ void PartSketchInteractionController::handleRelationsPointer(
             candidates.push_back({
                 {line.id, sketch::ConstraintElement::line_end},
                 {end->x, end->y}});
+        }
+        if (!stillCurrentPick()) {
+            rejectStalePick();
+            return;
         }
         const auto hit = sketch::resolveRelationEndpointHit(
             *current_model,
@@ -4314,6 +4358,10 @@ void PartSketchInteractionController::handleRelationsPointer(
     } else {
         const auto hit = viewport_controller_->querySketchEntityAt(
             input.viewport_position);
+        if (!stillCurrentPick()) {
+            rejectStalePick();
+            return;
+        }
         if (!hit.completed) {
             reportStatus("RELATIONS: current-stage Line hit query failed.");
             return;
@@ -4335,6 +4383,13 @@ void PartSketchInteractionController::handleRelationsPointer(
     }
 
     if (!target) return;
+    // Both the authored SketchModel pointer and the linked-source
+    // bindings above were taken from one particular Part incarnation.
+    // Native pick/projection calls must not cross that stage boundary.
+    if (!stillCurrentPick()) {
+        rejectStalePick();
+        return;
+    }
     // A1 has not authorized numerical constraints on PG-01 linked
     // sources. Reject any such target *before* consuming a draft pick.
     const auto linked = std::any_of(
@@ -4363,7 +4418,7 @@ void PartSketchInteractionController::handleRelationsPointer(
             "choose current-stage targets again if needed.");
         return;
     case sketch::RelationTargetOutcome::first_target_accepted:
-        relation_first_revision_ = session_->document().revision();
+        relation_first_revision_ = pointer_revision;
         reportStatus(
             "RELATIONS: first target accepted; choose the "
             "second distinct Line/endpoint.");
