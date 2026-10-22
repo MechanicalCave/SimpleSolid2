@@ -2504,6 +2504,16 @@ bool PartSketchInteractionController::selectRelationKind(
         }
     }
 
+    // Capture the original Part stage BEFORE consuming the first
+    // preselected semantic target. A state-changed callback can re-enter
+    // DocumentSession and commit an unrelated edit; its new revision is
+    // never authority to upgrade an earlier pick.
+    auto* const selection_session = session_;
+    const auto selection_sketch = *sketch_id_;
+    const auto selection_revision =
+        selection_session->document().revision();
+    const auto selection_incarnation =
+        selection_session->document().incarnationToken();
     sketch::RelationTargetResult result;
     for (const auto id : selected) {
         result = interaction_.acceptRelationTarget(
@@ -2516,6 +2526,7 @@ bool PartSketchInteractionController::selectRelationKind(
             // Should not occur after complete prevalidation; keep the
             // kind but clear any half-consumed selection, fail closed.
             static_cast<void>(interaction_.setRelationKind(kind));
+            relation_first_revision_.reset();
             reportStatus(
                 "RELATIONS: preselected targets were rejected. "
                 "No Part change.");
@@ -2523,10 +2534,31 @@ bool PartSketchInteractionController::selectRelationKind(
             return true;
         }
     }
+    if (result.outcome ==
+            sketch::RelationTargetOutcome::first_target_accepted) {
+        relation_first_revision_ = selection_revision;
+    }
     notifyStateChanged();
+    // Both a partial pair and a fully preselected ready relation must
+    // pass this gate after UI callbacks and before a Part command. A
+    // revision change is not benign merely because Line seeds match.
+    if (session_ != selection_session || !sketch_id_ ||
+        *sketch_id_ != selection_sketch ||
+        interaction_.relationKind() != kind ||
+        selection_session->document().incarnationToken() !=
+            selection_incarnation ||
+        selection_session->document().revision() !=
+            selection_revision) {
+        static_cast<void>(interaction_.cancelRelationTarget());
+        relation_first_revision_.reset();
+        reportStatus(
+            "RELATIONS: stale preselected targets after Part/context "
+            "change; select current-stage targets again. No Part change.");
+        notifyStateChanged();
+        return true;
+    }
     if (result.outcome ==
         sketch::RelationTargetOutcome::first_target_accepted) {
-        relation_first_revision_ = session_->document().revision();
         reportStatus(
             "RELATIONS: first preselected Line accepted; "
             "click one more Line. No Part change.");
