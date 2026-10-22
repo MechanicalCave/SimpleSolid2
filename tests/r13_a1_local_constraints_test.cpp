@@ -1270,6 +1270,87 @@ int main() {
               ->model.findLine(extra) != nullptr);
     }
 
+    // A2.0 RED: Fix Current Position must capture current NUMERIC
+    // solution, rather than the historical skew authored seed.
+    // Source is intentionally local/XY, never a projected or Body-stage Line.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct SolveToHorizontal final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                for (auto& line : candidate.lines) {
+                    line.end.v = line.start.v;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {},
+                        problem.fixed_lines.empty() ? 3U : 0U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 2.0}});
+        CHECK(line.ok() && line.entity_id);
+        const auto id = *line.entity_id;
+        const auto horizontal = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {id, sk::ConstraintElement::line}, {}});
+        CHECK(horizontal.ok() && horizontal.constraint_id);
+        const auto before_fix =
+            session.document().findSketch(sid)->model.state();
+        const auto rev = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::FixCurrentSketchLineCommand command{
+            sid, session.document().documentId(), rev,
+            session.document().incarnationToken(), id};
+        const auto frozen = session.execute(command, policy, backend);
+        CHECK(frozen.ok() && frozen.changed && frozen.constraint_id);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().revision() != rev);
+        CHECK(session.undoDepth() == undo + 1U);
+        const auto& model =
+            session.document().findSketch(sid)->model;
+        CHECK(model.isFixedLine(id));
+        CHECK(model.findLine(id) != nullptr);
+        CHECK(model.findLine(id)->start() == sk::Point2{0.0, 0.0});
+        CHECK(model.findLine(id)->end() == sk::Point2{5.0, 0.0});
+        CHECK(model.constraintCount() == 2U);
+        CHECK(session.undo().ok());
+        CHECK(session.document().findSketch(sid)->model.state().lines ==
+              before_fix.lines);
+        CHECK(!session.document().findSketch(sid)->model.isFixedLine(id));
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.isFixedLine(id));
+        CHECK(session.document().findSketch(sid)->model.findLine(id)->end() ==
+              sk::Point2{5.0, 0.0});
+        const auto fixed_rev = session.document().revision();
+        const auto fixed_undo = session.undoDepth();
+        const auto again = session.execute(
+            app::FixCurrentSketchLineCommand{
+                sid, session.document().documentId(), fixed_rev,
+                session.document().incarnationToken(), id},
+            policy, backend);
+        CHECK(!again.ok() && !again.changed);
+        CHECK(!again.constraint_id);
+        CHECK(session.document().revision() == fixed_rev);
+        CHECK(session.undoDepth() == fixed_undo);
+        CHECK(backend.calls == 2);
+    }
+
     sk::SketchModel model;
     const auto line = model.addLine({1.0, 2.0}, {5.0, 4.0});
     const auto seed = model.state();
