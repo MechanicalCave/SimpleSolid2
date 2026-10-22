@@ -374,6 +374,7 @@ public:
         development_relation_solver_ =
             backend != nullptr && policy.valid() ? backend : nullptr;
         development_relation_policy_ = policy;
+        ++relation_context_generation_;
     }
     [[nodiscard]] bool selectRelationKind(sketch::ConstraintKind kind);
     [[nodiscard]] bool selectDimensionKind(sketch::DrivingDimensionToolKind kind);
@@ -569,6 +570,10 @@ private:
     // never manufactured from the unsolved A1 command.
     sketch::ILocalSketchSolver* development_relation_solver_{};
     sketch::LocalSolverAcceptancePolicy development_relation_policy_{};
+    // Transient UI generation. An in-flight numeric solve must not
+    // authorize an old command after tool/context/solver re-registration,
+    // even if the Part's durable revision and IDs are unchanged.
+    std::uint64_t relation_context_generation_{};
     std::optional<sketch::SketchId> sketch_id_;
     // The first semantic target of a two-click relation belongs to one
     // exact Part revision, even if unrelated edits leave its Line unchanged.
