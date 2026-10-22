@@ -788,6 +788,30 @@ int main() {
         CHECK(independent.draft);
         CHECK(independent.draft->first == initial);
         CHECK(independent.draft->second == next);
+
+        // Role intent is part of the same first-hit provenance. It can
+        // change with a retained EntityId and identical endpoints.
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            edited, initial).outcome == RO::first_target_accepted);
+        CHECK(edited.setEntityRole(
+            first, sketch::EntityRole::construction));
+        const auto changed_role = staged.acceptRelationTarget(edited, next);
+        CHECK(changed_role.outcome == RO::invalid_target);
+        CHECK(!changed_role.draft);
+        CHECK(!staged.firstRelationTarget());
+        CHECK(staged.relationKind() == kind);
+
+        // A fresh pick must capture the construction-role Line as it is,
+        // not keep comparing against the old regular-role snapshot.
+        CHECK(staged.acceptRelationTarget(
+            edited, initial).outcome == RO::first_target_accepted);
+        const auto after_role_repick =
+            staged.acceptRelationTarget(edited, next);
+        CHECK(after_role_repick.outcome == RO::ready);
+        CHECK(after_role_repick.draft);
+        CHECK(after_role_repick.draft->first == initial);
+        CHECK(after_role_repick.draft->second == next);
     }
 
     // Native viewport screen-space R13-A2 Coincident endpoint grammar:
