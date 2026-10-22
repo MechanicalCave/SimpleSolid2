@@ -4299,12 +4299,20 @@ void PartSketchInteractionController::commitReadyRelation(
             development_relation_policy_,
             guarded_backend);
     }
-    if (tool_invalidated || !stillCurrentTool()) {
-        // Do not project status from an obsolete in-flight command into
-        // a new Sketch/Part UI context. The gateway has already rejected
-        // an in-flight tool transition before it can commit old intent.
+    if (!sameUiContext()) {
+        // A newer tool or solver registration owns the Operations UI.
+        // The old in-flight request must not overwrite its presentation.
         return;
     }
+    if (tool_invalidated) {
+        reportStatus(
+            "RELATIONS: stale in-flight solver result after context "
+            "or revision change; no relation command accepted.");
+        return;
+    }
+    // A successful Part commit MUST increment revision. The post-solve
+    // UI gate therefore compares stable session/tool generation, while
+    // the wrapped solver compared the exact entry-time revision.
     if (!committed.ok() || !committed.changed) {
         reportStatus(relationCommitRejectionText(committed));
         return;
