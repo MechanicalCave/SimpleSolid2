@@ -3280,6 +3280,50 @@ int main() {
         CHECK(skew.state() == original);
     }
 
+    // A2.0 RED: comparing backend-mutated canonical DTO with the
+    // *current* caller DTO is insufficient if a reentrant adapter also
+    // holds a mutable pointer to the caller's disposable problem.
+    // Keep an independent entry snapshot, not two mutable views that
+    // can be rewritten identically during solve().
+    {
+        struct DoubleTamperBackend final : sk::ILocalSketchSolver {
+            sk::LocalSolveProblem* caller{};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& view) override {
+                ++calls;
+                CHECK(caller != nullptr);
+                auto& canonical =
+                    const_cast<sk::LocalSolveProblem&>(view);
+                // Both problems now CLAIM the originally skew Line
+                // was already horizontal, so the old post-solve
+                // equality check cannot detect this breach.
+                caller->authored.lines.front().end.v = 0.0;
+                caller->lines.front().end.v = 0.0;
+                canonical.authored.lines.front().end.v = 0.0;
+                canonical.lines.front().end.v = 0.0;
+                return {sk::LocalBackendStatus::converged,
+                        canonical.authored, {}, {}, std::nullopt};
+            }
+        } backend;
+        sk::SketchModel original_model;
+        const auto id = original_model.addLine(
+            {0.0, 0.0}, {5.0, 1.0});
+        CHECK(original_model.addHorizontal(id));
+        const auto original = original_model.state();
+        auto input = sk::prepareLocalSolveProblem(original);
+        CHECK(input && input->equations.size() == 1U);
+        backend.caller = &*input;
+        const auto result = sk::evaluateLocalSolve(
+            *input, sk::LocalSolverAcceptancePolicy{1.0e-8, 1.0e-8},
+            backend);
+        CHECK(backend.calls == 1);
+        CHECK(result.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!result.candidate);
+        CHECK(original_model.state() == original);
+    }
+
     // SS1-style backend gateway RED: do not mistake a backend's declared
     // convergence for a trustworthy solved Sketch or Part authority.
     // Scripted backend tests the boundary; it is NOT a production solver.
