@@ -2813,5 +2813,83 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0 selection-first reentrancy: an owning UI callback may
+    // commit an unrelated Part edit between first-target acceptance and
+    // display refresh. That callback must not grant the OLD pick the
+    // newly incremented revision (or silently authorize later commit).
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto first = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto second = session.execute(
+            application::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(first.ok() && second.ok());
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) { status = message; });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        controller.activateSelect();
+        CHECK(viewport.sketch_scene_.lines.size() == 2U);
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_release,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(controller.selectedCount() == 1U);
+        controller.activateRelations();
+
+        const auto before_selection = session.document().revision();
+        bool injected = false;
+        controller.setStateChangedHandler([&] {
+            if (injected || !controller.firstRelationTarget()) return;
+            injected = true;
+            const auto circle = session.execute(
+                application::AddSketchCircleCommand{
+                    sid, {30.0, 30.0}, 2.0});
+            CHECK(circle.ok() && circle.entity_id);
+            viewport_controller.refreshPresentation();
+        });
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::parallel));
+        CHECK(injected);
+        CHECK(session.document().revision() != before_selection);
+        CHECK(status.find("stale") != std::string::npos);
+        CHECK(!controller.firstRelationTarget());
+        CHECK(backend.calls == 0);
+        const auto revised = session.document().revision();
+        const auto undo_depth = session.undoDepth();
+        const auto state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(state.constraints.empty());
+        CHECK(state.circles.size() == 1U);
+        CHECK(session.document().revision() == revised);
+        CHECK(session.undoDepth() == undo_depth);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
