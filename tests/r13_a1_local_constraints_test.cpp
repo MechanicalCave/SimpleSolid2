@@ -3357,6 +3357,28 @@ int main() {
               sk::LocalSolveGatewayStatus::invalid_backend_response);
         CHECK(!mismatched_conflict.candidate);
         CHECK(mismatched_conflict.conflicting_constraints.empty());
+
+        // The detailed inventory cannot be an incomplete subset of
+        // the actual conflict owners either. Exact complete coverage
+        // of two independent IDs remains accepted.
+        backend.conflicts = {*first_relation, *second_relation};
+        backend.diagnostics = {{
+            sk::LocalBackendDiagnosticKind::conflicting_constraint,
+            *first_relation}};
+        const auto missing_detail = sk::evaluateLocalSolve(
+            *multi_problem, policy, backend);
+        CHECK(missing_detail.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!missing_detail.candidate);
+        backend.diagnostics.push_back({
+            sk::LocalBackendDiagnosticKind::conflicting_constraint,
+            *second_relation});
+        const auto full_details = sk::evaluateLocalSolve(
+            *multi_problem, policy, backend);
+        CHECK(full_details.status == sk::LocalSolveGatewayStatus::conflict);
+        CHECK(!full_details.candidate);
+        CHECK(full_details.conflicting_constraints == backend.conflicts);
+        CHECK(full_details.diagnostics == backend.diagnostics);
         backend.diagnostics.clear();
 
         backend.conflicts = {*sk::ConstraintId::parse("9999")};
