@@ -3233,16 +3233,38 @@ int main(int argc, char* argv[]) {
         CHECK(viewport.sketch_scene_.lines.size() == 1U);
         viewport.point_query_ = {
             true, viewport.sketch_scene_.lines[0].token};
-        backend.on_solve = [&] { controller.end(); };
+        backend.on_solve = [&] { controller.activateSelect(); };
         controller.onPointer(pointer(
             sid, viewer::SpatialPointerPhase::primary_press,
             125.0, 100.0, 2.5, 0.0));
         CHECK(backend.calls == 1);
-        CHECK(!controller.active());
+        CHECK(controller.active());
+        CHECK(!controller.relationKind());
         CHECK(session.document().revision() == before_revision);
         CHECK(session.undoDepth() == before_undo);
         CHECK(session.document().findSketch(sid)->model.state() ==
               before_state);
+
+        // Positive control: same Part/geometry, now with a stable UI
+        // context, must genuinely pass solver and commit the same intent.
+        backend.on_solve = {};
+        controller.activateRelations();
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::horizontal));
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(backend.calls == 2);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        CHECK(session.document().revision() != before_revision);
+        const auto valid =
+            session.document().findSketch(sid)->model.state();
+        CHECK(valid.constraints.size() == 1U);
+        CHECK(valid.constraints.front().kind ==
+              sketch::ConstraintKind::horizontal);
+        controller.end();
     }
 
     return EXIT_SUCCESS;
