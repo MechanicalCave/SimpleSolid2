@@ -2408,6 +2408,11 @@ int main(int argc, char* argv[]) {
         a2_viewport_controller.setSketchEditSketch(sid);
         ui::PartSketchInteractionController a2_interaction{
             a2_viewport_controller};
+        std::string a2_status;
+        a2_interaction.setStatusHandler(
+            [&a2_status](const std::string& message) {
+                a2_status = message;
+            });
         a2_interaction.begin(a2_session, sid);
         CHECK(a2_interaction.selectedCount() == 0U);
         a2_interaction.activateRelations();
@@ -2538,6 +2543,8 @@ int main(int argc, char* argv[]) {
         CHECK(a2_session.undoDepth() == original_undo + 1U);
         CHECK(a2_session.document().findSketch(sid)->model.state() ==
               after_click);
+        CHECK(a2_status.find("redundant") != std::string::npos);
+        CHECK(a2_status.find("No command accepted") != std::string::npos);
 
         // Selection-first with two existing local Line identities commits
         // the same validated command without a redundant viewport click.
