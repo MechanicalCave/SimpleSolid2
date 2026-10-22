@@ -1423,6 +1423,11 @@ RelationEndpointHit resolveRelationEndpointHit(
     if (!std::isfinite(tolerance_sq)) return invalid;
 
     std::optional<ConstraintReference> found;
+    bool multiple_hits = false;
+    // Validate every supplied projection, even after a second visible
+    // hit makes selection ambiguous. Otherwise a later stale EntityId,
+    // duplicate endpoint or non-finite screen point is silently hidden
+    // behind an early AMBIGUOUS response instead of INVALID_INPUT.
     for (std::size_t index = 0; index < candidates.size(); ++index) {
         const auto& candidate = candidates[index];
         const auto reference = candidate.reference;
@@ -1446,11 +1451,15 @@ RelationEndpointHit resolveRelationEndpointHit(
         if (!std::isfinite(distance_sq)) return invalid;
         if (distance_sq > tolerance_sq) continue;
         if (found) {
-            return {RelationEndpointHitStatus::ambiguous, std::nullopt};
+            multiple_hits = true;
+        } else {
+            found = reference;
         }
-        found = reference;
     }
 
+    if (multiple_hits) {
+        return {RelationEndpointHitStatus::ambiguous, std::nullopt};
+    }
     return found
         ? RelationEndpointHit{RelationEndpointHitStatus::hit, found}
         : RelationEndpointHit{RelationEndpointHitStatus::miss, std::nullopt};
