@@ -2535,6 +2535,12 @@ int main(int argc, char* argv[]) {
         // with neither a revision nor Undo/ConstraintId side effect.
         const auto committed_revision =
             a2_session.document().revision();
+        // A successful Part transaction rebuilds the native Viewer scene.
+        // Requery the current-generation semantic token rather than
+        // replaying a stale presentation hit from before that transaction.
+        CHECK(!a2_viewport.sketch_scene_.lines.empty());
+        a2_viewport.point_query_ = {
+            true, a2_viewport.sketch_scene_.lines.front().token};
         a2_interaction.onPointer(pointer(
             sid, viewer::SpatialPointerPhase::primary_press,
             125.0, 100.0, 2.5, 0.0));
