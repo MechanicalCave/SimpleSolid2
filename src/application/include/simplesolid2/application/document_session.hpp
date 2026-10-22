@@ -159,6 +159,18 @@ struct AddSolvedSketchRelationCommand final {
     sketch::ConstraintReference second;
 };
 
+// A2.0 local origin-plane Fix Current Position. The command solves the
+// current authored relations, captures the verified effective Line endpoints
+// as authored seeds and freezes them in ONE guarded Part transaction.
+// A production UI/backend is separately gated by PlaneGCS distribution.
+struct FixCurrentSketchLineCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentId expected_document_id;
+    core::DocumentRevision expected_revision;
+    std::weak_ptr<const part::PartRuntimeIncarnation> expected_incarnation;
+    sketch::EntityId line_id;
+};
+
 struct AddHorizontalSketchConstraintCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
@@ -780,6 +792,10 @@ public:
         const AddHorizontalSketchConstraintCommand& command);
     [[nodiscard]] AddSolvedSketchRelationResult execute(
         const AddSolvedSketchRelationCommand& command,
+        const sketch::LocalSolverAcceptancePolicy& policy,
+        sketch::ILocalSketchSolver& backend);
+    [[nodiscard]] AddSolvedSketchRelationResult execute(
+        const FixCurrentSketchLineCommand& command,
         const sketch::LocalSolverAcceptancePolicy& policy,
         sketch::ILocalSketchSolver& backend);
     [[nodiscard]] DocumentSessionResult execute(
