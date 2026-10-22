@@ -3255,6 +3255,30 @@ int main(int argc, char* argv[]) {
         CHECK(session.document().findSketch(sid)->model.state() ==
               before_state);
 
+        // ABA regression: the callback registers the EXACT SAME backend
+        // address again during solve. Pointer identity alone is not
+        // sufficient authority; the transient UI epoch must invalidate
+        // this in-flight solve without spending revision/Undo/ConstraintId.
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        backend.on_solve = [&] {
+            controller.setDevelopmentRelationSolver(
+                &backend, {1.0e-7, 1.0e-6});
+        };
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(backend.calls == 2);
+        CHECK(controller.active());
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(session.document().revision() == before_revision);
+        CHECK(session.undoDepth() == before_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              before_state);
+
         // Positive control: same Part/geometry, now with a stable UI
         // context, must genuinely pass solver and commit the same intent.
         backend.on_solve = {};
@@ -3268,7 +3292,7 @@ int main(int argc, char* argv[]) {
         controller.onPointer(pointer(
             sid, viewer::SpatialPointerPhase::primary_press,
             125.0, 100.0, 2.5, 0.0));
-        CHECK(backend.calls == 2);
+        CHECK(backend.calls == 3);
         CHECK(session.undoDepth() == before_undo + 1U);
         CHECK(session.document().revision() != before_revision);
         const auto valid =
