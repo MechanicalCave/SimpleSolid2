@@ -702,8 +702,16 @@ namespace {
     for (std::size_t i = 0; i < pending.size(); ++i) {
         const auto current = pending[i];
         for (const auto [neighbor, edge_parity] : connections[current]) {
-            if (parity[neighbor] != -1) continue;
-            parity[neighbor] = parity[current] ^ edge_parity;
+            const int expected = parity[current] ^ edge_parity;
+            if (parity[neighbor] != -1) {
+                // An inconsistent authored cycle has no single valid
+                // implication. Leave the full conflicting system to
+                // the numeric solver instead of picking an arbitrary
+                // BFS path and falsely declaring this request redundant.
+                if (parity[neighbor] != expected) return false;
+                continue;
+            }
+            parity[neighbor] = expected;
             pending.push_back(neighbor);
         }
     }
