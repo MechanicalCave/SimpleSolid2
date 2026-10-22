@@ -3279,6 +3279,34 @@ int main(int argc, char* argv[]) {
         CHECK(session.document().findSketch(sid)->model.state() ==
               before_state);
 
+        // Same-document/context ABA: the backend synchronously ends the
+        // edit and begins an edit of this SAME Sketch, then explicitly
+        // registers the SAME solver pointer and selects SAME relation.
+        // IDs/revision/semantic kind all match again; only the transient
+        // controller generation distinguishes the two edit sessions.
+        backend.on_solve = [&] {
+            controller.end();
+            controller.begin(session, sid);
+            controller.setDevelopmentRelationSolver(
+                &backend, {1.0e-7, 1.0e-6});
+            controller.activateRelations();
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::horizontal));
+        };
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(backend.calls == 3);
+        CHECK(controller.active());
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(session.document().revision() == before_revision);
+        CHECK(session.undoDepth() == before_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              before_state);
+
         // Positive control: same Part/geometry, now with a stable UI
         // context, must genuinely pass solver and commit the same intent.
         backend.on_solve = {};
@@ -3292,7 +3320,7 @@ int main(int argc, char* argv[]) {
         controller.onPointer(pointer(
             sid, viewer::SpatialPointerPhase::primary_press,
             125.0, 100.0, 2.5, 0.0));
-        CHECK(backend.calls == 3);
+        CHECK(backend.calls == 4);
         CHECK(session.undoDepth() == before_undo + 1U);
         CHECK(session.document().revision() != before_revision);
         const auto valid =
