@@ -231,6 +231,10 @@ void PartSketchInteractionController::begin(
     sketch::SketchId sketch_id) {
     session_ = &session;
     sketch_id_ = sketch_id;
+    // A development solver is borrowed, never owned by this controller.
+    // Switching the Part/Sketch edit context revokes an old registration.
+    development_relation_solver_ = nullptr;
+    development_relation_policy_ = {};
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
     tracking_hover_.reset();
@@ -263,6 +267,8 @@ void PartSketchInteractionController::begin(
 }
 
 void PartSketchInteractionController::end() {
+    development_relation_solver_ = nullptr;
+    development_relation_policy_ = {};
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
     tracking_hover_.reset();
