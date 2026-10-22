@@ -1122,9 +1122,11 @@ int main() {
                 ++calls;
                 auto candidate = problem.authored;
                 CHECK(!candidate.lines.empty());
-                auto& moved = candidate.lines.back();
-                moved.start.u += 2.0;
-                moved.end.u += 2.0;
+                if (calls == 1) {
+                    auto& moved = candidate.lines.back();
+                    moved.start.u += 2.0;
+                    moved.end.u += 2.0;
+                }
                 return {sk::LocalBackendStatus::converged,
                         candidate, {}, {}, std::nullopt};
             }
@@ -1164,6 +1166,10 @@ int main() {
                 sk::ConstraintKind::horizontal,
                 {*first.entity_id, sk::ConstraintElement::line}, {}});
         CHECK(relation.ok() && relation.constraint_id);
+        // Re-arm one malicious initial candidate; the second solver
+        // would preserve any staged seeds, so without an authoring
+        // guard the transaction would incorrectly commit the jump.
+        backend.calls = 0;
         const auto before_delete =
             session.document().findSketch(sid)->model.state();
         const auto delete_revision = session.document().revision();
@@ -1173,7 +1179,7 @@ int main() {
             session.document().incarnationToken(), *relation.constraint_id};
         const auto wrong_delete = session.execute(erase, policy, backend);
         CHECK(!wrong_delete.ok() && !wrong_delete.changed);
-        CHECK(backend.calls == 2);
+        CHECK(backend.calls == 1);
         CHECK(session.document().revision() == delete_revision);
         CHECK(session.undoDepth() == delete_undo);
         CHECK(session.document().findSketch(sid)->model.state()
