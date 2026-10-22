@@ -1558,6 +1558,93 @@ int main() {
               ->model.findLine(extra) != nullptr);
     }
 
+    // A2.0 actual Part writer proof: an implicitly redundant new
+    // relation cannot spend a ConstraintId, change DocumentRevision, or
+    // create Undo even when the injected backend would say Converged.
+    // A genuinely independent relation must still commit normally.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct SilentRedundancy final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 2.0}, {5.0, 2.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 4.0}, {5.0, 4.0}});
+        const auto d = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 6.0}, {5.0, 6.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        CHECK(d.ok() && d.entity_id);
+        using CK = sk::ConstraintKind;
+        using CE = sk::ConstraintElement;
+        const sk::ConstraintReference ar{*a.entity_id, CE::line};
+        const sk::ConstraintReference br{*b.entity_id, CE::line};
+        const sk::ConstraintReference cr{*c.entity_id, CE::line};
+        const sk::ConstraintReference dr{*d.entity_id, CE::line};
+        const auto ab = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(), CK::parallel, ar, br});
+        const auto bc = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(), CK::parallel, br, cr});
+        CHECK(ab.ok() && ab.constraint_id);
+        CHECK(bc.ok() && bc.constraint_id);
+        const auto snapshot = session.document().findSketch(sid)->model.state();
+        const auto before_rev = session.document().revision();
+        const auto before_undo = session.undoDepth();
+        const auto wrong = session.execute(
+            app::AddSolvedSketchRelationCommand{
+                sid, session.document().documentId(), before_rev,
+                session.document().incarnationToken(),
+                CK::parallel, ar, cr}, policy, backend);
+        CHECK(!wrong.ok() && !wrong.changed);
+        CHECK(!wrong.constraint_id);
+        CHECK(wrong.preflight_status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(backend.calls == 0);
+        CHECK(session.document().revision() == before_rev);
+        CHECK(session.undoDepth() == before_undo);
+        CHECK(session.document().findSketch(sid)->model.state() == snapshot);
+
+        const auto valid = session.execute(
+            app::AddSolvedSketchRelationCommand{
+                sid, session.document().documentId(), before_rev,
+                session.document().incarnationToken(),
+                CK::parallel, ar, dr}, policy, backend);
+        CHECK(valid.ok() && valid.changed && valid.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        const auto after = session.document().findSketch(sid)->model.state();
+        CHECK(after.constraints.size() == 3U);
+        CHECK(after.next_constraint_id != snapshot.next_constraint_id);
+        CHECK(after.lines == snapshot.lines);
+        CHECK(session.undo().ok());
+        const auto undone = session.document().findSketch(sid)->model.state();
+        CHECK(undone.constraints == snapshot.constraints);
+        CHECK(undone.lines == snapshot.lines);
+        CHECK(undone.next_constraint_id == after.next_constraint_id);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.findConstraint(
+            *valid.constraint_id) != nullptr);
+    }
+
     // A2.0 RED: a second, independently constrained component must not
     // drift during Fix or solver-backed Delete. Every residual is valid:
     // both lines are horizontal, yet only component A is being edited.
