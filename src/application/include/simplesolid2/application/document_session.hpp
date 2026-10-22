@@ -177,6 +177,17 @@ struct AddHorizontalSketchConstraintCommand final {
     sketch::EntityId line_id;
 };
 
+// A2.0 numerical Delete preserving last accepted local Sketch geometry.
+// Distinct from the older unsolved headless erase path; actual production
+// 3D glyph/annotation Delete requires separate UI + licensed backend gates.
+struct EraseSolvedSketchConstraintCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentId expected_document_id;
+    core::DocumentRevision expected_revision;
+    std::weak_ptr<const part::PartRuntimeIncarnation> expected_incarnation;
+    sketch::ConstraintId constraint_id;
+};
+
 struct EraseSketchConstraintCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
@@ -554,6 +565,17 @@ struct AddSolvedSketchRelationResult final {
     }
 };
 
+struct EraseSolvedSketchConstraintResult final {
+    bool changed{false};
+    std::optional<sketch::LocalSolveGatewayStatus> solver_status;
+    std::vector<sketch::LocalBackendDiagnostic> solver_diagnostics;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
 struct AddSketchLineResult final {
     bool changed{false};
     std::optional<sketch::EntityId> entity_id;
@@ -796,6 +818,10 @@ public:
         sketch::ILocalSketchSolver& backend);
     [[nodiscard]] AddSolvedSketchRelationResult execute(
         const FixCurrentSketchLineCommand& command,
+        const sketch::LocalSolverAcceptancePolicy& policy,
+        sketch::ILocalSketchSolver& backend);
+    [[nodiscard]] EraseSolvedSketchConstraintResult execute(
+        const EraseSolvedSketchConstraintCommand& command,
         const sketch::LocalSolverAcceptancePolicy& policy,
         sketch::ILocalSketchSolver& backend);
     [[nodiscard]] DocumentSessionResult execute(
