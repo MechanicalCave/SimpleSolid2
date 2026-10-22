@@ -1446,6 +1446,86 @@ int main() {
             *a.entity_id));
     }
 
+    // A2.0 RED: Delete relation must retain last accepted effective
+    // geometry as authored seeds instead of snapping back to old inputs.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct HorizontalEffective final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                if (!problem.equations.empty()) {
+                    for (auto& line : candidate.lines) {
+                        line.end.v = line.start.v;
+                    }
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {},
+                        problem.equations.empty() ? 4U : 3U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 2.0}});
+        CHECK(line.ok() && line.entity_id);
+        const auto horizontal = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(horizontal.ok() && horizontal.constraint_id);
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        const auto original_rev = session.document().revision();
+        const auto original_undo = session.undoDepth();
+        const app::EraseSolvedSketchConstraintCommand command{
+            sid, session.document().documentId(), original_rev,
+            session.document().incarnationToken(), *horizontal.constraint_id};
+        const auto erased = session.execute(command, policy, backend);
+        CHECK(erased.ok() && erased.changed);
+        CHECK(backend.calls == 2);
+        const auto& after = session.document().findSketch(sid)->model;
+        CHECK(after.constraintCount() == 0U);
+        CHECK((after.findLine(*line.entity_id)->end() ==
+               sk::Point2{5.0, 0.0}));
+        CHECK(after.state().next_constraint_id ==
+              original.next_constraint_id);
+        CHECK(session.undoDepth() == original_undo + 1U);
+        CHECK(session.undo().ok());
+        const auto undo_state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(undo_state.lines == original.lines);
+        CHECK(undo_state.constraints == original.constraints);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.constraintCount() == 0U);
+        CHECK((session.document().findSketch(sid)->model
+                   .findLine(*line.entity_id)->end() ==
+               sk::Point2{5.0, 0.0}));
+        const auto no_op_rev = session.document().revision();
+        const auto no_op_undo = session.undoDepth();
+        const auto removed_twice = session.execute(
+            app::EraseSolvedSketchConstraintCommand{
+                sid, session.document().documentId(), no_op_rev,
+                session.document().incarnationToken(), *horizontal.constraint_id},
+            policy, backend);
+        CHECK(!removed_twice.ok() && !removed_twice.changed);
+        CHECK(session.document().revision() == no_op_rev);
+        CHECK(session.undoDepth() == no_op_undo);
+        CHECK(backend.calls == 2);
+    }
+
     sk::SketchModel model;
     const auto line = model.addLine({1.0, 2.0}, {5.0, 4.0});
     const auto seed = model.state();
