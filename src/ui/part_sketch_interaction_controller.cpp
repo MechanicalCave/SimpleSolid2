@@ -2438,8 +2438,11 @@ void PartSketchInteractionController::activateRelations() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
-    notifyStateChanged();
+    // Publish activation status BEFORE notifying Operations listeners.
+    // A listener can reenter, select a kind and commit a guarded DEV
+    // relation; its newer success/rejection must remain the last status.
     reportStatus("RELATIONS: numeric production solver and semantic targets are not yet enabled. No relation is authored.");
+    notifyStateChanged();
 }
 
 bool PartSketchInteractionController::selectRelationKind(
