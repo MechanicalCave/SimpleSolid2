@@ -2570,6 +2570,31 @@ int main(int argc, char* argv[]) {
         CHECK(a2_session.undoDepth() == undo_before_new_context);
         CHECK(a2_session.document().findSketch(sid)->model.state() ==
               before_new_context);
+
+        // A new edit context may explicitly register a new live DEV
+        // backend. Fix Current Position must then take the dedicated
+        // two-solve guarded Part transaction, never unsolved A1 authoring.
+        a2_interaction.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(backend.calls == 4);
+        const auto after_fix =
+            a2_session.document().findSketch(sid)->model.state();
+        CHECK(after_fix.constraints.size() == 3U);
+        CHECK(after_fix.constraints.back().kind ==
+              sketch::ConstraintKind::fix);
+        CHECK(after_fix.constraints.back().first.entity ==
+              *b.entity_id);
+        CHECK(after_fix.lines == original_sketch.lines);
+        CHECK(a2_session.undoDepth() == undo_before_new_context + 1U);
+        CHECK(a2_session.undo().ok());
+        CHECK(a2_session.document().findSketch(sid)->model.state() ==
+              before_new_context);
+        CHECK(a2_session.redo().ok());
+        CHECK(a2_session.document().findSketch(sid)->model.state()
+              .constraints == after_fix.constraints);
         a2_interaction.end();
     }
 
