@@ -1442,6 +1442,91 @@ int main() {
               ->model.findLine(extra) != nullptr);
     }
 
+    // A2.0 RED: a second, independently constrained component must not
+    // drift during Fix or solver-backed Delete. Every residual is valid:
+    // both lines are horizontal, yet only component A is being edited.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct DisconnectedHorizontalDrift final : sk::ILocalSketchSolver {
+            bool shift_every_solve{};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 2U);
+                if (shift_every_solve || calls == 1) {
+                    candidate.lines[1].start.u += 2.0;
+                    candidate.lines[1].end.u += 2.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto line_a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto line_b = session.execute(app::AddSketchLineCommand{
+            sid, {10.0, 2.0}, {15.0, 2.0}});
+        CHECK(line_a.ok() && line_a.entity_id);
+        CHECK(line_b.ok() && line_b.entity_id);
+        const auto horizontal_a = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line_a.entity_id, sk::ConstraintElement::line}, {}});
+        const auto horizontal_b = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line_b.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(horizontal_a.ok() && horizontal_a.constraint_id);
+        CHECK(horizontal_b.ok() && horizontal_b.constraint_id);
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        CHECK(original.constraints.size() == 2U);
+        const auto revision_before = session.document().revision();
+        const auto undo_before = session.undoDepth();
+
+        // Re-solving after a provisional Fix returns exactly the same
+        // apparently valid drift of component B. This must not authorize
+        // an extra Fix transaction or publication of this candidate.
+        backend.shift_every_solve = true;
+        const app::FixCurrentSketchLineCommand fix{
+            sid, session.document().documentId(), revision_before,
+            session.document().incarnationToken(), *line_a.entity_id};
+        const auto bad_fix = session.execute(fix, policy, backend);
+        CHECK(!bad_fix.ok() && !bad_fix.changed);
+        CHECK(!bad_fix.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == revision_before);
+        CHECK(session.undoDepth() == undo_before);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        // Delete(A) previously materialized the full solved candidate;
+        // component B then jumped 2 mm despite having an independent
+        // horizontal relation and no selected target in that component.
+        backend.calls = 0;
+        backend.shift_every_solve = false;
+        const app::EraseSolvedSketchConstraintCommand erase{
+            sid, session.document().documentId(), revision_before,
+            session.document().incarnationToken(), *horizontal_a.constraint_id};
+        const auto bad_delete = session.execute(erase, policy, backend);
+        CHECK(!bad_delete.ok() && !bad_delete.changed);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == revision_before);
+        CHECK(session.undoDepth() == undo_before);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+    }
+
     // A2.0 RED: Fix Current Position must capture current NUMERIC
     // solution, rather than the historical skew authored seed.
     // Source is intentionally local/XY, never a projected or Body-stage Line.
