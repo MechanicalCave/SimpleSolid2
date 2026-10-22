@@ -3215,6 +3215,47 @@ int main() {
             sk::SketchModelState{}, fixed));
     }
 
+    // A2.0 RED: a solver receives an input DTO by const reference, not
+    // permission to rewrite the canonical problem's authored inventory.
+    // As the gateway owns a mutable temporary value, an untrusted
+    // adapter could legally cast away const on THAT copy, delete the
+    // Horizontal equation and report convergence on a skew candidate.
+    // Never validate against a solver-mutated copy of the original
+    // contract; confirm exact input integrity after the callback.
+    {
+        struct MutateSolverInput final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& immutable_view) override {
+                ++calls;
+                auto& tampered =
+                    const_cast<sk::LocalSolveProblem&>(immutable_view);
+                tampered.authored.constraints.clear();
+                tampered.constraints.clear();
+                tampered.equations.clear();
+                return {sk::LocalBackendStatus::converged,
+                        tampered.authored, {}, {}, std::nullopt};
+            }
+        } backend;
+        sk::SketchModel skew;
+        const auto id = skew.addLine({0.0, 0.0}, {5.0, 1.0});
+        CHECK(skew.addHorizontal(id));
+        const auto original = skew.state();
+        const auto problem = sk::prepareLocalSolveProblem(original);
+        CHECK(problem && problem->equations.size() == 1U);
+        const auto result = sk::evaluateLocalSolve(
+            *problem, sk::LocalSolverAcceptancePolicy{1.0e-8, 1.0e-8},
+            backend);
+        CHECK(backend.calls == 1);
+        CHECK(result.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!result.candidate);
+        CHECK(problem->authored == original);
+        CHECK(problem->constraints == original.constraints);
+        CHECK(problem->equations.size() == 1U);
+        CHECK(skew.state() == original);
+    }
+
     // SS1-style backend gateway RED: do not mistake a backend's declared
     // convergence for a trustworthy solved Sketch or Part authority.
     // Scripted backend tests the boundary; it is NOT a production solver.
