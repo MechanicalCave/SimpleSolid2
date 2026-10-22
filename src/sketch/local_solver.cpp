@@ -377,25 +377,34 @@ LocalSolveGatewayResult evaluateLocalSolve(
     }
 
     // Callers cannot fabricate or alter the prepared bridge's constraint
-    // inventory, reference geometry or fixed-line declaration.
+    // inventory, reference geometry or fixed-line declaration. Keep the
+    // same exact comparison after the backend call: the solver receives
+    // a const view of our mutable temporary, and a faulty native adapter
+    // must never rewrite the very equations used to review its answer.
     const auto canonical = prepareLocalSolveProblem(
         problem.authored, std::span<const EntityId>{problem.fixed_lines});
-    if (!canonical ||
-        canonical->constraints != problem.constraints ||
-        canonical->equations != problem.equations ||
-        canonical->fixed_lines != problem.fixed_lines ||
-        canonical->lines.size() != problem.lines.size()) {
+    const auto matchesCaller = [&problem, &canonical]() {
+        if (!canonical ||
+            canonical->authored != problem.authored ||
+            canonical->constraints != problem.constraints ||
+            canonical->equations != problem.equations ||
+            canonical->fixed_lines != problem.fixed_lines ||
+            canonical->lines.size() != problem.lines.size()) {
+            return false;
+        }
+        for (std::size_t i = 0; i < problem.lines.size(); ++i) {
+            const auto& a = canonical->lines[i];
+            const auto& b = problem.lines[i];
+            if (a.id != b.id || a.start != b.start ||
+                a.end != b.end || a.fixed != b.fixed) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!matchesCaller()) {
         result.status = LocalSolveGatewayStatus::invalid_problem;
         return result;
-    }
-    for (std::size_t i = 0; i < problem.lines.size(); ++i) {
-        const auto& a = canonical->lines[i];
-        const auto& b = problem.lines[i];
-        if (a.id != b.id || a.start != b.start || a.end != b.end ||
-            a.fixed != b.fixed) {
-            result.status = LocalSolveGatewayStatus::invalid_problem;
-            return result;
-        }
     }
 
     LocalBackendSolveResult backend_result;
@@ -403,6 +412,10 @@ LocalSolveGatewayResult evaluateLocalSolve(
         backend_result = backend.solve(*canonical);
     } catch (...) {
         result.status = LocalSolveGatewayStatus::backend_failure;
+        return result;
+    }
+    if (!matchesCaller()) {
+        result.status = LocalSolveGatewayStatus::invalid_backend_response;
         return result;
     }
 
