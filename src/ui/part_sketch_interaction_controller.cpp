@@ -304,6 +304,7 @@ void PartSketchInteractionController::begin(
     // Switching the Part/Sketch edit context revokes an old registration.
     development_relation_solver_ = nullptr;
     development_relation_policy_ = {};
+    ++relation_context_generation_;
     relation_first_revision_.reset();
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
@@ -339,6 +340,7 @@ void PartSketchInteractionController::begin(
 void PartSketchInteractionController::end() {
     development_relation_solver_ = nullptr;
     development_relation_policy_ = {};
+    ++relation_context_generation_;
     relation_first_revision_.reset();
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
@@ -2424,6 +2426,7 @@ void PartSketchInteractionController::activateRelations() {
     if (!active()) return;
     resetProfileRuntime();
     interaction_.activateRelations();
+    ++relation_context_generation_;
     relation_first_revision_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
@@ -2445,6 +2448,7 @@ bool PartSketchInteractionController::selectRelationKind(
         !interaction_.setRelationKind(kind)) {
         return false;
     }
+    ++relation_context_generation_;
     // Capture both the selected durable IDs and exact original Part
     // stage BEFORE notifying Qt or the viewer. Both callbacks may reenter
     // DocumentSession and author an unrelated Part change; an old
@@ -3062,6 +3066,7 @@ bool PartSketchInteractionController::escape() {
 
     const bool changed = interaction_.escape();
     if (!changed) return false;
+    ++relation_context_generation_;
     if (!interaction_.firstRelationTarget()) {
         relation_first_revision_.reset();
     }
@@ -3545,6 +3550,7 @@ void PartSketchInteractionController::cancelForHistory() {
 
     resetProfileRuntime();
     interaction_.cancelForHistory();
+    ++relation_context_generation_;
     relation_first_revision_.reset();
     mirror_keep_original_ = false;
     manipulation_revision_.reset();
@@ -4204,6 +4210,68 @@ void PartSketchInteractionController::commitReadyRelation(
     }
     const auto expected_document_id = session_->documentId();
     const auto expected_revision = session_->document().revision();
+    auto* const initiating_session = session_;
+    const auto initiating_sketch = *sketch_id_;
+    const auto initiating_kind = draft.kind;
+    auto* const borrowed_backend = development_relation_solver_;
+    const auto initiating_generation = relation_context_generation_;
+    const auto stillCurrentTool = [this, initiating_session,
+                                   initiating_sketch, initiating_kind,
+                                   borrowed_backend,
+                                   initiating_generation,
+                                   expected_document_id, expected_revision,
+                                   expected_incarnation]() {
+        return session_ == initiating_session &&
+            sketch_id_ && *sketch_id_ == initiating_sketch &&
+            active() &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == initiating_kind &&
+            development_relation_solver_ == borrowed_backend &&
+            relation_context_generation_ == initiating_generation &&
+            initiating_session->documentId() == expected_document_id &&
+            initiating_session->document().revision() == expected_revision &&
+            initiating_session->document().incarnationToken() ==
+                expected_incarnation;
+    };
+
+    // DocumentSession protects Part state/revision. It cannot know that
+    // a synchronous DEV backend callback changed the Qt edit command or
+    // closed/reopened the controller on the *same unchanged Part*.
+    // Reject such a backend result BEFORE the domain writer can publish
+    // an otherwise valid candidate.
+    class UiLeaseCheckedSolver final : public sketch::ILocalSketchSolver {
+    public:
+        UiLeaseCheckedSolver(
+            sketch::ILocalSketchSolver& underlying,
+            std::function<bool()> still_current,
+            bool& invalidated)
+            : underlying_{underlying},
+              still_current_{std::move(still_current)},
+              invalidated_{invalidated} {}
+
+        [[nodiscard]] sketch::LocalBackendSolveResult solve(
+            const sketch::LocalSolveProblem& problem) override {
+            if (!still_current_()) return invalidatedResponse();
+            auto solved = underlying_.solve(problem);
+            if (!still_current_()) return invalidatedResponse();
+            return solved;
+        }
+
+    private:
+        [[nodiscard]] sketch::LocalBackendSolveResult
+        invalidatedResponse() {
+            invalidated_ = true;
+            return {sketch::LocalBackendStatus::failed,
+                    std::nullopt, {}, {}, std::nullopt};
+        }
+        sketch::ILocalSketchSolver& underlying_;
+        std::function<bool()> still_current_;
+        bool& invalidated_;
+    };
+
+    bool tool_invalidated = false;
+    UiLeaseCheckedSolver guarded_backend{
+        *borrowed_backend, stillCurrentTool, tool_invalidated};
 
     // The same owning DocumentSession is used for command-first and
     // selection-first requests. In particular, never call the old
@@ -4215,7 +4283,7 @@ void PartSketchInteractionController::commitReadyRelation(
                 *sketch_id_, expected_document_id, expected_revision,
                 expected_incarnation, draft.first.entity},
             development_relation_policy_,
-            *development_relation_solver_);
+            guarded_backend);
     } else {
         committed = session_->execute(
             application::AddSolvedSketchRelationCommand{
@@ -4223,7 +4291,13 @@ void PartSketchInteractionController::commitReadyRelation(
                 expected_incarnation, draft.kind,
                 draft.first, draft.second},
             development_relation_policy_,
-            *development_relation_solver_);
+            guarded_backend);
+    }
+    if (tool_invalidated || !stillCurrentTool()) {
+        // Do not project status from an obsolete in-flight command into
+        // a new Sketch/Part UI context. The gateway has already rejected
+        // an in-flight tool transition before it can commit old intent.
+        return;
     }
     if (!committed.ok() || !committed.changed) {
         reportStatus(relationCommitRejectionText(committed));
@@ -4231,9 +4305,13 @@ void PartSketchInteractionController::commitReadyRelation(
     }
 
     viewport_controller_->refreshPresentation();
+    if (!stillCurrentTool()) return;
     projectSelection();
+    if (!stillCurrentTool()) return;
     projectInteraction();
+    if (!stillCurrentTool()) return;
     notifyStateChanged();
+    if (!stillCurrentTool()) return;
     reportStatus(
         "RELATIONS: accepted by current Part solver and transaction "
         "(development-only backend).");
