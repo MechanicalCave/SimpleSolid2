@@ -3426,5 +3426,101 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0 selection-first edit-session ABA: a synchronous
+    // stateChanged handler ends and reopens the SAME Sketch, with the
+    // same Part revision, same backend address and same relation kind.
+    // The old preselected EntityIds must not be consumed by that new
+    // edit session merely because durable identity and revision match.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto first = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto second = session.execute(
+            application::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(first.ok() && first.entity_id);
+        CHECK(second.ok() && second.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) { status = message; });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        controller.activateSelect();
+        CHECK(viewport.sketch_scene_.lines.size() == 2U);
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_release,
+            125.0, 100.0, 2.5, 0.0));
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[1].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_release,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(controller.selectedCount() == 2U);
+        controller.activateRelations();
+
+        const auto revision = session.document().revision();
+        const auto undo_depth = session.undoDepth();
+        const auto authored =
+            session.document().findSketch(sid)->model.state();
+        bool reopened = false;
+        controller.setStateChangedHandler([&] {
+            if (reopened ||
+                controller.relationKind() !=
+                    sketch::ConstraintKind::parallel) {
+                return;
+            }
+            reopened = true;
+            controller.end();
+            controller.begin(session, sid);
+            controller.setDevelopmentRelationSolver(
+                &backend, {1.0e-7, 1.0e-6});
+            controller.activateRelations();
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::parallel));
+        });
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::parallel));
+        CHECK(reopened);
+        CHECK(status.find("stale") != std::string::npos);
+        CHECK(controller.active());
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::parallel);
+        CHECK(controller.selectedCount() == 0U);
+        CHECK(!controller.firstRelationTarget());
+        CHECK(backend.calls == 0);
+        CHECK(session.document().revision() == revision);
+        CHECK(session.undoDepth() == undo_depth);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              authored);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
