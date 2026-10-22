@@ -1418,10 +1418,10 @@ RelationEndpointHit resolveRelationEndpointHit(
         return invalid;
     }
 
-    const double tolerance_sq =
-        native_hit_tolerance_pixels * native_hit_tolerance_pixels;
-    if (!std::isfinite(tolerance_sq)) return invalid;
-
+    // Keep valid finite viewport coordinates valid even when their
+    // separation is too large to square in binary64. hypot avoids
+    // intermediate squared-distance overflow; a very far finite
+    // projection is a MISS, not an INVALID_INPUT capture error.
     std::optional<ConstraintReference> found;
     bool multiple_hits = false;
     // Validate every supplied projection, even after a second visible
@@ -1445,11 +1445,10 @@ RelationEndpointHit resolveRelationEndpointHit(
                 return invalid;
             }
         }
-        const double du = pointer_screen.u - candidate.screen_point.u;
-        const double dv = pointer_screen.v - candidate.screen_point.v;
-        const double distance_sq = du * du + dv * dv;
-        if (!std::isfinite(distance_sq)) return invalid;
-        if (distance_sq > tolerance_sq) continue;
+        const double distance = std::hypot(
+            pointer_screen.u - candidate.screen_point.u,
+            pointer_screen.v - candidate.screen_point.v);
+        if (distance > native_hit_tolerance_pixels) continue;
         if (found) {
             multiple_hits = true;
         } else {
