@@ -1053,9 +1053,9 @@ int main() {
     }
 
 
-    // R13-A2.0 RED: a converged backend may NOT move a Line absent from
-    // every authored constraint. Otherwise an unrelated line can jump when
-    // Fix Current Position or solved Delete materializes effective geometry.
+    // The general solver gateway returns disposable derived geometry and
+    // can legitimately translate underconstrained lines. Only an AUTHORING
+    // command that captures this candidate must guard unrelated seeds.
     {
         struct MoveUnrelatedLine final : sk::ILocalSketchSolver {
             int calls{};
@@ -1083,12 +1083,12 @@ int main() {
         CHECK(problem && problem->equations.size() == 1U);
         const auto wrong = sk::evaluateLocalSolve(*problem, policy, drift);
         CHECK(drift.calls == 1);
-        CHECK(wrong.status == sk::LocalSolveGatewayStatus::invalid_candidate);
-        CHECK(!wrong.candidate);
+        CHECK(wrong.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(wrong.candidate);
         CHECK(authored.state() == before);
 
-        // With no equations, none of the seed geometry may drift merely
-        // because a backend reports success and no residual is violated.
+        // No equations means zero geometric residuals; this is still a
+        // transient candidate, not permission to author changed seeds.
         sk::SketchModel no_constraints;
         const auto free_a =
             no_constraints.addLine({0.0, 0.0}, {5.0, 0.0});
@@ -1102,9 +1102,82 @@ int main() {
             sk::evaluateLocalSolve(*empty_problem, policy, drift);
         CHECK(drift.calls == 2);
         CHECK(wrong_empty.status ==
-              sk::LocalSolveGatewayStatus::invalid_candidate);
-        CHECK(!wrong_empty.candidate);
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(wrong_empty.candidate);
         CHECK(no_constraints.state() == free_state);
+    }
+
+    // A2.0 command-level RED: explicit authoring is not allowed to turn
+    // an unrelated free Line's solver-only translation into authored seeds.
+    // The generic numerical gateway deliberately remains permissive for
+    // current-stage derived geometry (Profile/Kernel tests above).
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct ShiftFreeLine final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(!candidate.lines.empty());
+                auto& moved = candidate.lines.back();
+                moved.start.u += 2.0;
+                moved.end.u += 2.0;
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto first = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        CHECK(first.ok() && first.entity_id);
+        const auto original = session.document().findSketch(sid)->model.state();
+        const auto fix_revision = session.document().revision();
+        const auto fix_undo = session.undoDepth();
+        const app::FixCurrentSketchLineCommand fix{
+            sid, session.document().documentId(), fix_revision,
+            session.document().incarnationToken(), *first.entity_id};
+        const auto wrong_fix = session.execute(fix, policy, backend);
+        CHECK(!wrong_fix.ok() && !wrong_fix.changed);
+        CHECK(!wrong_fix.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == fix_revision);
+        CHECK(session.undoDepth() == fix_undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        const auto extra = session.execute(
+            app::AddSketchLineCommand{
+                sid, {10.0, 2.0}, {15.0, 2.0}});
+        CHECK(extra.ok() && extra.entity_id);
+        const auto relation = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*first.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(relation.ok() && relation.constraint_id);
+        const auto before_delete =
+            session.document().findSketch(sid)->model.state();
+        const auto delete_revision = session.document().revision();
+        const auto delete_undo = session.undoDepth();
+        const app::EraseSolvedSketchConstraintCommand erase{
+            sid, session.document().documentId(), delete_revision,
+            session.document().incarnationToken(), *relation.constraint_id};
+        const auto wrong_delete = session.execute(erase, policy, backend);
+        CHECK(!wrong_delete.ok() && !wrong_delete.changed);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().revision() == delete_revision);
+        CHECK(session.undoDepth() == delete_undo);
+        CHECK(session.document().findSketch(sid)->model.state()
+              == before_delete);
     }
 
     // R13-A2.0 application-level atomic numeric transaction prototype.
