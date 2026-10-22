@@ -220,6 +220,75 @@ arcPointAt(
     return "unknown structural edit status";
 }
 
+// A2.0 Operations diagnostics are a projection of the validated
+// DocumentSession result, not a second authority about solver success.
+// Do not collapse conflict, unsupported geometry, input corruption and
+// stale Part provenance into an indistinguishable generic message.
+[[nodiscard]] const char* relationSolveFailureText(
+    sketch::LocalSolveGatewayStatus status) noexcept {
+    using Status = sketch::LocalSolveGatewayStatus;
+    switch (status) {
+    case Status::candidate_accepted:
+        return nullptr; // A later Part/transaction gate may still reject.
+    case Status::invalid_policy:
+        return "invalid numerical acceptance policy";
+    case Status::invalid_problem:
+        return "invalid current-stage solver input";
+    case Status::invalid_backend_response:
+        return "invalid solver response; backend input or output changed";
+    case Status::redundant_constraint:
+        return "redundant relation; an existing relation already implies it";
+    case Status::conflict:
+        return "conflict; the requested relation is incompatible with current constraints";
+    case Status::unsupported:
+        return "unsupported relation or geometry for the configured solver";
+    case Status::backend_failure:
+        return "solver failure or nonconvergence; inspect the constraints";
+    case Status::residual_violation:
+        return "residual violation; the numerical candidate does not satisfy the relation";
+    case Status::coincident_not_closed:
+        return "Coincident endpoints could not be closed exactly";
+    case Status::invalid_candidate:
+        return "invalid solved candidate geometry";
+    case Status::stale_semantics:
+        return "stale candidate semantic identity or authored constraints";
+    case Status::fixed_entity_changed:
+        return "fixed Sketch source changed during numerical solving";
+    }
+    return "unclassified solver rejection";
+}
+
+[[nodiscard]] std::string relationCommitRejectionText(
+    const application::AddSolvedSketchRelationResult& result) {
+    using Error = application::DocumentSessionErrorCode;
+    if (result.diagnostic.code == Error::revision_diverged) {
+        return "RELATIONS: stale Part revision or runtime context; "
+               "refresh the Sketch and retry. No command accepted.";
+    }
+    if (result.preflight_status ==
+        sketch::LocalRelationPreflightStatus::invalid_intent) {
+        return "RELATIONS: invalid or already implied/redundant relation; "
+               "check exact targets and existing constraints. No command accepted.";
+    }
+    if (result.solver_status) {
+        if (const char* reason =
+                relationSolveFailureText(*result.solver_status)) {
+            return std::string{"RELATIONS: "} + reason +
+                   ". No command accepted.";
+        }
+    }
+    if (result.preflight_status ==
+        sketch::LocalRelationPreflightStatus::invalid_problem) {
+        return "RELATIONS: invalid semantic solver problem; "
+               "check the current Sketch stage. No command accepted.";
+    }
+    return "RELATIONS: transaction or command rejected; " +
+        (result.diagnostic.message.empty()
+             ? std::string{"check current Sketch and Part context"}
+             : result.diagnostic.message) +
+        ". No command accepted.";
+}
+
 } // namespace
 
 PartSketchInteractionController::PartSketchInteractionController(
@@ -4086,11 +4155,7 @@ void PartSketchInteractionController::commitReadyRelation(
             *development_relation_solver_);
     }
     if (!committed.ok() || !committed.changed) {
-        reportStatus(
-            "RELATIONS: solver-backed creation rejected; " +
-            (committed.diagnostic.message.empty()
-                ? std::string{"semantic, numerical or stale-stage failure"}
-                : committed.diagnostic.message));
+        reportStatus(relationCommitRejectionText(committed));
         return;
     }
 
