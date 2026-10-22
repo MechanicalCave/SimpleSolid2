@@ -688,6 +688,51 @@ int main() {
         CHECK(!staged.firstRelationTarget());
     }
 
+    // Symmetric invalid second-hit case: the FIRST semantic target is
+    // still current, only the attempted second Line vanished. Keep the
+    // first pick so correcting the second click does not restart a valid
+    // two-target gesture or author any partial relation.
+    for (const auto kind : {RK::coincident, RK::parallel,
+                            RK::perpendicular}) {
+        sketch::SketchModel changing;
+        const auto first = changing.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto gone_second =
+            changing.addLine({0.0, 2.0}, {5.0, 2.0});
+        const auto valid_second =
+            changing.addLine({0.0, 4.0}, {5.0, 4.0});
+        const auto first_role = kind == RK::coincident
+            ? RE::line_end : RE::line;
+        const auto second_role = kind == RK::coincident
+            ? RE::line_start : RE::line;
+        const sketch::ConstraintReference first_ref{first, first_role};
+        const sketch::ConstraintReference gone_ref{
+            gone_second, second_role};
+        const sketch::ConstraintReference valid_ref{
+            valid_second, second_role};
+
+        sketch::SketchInteractionState staged;
+        staged.activateRelations();
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            changing, first_ref).outcome ==
+            RO::first_target_accepted);
+        CHECK(changing.erase(gone_second));
+        const auto lost_second = staged.acceptRelationTarget(
+            changing, gone_ref);
+        CHECK(lost_second.outcome == RO::invalid_target);
+        CHECK(!lost_second.draft);
+        CHECK(staged.firstRelationTarget() == first_ref);
+        CHECK(staged.relationKind() == kind);
+
+        const auto corrected = staged.acceptRelationTarget(
+            changing, valid_ref);
+        CHECK(corrected.outcome == RO::ready);
+        CHECK(corrected.draft);
+        CHECK(corrected.draft->first == first_ref);
+        CHECK(corrected.draft->second == valid_ref);
+        CHECK(!staged.firstRelationTarget());
+    }
+
     // Native viewport screen-space R13-A2 Coincident endpoint grammar:
     // input is a disposable projection from the *current* Sketch stage.
     // It does not need visible/selected editable grips and cannot write CAD.
