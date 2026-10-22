@@ -1351,6 +1351,101 @@ int main() {
         CHECK(backend.calls == 2);
     }
 
+    // Fix Current Position must never accept a second solve that
+    // independently moves other geometry, even when all residuals pass.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct AlternateSolution final : sk::ILocalSketchSolver {
+            int calls{};
+            app::DocumentSession* reenter{};
+            std::optional<sk::SketchId> sketch_id;
+            bool reentered{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                if (calls == 2 && reenter) {
+                    reentered = true;
+                    CHECK(sketch_id);
+                    const auto changed = reenter->execute(
+                        app::AddSketchLineCommand{
+                            *sketch_id, {30.0, 0.0}, {34.0, 0.0}});
+                    CHECK(changed.ok() && changed.changed);
+                } else if (calls == 2) {
+                    auto& other = candidate.lines.back();
+                    other.start.u += 1.0;
+                    other.end.u += 1.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {},
+                        problem.fixed_lines.empty() ? 8U : 4U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto a = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = session.execute(
+            app::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(a.ok() && a.entity_id && b.ok() && b.entity_id);
+        const auto prior = session.document().findSketch(sid)->model.state();
+        const auto rev = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::FixCurrentSketchLineCommand command{
+            sid, session.document().documentId(), rev,
+            session.document().incarnationToken(), *a.entity_id};
+        const auto alternative = session.execute(command, policy, backend);
+        CHECK(!alternative.ok() && !alternative.changed);
+        CHECK(!alternative.constraint_id);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().findSketch(sid)->model.state() == prior);
+        CHECK(session.document().revision() == rev);
+        CHECK(session.undoDepth() == undo);
+
+        // An old command is rejected before any additional backend call.
+        const auto changed = session.execute(
+            app::AddSketchLineCommand{
+                sid, {20.0, 0.0}, {25.0, 0.0}});
+        CHECK(changed.ok() && changed.changed);
+        CHECK(!session.execute(command, policy, backend).ok());
+        CHECK(backend.calls == 2);
+
+        // A backend that re-enters DocumentSession during the second
+        // validation invalidates the original command without hiding
+        // its own independently committed change or consuming a Fix ID.
+        backend.calls = 0;
+        backend.reenter = &session;
+        backend.sketch_id = sid;
+        const auto current_rev = session.document().revision();
+        const auto current_undo = session.undoDepth();
+        const auto current_constraints =
+            session.document().findSketch(sid)->model.constraintCount();
+        const app::FixCurrentSketchLineCommand reentrant{
+            sid, session.document().documentId(), current_rev,
+            session.document().incarnationToken(), *a.entity_id};
+        const auto stale_solve = session.execute(
+            reentrant, policy, backend);
+        CHECK(!stale_solve.ok() && !stale_solve.changed);
+        CHECK(!stale_solve.constraint_id);
+        CHECK(backend.calls == 2 && backend.reentered);
+        CHECK(session.document().revision() != current_rev);
+        CHECK(session.undoDepth() == current_undo + 1U);
+        CHECK(session.document().findSketch(sid)->model.constraintCount()
+              == current_constraints);
+        CHECK(!session.document().findSketch(sid)->model.isFixedLine(
+            *a.entity_id));
+    }
+
     sk::SketchModel model;
     const auto line = model.addLine({1.0, 2.0}, {5.0, 4.0});
     const auto seed = model.state();
