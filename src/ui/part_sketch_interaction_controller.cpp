@@ -4215,12 +4215,15 @@ void PartSketchInteractionController::commitReadyRelation(
     const auto initiating_kind = draft.kind;
     auto* const borrowed_backend = development_relation_solver_;
     const auto initiating_generation = relation_context_generation_;
-    const auto stillCurrentTool = [this, initiating_session,
-                                   initiating_sketch, initiating_kind,
-                                   borrowed_backend,
-                                   initiating_generation,
-                                   expected_document_id, expected_revision,
-                                   expected_incarnation]() {
+    // A successful domain commit advances DocumentRevision by design.
+    // Separate stable UI/context identity from the BEFORE-commit lease:
+    // only backend calls require the exact original revision.
+    const auto sameUiContext = [this, initiating_session,
+                                initiating_sketch, initiating_kind,
+                                borrowed_backend,
+                                initiating_generation,
+                                expected_document_id,
+                                expected_incarnation]() {
         return session_ == initiating_session &&
             sketch_id_ && *sketch_id_ == initiating_sketch &&
             active() &&
@@ -4229,9 +4232,12 @@ void PartSketchInteractionController::commitReadyRelation(
             development_relation_solver_ == borrowed_backend &&
             relation_context_generation_ == initiating_generation &&
             initiating_session->documentId() == expected_document_id &&
-            initiating_session->document().revision() == expected_revision &&
             initiating_session->document().incarnationToken() ==
                 expected_incarnation;
+    };
+    const auto stillCurrentTool = [&]() {
+        return sameUiContext() &&
+            initiating_session->document().revision() == expected_revision;
     };
 
     // DocumentSession protects Part state/revision. It cannot know that
@@ -4305,13 +4311,13 @@ void PartSketchInteractionController::commitReadyRelation(
     }
 
     viewport_controller_->refreshPresentation();
-    if (!stillCurrentTool()) return;
+    if (!sameUiContext()) return;
     projectSelection();
-    if (!stillCurrentTool()) return;
+    if (!sameUiContext()) return;
     projectInteraction();
-    if (!stillCurrentTool()) return;
+    if (!sameUiContext()) return;
     notifyStateChanged();
-    if (!stillCurrentTool()) return;
+    if (!sameUiContext()) return;
     reportStatus(
         "RELATIONS: accepted by current Part solver and transaction "
         "(development-only backend).");
