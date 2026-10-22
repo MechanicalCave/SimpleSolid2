@@ -733,6 +733,63 @@ int main() {
         CHECK(!staged.firstRelationTarget());
     }
 
+    // A2.0 RED: a stale first semantic Line can still have the SAME
+    // EntityId after a legal current-stage endpoint/role edit or Undo.
+    // Such a hit is not the originally selected geometry and must not
+    // produce a READY relation draft on the second click.
+    for (const auto kind : {RK::coincident, RK::parallel,
+                            RK::perpendicular}) {
+        sketch::SketchModel edited;
+        const auto first = edited.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto second = edited.addLine({0.0, 3.0}, {5.0, 3.0});
+        const auto third = edited.addLine({0.0, 6.0}, {5.0, 6.0});
+        const auto first_role =
+            kind == RK::coincident ? RE::line_end : RE::line;
+        const auto second_role =
+            kind == RK::coincident ? RE::line_start : RE::line;
+        const sketch::ConstraintReference initial{first, first_role};
+        const sketch::ConstraintReference next{second, second_role};
+        const sketch::ConstraintReference corrected{third, first_role};
+        sketch::SketchInteractionState staged;
+        staged.activateRelations();
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            edited, initial).outcome == RO::first_target_accepted);
+        CHECK(staged.firstRelationTarget() == initial);
+
+        // The first Line still exists with its durable identity, but its
+        // initially hit endpoint has moved in the current effective model.
+        CHECK(edited.updateLine(first, {0.0, 0.0}, {5.0, 2.0}));
+        const auto stale_geometry =
+            staged.acceptRelationTarget(edited, next);
+        CHECK(stale_geometry.outcome == RO::invalid_target);
+        CHECK(!stale_geometry.draft);
+        CHECK(!staged.firstRelationTarget());
+        CHECK(staged.relationKind() == kind);
+        CHECK(edited.findLine(first) != nullptr);
+
+        CHECK(staged.acceptRelationTarget(
+            edited, next).outcome == RO::first_target_accepted);
+        const auto ready = staged.acceptRelationTarget(edited, corrected);
+        CHECK(ready.outcome == RO::ready);
+        CHECK(ready.draft);
+        CHECK(ready.draft->first == next);
+        CHECK(ready.draft->second == corrected);
+        CHECK(!staged.firstRelationTarget());
+
+        // Changing a different Line must NOT invalidate a stable first
+        // Line hit. A current-stage second hit can still complete it.
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            edited, initial).outcome == RO::first_target_accepted);
+        CHECK(edited.updateLine(second, {0.0, 3.0}, {5.0, 4.0}));
+        const auto independent = staged.acceptRelationTarget(edited, next);
+        CHECK(independent.outcome == RO::ready);
+        CHECK(independent.draft);
+        CHECK(independent.draft->first == initial);
+        CHECK(independent.draft->second == next);
+    }
+
     // Native viewport screen-space R13-A2 Coincident endpoint grammar:
     // input is a disposable projection from the *current* Sketch stage.
     // It does not need visible/selected editable grips and cannot write CAD.
