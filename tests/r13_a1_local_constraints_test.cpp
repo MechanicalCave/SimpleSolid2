@@ -1527,6 +1527,84 @@ int main() {
         CHECK(session.document().findSketch(sid)->model.state() == original);
     }
 
+    // Positive connected-component control: Delete(A--B) is allowed to
+    // preserve the accepted effective position of C when B--C has its
+    // own surviving relation. Traversal must be TRANSITIVE, not only
+    // the two directly selected Line ids.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct ConnectedEffective final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto solved = problem.authored;
+                CHECK(solved.lines.size() == 3U);
+                if (calls == 1) {
+                    solved.lines.back().start.u += 2.0;
+                    solved.lines.back().end.u += 2.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        solved, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {10.0, 2.0}, {15.0, 2.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {20.0, 4.0}, {25.0, 4.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        const auto a_b = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(),
+            sk::ConstraintKind::parallel,
+            {*a.entity_id, sk::ConstraintElement::line},
+            {*b.entity_id, sk::ConstraintElement::line}});
+        const auto b_c = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(),
+            sk::ConstraintKind::parallel,
+            {*b.entity_id, sk::ConstraintElement::line},
+            {*c.entity_id, sk::ConstraintElement::line}});
+        CHECK(a_b.ok() && a_b.constraint_id);
+        CHECK(b_c.ok() && b_c.constraint_id);
+        const auto before = session.document().findSketch(sid)->model.state();
+        const auto old_undo = session.undoDepth();
+        const app::EraseSolvedSketchConstraintCommand erase{
+            sid, session.document().documentId(),
+            session.document().revision(),
+            session.document().incarnationToken(), *a_b.constraint_id};
+        const auto deleted = session.execute(erase, policy, backend);
+        CHECK(deleted.ok() && deleted.changed);
+        CHECK(backend.calls == 2);
+        CHECK(session.undoDepth() == old_undo + 1U);
+        const auto& current = session.document().findSketch(sid)->model;
+        CHECK(current.findConstraint(*a_b.constraint_id) == nullptr);
+        CHECK(current.findConstraint(*b_c.constraint_id) != nullptr);
+        CHECK((current.findLine(*c.entity_id)->start() ==
+               sk::Point2{22.0, 4.0}));
+        CHECK((current.findLine(*c.entity_id)->end() ==
+               sk::Point2{27.0, 4.0}));
+        CHECK(session.undo().ok());
+        const auto undone = session.document().findSketch(sid)->model.state();
+        CHECK(undone.lines == before.lines);
+        CHECK(undone.constraints == before.constraints);
+        CHECK(session.redo().ok());
+        CHECK((session.document().findSketch(sid)->model
+                   .findLine(*c.entity_id)->start() ==
+               sk::Point2{22.0, 4.0}));
+    }
+
     // A2.0 RED: Fix Current Position must capture current NUMERIC
     // solution, rather than the historical skew authored seed.
     // Source is intentionally local/XY, never a projected or Body-stage Line.
