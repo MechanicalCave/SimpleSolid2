@@ -3078,5 +3078,98 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0: selection-first is already a semantic Part-stage gesture
+    // when the Relations type is clicked. A stateChanged callback in the
+    // FIRST notifyStateChanged() must not renew an old two-Line selection
+    // onto an unrelated newly committed Part revision.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto first = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto second = session.execute(
+            application::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(first.ok() && first.entity_id);
+        CHECK(second.ok() && second.entity_id);
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) {
+                status = message;
+            });
+        controller.begin(session, sid);
+        controller.activateSelect();
+        CHECK(viewport.sketch_scene_.lines.size() == 2U);
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_release,
+            125.0, 100.0, 2.5, 0.0));
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[1].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_release,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(controller.selectedCount() == 2U);
+        controller.activateRelations();
+        EchoConvergedRelationSolver solver;
+        controller.setDevelopmentRelationSolver(
+            &solver, {1.0e-7, 1.0e-6});
+
+        const auto start_revision = session.document().revision();
+        bool injected = false;
+        controller.setStateChangedHandler([&] {
+            if (injected ||
+                controller.relationKind() !=
+                    sketch::ConstraintKind::parallel ||
+                controller.firstRelationTarget()) {
+                return;
+            }
+            injected = true;
+            const auto circle = session.execute(
+                application::AddSketchCircleCommand{
+                    sid, {30.0, 30.0}, 2.0});
+            CHECK(circle.ok() && circle.entity_id);
+            viewport_controller.refreshPresentation();
+        });
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::parallel));
+        CHECK(injected);
+        CHECK(session.document().revision() != start_revision);
+        CHECK(status.find("stale") != std::string::npos);
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::parallel);
+        CHECK(!controller.firstRelationTarget());
+        CHECK(solver.calls == 0);
+        const auto state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(state.constraints.empty());
+        CHECK(state.circles.size() == 1U);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
