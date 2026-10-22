@@ -364,6 +364,17 @@ public:
     void activateRectangle();
     void activateRelations();
     void activateDimensions();
+    // Explicit DEV/test-only numerical dependency. Normal desktop builds
+    // inject no solver and cannot author constraints merely through UI
+    // target capture. Borrowed backend must outlive its registration.
+    // Production PlaneGCS packaging/distribution remains a separate D2 gate.
+    void setDevelopmentRelationSolver(
+        sketch::ILocalSketchSolver* backend,
+        sketch::LocalSolverAcceptancePolicy policy) noexcept {
+        development_relation_solver_ =
+            backend != nullptr && policy.valid() ? backend : nullptr;
+        development_relation_policy_ = policy;
+    }
     [[nodiscard]] bool selectRelationKind(sketch::ConstraintKind kind);
     [[nodiscard]] bool selectDimensionKind(sketch::DrivingDimensionToolKind kind);
     [[nodiscard]] std::optional<sketch::DrivingDimensionToolKind>
@@ -431,6 +442,8 @@ private:
     void handleRectanglePointer(const SketchPointerInput& input);
     void handleMeasurePointer(const SketchPointerInput& input);
     void handleRelationsPointer(const SketchPointerInput& input);
+    void commitReadyRelation(
+        const sketch::RelationTargetDraft& draft);
     void handleStructuralEditPointer(
         const SketchPointerInput& input);
     [[nodiscard]] std::optional<
@@ -552,6 +565,10 @@ private:
     PartViewportController* viewport_controller_{};
     kernel::ISolidModelingKernel* solid_modeling_kernel_{};
     application::DocumentSession* session_{};
+    // Borrowed only for explicitly provisioned developer/native tests;
+    // never manufactured from the unsolved A1 command.
+    sketch::ILocalSketchSolver* development_relation_solver_{};
+    sketch::LocalSolverAcceptancePolicy development_relation_policy_{};
     std::optional<sketch::SketchId> sketch_id_;
     std::optional<SketchPointerInput> last_pointer_input_;
     sketch::SketchInteractionState interaction_;
