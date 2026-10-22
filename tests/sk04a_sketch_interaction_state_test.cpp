@@ -639,6 +639,55 @@ int main() {
     CHECK(!acquire.dimensionKind());
     CHECK(relation_model.state() == relation_before);
 
+    // R13-A2.0 RED: a two-hit relation draft must never be READY with a
+    // first semantic Line that was deleted between the two user clicks.
+    // This is a stale current-model validation failure, not a reason to
+    // reset the selected tool or consume a constraint ID.
+    for (const auto kind : {RK::coincident, RK::parallel,
+                            RK::perpendicular}) {
+        sketch::SketchModel changing;
+        const auto removed = changing.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto surviving = changing.addLine({0.0, 2.0}, {5.0, 2.0});
+        const auto third = changing.addLine({0.0, 4.0}, {5.0, 4.0});
+        const auto role = kind == RK::coincident
+            ? RE::line_end : RE::line;
+        const auto next_role = kind == RK::coincident
+            ? RE::line_start : RE::line;
+        const sketch::ConstraintReference original_target{removed, role};
+        const sketch::ConstraintReference current_target{surviving, next_role};
+        const sketch::ConstraintReference final_target{third, role};
+
+        sketch::SketchInteractionState staged;
+        staged.activateRelations();
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            changing, original_target).outcome ==
+            RO::first_target_accepted);
+        CHECK(staged.firstRelationTarget() == original_target);
+        CHECK(changing.erase(removed));
+
+        const auto stale_second = staged.acceptRelationTarget(
+            changing, current_target);
+        CHECK(stale_second.outcome == RO::invalid_target);
+        CHECK(!stale_second.draft);
+        CHECK(!staged.firstRelationTarget());
+        CHECK(staged.relationKind() == kind);
+
+        // After explicit rejection the new first hit is acquired from
+        // the current Sketch; a third distinct current Line completes
+        // a valid transient draft without resetting the chosen kind.
+        CHECK(staged.acceptRelationTarget(
+            changing, current_target).outcome ==
+            RO::first_target_accepted);
+        const auto recovered = staged.acceptRelationTarget(
+            changing, final_target);
+        CHECK(recovered.outcome == RO::ready);
+        CHECK(recovered.draft);
+        CHECK(recovered.draft->first == current_target);
+        CHECK(recovered.draft->second == final_target);
+        CHECK(!staged.firstRelationTarget());
+    }
+
     // Native viewport screen-space R13-A2 Coincident endpoint grammar:
     // input is a disposable projection from the *current* Sketch stage.
     // It does not need visible/selected editable grips and cannot write CAD.
