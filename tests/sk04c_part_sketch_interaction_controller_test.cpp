@@ -3660,5 +3660,79 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0 Operations status reentrancy: activating Relations notifies
+    // the UI, which can immediately choose Horizontal and complete a
+    // valid click-to-author operation. The outer activation must not
+    // overwrite the successful command status with its older generic
+    // "solver not yet enabled" message on return from the callback.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        CHECK(line.ok() && line.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) {
+                status = message;
+            });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        const auto before_revision = session.document().revision();
+        const auto before_undo = session.undoDepth();
+
+        bool reentered = false;
+        controller.setStateChangedHandler([&] {
+            if (reentered ||
+                controller.tool() != sketch::SketchTool::relations) {
+                return;
+            }
+            reentered = true;
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::horizontal));
+            CHECK(viewport.sketch_scene_.lines.size() == 1U);
+            viewport.point_query_ = {
+                true, viewport.sketch_scene_.lines[0].token};
+            controller.onPointer(pointer(
+                sid, viewer::SpatialPointerPhase::primary_press,
+                125.0, 100.0, 2.5, 0.0));
+            CHECK(backend.calls == 1);
+            CHECK(status.find("accepted by current Part solver") !=
+                  std::string::npos);
+        });
+        controller.activateRelations();
+        CHECK(reentered);
+        CHECK(status.find("accepted by current Part solver") !=
+              std::string::npos);
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(session.document().revision() != before_revision);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        const auto state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(state.constraints.size() == 1U);
+        CHECK(state.constraints.front().kind ==
+              sketch::ConstraintKind::horizontal);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
