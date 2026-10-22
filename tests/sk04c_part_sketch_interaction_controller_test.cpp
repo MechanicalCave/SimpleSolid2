@@ -3522,5 +3522,112 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0: a stale outer Viewer callback must not CANCEL an entirely
+    // new, legitimate first target acquired by a reentrant new Sketch edit.
+    // It can only discard a pending target from its OWN edit generation.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto first = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto second = session.execute(
+            application::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(first.ok() && first.entity_id);
+        CHECK(second.ok() && second.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& value) { status = value; });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver solver;
+        controller.setDevelopmentRelationSolver(
+            &solver, {1.0e-7, 1.0e-6});
+        controller.activateRelations();
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::parallel));
+        CHECK(viewport.sketch_scene_.lines.size() == 2U);
+        const auto before_revision = session.document().revision();
+        const auto before_undo = session.undoDepth();
+        const auto before_state =
+            session.document().findSketch(sid)->model.state();
+
+        bool reentered = false;
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        viewport.on_point_query_ = [&] {
+            if (reentered) return;
+            reentered = true;
+            controller.end();
+            controller.begin(session, sid);
+            controller.setDevelopmentRelationSolver(
+                &solver, {1.0e-7, 1.0e-6});
+            controller.activateRelations();
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::parallel));
+            // Take the NEW first target inside the new edit session.
+            CHECK(viewport.sketch_scene_.lines.size() == 2U);
+            viewport.point_query_ = {
+                true, viewport.sketch_scene_.lines[1].token};
+            controller.onPointer(pointer(
+                sid, viewer::SpatialPointerPhase::primary_press,
+                225.0, 100.0, 12.5, 0.0));
+            CHECK(controller.firstRelationTarget() ==
+                  (sketch::ConstraintReference{
+                      *second.entity_id,
+                      sketch::ConstraintElement::line}));
+        };
+        // Old first hit resumes after the new first target is accepted.
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(reentered);
+        CHECK(controller.active());
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::parallel);
+        CHECK(controller.firstRelationTarget() ==
+              (sketch::ConstraintReference{
+                  *second.entity_id,
+                  sketch::ConstraintElement::line}));
+        CHECK(status.find("first") != std::string::npos);
+        CHECK(solver.calls == 0);
+        CHECK(session.document().revision() == before_revision);
+        CHECK(session.undoDepth() == before_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              before_state);
+
+        // The new context retains its first hit; one further current
+        // hit must create precisely one valid Parallel relation.
+        viewport.on_point_query_ = {};
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(solver.calls == 1);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        const auto accepted =
+            session.document().findSketch(sid)->model.state();
+        CHECK(accepted.constraints.size() == 1U);
+        CHECK(accepted.constraints.front().kind ==
+              sketch::ConstraintKind::parallel);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
