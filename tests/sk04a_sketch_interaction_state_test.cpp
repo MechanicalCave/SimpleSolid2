@@ -845,6 +845,40 @@ int main() {
     CHECK(sketch::resolveRelationEndpointHit(
         relation_model, {40.0, 65.0}, {overlap.data(), overlap.size()}, 9.0
     ).status == EH::ambiguous);
+
+    // A2.0 RED: input validation must run over the WHOLE candidate
+    // collection. An early ambiguous hit is not permission to skip a
+    // later stale, duplicated or non-finite endpoint projection.
+    const std::vector<sketch::RelationEndpointScreenCandidate> late_stale{
+        {a_end, {40.0, 65.0}},
+        {b_start, {41.0, 66.0}},
+        {{relation_circle, RE::line_end}, {200.0, 200.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, late_stale, 9.0
+    ).status == EH::invalid_input);
+    const std::vector<sketch::RelationEndpointScreenCandidate> late_duplicate{
+        {a_end, {40.0, 65.0}},
+        {b_start, {41.0, 66.0}},
+        {a_end, {200.0, 200.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, late_duplicate, 9.0
+    ).status == EH::invalid_input);
+    const std::vector<sketch::RelationEndpointScreenCandidate> late_nonfinite{
+        {a_end, {40.0, 65.0}},
+        {b_start, {41.0, 66.0}},
+        {a_end, {std::numeric_limits<double>::infinity(), 200.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, late_nonfinite, 9.0
+    ).status == EH::invalid_input);
+    // VALID overlap still returns ambiguity independently of order,
+    // and never chooses a nearest-by-iteration endpoint.
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, overlap, 9.0
+    ).status == EH::ambiguous);
+
     const std::vector<sketch::RelationEndpointScreenCandidate> duplicate{
         {a_end, {40.0, 65.0}},
         {a_end, {40.0, 65.0}},
