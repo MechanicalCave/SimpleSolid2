@@ -1526,6 +1526,91 @@ int main() {
         CHECK(backend.calls == 2);
     }
 
+    // Solved Delete must fail closed if the remaining solver shifts an
+    // otherwise unconstrained Line, or mutates the owning Part mid-solve.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct DivertOrReenter final : sk::ILocalSketchSolver {
+            int calls{};
+            app::DocumentSession* reenter{};
+            std::optional<sk::SketchId> sketch_id;
+            bool reentered{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                if (calls == 2 && reenter) {
+                    reentered = true;
+                    CHECK(sketch_id);
+                    const auto extra = reenter->execute(
+                        app::AddSketchLineCommand{
+                            *sketch_id, {30.0, 0.0}, {35.0, 0.0}});
+                    CHECK(extra.ok() && extra.changed);
+                } else if (calls == 2) {
+                    candidate.lines.back().start.u += 1.0;
+                    candidate.lines.back().end.u += 1.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {},
+                        problem.equations.empty() ? 8U : 7U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8,1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto other = session.execute(
+            app::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(line.ok() && line.entity_id &&
+              other.ok() && other.entity_id);
+        const auto added = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(added.ok() && added.constraint_id);
+        const auto before =
+            session.document().findSketch(sid)->model.state();
+        const auto rev = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::EraseSolvedSketchConstraintCommand command{
+            sid, session.document().documentId(), rev,
+            session.document().incarnationToken(), *added.constraint_id};
+        const auto divergent = session.execute(
+            command, policy, backend);
+        CHECK(!divergent.ok() && !divergent.changed);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().findSketch(sid)->model.state() == before);
+        CHECK(session.document().revision() == rev);
+        CHECK(session.undoDepth() == undo);
+
+        backend.calls = 0;
+        backend.reenter = &session;
+        backend.sketch_id = sid;
+        const auto changing = session.execute(
+            command, policy, backend);
+        CHECK(!changing.ok() && !changing.changed);
+        CHECK(backend.calls == 2 && backend.reentered);
+        CHECK(session.document().revision() != rev);
+        CHECK(session.undoDepth() == undo + 1U);
+        const auto afterReentry =
+            session.document().findSketch(sid)->model.state();
+        CHECK(afterReentry.constraints == before.constraints);
+        CHECK(afterReentry.lines.size() == before.lines.size() + 1U);
+        CHECK(!session.execute(command, policy, backend).ok());
+        CHECK(backend.calls == 2);
+    }
+
     sk::SketchModel model;
     const auto line = model.addLine({1.0, 2.0}, {5.0, 4.0});
     const auto seed = model.state();
