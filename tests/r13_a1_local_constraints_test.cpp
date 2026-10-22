@@ -1297,6 +1297,101 @@ int main() {
         CHECK(no_constraints.state() == free_state);
     }
 
+    // A2.0 RED: the new numerically solved relation is permitted to
+    // correct its own connected component, NOT translate an independent
+    // Horizontal Line when all residuals happen to remain satisfied.
+    // The create writer must fail closed before a Part transaction.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct CreatedRelationDrift final : sk::ILocalSketchSolver {
+            bool drift_unrelated{true};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 3U);
+                // The authored first Line is skew; the backend solves
+                // the requested Horizontal(A) equation legitimately.
+                candidate.lines.front().end.v =
+                    candidate.lines.front().start.v;
+                if (drift_unrelated) {
+                    // C has its own unrelated Horizontal constraint.
+                    // Its 2 mm translation still satisfies residuals.
+                    candidate.lines.back().start.u += 2.0;
+                    candidate.lines.back().end.u += 2.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 1.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {10.0, 3.0}, {15.0, 3.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {20.0, 7.0}, {25.0, 7.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        const auto fixed_c = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(),
+            sk::ConstraintKind::horizontal,
+            {*c.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(fixed_c.ok() && fixed_c.constraint_id);
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        const auto original_rev = session.document().revision();
+        const auto original_undo = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand create_a{
+            sid, session.document().documentId(), original_rev,
+            session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {*a.entity_id, sk::ConstraintElement::line}, {}};
+
+        // A generic current-stage solver may return this geometry,
+        // but an explicit relation authoring command cannot accept
+        // it as new authoritative relational intent.
+        const auto bad = session.execute(create_a, policy, backend);
+        CHECK(!bad.ok() && !bad.changed && !bad.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == original_rev);
+        CHECK(session.undoDepth() == original_undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        // Positive control: same numerical correction of A with
+        // unrelated B/C exactly fixed remains legal. Solved geometry
+        // is ephemeral; ONLY the new semantic relation is authored.
+        backend.drift_unrelated = false;
+        const auto accepted = session.execute(create_a, policy, backend);
+        CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
+        CHECK(backend.calls == 2);
+        CHECK(session.undoDepth() == original_undo + 1U);
+        const auto after =
+            session.document().findSketch(sid)->model.state();
+        CHECK(after.constraints.size() == original.constraints.size() + 1U);
+        CHECK(after.lines == original.lines);
+        CHECK(after.constraints.front() == original.constraints.front());
+        CHECK(session.undo().ok());
+        const auto undone =
+            session.document().findSketch(sid)->model.state();
+        CHECK(undone.lines == original.lines);
+        CHECK(undone.constraints == original.constraints);
+        CHECK(undone.next_constraint_id == after.next_constraint_id);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.findConstraint(
+            *accepted.constraint_id) != nullptr);
+    }
+
     // A2.0 command-level RED: explicit authoring is not allowed to turn
     // an unrelated free Line's solver-only translation into authored seeds.
     // The generic numerical gateway deliberately remains permissive for
