@@ -3309,6 +3309,56 @@ int main() {
         CHECK(!conflict.candidate);
         CHECK(conflict.conflicting_constraints == backend.conflicts);
 
+        // A2.0 RED: a backend may not publish contradictory semantic
+        // conflict provenance. The vector consumed by UI highlights and
+        // the detailed diagnostics must agree on exact ConstraintIds.
+        backend.diagnostics = {{
+            sk::LocalBackendDiagnosticKind::conflicting_constraint,
+            relation}};
+        backend.conflicts.clear();
+        const auto diagnostic_without_owner = sk::evaluateLocalSolve(
+            *input, policy, backend);
+        CHECK(diagnostic_without_owner.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!diagnostic_without_owner.candidate);
+        CHECK(diagnostic_without_owner.conflicting_constraints.empty());
+        backend.conflicts = {*relation};
+        const auto consistent_conflict = sk::evaluateLocalSolve(
+            *input, policy, backend);
+        CHECK(consistent_conflict.status ==
+              sk::LocalSolveGatewayStatus::conflict);
+        CHECK(consistent_conflict.conflicting_constraints ==
+              backend.conflicts);
+        CHECK(consistent_conflict.diagnostics == backend.diagnostics);
+        backend.diagnostics.clear();
+
+        // Cross-linked detail from a different, existing ConstraintId
+        // is equally unsafe; checking IDs only for existence is not
+        // enough. A partial diagnostic list cannot contradict the
+        // conflict-owner inventory.
+        sk::SketchModel multi;
+        const auto first_line =
+            multi.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto second_line =
+            multi.addLine({0.0, 2.0}, {5.0, 2.0});
+        const auto first_relation = multi.addHorizontal(first_line);
+        const auto second_relation = multi.addHorizontal(second_line);
+        CHECK(first_relation && second_relation);
+        const auto multi_problem =
+            sk::prepareLocalSolveProblem(multi.state());
+        CHECK(multi_problem);
+        backend.conflicts = {*first_relation};
+        backend.diagnostics = {{
+            sk::LocalBackendDiagnosticKind::conflicting_constraint,
+            *second_relation}};
+        const auto mismatched_conflict = sk::evaluateLocalSolve(
+            *multi_problem, policy, backend);
+        CHECK(mismatched_conflict.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!mismatched_conflict.candidate);
+        CHECK(mismatched_conflict.conflicting_constraints.empty());
+        backend.diagnostics.clear();
+
         backend.conflicts = {*sk::ConstraintId::parse("9999")};
         CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
               sk::LocalSolveGatewayStatus::invalid_backend_response);
