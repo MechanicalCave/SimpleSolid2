@@ -2164,6 +2164,26 @@ AddSolvedSketchRelationResult DocumentSession::execute(
                 error.diagnostic};
     }
 
+    // An explicit CREATE may solve and reposition the NEW relation's
+    // connected Line component, but it cannot also change a disjoint
+    // component (or a free unrelated Line) merely because the backend
+    // found another numerically valid answer there. Check against the
+    // PROPOSED authorship graph: the new edge/axis constraint belongs
+    // to this command, not yet to the prior authoritative Sketch.
+    // The generic derived solver remains permissive for Profile/Kernel.
+    if (!preflight.solve.candidate ||
+        !unchangedOutsideRelationComponent(
+            *preflight.proposed_authored, *preflight.solve.candidate,
+            command.first.entity, command.second.entity)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Solved relation backend moved an unrelated relation component",
+            path_);
+        return {false, std::nullopt, preflight.status,
+                preflight.solve.status, preflight.solve.diagnostics,
+                failed.diagnostic};
+    }
+
     // Reconstruct the fully validated authored proposal in a temporary
     // Part state. The accepted *derived* solution remains ephemeral:
     // it must never replace authored seeds or enter native persistence.
