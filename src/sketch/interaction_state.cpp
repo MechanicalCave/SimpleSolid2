@@ -1367,6 +1367,7 @@ void SketchInteractionState::activateRelations() noexcept {
     tool_ = SketchTool::relations;
     relation_kind_.reset();
     relation_first_.reset();
+    relation_first_geometry_.reset();
     resetLineStage();
     resetCircleStage();
     resetArcStage();
@@ -1383,6 +1384,7 @@ void SketchInteractionState::activateDimensions() noexcept {
     tool_ = SketchTool::dimensions;
     relation_kind_.reset();
     relation_first_.reset();
+    relation_first_geometry_.reset();
     dimension_kind_.reset();
     resetLineStage();
     resetCircleStage();
@@ -1470,6 +1472,7 @@ bool SketchInteractionState::setRelationKind(
     }
     relation_kind_ = kind;
     relation_first_.reset();
+    relation_first_geometry_.reset();
     return true;
 }
 
@@ -1480,15 +1483,21 @@ RelationTargetResult SketchInteractionState::acceptRelationTarget(
         return {};
     }
 
-    // A two-hit transient draft may survive a separate geometry edit,
-    // Undo or stage refresh between pointer events. Never emit READY with
-    // a first Line that no longer belongs to the current Sketch model.
-    // Clear only the stale first pick; preserve the chosen relation kind
-    // so the next click can start a new valid two-target gesture.
-    if (relation_first_ &&
-        model.findLine(relation_first_->entity) == nullptr) {
-        relation_first_.reset();
-        return {RelationTargetOutcome::invalid_target, std::nullopt};
+    // A two-hit draft may survive a geometry edit, Undo or stage
+    // refresh between clicks. Durable EntityId alone cannot prove that
+    // the picked Line is STILL the same current-stage geometry/role.
+    // Reject a changed first hit without emitting READY or authoring ID;
+    // retain the relation kind for a fresh pair of semantic clicks.
+    if (relation_first_) {
+        const auto* line = model.findLine(relation_first_->entity);
+        if (!line || !relation_first_geometry_ ||
+            line->start() != relation_first_geometry_->start ||
+            line->end() != relation_first_geometry_->end ||
+            line->role() != relation_first_geometry_->role) {
+            relation_first_.reset();
+            relation_first_geometry_.reset();
+            return {RelationTargetOutcome::invalid_target, std::nullopt};
+        }
     }
 
     const auto kind = *relation_kind_;
@@ -1513,7 +1522,12 @@ RelationTargetResult SketchInteractionState::acceptRelationTarget(
                 RelationTargetDraft{kind, target, {}}};
     }
     if (!relation_first_) {
+        const auto* line = model.findLine(target.entity);
+        // Already checked above; capture by value rather than pointer
+        // so subsequent Line edits cannot silently retarget the gesture.
         relation_first_ = target;
+        relation_first_geometry_ = SketchLineState{
+            target.entity, line->start(), line->end(), line->role()};
         return {RelationTargetOutcome::first_target_accepted,
                 std::nullopt};
     }
@@ -1528,6 +1542,7 @@ RelationTargetResult SketchInteractionState::acceptRelationTarget(
     const RelationTargetDraft candidate{
         kind, *relation_first_, target};
     relation_first_.reset();
+    relation_first_geometry_.reset();
     // READY is a transient semantic request only. No ID, solver
     // value, Part revision, persistence or history is mutated here.
     return {RelationTargetOutcome::ready, candidate};
@@ -1538,6 +1553,7 @@ bool SketchInteractionState::cancelRelationTarget() noexcept {
         return false;
     }
     relation_first_.reset();
+    relation_first_geometry_.reset();
     return true;
 }
 
@@ -3883,6 +3899,7 @@ void SketchInteractionState::resetToSelect() noexcept {
     resetMeasure();
     relation_kind_.reset();
     relation_first_.reset();
+    relation_first_geometry_.reset();
     dimension_kind_.reset();
     tool_ = SketchTool::select;
     resetLineStage();
@@ -3975,6 +3992,7 @@ void SketchInteractionState::resetStructuralEdit() noexcept {
     // cleanup path. Never carry half-acquired A2 references across tools.
     relation_kind_.reset();
     relation_first_.reset();
+    relation_first_geometry_.reset();
     dimension_kind_.reset();
 }
 
