@@ -3194,9 +3194,9 @@ int main(int argc, char* argv[]) {
     }
 
     // R13-A2.0: a solver backend may reenter application/UI code while
-    // performing a numeric solve. Closing the active Sketch tool is not
-    // an authorized license to commit the old in-flight relation, even
-    // if the original Part state/revision remains unchanged.
+    // performing a numeric solve. Switching the active Relations kind
+    // must not silently commit the old pending kind even if the exact
+    // Part state/revision remains unchanged.
     {
         auto document =
             part::PartDocument::create(core::DocumentId::generate());
@@ -3233,13 +3233,17 @@ int main(int argc, char* argv[]) {
         CHECK(viewport.sketch_scene_.lines.size() == 1U);
         viewport.point_query_ = {
             true, viewport.sketch_scene_.lines[0].token};
-        backend.on_solve = [&] { controller.activateSelect(); };
+        backend.on_solve = [&] {
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::vertical));
+        };
         controller.onPointer(pointer(
             sid, viewer::SpatialPointerPhase::primary_press,
             125.0, 100.0, 2.5, 0.0));
         CHECK(backend.calls == 1);
         CHECK(controller.active());
-        CHECK(!controller.relationKind());
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::vertical);
         CHECK(session.document().revision() == before_revision);
         CHECK(session.undoDepth() == before_undo);
         CHECK(session.document().findSketch(sid)->model.state() ==
