@@ -2445,13 +2445,54 @@ bool PartSketchInteractionController::selectRelationKind(
         !interaction_.setRelationKind(kind)) {
         return false;
     }
-    // A type change starts a new semantic acquisition in the current
-    // revision; a former pending pair must not donate its Part lease.
+    // Capture both the selected durable IDs and exact original Part
+    // stage BEFORE notifying Qt or the viewer. Both callbacks may reenter
+    // DocumentSession and author an unrelated Part change; an old
+    // preselection must not inherit the new revision.
+    auto* const selection_session = session_;
+    const auto selection_sketch = *sketch_id_;
+    const auto selection_document_id =
+        selection_session->documentId();
+    const auto selection_revision =
+        selection_session->document().revision();
+    const auto selection_incarnation =
+        selection_session->document().incarnationToken();
+    const auto selected = interaction_.selectedEntities();
+    const auto stillCurrentSelection = [&]() {
+        return session_ == selection_session &&
+            sketch_id_ && *sketch_id_ == selection_sketch &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == kind &&
+            selection_session->documentId() == selection_document_id &&
+            selection_session->document().incarnationToken() ==
+                selection_incarnation &&
+            selection_session->document().revision() ==
+                selection_revision;
+    };
+    const auto rejectStaleSelection = [&]() {
+        if (stillCurrentSelection()) return false;
+        // Discard the old draft only in the original active tool;
+        // never overwrite a different session or a changed tool.
+        if (session_ == selection_session && sketch_id_ &&
+            *sketch_id_ == selection_sketch &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == kind) {
+            static_cast<void>(interaction_.setRelationKind(kind));
+            relation_first_revision_.reset();
+        }
+        reportStatus(
+            "RELATIONS: stale selection-first targets after Part or "
+            "Sketch context changed; select the current-stage Lines again. "
+            "No Part change.");
+        notifyStateChanged();
+        return true;
+    };
+
     relation_first_revision_.reset();
     projectInteraction();
+    if (rejectStaleSelection()) return true;
     notifyStateChanged();
-
-    const auto& selected = interaction_.selectedEntities();
+    if (rejectStaleSelection()) return true;
     if (selected.empty()) {
         reportStatus(
             "RELATIONS: choose the required Line/endpoint. "
@@ -2504,16 +2545,8 @@ bool PartSketchInteractionController::selectRelationKind(
         }
     }
 
-    // Capture the original Part stage BEFORE consuming the first
-    // preselected semantic target. A state-changed callback can re-enter
-    // DocumentSession and commit an unrelated edit; its new revision is
-    // never authority to upgrade an earlier pick.
-    auto* const selection_session = session_;
-    const auto selection_sketch = *sketch_id_;
-    const auto selection_revision =
-        selection_session->document().revision();
-    const auto selection_incarnation =
-        selection_session->document().incarnationToken();
+    // Keep using the entry-time lease, not a fresh snapshot acquired
+    // after native projection or any reentrant UI callback.
     sketch::RelationTargetResult result;
     for (const auto id : selected) {
         result = interaction_.acceptRelationTarget(
@@ -2542,13 +2575,7 @@ bool PartSketchInteractionController::selectRelationKind(
     // Both a partial pair and a fully preselected ready relation must
     // pass this gate after UI callbacks and before a Part command. A
     // revision change is not benign merely because Line seeds match.
-    if (session_ != selection_session || !sketch_id_ ||
-        *sketch_id_ != selection_sketch ||
-        interaction_.relationKind() != kind ||
-        selection_session->document().incarnationToken() !=
-            selection_incarnation ||
-        selection_session->document().revision() !=
-            selection_revision) {
+    if (!stillCurrentSelection()) {
         static_cast<void>(interaction_.cancelRelationTarget());
         relation_first_revision_.reset();
         reportStatus(
