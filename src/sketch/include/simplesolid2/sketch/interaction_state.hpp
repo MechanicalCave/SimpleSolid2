@@ -944,6 +944,9 @@ private:
     SketchTool tool_{SketchTool::select};
     std::optional<ConstraintKind> relation_kind_;
     std::optional<ConstraintReference> relation_first_;
+    // Ephemeral first-hit provenance: same EntityId alone is insufficient
+    // after a Line edit/Undo between two gesture clicks. Never authored.
+    std::optional<SketchLineState> relation_first_geometry_;
     std::optional<DrivingDimensionToolKind> dimension_kind_;
 
     LineStage line_stage_{
