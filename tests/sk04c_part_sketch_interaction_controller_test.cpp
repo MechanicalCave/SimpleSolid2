@@ -2709,5 +2709,109 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0: a two-click semantic gesture is revision-bound.
+    // A different Part command may update only an unrelated Circle, leaving
+    // both Line geometries/roles identical. Accepting the old first hit
+    // against the new revision would silently retarget the user's gesture.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto first = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto second = session.execute(
+            application::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(first.ok() && first.entity_id);
+        CHECK(second.ok() && second.entity_id);
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& text) { status = text; });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        controller.activateRelations();
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::parallel));
+        CHECK(viewport.sketch_scene_.lines.size() == 2U);
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(controller.firstRelationTarget() ==
+              (sketch::ConstraintReference{
+                  *first.entity_id, sketch::ConstraintElement::line}));
+        CHECK(backend.calls == 0);
+
+        // Unrelated Part authoring changes the revision but neither picked
+        // Line nor its geometry, semantic role, or durable EntityId.
+        const auto circle = session.execute(
+            application::AddSketchCircleCommand{
+                sid, {30.0, 30.0}, 2.0});
+        CHECK(circle.ok() && circle.entity_id);
+        viewport_controller.refreshPresentation();
+        const auto updated_revision = session.document().revision();
+        const auto updated_undo = session.undoDepth();
+        const auto updated_state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(updated_state.constraints.empty());
+        CHECK(viewport.sketch_scene_.lines.size() == 2U);
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[1].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(!controller.firstRelationTarget());
+        CHECK(status.find("stale") != std::string::npos);
+        CHECK(backend.calls == 0);
+        CHECK(session.document().revision() == updated_revision);
+        CHECK(session.undoDepth() == updated_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              updated_state);
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::parallel);
+
+        // The same mode can begin a fresh two-hit gesture on the current
+        // revision and commit exactly once through the guarded solver.
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[0].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(controller.firstRelationTarget());
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[1].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == updated_undo + 1U);
+        const auto after =
+            session.document().findSketch(sid)->model.state();
+        CHECK(after.constraints.size() == 1U);
+        CHECK(after.constraints.front().kind ==
+              sketch::ConstraintKind::parallel);
+        CHECK(after.circles == updated_state.circles);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
