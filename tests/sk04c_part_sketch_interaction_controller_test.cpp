@@ -4217,5 +4217,101 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+
+    // R13-A2.0: reportStatus itself is a synchronous, reentrant UI
+    // boundary. Moving the obsolete placeholder before Viewer callbacks
+    // must not let the old tool invocation clear a NEW edit generation's
+    // first Line target/revision lease after an end/begin ABA restart.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto first = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto second = session.execute(
+            application::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(first.ok() && first.entity_id);
+        CHECK(second.ok() && second.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        const auto before_revision = session.document().revision();
+        const auto before_undo = session.undoDepth();
+        const auto before_state =
+            session.document().findSketch(sid)->model.state();
+        bool reentered = false;
+        controller.setStatusHandler([&](const std::string& status) {
+            if (reentered ||
+                status.find("RELATIONS: numeric production solver") ==
+                    std::string::npos) {
+                return;
+            }
+            reentered = true;
+            controller.end();
+            controller.begin(session, sid);
+            controller.setDevelopmentRelationSolver(
+                &backend, {1.0e-7, 1.0e-6});
+            controller.activateRelations();
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::parallel));
+            CHECK(viewport.sketch_scene_.lines.size() == 2U);
+            viewport.point_query_ = {
+                true, viewport.sketch_scene_.lines[0].token};
+            controller.onPointer(pointer(
+                sid, viewer::SpatialPointerPhase::primary_press,
+                125.0, 100.0, 2.5, 0.0));
+            CHECK(controller.firstRelationTarget() ==
+                  (sketch::ConstraintReference{
+                      *first.entity_id,
+                      sketch::ConstraintElement::line}));
+        });
+        controller.activateRelations();
+        CHECK(reentered);
+        CHECK(controller.active());
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::parallel);
+        CHECK(controller.firstRelationTarget() ==
+              (sketch::ConstraintReference{
+                  *first.entity_id, sketch::ConstraintElement::line}));
+        CHECK(backend.calls == 0);
+        CHECK(session.document().revision() == before_revision);
+        CHECK(session.undoDepth() == before_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              before_state);
+
+        // A valid second hit MUST still complete the newer draft:
+        // an obsolete outer activation may not clear its revision lease.
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines[1].token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            225.0, 100.0, 12.5, 0.0));
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        const auto state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(state.constraints.size() == 1U);
+        CHECK(state.constraints.front().kind ==
+              sketch::ConstraintKind::parallel);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
