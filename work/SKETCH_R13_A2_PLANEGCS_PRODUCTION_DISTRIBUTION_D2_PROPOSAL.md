@@ -1,6 +1,6 @@
 # SS2 R13-A2 — PlaneGCS production distribution / native solver D2 decision proposal
 
-**Status:** PROPOSED / OWNER DECISION PENDING / NOT AN ACTIVE IMPLEMENTATION CONTRACT
+**Status:** OWNER-SELECTED L-DLL FEASIBILITY DIRECTION (2026-10-23); EXACT ABI / FILE SCOPE / LICENSE / PRODUCTION IMPLEMENTATION STILL PROPOSED, NOT APPROVED
 **Date:** 2026-10-23 (Europe/Warsaw)
 **Decision class:** D2 production backend, third-party distribution, provider-neutral integration and CI scope; possible D3 commercial licensing/redistribution disposition remains Owner-owned
 **Authorities:** `AGENTS.md`, frozen Constitution/Foundation/Architecture, ADR-0008/0009/0012, `work/ACTIVE.yaml`, `work/SKETCH_ROADMAP.md` v1.11, active `work/SKETCH_R13_A2_RELATIONS_DRIVING_DIMENSIONS_D2_WORK_CONTRACT_PROPOSAL.md` §§0, 2.2, 3, 4, 6, 6B
@@ -46,13 +46,89 @@ For a **future exact Owner-approved experiment**, some existing R13-A2 §4 paths
 
 ## 5. Owner review questions / STOP conditions
 
-**Decision 1 (D2 feasibility):** approve **L-DLL technical exploration only**, or request L-STATIC evidence design, or select L-ALT. No release permission implied.
+**Decision 1 (D2 feasibility): OWNER ACCEPTED L-DLL EXPLORATION ONLY (2026-10-23).** In direct response to the L-DLL first feasibility request, Owner answered `akceptuje - kontynuuj`. Record the selection of read-only/native research and ABI design, **not** authorization to add C++ source, change CI, vendor the library or distribute an application. L-STATIC and L-ALT are alternatives for a later separate decision, not presently selected.
 
 **Decision 2 (D2 source scope, deferred):** after seeing exact proposed CMake/adapter/test/CI path list and generated ABI/install model, accept or reject the bounded implementation amendment; no implicit `third_party/**`, SDK/API or workflow blanket permission.
 
 **Decision 3 (D3/legal distribution, deferred):** independently accept the actual commercial/open distribution strategy, library source/patches, relevant notices, replacement/relink and installed-consumer proof **before** production A2 release. Neither decision 1 nor native 2/2 DEV PASS satisfies this gate.
 
 STOP for new path/API without separate Owner approval, license conflict, absent original bytes, misidentified fixed input, stale Part stage, nonconverged/redundant/ambiguous result, incomplete installed-consumer test or failure to revalidate at command commit. A2.0 remains Draft; A2.1–A2.3 and R13-A3 not activated or accepted by this proposal. PM-06 / further RG-02 deferred.
+
+
+## 6. L-DLL read-only ABI feasibility design — prepared after bounded Owner research approval, NOT frozen
+
+### 6.1 Exact boundary and a failure risk
+
+At pinned upstream `spookylukey/planegcs@5a60d5328bedd85f1e4aef81b9b57f5c4410ae52`, `src/wrapper.h` exposes C++ `SketchSolver` with STL containers/exception-capable methods. Upstream `CMakeLists.txt` builds `pybind11_add_module(_planegcs)`; this Python module is **not** a stable native C ABI or a drop-in user-replaceable SS2 DLL. A CMake STATIC→SHARED change, direct C++ mangled export or `LoadLibrary` of `_planegcs.pyd` without a specifically reviewed native interface is **insufficient**.
+
+**Candidate seam:**
+
+```text
+PartCommand/revision+incarnation+stage validation
+    → SS2 sketch::ILocalSketchSolver (existing neutral C++ seam)
+    → privately owned SS2 DLL client/admission adapter
+    → explicit versioned C-compatible ABI (no Qt/OCCT/C++ objects)
+    → source-backed PlaneGCS 0.8.0 DLL (original solver + thin ABI bridge)
+    → caller-owned, fully checked primitive candidate/diagnostics
+    → SS2 independent semantic+numeric residual review
+    → guarded Part transaction only on total acceptance
+```
+
+**Single point of failure:** a genuinely replaceable, ABI-compatible DLL whose source/distribution/relink pathway and installed consumer pass on real Windows. If not achieved, reject L-DLL as production route; do not mark DEV static original-native tests as a release substitute.
+
+### 6.2 Candidate ABI policy for later D2 freeze — no public SS2 CAD-domain contract yet
+
+Propose **one explicitly versioned, fixed-width C ABI**, callable under a documented Windows calling convention from the SS2-private adapter. This section is *acceptance criteria*, not declarations presently permitted for production.
+
+| Concern | Proposed bounded invariant |
+| --- | --- |
+| Entry/export | Exactly one documented factory/version negotiation symbol with explicit ABI major, minor, size and capabilities; no relying on C++ mangled `SketchSolver` symbols or Python module |
+| Request | Plain fixed-width integer tags and finite `double` values for one disposable solver invocation, with explicit sizes/counts, supported Line endpoints, equation semantic roles and fixed flags; **no durable DocumentId/SketchId/ConstraintId** crossing as CAD identity: map invocation-local indexes/tags only inside SS2 |
+| Constraints | Only A2.0's already accepted five Line equations and Fix-mask; reject unknown discriminants, reserved fields, inconsistent count, duplicate map, unsupported projected/linked source. A2.1 Circle and numeric kinds require a **later** separate ABI capability/version decision after v22 freeze |
+| Result | Explicit enum status/convergence, DoF, native diagnostics tagged by invocation-local equation index, full candidate coordinate array with expected count; distinguish unsupported, conflict, redundant, not-converged and ABI failure; no partial success or invention of missing diagnostics |
+| Ownership | Caller supplies memory buffers/capacities, DLL reports required capacities without unbounded allocation or pointer retention; if a per-solve opaque native handle is needed, creation/destruction must be paired in the same loaded module and covered by leak/error tests; **never free across module CRT boundaries** |
+| Exceptions/threads | No exception, STL, callback, Qt, OCCT, external file path or raw pointer lifetime crossing the ABI; catch native exceptions at DLL boundary and return typed failure; specify non-reentrancy or independent fresh session per solve; do not silently cache per-document native state |
+| Version failure | Incompatible major, undersized struct, unsupported operation, absent export, mismatched bitness or corrupt output **fails closed**. No fallback to scripted/echo DEV or unsolved A1 command in shipped UI |
+| Loader | Resolve only a verified application-controlled absolute installation path with safe Windows DLL dependency-search flags, never CWD/PATH-first or implicitly another system DLL. Pin main product's expected ABI and record actual loaded module identity for troubleshooting; security/signature policy requires distinct review |
+| Part integrity | SS2 validates exact DocumentId, runtime incarnation, revision, active Sketch stage and fixed-source lease both sides of backend invocation; rechecks finite nondegenerate geometry, exact endpoint Coincident closure, independent residual tolerance, semantic IDs and no new authored mutation before final commit. Runtime solver pointers/tags are not persisted |
+
+A compatibility contract for a replaceable library must distinguish ABI compatibility from numerical/semantic acceptance. A replacement may solve differently while still returning a valid byte layout; only the strict host-side residual, fixed-input, convergence and complete diagnostic tests can authorize candidate publication. If replacement lacks an explicit supported algorithm/version capability, fail closed and show a typed actionable diagnostic.
+
+### 6.3 Windows evidence matrix, before any shipping claim
+
+| Phase | Required executable evidence | Failure oracle |
+| --- | --- | --- |
+| E0 source attestation | Independent immutable `planegcs-0.8.0.tar.gz` digest `09e77e6e3a27fa77d3b5a69065ea4c82ae6ed35753246a2e518b1a6005fea162` plus exact consumed-source SHA manifest, Eigen/Boost pin and MSVC x64 build | Hash/version/file/headers missing or unapproved vendored copy → STOP |
+| E1 DLL prototype | Isolated, untracked external Windows MSVC x64 build with C symbol export inspection, handshake and pure C consumer; two builds of equivalent source with independent dll/lib link inputs | C++ mangling, missing/incorrect exports, CRT-cross ownership or invalid ABI version → STOP |
+| E2 actual replacement | Clean installed-consumer directory using no developer build tree, verified library identity and **user-replaced rebuilt compatible DLL**, cold process restart, identical expected semantic outcomes | Hidden load from dev PATH/working directory, package requires developer machine, relink impossible → STOP |
+| E3 adversarial/native | Failures for missing DLL, wrong bitness, missing dependent DLL, wrong ABI, truncated buffers, duplicate tags, nonfinite values, conflicting/redundant equation, nonconverged partial candidate, stale lease during callback, unsupported projected source | Any resulting Part mutation, Undo/ID consumption, stale publish, accepted partial solution or silent mock fallback → STOP |
+| E4 Part integration | Original installed backend drives six manual A2.0 relation gestures including Fix Current Position, select/delete and current-stage Profile→OCCT Extrude/Revolve; Save→Close→new-process Reopen, Undo/Redo, failed-body repair, genuine UI owner-selection and camera input | No real user-facing 3D viewport pathway or stale/ambiguous glyph selection → A2.0 not complete |
+| E5 licensing/release | Owner/legal signoff on LGPL-2.1-or-later notices/full license, corresponding source and patches, attribution, relink/replacement instructions/rights and binary dependencies for each distributed build; test clean customer-like replacement, not merely document it | Absent approval/proven installed mechanism → NO RELEASE |
+| E6 CI | Registered exact-head Windows native/DLL and installed-consumer job; applicable FOCUSED/FAST/Ready FULL + DOC-01 checks and independent Owner manual/technical FINAL | `SKIPPED` is not `PASS`; old PR #506-only native CI remains historic, not A2 proof |
+
+### 6.4 Path impact inventory — CANDIDATES ONLY, next explicit Owner D2 path approval required
+
+**Already named in accepted A2 §4 conditional maximum** (not automatically applicable to DLL):
+- `src/CMakeLists.txt`: separate externally supplied original-source build target, build-tree vs install-tree and safe OFF default, with no automatic downloads
+- `src/sketch/include/simplesolid2/sketch/local_solver.hpp`, `src/sketch/local_solver.cpp`: **only if required** to preserve the existing SS2-neutral solver acceptance API; no public CAD identity changes
+- `tests/CMakeLists.txt`, `tests/core_only/CMakeLists.txt`, `tests/kernel_native/CMakeLists.txt`: separately allowed targets/test registration as appropriate
+- `.github/workflows/windows-pr-gate.yml`: specifically Owner-reviewed extension of PR-#506-only original-native lane, not an authorization to edit CI now
+- Existing `tests/r13_a1_local_constraints_test.cpp` and existing Sketch-domain tests: only new positive and negative native evidence, never weakened assertions
+
+**Likely new exact-path candidates, explicitly NOT AUTHORISED BY THIS ACCEPTANCE:**
+- `src/sketch/include/simplesolid2/sketch/planegcs_dll_abi.h` — candidate private frozen C ABI declarations only, no Qt, OCCT or public domain identity
+- `src/sketch/planegcs_dll_backend.cpp` — candidate private host adapter from existing neutral `ILocalSketchSolver`
+- `src/sketch/planegcs_dll_exports.cpp` — candidate source-backed DLL implementation of C ABI built only when verified original source is explicitly provided
+- `tests/r13_a2_planegcs_dll_abi_test.cpp` — candidate host handshake/error/diagnostic/replacement native test
+- Any **installer/packaging/installed-consumer** target, release notice and license/source/relink materials: **exact paths unknown**, therefore BLOCKED, not implicitly in scope
+
+The accepted R13-A2 §4 list does not authorize these new paths. The future D2 addendum must either accept a fully enumerated minimal manifest with those exact paths or change the experiment design; an unknown install/relink path is a hard STOP. Do not edit `third_party/**`, `work/ACTIVE.yaml`, stored Part schema, product CMake/CI or release packaging on the basis of this design proposal.
+
+### 6.5 Bounded acceptance and next decision
+
+At the currently approved **L-DLL feasibility-only** scope, the legitimate completion is: an inspectable exact ABI design, source and dependency pin strategy, reproducible isolated external Windows experiment instructions and explicit gap report. It is **not** a shipping library or final A2.0.
+
+The **next Owner D2 decision** must approve a reviewed concrete ABI shape, a finite exact-path diff budget and Windows experiment runner/installed-consumer matrix (including naming installer/relink paths) *before* any tracked implementation. A separate later D3/legal release decision remains mandatory. Reject blanket static fallback, extension of unapproved numeric/3D APIs, silent vendor installation and global parametric graph.
 
 ## Documentation impact
 
