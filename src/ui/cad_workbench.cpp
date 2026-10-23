@@ -1982,9 +1982,8 @@ void CadWorkbench::buildUi() {
     // Normal application builds contain no native provider registration.
     dev_relation_preview_solver_ =
         std::make_unique<sketch::PlaneGcsDevSolver>();
-    sketch_interaction_controller_->setDevelopmentRelationSolver(
-        dev_relation_preview_solver_.get(),
-        sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
+    // begin()/end() correctly revoke borrowed solver leases; register
+    // the preview only AFTER entering each actual Sketch Edit context.
     setProperty("ss2OriginalPlaneGcsDevRelationsPreview", true);
 #endif
     sketch_interaction_controller_->
@@ -13380,6 +13379,11 @@ void CadWorkbench::enterSketchEdit(
         sketch_interaction_controller_->begin(
             *document_session,
             sketch_id);
+#if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
+        sketch_interaction_controller_->setDevelopmentRelationSolver(
+            dev_relation_preview_solver_.get(),
+            sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
+#endif
 
         const auto selected_profiles =
             tree_controller_->selectedProfileIds();
@@ -15061,6 +15065,11 @@ void CadWorkbench::reconcileSketchRuntimeContext() {
             sketch_interaction_controller_->begin(
                 *document_session,
                 *active_sketch_id_);
+#if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
+            sketch_interaction_controller_->setDevelopmentRelationSolver(
+                dev_relation_preview_solver_.get(),
+                sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
+#endif
         } else {
             static_cast<void>(
                 sketch_interaction_controller_->
