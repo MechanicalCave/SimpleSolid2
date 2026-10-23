@@ -4258,9 +4258,17 @@ int main(int argc, char* argv[]) {
             session.document().findSketch(sid)->model.state();
         bool reentered = false;
         controller.setStatusHandler([&](const std::string& status) {
-            if (reentered ||
-                status.find("RELATIONS: numeric production solver") ==
-                    std::string::npos) {
+            // This callback is triggered by the *provisional* activation
+            // message in either standard (no backend) or explicitly
+            // opted-in DEV preview builds. The preview label differs,
+            // but the stale-activation/ABA invariant is identical.
+            const bool provisional_activation =
+                status.find("RELATIONS: numeric production solver") !=
+                    std::string::npos ||
+                status.find(
+                    "RELATIONS DEV PREVIEW: numerical backend registered") !=
+                    std::string::npos;
+            if (reentered || !provisional_activation) {
                 return;
             }
             reentered = true;
