@@ -2426,10 +2426,6 @@ void PartSketchInteractionController::activateRelations() {
     if (!active()) return;
     resetProfileRuntime();
     interaction_.activateRelations();
-    // The native Viewer projection can synchronously reenter Operations.
-    // Publish this preliminary message BEFORE the first external callback
-    // so an inner current-stage Relations commit owns the final status.
-    reportStatus("RELATIONS: numeric production solver and semantic targets are not yet enabled. No relation is authored.");
     ++relation_context_generation_;
     relation_first_revision_.reset();
     press_anchor_.reset();
@@ -2437,6 +2433,17 @@ void PartSketchInteractionController::activateRelations() {
     manipulation_revision_.reset();
     transform_revision_.reset();
     rectangle_revision_.reset();
+    // Finish ALL original-epoch resets before reporting anything to UI.
+    // Both status listeners and native Viewer projection may reenter.
+    // Do not let an obsolete outer activation clear the new edit's
+    // first relation target or its DocumentRevision lease.
+    const auto activation_generation = relation_context_generation_;
+    reportStatus("RELATIONS: numeric production solver and semantic targets are not yet enabled. No relation is authored.");
+    if (relation_context_generation_ != activation_generation ||
+        !active() ||
+        interaction_.tool() != sketch::SketchTool::relations) {
+        return;
+    }
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
@@ -2636,14 +2643,21 @@ void PartSketchInteractionController::activateDimensions() {
     if (!active()) return;
     resetProfileRuntime();
     interaction_.activateDimensions();
-    // Viewer projection below can reenter a new Relations tool and commit.
-    // The older disabled-Dimensions notice must precede that callback.
-    reportStatus("DIMENSIONS: native driving-dimension solver and v22 schema are not yet enabled. No dimension is authored.");
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
     rectangle_revision_.reset();
+    // The provisional notice must follow local resets but precede ANY
+    // synchronous external Viewer/UI callback. Abandon the outer
+    // projection when a listener switches to a new edit generation.
+    const auto activation_generation = relation_context_generation_;
+    reportStatus("DIMENSIONS: native driving-dimension solver and v22 schema are not yet enabled. No dimension is authored.");
+    if (relation_context_generation_ != activation_generation ||
+        !active() ||
+        interaction_.tool() != sketch::SketchTool::dimensions) {
+        return;
+    }
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
