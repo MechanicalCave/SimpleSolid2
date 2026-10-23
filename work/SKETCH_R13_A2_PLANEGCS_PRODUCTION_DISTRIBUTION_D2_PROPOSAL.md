@@ -226,7 +226,7 @@ int32_t SS2_PG_CALL ss2_pg_solve_v1(
 | ss2_pg_response_v1 | 56 | lines at 40 |
 | ss2_pg_abi_v1 | 48 | — |
 
-**Limited local syntax/layout check completed:** the identical candidate declarations compiled as C11 and C++20 with GCC on the development Linux environment and passed size/offset static assertions; candidate header SHA-256 `3953482474c5090ebdf3485c4ef44a77eddc7dcf46e1a65d3da025aa5b2ce037`. This is **not** a build of SS2, the original native PlaneGCS DLL, an MSVC/Windows ABI PASS, installation proof, or release license approval. The header text is included *for review only* in this work document; no new tracked header was created.
+**Limited local syntax/layout check completed:** an untracked standalone header with the same structure/member layouts and function prototypes as this candidate compiled as C11 and C++20 with GCC on a Linux development environment and passed size/offset static assertions. Its source comments differ from this Markdown listing: **no byte-identical compilation of the embedded text or Windows MSVC ABI proof is claimed**. This is **not** a build of SS2, an original-native PlaneGCS DLL, installation proof, or release license approval. The proposed header is included for D2 review only; no tracked C/C++ source was created.
 
 ### 7.2 Required implementation interpretation (not negotiable without D2 revision)
 
