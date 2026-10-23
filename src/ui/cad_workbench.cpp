@@ -16875,10 +16875,31 @@ bool CadWorkbench::eventFilter(
             }
 
             if (key_event->key() == Qt::Key_Escape) {
+                // Esc on a half-picked Relations pair keeps the kind
+                // active but drops its first semantic target. Both the
+                // progress counter and the visible Operations feedback
+                // must describe that SAME current gesture.
+                const bool pending_relation =
+                    sketch_interaction_controller_->tool() ==
+                        sketch::SketchTool::relations &&
+                    sketch_interaction_controller_->
+                        firstRelationTarget().has_value();
                 if (sketch_interaction_controller_->escape()) {
-                    setStatusText(
-                        QStringLiteral(
-                            "Sketch interaction cancelled."));
+                    const auto message = pending_relation
+                        ? QStringLiteral(
+                              "RELATIONS: first target cancelled; "
+                              "select a new first Line/endpoint. "
+                              "No Part change.")
+                        : QStringLiteral(
+                              "Sketch interaction cancelled.");
+                    if (pending_relation &&
+                        sketch_relations_feedback_label_ != nullptr &&
+                        sketch_interaction_controller_->tool() ==
+                            sketch::SketchTool::relations) {
+                        sketch_relations_feedback_label_->setText(
+                            message);
+                    }
+                    setStatusText(message);
                 }
                 return true;
             }
