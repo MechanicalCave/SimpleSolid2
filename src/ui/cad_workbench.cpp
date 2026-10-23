@@ -2013,7 +2013,19 @@ void CadWorkbench::buildUi() {
         });
     sketch_interaction_controller_->setStatusHandler(
         [this](const std::string& message) {
-            setStatusText(fromUtf8(message));
+            const auto text = fromUtf8(message);
+            // Keep acquisition, accepted result and typed rejection next
+            // to the chosen Relations kind in the existing Operations UI,
+            // not only in the bottom status bar. A stale asynchronous
+            // callback from another tool may not rewrite this panel.
+            if (sketch_relations_feedback_label_ != nullptr &&
+                sketch_interaction_controller_ != nullptr &&
+                sketch_interaction_controller_->active() &&
+                sketch_interaction_controller_->tool() ==
+                    sketch::SketchTool::relations) {
+                sketch_relations_feedback_label_->setText(text);
+            }
+            setStatusText(text);
         });
 
     tree_controller_->setAxisSelectionHandler(
@@ -3051,6 +3063,17 @@ void CadWorkbench::buildUi() {
         ++relation_index;
     }
     relations_layout->addLayout(relations_grid);
+    sketch_relations_feedback_label_ = new QLabel(
+        QStringLiteral(
+            "Choose a relation type, then select the required "
+            "current-stage Line or exact endpoint."),
+        sketch_relations_operations_widget_);
+    sketch_relations_feedback_label_->setObjectName(
+        QStringLiteral("sketchRelationsFeedbackLabel"));
+    sketch_relations_feedback_label_->setWordWrap(true);
+    sketch_relations_feedback_label_->setTextInteractionFlags(
+        Qt::TextSelectableByMouse);
+    relations_layout->addWidget(sketch_relations_feedback_label_);
 #if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
     auto* relation_preview_info = new QLabel(
         QStringLiteral(
