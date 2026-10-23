@@ -6,6 +6,10 @@
 
 #include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/precision_input.hpp>
+#include <simplesolid2/sketch/local_solver.hpp>
+#if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
+#include <simplesolid2/sketch/planegcs_dev_solver.hpp>
+#endif
 
 #include <QBoxLayout>
 #include <QCheckBox>
@@ -1971,6 +1975,18 @@ void CadWorkbench::buildUi() {
     sketch_interaction_controller_ =
         std::make_unique<PartSketchInteractionController>(
             *viewport_controller_);
+#if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
+    // Only an explicitly configured LOCAL developer build is allowed to
+    // borrow the pinned, real original PlaneGCS 0.8.0 provider here.
+    // Workbench owns the provider for the controller's entire lifetime.
+    // Normal application builds contain no native provider registration.
+    dev_relation_preview_solver_ =
+        std::make_unique<sketch::PlaneGcsDevSolver>();
+    sketch_interaction_controller_->setDevelopmentRelationSolver(
+        dev_relation_preview_solver_.get(),
+        sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
+    setProperty("ss2OriginalPlaneGcsDevRelationsPreview", true);
+#endif
     sketch_interaction_controller_->
         setSolidModelingKernel(
             solid_modeling_kernel_);
@@ -3011,8 +3027,14 @@ void CadWorkbench::buildUi() {
         control->setObjectName(QString::fromLatin1(spec.object_name));
         control->setCheckable(true);
         control->setEnabled(false);
+#if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
+        control->setToolTip(QStringLiteral(
+            "LOCAL DEV PREVIEW: original PlaneGCS 0.8.0. Select a current "
+            "Sketch Line/endpoint and verify the Part result; not a release build."));
+#else
         control->setToolTip(QStringLiteral(
             "Relation type selection only. Numerical authoring not yet enabled."));
+#endif
         sketch_relation_kind_buttons_[static_cast<std::size_t>(relation_index)] = control;
         const auto selected_kind = spec.relation_kind;
         QObject::connect(control, &QPushButton::clicked, this,
@@ -3030,9 +3052,26 @@ void CadWorkbench::buildUi() {
         ++relation_index;
     }
     relations_layout->addLayout(relations_grid);
+#if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
+    auto* relation_preview_info = new QLabel(
+        QStringLiteral(
+            "DEV PREVIEW — real original PlaneGCS 0.8.0 (local build only). "
+            "Choose Horizontal / Vertical / Coincident / Parallel / "
+            "Perpendicular / Fix, then select the Line or exact endpoints. "
+            "Each accepted command changes the Part and supports Undo. "
+            "Rejected targets must leave the Part unchanged. "
+            "This is NOT the final product UI; glyphs and Driving "
+            "Dimensions are still unavailable."),
+        sketch_relations_operations_widget_);
+    relation_preview_info->setObjectName(
+        QStringLiteral("sketchRelationsNativePreviewNotice"));
+    relation_preview_info->setWordWrap(true);
+    relations_layout->addWidget(relation_preview_info);
+#else
     relations_layout->addWidget(new QLabel(
         QStringLiteral("Numeric relation authoring is not enabled in this draft."),
         sketch_relations_operations_widget_));
+#endif
     operations_layout->addWidget(sketch_relations_operations_widget_);
     sketch_relations_operations_widget_->setVisible(false);
 
