@@ -2623,10 +2623,13 @@ bool PartSketchInteractionController::selectDimensionKind(
         return false;
     }
     projectInteraction();
-    notifyStateChanged();
+    // Emit this provisional status before Operations notification: a
+    // synchronous stateChanged listener may switch to Relations and
+    // commit a newer Part transaction with a more important status.
     reportStatus(
         "DIMENSIONS: type selected. Authoring is blocked pending "
         "strict v22 and a native driving solver; no Part change.");
+    notifyStateChanged();
     return true;
 }
 
@@ -2644,8 +2647,10 @@ void PartSketchInteractionController::activateDimensions() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
-    notifyStateChanged();
+    // Do not overwrite a successful reentrant Relations commit from
+    // the stateChanged callback with this older provisional notice.
     reportStatus("DIMENSIONS: native driving-dimension solver and v22 schema are not yet enabled. No dimension is authored.");
+    notifyStateChanged();
 }
 
 bool PartSketchInteractionController::activateTrim() {
