@@ -647,6 +647,7 @@ private:
     QLabel* operations_placeholder_{};
     QWidget* sketch_relations_operations_widget_{};
     QLabel* sketch_relations_feedback_label_{};
+    QLabel* sketch_relation_targets_label_{};
     QListWidget* sketch_authored_relations_list_{};
     std::array<QPushButton*, 6> sketch_relation_kind_buttons_{};
     QWidget* sketch_dimensions_operations_widget_{};
