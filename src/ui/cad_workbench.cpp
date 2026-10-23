@@ -3076,6 +3076,19 @@ void CadWorkbench::buildUi() {
         Qt::TextSelectableByMouse);
     relations_layout->addWidget(sketch_relations_feedback_label_);
 
+    // Live, non-authoritative gesture progress, sourced from the current
+    // transient semantic draft rather than guessing a nearest hit or
+    // consuming any Part IDs before numeric solver acceptance.
+    sketch_relation_targets_label_ = new QLabel(
+        QStringLiteral("Select a relation type."),
+        sketch_relations_operations_widget_);
+    sketch_relation_targets_label_->setObjectName(
+        QStringLiteral("sketchRelationTargetsLabel"));
+    sketch_relation_targets_label_->setWordWrap(true);
+    sketch_relation_targets_label_->setTextInteractionFlags(
+        Qt::TextSelectableByMouse);
+    relations_layout->addWidget(sketch_relation_targets_label_);
+
     // A2.0 read-only semantic inspection. These rows originate from the
     // exact Part-owned Sketch, NEVER from screen tokens, hover inference
     // or an uncommitted solver candidate. Do not enable list Delete or
@@ -17364,6 +17377,50 @@ void CadWorkbench::syncSketchInteractionUi() {
     const auto selected_relation =
         editing ? sketch_interaction_controller_->relationKind()
                 : std::optional<sketch::ConstraintKind>{};
+    if (sketch_relation_targets_label_ != nullptr) {
+        QString progress = QStringLiteral("Select a relation type.");
+        if (relations_mode && selected_relation) {
+            const auto first =
+                sketch_interaction_controller_->firstRelationTarget();
+            const bool exact_endpoints =
+                *selected_relation == sketch::ConstraintKind::coincident;
+            const bool pair =
+                exact_endpoints ||
+                *selected_relation == sketch::ConstraintKind::parallel ||
+                *selected_relation == sketch::ConstraintKind::perpendicular;
+            if (first && pair) {
+                const auto id = QString::fromStdString(
+                    first->entity.serialized());
+                QString source = QStringLiteral("Line %1").arg(id);
+                if (first->element ==
+                    sketch::ConstraintElement::line_start) {
+                    source += QStringLiteral(" Start");
+                } else if (first->element ==
+                           sketch::ConstraintElement::line_end) {
+                    source += QStringLiteral(" End");
+                }
+                progress = exact_endpoints
+                    ? QStringLiteral(
+                          "1/2 — %1 selected. Click an exact Start/End "
+                          "point on a different Line.").arg(source)
+                    : QStringLiteral(
+                          "1/2 — %1 selected. Click a different Line.")
+                          .arg(source);
+            } else if (pair) {
+                progress = exact_endpoints
+                    ? QStringLiteral(
+                          "0/2 — Click the first exact Line Start/End point.")
+                    : QStringLiteral(
+                          "0/2 — Click the first Line.");
+            } else {
+                progress = QStringLiteral(
+                    "0/1 — Click one current-stage Line.");
+            }
+        }
+        if (sketch_relation_targets_label_->text() != progress) {
+            sketch_relation_targets_label_->setText(progress);
+        }
+    }
     constexpr std::array relation_kinds_for_ui{
         sketch::ConstraintKind::horizontal,
         sketch::ConstraintKind::vertical,
