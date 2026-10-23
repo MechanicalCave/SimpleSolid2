@@ -2614,14 +2614,34 @@ int main(int argc, char* argv[]) {
     const auto before_dimension_kind_revision =
         ux_session->document().revision();
     const auto before_dimension_kind_undo = ux_session->undoDepth();
+    length_kind->setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    CHECK(length_kind->hasFocus());
     length_kind->click();
     QApplication::processEvents();
+    CHECK(viewport->hasFocus());
     CHECK(length_kind->isChecked());
     CHECK(!diameter_kind->isChecked());
+    diameter_kind->setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    CHECK(diameter_kind->hasFocus());
     diameter_kind->click();
     QApplication::processEvents();
+    CHECK(viewport->hasFocus());
     CHECK(!length_kind->isChecked());
     CHECK(diameter_kind->isChecked());
+    CHECK(ux_session->document().revision() == before_dimension_kind_revision);
+    CHECK(ux_session->undoDepth() == before_dimension_kind_undo);
+    // Esc after choosing a Dimensions kind exits the disabled mode;
+    // neither selecting the kind nor cancelling may author a driver.
+    QKeyEvent cancel_dimension{
+        QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+    QApplication::sendEvent(viewport, &cancel_dimension);
+    QApplication::processEvents();
+    CHECK(select_tool->isChecked());
+    CHECK(!dimensions_tool->isChecked());
+    CHECK(relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
     CHECK(ux_session->document().revision() == before_dimension_kind_revision);
     CHECK(ux_session->undoDepth() == before_dimension_kind_undo);
     select_tool->click();
