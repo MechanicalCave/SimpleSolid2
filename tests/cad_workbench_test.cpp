@@ -141,6 +141,10 @@ public:
         fail_sketch_scene_ = fail;
     }
 
+    [[nodiscard]] const viewer::SketchScene& sketchScene() const noexcept {
+        return sketch_scene_;
+    }
+
     bool setSketchPreviewScene(
         const viewer::SketchPreviewScene& scene) override {
         if (!scene.valid()) return false;
@@ -2283,6 +2287,19 @@ int main(int argc, char* argv[]) {
             application::CreatePartSketchCommand{
                 core::BuiltinReferenceRole::xy_plane});
     CHECK(ux_sketch.ok() && ux_sketch.sketch_id);
+    const bool native_relations_preview =
+        workbench.property(
+            "ss2OriginalPlaneGcsDevRelationsPreview").toBool();
+    if (native_relations_preview) {
+        // Native opt-in test creates a deliberately nonhorizontal seed,
+        // then exercises the real user-facing Workbench controls with
+        // the original source-backed PlaneGCS 0.8.0 backend.
+        const auto seed = ux_session->execute(
+            application::AddSketchLineCommand{
+                *ux_sketch.sketch_id,
+                {0.0, 1.0}, {5.0, 2.0}});
+        CHECK(seed.ok() && seed.entity_id);
+    }
     CHECK(workbench.activateDocument(ux_session, workspace));
     auto* part_axis_tool =
         workbench.findChild<QPushButton*>(
@@ -2422,6 +2439,63 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(relation_operations->isHidden());
     CHECK(dimension_operations->isHidden());
+
+    if (native_relations_preview) {
+        auto* banner = workbench.findChild<QLabel*>(
+            QStringLiteral("sketchRelationsNativePreviewNotice"));
+        CHECK(banner != nullptr);
+        CHECK(banner->text().contains(QStringLiteral(
+            "original PlaneGCS 0.8.0")));
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+
+        // Selection-first in the REAL CadWorkbench: same native
+        // PresentationToken event used by the viewport, followed by
+        // the actual Qt Relations and Horizontal operation buttons.
+        const auto baseline_revision =
+            ux_session->document().revision();
+        const auto baseline_undo = ux_session->undoDepth();
+        viewport->emitSelectionIntent(
+            viewport->sketchScene().lines.front().token,
+            viewer::SelectionIntentMode::replace);
+        QApplication::processEvents();
+        CHECK(ux_session->document().revision() ==
+              baseline_revision);
+        relations_tool->click();
+        QApplication::processEvents();
+        horizontal_relation->click();
+        QApplication::processEvents();
+
+        CHECK(ux_session->document().revision() !=
+              baseline_revision);
+        CHECK(ux_session->undoDepth() ==
+              baseline_undo + 1U);
+        const auto* authored =
+            ux_session->document().findSketch(
+                *ux_sketch.sketch_id);
+        CHECK(authored != nullptr);
+        CHECK(authored->model.state().constraints.size() == 1U);
+        CHECK(authored->model.state().constraints.front().kind ==
+              sketch::ConstraintKind::horizontal);
+
+        // A real numerical transaction, not a mocked success status,
+        // is undoable and redoable in the owning DocumentSession.
+        CHECK(ux_session->undo().changed);
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.empty());
+        CHECK(ux_session->redo().changed);
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.size() == 1U);
+        select_tool->click();
+        QApplication::processEvents();
+    } else {
+        // Ordinary shipped-source builds stay fail-closed and cannot
+        // masquerade as an installed PlaneGCS product.
+        CHECK(workbench.findChild<QLabel*>(
+                  QStringLiteral(
+                      "sketchRelationsNativePreviewNotice")) == nullptr);
+    }
 
     CHECK(mirror_keep_original->isHidden());
     CHECK(operations->parentWidget()->isAncestorOf(
