@@ -3057,6 +3057,14 @@ void CadWorkbench::buildUi() {
                     setStatusText(QStringLiteral(
                         "Could not select relation kind in current Sketch context."));
                     syncSketchInteractionUi();
+                    return;
+                }
+                // Return keyboard ownership to the real Sketch viewport.
+                // Otherwise a mouse click on this Operations button leaves
+                // Esc on the button instead of cancelling the first pick.
+                // The viewport owns the spatial input + focused-key route.
+                if (viewport_widget_ != nullptr) {
+                    viewport_widget_->setFocus(Qt::OtherFocusReason);
                 }
             });
         relations_grid->addWidget(
