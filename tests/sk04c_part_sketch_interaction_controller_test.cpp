@@ -3858,5 +3858,147 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+
+    // R13-A2.0: activating the still-disabled Dimensions tool publishes
+    // its placeholder status only for the CURRENT UI event. A synchronous
+    // Operations listener may switch tools and author a valid DEV relation.
+    // The obsolete outer Dimensions activation must not replace the newer
+    // successfully committed relation status after its notification.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto added = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        CHECK(added.ok() && added.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) {
+                status = message;
+            });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        const auto before_revision = session.document().revision();
+        const auto before_undo = session.undoDepth();
+        bool reentered = false;
+        controller.setStateChangedHandler([&] {
+            if (reentered ||
+                controller.tool() != sketch::SketchTool::dimensions) {
+                return;
+            }
+            reentered = true;
+            controller.activateRelations();
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::horizontal));
+            CHECK(viewport.sketch_scene_.lines.size() == 1U);
+            viewport.point_query_ = {
+                true, viewport.sketch_scene_.lines.front().token};
+            controller.onPointer(pointer(
+                sid, viewer::SpatialPointerPhase::primary_press,
+                125.0, 100.0, 2.5, 0.0));
+            CHECK(backend.calls == 1);
+            CHECK(status.find("accepted by current Part solver") !=
+                  std::string::npos);
+        });
+        controller.activateDimensions();
+        CHECK(reentered);
+        CHECK(controller.tool() == sketch::SketchTool::relations);
+        CHECK(status.find("accepted by current Part solver") !=
+              std::string::npos);
+        CHECK(session.document().revision() != before_revision);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        CHECK(session.document().findSketch(sid)->
+                  model.state().constraints.size() == 1U);
+        controller.end();
+    }
+
+    // R13-A2.0: selecting a disabled dimension kind notifies Operations
+    // listeners after its transient state changes. An inner callback can
+    // author a valid relation; the superseded outer dimension-kind status
+    // must not overwrite the accepted Part transaction's diagnostics.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto added = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        CHECK(added.ok() && added.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{
+            viewport_controller};
+        std::string status;
+        controller.setStatusHandler(
+            [&status](const std::string& message) {
+                status = message;
+            });
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        controller.activateDimensions();
+        const auto before_revision = session.document().revision();
+        const auto before_undo = session.undoDepth();
+        bool reentered = false;
+        controller.setStateChangedHandler([&] {
+            if (reentered ||
+                controller.tool() != sketch::SketchTool::dimensions) {
+                return;
+            }
+            reentered = true;
+            controller.activateRelations();
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::horizontal));
+            CHECK(viewport.sketch_scene_.lines.size() == 1U);
+            viewport.point_query_ = {
+                true, viewport.sketch_scene_.lines.front().token};
+            controller.onPointer(pointer(
+                sid, viewer::SpatialPointerPhase::primary_press,
+                125.0, 100.0, 2.5, 0.0));
+            CHECK(backend.calls == 1);
+            CHECK(status.find("accepted by current Part solver") !=
+                  std::string::npos);
+        });
+        CHECK(controller.selectDimensionKind(
+            sketch::DrivingDimensionToolKind::length));
+        CHECK(reentered);
+        CHECK(controller.tool() == sketch::SketchTool::relations);
+        CHECK(status.find("accepted by current Part solver") !=
+              std::string::npos);
+        CHECK(session.document().revision() != before_revision);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        CHECK(session.document().findSketch(sid)->
+                  model.state().constraints.size() == 1U);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
