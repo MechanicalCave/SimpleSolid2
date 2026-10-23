@@ -457,14 +457,19 @@ LocalSolveGatewayResult evaluateLocalSolve(
         }
     }
 
-    // Backend diagnostics cannot invent new ConstraintIds or repeat IDs.
+    // Fix(Line) is a fixed-parameter mask, never a backend equation.
+    // Check equation-bound conflict provenance against the immutable,
+    // entry-time canonical inventory, not merely any authored ConstraintId.
+    const auto isEquation = [&original](ConstraintId id) {
+        return std::any_of(
+            original.equations.cbegin(), original.equations.cend(),
+            [id](const SketchConstraintState& relation) {
+                return relation.id == id;
+            });
+    };
     std::set<ConstraintId> seen;
     for (const auto id : backend_result.conflicting_constraints) {
-        const auto it = std::find_if(
-            problem.constraints.cbegin(), problem.constraints.cend(),
-            [id](const SketchConstraintState& c) { return c.id == id; });
-        if (!id.valid() || it == problem.constraints.cend() ||
-            !seen.insert(id).second) {
+        if (!id.valid() || !isEquation(id) || !seen.insert(id).second) {
             result.status = LocalSolveGatewayStatus::invalid_backend_response;
             return result;
         }
@@ -489,7 +494,16 @@ LocalSolveGatewayResult evaluateLocalSolve(
             const auto found = std::find_if(
                 problem.constraints.cbegin(), problem.constraints.cend(),
                 [id](const SketchConstraintState& c) { return c.id == id; });
+            // Redundancy/conflict diagnostics must name an actual
+            // equation. A Fix ID can exist in the Sketch inventory but
+            // has no algebraic equation to diagnose or highlight.
+            const bool equation_diagnostic =
+                diagnostic.kind ==
+                    LocalBackendDiagnosticKind::redundant_constraint ||
+                diagnostic.kind ==
+                    LocalBackendDiagnosticKind::conflicting_constraint;
             if (!id.valid() || found == problem.constraints.cend() ||
+                (equation_diagnostic && !isEquation(id)) ||
                 !diagnostic_ids.insert(id).second) {
                 result.status = LocalSolveGatewayStatus::invalid_backend_response;
                 return result;
