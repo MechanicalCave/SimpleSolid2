@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QKeyEvent>
@@ -2299,6 +2300,23 @@ int main(int argc, char* argv[]) {
                 *ux_sketch.sketch_id,
                 {0.0, 1.0}, {5.0, 2.0}});
         CHECK(seed.ok() && seed.entity_id);
+    } else {
+        // The ordinary no-solver application can still inspect a real,
+        // Part-owned A1 relation created by the existing headless API.
+        // This fixture does NOT pretend numeric UI authorship is enabled.
+        const auto seed = ux_session->execute(
+            application::AddSketchLineCommand{
+                *ux_sketch.sketch_id,
+                {0.0, 1.0}, {5.0, 1.0}});
+        CHECK(seed.ok() && seed.entity_id);
+        const auto relation = ux_session->execute(
+            application::AddSketchRelationCommand{
+                *ux_sketch.sketch_id,
+                ux_session->document().revision(),
+                sketch::ConstraintKind::horizontal,
+                {*seed.entity_id, sketch::ConstraintElement::line},
+                {}});
+        CHECK(relation.ok() && relation.constraint_id);
     }
     CHECK(workbench.activateDocument(ux_session, workspace));
     auto* part_axis_tool =
@@ -2385,6 +2403,13 @@ int main(int argc, char* argv[]) {
         QStringLiteral("sketchRelationsFeedbackLabel"));
     CHECK(relations_feedback != nullptr);
     CHECK(relation_operations->isAncestorOf(relations_feedback));
+    auto* authored_relations = workbench.findChild<QListWidget*>(
+        QStringLiteral("sketchAuthoredRelationsList"));
+    CHECK(authored_relations != nullptr);
+    CHECK(relation_operations->isAncestorOf(authored_relations));
+    CHECK(authored_relations->selectionMode() ==
+          QAbstractItemView::NoSelection);
+    CHECK(authored_relations->focusPolicy() == Qt::NoFocus);
     CHECK(relations_feedback->text().contains(
         QStringLiteral("Choose a relation type")));
     CHECK(relation_operations->isHidden());
@@ -2397,6 +2422,18 @@ int main(int argc, char* argv[]) {
     CHECK(dimension_operations->isHidden());
     CHECK(relations_feedback->text().contains(
         QStringLiteral("RELATIONS")));
+    CHECK(authored_relations->count() == 1);
+    if (native_relations_preview) {
+        CHECK(authored_relations->item(0)->text() ==
+              QStringLiteral("No authored relations"));
+    } else {
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Horizontal")));
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Line 1")));
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("ID 1")));
+    }
     CHECK(!finish_sketch->isHidden());
     auto* horizontal_relation = workbench.findChild<QPushButton*>(
         QStringLiteral("sketchRelationHorizontalButton"));
@@ -2494,17 +2531,38 @@ int main(int argc, char* argv[]) {
         // must give the user visible confirmation of the native result.
         CHECK(relations_feedback->text().contains(
             QStringLiteral("accepted by current Part solver")));
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Horizontal")));
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Line 1")));
 
-        // A real numerical transaction, not a mocked success status,
-        // is undoable and redoable in the owning DocumentSession.
-        CHECK(ux_session->undo().changed);
+        // Real Qt Undo/Redo must refresh the authored list from Part.
+        // History cancels the transient tool, so explicitly reopen
+        // Relations to inspect each stage without synthesizing signals.
+        CHECK(undo->isEnabled());
+        undo->click();
+        QApplication::processEvents();
         CHECK(ux_session->document().findSketch(
                   *ux_sketch.sketch_id)
                   ->model.state().constraints.empty());
-        CHECK(ux_session->redo().changed);
+        relations_tool->click();
+        QApplication::processEvents();
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text() ==
+              QStringLiteral("No authored relations"));
+
+        CHECK(redo->isEnabled());
+        redo->click();
+        QApplication::processEvents();
         CHECK(ux_session->document().findSketch(
                   *ux_sketch.sketch_id)
                   ->model.state().constraints.size() == 1U);
+        relations_tool->click();
+        QApplication::processEvents();
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Horizontal")));
         select_tool->click();
         QApplication::processEvents();
     } else {
