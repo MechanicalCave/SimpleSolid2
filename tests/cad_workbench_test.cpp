@@ -2435,6 +2435,45 @@ int main(int argc, char* argv[]) {
             QStringLiteral("ID 1")));
     }
     CHECK(!finish_sketch->isHidden());
+    if (!native_relations_preview) {
+        // This is a real Qt Workbench Undo/Redo regression in the
+        // ordinary preview-OFF product, not a conditional solver test.
+        // A pre-authored A1 constraint must disappear/reappear in
+        // Operations without creating any replacement constraint.
+        const auto prior_revision = ux_session->document().revision();
+        const auto prior_undo = ux_session->undoDepth();
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.size() == 1U);
+
+        CHECK(undo->isEnabled());
+        undo->click();
+        QApplication::processEvents();
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.empty());
+        relations_tool->click();
+        QApplication::processEvents();
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text() ==
+              QStringLiteral("No authored relations"));
+
+        CHECK(redo->isEnabled());
+        redo->click();
+        QApplication::processEvents();
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.size() == 1U);
+        relations_tool->click();
+        QApplication::processEvents();
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Horizontal")));
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("ID 1")));
+        CHECK(ux_session->document().revision() != prior_revision);
+        CHECK(ux_session->undoDepth() == prior_undo);
+    }
     auto* horizontal_relation = workbench.findChild<QPushButton*>(
         QStringLiteral("sketchRelationHorizontalButton"));
     auto* parallel_relation = workbench.findChild<QPushButton*>(
