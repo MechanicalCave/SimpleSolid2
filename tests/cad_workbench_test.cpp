@@ -2381,6 +2381,12 @@ int main(int argc, char* argv[]) {
     auto* dimension_operations = workbench.findChild<QWidget*>(
         QStringLiteral("sketchDimensionsOperations"));
     CHECK(relation_operations && dimension_operations);
+    auto* relations_feedback = workbench.findChild<QLabel*>(
+        QStringLiteral("sketchRelationsFeedbackLabel"));
+    CHECK(relations_feedback != nullptr);
+    CHECK(relation_operations->isAncestorOf(relations_feedback));
+    CHECK(relations_feedback->text().contains(
+        QStringLiteral("Choose a relation type")));
     CHECK(relation_operations->isHidden());
     CHECK(dimension_operations->isHidden());
     relations_tool->click();
@@ -2389,6 +2395,8 @@ int main(int argc, char* argv[]) {
     CHECK(!dimensions_tool->isChecked());
     CHECK(!relation_operations->isHidden());
     CHECK(dimension_operations->isHidden());
+    CHECK(relations_feedback->text().contains(
+        QStringLiteral("RELATIONS")));
     CHECK(!finish_sketch->isHidden());
     auto* horizontal_relation = workbench.findChild<QPushButton*>(
         QStringLiteral("sketchRelationHorizontalButton"));
@@ -2403,10 +2411,14 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(horizontal_relation->isChecked());
     CHECK(!parallel_relation->isChecked());
+    CHECK(relations_feedback->text().contains(
+        QStringLiteral("Line/endpoint")));
     parallel_relation->click();
     QApplication::processEvents();
     CHECK(!horizontal_relation->isChecked());
     CHECK(parallel_relation->isChecked());
+    CHECK(relations_feedback->text().contains(
+        QStringLiteral("Line/endpoint")));
     CHECK(ux_session->document().revision() == before_kind_revision);
     CHECK(ux_session->undoDepth() == before_kind_undo);
     dimensions_tool->click();
@@ -2415,6 +2427,8 @@ int main(int argc, char* argv[]) {
     CHECK(!relations_tool->isChecked());
     CHECK(relation_operations->isHidden());
     CHECK(!dimension_operations->isHidden());
+    CHECK(!relations_feedback->text().contains(
+        QStringLiteral("DIMENSIONS")));
     auto* length_kind = workbench.findChild<QPushButton*>(
         QStringLiteral("sketchDimensionLengthButton"));
     auto* diameter_kind = workbench.findChild<QPushButton*>(
@@ -2476,6 +2490,10 @@ int main(int argc, char* argv[]) {
         CHECK(authored->model.state().constraints.size() == 1U);
         CHECK(authored->model.state().constraints.front().kind ==
               sketch::ConstraintKind::horizontal);
+        // The actual Operations panel, not merely the global status bar,
+        // must give the user visible confirmation of the native result.
+        CHECK(relations_feedback->text().contains(
+            QStringLiteral("accepted by current Part solver")));
 
         // A real numerical transaction, not a mocked success status,
         // is undoable and redoable in the owning DocumentSession.
