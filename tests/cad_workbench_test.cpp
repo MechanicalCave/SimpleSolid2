@@ -60,7 +60,11 @@ class TestViewportWidget final
       public viewer::IDocumentViewport {
 public:
     explicit TestViewportWidget(QWidget* parent = nullptr)
-        : QWidget{parent} {}
+        : QWidget{parent} {
+        // Mirror native Qt/OCCT widget: real spatial-input viewport
+        // must accept keyboard focus for Esc during Sketch Edit.
+        setFocusPolicy(Qt::StrongFocus);
+    }
 
     [[nodiscard]] std::optional<viewer::CameraState>
     cameraState() const override {
@@ -2516,16 +2520,26 @@ int main(int argc, char* argv[]) {
     CHECK(parallel_relation->isEnabled());
     const auto before_kind_revision = ux_session->document().revision();
     const auto before_kind_undo = ux_session->undoDepth();
+    horizontal_relation->setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    CHECK(horizontal_relation->hasFocus());
     horizontal_relation->click();
     QApplication::processEvents();
+    // A relation-kind click must return keyboard focus to the actual
+    // viewport so Esc cancels a pending pick without another mouse click.
+    CHECK(viewport->hasFocus());
     CHECK(horizontal_relation->isChecked());
     CHECK(!parallel_relation->isChecked());
     CHECK(relations_feedback->text().contains(
         QStringLiteral("Line/endpoint")));
     CHECK(relation_targets->text().contains(
         QStringLiteral("0/1")));
+    parallel_relation->setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    CHECK(parallel_relation->hasFocus());
     parallel_relation->click();
     QApplication::processEvents();
+    CHECK(viewport->hasFocus());
     CHECK(!horizontal_relation->isChecked());
     CHECK(parallel_relation->isChecked());
     CHECK(relations_feedback->text().contains(
@@ -2557,6 +2571,20 @@ int main(int argc, char* argv[]) {
             QStringLiteral("Line 1")));
         CHECK(relation_targets->text().contains(
             QStringLiteral("different Line")));
+        CHECK(viewport->hasFocus());
+
+        // Esc is an actual KeyPress on the still-focused viewport:
+        // first press drops ONLY the half-acquired pair, keeps Parallel
+        // selected and adds zero Part revision/Undo.
+        QKeyEvent cancel_first_pick{
+            QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+        QApplication::sendEvent(viewport, &cancel_first_pick);
+        QApplication::processEvents();
+        CHECK(parallel_relation->isChecked());
+        CHECK(relation_targets->text().contains(
+            QStringLiteral("0/2")));
+        CHECK(!relation_targets->text().contains(
+            QStringLiteral("Line 1")));
         CHECK(ux_session->document().revision() ==
               before_kind_revision);
         CHECK(ux_session->undoDepth() == before_kind_undo);
