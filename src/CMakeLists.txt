@@ -31,6 +31,14 @@ target_compile_features(simplesolid2_sketch PUBLIC cxx_std_20)
 # Optional original-source-backed PlaneGCS 0.8.0 DEV native test.
 # Never fetch, vendor, install or enable for normal application builds.
 option(SS2_R13_PLANEGCS_DEV "Opt in to real original PlaneGCS 0.8.0 native DEV CTest" OFF)
+# Additional explicit opt-in for a real, locally built Sketch Relations GUI
+# prototype. OFF keeps the usual consumer application unchanged; never add
+# this executable to release/install/distribution packaging.
+option(SS2_R13_PLANEGCS_UI_PREVIEW "Enable local original PlaneGCS 0.8.0 DEV Relations UI preview (NOT a release)" OFF)
+if(SS2_R13_PLANEGCS_UI_PREVIEW AND NOT SS2_R13_PLANEGCS_DEV)
+    message(FATAL_ERROR
+        "SS2_R13_PLANEGCS_UI_PREVIEW requires SS2_R13_PLANEGCS_DEV=ON and its verified external source/dependencies")
+endif()
 if(SS2_R13_PLANEGCS_DEV)
     set(SS2_PLANEGCS_080_SOURCE_DIR "" CACHE PATH "Verified existing PlaneGCS 0.8.0 source root")
     set(SS2_PLANEGCS_EIGEN_INCLUDE_DIR "" CACHE PATH "Existing Eigen3 include directory")
@@ -392,6 +400,15 @@ target_link_libraries(simplesolid2_ui
 )
 
 target_compile_features(simplesolid2_ui PUBLIC cxx_std_20)
+
+if(SS2_R13_PLANEGCS_UI_PREVIEW)
+    # Compile the PRIVATE workbench adapter only when the verified original
+    # DEV target exists. No global define, auto-vendoring, C ABI or install.
+    target_compile_definitions(simplesolid2_ui PRIVATE
+        SS2_R13_PLANEGCS_UI_PREVIEW=1)
+    target_link_libraries(simplesolid2_ui PRIVATE
+        ss2_r13_planegcs_dev)
+endif()
 
 add_executable(simplesolid2
     app/main.cpp
