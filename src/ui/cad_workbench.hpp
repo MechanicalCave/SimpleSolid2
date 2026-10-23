@@ -39,6 +39,10 @@ namespace simplesolid2::kernel {
 class ISolidModelingKernel;
 }
 
+namespace simplesolid2::sketch {
+class ILocalSketchSolver;
+}
+
 namespace simplesolid2::ui {
 
 struct BodyTopologyInspection;
@@ -509,6 +513,11 @@ private:
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
     PartViewportController* viewport_controller_{};
+    // Explicit opt-in local original-PlaneGCS UI preview: this owner must
+    // outlive the interaction controller's borrowed ILocalSketchSolver.
+    // Empty for every normal desktop/consumer build.
+    std::unique_ptr<sketch::ILocalSketchSolver>
+        dev_relation_preview_solver_;
     std::unique_ptr<PartSketchInteractionController>
         sketch_interaction_controller_;
 
