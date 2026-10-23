@@ -2585,6 +2585,13 @@ int main(int argc, char* argv[]) {
             QStringLiteral("0/2")));
         CHECK(!relation_targets->text().contains(
             QStringLiteral("Line 1")));
+        // A cancelled first pick must also clear obsolete on-panel
+        // "first Line accepted" guidance; the counter alone is not
+        // sufficient feedback for actual end users.
+        CHECK(relations_feedback->text().contains(
+            QStringLiteral("cancelled")));
+        CHECK(!relations_feedback->text().contains(
+            QStringLiteral("first preselected Line accepted")));
         CHECK(ux_session->document().revision() ==
               before_kind_revision);
         CHECK(ux_session->undoDepth() == before_kind_undo);
