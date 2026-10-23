@@ -1,12 +1,12 @@
 # SimpleSolid 2.0 — Sketcher R13-A2
 ## Relations UI + Driving Dimensions — D2 Work Contract (Owner accepted)
 
-**Status:** **OWNER-ACCEPTED D2 CONTRACT / MERGED GOVERNANCE (PR #521, 2026-10-21)**. The Owner separately authorized guarded squash and A2 activation sequence; PR #521 was verified merged as `12901abb2fbfc6372cb9ab9ba50a3463bb265c63`. The present DOC-01 errata is a separate one-file governance change. A2 product mutation remains conditioned on a verified independent ACTIVE-only merge and the further strict v22 codec, solver distribution and real 3D viewer interface gates.  
+**Status:** **OWNER-ACCEPTED D2 / ACTIVE; R13-A2 PRODUCT IN PROGRESS (2026-10-23)**. Contract PR [#521](https://github.com/MechanicalCave/SimpleSolid2/pull/521) guarded-squash merged as `12901abb2fbfc6372cb9ab9ba50a3463bb265c63`; one-file DOC-01 correction [#523](https://github.com/MechanicalCave/SimpleSolid2/pull/523) merged, and independent ACTIVE-only [#524](https://github.com/MechanicalCave/SimpleSolid2/pull/524) merged protected main `68fc4f33aaeee0e4741bc20b269b665839fa06cf`. The active A2.0 product [PR #525](https://github.com/MechanicalCave/SimpleSolid2/pull/525) is OPEN/DRAFT/UNMERGED. Activation is complete; strict v22 schema, original PlaneGCS release/distribution and native 3D viewer interface remain separate STOP gates.  
 **Prepared:** 2026-10-21 (Europe/Warsaw).  
-**SS2 authoritative readback:** `MechanicalCave/SimpleSolid2`, protected `main@30a17150552fe67e30fe84a7f17e0dce30ef619c`; `work/ACTIVE.yaml` still points to completed `work/SKETCH_R13_A1_LOCAL_RELATIONS_D2_WORK_CONTRACT_PROPOSAL.md`.  
+**Original 2026-10-21 proposal readback (historical):** `MechanicalCave/SimpleSolid2`, protected `main@30a17150552fe67e30fe84a7f17e0dce30ef619c`; at that point ACTIVE still pointed to completed A1. **Current verified readback (2026-10-23):** protected `main@68fc4f33aaeee0e4741bc20b269b665839fa06cf`, ACTIVE points to this A2 contract.  
 **Program:** `work/SKETCH_ROADMAP.md` v1.11; companion Part Modeling roadmap v1.35; R13-A2 after technically accepted/merged R13-A1 PR #506.  
 **Donor:** `MechanicalCave/SimpleSolid` `main@b6c010b1af4a03ab130b09f25b6e61b1d9f421ec`; specifically `components/SimpleSolid_Sketcher`, `SimpleSolid_Sketcher_Qt`, SK-02 S2 evidence/tests.  
-**Historical design reference:** SS2 Draft PR #493, `work/SKETCH_R13_CONSTRAINTS_DIMENSIONS_D2_CONTRACT_PROPOSAL.md` on PR head `1b63591053cf92b1c18954f7e32d713bd486388b`. The newer Owner-accepted click-to-create UX below **supersedes the older suggestion that creating a dimension must confirm its placement and type a value before authoring**. This document is a new A2 work-contract proposal, not a silent mutation or automatic merge of #493.
+**Historical design reference:** SS2 Draft PR #493, `work/SKETCH_R13_CONSTRAINTS_DIMENSIONS_D2_CONTRACT_PROPOSAL.md` on PR head `1b63591053cf92b1c18954f7e32d713bd486388b`. The newer Owner-accepted click-to-create UX below **supersedes the older suggestion that creating a dimension must confirm its placement and type a value before authoring**. This document was proposed as a separate A2 Work Contract and later merged/activated; it never implied automatic merge of historic #493.
 
 ## 0. Authority, purpose, STOP
 
@@ -240,7 +240,7 @@ This **non-effective engineering clarification** closes file-path omissions disc
 
 **Acceptance does not assert unproven implementation details:** exact strict v22 nested fields/ordering/precision bounds must be separately reviewed and frozen before modifying the store; v21 remains authoritative until then. The provider-neutral annotation data/selection/focus contract requires its concrete types and validation to be reviewed against the actual native viewer before implementing that seam. PlaneGCS production linking, LGPL notice/relink/source pathway, library pin and installed-consumer run require independent Owner D2 disposition before shipping; `SS2_R13_PLANEGCS_DEV` is not production clearance. All are hard STOP points, not silently resolved by this acceptance.
 
-**Governance activation remains two independent future changes**:
+**Historical 2026-10-21 governance activation checklist — both steps subsequently completed by PR #521 and separate PR #524**:
 
 1. This one-file contract PR may be marked **Ready for review** after successful exact-head governance CLOSURE, but **must not** be merged without a *separate, explicit Owner guarded-squash authorization referring to PR #521 and its final HEAD*.
 2. Once the contract is guarded-merged to protected main and read back, propose a **distinct one-file `work/ACTIVE.yaml`** activation PR pointing to the integrated contract (no production source in that PR), obtain its own exact-head governance CLOSURE and **separate explicit Owner guarded-squash authorization**. Only after verified activation may accepted A2.0 product implementation start on its own bounded branch. Subsequent A2.1/A2.2 remain subject to their specific D2/solver/schema/GUI gates and Owner review, even though the full program scope is now accepted.
@@ -249,7 +249,25 @@ The unmerged historical PR #493 remains non-authoritative for any conflicting ol
 
 ## 7. Closure statement
 
-This is an **Owner-accepted and merged D2 Work Contract**. Product execution becomes effective only after independently approved, passing and merged A2 ACTIVE-only activation; specific solver/schema/GUI gates remain binding. It makes **no representation** that `ACTIVE.yaml` changed or that production solver licensing/build/Windows tests passed for A2. This draft governance PR changes only this `work/` contract; no product source, tests, CI, as-built/product documentation, `ACTIVE.yaml` or CAD document is altered.
+This is an **Owner-accepted, merged and ACTIVE D2 Work Contract** after the independent guarded #524 activation. A2.0 bounded product work is therefore authorized **only within the conditional §4 allowlist and still-applicable D2 gates**; no release solver, strict v22 schema, native annotation API or completed A2 user workflow is implied. The historical one-file governance PR #521 did not itself alter product code or `ACTIVE.yaml`. Current Draft product PR #525 is separately reviewed and unmerged.
+
+## 8. Non-normative status/evidence readback — 2026-10-23
+
+This section synchronizes observed implementation history only; it **does not amend the Owner-accepted workflow, finite conditional §4 paths, solver/schema/Viewer decision authority or acceptance criteria**. It is not final A2 or A2.0 acceptance.
+
+| Gate | Verified disposition | Evidence / limit |
+| --- | --- | --- |
+| Paired R13/Part roadmap | COMPLETE | [#494](https://github.com/MechanicalCave/SimpleSolid2/pull/494) MERGED; Sketch v1.11 / Part v1.35 |
+| A2 contract + DOC-01 declaration | COMPLETE | [#521](https://github.com/MechanicalCave/SimpleSolid2/pull/521) and [#523](https://github.com/MechanicalCave/SimpleSolid2/pull/523) merged |
+| A2 active pointer | COMPLETE | Independent ACTIVE-only [#524](https://github.com/MechanicalCave/SimpleSolid2/pull/524) merged to protected main `68fc4f33aaeee0e4741bc20b269b665839fa06cf` |
+| A2.0 testable DEV work | IN PROGRESS | Draft [#525](https://github.com/MechanicalCave/SimpleSolid2/pull/525), feature branch `feat/r13-a2-0-relations-dimensions-ui-20261021`, current branch tip `dc24b03c701a06a44bbc9de2150717f350335e70`; conditional §4 files only |
+| Exact feature-branch Windows FULL | PASS, scoped | [manual workflow_dispatch #39940051026](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39940051026): exact checkout `dc24b03c701a06a44bbc9de2150717f350335e70`, Core 26/26, kernel-native 59/59, Desktop 118/118 incl. registered `sk04c.part_sketch_interaction_controller`; workflow and aggregate succeeded. Separate FOCUSED, FAST, DOCS, original-PlaneGCS and CLOSURE lanes were SKIPPED |
+| PR #525 review/merge SHA lease | BLOCKED | GitHub `refs/pull/525/head` / PR metadata still report `625560a2f421e92441d531f219796f0f476eb1ec` while the feature branch ref is `dc24b03...`. The manual branch FULL is not a PR-head CLOSURE. No force-push, editing `refs/pull/*` or bypassing SHA verification |
+| Shipped solver and LGPL distribution | STOP / UNPROVEN | Controlled Qt/controller tests use explicitly injected DEV solver; original pinned PlaneGCS 0.8.0 native Windows installed consumer, legally sufficient LGPL notices/source/relink strategy and independent Owner D2 release approval are outstanding |
+| A2.0 user-facing closure | OPEN | GUI modes and bounded solver-validated writer exist; shipped solver wiring, six actual user-facing relation/glyph/selection/deletion/Fix workflows and real visual/manual proof are not complete |
+| A2.1 / A2.2 / A2.3 | NOT COMPLETE | Owner-frozen exact v22 schema, numeric Circle/Length equations, durable 3D annotations/on-label edit/placement, DOC-01 PL+EN/internal/Browser, lifecycle, independent technical FINAL, Owner manual Functional+Visual PASS, final product HEAD and separate merge approval remain required |
+
+**STOP and delivery rule:** a passing FULL at a DEV branch SHA must not be called product readiness. Current as-built/product documentation remains the **shipped state** until accepted runtime behavior changes. PM-06 and further RG-02 stay deferred. These `work/**` status-only corrections do not require PL/EN Product Browser regeneration and do not license edits to `docs/browser/index.html`.
 
 ### Primary references
 
