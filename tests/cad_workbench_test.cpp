@@ -2403,6 +2403,12 @@ int main(int argc, char* argv[]) {
         QStringLiteral("sketchRelationsFeedbackLabel"));
     CHECK(relations_feedback != nullptr);
     CHECK(relation_operations->isAncestorOf(relations_feedback));
+    auto* relation_targets = workbench.findChild<QLabel*>(
+        QStringLiteral("sketchRelationTargetsLabel"));
+    CHECK(relation_targets != nullptr);
+    CHECK(relation_operations->isAncestorOf(relation_targets));
+    CHECK(relation_targets->text() ==
+          QStringLiteral("Select a relation type."));
     auto* authored_relations = workbench.findChild<QListWidget*>(
         QStringLiteral("sketchAuthoredRelationsList"));
     CHECK(authored_relations != nullptr);
@@ -2422,6 +2428,8 @@ int main(int argc, char* argv[]) {
     CHECK(dimension_operations->isHidden());
     CHECK(relations_feedback->text().contains(
         QStringLiteral("RELATIONS")));
+    CHECK(relation_targets->text() ==
+          QStringLiteral("Select a relation type."));
     CHECK(authored_relations->count() == 1);
     if (native_relations_preview) {
         CHECK(authored_relations->item(0)->text() ==
@@ -2489,14 +2497,46 @@ int main(int argc, char* argv[]) {
     CHECK(!parallel_relation->isChecked());
     CHECK(relations_feedback->text().contains(
         QStringLiteral("Line/endpoint")));
+    CHECK(relation_targets->text().contains(
+        QStringLiteral("0/1")));
     parallel_relation->click();
     QApplication::processEvents();
     CHECK(!horizontal_relation->isChecked());
     CHECK(parallel_relation->isChecked());
     CHECK(relations_feedback->text().contains(
         QStringLiteral("Line/endpoint")));
+    CHECK(relation_targets->text().contains(
+        QStringLiteral("0/2")));
+    CHECK(relation_targets->text().contains(
+        QStringLiteral("first Line")));
     CHECK(ux_session->document().revision() == before_kind_revision);
     CHECK(ux_session->undoDepth() == before_kind_undo);
+    if (!native_relations_preview) {
+        // Genuine current-viewport selection-first followed by the
+        // actual native Qt Relations and Parallel buttons must show
+        // the semantically accepted first Line, without creating a
+        // Part relation or consuming any Undo entry.
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+        select_tool->click();
+        QApplication::processEvents();
+        viewport->emitSelectionIntent(
+            viewport->sketchScene().lines.front().token,
+            viewer::SelectionIntentMode::replace);
+        QApplication::processEvents();
+        relations_tool->click();
+        QApplication::processEvents();
+        parallel_relation->click();
+        QApplication::processEvents();
+        CHECK(relation_targets->text().contains(
+            QStringLiteral("1/2")));
+        CHECK(relation_targets->text().contains(
+            QStringLiteral("Line 1")));
+        CHECK(relation_targets->text().contains(
+            QStringLiteral("different Line")));
+        CHECK(ux_session->document().revision() ==
+              before_kind_revision);
+        CHECK(ux_session->undoDepth() == before_kind_undo);
+    }
     dimensions_tool->click();
     QApplication::processEvents();
     CHECK(dimensions_tool->isChecked());
