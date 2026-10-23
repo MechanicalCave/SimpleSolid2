@@ -1,7 +1,7 @@
 # Sketcher Program Roadmap
 
-**Status:** **OWNER-ACCEPTED EXACT v1.11 ROADMAP TEXT (2026-10-18), PR #494 STILL OPEN / NOT MERGED / NOT ACTIVE.** Historic v1.10 remains the latest integrated roadmap on protected main pending separate Owner guarded-squash permission.
-**Version:** **1.11 OWNER-ACCEPTED EXACT TEXT (2026-10-18)** — acceptance of paired PR #494 at design SHA `972da58f6fb67e537d0941978007bda467a7cb04`; separate guarded merge permission PENDING. **Previous integrated:** v1.10 (2026-10-16).
+**Status:** **OWNER-ACCEPTED / INTEGRATED v1.11**. Paired roadmap PR [#494](https://github.com/MechanicalCave/SimpleSolid2/pull/494) was merged on 2026-10-18; `work/ACTIVE.yaml` now selects the R13-A2 D2 contract. This updates factual status only; prior unmerged/pending passages below are explicitly dated historical checkpoints, not current implementation permission.
+**Version:** **1.11**, Owner-accepted 2026-10-18 at design SHA `972da58f6fb67e537d0941978007bda467a7cb04`, subsequently guarded-squash merged via PR #494. **Previous integrated:** v1.10 (2026-10-16).
 **Owner direction:** 2026-10-16 accepted Sketcher audit repair **S0→S1→S2→S3** scheduling and later **expressly approved exact paired v1.10/v1.34 roadmap text** and guarded squash of PR #455 (`akceptuje - kontynuuj pracce`).  
 **Previous accepted version:** 1.9 — Owner-accepted 2026-10-02  
 **Foundation:** 1.0 (foundation-v1.0)  
@@ -10,9 +10,9 @@
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
 **Historical v1.10 scheduling snapshot (not current post-S3 product status):** existing R0–R12, WB-02, AUDIT-01 A–F, SR-01–SR-03 and later separately accepted Part/Projection/RG-02 work stay historically completed. **New priority S0/S1 (B01/B02)** reproduces and repairs exact Line/Circle/Arc tangent predicates, arrangement and durable Profile/Extrude correctness before independent **S2 (B03a/B04)** and **S3 (B03b/B05/B06)**. These do not retroactively erase old readiness findings, reactivate R13 constraints/Split/Join, or authorize code without the separately accepted exact S0/S1 contract and formal ACTIVE-only switch.  
 
-## 0R. OWNER-ACCEPTED v1.11 — R13 constraints/dimensions after completed S3 (merge pending)
+## 0R. OWNER-ACCEPTED v1.11 — R13 constraints/dimensions after completed S3 (integrated; 2026-10-18 decision history)
 
-**Decision class:** **Owner-accepted D2 exact roadmap scheduling/text** in PR #494 (`zatwierdzam - kontynuuj`, 2026-10-18). The Owner selected R13 over PM-06 / further RG-02 and accepted the R13-G0→A1→A2→A3 sequence and product D3 choices in Draft PR #493, but **has NOT separately authorized guarded squash merge of roadmap PR #494**. S3 product PR #490 was guarded-squash merged protected main at `47bcd16f2b75b845b14fc5d9fecf5ffe8e553178`. Prior v1.10 S0/S1/S2/S3 planning and their old pending states below are historical; they are not newly active product tasks.
+**Decision class:** **Owner-accepted D2 exact roadmap scheduling/text** in PR #494 (`zatwierdzam - kontynuuj`, 2026-10-18). The Owner selected R13 over PM-06 / further RG-02 and accepted the R13-G0→A1→A2→A3 sequence and product D3 choices in Draft PR #493, and at that design checkpoint **had not yet authorized the separate guarded squash of PR #494**; that authorization and merge were subsequently completed on 2026-10-18. S3 product PR #490 was guarded-squash merged protected main at `47bcd16f2b75b845b14fc5d9fecf5ffe8e553178`. Prior v1.10 S0/S1/S2/S3 planning and their old pending states below are historical; they are not newly active product tasks.
 
 **Proposed next sole focus: Sketcher R13, optional local constraints and parametric Driving/Reference dimensions.** Defer PM-06 and further RG-02 without cancelling accepted Part obligations or reopening S0–S3. Use MechanicalCave/SimpleSolid for inspected algorithms, tests and UX patterns only; current SS2 ownership/ADRs and versioned native Part store are authoritative. No global project-level parametric graph or Assembly/Drawings implementation.
 
@@ -26,7 +26,7 @@
 
 **Accepted product D3, not implementation authorization:** manual relations/Auto-Constraint OFF; A1 five types; A2 three dimension kinds and real on-label editable viewport label with movable annotation; A3 Reference+typed conversion; Delete Driving freezes solved geometry; local cascading geometry Delete with impact prompt and downstream Part repair option B. Full proposal in `work/SKETCH_R13_CONSTRAINTS_DIMENSIONS_D2_CONTRACT_PROPOSAL.md` (Draft PR #493). Existing CAD Input / DocumentSession / Sketch role semantics remain singular authorities.
 
-**Governance gates still separate:** Owner has **accepted the exact paired v1.11 Sketch + v1.35 Part roadmap text**; a **separate explicit guarded-squash authorization remains required for PR #494** after final exact-head Windows CLOSURE; approve/merge a finite R13-G0 Work Contract under its own independent governance gate; approve/merge a one-file ACTIVE-only pointer + program_roadmap_version switch; only then run G0 work. A1/A2/A3 need their own contracts and activation. The previous S3 product permission cannot authorize new R13 implementation.
+**Governance gate disposition (updated 2026-10-23; original sequence retained as history):** paired roadmap #494, R13-G0 and R13-A1 governance/product and R13-A2 contract #521 with distinct ACTIVE-only #524 have been integrated. `ACTIVE.yaml` selects A2; none of those earlier permissions waives the remaining A2 product gates: original distributable PlaneGCS, exact v22 D2 freeze, native 3D annotation/focus interface D2, end-to-end Windows evidence, DOC-01, Owner manual, independent technical FINAL and distinct product merge approval. R13-A3 still needs its own contract and activation. The previous S3/A1 decisions never authorized unrestricted R13 implementation.
 
 **Documentation impact:** program-only planning update; current Internal/Product PL/EN/Browser **not required** until an accepted executable phase actually changes behavior.
 ## 0. Owner-accepted S0–S3 audit-repair scheduling amendment — 2026-10-16
@@ -894,7 +894,7 @@ R9 completed — exact-head FULL #912 and Owner manual Windows PASS on bfe36544d
 R10 completed — final exact-head Windows FULL #1009; Owner manual Windows PASS; Polar-only directional assistance retained  
 R11 completed — final exact-head Windows FULL #1088; Owner manual Windows PASS  
 R12 completed — final exact-head Windows FULL #1104; Owner manual Windows PASS; Split/Join deferred  
-R13–R15 inactive  
+R13–R15 inactive *(historical v1.9 program-state snapshot; R13-A2 is active as of 2026-10-23 per `work/ACTIVE.yaml`)*  
 Initial Sketcher profile-authoring readiness review — concrete blockers recorded; checkpoint not passed  
 SR-01 Interaction Correctness and Profile UX — completed 2026-10-02 after Windows FULL #1128 and Owner manual Windows PASS  
 SR-02 Sketch Interaction & Presentation Latency — completed 2026-10-02 after Windows FULL #1169 and Owner manual Windows PASS  
