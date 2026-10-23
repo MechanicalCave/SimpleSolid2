@@ -4441,5 +4441,84 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2 E0 — EXPECTED RED until the existing Part stage-solved
+    // evaluation is connected to the real current Sketch scene.
+    // An authored Horizontal relation and an accepted numerical solver
+    // candidate MUST NOT leave a skew Line visible to the user.
+    // This is test-only evidence: no new runtime API or solver dependency.
+    {
+        struct SolveHorizontal final : sketch::ILocalSketchSolver {
+            int calls{};
+
+            [[nodiscard]] sketch::LocalBackendSolveResult solve(
+                const sketch::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 1U);
+                candidate.lines.front().end.v =
+                    candidate.lines.front().start.v;
+                return {sketch::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession solved_session{{}, std::move(document)};
+        const auto created_sketch = solved_session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created_sketch.ok() && created_sketch.sketch_id);
+        const auto sid = *created_sketch.sketch_id;
+        const auto added = solved_session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 1.0}, {5.0, 2.0}});
+        CHECK(added.ok() && added.entity_id);
+        const auto revision_before =
+            solved_session.document().revision();
+        const auto undo_before = solved_session.undoDepth();
+        QTreeWidget scene_tree;
+        ui::PartDocumentTreeController scene_tree_controller{scene_tree};
+        TestViewport scene_viewport;
+        ui::PartViewportController scene_controller{
+            scene_tree_controller, &scene_viewport};
+        scene_controller.setDocumentSession(&solved_session);
+        scene_controller.setSketchEditSketch(sid);
+        CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
+        const auto before = scene_viewport.sketch_scene_.lines.front();
+        CHECK(!near(before.start.y, before.end.y));
+        ui::PartSketchInteractionController interaction{scene_controller};
+        interaction.begin(solved_session, sid);
+        interaction.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        interaction.activateRelations();
+        CHECK(interaction.selectRelationKind(
+            sketch::ConstraintKind::horizontal));
+        CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
+        scene_viewport.point_query_ = {
+            true, scene_viewport.sketch_scene_.lines.front().token};
+        interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 115.0, 2.5, 1.5));
+        CHECK(backend.calls == 1);
+        CHECK(solved_session.undoDepth() == undo_before + 1U);
+        CHECK(solved_session.document().revision() != revision_before);
+        const auto authored =
+            solved_session.document().findSketch(sid)->model.state();
+        CHECK(authored.constraints.size() == 1U);
+        CHECK(authored.constraints.front().kind ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(authored.lines.size() == 1U);
+        CHECK(near(authored.lines.front().start.v, 1.0));
+        CHECK(near(authored.lines.front().end.v, 2.0));
+        // The authoritative authored seed remains deliberately skew,
+        // while the current evaluated Scene MUST display a solved Line.
+        // This fails on #528: unlinked Sketch presentation uses the
+        // authored model without the already available Part solver gateway.
+        CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
+        const auto shown = scene_viewport.sketch_scene_.lines.front();
+        CHECK(near(shown.start.y, shown.end.y));
+        interaction.end();
+    }
+
     return EXIT_SUCCESS;
 }
