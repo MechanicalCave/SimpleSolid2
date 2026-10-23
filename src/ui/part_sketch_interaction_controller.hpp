@@ -371,10 +371,15 @@ public:
     void setDevelopmentRelationSolver(
         sketch::ILocalSketchSolver* backend,
         sketch::LocalSolverAcceptancePolicy policy) noexcept {
+        // A borrowed solver (or policy) registration change is a new
+        // acceptance epoch. Do not transfer a half-picked two-click
+        // relation, or its Part revision lease, to another provider.
+        ++relation_context_generation_;
+        static_cast<void>(interaction_.cancelRelationTarget());
+        relation_first_revision_.reset();
         development_relation_solver_ =
             backend != nullptr && policy.valid() ? backend : nullptr;
         development_relation_policy_ = policy;
-        ++relation_context_generation_;
     }
     [[nodiscard]] bool selectRelationKind(sketch::ConstraintKind kind);
     [[nodiscard]] bool selectDimensionKind(sketch::DrivingDimensionToolKind kind);
