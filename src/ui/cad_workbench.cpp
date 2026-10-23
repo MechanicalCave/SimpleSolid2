@@ -3182,6 +3182,13 @@ void CadWorkbench::buildUi() {
                     setStatusText(QStringLiteral(
                         "Could not select dimension kind in current Sketch context."));
                     syncSketchInteractionUi();
+                    return;
+                }
+                // Keep the same native keyboard route as Relations:
+                // Esc is owned by the viewport, not the clicked
+                // Operations button. This does NOT enable v22 authoring.
+                if (viewport_widget_ != nullptr) {
+                    viewport_widget_->setFocus(Qt::OtherFocusReason);
                 }
             });
         dimensions_grid->addWidget(
