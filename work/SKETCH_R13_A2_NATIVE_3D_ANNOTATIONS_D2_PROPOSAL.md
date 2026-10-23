@@ -19,6 +19,8 @@ Propose **one narrow, renderer-neutral runtime annotation scene/pick mechanism**
 - **E1 / R13-A2.0:** render and exactly pick the six authored A1 relation glyphs from the *effective current-stage* Sketch. Selection is transient. Actual Delete/freeze remains **disabled** until its separate accepted transaction D2 is satisfied.
 - **E2 / R13-A2.2 (future, NOT unlocked by E1):** render selectable Driving Length/Radius/Diameter technical labels, arrows and witnesses; edit numeric text **on the visible label**, drag only authored relative placement. Requires separately accepted strict v22 and numeric solver/command gates first. E1 acceptance does not itself activate E2.
 
+**Hard prerequisite uncovered by exact #528 source audit:** an accepted `AddSolvedSketchRelationCommand` writes the *authored relation* but intentionally does **not** overwrite authored Line seeds with the solved candidate; `PartViewportController::effectiveSketchModelForPresentation` returns `hosted.model` unchanged for an unlinked Sketch. Thus the existing `wb01.cad_workbench` DEV-preview fixture asserts authored Horizontal/Undo but does **not** assert that the originally skew Line becomes horizontal in the rendered Scene or the Part Profile/Kernel. A selectable glyph alone could therefore decorate unsolved geometry, a product-level false success. **E0 effective-stage geometry coherence must precede E1 glyphs; see §1A and §6.** This is a source-backed gap, not a claim of a native Windows RED run.
+
 This proposal freezes the **boundary**, not product implementation or release packaging. Its runtime semantics must be reviewed against actual Qt/OCCT mouse event flow before Owner acceptance.
 
 ## 1. Source-backed architecture baseline
@@ -32,6 +34,31 @@ Already present on #528:
 - `sketch::SketchConstraintState` already owns `ConstraintId`, kind and stable entity/element references; it does **not** persist screen coordinates.
 
 Any implementation has to use the **current effective Sketch**, not raw authored seeds when solving/projection changes current geometry. The source stage, evaluated geometry and annotation scene must come from the same valid snapshot.
+
+## 1A. New E0 prerequisite — one effective Sketch result for Viewer, Profile and Kernel (D2 STOP)
+
+**Observed code path, exact #528 at `7874a47d`:**
+
+1. `src/application/document_session.cpp`, `DocumentSession::execute(AddSolvedSketchRelationCommand)`: `preflightLocalRelation` returns an independently validated candidate, but `SketchModel::restore(*preflight.proposed_authored)` commits only authored seeds + relation. The derived candidate intentionally remains ephemeral; that preserves ADR-0008/0009 and is **correct**.
+2. `src/ui/part_viewport_controller.cpp`, `currentSketchInteractionModel()` and `effectiveSketchModelForPresentation()`: for a Sketch with **zero PG-01 projection bindings**, both currently return original `hosted.model` (the authored seeds), not a solver-evaluated, stage-authorized Sketch. `buildSketchScene()` uses that model; its snapshot is revision-checked but not a local-solver projection.
+3. `tests/cad_workbench_test.cpp` native DEV-preview conditional adds Line `(0,1)→(5,2)`, creates Horizontal and checks `ConstraintId`, Part revision, status, Undo/Redo. It lacks an assertion on **rendered geometry becoming horizontal** and lacks a Profile/Extrude consumer. Existing preview=OFF FAST 94/94 and older manual FULL therefore do not close E0.
+
+**Required E0 decision, not yet accepted or implemented:** a **single domain/application-owned, stage/revision/incarnation-bound disposable evaluated Sketch** must feed (a) native Sketch scene/pick and future 3D glyph anchors, **and** (b) Part Profile/Kernel input where applicable. The same source constraints and one validated solver contract must determine the effective geometry, without materializing it into persistent authored seeds. An R13 constraint may be authored while no released solver is available, but the renderer must not present seed geometry as a successfully solved current state; downstream Profile/Body must be explicitly Unavailable/Blocked on unsolved/unsupported stages as appropriate. A prior last-good result is not current truth. No UI-only cache may override Part's effective stage.
+
+**Minimum E0 evaluation boundary** (exact function names/types remain Owner D2):
+```text
+Part current DocumentId / incarnation / revision / Sketch support & producing Body stage
++ authored Sketch (seeds, ConstraintIds, semantic source refs)
++ current evaluated PG-01 linked-source inputs (when supported)
++ explicitly accepted solver + numerical/DoF/conflict policy
+    -> accepted disposable EffectiveSketchModel, with provenance lease
+    OR typed Failed / Missing / Ambiguous / Unsupported / Blocked
+    -> ONE coherent source for Viewer geometry, semantic picking,
+       ProfileRegionIntent resolution and native Kernel consumer
+```
+The backend yields a candidate, but **Part's existing revision-bound evaluation authority** validates and publishes the result; Viewer renders it but never decides model meaning. Do not silently re-solve in Qt with different constraints/policy than Kernel or use an old disposable result after a new DocumentRevision. E0 may be validated locally with the original opt-in PlaneGCS on the existing DEV branch; it **does not** grant release authority until the separate PR #529 DLL/installed-consumer/LGPL gate.
+
+**E0 STOP conditions:** failure of unique current stage/support, missing source, backend missing or rejected, nonfinite/residual/DoF mismatch, stale Part incarnation/revision, difference between native displayed geometry and consumed Profile/Kernel effective model, or any required new public API/track path outside the accepted parent contract. Before E0 D2 acceptance, do not add a cosmetic horizontal icon over the still-oblique source Line. This E0 gate is a **request to extend/clarify technical authority**, not permission for code or schema changes.
 
 ## 2. Proposed public presentation shape — bounded D2
 
@@ -110,6 +137,12 @@ No new source/test path, generated HTML edit, new dependency, solver/backend, st
 
 ## 6. Mandatory evidence (real RED -> GREEN, not screenshot theater)
 
+**E0 gate — required BEFORE E1 glyph implementation or claiming a functioning Relations UI:**
+
+- Add registered **real Windows native original-PlaneGCS preview=ON** fixture for a nonhorizontal source Line `(0,1)→(5,2)`: after Horizontal, inspect the actual published `SketchScene` 3D world endpoints and require horizontal U/V geometry within the accepted evaluated tolerance, *not merely an authored ConstraintId*. The same exact effective model must be used by Sketch source selection; committed authored seed must remain unchanged. Verify scene before authoring and after Undo/Redo, camera republish, context switch and cold new-process replay where the installed backend is available.
+- Cross-domain tests with a previously accepted Profile/Extrude consumer must use evaluated line geometry or **fail closed with typed current-state failure** when constraints cannot be evaluated. Never quietly build stale/unconstrained geometry. Prove source-stage equality among Viewer, Profile and Kernel, zero false-current bodies and no changed authored seed. Positive new-process replay/product claims are gated on the approved original production solver package; DEV-only evidence does not replace them.
+- First run RED on actual Windows with the fixture and preserve failure. Then minimal in-scope staged E0 implementation, independently required D2/paths and FOCUSED → FAST → FULL evidence. An ordinary preview=OFF green FAST is insufficient. **No E1 "complete" label without E0.**
+
 **E1 gate, before merging even a partial UI feature:**
 
 - Registered Windows native real-`QtOcctViewerWidget` test RED for missing glyph, exact hit, ambiguity and reentrant/stale scene generation. Native provider must produce real 3D objects/hits; a stub-scene-only pass is insufficient.
@@ -124,11 +157,11 @@ Both gates require exact-head Windows FOCUSED → FAST → Ready FULL (Core + ke
 
 ## 7. Decision options and hard STOP
 
-**Recommended Owner D2:** accept **P1–P4 and E1 only** as the exact finite provider-neutral glyph scene, query, application binding and hit precedence, conditional on the 14 existing paths in §5, with no release/merge permission. Reserve E2 implementation until strict v22, solver/package and Delete/Freeze gates receive independent D2 acceptance. Owner may request a concrete signature amendment before acceptance.
+**Recommended Owner D2:** separately resolve **E0 stage-coherent effective Sketch evaluation** before accepting executable **P1–P4 and E1 only** as the exact finite provider-neutral glyph scene, query, application binding and hit precedence, conditional on the 14 existing paths in §5, with no release/merge permission. Reserve E2 implementation until strict v22, solver/package and Delete/Freeze gates receive independent D2 acceptance. Owner may request a concrete signature amendment before acceptance.
 
 **Rejected alternatives:** (a) Qt list icons instead of real Viewer glyphs; (b) pixel/name/geometric similarity as persistent identity; (c) import SS1 standalone Sketch canvas; (d) generic catch-all annotation engine for future Drawing; (e) fake glyphs that cannot be selected or whose selection bypasses current Part guard.
 
-**STOP now:** no D2 acceptance yet; no E1 public API or source changes, no E2 production work, no v22, no provider/CI new paths, no DLL distribution, no Owner/manual/merge claim. Do not treat this proposal's PR creation, green governance CLOSURE or a generic `kontynuuj` as approval of its public API.
+**STOP now:** E0 effective-stage evaluation boundary and E1 annotation API both lack specific Owner D2 acceptance; no E1 public API or source changes, no E2 production work, no v22, no provider/CI new paths, no DLL distribution, no Owner/manual/merge claim. Do not treat this proposal's PR creation, green governance CLOSURE or a generic `kontynuuj` as approval of its public API.
 
 ## Documentation impact
 
