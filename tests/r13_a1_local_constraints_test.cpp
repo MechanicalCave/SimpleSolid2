@@ -3626,6 +3626,93 @@ int main() {
         CHECK(consistent_conflict.diagnostics == backend.diagnostics);
         backend.diagnostics.clear();
 
+        // R13-A2.0 gateway provenance RED: Fix(Line) is a parameter
+        // mask, NEVER a native equation. An untrusted backend must not
+        // attribute an equation conflict or redundancy to a perfectly
+        // valid but non-equation Fix ConstraintId. This is also true
+        // when the complete problem contains a real equation with
+        // its own separate semantic ID.
+        {
+            sk::SketchModel fixedWithEquation;
+            const auto fixedLine = fixedWithEquation.addLine(
+                {0.0, 0.0}, {5.0, 0.0});
+            const auto freeLine = fixedWithEquation.addLine(
+                {0.0, 2.0}, {5.0, 2.0});
+            const auto fixMask = fixedWithEquation.addConstraint(
+                sk::ConstraintKind::fix,
+                {fixedLine, sk::ConstraintElement::line});
+            const auto equation = fixedWithEquation.addHorizontal(freeLine);
+            CHECK(fixMask && equation && *fixMask != *equation);
+            const auto fixedState = fixedWithEquation.state();
+            const auto fixedInput = sk::prepareLocalSolveProblem(fixedState);
+            CHECK(fixedInput);
+            CHECK(fixedInput->constraints.size() == 2U);
+            CHECK(fixedInput->equations.size() == 1U);
+            CHECK(fixedInput->equations.front().id == *equation);
+            CHECK(fixedInput->fixed_lines.size() == 1U);
+            CHECK(fixedInput->fixed_lines.front() == fixedLine);
+
+            ScriptedBackend provenance;
+            provenance.candidate = fixedState;
+            provenance.degrees_of_freedom = 3U;
+            const auto normal = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(normal.status ==
+                sk::LocalSolveGatewayStatus::candidate_accepted);
+            CHECK(normal.candidate && *normal.candidate == fixedState);
+
+            provenance.diagnostics = {{
+                sk::LocalBackendDiagnosticKind::redundant_constraint,
+                *fixMask}};
+            const auto maskRedundancy = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(maskRedundancy.status ==
+                sk::LocalSolveGatewayStatus::invalid_backend_response);
+            CHECK(!maskRedundancy.candidate);
+
+            provenance.diagnostics = {{
+                sk::LocalBackendDiagnosticKind::redundant_constraint,
+                *equation}};
+            const auto realRedundancy = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(realRedundancy.status ==
+                sk::LocalSolveGatewayStatus::redundant_constraint);
+            CHECK(!realRedundancy.candidate);
+
+            provenance.status = sk::LocalBackendStatus::conflict;
+            provenance.candidate.reset();
+            provenance.diagnostics.clear();
+            provenance.conflicts = {*fixMask};
+            const auto maskConflict = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(maskConflict.status ==
+                sk::LocalSolveGatewayStatus::invalid_backend_response);
+            CHECK(!maskConflict.candidate);
+            CHECK(maskConflict.conflicting_constraints.empty());
+
+            provenance.diagnostics = {{
+                sk::LocalBackendDiagnosticKind::conflicting_constraint,
+                *fixMask}};
+            const auto detailedMaskConflict = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(detailedMaskConflict.status ==
+                sk::LocalSolveGatewayStatus::invalid_backend_response);
+            CHECK(!detailedMaskConflict.candidate);
+
+            provenance.conflicts = {*equation};
+            provenance.diagnostics = {{
+                sk::LocalBackendDiagnosticKind::conflicting_constraint,
+                *equation}};
+            const auto realConflict = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(realConflict.status ==
+                sk::LocalSolveGatewayStatus::conflict);
+            CHECK(realConflict.conflicting_constraints ==
+                std::vector<sk::ConstraintId>{*equation});
+            CHECK(realConflict.diagnostics == provenance.diagnostics);
+            CHECK(fixedWithEquation.state() == fixedState);
+        }
+
         // Cross-linked detail from a different, existing ConstraintId
         // is equally unsafe; checking IDs only for existence is not
         // enough. A partial diagnostic list cannot contradict the
