@@ -116,7 +116,7 @@ A compatibility contract for a replaceable library must distinguish ABI compatib
 - Existing `tests/r13_a1_local_constraints_test.cpp` and existing Sketch-domain tests: only new positive and negative native evidence, never weakened assertions
 
 **Likely new exact-path candidates, explicitly NOT AUTHORISED BY THIS ACCEPTANCE:**
-- `src/sketch/include/simplesolid2/sketch/planegcs_dll_abi.h` — candidate private frozen C ABI declarations only, no Qt, OCCT or public domain identity
+- `src/sketch/planegcs_dll_abi.h` — candidate private frozen C ABI declarations only, no Qt, OCCT or public domain identity
 - `src/sketch/planegcs_dll_backend.cpp` — candidate private host adapter from existing neutral `ILocalSketchSolver`
 - `src/sketch/planegcs_dll_exports.cpp` — candidate source-backed DLL implementation of C ABI built only when verified original source is explicitly provided
 - `tests/r13_a2_planegcs_dll_abi_test.cpp` — candidate host handshake/error/diagnostic/replacement native test
@@ -137,7 +137,7 @@ This is a **new concrete design proposal** within the previously Owner-selected 
 
 ### 7.1 Standalone C11/C++20 candidate header (complete v1 declarations)
 
-The proposed exact new path is src/sketch/include/simplesolid2/sketch/planegcs_dll_abi.h, a *private experiment* header, not a public SS2 domain API. On Windows x64 use the normal 8-byte struct alignment with default MSVC packing and __cdecl. Library definitions export these exact undecorated ASCII symbols with extern "C" and __declspec(dllexport); host discovers exports by absolute-path GetProcAddress, not implicit imports.
+The proposed exact new path is src/sketch/planegcs_dll_abi.h, an internal-only experiment header in the private Sketch source tree, **not** an exported/public SS2 CAD-domain API. On Windows x64 use the normal 8-byte struct alignment with default MSVC packing and __cdecl. Library definitions export these exact undecorated ASCII symbols with extern "C" and __declspec(dllexport); host discovers exports by absolute-path GetProcAddress, not implicit imports.
 
 ```c
 #ifndef SS2_PG_DLL_ABI_V1_H
@@ -245,7 +245,7 @@ int32_t SS2_PG_CALL ss2_pg_solve_v1(
 | Path | Status | Only authorized purpose **if separately Owner-frozen** |
 | --- | --- | --- |
 | src/CMakeLists.txt | Existing A2 §4 conditional | Add distinct OFF-by-default original-PlaneGCS DLL E1 target, pinned offline source and export compilation; no shipping installer |
-| src/sketch/include/simplesolid2/sketch/planegcs_dll_abi.h | **NEW / NOT APPROVED** | Exact private v1 C ABI header shown above |
+| src/sketch/planegcs_dll_abi.h | **NEW / NOT APPROVED** | Exact private v1 C ABI header shown above |
 | src/sketch/planegcs_dll_exports.cpp | **NEW / NOT APPROVED** | Export two functions; adapt original source-backed SketchSolver, no crossing STL/Qt |
 | src/sketch/planegcs_dll_backend.cpp | **NEW / NOT APPROVED** | Host-private loader and ILocalSketchSolver adapter, fail-closed native result mapping |
 | tests/r13_a2_planegcs_dll_abi_test.cpp | **NEW / NOT APPROVED** | Registered MSVC native ABI handshake, real Line solver and malformed-loader/diagnostics test source; test-only negative DLL builds may reuse this file |
