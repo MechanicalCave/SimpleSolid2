@@ -2426,6 +2426,10 @@ void PartSketchInteractionController::activateRelations() {
     if (!active()) return;
     resetProfileRuntime();
     interaction_.activateRelations();
+    // The native Viewer projection can synchronously reenter Operations.
+    // Publish this preliminary message BEFORE the first external callback
+    // so an inner current-stage Relations commit owns the final status.
+    reportStatus("RELATIONS: numeric production solver and semantic targets are not yet enabled. No relation is authored.");
     ++relation_context_generation_;
     relation_first_revision_.reset();
     press_anchor_.reset();
@@ -2438,10 +2442,6 @@ void PartSketchInteractionController::activateRelations() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
-    // Publish activation status BEFORE notifying Operations listeners.
-    // A listener can reenter, select a kind and commit a guarded DEV
-    // relation; its newer success/rejection must remain the last status.
-    reportStatus("RELATIONS: numeric production solver and semantic targets are not yet enabled. No relation is authored.");
     notifyStateChanged();
 }
 
@@ -2622,13 +2622,12 @@ bool PartSketchInteractionController::selectDimensionKind(
         !interaction_.setDimensionKind(kind)) {
         return false;
     }
-    projectInteraction();
-    // Emit this provisional status before Operations notification: a
-    // synchronous stateChanged listener may switch to Relations and
-    // commit a newer Part transaction with a more important status.
+    // Both Viewer projection and Operations notification can reenter.
+    // Do not report this obsolete placeholder after either callback.
     reportStatus(
         "DIMENSIONS: type selected. Authoring is blocked pending "
         "strict v22 and a native driving solver; no Part change.");
+    projectInteraction();
     notifyStateChanged();
     return true;
 }
@@ -2637,6 +2636,9 @@ void PartSketchInteractionController::activateDimensions() {
     if (!active()) return;
     resetProfileRuntime();
     interaction_.activateDimensions();
+    // Viewer projection below can reenter a new Relations tool and commit.
+    // The older disabled-Dimensions notice must precede that callback.
+    reportStatus("DIMENSIONS: native driving-dimension solver and v22 schema are not yet enabled. No dimension is authored.");
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -2647,9 +2649,6 @@ void PartSketchInteractionController::activateDimensions() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
-    // Do not overwrite a successful reentrant Relations commit from
-    // the stateChanged callback with this older provisional notice.
-    reportStatus("DIMENSIONS: native driving-dimension solver and v22 schema are not yet enabled. No dimension is authored.");
     notifyStateChanged();
 }
 
