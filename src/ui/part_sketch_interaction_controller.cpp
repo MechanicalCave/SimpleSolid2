@@ -2438,7 +2438,14 @@ void PartSketchInteractionController::activateRelations() {
     // Do not let an obsolete outer activation clear the new edit's
     // first relation target or its DocumentRevision lease.
     const auto activation_generation = relation_context_generation_;
-    reportStatus("RELATIONS: numeric production solver and semantic targets are not yet enabled. No relation is authored.");
+    reportStatus(
+        development_relation_solver_ != nullptr &&
+                development_relation_policy_.valid()
+            ? "RELATIONS DEV PREVIEW: numerical backend registered. "
+              "Select a current-stage Line/endpoint; an accepted relation "
+              "must pass guarded Part validation. Not a release build."
+            : "RELATIONS: numeric production solver and semantic targets "
+              "are not yet enabled. No relation is authored.");
     if (relation_context_generation_ != activation_generation ||
         !active() ||
         interaction_.tool() != sketch::SketchTool::relations) {
@@ -2526,8 +2533,12 @@ bool PartSketchInteractionController::selectRelationKind(
     if (rejectStaleSelection()) return true;
     if (selected.empty()) {
         reportStatus(
-            "RELATIONS: choose the required Line/endpoint. "
-            "Numeric authoring is not yet enabled.");
+            development_relation_solver_ != nullptr &&
+                    development_relation_policy_.valid()
+                ? "RELATIONS DEV PREVIEW: choose the required "
+                  "current-stage Line/endpoint; no Part change yet."
+                : "RELATIONS: choose the required Line/endpoint. "
+                  "Numeric authoring is not yet enabled.");
         return true;
     }
     if (kind == sketch::ConstraintKind::coincident) {
