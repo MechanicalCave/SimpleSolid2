@@ -22,6 +22,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QLocale>
 #include <QMessageBox>
 #include <QMouseEvent>
@@ -3074,6 +3075,26 @@ void CadWorkbench::buildUi() {
     sketch_relations_feedback_label_->setTextInteractionFlags(
         Qt::TextSelectableByMouse);
     relations_layout->addWidget(sketch_relations_feedback_label_);
+
+    // A2.0 read-only semantic inspection. These rows originate from the
+    // exact Part-owned Sketch, NEVER from screen tokens, hover inference
+    // or an uncommitted solver candidate. Do not enable list Delete or
+    // selection until the native glyph-to-ConstraintId seam is approved.
+    relations_layout->addWidget(new QLabel(
+        QStringLiteral("Authored relations in this Sketch"),
+        sketch_relations_operations_widget_));
+    sketch_authored_relations_list_ =
+        new QListWidget(sketch_relations_operations_widget_);
+    sketch_authored_relations_list_->setObjectName(
+        QStringLiteral("sketchAuthoredRelationsList"));
+    sketch_authored_relations_list_->setSelectionMode(
+        QAbstractItemView::NoSelection);
+    sketch_authored_relations_list_->setFocusPolicy(Qt::NoFocus);
+    sketch_authored_relations_list_->setMaximumHeight(128);
+    sketch_authored_relations_list_->setToolTip(QStringLiteral(
+        "Read-only authored Sketch constraints. Selectable 3D "
+        "glyphs and safe constraint deletion are not available yet."));
+    relations_layout->addWidget(sketch_authored_relations_list_);
 #if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
     auto* relation_preview_info = new QLabel(
         QStringLiteral(
@@ -17255,6 +17276,90 @@ void CadWorkbench::syncSketchInteractionUi() {
     }
     if (sketch_relations_operations_widget_ != nullptr) {
         sketch_relations_operations_widget_->setVisible(relations_mode);
+    }
+    if (sketch_authored_relations_list_ != nullptr) {
+        QStringList authored_rows;
+        // No stale cross-document or cross-Sketch information may survive
+        // a Part switch, Finish Sketch, or a history revision.
+        if (relations_mode && document_session_ != nullptr &&
+            active_sketch_id_ && sketch_edit_document_id_ &&
+            document_session_->documentId() ==
+                *sketch_edit_document_id_) {
+            const auto* active_sketch =
+                document_session_->document().findSketch(
+                    *active_sketch_id_);
+            if (active_sketch != nullptr) {
+                const auto authored = active_sketch->model.state();
+                const auto targetName =
+                    [](sketch::ConstraintReference ref) -> QString {
+                    if (!ref.entity.valid()) return {};
+                    const auto id = QString::fromStdString(
+                        ref.entity.serialized());
+                    switch (ref.element) {
+                    case sketch::ConstraintElement::line:
+                        return QStringLiteral("Line %1").arg(id);
+                    case sketch::ConstraintElement::line_start:
+                        return QStringLiteral("Line %1 Start").arg(id);
+                    case sketch::ConstraintElement::line_end:
+                        return QStringLiteral("Line %1 End").arg(id);
+                    case sketch::ConstraintElement::none:
+                        return {};
+                    }
+                    return {};
+                };
+                for (const auto& relation : authored.constraints) {
+                    QString kind;
+                    switch (relation.kind) {
+                    case sketch::ConstraintKind::horizontal:
+                        kind = QStringLiteral("Horizontal"); break;
+                    case sketch::ConstraintKind::vertical:
+                        kind = QStringLiteral("Vertical"); break;
+                    case sketch::ConstraintKind::coincident:
+                        kind = QStringLiteral("Coincident"); break;
+                    case sketch::ConstraintKind::parallel:
+                        kind = QStringLiteral("Parallel"); break;
+                    case sketch::ConstraintKind::perpendicular:
+                        kind = QStringLiteral("Perpendicular"); break;
+                    case sketch::ConstraintKind::fix:
+                        kind = QStringLiteral("Fix"); break;
+                    }
+                    auto targets = targetName(relation.first);
+                    if (relation.second.entity.valid()) {
+                        targets += QStringLiteral(" + ") +
+                            targetName(relation.second);
+                    }
+                    authored_rows.push_back(
+                        QStringLiteral("%1  |  %2  |  ID %3")
+                            .arg(kind, targets,
+                                 QString::fromStdString(
+                                     relation.id.serialized())));
+                }
+            }
+        }
+        if (authored_rows.isEmpty()) {
+            authored_rows.push_back(
+                QStringLiteral("No authored relations"));
+        }
+        // Avoid resetting scroll position/focus on unrelated viewport
+        // state updates. No QObject signal is a CAD mutation authority.
+        bool changed =
+            sketch_authored_relations_list_->count() !=
+            authored_rows.size();
+        if (!changed) {
+            for (int i = 0; i < authored_rows.size(); ++i) {
+                if (sketch_authored_relations_list_->item(i)->text() !=
+                    authored_rows.at(i)) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        if (changed) {
+            const QSignalBlocker blocker{
+                sketch_authored_relations_list_};
+            sketch_authored_relations_list_->clear();
+            sketch_authored_relations_list_->addItems(authored_rows);
+        }
     }
     const auto selected_relation =
         editing ? sketch_interaction_controller_->relationKind()
