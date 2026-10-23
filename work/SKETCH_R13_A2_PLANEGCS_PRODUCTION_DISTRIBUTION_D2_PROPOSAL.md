@@ -130,6 +130,140 @@ At the currently approved **L-DLL feasibility-only** scope, the legitimate compl
 
 The **next Owner D2 decision** must approve a reviewed concrete ABI shape, a finite exact-path diff budget and Windows experiment runner/installed-consumer matrix (including naming installer/relink paths) *before* any tracked implementation. A separate later D3/legal release decision remains mandatory. Reject blanket static fallback, extension of unapproved numeric/3D APIs, silent vendor installation and global parametric graph.
 
+
+## 7. Exact experimental C ABI candidate v1 — reviewable D2 addendum, **NOT OWNER-FROZEN**
+
+This is a **new concrete design proposal** within the previously Owner-selected *feasibility research* direction, not a claim that the Owner has approved these exact declarations or files. It defines E1: an *optional, externally source-backed Windows x64 development DLL experiment*, not an installer, shipping backend, or v22/numeric A2.1 implementation. The original SS2 R13-A2 work-contract §4 allowlist and Foundation remain unchanged. A separately explicit Owner D2 acceptance of this exact ABI and path list is mandatory before tracked C++/CMake/CI changes.
+
+### 7.1 Standalone C11/C++20 candidate header (complete v1 declarations)
+
+The proposed exact new path is src/sketch/include/simplesolid2/sketch/planegcs_dll_abi.h, a *private experiment* header, not a public SS2 domain API. On Windows x64 use the normal 8-byte struct alignment with default MSVC packing and __cdecl. Library definitions export these exact undecorated ASCII symbols with extern "C" and __declspec(dllexport); host discovers exports by absolute-path GetProcAddress, not implicit imports.
+
+```c
+#ifndef SS2_PG_DLL_ABI_V1_H
+#define SS2_PG_DLL_ABI_V1_H
+#include <stdint.h>
+#if defined(_WIN32)
+#define SS2_PG_CALL __cdecl
+#else
+#define SS2_PG_CALL
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+#define SS2_PG_ABI_MAJOR 1u
+#define SS2_PG_ABI_MINOR 0u
+#define SS2_PG_FIXED 1u
+#define SS2_PG_UNUSED_INDEX UINT32_MAX
+
+/* Tags refer to zero-based per-call positions, never durable CAD IDs. */
+typedef struct ss2_pg_line_v1 {
+    uint32_t tag;
+    uint32_t flags;
+    double u0, v0, u1, v1;
+} ss2_pg_line_v1;
+
+/* kind 1 Horizontal, 2 Vertical, 3 Coincident,
+        4 Parallel, 5 Perpendicular.
+   point fields: 0 whole Line, 1 Start, 2 End.
+   The unused second line is SS2_PG_UNUSED_INDEX. */
+typedef struct ss2_pg_equation_v1 {
+    uint32_t tag;
+    uint32_t kind;
+    uint32_t line_a, point_a, line_b, point_b;
+    uint32_t reserved0, reserved1;
+} ss2_pg_equation_v1;
+
+/* kind 1 conflicting, 2 redundant; tag is an equation index. */
+typedef struct ss2_pg_diagnostic_v1 {
+    uint32_t equation_tag, kind;
+} ss2_pg_diagnostic_v1;
+
+typedef struct ss2_pg_request_v1 {
+    uint32_t bytes, abi_major, abi_minor, flags;
+    uint32_t line_count, equation_count, reserved0, reserved1;
+    const ss2_pg_line_v1 *lines;
+    const ss2_pg_equation_v1 *equations;
+} ss2_pg_request_v1;
+
+typedef struct ss2_pg_response_v1 {
+    uint32_t bytes, status, line_capacity, diagnostic_capacity;
+    uint32_t line_count, diagnostic_count, reserved0, reserved1;
+    int32_t dof; /* -1 unknown, otherwise nonnegative. */
+    uint32_t reserved2;
+    ss2_pg_line_v1 *lines;
+    ss2_pg_diagnostic_v1 *diagnostics;
+} ss2_pg_response_v1;
+
+typedef struct ss2_pg_abi_v1 {
+    uint32_t bytes, abi_major, abi_minor, capabilities;
+    uint32_t sizeof_line, sizeof_equation, sizeof_diagnostic, sizeof_request;
+    uint32_t sizeof_response, max_lines, max_equations, max_diagnostics;
+} ss2_pg_abi_v1;
+
+/* Transport return 0: valid invocation; solve status in response.status:
+   0 converged, 1 conflict, 2 redundant, 3 nonconverged,
+   4 unsupported, 5 backend failed.
+   Nonzero transport codes: 1 incompatible ABI,
+   2 invalid input, 3 insufficient capacity, 4 internal failure. */
+int32_t SS2_PG_CALL ss2_pg_query_abi_v1(ss2_pg_abi_v1 *abi);
+int32_t SS2_PG_CALL ss2_pg_solve_v1(
+    const ss2_pg_request_v1 *request, ss2_pg_response_v1 *response);
+#ifdef __cplusplus
+}
+#endif
+#endif
+```
+
+**Proposed x64 size and offset checks, under default packing**:
+
+| Type | sizeof (bytes) | Critical pointer offset |
+| --- | ---: | ---: |
+| ss2_pg_line_v1 | 40 | — |
+| ss2_pg_equation_v1 | 32 | — |
+| ss2_pg_diagnostic_v1 | 8 | — |
+| ss2_pg_request_v1 | 48 | lines at 32 |
+| ss2_pg_response_v1 | 56 | lines at 40 |
+| ss2_pg_abi_v1 | 48 | — |
+
+**Limited local syntax/layout check completed:** the identical candidate declarations compiled as C11 and C++20 with GCC on the development Linux environment and passed size/offset static assertions; candidate header SHA-256 `3953482474c5090ebdf3485c4ef44a77eddc7dcf46e1a65d3da025aa5b2ce037`. This is **not** a build of SS2, the original native PlaneGCS DLL, an MSVC/Windows ABI PASS, installation proof, or release license approval. The header text is included *for review only* in this work document; no new tracked header was created.
+
+### 7.2 Required implementation interpretation (not negotiable without D2 revision)
+
+1. **Handshake:** caller initializes abi.bytes=48, all other fields zero; query checks input size then returns major=1, minor=0, the exact five structure sizes above and finite capacities. Candidate fixed limits: max_lines=4096; max_equations=8192; max_diagnostics=8192. Capabilities bit 0 = all five Line relation equations, bit 1 = Fix mask. Unknown capability/reserved bits fail closed. Any mismatching major/size, unsupported minor or unknown capability is rejected. No silent compatibility guess.
+2. **Semantic binding:** host sorts the current-stage SS2 semantic Line inventory deterministically, assigns invocation-local line.tag equal to its array index, equation.tag equal to its array index, and retains ephemeral lookups inside the caller. No original EntityId/ConstraintId, SketchId, DocumentId, revision, source UUID or Part feature identity crosses the DLL. A single request describes the *entire* current-stage constraint inventory, not just the new equation; missing fixed/projected source is unsupported, not guessed.
+3. **Validation:** line.flags may contain **only** SS2_PG_FIXED. Every Line's endpoints and all input values must be finite; segments must be positive/nondegenerate. H/V each use one Line, whole-Line element=0, second line=UINT32_MAX, second point=0; parallel/perpendicular use two distinct Line indexes, whole-Line element=0; Coincident uses two valid Start/End endpoint indexes 1/2 (possibly on separate Lines). Any duplicate equation tag, invalid/reserved field, out-of-range element/tag or count over limit fails before a native solve.
+4. **Solution ownership:** call is synchronous; all request pointers are borrowed only for the call. Caller supplies result arrays and explicit capacities; DLL never retains/frees caller memory. If output capacity is insufficient, return transport 3, set required counts only in response, write **no** result array elements, and reject any claim of partial convergence. For a valid converged reply, result.line_count equals request.line_count; each returned line tag/flags and every original semantic entity mapping must match the request. The DLL owns/free its native internal allocations and catches every C++ exception before crossing ABI.
+5. **Statuses and diagnostics:** transport 0 does not mean a valid CAD solve. For solve status 0 the host independently runs evaluateLocalSolve/reviewLocalSolveCandidate including residuals, Coincident closure, fixed endpoints and exact stage/Part lease; conflict/redundancy/nonconvergence/unsupported/failure yield **no commit**. Each diagnostic refers to an existing equation.tag and uses kind 1/2 only; duplicate, out-of-range or contradictory diagnostics fail closed, with conflict higher priority than redundancy. Unknown DoF is -1, never fabricated 0. No silent mock/echo fallback on missing DLL.
+6. **Loader and replacement:** approved application-owned *absolute path*, verified same-bitness exports and safe Win32 dependency-search flags; do not use CWD/PATH-first search. A clean customer-like process starts with pinned original DLL, then a separately rebuilt ABI-compatible replacement after cold restart, with actual module path/ABI diagnostic reporting. Runtime hard pinning to a single DLL digest would defeat the stated replacement objective, so separate distributed-source provenance attestation from runtime ABI/semantic validation and any later independent code-signing policy.
+7. **Part atomicity:** after every native solve and before Transaction commit, recheck DocumentId, ephemeral Part incarnation, revision, Sketch support/stage, projected/fixed source and exact accepted semantics. No UI event, C++ wrapper, DLL pointer, native token or solver output becomes durable intent or bypasses Command. Preserve rejected candidate zero ID/Undo/revision consumption.
+
+**Critical design question for Owner D2 freeze:** is a plain C ABI with an invocation-local Line/Equation array and two exports acceptable as the experimental boundary, or must the prototype use a different process boundary? No answer is implied by the earlier acceptance of L-DLL feasibility in general.
+
+### 7.3 Finite proposed E1 implementation path budget — must be separately approved *as a set*
+
+| Path | Status | Only authorized purpose **if separately Owner-frozen** |
+| --- | --- | --- |
+| src/CMakeLists.txt | Existing A2 §4 conditional | Add distinct OFF-by-default original-PlaneGCS DLL E1 target, pinned offline source and export compilation; no shipping installer |
+| src/sketch/include/simplesolid2/sketch/planegcs_dll_abi.h | **NEW / NOT APPROVED** | Exact private v1 C ABI header shown above |
+| src/sketch/planegcs_dll_exports.cpp | **NEW / NOT APPROVED** | Export two functions; adapt original source-backed SketchSolver, no crossing STL/Qt |
+| src/sketch/planegcs_dll_backend.cpp | **NEW / NOT APPROVED** | Host-private loader and ILocalSketchSolver adapter, fail-closed native result mapping |
+| tests/r13_a2_planegcs_dll_abi_test.cpp | **NEW / NOT APPROVED** | Registered MSVC native ABI handshake, real Line solver and malformed-loader/diagnostics test source; test-only negative DLL builds may reuse this file |
+| tests/core_only/CMakeLists.txt | Existing A2 §4 conditional | Register no-Qt, no-OCCT MSVC native ABI/backend test only |
+| .github/workflows/windows-pr-gate.yml | Existing A2 §4 **separate CI approval** | Exact PR-head E1 Windows source-backed native lane, no arbitrary number == 506 classifier restriction for new A2 test; never weaken existing A1 job |
+
+**Exactly seven tracked paths for optional E1, no more.** The three new backend/interface sources and new test source are **not currently authorized** by the accepted A2 §4 conditional maximum. If a later E1 implementation needs tests/CMakeLists.txt, tests/kernel_native/CMakeLists.txt, install/packaging, public include, external vendoring, original wrapper changes, license notices or scripts beyond this list, **STOP** for a new exact-path D2 addendum. E1 is a development-only native ABI feasibility build and **cannot close** the installed-consumer replacement/license requirements E2/E5 or R13-A2.0 user-facing product gate.
+
+### 7.4 RED → GREEN Windows matrix for any separately approved E1 implementation
+
+- **RED-first registered native:** missing export; wrong major; wrong size/packing; truncated result and null buffer; incompatible capability; unsupported kind; invalid arrays/tags; duplicate diagnostics; nonfinite/degenerate Line; two independent fixed Line cases; conflicts, redundancy and nonconvergence; zero model mutation and no fallback in each failure. Negative library may be emitted from a test target built from the same exact test source under a test-only define.
+- **GREEN native:** exact original immutable 0.8.0 source, MSVC x64 DLL with two inspected exported symbols; exact Line Horizontal/Vertical/Coincident(semantic Start/End)/Parallel/Perpendicular/Fix-masked cases and residual/DoF diagnostics; independent user-rebuilt ABI-compatible DLL in a clean **test directory** (not falsely claimed as installed product), cold restart and replacement load.
+- **CI:** fail a required E1 native job if source/dependencies absent rather than silently report a skipped PASS. Separate real Core, kernel OCCT, Qt Desktop tiers remain required for A2 product readiness; E1 native proof does not substitute them.
+- **Verification still open after E1:** actual installed product, DLL replacement permissions for users, LGPL-2.1-or-later notices/full license/source/patch/relink and signed/reproducible release artifacts, original six relation gestures in real 3D viewport, strict v22 and Driving dimensions, DOC-01 PL/EN+internal+generated Browser, independent Technical FINAL and Owner manual PASS.
+
+**Proposed Owner decision for E1 (not yet granted):** accept the exact ABI v1 declarations in §7.1–7.2 and the seven paths in §7.3 strictly for offline-sourced, OFF-by-default Windows experimental DLL build/native tests; approve separately justified workflow extension for the one exact native test lane. **Exclude** shipping, installer, legal distribution signoff, v22 and native annotation API until their own D2/D3 freezes. Acceptance of this specific proposal should be recorded in its own Owner review and *not* inferred from “akceptuje - kontynuuj” against the earlier, less specific draft.
+
+
 ## Documentation impact
 
 Internal docs: not required
