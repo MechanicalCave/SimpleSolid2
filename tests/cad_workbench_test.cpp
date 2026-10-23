@@ -164,8 +164,9 @@ public:
     querySketchPresentation(
         viewer::ViewportPoint2 point) override {
         return viewer::SketchPointQueryResult{
-            point.valid(),
-            std::nullopt};
+            point.valid(), point.valid()
+                ? sketch_pick_token_
+                : std::nullopt};
     }
 
     viewer::SketchRectangleQueryResult
@@ -214,6 +215,29 @@ public:
         }
     }
 
+    // Sketch Edit does NOT use the generic built-in-reference SelectionIntent
+    // channel. Actual Qt/OCCT pointer handling dispatches a spatial event,
+    // intersects the live Sketch plane, then resolves the native hit token.
+    // Drive that exact path in the Workbench regression.
+    void emitSketchPointerPick(
+        viewer::PresentationToken line_token,
+        double u,
+        double v) {
+        CHECK(static_cast<bool>(spatial_pointer_handler_));
+        CHECK(routing_ ==
+              viewer::PrimaryPointerRouting::spatial_tool_input);
+        sketch_pick_token_ = line_token;
+        viewer::SpatialPointerEvent event{};
+        event.phase = viewer::SpatialPointerPhase::primary_press;
+        event.position = {100.0 + u * 10.0, 100.0 + v * 10.0};
+        event.ray = {{u, v, 10.0}, {0.0, 0.0, -1.0}};
+        CHECK(event.valid());
+        spatial_pointer_handler_(event);
+        event.phase = viewer::SpatialPointerPhase::primary_release;
+        spatial_pointer_handler_(event);
+        sketch_pick_token_.reset();
+    }
+
     [[nodiscard]] int fitAllCount() const noexcept {
         return fit_all_count_;
     }
@@ -231,6 +255,7 @@ private:
     viewer::CameraState state_;
     viewer::ReferenceScene scene_;
     viewer::SketchScene sketch_scene_;
+    std::optional<viewer::PresentationToken> sketch_pick_token_;
     viewer::SketchPreviewScene sketch_preview_scene_;
     viewer::PresentationSelection selection_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
@@ -2512,16 +2537,15 @@ int main(int argc, char* argv[]) {
     CHECK(ux_session->document().revision() == before_kind_revision);
     CHECK(ux_session->undoDepth() == before_kind_undo);
     if (!native_relations_preview) {
-        // Genuine current-viewport selection-first followed by the
-        // actual native Qt Relations and Parallel buttons must show
-        // the semantically accepted first Line, without creating a
-        // Part relation or consuming any Undo entry.
+        // Native Sketch spatial input (not the unrelated generic
+        // SelectionIntent route) followed by real Qt Relations/Parallel
+        // must show the first accepted Line without a Part mutation.
         CHECK(viewport->sketchScene().lines.size() == 1U);
         select_tool->click();
         QApplication::processEvents();
-        viewport->emitSelectionIntent(
+        viewport->emitSketchPointerPick(
             viewport->sketchScene().lines.front().token,
-            viewer::SelectionIntentMode::replace);
+            2.5, 1.0);
         QApplication::processEvents();
         relations_tool->click();
         QApplication::processEvents();
@@ -2578,15 +2602,15 @@ int main(int argc, char* argv[]) {
             "original PlaneGCS 0.8.0")));
         CHECK(viewport->sketchScene().lines.size() == 1U);
 
-        // Selection-first in the REAL CadWorkbench: same native
-        // PresentationToken event used by the viewport, followed by
-        // the actual Qt Relations and Horizontal operation buttons.
+        // Selection-first in the REAL CadWorkbench via the true Sketch
+        // spatial pointer route; generic SelectionIntent is reserved
+        // for non-Sketch reference/display objects.
         const auto baseline_revision =
             ux_session->document().revision();
         const auto baseline_undo = ux_session->undoDepth();
-        viewport->emitSelectionIntent(
+        viewport->emitSketchPointerPick(
             viewport->sketchScene().lines.front().token,
-            viewer::SelectionIntentMode::replace);
+            2.5, 1.5);
         QApplication::processEvents();
         CHECK(ux_session->document().revision() ==
               baseline_revision);
