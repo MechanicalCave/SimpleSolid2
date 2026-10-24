@@ -4618,6 +4618,11 @@ void PartSketchInteractionController::handleRelationsPointer(
         reportStatus(
             "RELATIONS: first target accepted; choose the "
             "second distinct Line/endpoint.");
+        // reportStatus is a synchronous external Qt callback. The
+        // listener may have begun a newer gesture, even on the same
+        // Part/Sketch and revision, while retaining its own first hit.
+        // Do not emit this old pick's stateChanged into the new epoch.
+        if (!stillCurrentPick()) return;
         notifyStateChanged();
         return;
     case sketch::RelationTargetOutcome::ready:
