@@ -6,6 +6,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/part/profile.hpp>
+#include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
@@ -4510,13 +4511,63 @@ int main(int argc, char* argv[]) {
         CHECK(authored.lines.size() == 1U);
         CHECK(near(authored.lines.front().start.v, 1.0));
         CHECK(near(authored.lines.front().end.v, 2.0));
-        // The authoritative authored seed remains deliberately skew,
-        // while the current evaluated Scene MUST display a solved Line.
-        // This fails on #528: unlinked Sketch presentation uses the
-        // authored model without the already available Part solver gateway.
+        // The accepted Part stage-solver gateway is ALREADY capable of
+        // producing the same Horizontal effective geometry independently
+        // from the authored, deliberately skew Line seed. This check is
+        // a domain-side E0 oracle, not a new Viewer API, shortcut or
+        // second numerical solver. It must PASS before the Viewer RED.
+        struct NoProjectedEdges final : kernel::IEdgeProjectionQuery {
+            std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+                kernel::RuntimeSolidHandle,
+                kernel::RuntimeEdgeToken) noexcept override {
+                return std::nullopt;
+            }
+            kernel::EdgeProjectionResult projectEdgeToPlane(
+                kernel::RuntimeSolidHandle,
+                const kernel::ScopedProjectionEdge&,
+                const kernel::Frame3&) noexcept override {
+                return {};
+            }
+        } projection;
+        part::PartEvaluation current_stage;
+        current_stage.source_document_id =
+            solved_session.document().documentId();
+        current_stage.source_revision =
+            solved_session.document().revision();
+        current_stage.source_incarnation =
+            solved_session.document().incarnationToken();
+        const sketch::LocalSolverAcceptancePolicy policy{1.0e-7, 1.0e-6};
+        const auto part_solved = part::evaluateStageLocalSolve(
+            solved_session.document(), sid, current_stage, projection,
+            policy, backend);
+        CHECK(part_solved);
+        CHECK(part_solved->source_document_id ==
+              solved_session.document().documentId());
+        CHECK(part_solved->source_revision ==
+              solved_session.document().revision());
+        CHECK(part_solved->source_sketch_id == sid);
+        CHECK(part_solved->solution.status ==
+              sketch::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(part_solved->solution.candidate);
+        CHECK(part_solved->solution.candidate->lines.size() == 1U);
+        const auto& solved_line =
+            part_solved->solution.candidate->lines.front();
+        CHECK(solved_line.id == *added.entity_id);
+        CHECK(near(solved_line.start.v, solved_line.end.v));
+        CHECK(near(solved_line.start.v, authored.lines.front().start.v));
+        CHECK(!near(solved_line.end.v, authored.lines.front().end.v));
+        CHECK(backend.calls == 2);
+        CHECK(solved_session.document().findSketch(sid)->model.state() ==
+              authored);
+
+        // E0 integration RED: the same current Part stage has a verified
+        // horizontal candidate, yet the ACTUAL SketchScene still renders
+        // stale authored coordinates rather than that candidate.
         CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
         const auto shown = scene_viewport.sketch_scene_.lines.front();
         CHECK(near(shown.start.y, shown.end.y));
+        CHECK(near(shown.start.y, solved_line.start.v));
+        CHECK(near(shown.end.y, solved_line.end.v));
         interaction.end();
     }
 
