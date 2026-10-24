@@ -2640,12 +2640,23 @@ bool PartSketchInteractionController::selectDimensionKind(
         !interaction_.setDimensionKind(kind)) {
         return false;
     }
-    // Both Viewer projection and Operations notification can reenter.
-    // Do not report this obsolete placeholder after either callback.
+    // A Dimensions type click is its own transient interaction epoch.
+    // A synchronous status or Viewer callback may switch tools, or
+    // close/reopen this very same Sketch and select a newer type (ABA).
+    // An obsolete outer request must not project/notify the newer UI.
+    const auto selection_generation = ++relation_context_generation_;
+    const auto stillCurrentSelection = [this, selection_generation, kind] {
+        return relation_context_generation_ == selection_generation &&
+            active() &&
+            interaction_.tool() == sketch::SketchTool::dimensions &&
+            interaction_.dimensionKind() == kind;
+    };
     reportStatus(
         "DIMENSIONS: type selected. Authoring is blocked pending "
         "strict v22 and a native driving solver; no Part change.");
+    if (!stillCurrentSelection()) return true;
     projectInteraction();
+    if (!stillCurrentSelection()) return true;
     notifyStateChanged();
     return true;
 }
@@ -2654,26 +2665,34 @@ void PartSketchInteractionController::activateDimensions() {
     if (!active()) return;
     resetProfileRuntime();
     interaction_.activateDimensions();
+    // Even a same-tool reactivation is a newer UI gesture. Generation,
+    // not Sketch identity or equality of the mode, distinguishes it.
+    const auto activation_generation = ++relation_context_generation_;
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
     rectangle_revision_.reset();
-    // The provisional notice must follow local resets but precede ANY
-    // synchronous external Viewer/UI callback. Abandon the outer
-    // projection when a listener switches to a new edit generation.
-    const auto activation_generation = relation_context_generation_;
+    const auto stillCurrentActivation = [this, activation_generation] {
+        return relation_context_generation_ == activation_generation &&
+            active() &&
+            interaction_.tool() == sketch::SketchTool::dimensions;
+    };
+    // Each call below can synchronously enter Qt/Viewer and replace the
+    // context. Never let old callbacks emit duplicate newer-tool state
+    // or clear a new gesture's presentation after such a transition.
     reportStatus("DIMENSIONS: native driving-dimension solver and v22 schema are not yet enabled. No dimension is authored.");
-    if (relation_context_generation_ != activation_generation ||
-        !active() ||
-        interaction_.tool() != sketch::SketchTool::dimensions) {
-        return;
-    }
+    if (!stillCurrentActivation()) return;
     viewport_controller_->clearSketchPreview();
+    if (!stillCurrentActivation()) return;
     viewport_controller_->clearSketchSelectionBoxOverlay();
+    if (!stillCurrentActivation()) return;
     projectSelection();
+    if (!stillCurrentActivation()) return;
     projectInteraction();
+    if (!stillCurrentActivation()) return;
     configureForCurrentTool();
+    if (!stillCurrentActivation()) return;
     notifyStateChanged();
 }
 
