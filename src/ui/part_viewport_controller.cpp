@@ -45,6 +45,59 @@ public:
     }
 };
 
+// A single numerical RESPONSE for the complete same-stage Sketch
+// problem across Part's Feature/Profile→Kernel and UI's Sketch/Profile
+// presentation. This is not a second solver or a new acceptance path:
+// every consumer still runs evaluateStageLocalSolve and independently
+// revalidates candidate, fixed anchors, relations and Part provenance.
+// Distinct source projections/fixed/equation sets never share a result.
+class OneRefreshStageBackend final : public sketch::ILocalSketchSolver {
+public:
+    explicit OneRefreshStageBackend(
+        sketch::ILocalSketchSolver& source) : source_{source} {}
+
+    [[nodiscard]] sketch::LocalBackendSolveResult solve(
+        const sketch::LocalSolveProblem& problem) override {
+        const auto sameProblem = [](const sketch::LocalSolveProblem& a,
+                                    const sketch::LocalSolveProblem& b) {
+            if (a.authored != b.authored ||
+                a.constraints != b.constraints ||
+                a.fixed_lines != b.fixed_lines ||
+                a.equations != b.equations ||
+                a.lines.size() != b.lines.size()) {
+                return false;
+            }
+            for (std::size_t i = 0; i < a.lines.size(); ++i) {
+                const auto& x = a.lines[i];
+                const auto& y = b.lines[i];
+                if (x.id != y.id ||
+                    x.start != y.start ||
+                    x.end != y.end ||
+                    x.fixed != y.fixed) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        for (const auto& cached : entries_) {
+            if (sameProblem(cached.problem, problem)) {
+                return cached.response;
+            }
+        }
+        auto answer = source_.solve(problem);
+        entries_.push_back({problem, answer});
+        return answer;
+    }
+
+private:
+    struct Entry final {
+        sketch::LocalSolveProblem problem;
+        sketch::LocalBackendSolveResult response;
+    };
+    sketch::ILocalSketchSolver& source_;
+    std::vector<Entry> entries_;
+};
+
 [[nodiscard]] viewer::Point3 viewerPoint(
     const kernel::Point3& point) noexcept {
     return {point.x, point.y, point.z};
@@ -978,6 +1031,28 @@ void PartViewportController::refreshDocumentTree() {
 void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
 
+    // One transient numerical lease per presentation cycle. A Kernel
+    // feature may consume the stage before the Sketch/Profile scene;
+    // identical complete solver inputs must replay the same numerical
+    // response, but each Part gateway independently validates it.
+    // DEV mode may change its solution without a DocumentRevision edit:
+    // the Body must be evaluated again with that very same candidate,
+    // never returned from a stale revision-only Body cache.
+    refresh_stage_solver_.reset();
+    if (development_stage_solver_ != nullptr &&
+        development_stage_policy_.valid() &&
+        sketch_edit_id_.has_value()) {
+        refresh_stage_solver_ =
+            std::make_shared<OneRefreshStageBackend>(
+                *development_stage_solver_);
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        part_evaluation_cache_.reset();
+        datum_evaluation_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
+        body_topology_bindings_.clear();
+    }
     // One immutable effective source per refresh, never a previously
     // solved snapshot replayed across a Part revision or incarnation.
     effective_stage_sketch_cache_.reset();
@@ -4174,15 +4249,18 @@ PartViewportController::buildBodyScene() {
             return std::nullopt;
         };
 
-    // The same explicit solver/policy is used by the existing Part
-    // feature scheduler, not by an independent UI numerical shortcut.
+    // Reuse the same complete-input numerical response later in
+    // SketchScene, after the Feature scheduler has accepted the
+    // Profile→Kernel input. Keep a local strong lifetime lease across
+    // synchronous native/Qt reentry, even if refresh replaces it.
+    const auto solver_lease = refresh_stage_solver_;
     const auto evaluation =
-        development_stage_solver_ != nullptr &&
+        solver_lease != nullptr &&
                 development_stage_policy_.valid() &&
                 sketch_edit_id_.has_value()
             ? part::evaluatePartWithLocalSolve(
                   session_->document(), *solid_modeling_kernel_,
-                  development_stage_policy_, *development_stage_solver_)
+                  development_stage_policy_, *solver_lease)
             : part::evaluatePart(
                   session_->document(), *solid_modeling_kernel_);
     auto* exact =
@@ -4618,10 +4696,16 @@ PartViewportController::effectiveSketchModelForPresentation(
         if (query == nullptr && !hosted.projection_bindings.empty()) {
             return failClosed();
         }
+        // A Body feature and this scene must not run a potentially
+        // underdetermined backend independently within one refresh.
+        // No persistent or global numerical cache: identity, revision,
+        // stage and equations are rechecked by Part on every use.
+        const auto solver_lease = refresh_stage_solver_;
+        if (!solver_lease) return failClosed();
         const auto solved = part::evaluateStageLocalSolve(
             document, hosted.id, prefix,
             query != nullptr ? *query : empty_query,
-            development_stage_policy_, *development_stage_solver_);
+            development_stage_policy_, *solver_lease);
         if (!solved ||
             !part::ownsCurrentPartEvaluation(document, prefix) ||
             solved->source_document_id != document.documentId() ||
