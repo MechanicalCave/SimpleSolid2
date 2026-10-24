@@ -819,6 +819,11 @@ void PartViewportController::setDevelopmentStageSolver(
 void PartViewportController::setDocumentSession(
     application::DocumentSession* session) {
     if (session_ != session) {
+        // A borrowed numeric backend is bound to the owning edit
+        // session; never carry it across document/session replacement.
+        development_stage_solver_ = nullptr;
+        development_stage_policy_ = {};
+        effective_stage_sketch_cache_.reset();
         selected_feature_contribution_.reset();
     project_face_feedback_revision_.reset();
     project_face_feedback_generation_.reset();
@@ -870,6 +875,9 @@ void PartViewportController::setDocumentSession(
 
 void PartViewportController::clear() {
     session_ = nullptr;
+    development_stage_solver_ = nullptr;
+    development_stage_policy_ = {};
+    effective_stage_sketch_cache_.reset();
     selected_feature_contribution_.reset();
     hovered_feature_contribution_.reset();
     sketch_edit_id_.reset();
@@ -1116,6 +1124,13 @@ PartViewportController::currentSketchInteractionModel() const {
 
 void PartViewportController::setSketchEditSketch(
     std::optional<sketch::SketchId> sketch_id) {
+    if (sketch_edit_id_ != sketch_id) {
+        // On a different edit context, the previously borrowed backend
+        // no longer owns any numeric scene-authoring authority.
+        development_stage_solver_ = nullptr;
+        development_stage_policy_ = {};
+        effective_stage_sketch_cache_.reset();
+    }
     if (sketch_edit_id_ == sketch_id) {
         if (sketch_edit_id_ &&
             activeSketch() == nullptr) {
