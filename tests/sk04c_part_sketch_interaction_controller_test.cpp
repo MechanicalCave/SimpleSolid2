@@ -4624,5 +4624,137 @@ int main(int argc, char* argv[]) {
         interaction.end();
     }
 
+    // E0: a Profile and its active SketchScene must consume the SAME
+    // disposable Part stage result during one refresh. A translating
+    // numerical provider exposes even a small difference between a
+    // second, independent solve and the geometry actually drawn.
+    {
+        struct ShiftStageSolver final : sketch::ILocalSketchSolver {
+            int calls{};
+            double shift_u{3.0};
+            bool reject{false};
+
+            [[nodiscard]] sketch::LocalBackendSolveResult solve(
+                const sketch::LocalSolveProblem& problem) override {
+                ++calls;
+                if (reject) {
+                    return {sketch::LocalBackendStatus::failed,
+                            std::nullopt, {}, {}, std::nullopt};
+                }
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 4U);
+                for (auto& line : candidate.lines) {
+                    line.start.u += shift_u;
+                    line.end.u += shift_u;
+                }
+                return {sketch::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } stage_solver;
+        application::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto rectangle = session.execute(
+            application::AddSketchRectangleCommand{
+                sid, session.document().revision(),
+                {0.0, 0.0}, {10.0, 8.0},
+                sketch::EntityRole::regular, false});
+        CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+        const auto authored =
+            session.document().findSketch(sid)->model.state();
+        const auto regions = sketch::analyzeRegions(
+            session.document().findSketch(sid)->model);
+        CHECK(regions.complete() && regions.regions.size() == 1U);
+        const auto intent =
+            part::makeProfileRegionIntent(regions.regions.front());
+        CHECK(intent);
+        const auto profile = session.execute(
+            application::CreateProfileCommand{
+                sid, session.document().revision(), *intent});
+        CHECK(profile.ok() && profile.profile_id);
+        const auto relation = session.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                sid, session.document().revision(),
+                rectangle.entity_ids.front()});
+        CHECK(relation.ok() && relation.constraint_id);
+        const auto source_revision = session.document().revision();
+        const auto source_undo = session.undoDepth();
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController controller{tree_controller, &viewport};
+        controller.setDocumentSession(&session);
+        controller.setSketchEditSketch(sid);
+        // Explicit E0 activation runs the existing Part stage gateway.
+        controller.setDevelopmentStageSolver(
+            &stage_solver, {1.0e-7, 1.0e-6});
+        const auto checkSamePublishedSource = [&](double shift) {
+            CHECK(viewport.sketch_scene_.lines.size() == 4U);
+            CHECK(viewport.profile_scene_.profiles.size() == 1U);
+            const auto& loop =
+                viewport.profile_scene_.profiles.front().region.outer;
+            CHECK(loop.size() >= 4U);
+            const auto leftmost = [](const auto& points) {
+                double minimum = points.front().x;
+                for (const auto& point : points) {
+                    minimum = std::min(minimum, point.x);
+                }
+                return minimum;
+            };
+            CHECK(near(leftmost(loop), shift));
+            double sketch_leftmost =
+                viewport.sketch_scene_.lines.front().start.x;
+            for (const auto& line : viewport.sketch_scene_.lines) {
+                sketch_leftmost = std::min(
+                    sketch_leftmost,
+                    std::min(line.start.x, line.end.x));
+            }
+            CHECK(near(sketch_leftmost, shift));
+            const auto effective =
+                controller.currentSketchInteractionModel();
+            CHECK(effective != nullptr);
+            CHECK(effective->state().lines.size() == 4U);
+            const auto resolved =
+                controller.currentProfileResolution(
+                    *profile.profile_id);
+            CHECK(resolved && resolved->valid());
+            CHECK(session.document().revision() == source_revision);
+            CHECK(session.undoDepth() == source_undo);
+            // The authored source before the Horizontal command is
+            // unchanged; the only new persisted intent is the relation.
+            CHECK(session.document().findSketch(sid)->
+                  model.state().lines == authored.lines);
+        };
+        CHECK(stage_solver.calls == 1);
+        checkSamePublishedSource(3.0);
+        // No extra solve on semantic pick or Properties/Profile access.
+        CHECK(stage_solver.calls == 1);
+
+        stage_solver.shift_u = 5.0;
+        controller.refreshPresentation();
+        CHECK(stage_solver.calls == 2);
+        checkSamePublishedSource(5.0);
+
+        stage_solver.reject = true;
+        controller.refreshPresentation();
+        CHECK(stage_solver.calls == 3);
+        CHECK(viewport.sketch_scene_.lines.empty());
+        CHECK(viewport.profile_scene_.profiles.empty());
+        CHECK(!controller.currentProfileResolution(
+            *profile.profile_id));
+        CHECK(session.document().revision() == source_revision);
+        CHECK(session.undoDepth() == source_undo);
+        stage_solver.reject = false;
+        controller.refreshPresentation();
+        CHECK(stage_solver.calls == 4);
+        checkSamePublishedSource(5.0);
+        controller.setDevelopmentStageSolver(nullptr, {});
+    }
+
     return EXIT_SUCCESS;
 }
