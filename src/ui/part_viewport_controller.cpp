@@ -812,6 +812,16 @@ void PartViewportController::setDevelopmentStageSolver(
     development_stage_solver_ =
         backend != nullptr && policy.valid() ? backend : nullptr;
     development_stage_policy_ = policy;
+    // This opt-in changes the effective Part evaluation policy without
+    // changing the authored DocumentRevision. An old non-numerical (or
+    // old-provider) Body/Feature evaluation is no longer authoritative.
+    body_scene_revision_.reset();
+    body_scene_cache_.reset();
+    part_evaluation_cache_.reset();
+    datum_evaluation_cache_.reset();
+    body_topology_catalog_cache_.reset();
+    body_stage_topology_catalogs_cache_.clear();
+    body_topology_bindings_.clear();
     effective_stage_sketch_cache_.reset();
     refreshPresentation();
 }
@@ -1130,6 +1140,15 @@ void PartViewportController::setSketchEditSketch(
         development_stage_solver_ = nullptr;
         development_stage_policy_ = {};
         effective_stage_sketch_cache_.reset();
+        // No Part revision changes on an edit-context switch, yet the
+        // prior Body evaluation may have used the revoked DEV backend.
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        part_evaluation_cache_.reset();
+        datum_evaluation_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
+        body_topology_bindings_.clear();
     }
     if (sketch_edit_id_ == sketch_id) {
         if (sketch_edit_id_ &&
@@ -4509,23 +4528,45 @@ PartViewportController::effectiveSketchModelForPresentation(
         development_stage_policy_.valid() &&
         !hosted.model.state().constraints.empty()) {
         const auto& document = session_->document();
-        const auto incarnation =
-            document.incarnationToken();
-        // The borrowed DEV solver is authorized for the *current Sketch
-        // Edit* only, never for some other hosted Sketch/Profile.
-        if (!sketch_edit_id_ || *sketch_edit_id_ != hosted.id ||
-            !incarnation) {
+        const auto incarnation = document.incarnationToken();
+        const auto source_revision = document.revision();
+        const auto source_document_id = document.documentId();
+        const auto source_sketch_id = hosted.id;
+        // A failure is also a stage evaluation outcome. Cache it for
+        // this very same Document incarnation/revision and Sketch so
+        // Profile and Viewer cannot independently retry a changing
+        // backend in the same presentation. Never cache an answer
+        // produced while DocumentSession was replaced reentrantly.
+        const auto failClosed = [this, &document, incarnation,
+                                 source_revision, source_document_id,
+                                 source_sketch_id]() {
+            if (incarnation &&
+                document.documentId() == source_document_id &&
+                document.revision() == source_revision &&
+                document.incarnationToken() == incarnation) {
+                effective_stage_sketch_cache_ =
+                    EffectiveStageSketchCache{
+                        source_document_id, source_revision, incarnation,
+                        source_sketch_id, std::nullopt};
+            }
             return sketch::SketchModel{};
-        }
+        };
         if (effective_stage_sketch_cache_ &&
             effective_stage_sketch_cache_->document_id ==
-                document.documentId() &&
+                source_document_id &&
             effective_stage_sketch_cache_->revision ==
-                document.revision() &&
+                source_revision &&
             effective_stage_sketch_cache_->incarnation.lock() ==
                 incarnation &&
-            effective_stage_sketch_cache_->sketch_id == hosted.id) {
-            return effective_stage_sketch_cache_->model;
+            effective_stage_sketch_cache_->sketch_id == source_sketch_id) {
+            return effective_stage_sketch_cache_->model.value_or(
+                sketch::SketchModel{});
+        }
+        // The borrowed DEV solver is authorized for the *current Sketch
+        // Edit* only, never for some other hosted Sketch/Profile.
+        if (!sketch_edit_id_ ||
+            *sketch_edit_id_ != source_sketch_id || !incarnation) {
+            return failClosed();
         }
 
         // Prefer the SAME evaluated Part feature prefix as the current
@@ -4536,14 +4577,14 @@ PartViewportController::effectiveSketchModelForPresentation(
         if (part_evaluation_cache_) {
             if (!part::ownsCurrentPartEvaluation(
                     document, *part_evaluation_cache_)) {
-                return sketch::SketchModel{};
+                return failClosed();
             }
             prefix = *part_evaluation_cache_;
         } else {
             if (!hosted.projection_bindings.empty() ||
                 !part::builtinOriginPlaneForSketchSupport(
                     hosted.support)) {
-                return sketch::SketchModel{};
+                return failClosed();
             }
             prefix.source_document_id = document.documentId();
             prefix.source_revision = document.revision();
@@ -4556,7 +4597,7 @@ PartViewportController::effectiveSketchModelForPresentation(
             dynamic_cast<kernel::IEdgeProjectionQuery*>(
                 solid_modeling_kernel_);
         if (query == nullptr && !hosted.projection_bindings.empty()) {
-            return sketch::SketchModel{};
+            return failClosed();
         }
         const auto solved = part::evaluateStageLocalSolve(
             document, hosted.id, prefix,
@@ -4570,14 +4611,14 @@ PartViewportController::effectiveSketchModelForPresentation(
             solved->solution.status !=
                 sketch::LocalSolveGatewayStatus::candidate_accepted ||
             !solved->solution.candidate) {
-            // Missing or rejected current numerical solution never
-            // becomes an authoritative Viewer or Profile geometry seed.
-            return sketch::SketchModel{};
+            // Missing or rejected current numerical solution is ONE
+            // unavailable Part stage for all consumers this refresh.
+            return failClosed();
         }
         auto model =
             sketch::SketchModel::restore(
                 *solved->solution.candidate);
-        if (!model) return sketch::SketchModel{};
+        if (!model) return failClosed();
         effective_stage_sketch_cache_ =
             EffectiveStageSketchCache{
                 document.documentId(), document.revision(),
