@@ -4516,6 +4516,17 @@ PartViewportController::currentProfileResolution(
     }
     const auto model =
         effectiveSketchModelForPresentation(*source);
+    if (!source->model.state().constraints.empty() &&
+        development_stage_solver_ != nullptr &&
+        effective_stage_sketch_cache_ &&
+        effective_stage_sketch_cache_->sketch_id == source->id &&
+        !effective_stage_sketch_cache_->model) {
+        // A rejected stage is NOT a missing authored source entity.
+        // Withhold a current Profile resolution until Part can solve it;
+        // never manufacture misleading missing-ID diagnostics from the
+        // intentionally empty fail-closed presentation model.
+        return std::nullopt;
+    }
     return part::resolveProfileRegionIntent(
         model, profile->region_intent);
 }
