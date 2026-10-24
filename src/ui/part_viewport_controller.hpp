@@ -791,7 +791,10 @@ private:
         core::DocumentRevision revision;
         std::weak_ptr<const part::PartRuntimeIncarnation> incarnation;
         sketch::SketchId sketch_id;
-        sketch::SketchModel model;
+        // Null means the *current* Part stage was evaluated and rejected.
+        // Reuse that failure for every scene/pick consumer this refresh,
+        // rather than invoking an unstable provider repeatedly.
+        std::optional<sketch::SketchModel> model;
     };
     mutable std::optional<EffectiveStageSketchCache>
         effective_stage_sketch_cache_;
