@@ -2712,5 +2712,127 @@ int main(int argc, char* argv[]) {
                   model.state().lines == seed.lines);
     }
 
+    // E0 non-XY source-of-truth: the same accepted Part stage candidate
+    // must pass through SketchPlacement local U/V to REAL world XYZ
+    // before it is published as semantic SketchScene coordinates.
+    // This complements native QtOcctViewerWidget XZ AIS/hit tests:
+    // here the 3D coordinates actually come from PartViewportController.
+    {
+        struct FlattenXZSolver final : sketch::ILocalSketchSolver {
+            int calls{};
+            bool reject{false};
+            [[nodiscard]] sketch::LocalBackendSolveResult solve(
+                const sketch::LocalSolveProblem& problem) override {
+                ++calls;
+                if (reject) {
+                    return {sketch::LocalBackendStatus::failed,
+                            std::nullopt, {}, {}, std::nullopt};
+                }
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 1U);
+                candidate.lines.front().end.v =
+                    candidate.lines.front().start.v;
+                return {sketch::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+        application::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xz_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto added = session.execute(application::AddSketchLineCommand{
+            sid, {0.0, 1.0}, {5.0, 2.0}});
+        CHECK(added.ok() && added.entity_id);
+        const auto authors_seed =
+            session.document().findSketch(sid)->model.state();
+        const auto relation = session.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                sid, session.document().revision(), *added.entity_id});
+        CHECK(relation.ok() && relation.constraint_id);
+        const auto source_revision = session.document().revision();
+        const auto source_undo = session.undoDepth();
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        CHECK(original.lines.front().start.v !=
+              original.lines.front().end.v);
+        const auto support =
+            part::partSketchSupportForBuiltinPlane(
+                core::BuiltinReferenceRole::xz_plane);
+        const auto placement =
+            support ? part::sketchPlacementForSupport(*support)
+                    : std::nullopt;
+        CHECK(placement && placement->valid());
+        const auto toWorld = [&placement](double u, double v) {
+            return viewer::Point3{
+                placement->origin[0] + u * placement->u_axis[0] +
+                    v * placement->v_axis[0],
+                placement->origin[1] + u * placement->u_axis[1] +
+                    v * placement->v_axis[1],
+                placement->origin[2] + u * placement->u_axis[2] +
+                    v * placement->v_axis[2]};
+        };
+        const auto expected_start = toWorld(0.0, 1.0);
+        const auto expected_end = toWorld(5.0, 1.0);
+        const auto seed_end = toWorld(5.0, 2.0);
+        CHECK(std::abs(seed_end.z - expected_end.z) > 0.5);
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController controller{
+            tree_controller, &viewport};
+        controller.setDocumentSession(&session);
+        controller.setSketchEditSketch(sid);
+        controller.setDevelopmentStageSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        CHECK(backend.calls == 1);
+        CHECK(viewport.sketch_scene_.lines.size() == 1U);
+        const auto shown = viewport.sketch_scene_.lines.front();
+        const auto same = [](const viewer::Point3& a,
+                             const viewer::Point3& b) {
+            return std::abs(a.x - b.x) < 1.0e-9 &&
+                   std::abs(a.y - b.y) < 1.0e-9 &&
+                   std::abs(a.z - b.z) < 1.0e-9;
+        };
+        CHECK(same(shown.start, expected_start));
+        CHECK(same(shown.end, expected_end));
+        CHECK(!same(shown.end, seed_end));
+        CHECK(controller.currentSketchInteractionModel() != nullptr);
+        CHECK(controller.currentSketchInteractionModel()->
+                  state().lines.front().start.v ==
+              controller.currentSketchInteractionModel()->
+                  state().lines.front().end.v);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == source_revision);
+        CHECK(session.undoDepth() == source_undo);
+        CHECK(session.document().findSketch(sid)->
+                  model.state() == original);
+        CHECK(authors_seed.lines == original.lines);
+
+        backend.reject = true;
+        controller.refreshPresentation();
+        CHECK(backend.calls == 2);
+        CHECK(viewport.sketch_scene_.lines.empty());
+        const auto* unavailable =
+            controller.currentSketchInteractionModel();
+        CHECK(unavailable == nullptr ||
+              unavailable->state().lines.empty());
+        CHECK(session.document().revision() == source_revision);
+        CHECK(session.undoDepth() == source_undo);
+        backend.reject = false;
+        controller.refreshPresentation();
+        CHECK(backend.calls == 3);
+        CHECK(viewport.sketch_scene_.lines.size() == 1U);
+        CHECK(same(viewport.sketch_scene_.lines.front().start,
+                   expected_start));
+        CHECK(same(viewport.sketch_scene_.lines.front().end,
+                   expected_end));
+        CHECK(session.document().findSketch(sid)->
+                  model.state() == original);
+    }
+
     return EXIT_SUCCESS;
 }
