@@ -4656,5 +4656,76 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0 D1: successful solver commit is not lasting authority
+    // to display "accepted" after a synchronous Operations/Qt callback
+    // performs Undo. Part revision advances for the commit AND again
+    // for Undo; same Sketch, incarnation and tool generation remain.
+    // The obsolete post-commit continuation must not report success
+    // when the relation is absent at the end of the callback.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(application::AddSketchLineCommand{
+            sid, {0.0, 1.0}, {5.0, 1.0}});
+        CHECK(line.ok() && line.entity_id);
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController view{tree_controller, &viewport};
+        view.setDocumentSession(&session);
+        view.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{view};
+        controller.begin(session, sid);
+        EchoConvergedRelationSolver backend;
+        controller.setDevelopmentRelationSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        controller.activateRelations();
+        CHECK(controller.selectRelationKind(
+            sketch::ConstraintKind::horizontal));
+        CHECK(viewport.sketch_scene_.lines.size() == 1U);
+        const auto starting_depth = session.undoDepth();
+        const auto starting_revision = session.document().revision();
+
+        bool undo_during_notification = false;
+        int accepted_status_after_undo = 0;
+        controller.setStatusHandler([&](const std::string& status) {
+            if (undo_during_notification &&
+                status.find("accepted by current Part solver") !=
+                    std::string::npos) {
+                ++accepted_status_after_undo;
+            }
+        });
+        controller.setStateChangedHandler([&] {
+            if (undo_during_notification ||
+                backend.calls != 1 ||
+                session.document().findSketch(sid)->
+                    model.state().constraints.size() != 1U) {
+                return;
+            }
+            undo_during_notification = true;
+            const auto undone = session.undo();
+            CHECK(undone.ok() && undone.changed);
+        });
+        viewport.point_query_ = {
+            true, viewport.sketch_scene_.lines.front().token};
+        controller.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 110.0, 2.5, 1.0));
+        CHECK(backend.calls == 1);
+        CHECK(undo_during_notification);
+        CHECK(accepted_status_after_undo == 0);
+        CHECK(session.document().findSketch(sid)->
+                  model.state().constraints.empty());
+        CHECK(session.undoDepth() == starting_depth);
+        CHECK(session.document().revision() != starting_revision);
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
