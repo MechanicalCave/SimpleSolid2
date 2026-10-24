@@ -1541,6 +1541,7 @@ target_include_directories(sk03a_viewer_native_input_test
 
 target_link_libraries(sk03a_viewer_native_input_test
     PRIVATE
+        simplesolid2_ui
         simplesolid2_part
         simplesolid2_viewer
         simplesolid2_viewer_qt_occt

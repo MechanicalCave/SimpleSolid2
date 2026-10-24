@@ -270,6 +270,13 @@ public:
     void setSolidModelingKernel(
         kernel::ISolidModelingKernel* modeling_kernel);
 
+    // E0 / opt-in only. Borrowed solver is owned by the Workbench or
+    // deterministic test fixture; never by Viewer or durable Part state.
+    // Every published Sketch uses the existing Part stage-solve gateway.
+    void setDevelopmentStageSolver(
+        sketch::ILocalSketchSolver* backend,
+        sketch::LocalSolverAcceptancePolicy policy);
+
     void clear();
     void resetRuntimeState();
     void refreshDocumentTree();
@@ -766,6 +773,10 @@ private:
     PartDocumentTreeController* tree_{};
     viewer::IDocumentViewport* viewport_{};
     application::DocumentSession* session_{};
+    // A synchronous Part solver or Qt/Viewer callback may run Undo and
+    // publish a newer scene while an outer refresh is still executing.
+    // Only the latest refresh generation can publish scene/pick state.
+    std::uint64_t presentation_refresh_generation_{};
     kernel::ISolidModelingKernel*
         solid_modeling_kernel_{};
     std::optional<core::DocumentRevision>
@@ -774,6 +785,34 @@ private:
         body_scene_cache_;
     std::optional<part::PartEvaluation>
         part_evaluation_cache_;
+    sketch::ILocalSketchSolver* development_stage_solver_{};
+    sketch::LocalSolverAcceptancePolicy development_stage_policy_{};
+    // Sticky only within this Part document runtime. Once DEV stage
+    // solving was enabled, its removal must fail closed rather than
+    // republish previously "solved" authored seed geometry. A1's
+    // historical unaided authored-edit preview remains unchanged.
+    bool development_stage_authority_required_{};
+    // The Body's Part Feature scheduler and Sketch/Profile scenes reuse
+    // ONE validated backend response for identical complete numerical
+    // problems in a refresh. The Part gateway still independently
+    // reviews candidate residuals, fixed lines and current provenance.
+    // Strong local leases on callers survive synchronous Qt reentry.
+    std::shared_ptr<sketch::ILocalSketchSolver> refresh_stage_solver_;
+    // One per-refresh, stage-authorized disposable result for visible
+    // Sketch, Profile region and semantic pick. Invalidate on every
+    // refresh and require current document incarnation/revision on read.
+    struct EffectiveStageSketchCache final {
+        core::DocumentId document_id;
+        core::DocumentRevision revision;
+        std::weak_ptr<const part::PartRuntimeIncarnation> incarnation;
+        sketch::SketchId sketch_id;
+        // Null means the *current* Part stage was evaluated and rejected.
+        // Reuse that failure for every scene/pick consumer this refresh,
+        // rather than invoking an unstable provider repeatedly.
+        std::optional<sketch::SketchModel> model;
+    };
+    mutable std::optional<EffectiveStageSketchCache>
+        effective_stage_sketch_cache_;
     std::optional<part::DatumEvaluation>
         datum_evaluation_cache_;
     std::optional<kernel::Frame3>
@@ -846,6 +885,7 @@ private:
         core::DocumentId document_id;
         sketch::SketchId sketch_id;
         core::DocumentRevision revision;
+        std::weak_ptr<const part::PartRuntimeIncarnation> incarnation;
         sketch::SketchModel model;
     };
     std::optional<CurrentSketchModelSnapshot>
