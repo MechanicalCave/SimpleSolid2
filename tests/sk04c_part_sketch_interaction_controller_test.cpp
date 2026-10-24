@@ -14,6 +14,7 @@
 #include <QTreeWidget>
 #include <QWidget>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
