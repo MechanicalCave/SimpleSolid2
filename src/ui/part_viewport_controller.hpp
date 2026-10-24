@@ -773,6 +773,10 @@ private:
     PartDocumentTreeController* tree_{};
     viewer::IDocumentViewport* viewport_{};
     application::DocumentSession* session_{};
+    // A synchronous Part solver or Qt/Viewer callback may run Undo and
+    // publish a newer scene while an outer refresh is still executing.
+    // Only the latest refresh generation can publish scene/pick state.
+    std::uint64_t presentation_refresh_generation_{};
     kernel::ISolidModelingKernel*
         solid_modeling_kernel_{};
     std::optional<core::DocumentRevision>
