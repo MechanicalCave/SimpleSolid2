@@ -2633,7 +2633,13 @@ int main(int argc, char* argv[]) {
 
         CHECK(kernel.last_profile.has_value());
         CHECK(solver.calls == 1);
+        CHECK(!vp.body_scene_.triangles.empty());
         CHECK(vp.sketch_scene_.lines.size() == 4U);
+        const auto first_profile_properties =
+            vc.currentProfileResolution(*profile.profile_id);
+        CHECK(first_profile_properties && first_profile_properties->valid());
+        CHECK(vc.currentSketchInteractionModel() != nullptr);
+        CHECK(solver.calls == 1);
         const auto& native_loop = kernel.last_profile->outer.boundary;
         CHECK(native_loop.size() == 4U);
         double kernel_leftmost = 1.0e10;
@@ -2692,7 +2698,13 @@ int main(int argc, char* argv[]) {
         vc.refreshPresentation();
         CHECK(solver.calls == 4);
         CHECK(kernel.last_profile.has_value());
+        CHECK(!vp.body_scene_.triangles.empty());
         CHECK(vp.sketch_scene_.lines.size() == 4U);
+        const auto recovered_profile_properties =
+            vc.currentProfileResolution(*profile.profile_id);
+        CHECK(recovered_profile_properties &&
+              recovered_profile_properties->valid());
+        CHECK(solver.calls == 4);
         CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 13.0) <
               1.0e-9);
         CHECK(tested_session.document().revision() == rev);
