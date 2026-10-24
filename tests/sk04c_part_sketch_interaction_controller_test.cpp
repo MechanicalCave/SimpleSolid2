@@ -4844,6 +4844,35 @@ int main(int argc, char* argv[]) {
               *relation.constraint_id);
         CHECK(!reopened.needsSave());
         CHECK(reopened.undoDepth() == 0U);
+
+        // Cold-incarnation failure must not resurrect a candidate
+        // obtained before save. With no current accepted solution,
+        // both Profile and Sketch picking remain unavailable.
+        stage_solver.reject = true;
+        controller.refreshPresentation();
+        CHECK(stage_solver.calls == 7);
+        CHECK(viewport.sketch_scene_.lines.empty());
+        CHECK(viewport.profile_scene_.profiles.empty());
+        const auto* unavailable_cold_pick =
+            controller.currentSketchInteractionModel();
+        CHECK(unavailable_cold_pick == nullptr ||
+              unavailable_cold_pick->state().lines.empty());
+        CHECK(!controller.currentProfileResolution(
+            *profile.profile_id));
+        CHECK(!reopened.needsSave());
+
+        // A new successful response must use the NEW current numeric
+        // solution, not the pre-save answer or rejected stage.
+        stage_solver.reject = false;
+        stage_solver.shift_u = 9.0;
+        controller.refreshPresentation();
+        CHECK(stage_solver.calls == 8);
+        CHECK(viewport.sketch_scene_.lines.size() == 4U);
+        CHECK(viewport.profile_scene_.profiles.size() == 1U);
+        CHECK(near(viewport.sketch_scene_.lines.front().start.x, 9.0));
+        CHECK(reopened.document().findSketch(sid)->
+                  model.state().lines == authored.lines);
+        CHECK(!reopened.needsSave());
     }
 
     return EXIT_SUCCESS;
