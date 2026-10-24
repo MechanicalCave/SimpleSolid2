@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -2562,9 +2563,11 @@ int main(int argc, char* argv[]) {
         struct DriftingStageSolver final : sketch::ILocalSketchSolver {
             int calls{};
             bool reject{false};
+            std::function<void()> on_solve;
             [[nodiscard]] sketch::LocalBackendSolveResult solve(
                 const sketch::LocalSolveProblem& problem) override {
                 ++calls;
+                if (on_solve) on_solve();
                 if (reject) {
                     return {sketch::LocalBackendStatus::failed,
                             std::nullopt, {}, {}, std::nullopt};
@@ -2708,6 +2711,56 @@ int main(int argc, char* argv[]) {
         CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 13.0) <
               1.0e-9);
         CHECK(tested_session.document().revision() == rev);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.state().lines == seed.lines);
+        // Reentrant Undo during the real Feature->Kernel stage solve.
+        // The newer, post-Undo refresh must retain its Body, Profile,
+        // SketchScene and semantic pick authority after the outer call.
+        bool callback_fired = false;
+        kernel.last_profile.reset();
+        solver.on_solve = [&] {
+            CHECK(!callback_fired);
+            callback_fired = true;
+            solver.on_solve = {};
+            const auto undone = tested_session.undo();
+            CHECK(undone.ok() && undone.changed);
+            CHECK(tested_session.document().findSketch(sid)->
+                      model.state().constraints.empty());
+            vc.refreshPresentation();
+            CHECK(kernel.last_profile.has_value());
+            CHECK(!vp.body_scene_.triangles.empty());
+            CHECK(vp.sketch_scene_.lines.size() == 4U);
+            CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 5.0) <
+                  1.0e-9);
+        };
+        vc.refreshPresentation();
+        CHECK(callback_fired);
+        CHECK(tested_session.document().revision() != rev);
+        CHECK(tested_session.undoDepth() + 1U == undo);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.state().constraints.empty());
+        CHECK(kernel.last_profile.has_value());
+        CHECK(!vp.body_scene_.triangles.empty());
+        CHECK(vp.body_scene_.generation.valid());
+        CHECK(vp.sketch_scene_.lines.size() == 4U);
+        CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 5.0) <
+              1.0e-9);
+        const auto* post_undo = vc.currentSketchInteractionModel();
+        CHECK(post_undo != nullptr);
+        CHECK(post_undo->state().constraints.empty());
+        CHECK(post_undo->state().lines == seed.lines);
+        const auto after_undo_profile =
+            vc.currentProfileResolution(*profile.profile_id);
+        CHECK(after_undo_profile && after_undo_profile->valid());
+        double kernel_leftmost_after_undo = 1.0e10;
+        for (const auto& use : kernel.last_profile->outer.boundary) {
+            const auto* line = std::get_if<kernel::Line2>(&use.curve);
+            CHECK(line != nullptr);
+            kernel_leftmost_after_undo = std::min(
+                kernel_leftmost_after_undo,
+                std::min(line->start.u, line->end.u));
+        }
+        CHECK(std::abs(kernel_leftmost_after_undo - 5.0) < 1.0e-9);
         CHECK(tested_session.document().findSketch(sid)->
                   model.state().lines == seed.lines);
     }
