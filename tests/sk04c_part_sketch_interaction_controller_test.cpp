@@ -4806,7 +4806,7 @@ int main(int argc, char* argv[]) {
         const auto persisted = store.createNew(
             cold_path, session.document());
         CHECK(persisted.ok());
-        const auto cold = store.load(cold_path);
+        auto cold = store.load(cold_path);
         CHECK(cold.ok() && cold.document && cold.checkpoint);
         CHECK(cold.document->documentId() ==
               session.document().documentId());
