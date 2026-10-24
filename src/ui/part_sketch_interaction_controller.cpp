@@ -2438,6 +2438,11 @@ void PartSketchInteractionController::activateRelations() {
     // Do not let an obsolete outer activation clear the new edit's
     // first relation target or its DocumentRevision lease.
     const auto activation_generation = relation_context_generation_;
+    const auto stillCurrentActivation = [this, activation_generation] {
+        return relation_context_generation_ == activation_generation &&
+            active() &&
+            interaction_.tool() == sketch::SketchTool::relations;
+    };
     reportStatus(
         development_relation_solver_ != nullptr &&
                 development_relation_policy_.valid()
@@ -2446,16 +2451,21 @@ void PartSketchInteractionController::activateRelations() {
               "must pass guarded Part validation. Not a release build."
             : "RELATIONS: numeric production solver and semantic targets "
               "are not yet enabled. No relation is authored.");
-    if (relation_context_generation_ != activation_generation ||
-        !active() ||
-        interaction_.tool() != sketch::SketchTool::relations) {
-        return;
-    }
+    if (!stillCurrentActivation()) return;
+    // Native Viewer projection and Qt notification can reenter the
+    // controller, including changing tools or restarting the same
+    // Relations mode. An older invocation may not republish the
+    // newer tool's state after ANY such external callback.
     viewport_controller_->clearSketchPreview();
+    if (!stillCurrentActivation()) return;
     viewport_controller_->clearSketchSelectionBoxOverlay();
+    if (!stillCurrentActivation()) return;
     projectSelection();
+    if (!stillCurrentActivation()) return;
     projectInteraction();
+    if (!stillCurrentActivation()) return;
     configureForCurrentTool();
+    if (!stillCurrentActivation()) return;
     notifyStateChanged();
 }
 
