@@ -4691,6 +4691,14 @@ int main(int argc, char* argv[]) {
         ui::PartViewportController controller{tree_controller, &viewport};
         controller.setDocumentSession(&session);
         controller.setSketchEditSketch(sid);
+        // Pre-existing A1 authored-only editing is still intentionally
+        // inspectable before any E0 DEV solver lease is acquired. This
+        // legacy scene is not being claimed as numerically solved.
+        CHECK(viewport.sketch_scene_.lines.size() == 4U);
+        CHECK(controller.currentSketchInteractionModel() != nullptr);
+        CHECK(controller.currentSketchInteractionModel()->
+                  state().lines.size() == 4U);
+        CHECK(viewport.profile_scene_.profiles.empty());
         // Explicit E0 activation runs the existing Part stage gateway.
         controller.setDevelopmentStageSolver(
             &stage_solver, {1.0e-7, 1.0e-6});
