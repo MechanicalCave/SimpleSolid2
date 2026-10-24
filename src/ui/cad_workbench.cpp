@@ -13455,6 +13455,12 @@ void CadWorkbench::enterSketchEdit(
         sketch_interaction_controller_->setDevelopmentRelationSolver(
             dev_relation_preview_solver_.get(),
             sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
+        // E0 accepted DEV-only: the same borrowed original solver and
+        // numerical policy now feed Part stage evaluation for the actual
+        // SketchScene and Profile, not only relation acceptance.
+        viewport_controller_->setDevelopmentStageSolver(
+            dev_relation_preview_solver_.get(),
+            sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
 #endif
 
         const auto selected_profiles =
@@ -15086,6 +15092,11 @@ void CadWorkbench::clearSketchRuntimeContext() {
         viewport_controller_->clearSketchDynamicInputOverlay();
     }
 
+    if (viewport_controller_ != nullptr) {
+        // Borrowed DEV solver lifetime is Sketch Edit lifetime only.
+        viewport_controller_->setDevelopmentStageSolver(
+            nullptr, {});
+    }
     if (sketch_interaction_controller_) {
         sketch_interaction_controller_->end();
     }
@@ -15139,6 +15150,9 @@ void CadWorkbench::reconcileSketchRuntimeContext() {
                 *active_sketch_id_);
 #if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
             sketch_interaction_controller_->setDevelopmentRelationSolver(
+                dev_relation_preview_solver_.get(),
+                sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
+            viewport_controller_->setDevelopmentStageSolver(
                 dev_relation_preview_solver_.get(),
                 sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
 #endif
