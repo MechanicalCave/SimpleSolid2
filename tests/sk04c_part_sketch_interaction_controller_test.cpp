@@ -4727,5 +4727,66 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0: native Viewer presentation callbacks can switch the
+    // active Sketch tool during a Relations activation. The obsolete
+    // outer activation must not deliver stateChanged for the new
+    // Dimensions generation after the inner gesture is complete.
+    {
+        auto document =
+            part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession session{{}, std::move(document)};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController view{tree_controller, &viewport};
+        view.setDocumentSession(&session);
+        view.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{view};
+        controller.begin(session, sid);
+        const auto starting_revision = session.document().revision();
+        const auto starting_undo = session.undoDepth();
+        const auto authored = session.document().state();
+
+        bool reentered = false;
+        bool inner_complete = false;
+        int late_notifications = 0;
+        controller.setStateChangedHandler([&] {
+            if (inner_complete) ++late_notifications;
+        });
+        viewport.on_interaction_presentation_ = [&] {
+            if (reentered ||
+                controller.tool() != sketch::SketchTool::relations) {
+                return;
+            }
+            reentered = true;
+            controller.activateDimensions();
+            CHECK(controller.selectDimensionKind(
+                sketch::DrivingDimensionToolKind::diameter));
+            inner_complete = true;
+        };
+        controller.activateRelations();
+        CHECK(reentered && inner_complete);
+        CHECK(controller.tool() == sketch::SketchTool::dimensions);
+        CHECK(controller.dimensionKind() ==
+              sketch::DrivingDimensionToolKind::diameter);
+        CHECK(late_notifications == 0);
+        CHECK(session.document().revision() == starting_revision);
+        CHECK(session.undoDepth() == starting_undo);
+        CHECK(session.document().state() == authored);
+        // The reentrant tool stays usable after the outer call returns.
+        CHECK(controller.selectDimensionKind(
+            sketch::DrivingDimensionToolKind::length));
+        CHECK(controller.dimensionKind() ==
+              sketch::DrivingDimensionToolKind::length);
+        CHECK(late_notifications == 1);
+        viewport.on_interaction_presentation_ = {};
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
