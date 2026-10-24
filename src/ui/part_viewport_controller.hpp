@@ -783,6 +783,11 @@ private:
         part_evaluation_cache_;
     sketch::ILocalSketchSolver* development_stage_solver_{};
     sketch::LocalSolverAcceptancePolicy development_stage_policy_{};
+    // Sticky only within this Part document runtime. Once DEV stage
+    // solving was enabled, its removal must fail closed rather than
+    // republish previously "solved" authored seed geometry. A1's
+    // historical unaided authored-edit preview remains unchanged.
+    bool development_stage_authority_required_{};
     // One per-refresh, stage-authorized disposable result for visible
     // Sketch, Profile region and semantic pick. Invalidate on every
     // refresh and require current document incarnation/revision on read.
