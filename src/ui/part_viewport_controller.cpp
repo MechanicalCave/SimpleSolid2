@@ -1116,7 +1116,7 @@ PartViewportController::currentSketchInteractionModel() const {
             session_->document().revision() ||
         !current_sketch_model_snapshot_->incarnation.lock() ||
         current_sketch_model_snapshot_->incarnation.lock() !=
-            session_->document().incarnationToken().lock()) {
+            session_->document().incarnationToken()) {
         return nullptr;
     }
     return &current_sketch_model_snapshot_->model;
@@ -4510,7 +4510,7 @@ PartViewportController::effectiveSketchModelForPresentation(
         !hosted.model.state().constraints.empty()) {
         const auto& document = session_->document();
         const auto incarnation =
-            document.incarnationToken().lock();
+            document.incarnationToken();
         // The borrowed DEV solver is authorized for the *current Sketch
         // Edit* only, never for some other hosted Sketch/Profile.
         if (!sketch_edit_id_ || *sketch_edit_id_ != hosted.id ||
