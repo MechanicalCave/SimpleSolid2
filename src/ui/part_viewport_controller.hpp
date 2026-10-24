@@ -270,6 +270,13 @@ public:
     void setSolidModelingKernel(
         kernel::ISolidModelingKernel* modeling_kernel);
 
+    // E0 / opt-in only. Borrowed solver is owned by the Workbench or
+    // deterministic test fixture; never by Viewer or durable Part state.
+    // Every published Sketch uses the existing Part stage-solve gateway.
+    void setDevelopmentStageSolver(
+        sketch::ILocalSketchSolver* backend,
+        sketch::LocalSolverAcceptancePolicy policy);
+
     void clear();
     void resetRuntimeState();
     void refreshDocumentTree();
@@ -774,6 +781,20 @@ private:
         body_scene_cache_;
     std::optional<part::PartEvaluation>
         part_evaluation_cache_;
+    sketch::ILocalSketchSolver* development_stage_solver_{};
+    sketch::LocalSolverAcceptancePolicy development_stage_policy_{};
+    // One per-refresh, stage-authorized disposable result for visible
+    // Sketch, Profile region and semantic pick. Invalidate on every
+    // refresh and require current document incarnation/revision on read.
+    struct EffectiveStageSketchCache final {
+        core::DocumentId document_id;
+        core::DocumentRevision revision;
+        std::weak_ptr<const part::PartRuntimeIncarnation> incarnation;
+        sketch::SketchId sketch_id;
+        sketch::SketchModel model;
+    };
+    mutable std::optional<EffectiveStageSketchCache>
+        effective_stage_sketch_cache_;
     std::optional<part::DatumEvaluation>
         datum_evaluation_cache_;
     std::optional<kernel::Frame3>
@@ -846,6 +867,7 @@ private:
         core::DocumentId document_id;
         sketch::SketchId sketch_id;
         core::DocumentRevision revision;
+        std::weak_ptr<const part::PartRuntimeIncarnation> incarnation;
         sketch::SketchModel model;
     };
     std::optional<CurrentSketchModelSnapshot>
