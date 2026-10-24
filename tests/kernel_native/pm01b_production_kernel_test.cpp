@@ -75,7 +75,8 @@ kernel::BoundaryUse2D arcUse(
 
 kernel::PlanarProfileInput upperHalfDisk(
     bool reverse_traversal,
-    kernel::Point3 origin = {}) {
+    kernel::Point3 origin = {},
+    double radius = 10.0) {
     constexpr double pi =
         3.141592653589793238462643383279502884;
     kernel::PlanarProfileInput profile;
@@ -85,7 +86,7 @@ kernel::PlanarProfileInput upperHalfDisk(
         profile.outer.boundary = {
             arcUse(
                 {0.0, 0.0},
-                10.0,
+                radius,
                 0.0,
                 pi,
                 0.0,
@@ -93,8 +94,8 @@ kernel::PlanarProfileInput upperHalfDisk(
                 true,
                 "upper-arc"),
             lineUse(
-                {-10.0, 0.0},
-                {10.0, 0.0},
+                {-radius, 0.0},
+                {radius, 0.0},
                 "diameter"),
         };
     } else {
@@ -103,12 +104,12 @@ kernel::PlanarProfileInput upperHalfDisk(
         // the authored Arc; it must not cause a second parameter reversal.
         profile.outer.boundary = {
             lineUse(
-                {10.0, 0.0},
-                {-10.0, 0.0},
+                {radius, 0.0},
+                {-radius, 0.0},
                 "diameter"),
             arcUse(
                 {0.0, 0.0},
-                10.0,
+                radius,
                 0.0,
                 pi,
                 1.0,
@@ -509,6 +510,73 @@ int main() {
     CHECK(reverse_bounds.min_y >= -geometry_epsilon);
     CHECK(forward_bounds.max_y > 9.0);
     CHECK(reverse_bounds.max_y > 9.0);
+
+    // The same reverse-traversed Line+Arc profile must preserve geometry
+    // when it is no longer the first solid-producing Feature.
+    //
+    // Base occupies x=[0,40], y=[0,30], z=[0,10]. The correct upper-half
+    // disk centered at (20,25,10) overlaps the base only in y=[25,30] and
+    // protrudes to y=35, so attached Add must extend the final Body above 34.
+    // A reflected/lower-half Arc can still produce a valid Boolean, but it
+    // cannot satisfy this geometric bound.
+    const auto arc_attached_add =
+        provider.extrude(
+            forward(
+                upperHalfDisk(
+                    true,
+                    {20.0, 25.0, 10.0}),
+                5.0),
+            base.solid);
+    CHECK(arc_attached_add.ok());
+    CHECK(arc_attached_add.solid_count == 1U);
+    const auto arc_attached_add_mesh =
+        provider.presentationMesh(
+            arc_attached_add.solid);
+    CHECK(arc_attached_add_mesh.ok());
+    const auto arc_attached_add_bounds =
+        meshBoundsY(
+            arc_attached_add_mesh.mesh);
+    CHECK(
+        arc_attached_add_bounds.max_y >
+        34.0);
+
+    // Subsequent Cut gets an independent base so its expected geometry is
+    // explicit. A reverse-traversed upper half-disk with radius 20 centered
+    // at y=25 cuts downward through the complete top band of a
+    // x=[-10,10], y=[0,30] prism. The surviving one-solid Body therefore
+    // cannot extend above y=25. Reinterpreting the Arc as the lower half
+    // either changes that bound or yields a different Boolean outcome.
+    const auto arc_cut_base =
+        provider.extrude(
+            forward(
+                rectangle(
+                    -10.0, 0.0,
+                    10.0, 30.0),
+                10.0));
+    CHECK(arc_cut_base.ok());
+
+    const auto arc_subsequent_cut =
+        provider.extrude(
+            reverse(
+                upperHalfDisk(
+                    true,
+                    {0.0, 25.0, 10.0},
+                    20.0),
+                10.0,
+                kernel::SolidBooleanOperation::cut),
+            arc_cut_base.solid);
+    CHECK(arc_subsequent_cut.ok());
+    CHECK(arc_subsequent_cut.solid_count == 1U);
+    const auto arc_subsequent_cut_mesh =
+        provider.presentationMesh(
+            arc_subsequent_cut.solid);
+    CHECK(arc_subsequent_cut_mesh.ok());
+    const auto arc_subsequent_cut_bounds =
+        meshBoundsY(
+            arc_subsequent_cut_mesh.mesh);
+    CHECK(
+        arc_subsequent_cut_bounds.max_y <=
+        25.0 + geometry_epsilon);
 
     // Attached chained Add: remains one Body; the coincident profile cap may
     // disappear into the Boolean, but no missing/merged role is promoted to
