@@ -4875,5 +4875,93 @@ int main(int argc, char* argv[]) {
         CHECK(!reopened.needsSave());
     }
 
+    // E0 Part provenance under synchronous backend reentry: while a
+    // current-stage candidate is being evaluated, the user may Undo
+    // and trigger a *new* Viewer refresh before the old solve returns.
+    // The old outer refresh must never republish its obsolete stage or
+    // clear the newer committed scene / semantic picking snapshot.
+    {
+        struct UndoReentrantStageSolver final : sketch::ILocalSketchSolver {
+            int calls{};
+            std::function<void()> on_solve;
+            [[nodiscard]] sketch::LocalBackendSolveResult solve(
+                const sketch::LocalSolveProblem& problem) override {
+                ++calls;
+                if (on_solve) on_solve();
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 1U);
+                candidate.lines.front().end.v =
+                    candidate.lines.front().start.v;
+                return {sketch::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+        application::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto added = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 1.0}, {5.0, 2.0}});
+        CHECK(added.ok() && added.entity_id);
+        const auto added_relation = session.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                sid, session.document().revision(),
+                *added.entity_id});
+        CHECK(added_relation.ok() && added_relation.constraint_id);
+        const auto initial_revision = session.document().revision();
+        const auto initial_undo = session.undoDepth();
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController controller{
+            tree_controller, &viewport};
+        controller.setDocumentSession(&session);
+        controller.setSketchEditSketch(sid);
+        CHECK(viewport.sketch_scene_.lines.size() == 1U);
+        CHECK(!near(viewport.sketch_scene_.lines.front().start.y,
+                    viewport.sketch_scene_.lines.front().end.y));
+
+        bool callback_fired = false;
+        backend.on_solve = [&] {
+            CHECK(!callback_fired);
+            callback_fired = true;
+            const auto undone = session.undo();
+            CHECK(undone.ok() && undone.changed);
+            CHECK(session.document().findSketch(sid) != nullptr);
+            CHECK(session.document().findSketch(sid)->
+                      model.state().constraints.empty());
+            // The newer, post-Undo scene is published before the
+            // obsolete outer numerical solver call returns.
+            controller.refreshPresentation();
+            CHECK(viewport.sketch_scene_.lines.size() == 1U);
+            CHECK(!near(viewport.sketch_scene_.lines.front().start.y,
+                        viewport.sketch_scene_.lines.front().end.y));
+        };
+        controller.setDevelopmentStageSolver(
+            &backend, {1.0e-7, 1.0e-6});
+
+        CHECK(callback_fired);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() != initial_revision);
+        CHECK(session.undoDepth() + 1U == initial_undo);
+        CHECK(session.document().findSketch(sid)->
+                  model.state().constraints.empty());
+        CHECK(viewport.sketch_scene_.lines.size() == 1U);
+        CHECK(!near(viewport.sketch_scene_.lines.front().start.y,
+                    viewport.sketch_scene_.lines.front().end.y));
+        const auto* current = controller.currentSketchInteractionModel();
+        CHECK(current != nullptr);
+        CHECK(current->state().lines.size() == 1U);
+        CHECK(current->state().constraints.empty());
+        CHECK(!near(current->state().lines.front().start.v,
+                    current->state().lines.front().end.v));
+        backend.on_solve = {};
+    }
+
     return EXIT_SUCCESS;
 }
