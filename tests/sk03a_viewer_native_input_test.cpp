@@ -1,11 +1,15 @@
 #include "sketch_viewport_mapping.hpp"
+#include "part_document_tree_controller.hpp"
+#include "part_viewport_controller.hpp"
 
+#include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
 #include <QMouseEvent>
 #include <QTest>
+#include <QTreeWidget>
 
 #include <algorithm>
 #include <cmath>
@@ -343,6 +347,145 @@ int main(int argc, char* argv[]) {
         widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
         !picksNothing(*new_xz_hit)) {
         return fail("native E0 XZ fail-closed scene");
+    }
+
+    // E0 native joined-path proof: unlike the scripted scenes above,
+    // the Part controller now creates the exact SketchScene that the
+    // real QtOcctViewerWidget converts into AIS objects and native hit
+    // tokens. A deterministic solver double is intentionally used;
+    // original PlaneGCS production/distribution is an independent gate.
+    {
+        struct NativeStageSolver final : sketch::ILocalSketchSolver {
+            int calls{};
+            bool reject{};
+            double solved_v{-15.0};
+
+            [[nodiscard]] sketch::LocalBackendSolveResult solve(
+                const sketch::LocalSolveProblem& problem) override {
+                ++calls;
+                if (reject) {
+                    return {sketch::LocalBackendStatus::failed,
+                            std::nullopt, {}, {}, std::nullopt};
+                }
+                auto candidate = problem.authored;
+                if (candidate.lines.size() != 1U) {
+                    return {sketch::LocalBackendStatus::failed,
+                            std::nullopt, {}, {}, std::nullopt};
+                }
+                candidate.lines.front().start.v = solved_v;
+                candidate.lines.front().end.v = solved_v;
+                return {sketch::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+
+        application::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        if (!created.ok() || !created.sketch_id)
+            return fail("E0 joined Part create Sketch");
+        const auto sid = *created.sketch_id;
+        const auto added = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 1.0}, {5.0, 2.0}});
+        if (!added.ok() || !added.entity_id)
+            return fail("E0 joined Part skew seed");
+        const auto relation = session.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                sid, session.document().revision(), *added.entity_id});
+        if (!relation.ok() || !relation.constraint_id)
+            return fail("E0 joined Part relation authoring");
+        const auto revision = session.document().revision();
+        const auto undo_depth = session.undoDepth();
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        ui::PartViewportController controller{tree_controller, &widget};
+        controller.setDocumentSession(&session);
+        controller.setSketchEditSketch(sid);
+        if (!widget.setCameraState(sketch_camera)) {
+            return fail("E0 joined native camera");
+        }
+        const auto old_pixel =
+            project(viewer::Point3{2.5, 1.5, 0.0});
+        const auto solved_pixel =
+            project(viewer::Point3{2.5, -15.0, 0.0});
+        if (!old_pixel || !solved_pixel)
+            return fail("E0 joined projected hit points");
+        const auto original_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        const auto old_hit = widget.querySketchPresentation(*old_pixel);
+        if (!original_token || !old_hit.completed || !old_hit.token ||
+            *old_hit.token != *original_token ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U) {
+            return fail("E0 joined original Part geometry AIS/pick");
+        }
+
+        controller.setDevelopmentStageSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        const auto current_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        const auto current_hit = widget.querySketchPresentation(*solved_pixel);
+        const auto obsolete_hit = widget.querySketchPresentation(*old_pixel);
+        const auto* model = controller.currentSketchInteractionModel();
+        if (backend.calls != 1 ||
+            !current_token || !current_hit.completed || !current_hit.token ||
+            *current_hit.token != *current_token ||
+            !obsolete_hit.completed || obsolete_hit.token ||
+            !model || model->state().lines.size() != 1U ||
+            !near(model->state().lines.front().start.v, -15.0, 1.0e-7) ||
+            !near(model->state().lines.front().end.v, -15.0, 1.0e-7) ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U) {
+            return fail("E0 joined solved Part to native AIS/pick");
+        }
+        const auto semantic =
+            controller.sketchEntityFor(*current_hit.token);
+        if (!semantic || semantic->sketch_id != sid ||
+            semantic->entity_id != *added.entity_id ||
+            session.document().revision() != revision ||
+            session.undoDepth() != undo_depth ||
+            session.document().findSketch(sid)->
+                model.state().lines.front().end.v != 2.0) {
+            return fail("E0 joined semantic pick is authored identity");
+        }
+
+        backend.reject = true;
+        controller.refreshPresentation();
+        const auto rejected_hit =
+            widget.querySketchPresentation(*solved_pixel);
+        if (backend.calls != 2 || !rejected_hit.completed ||
+            rejected_hit.token ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
+            controller.sketchPresentationFor(*added.entity_id) ||
+            controller.currentSketchInteractionModel()) {
+            return fail("E0 joined rejected Part stage clears native AIS");
+        }
+
+        backend.reject = false;
+        backend.solved_v = -10.0;
+        controller.refreshPresentation();
+        const auto recovered_pixel =
+            project(viewer::Point3{2.5, -10.0, 0.0});
+        if (!recovered_pixel)
+            return fail("E0 joined recovered native pixel");
+        const auto recovered_hit =
+            widget.querySketchPresentation(*recovered_pixel);
+        const auto stale_hit =
+            widget.querySketchPresentation(*solved_pixel);
+        const auto recovered_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        if (backend.calls != 3 ||
+            !recovered_token || !recovered_hit.completed ||
+            recovered_hit.token != recovered_token ||
+            !stale_hit.completed || stale_hit.token ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+            session.document().revision() != revision ||
+            session.undoDepth() != undo_depth) {
+            return fail("E0 joined recovery uses fresh native geometry");
+        }
+        controller.clear();
     }
     // Restore the original XY camera and scene so the pre-existing
     // spatial ray/orbit tests are not affected by this 3D E0 witness.
