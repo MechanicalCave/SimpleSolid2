@@ -4380,14 +4380,28 @@ void PartSketchInteractionController::commitReadyRelation(
         return;
     }
 
+    // The successful Part command advanced DocumentRevision. Subsequent
+    // Qt/Viewer callbacks can synchronously Undo, Redo, edit another
+    // feature or refresh this Sketch while leaving the same UI tool and
+    // borrowed solver in place. The latest accepted transaction must
+    // still own the exact post-commit revision before announcing success.
+    // Checking the pre-commit revision here would incorrectly reject
+    // every successful command; checking only the UI epoch misses Undo.
+    const auto committed_revision =
+        initiating_session->document().revision();
+    const auto sameCommittedStage = [&]() {
+        return sameUiContext() &&
+            initiating_session->document().revision() ==
+                committed_revision;
+    };
     viewport_controller_->refreshPresentation();
-    if (!sameUiContext()) return;
+    if (!sameCommittedStage()) return;
     projectSelection();
-    if (!sameUiContext()) return;
+    if (!sameCommittedStage()) return;
     projectInteraction();
-    if (!sameUiContext()) return;
+    if (!sameCommittedStage()) return;
     notifyStateChanged();
-    if (!sameUiContext()) return;
+    if (!sameCommittedStage()) return;
     reportStatus(
         "RELATIONS: accepted by current Part solver and transaction "
         "(development-only backend).");
