@@ -4441,5 +4441,124 @@ int main(int argc, char* argv[]) {
         controller.end();
     }
 
+    // R13-A2.0 D1 — an old Dimensions kind-selection status callback
+    // can synchronously switch the Sketch tool. The superseded outer
+    // invocation must not project or notify state for the new context.
+    // This is not authorization to create v22 Driving dimensions.
+    {
+        auto doc = part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession document_session{{}, std::move(doc)};
+        const auto created = document_session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&document_session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{viewport_controller};
+        controller.begin(document_session, sid);
+        controller.activateDimensions();
+        const auto revision = document_session.document().revision();
+        const auto undo = document_session.undoDepth();
+
+        bool reentered = false;
+        bool inner_completed = false;
+        int obsolete_notifications = 0;
+        int obsolete_projections = 0;
+        controller.setStateChangedHandler([&] {
+            if (inner_completed) ++obsolete_notifications;
+        });
+        viewport.on_interaction_presentation_ = [&] {
+            if (inner_completed) ++obsolete_projections;
+        };
+        controller.setStatusHandler([&](const std::string& status) {
+            if (reentered ||
+                status.find("DIMENSIONS: type selected.") ==
+                    std::string::npos) {
+                return;
+            }
+            reentered = true;
+            controller.activateRelations();
+            CHECK(controller.selectRelationKind(
+                sketch::ConstraintKind::horizontal));
+            inner_completed = true;
+        });
+        CHECK(controller.selectDimensionKind(
+            sketch::DrivingDimensionToolKind::length));
+        CHECK(reentered);
+        CHECK(controller.tool() == sketch::SketchTool::relations);
+        CHECK(controller.relationKind() ==
+              sketch::ConstraintKind::horizontal);
+        CHECK(obsolete_notifications == 0);
+        CHECK(obsolete_projections == 0);
+        CHECK(document_session.document().revision() == revision);
+        CHECK(document_session.undoDepth() == undo);
+        viewport.on_interaction_presentation_ = {};
+        controller.end();
+    }
+
+    // An older Dimensions activation must similarly stop after its
+    // provisional status if it is replaced by a new activation of the
+    // *same* tool and new kind (ABA). Tool equality alone is insufficient.
+    {
+        auto doc = part::PartDocument::create(core::DocumentId::generate());
+        application::DocumentSession document_session{{}, std::move(doc)};
+        const auto created = document_session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        TestViewport viewport;
+        ui::PartViewportController viewport_controller{
+            tree_controller, &viewport};
+        viewport_controller.setDocumentSession(&document_session);
+        viewport_controller.setSketchEditSketch(sid);
+        ui::PartSketchInteractionController controller{viewport_controller};
+        controller.begin(document_session, sid);
+        const auto revision = document_session.document().revision();
+        const auto undo = document_session.undoDepth();
+
+        bool reentered = false;
+        bool inner_completed = false;
+        int obsolete_notifications = 0;
+        int obsolete_projections = 0;
+        controller.setStateChangedHandler([&] {
+            if (inner_completed) ++obsolete_notifications;
+        });
+        viewport.on_interaction_presentation_ = [&] {
+            if (inner_completed) ++obsolete_projections;
+        };
+        controller.setStatusHandler([&](const std::string& status) {
+            if (reentered ||
+                status.find("DIMENSIONS: native driving-dimension") ==
+                    std::string::npos) {
+                return;
+            }
+            reentered = true;
+            controller.activateDimensions();
+            CHECK(controller.selectDimensionKind(
+                sketch::DrivingDimensionToolKind::diameter));
+            inner_completed = true;
+        });
+        controller.activateDimensions();
+        CHECK(reentered);
+        CHECK(controller.tool() == sketch::SketchTool::dimensions);
+        CHECK(controller.dimensionKind() ==
+              sketch::DrivingDimensionToolKind::diameter);
+        CHECK(obsolete_notifications == 0);
+        CHECK(obsolete_projections == 0);
+        CHECK(document_session.document().revision() == revision);
+        CHECK(document_session.undoDepth() == undo);
+        viewport.on_interaction_presentation_ = {};
+        controller.end();
+    }
+
     return EXIT_SUCCESS;
 }
