@@ -1,7 +1,7 @@
 # SS2 R13-A2 — Native 3D Sketch relations and Driving labels
 ## Exact provider-neutral Viewer/binding D2 proposal (NOT ACCEPTED)
 
-**Status:** DRAFT / OWNER D2 REVIEW REQUIRED — proposal only; no executable product permission  
+**Status:** PARTIAL OWNER D2 ACCEPTANCE — E0 direction ONLY accepted 2026-10-24; E1/E2 NOT accepted; no merge/release authority  
 **Date:** 2026-10-23  
 **Foundation:** v1.0 FROZEN; Constitution and Architecture; ADR-0008, 0009, 0011, 0012–0014, 0016–0017  
 **Program:** `work/ACTIVE.yaml` → R13-A2, Sketch Roadmap v1.11  
@@ -9,6 +9,14 @@
 **Read-only implementation audit:** PR #528 head `7874a47d7fca540fb5f6b694c05beda1924b00a0`; protected main `68fc4f33aaeee0e4741bc20b269b665839fa06cf`  
 **Separate solver distribution proposal:** PR #529 — L-DLL feasibility selected, C ABI/path approval still pending  
 **Do not merge this proposal or implement its new public interface without independent Owner D2 acceptance, exact-head governance CLOSURE and separate guarded-squash authority.**
+
+## Owner's explicit E0-only decision — 2026-10-24
+
+**Owner response:** `akceptuje - kontynuuj`, given in direct reply to the explicit question: accept **E0 only from this PR #530** — reuse existing validated Part numerical stage gateway as one current/revision/incarnation-bound geometry source for Viewer, semantic picking and Profile/Kernel; **without authorizing E1/E2, v22 or PlaneGCS distribution**.
+
+**Approved E0 direction, bounded execution:** retain authored geometry seeds and semantic ConstraintId unchanged; derive only disposable, provenance-checked current-stage solved geometry from `part::evaluateStageLocalSolve` and existing Part Profile/Feature evaluator. The UI may borrow the already explicitly gated DEV solver for source-backed experiments but cannot introduce an independently trusted Qt solver, a new public Viewer glyph/annotation interface, arbitrary source-stage identity, a persistence/schema change, a vendor artifact, or release packaging. Fail closed on invalid solution and clear stale scene/selection; prove meaningful RED→GREEN with real Windows registered tests. E0 implementation remains subject to exact active contract paths, independent technical and real-native evidence, documentation impact when shipped, and **separate guarded product/governance merge authorization**.
+
+**Still NOT accepted:** E1 P1–P4 public glyph/label scene+hit API, E2 numeric labels, strict v22, LGPL binary distribution, and Delete/Freeze extension. Nothing about this partial acceptance changes the Draft/unmerged status of #530 or grants E1 code permission.
 
 ## 0. Decision requested; why this is not a Qt paint patch
 
@@ -160,11 +168,11 @@ Both gates require exact-head Windows FOCUSED → FAST → Ready FULL (Core + ke
 
 ## 7. Decision options and hard STOP
 
-**Recommended Owner D2:** separately resolve **E0 stage-coherent effective Sketch evaluation** before accepting executable **P1–P4 and E1 only** as the exact finite provider-neutral glyph scene, query, application binding and hit precedence, conditional on the 14 existing paths in §5, with no release/merge permission. Reserve E2 implementation until strict v22, solver/package and Delete/Freeze gates receive independent D2 acceptance. Owner may request a concrete signature amendment before acceptance.
+**E0 accepted independently as recorded above. Next Owner D2 decision:** accept executable **P1–P4 and E1 only** as the exact finite provider-neutral glyph scene, query, application binding and hit precedence, conditional on the 14 existing paths in §5, with no release/merge permission. Reserve E2 implementation until strict v22, solver/package and Delete/Freeze gates receive independent D2 acceptance. Owner may request a concrete signature amendment before acceptance.
 
 **Rejected alternatives:** (a) Qt list icons instead of real Viewer glyphs; (b) pixel/name/geometric similarity as persistent identity; (c) import SS1 standalone Sketch canvas; (d) generic catch-all annotation engine for future Drawing; (e) fake glyphs that cannot be selected or whose selection bypasses current Part guard.
 
-**STOP now:** E0 effective-stage evaluation boundary and E1 annotation API both lack specific Owner D2 acceptance; no E1 public API or source changes, no E2 production work, no v22, no provider/CI new paths, no DLL distribution, no Owner/manual/merge claim. Do not treat this proposal's PR creation, green governance CLOSURE or a generic `kontynuuj` as approval of its public API.
+**STOP now for E1/E2:** E0's exact Part-owned effective-stage direction is explicitly accepted above, but this partial decision **does not authorize E1 public glyph/annotation APIs**, E2/v22 authoring, new provider/CI paths or DLL distribution. No Owner/manual/merge claim. #530 remains a Draft decision record requiring independent guarded merge authority; E0 implementation remains a separate Draft until real Windows/full/native closure and separate integration approval. The Owner's targeted answer is NOT acceptance of P1–P4.
 
 ## Documentation impact
 
