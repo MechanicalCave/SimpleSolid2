@@ -1111,8 +1111,7 @@ PartViewportController::currentSketchInteractionModel() const {
         return nullptr;
     }
     if (hosted->projection_bindings.empty() &&
-        (development_stage_solver_ == nullptr ||
-         hosted->model.state().constraints.empty())) {
+        hosted->model.state().constraints.empty()) {
         return &hosted->model;
     }
     // Only the exact model snapshot that backed the visible scene may
@@ -4635,6 +4634,14 @@ PartViewportController::effectiveSketchModelForPresentation(
                 document.documentId(), document.revision(),
                 document.incarnationToken(), hosted.id, *model};
         return *model;
+    }
+    if (!hosted.model.state().constraints.empty()) {
+        // No accepted numerical backend (or no current edit lease) is
+        // NOT a converged Sketch. An authored seed remains valid durable
+        // intent, but cannot be published as the current solved scene.
+        // Do not allow the unlinked shortcut to undo this fail-closed
+        // boundary when a DEV provider is revoked during Sketch Edit.
+        return sketch::SketchModel{};
     }
     if (hosted.projection_bindings.empty()) {
         return hosted.model;
