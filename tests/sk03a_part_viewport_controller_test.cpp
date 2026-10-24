@@ -2766,6 +2766,48 @@ int main(int argc, char* argv[]) {
         CHECK(std::abs(kernel_leftmost_after_undo - 5.0) < 1.0e-9);
         CHECK(tested_session.document().findSketch(sid)->
                   model.state().lines == seed.lines);
+
+        // Re-entering the previously undone relation via Redo must
+        // authorize a NEW numerical result. Neither the pre-Undo
+        // solved scene nor the rejected outer candidate is current.
+        const auto before_redo_calls = solver.calls;
+        const auto before_redo_revision =
+            tested_session.document().revision();
+        const auto redone = tested_session.redo();
+        CHECK(redone.ok() && redone.changed);
+        CHECK(tested_session.document().revision() !=
+              before_redo_revision);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.state().constraints.size() == 1U);
+        kernel.last_profile.reset();
+        vc.refreshPresentation();
+        CHECK(solver.calls == before_redo_calls + 1);
+        CHECK(kernel.last_profile.has_value());
+        CHECK(!vp.body_scene_.triangles.empty());
+        CHECK(vp.body_scene_.generation.valid());
+        CHECK(vp.sketch_scene_.lines.size() == 4U);
+        const auto solved_leftmost =
+            5.0 + 2.0 * static_cast<double>(solver.calls);
+        CHECK(std::abs(vp.sketch_scene_.lines.front().start.x -
+                       solved_leftmost) < 1.0e-9);
+        double kernel_leftmost_after_redo = 1.0e10;
+        for (const auto& use : kernel.last_profile->outer.boundary) {
+            const auto* line = std::get_if<kernel::Line2>(&use.curve);
+            CHECK(line != nullptr);
+            kernel_leftmost_after_redo = std::min(
+                kernel_leftmost_after_redo,
+                std::min(line->start.u, line->end.u));
+        }
+        CHECK(std::abs(kernel_leftmost_after_redo -
+                       solved_leftmost) < 1.0e-9);
+        const auto* evaluated_redo =
+            vc.currentSketchInteractionModel();
+        CHECK(evaluated_redo != nullptr);
+        CHECK(evaluated_redo->state().constraints.size() == 1U);
+        CHECK(vc.currentProfileResolution(*profile.profile_id).has_value());
+        CHECK(solver.calls == before_redo_calls + 1);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.state().lines == seed.lines);
     }
 
     // E0 non-XY source-of-truth: the same accepted Part stage candidate
