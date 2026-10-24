@@ -3,6 +3,7 @@
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
+#include <simplesolid2/kernel/edge_projection.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <QApplication>
@@ -12,6 +13,8 @@
 #include <QTreeWidgetItemIterator>
 #include <QWidget>
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
@@ -435,8 +438,25 @@ kernel::Frame3 offsetStageFrame(
 }
 
 class StageAwareSketchKernel final
-    : public kernel::ISolidModelingKernel {
+    : public kernel::ISolidModelingKernel,
+      public kernel::IEdgeProjectionQuery {
 public:
+    std::optional<kernel::PlanarProfileInput> last_profile;
+
+    // A valid no-projection provider for Origin-backed Sketches only.
+    // Linked stage edges deliberately remain unavailable.
+    std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+        kernel::RuntimeSolidHandle,
+        kernel::RuntimeEdgeToken) noexcept override {
+        return std::nullopt;
+    }
+    kernel::EdgeProjectionResult projectEdgeToPlane(
+        kernel::RuntimeSolidHandle,
+        const kernel::ScopedProjectionEdge&,
+        const kernel::Frame3&) noexcept override {
+        return {};
+    }
+
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
         kernel::RuntimeSolidHandle upstream = {}) noexcept override {
@@ -446,6 +466,7 @@ public:
                 kernel::SolidModelingStatus::invalid_input;
             return result;
         }
+        last_profile = input.profile;
 
         auto runtime =
             std::make_shared<StageAwareSketchSolid>();
@@ -2530,6 +2551,119 @@ int main(int argc, char* argv[]) {
         datum_controller.setSolidModelingKernel(
             nullptr);
         datum_controller.clear();
+    }
+
+    // E0 Body/Viewer kernel consumption: a bounded numerical backend
+    // must not independently solve the same current Sketch once for
+    // native Profile->Feature and again for the visible Sketch scene.
+    // A deterministic changing provider exposes the divergence even
+    // though both solutions individually satisfy Horizontal.
+    {
+        struct DriftingStageSolver final : sketch::ILocalSketchSolver {
+            int calls{};
+            [[nodiscard]] sketch::LocalBackendSolveResult solve(
+                const sketch::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 4U);
+                for (auto& line : candidate.lines) {
+                    line.start.u += 2.0 * calls;
+                    line.end.u += 2.0 * calls;
+                }
+                return {sketch::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } solver;
+        application::DocumentSession tested_session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        StageAwareSketchKernel kernel;
+        const auto sk = tested_session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(sk.ok() && sk.sketch_id);
+        const auto sid = *sk.sketch_id;
+        const auto rect = tested_session.execute(
+            application::AddSketchRectangleCommand{
+                sid, tested_session.document().revision(),
+                {5.0, 0.0}, {15.0, 8.0},
+                sketch::EntityRole::regular, false});
+        CHECK(rect.ok() && rect.entity_ids.size() == 4U);
+        const auto seed = tested_session.document().findSketch(sid)->
+            model.state();
+        const auto regions = sketch::analyzeRegions(
+            tested_session.document().findSketch(sid)->model);
+        CHECK(regions.complete() && regions.regions.size() == 1U);
+        const auto intent =
+            part::makeProfileRegionIntent(regions.regions.front());
+        CHECK(intent);
+        const auto profile = tested_session.execute(
+            application::CreateProfileCommand{
+                sid, tested_session.document().revision(), *intent});
+        CHECK(profile.ok() && profile.profile_id);
+        const auto feature = tested_session.execute(
+            application::CreateExtrudeFeatureCommand{
+                *profile.profile_id, tested_session.document().revision(),
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{core::LengthValue{5.0}, false},
+                {}}, kernel);
+        CHECK(feature.ok() && feature.feature_id);
+        const auto constraint = tested_session.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                sid, tested_session.document().revision(),
+                rect.entity_ids.front()});
+        CHECK(constraint.ok() && constraint.constraint_id);
+        const auto rev = tested_session.document().revision();
+        const auto undo = tested_session.undoDepth();
+        kernel.last_profile.reset();
+
+        QTreeWidget t;
+        ui::PartDocumentTreeController tc{t};
+        TestViewport vp;
+        ui::PartViewportController vc{tc, &vp};
+        vc.setSolidModelingKernel(&kernel);
+        vc.setDocumentSession(&tested_session);
+        vc.setSketchEditSketch(sid);
+        vc.setDevelopmentStageSolver(
+            &solver, sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
+
+        CHECK(kernel.last_profile.has_value());
+        CHECK(solver.calls == 1);
+        CHECK(vp.sketch_scene_.lines.size() == 4U);
+        const auto& native_loop = kernel.last_profile->outer.boundary;
+        CHECK(native_loop.size() == 4U);
+        double kernel_leftmost = 1.0e10;
+        for (const auto& use : native_loop) {
+            const auto* line = std::get_if<kernel::Line2>(&use.curve);
+            CHECK(line != nullptr);
+            kernel_leftmost = std::min(
+                kernel_leftmost,
+                std::min(line->start.u, line->end.u));
+        }
+        double sketch_leftmost = 1.0e10;
+        for (const auto& line : vp.sketch_scene_.lines) {
+            sketch_leftmost = std::min(
+                sketch_leftmost,
+                std::min(line.start.x, line.end.x));
+        }
+        CHECK(std::abs(kernel_leftmost - sketch_leftmost) < 1.0e-9);
+        CHECK(std::abs(kernel_leftmost - 7.0) < 1.0e-9);
+        CHECK(tested_session.document().revision() == rev);
+        CHECK(tested_session.undoDepth() == undo);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.state().lines == seed.lines);
+
+        // A second explicit refresh may solve anew, but must use one
+        // coherent *new* candidate for Body and Sketch in that refresh.
+        kernel.last_profile.reset();
+        vc.refreshPresentation();
+        CHECK(kernel.last_profile.has_value());
+        CHECK(solver.calls == 2);
+        CHECK(vp.sketch_scene_.lines.size() == 4U);
+        CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 9.0) <
+              1.0e-9);
+        CHECK(tested_session.document().revision() == rev);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.state().lines == seed.lines);
     }
 
     return EXIT_SUCCESS;
