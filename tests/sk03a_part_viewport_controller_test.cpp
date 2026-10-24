@@ -2719,9 +2719,11 @@ int main(int argc, char* argv[]) {
         bool callback_fired = false;
         kernel.last_profile.reset();
         solver.on_solve = [&] {
-            CHECK(!callback_fired);
+            // A reentrant call must not destroy its own std::function
+            // closure while it is executing: ignore subsequent callbacks
+            // until the outer solve returns, then disconnect safely.
+            if (callback_fired) return;
             callback_fired = true;
-            solver.on_solve = {};
             const auto undone = tested_session.undo();
             CHECK(undone.ok() && undone.changed);
             CHECK(tested_session.document().findSketch(sid)->
@@ -2734,6 +2736,7 @@ int main(int argc, char* argv[]) {
                   1.0e-9);
         };
         vc.refreshPresentation();
+        solver.on_solve = {};
         CHECK(callback_fired);
         CHECK(tested_session.document().revision() != rev);
         CHECK(tested_session.undoDepth() + 1U == undo);
