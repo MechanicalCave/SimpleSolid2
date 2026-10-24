@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <limits>
 #include <numbers>
 #include <set>
 #include <utility>
@@ -376,25 +377,53 @@ LocalSolveGatewayResult evaluateLocalSolve(
     }
 
     // Callers cannot fabricate or alter the prepared bridge's constraint
-    // inventory, reference geometry or fixed-line declaration.
+    // inventory, reference geometry or fixed-line declaration. Keep the
+    // same exact comparison after the backend call: the solver receives
+    // a const view of our mutable temporary, and a faulty native adapter
+    // must never rewrite the very equations used to review its answer.
     const auto canonical = prepareLocalSolveProblem(
         problem.authored, std::span<const EntityId>{problem.fixed_lines});
-    if (!canonical ||
-        canonical->constraints != problem.constraints ||
-        canonical->equations != problem.equations ||
-        canonical->fixed_lines != problem.fixed_lines ||
-        canonical->lines.size() != problem.lines.size()) {
+    if (!canonical) {
         result.status = LocalSolveGatewayStatus::invalid_problem;
         return result;
     }
-    for (std::size_t i = 0; i < problem.lines.size(); ++i) {
-        const auto& a = canonical->lines[i];
-        const auto& b = problem.lines[i];
-        if (a.id != b.id || a.start != b.start || a.end != b.end ||
-            a.fixed != b.fixed) {
-            result.status = LocalSolveGatewayStatus::invalid_problem;
-            return result;
+    // Independent entry-time authority. Comparing two *live* DTOs after
+    // solve is insufficient: a reentrant adapter can mutate both the
+    // caller problem and its canonical temporary identically. This
+    // snapshot is never exposed to the backend.
+    const LocalSolveProblem original = *canonical;
+    const auto matchesCaller = [&problem, &canonical, &original]() {
+        if (canonical->authored != original.authored ||
+            problem.authored != original.authored ||
+            canonical->constraints != original.constraints ||
+            problem.constraints != original.constraints ||
+            canonical->equations != original.equations ||
+            problem.equations != original.equations ||
+            canonical->fixed_lines != original.fixed_lines ||
+            problem.fixed_lines != original.fixed_lines ||
+            canonical->lines.size() != original.lines.size() ||
+            problem.lines.size() != original.lines.size()) {
+            return false;
         }
+        for (std::size_t i = 0; i < original.lines.size(); ++i) {
+            const auto& expected = original.lines[i];
+            const auto& received = canonical->lines[i];
+            const auto& current = problem.lines[i];
+            const auto matches = [&expected](const LocalSolveLineInput& line) {
+                return expected.id == line.id &&
+                       expected.start == line.start &&
+                       expected.end == line.end &&
+                       expected.fixed == line.fixed;
+            };
+            if (!matches(received) || !matches(current)) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!matchesCaller()) {
+        result.status = LocalSolveGatewayStatus::invalid_problem;
+        return result;
     }
 
     LocalBackendSolveResult backend_result;
@@ -404,15 +433,43 @@ LocalSolveGatewayResult evaluateLocalSolve(
         result.status = LocalSolveGatewayStatus::backend_failure;
         return result;
     }
+    if (!matchesCaller()) {
+        result.status = LocalSolveGatewayStatus::invalid_backend_response;
+        return result;
+    }
 
-    // Backend diagnostics cannot invent new ConstraintIds or repeat IDs.
+    // An externally supplied DoF is diagnostic evidence, not solver
+    // authority. It cannot exceed the number of mutable scalar inputs:
+    // a free Line has exactly four U/V endpoint coordinates; a Fix or
+    // stage-fixed Line has zero. This is an upper-bound sanity check,
+    // not a claim that DoF rank/redundancy is independently computed.
+    if (backend_result.degrees_of_freedom) {
+        const auto free_lines = static_cast<std::size_t>(
+            std::count_if(canonical->lines.cbegin(),
+                          canonical->lines.cend(),
+                          [](const LocalSolveLineInput& line) {
+                              return !line.fixed;
+                          }));
+        if (free_lines > std::numeric_limits<std::size_t>::max() / 4U ||
+            *backend_result.degrees_of_freedom > 4U * free_lines) {
+            result.status = LocalSolveGatewayStatus::invalid_backend_response;
+            return result;
+        }
+    }
+
+    // Fix(Line) is a fixed-parameter mask, never a backend equation.
+    // Check equation-bound conflict provenance against the immutable,
+    // entry-time canonical inventory, not merely any authored ConstraintId.
+    const auto isEquation = [&original](ConstraintId id) {
+        return std::any_of(
+            original.equations.cbegin(), original.equations.cend(),
+            [id](const SketchConstraintState& relation) {
+                return relation.id == id;
+            });
+    };
     std::set<ConstraintId> seen;
     for (const auto id : backend_result.conflicting_constraints) {
-        const auto it = std::find_if(
-            problem.constraints.cbegin(), problem.constraints.cend(),
-            [id](const SketchConstraintState& c) { return c.id == id; });
-        if (!id.valid() || it == problem.constraints.cend() ||
-            !seen.insert(id).second) {
+        if (!id.valid() || !isEquation(id) || !seen.insert(id).second) {
             result.status = LocalSolveGatewayStatus::invalid_backend_response;
             return result;
         }
@@ -430,13 +487,23 @@ LocalSolveGatewayResult evaluateLocalSolve(
 
     bool redundant = false;
     std::set<ConstraintId> diagnostic_ids;
+    std::set<ConstraintId> diagnosed_conflicts;
     for (const auto& diagnostic : backend_result.diagnostics) {
         if (diagnostic.constraint) {
             const auto id = *diagnostic.constraint;
             const auto found = std::find_if(
                 problem.constraints.cbegin(), problem.constraints.cend(),
                 [id](const SketchConstraintState& c) { return c.id == id; });
+            // Redundancy/conflict diagnostics must name an actual
+            // equation. A Fix ID can exist in the Sketch inventory but
+            // has no algebraic equation to diagnose or highlight.
+            const bool equation_diagnostic =
+                diagnostic.kind ==
+                    LocalBackendDiagnosticKind::redundant_constraint ||
+                diagnostic.kind ==
+                    LocalBackendDiagnosticKind::conflicting_constraint;
             if (!id.valid() || found == problem.constraints.cend() ||
+                (equation_diagnostic && !isEquation(id)) ||
                 !diagnostic_ids.insert(id).second) {
                 result.status = LocalSolveGatewayStatus::invalid_backend_response;
                 return result;
@@ -456,6 +523,9 @@ LocalSolveGatewayResult evaluateLocalSolve(
         case LocalBackendDiagnosticKind::conflicting_constraint:
             compatible = backend_result.status == LocalBackendStatus::conflict &&
                          diagnostic.constraint.has_value();
+            if (compatible) {
+                diagnosed_conflicts.insert(*diagnostic.constraint);
+            }
             break;
         case LocalBackendDiagnosticKind::unsupported_constraint:
             compatible = backend_result.status == LocalBackendStatus::unsupported;
@@ -470,6 +540,16 @@ LocalSolveGatewayResult evaluateLocalSolve(
             result.status = LocalSolveGatewayStatus::invalid_backend_response;
             return result;
         }
+    }
+    // Detailed conflict diagnostics identify the exact same semantic
+    // owners as the conflict-ID vector consumed by viewer/UI highlights.
+    // An older backend may return only the conflict vector, but if it
+    // supplies detailed conflict IDs their inventory must be complete
+    // and identical. Never attribute one conflict to another constraint.
+    if (!diagnosed_conflicts.empty() &&
+        diagnosed_conflicts != seen) {
+        result.status = LocalSolveGatewayStatus::invalid_backend_response;
+        return result;
     }
     result.diagnostics = backend_result.diagnostics;
 
@@ -569,6 +649,187 @@ LocalSolveGatewayResult evaluateLocalSolve(
         break;
     }
     result.status = LocalSolveGatewayStatus::invalid_backend_response;
+    return result;
+}
+
+namespace {
+
+// An A2 create command must not depend solely on a backend diagnosing
+// elementary redundant equations: a well-formed Converged response can
+// omit redundancy diagnostics. This detects ONLY logically implied NEW
+// relations, never rewrites an existing Sketch or the generic solver.
+//
+// Parallel/Perpendicular form an undirected parity graph (0 = parallel,
+// 1 = perpendicular). Horizontal is parallel to the single horizontal
+// reference axis; Vertical is perpendicular to it. The graph must be
+// derived from authored constraints, NOT coincident seed coordinates.
+[[nodiscard]] bool authoredRelationsImply(
+    const SketchModelState& authored,
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second) {
+    if (kind == ConstraintKind::coincident) {
+        // Equality is transitive over exact SEMANTIC endpoints, not whole
+        // Line identity or neighboring/nearby model-space coordinates.
+        std::vector<ConstraintReference> reachable{first};
+        for (std::size_t i = 0; i < reachable.size(); ++i) {
+            for (const auto& relation : authored.constraints) {
+                if (relation.kind != ConstraintKind::coincident) continue;
+                ConstraintReference other;
+                if (relation.first == reachable[i]) {
+                    other = relation.second;
+                } else if (relation.second == reachable[i]) {
+                    other = relation.first;
+                } else {
+                    continue;
+                }
+                if (other == second) return true;
+                if (std::find(reachable.cbegin(), reachable.cend(), other)
+                    == reachable.cend()) {
+                    reachable.push_back(other);
+                }
+            }
+        }
+        return false;
+    }
+
+    if (kind != ConstraintKind::horizontal &&
+        kind != ConstraintKind::vertical &&
+        kind != ConstraintKind::parallel &&
+        kind != ConstraintKind::perpendicular) {
+        return false;
+    }
+
+    std::map<EntityId, std::size_t> indices;
+    for (std::size_t i = 0; i < authored.lines.size(); ++i) {
+        indices.emplace(authored.lines[i].id, i);
+    }
+    const auto first_node = indices.find(first.entity);
+    if (first_node == indices.end()) return false;
+    const std::size_t axis = authored.lines.size();
+    const bool unary = kind == ConstraintKind::horizontal ||
+                       kind == ConstraintKind::vertical;
+    std::size_t destination = axis;
+    if (!unary) {
+        const auto second_node = indices.find(second.entity);
+        if (second_node == indices.end()) return false;
+        destination = second_node->second;
+    }
+    const int required = (kind == ConstraintKind::vertical ||
+                          kind == ConstraintKind::perpendicular) ? 1 : 0;
+
+    using Edge = std::pair<std::size_t, int>;
+    std::vector<std::vector<Edge>> connections(axis + 1U);
+    const auto connect = [&connections](
+        std::size_t a, std::size_t b, int parity) {
+        connections[a].push_back({b, parity});
+        connections[b].push_back({a, parity});
+    };
+    for (const auto& relation : authored.constraints) {
+        if (relation.kind == ConstraintKind::fix ||
+            relation.kind == ConstraintKind::coincident) {
+            continue;
+        }
+        const auto a = indices.find(relation.first.entity);
+        if (a == indices.end()) return false;
+        switch (relation.kind) {
+        case ConstraintKind::horizontal:
+            connect(a->second, axis, 0);
+            break;
+        case ConstraintKind::vertical:
+            connect(a->second, axis, 1);
+            break;
+        case ConstraintKind::parallel:
+        case ConstraintKind::perpendicular: {
+            const auto b = indices.find(relation.second.entity);
+            if (b == indices.end()) return false;
+            connect(a->second, b->second,
+                    relation.kind == ConstraintKind::perpendicular ? 1 : 0);
+            break;
+        }
+        case ConstraintKind::coincident:
+        case ConstraintKind::fix:
+            break;
+        }
+    }
+
+    // Find an already-authored implication by parity reachability.
+    // Opposite parity is a potential conflict, left for the complete
+    // solver/diagnostic gate instead of mislabeling it as redundancy.
+    std::vector<int> parity(axis + 1U, -1);
+    std::vector<std::size_t> pending{first_node->second};
+    parity[first_node->second] = 0;
+    for (std::size_t i = 0; i < pending.size(); ++i) {
+        const auto current = pending[i];
+        for (const auto [neighbor, edge_parity] : connections[current]) {
+            const int expected = parity[current] ^ edge_parity;
+            if (parity[neighbor] != -1) {
+                // An inconsistent authored cycle has no single valid
+                // implication. Leave the full conflicting system to
+                // the numeric solver instead of picking an arbitrary
+                // BFS path and falsely declaring this request redundant.
+                if (parity[neighbor] != expected) return false;
+                continue;
+            }
+            parity[neighbor] = expected;
+            pending.push_back(neighbor);
+        }
+    }
+    return parity[destination] == required;
+}
+
+} // namespace
+
+LocalRelationPreflightResult preflightLocalRelation(
+    const SketchModelState& current_stage,
+    ConstraintKind kind,
+    ConstraintReference first,
+    ConstraintReference second,
+    std::span<const EntityId> stage_fixed_lines,
+    const LocalSolverAcceptancePolicy& policy,
+    ILocalSketchSolver& backend) {
+    LocalRelationPreflightResult result;
+
+    // Restore a fresh copy so every rejected draft preserves the original
+    // cursor, semantic refs, geometry and Part-authoring state.
+    auto disposable = SketchModel::restore(current_stage);
+    if (!disposable) return result;
+
+    // Fail before allocating even a provisional ID or invoking an
+    // untrustworthy backend if authored semantics already imply intent.
+    if (authoredRelationsImply(current_stage, kind, first, second)) {
+        return result;
+    }
+
+    const auto provisional_id =
+        disposable->addConstraint(kind, first, second);
+    if (!provisional_id) return result;
+
+    // A malicious/invalid fixed-reference set fails closed before solve.
+    const auto draft = disposable->state();
+    const auto prepared = prepareLocalSolveProblem(
+        draft, stage_fixed_lines);
+    if (!prepared) {
+        result.status = LocalRelationPreflightStatus::invalid_problem;
+        return result;
+    }
+
+    result.solve = evaluateLocalSolve(*prepared, policy, backend);
+    // A rejected numerical proposal must not expose any authored draft
+    // or provisional identity that a future caller could accidentally
+    // publish. Diagnostics remain available separately in result.solve.
+    if (result.solve.status ==
+            LocalSolveGatewayStatus::candidate_accepted &&
+        result.solve.candidate.has_value()) {
+        result.status = LocalRelationPreflightStatus::candidate_accepted;
+        result.provisional_constraint_id = *provisional_id;
+        result.proposed_authored = std::move(draft);
+    } else {
+        result.status = LocalRelationPreflightStatus::solver_rejected;
+    }
+    // No DocumentSession command, no model write and no revision/lease
+    // capture occurs here. A real writer MUST solve the authoritative
+    // revision again within a single guarded Part transaction.
     return result;
 }
 

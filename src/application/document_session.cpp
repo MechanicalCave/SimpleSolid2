@@ -66,6 +66,71 @@ part::PartSketch* findSketch(
         : &*found;
 }
 
+// Solver candidates may legally carry alternate *derived* geometry for
+// Profile/Kernel. A Fix/Delete command materializes a candidate into
+// authored geometry and thus cannot also move an independent constraint
+// component. Compute a semantic Line relation graph rooted at the
+// requested operation; do not treat "any constraint exists" as authority.
+// Free unreferenced Lines (including a free requested Fix target) remain
+// exactly at their authored seeds. No tolerance or provider ordinals.
+[[nodiscard]] bool unchangedOutsideRelationComponent(
+    const sketch::SketchModelState& authored,
+    const sketch::SketchModelState& candidate,
+    sketch::EntityId first_root,
+    sketch::EntityId second_root = {}) {
+    if (authored.lines.size() != candidate.lines.size() ||
+        !first_root.valid()) return false;
+
+    std::set<sketch::EntityId> permitted;
+    // Roots only enter the movable component through an actual authored
+    // relation. A completely free Line has no solver equation that can
+    // authorize a different current position before freezing.
+    for (const auto& relation : authored.constraints) {
+        const bool touches_root =
+            relation.first.entity == first_root ||
+            relation.second.entity == first_root ||
+            (second_root.valid() &&
+             (relation.first.entity == second_root ||
+              relation.second.entity == second_root));
+        if (!touches_root) continue;
+        if (relation.first.entity.valid()) {
+            permitted.insert(relation.first.entity);
+        }
+        if (relation.second.entity.valid()) {
+            permitted.insert(relation.second.entity);
+        }
+    }
+    // Relations with two Line references form edges. Repeated closure
+    // keeps all geometrically connected constraints in the same component,
+    // while independently constrained Lines never become permitted.
+    bool added;
+    do {
+        added = false;
+        for (const auto& relation : authored.constraints) {
+            if (!permitted.contains(relation.first.entity) &&
+                !permitted.contains(relation.second.entity)) continue;
+            if (relation.first.entity.valid()) {
+                added = permitted.insert(relation.first.entity).second || added;
+            }
+            if (relation.second.entity.valid()) {
+                added = permitted.insert(relation.second.entity).second || added;
+            }
+        }
+    } while (added);
+
+    for (std::size_t i = 0; i < authored.lines.size(); ++i) {
+        const auto& original = authored.lines[i];
+        const auto& solved = candidate.lines[i];
+        if (original.id != solved.id) return false;
+        if (permitted.contains(original.id)) continue;
+        if (original.start != solved.start ||
+            original.end != solved.end) {
+            return false;
+        }
+    }
+    return true;
+}
+
 part::PartAxis* findAxis(
     part::PartAuthoredState& state,
     part::AxisId id) noexcept {
@@ -2025,6 +2090,273 @@ AddSketchConstraintResult DocumentSession::execute(
     return {true, *id, {}};
 }
 
+AddSolvedSketchRelationResult DocumentSession::execute(
+    const AddSolvedSketchRelationCommand& command,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend) {
+    const auto reject = [this](
+        DocumentSessionErrorCode code,
+        const char* message) -> AddSolvedSketchRelationResult {
+        const auto error = failure(code, message, path_);
+        return {false, std::nullopt, std::nullopt, std::nullopt,
+                {}, error.diagnostic};
+    };
+
+    // The exact live runtime incarnation is part of this command's
+    // provenance, not a serialized DocumentId or provider handle.
+    const auto current_incarnation = document_.incarnationToken();
+    const auto expected_incarnation = command.expected_incarnation.lock();
+    if (!expected_incarnation || !current_incarnation ||
+        expected_incarnation != current_incarnation ||
+        command.expected_document_id != document_.documentId()) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Part incarnation / DocumentId mismatch");
+    }
+    if (document_.revision() != command.expected_revision) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation command has stale DocumentRevision");
+    }
+    if (command.kind == sketch::ConstraintKind::fix) {
+        // Fix Current Position must first capture the verified *effective*
+        // solved endpoints, not just the unsolved authored seeds.
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position needs a separate evaluated-position command");
+    }
+
+    // The first bounded numeric writer accepts only built-in origin-plane
+    // Sketches with zero PG-01 links. No provider or upstream stage can be
+    // silently reconstructed from authored projected seeds. Other support
+    // kinds require an explicit stage/provider-bound D2 extension.
+    const auto before = document_.state();
+    auto after = before;
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (!target ||
+        !part::builtinOriginPlaneForSketchSupport(target->support) ||
+        !target->projection_bindings.empty()) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation requires an unlinked current builtin-plane Sketch");
+    }
+
+    const auto preflight = sketch::preflightLocalRelation(
+        target->model.state(), command.kind,
+        command.first, command.second, {}, policy, backend);
+    // A backend may re-enter the session. Check both semantic state and
+    // identity AFTER solve; never publish a now-stale candidate.
+    if (document_.revision() != command.expected_revision ||
+        document_.documentId() != command.expected_document_id ||
+        document_.incarnationToken() != expected_incarnation ||
+        document_.state() != before) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation Part context changed during numeric evaluation");
+    }
+
+    if (preflight.status !=
+            sketch::LocalRelationPreflightStatus::candidate_accepted ||
+        !preflight.proposed_authored ||
+        !preflight.provisional_constraint_id) {
+        const auto error = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Solved relation rejected by semantic or numeric validation",
+            path_);
+        return {false, std::nullopt, preflight.status,
+                preflight.solve.status, preflight.solve.diagnostics,
+                error.diagnostic};
+    }
+
+    // An explicit CREATE may solve and reposition the NEW relation's
+    // connected Line component, but it cannot also change a disjoint
+    // component (or a free unrelated Line) merely because the backend
+    // found another numerically valid answer there. Check against the
+    // PROPOSED authorship graph: the new edge/axis constraint belongs
+    // to this command, not yet to the prior authoritative Sketch.
+    // The generic derived solver remains permissive for Profile/Kernel.
+    if (!preflight.solve.candidate ||
+        !unchangedOutsideRelationComponent(
+            *preflight.proposed_authored, *preflight.solve.candidate,
+            command.first.entity, command.second.entity)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Solved relation backend moved an unrelated relation component",
+            path_);
+        return {false, std::nullopt, preflight.status,
+                preflight.solve.status, preflight.solve.diagnostics,
+                failed.diagnostic};
+    }
+
+    // Reconstruct the fully validated authored proposal in a temporary
+    // Part state. The accepted *derived* solution remains ephemeral:
+    // it must never replace authored seeds or enter native persistence.
+    auto model = sketch::SketchModel::restore(
+        *preflight.proposed_authored);
+    if (!model) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation accepted an invalid temporary Sketch model");
+    }
+    target->model = std::move(*model);
+    const auto committed = commitCommandState(
+        std::move(after),
+        "Part transaction failed while adding numerically solved Sketch relation");
+    if (!committed.ok() || !committed.changed) {
+        return {false, std::nullopt, preflight.status,
+                preflight.solve.status, preflight.solve.diagnostics,
+                committed.diagnostic};
+    }
+    return {true, preflight.provisional_constraint_id,
+            preflight.status, preflight.solve.status,
+            preflight.solve.diagnostics, {}};
+}
+
+AddSolvedSketchRelationResult DocumentSession::execute(
+    const FixCurrentSketchLineCommand& command,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend) {
+    const auto reject = [this](
+        DocumentSessionErrorCode code,
+        const char* message) -> AddSolvedSketchRelationResult {
+        const auto failed = failure(code, message, path_);
+        return {false, std::nullopt, std::nullopt, std::nullopt,
+                {}, failed.diagnostic};
+    };
+    const auto rejectSolve = [this](
+        const sketch::LocalSolveGatewayResult& solve,
+        const char* message) -> AddSolvedSketchRelationResult {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command, message, path_);
+        return {false, std::nullopt, std::nullopt,
+                solve.status, solve.diagnostics, failed.diagnostic};
+    };
+
+    // The request must address the exact live Part, not merely equal
+    // durable IDs and a coincidentally matching technical revision.
+    const auto incumbent = document_.incarnationToken();
+    const auto expected = command.expected_incarnation.lock();
+    if (!incumbent || !expected || expected != incumbent ||
+        command.expected_document_id != document_.documentId()) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position Part incarnation / DocumentId mismatch");
+    }
+    if (command.expected_revision != document_.revision()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Fix Current Position has stale DocumentRevision");
+    }
+
+    const auto before = document_.state();
+    auto after = before;
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (!target ||
+        !part::builtinOriginPlaneForSketchSupport(target->support) ||
+        !target->projection_bindings.empty() ||
+        !command.line_id.valid() ||
+        target->model.findLine(command.line_id) == nullptr ||
+        target->model.isFixedLine(command.line_id)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position requires an unfixed, unlinked local Line "
+            "in a builtin origin-plane Sketch");
+    }
+
+    const auto stillCurrent = [this, &command, &expected, &before]() {
+        return document_.revision() == command.expected_revision &&
+            document_.documentId() == command.expected_document_id &&
+            document_.incarnationToken() == expected &&
+            document_.state() == before;
+    };
+
+    // Solve the *existing* authored relations. Raw Sketch seeds are never
+    // allowed to stand in for the current accepted effective position.
+    const auto initial_problem = sketch::prepareLocalSolveProblem(
+        target->model.state());
+    if (!initial_problem) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position current-stage solver problem is invalid");
+    }
+    const auto effective = sketch::evaluateLocalSolve(
+        *initial_problem, policy, backend);
+    if (!stillCurrent()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Fix Current Position Part changed during initial solver call");
+    }
+    if (effective.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !effective.candidate) {
+        return rejectSolve(effective,
+            "Fix Current Position has no accepted effective Sketch");
+    }
+    if (!unchangedOutsideRelationComponent(
+            target->model.state(), *effective.candidate, command.line_id)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position backend moved an unrelated relation component");
+    }
+
+    const auto found = std::find_if(
+        effective.candidate->lines.cbegin(),
+        effective.candidate->lines.cend(),
+        [&command](const sketch::SketchLineState& line) {
+            return line.id == command.line_id;
+        });
+    if (found == effective.candidate->lines.cend()) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position effective Line identity is missing");
+    }
+
+    // The only authored coordinate change is an explicit one-time capture
+    // of THIS Line's accepted effective endpoints, immediately followed by
+    // its semantic Fix mask; no evaluated solver state is persisted.
+    auto proposed = target->model;
+    if (!proposed.updateLine(
+            command.line_id, found->start, found->end)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position effective Line cannot become authored seed");
+    }
+    const auto fixed_id = proposed.addConstraint(
+        sketch::ConstraintKind::fix,
+        {command.line_id, sketch::ConstraintElement::line}, {});
+    if (!fixed_id) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position conflicts with remaining authored relations");
+    }
+
+    // A frozen line changes the solver's fixed parameter mask. Re-solve
+    // every remaining relation against that mask, and refuse even a valid
+    // alternate solution if it would move any other effective geometry.
+    const auto frozen_problem = sketch::prepareLocalSolveProblem(
+        proposed.state());
+    if (!frozen_problem) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position staged fixed solver problem is invalid");
+    }
+    const auto verified = sketch::evaluateLocalSolve(
+        *frozen_problem, policy, backend);
+    if (!stillCurrent()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Fix Current Position Part changed during frozen solver call");
+    }
+    if (verified.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !verified.candidate) {
+        return rejectSolve(verified,
+            "Fix Current Position remaining relations reject frozen solution");
+    }
+    if (effective.candidate->lines != verified.candidate->lines ||
+        effective.candidate->circles != verified.candidate->circles ||
+        effective.candidate->arcs != verified.candidate->arcs) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Fix Current Position would change unrelated effective geometry");
+    }
+
+    target->model = std::move(proposed);
+    const auto committed = commitCommandState(
+        std::move(after),
+        "Part transaction failed while fixing solved Sketch Line position");
+    if (!committed.ok() || !committed.changed) {
+        return {false, std::nullopt, std::nullopt, verified.status,
+                verified.diagnostics, committed.diagnostic};
+    }
+    return {true, *fixed_id, std::nullopt,
+            verified.status, verified.diagnostics, {}};
+}
+
 AddSketchConstraintResult DocumentSession::execute(
     const AddHorizontalSketchConstraintCommand& command) {
     return execute(AddSketchRelationCommand{
@@ -2033,6 +2365,138 @@ AddSketchConstraintResult DocumentSession::execute(
         sketch::ConstraintKind::horizontal,
         {command.line_id, sketch::ConstraintElement::line},
         {}});
+}
+
+EraseSolvedSketchConstraintResult DocumentSession::execute(
+    const EraseSolvedSketchConstraintCommand& command,
+    const sketch::LocalSolverAcceptancePolicy& policy,
+    sketch::ILocalSketchSolver& backend) {
+    const auto reject = [this](
+        DocumentSessionErrorCode code,
+        const char* message) -> EraseSolvedSketchConstraintResult {
+        const auto failed = failure(code, message, path_);
+        return {false, std::nullopt, {}, failed.diagnostic};
+    };
+    const auto rejectSolve = [this](
+        const sketch::LocalSolveGatewayResult& solve,
+        const char* message) -> EraseSolvedSketchConstraintResult {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command, message, path_);
+        return {false, solve.status, solve.diagnostics,
+                failed.diagnostic};
+    };
+
+    // Never use document identity alone as a stale Part-session lease.
+    const auto current_incarnation = document_.incarnationToken();
+    const auto expected_incarnation = command.expected_incarnation.lock();
+    if (!current_incarnation || !expected_incarnation ||
+        current_incarnation != expected_incarnation ||
+        document_.documentId() != command.expected_document_id) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete Part incarnation / DocumentId mismatch");
+    }
+    if (document_.revision() != command.expected_revision) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation Delete has stale DocumentRevision");
+    }
+
+    const auto before = document_.state();
+    auto after = before;
+    applySketchConstraintIdCursors(after);
+    auto* target = findSketch(after, command.sketch_id);
+    if (!target ||
+        !part::builtinOriginPlaneForSketchSupport(target->support) ||
+        !target->projection_bindings.empty() ||
+        !command.constraint_id.valid() ||
+        target->model.findConstraint(command.constraint_id) == nullptr) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete requires an existing local constraint "
+            "and unlinked current builtin-plane Sketch");
+    }
+    const auto stillCurrent = [this, &command,
+                              &expected_incarnation, &before]() {
+        return document_.revision() == command.expected_revision &&
+            document_.documentId() == command.expected_document_id &&
+            document_.incarnationToken() == expected_incarnation &&
+            document_.state() == before;
+    };
+
+    // The accepted effective Sketch, not historic authored seeds, is
+    // precisely what must remain after a user removes a solver relation.
+    const auto initial_problem = sketch::prepareLocalSolveProblem(
+        target->model.state());
+    if (!initial_problem) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete current-stage problem is invalid");
+    }
+    const auto effective = sketch::evaluateLocalSolve(
+        *initial_problem, policy, backend);
+    if (!stillCurrent()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation Delete Part changed during initial solver");
+    }
+    if (effective.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !effective.candidate) {
+        return rejectSolve(effective,
+            "Solved relation Delete needs current accepted geometry");
+    }
+    const auto* selected =
+        target->model.findConstraint(command.constraint_id);
+    if (!selected ||
+        !unchangedOutsideRelationComponent(
+            target->model.state(), *effective.candidate,
+            selected->first.entity, selected->second.entity)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete backend moved an unrelated relation component");
+    }
+
+    // Materialize the entire accepted local Line solution as new authored
+    // seeds, preserve semantic IDs/roles/cursors and erase exactly one
+    // relation. The previously evaluated candidate becomes authored ONLY
+    // through this explicit single semantic Delete command.
+    auto proposed = sketch::SketchModel::restore(*effective.candidate);
+    if (!proposed || !proposed->eraseConstraint(command.constraint_id)) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete cannot stage geometry and ConstraintId");
+    }
+
+    // Removing a relation can cause the remaining solver to choose another
+    // valid branch. That is not authority to move geometry during Delete.
+    const auto remaining_problem = sketch::prepareLocalSolveProblem(
+        proposed->state());
+    if (!remaining_problem) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete remaining solver problem is invalid");
+    }
+    const auto verified = sketch::evaluateLocalSolve(
+        *remaining_problem, policy, backend);
+    if (!stillCurrent()) {
+        return reject(DocumentSessionErrorCode::revision_diverged,
+            "Solved relation Delete Part changed during remaining solver");
+    }
+    if (verified.status !=
+            sketch::LocalSolveGatewayStatus::candidate_accepted ||
+        !verified.candidate) {
+        return rejectSolve(verified,
+            "Solved relation Delete remaining constraints reject solution");
+    }
+    if (effective.candidate->lines != verified.candidate->lines ||
+        effective.candidate->circles != verified.candidate->circles ||
+        effective.candidate->arcs != verified.candidate->arcs) {
+        return reject(DocumentSessionErrorCode::invalid_command,
+            "Solved relation Delete would move effective Sketch geometry");
+    }
+
+    target->model = std::move(*proposed);
+    const auto committed = commitCommandState(
+        std::move(after),
+        "Part transaction failed while deleting solved Sketch relation");
+    if (!committed.ok() || !committed.changed) {
+        return {false, verified.status, verified.diagnostics,
+                committed.diagnostic};
+    }
+    return {true, verified.status, verified.diagnostics, {}};
 }
 
 DocumentSessionResult DocumentSession::execute(

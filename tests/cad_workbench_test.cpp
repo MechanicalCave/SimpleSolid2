@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QKeyEvent>
@@ -59,7 +60,11 @@ class TestViewportWidget final
       public viewer::IDocumentViewport {
 public:
     explicit TestViewportWidget(QWidget* parent = nullptr)
-        : QWidget{parent} {}
+        : QWidget{parent} {
+        // Mirror native Qt/OCCT widget: real spatial-input viewport
+        // must accept keyboard focus for Esc during Sketch Edit.
+        setFocusPolicy(Qt::StrongFocus);
+    }
 
     [[nodiscard]] std::optional<viewer::CameraState>
     cameraState() const override {
@@ -141,6 +146,10 @@ public:
         fail_sketch_scene_ = fail;
     }
 
+    [[nodiscard]] const viewer::SketchScene& sketchScene() const noexcept {
+        return sketch_scene_;
+    }
+
     bool setSketchPreviewScene(
         const viewer::SketchPreviewScene& scene) override {
         if (!scene.valid()) return false;
@@ -159,8 +168,9 @@ public:
     querySketchPresentation(
         viewer::ViewportPoint2 point) override {
         return viewer::SketchPointQueryResult{
-            point.valid(),
-            std::nullopt};
+            point.valid(), point.valid()
+                ? sketch_pick_token_
+                : std::nullopt};
     }
 
     viewer::SketchRectangleQueryResult
@@ -209,6 +219,29 @@ public:
         }
     }
 
+    // Sketch Edit does NOT use the generic built-in-reference SelectionIntent
+    // channel. Actual Qt/OCCT pointer handling dispatches a spatial event,
+    // intersects the live Sketch plane, then resolves the native hit token.
+    // Drive that exact path in the Workbench regression.
+    void emitSketchPointerPick(
+        viewer::PresentationToken line_token,
+        double u,
+        double v) {
+        CHECK(static_cast<bool>(spatial_pointer_handler_));
+        CHECK(routing_ ==
+              viewer::PrimaryPointerRouting::spatial_tool_input);
+        sketch_pick_token_ = line_token;
+        viewer::SpatialPointerEvent event{};
+        event.phase = viewer::SpatialPointerPhase::primary_press;
+        event.position = {100.0 + u * 10.0, 100.0 + v * 10.0};
+        event.ray = {{u, v, 10.0}, {0.0, 0.0, -1.0}};
+        CHECK(event.valid());
+        spatial_pointer_handler_(event);
+        event.phase = viewer::SpatialPointerPhase::primary_release;
+        spatial_pointer_handler_(event);
+        sketch_pick_token_.reset();
+    }
+
     [[nodiscard]] int fitAllCount() const noexcept {
         return fit_all_count_;
     }
@@ -226,6 +259,7 @@ private:
     viewer::CameraState state_;
     viewer::ReferenceScene scene_;
     viewer::SketchScene sketch_scene_;
+    std::optional<viewer::PresentationToken> sketch_pick_token_;
     viewer::SketchPreviewScene sketch_preview_scene_;
     viewer::PresentationSelection selection_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
@@ -2283,6 +2317,36 @@ int main(int argc, char* argv[]) {
             application::CreatePartSketchCommand{
                 core::BuiltinReferenceRole::xy_plane});
     CHECK(ux_sketch.ok() && ux_sketch.sketch_id);
+    const bool native_relations_preview =
+        workbench.property(
+            "ss2OriginalPlaneGcsDevRelationsPreview").toBool();
+    if (native_relations_preview) {
+        // Native opt-in test creates a deliberately nonhorizontal seed,
+        // then exercises the real user-facing Workbench controls with
+        // the original source-backed PlaneGCS 0.8.0 backend.
+        const auto seed = ux_session->execute(
+            application::AddSketchLineCommand{
+                *ux_sketch.sketch_id,
+                {0.0, 1.0}, {5.0, 2.0}});
+        CHECK(seed.ok() && seed.entity_id);
+    } else {
+        // The ordinary no-solver application can still inspect a real,
+        // Part-owned A1 relation created by the existing headless API.
+        // This fixture does NOT pretend numeric UI authorship is enabled.
+        const auto seed = ux_session->execute(
+            application::AddSketchLineCommand{
+                *ux_sketch.sketch_id,
+                {0.0, 1.0}, {5.0, 1.0}});
+        CHECK(seed.ok() && seed.entity_id);
+        const auto relation = ux_session->execute(
+            application::AddSketchRelationCommand{
+                *ux_sketch.sketch_id,
+                ux_session->document().revision(),
+                sketch::ConstraintKind::horizontal,
+                {*seed.entity_id, sketch::ConstraintElement::line},
+                {}});
+        CHECK(relation.ok() && relation.constraint_id);
+    }
     CHECK(workbench.activateDocument(ux_session, workspace));
     auto* part_axis_tool =
         workbench.findChild<QPushButton*>(
@@ -2321,6 +2385,383 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(part_axis_tool->isHidden());
     CHECK(!mirror_tool->isHidden());
+
+    // R13-A2.0 native registered desktop RED: Sketch Create exposes
+    // two ordinary (non-popup) tools. Every semantic type and the
+    // view-only visibility toggles live under the existing Operations.
+    // A2.0 is not green merely because a headless A1 solver exists.
+    auto* relations_tool = workbench.findChild<QPushButton*>(
+        QStringLiteral("relationsSketchToolButton"));
+    auto* dimensions_tool = workbench.findChild<QPushButton*>(
+        QStringLiteral("dimensionsSketchToolButton"));
+    CHECK(relations_tool != nullptr);
+    CHECK(dimensions_tool != nullptr);
+    CHECK(!relations_tool->isHidden());
+    CHECK(!dimensions_tool->isHidden());
+    for (const char* name : {
+        "sketchRelationHorizontalButton",
+        "sketchRelationVerticalButton",
+        "sketchRelationCoincidentButton",
+        "sketchRelationParallelButton",
+        "sketchRelationPerpendicularButton",
+        "sketchRelationFixButton",
+        "sketchDimensionLengthButton",
+        "sketchDimensionRadiusButton",
+        "sketchDimensionDiameterButton"
+    }) {
+        auto* option = workbench.findChild<QPushButton*>(
+            QString::fromLatin1(name));
+        CHECK(option != nullptr);
+        CHECK(operations->parentWidget()->isAncestorOf(option));
+    }
+    auto* show_constraints = workbench.findChild<QCheckBox*>(
+        QStringLiteral("sketchShowConstraintsCheck"));
+    auto* show_dimensions = workbench.findChild<QCheckBox*>(
+        QStringLiteral("sketchShowDimensionsCheck"));
+    CHECK(show_constraints && show_dimensions);
+    CHECK(!show_constraints->isHidden());
+    CHECK(!show_dimensions->isHidden());
+    CHECK(operations->parentWidget()->isAncestorOf(show_constraints));
+    CHECK(operations->parentWidget()->isAncestorOf(show_dimensions));
+    auto* relation_operations = workbench.findChild<QWidget*>(
+        QStringLiteral("sketchRelationsOperations"));
+    auto* dimension_operations = workbench.findChild<QWidget*>(
+        QStringLiteral("sketchDimensionsOperations"));
+    CHECK(relation_operations && dimension_operations);
+    auto* relations_feedback = workbench.findChild<QLabel*>(
+        QStringLiteral("sketchRelationsFeedbackLabel"));
+    CHECK(relations_feedback != nullptr);
+    CHECK(relation_operations->isAncestorOf(relations_feedback));
+    auto* relation_targets = workbench.findChild<QLabel*>(
+        QStringLiteral("sketchRelationTargetsLabel"));
+    CHECK(relation_targets != nullptr);
+    CHECK(relation_operations->isAncestorOf(relation_targets));
+    CHECK(relation_targets->text() ==
+          QStringLiteral("Select a relation type."));
+    auto* authored_relations = workbench.findChild<QListWidget*>(
+        QStringLiteral("sketchAuthoredRelationsList"));
+    CHECK(authored_relations != nullptr);
+    CHECK(relation_operations->isAncestorOf(authored_relations));
+    CHECK(authored_relations->selectionMode() ==
+          QAbstractItemView::NoSelection);
+    CHECK(authored_relations->focusPolicy() == Qt::NoFocus);
+    CHECK(relations_feedback->text().contains(
+        QStringLiteral("Choose a relation type")));
+    CHECK(relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+    relations_tool->click();
+    QApplication::processEvents();
+    CHECK(relations_tool->isChecked());
+    CHECK(!dimensions_tool->isChecked());
+    CHECK(!relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+    CHECK(relations_feedback->text().contains(
+        QStringLiteral("RELATIONS")));
+    CHECK(relation_targets->text() ==
+          QStringLiteral("Select a relation type."));
+    CHECK(authored_relations->count() == 1);
+    if (native_relations_preview) {
+        CHECK(authored_relations->item(0)->text() ==
+              QStringLiteral("No authored relations"));
+    } else {
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Horizontal")));
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Line 1")));
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("ID 1")));
+    }
+    CHECK(!finish_sketch->isHidden());
+    if (!native_relations_preview) {
+        // This is a real Qt Workbench Undo/Redo regression in the
+        // ordinary preview-OFF product, not a conditional solver test.
+        // A pre-authored A1 constraint must disappear/reappear in
+        // Operations without creating any replacement constraint.
+        const auto prior_revision = ux_session->document().revision();
+        const auto prior_undo = ux_session->undoDepth();
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.size() == 1U);
+
+        CHECK(undo->isEnabled());
+        undo->click();
+        QApplication::processEvents();
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.empty());
+        relations_tool->click();
+        QApplication::processEvents();
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text() ==
+              QStringLiteral("No authored relations"));
+
+        CHECK(redo->isEnabled());
+        redo->click();
+        QApplication::processEvents();
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.size() == 1U);
+        relations_tool->click();
+        QApplication::processEvents();
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Horizontal")));
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("ID 1")));
+        CHECK(ux_session->document().revision() != prior_revision);
+        CHECK(ux_session->undoDepth() == prior_undo);
+    }
+    auto* horizontal_relation = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchRelationHorizontalButton"));
+    auto* parallel_relation = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchRelationParallelButton"));
+    CHECK(horizontal_relation && parallel_relation);
+    CHECK(horizontal_relation->isEnabled());
+    CHECK(parallel_relation->isEnabled());
+    const auto before_kind_revision = ux_session->document().revision();
+    const auto before_kind_undo = ux_session->undoDepth();
+    horizontal_relation->setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    CHECK(horizontal_relation->hasFocus());
+    horizontal_relation->click();
+    QApplication::processEvents();
+    // A relation-kind click must return keyboard focus to the actual
+    // viewport so Esc cancels a pending pick without another mouse click.
+    CHECK(viewport->hasFocus());
+    CHECK(horizontal_relation->isChecked());
+    CHECK(!parallel_relation->isChecked());
+    CHECK(relations_feedback->text().contains(
+        QStringLiteral("Line/endpoint")));
+    CHECK(relation_targets->text().contains(
+        QStringLiteral("0/1")));
+    parallel_relation->setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    CHECK(parallel_relation->hasFocus());
+    parallel_relation->click();
+    QApplication::processEvents();
+    CHECK(viewport->hasFocus());
+    CHECK(!horizontal_relation->isChecked());
+    CHECK(parallel_relation->isChecked());
+    CHECK(relations_feedback->text().contains(
+        QStringLiteral("Line/endpoint")));
+    CHECK(relation_targets->text().contains(
+        QStringLiteral("0/2")));
+    CHECK(relation_targets->text().contains(
+        QStringLiteral("first Line")));
+    CHECK(ux_session->document().revision() == before_kind_revision);
+    CHECK(ux_session->undoDepth() == before_kind_undo);
+    if (!native_relations_preview) {
+        // Native Sketch spatial input (not the unrelated generic
+        // SelectionIntent route) followed by real Qt Relations/Parallel
+        // must show the first accepted Line without a Part mutation.
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+        select_tool->click();
+        QApplication::processEvents();
+        viewport->emitSketchPointerPick(
+            viewport->sketchScene().lines.front().token,
+            2.5, 1.0);
+        QApplication::processEvents();
+        relations_tool->click();
+        QApplication::processEvents();
+        parallel_relation->click();
+        QApplication::processEvents();
+        CHECK(relation_targets->text().contains(
+            QStringLiteral("1/2")));
+        CHECK(relation_targets->text().contains(
+            QStringLiteral("Line 1")));
+        CHECK(relation_targets->text().contains(
+            QStringLiteral("different Line")));
+        CHECK(viewport->hasFocus());
+
+        // Esc is an actual KeyPress on the still-focused viewport:
+        // first press drops ONLY the half-acquired pair, keeps Parallel
+        // selected and adds zero Part revision/Undo.
+        QKeyEvent cancel_first_pick{
+            QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+        QApplication::sendEvent(viewport, &cancel_first_pick);
+        QApplication::processEvents();
+        CHECK(parallel_relation->isChecked());
+        CHECK(relation_targets->text().contains(
+            QStringLiteral("0/2")));
+        CHECK(!relation_targets->text().contains(
+            QStringLiteral("Line 1")));
+        // A cancelled first pick must also clear obsolete on-panel
+        // "first Line accepted" guidance; the counter alone is not
+        // sufficient feedback for actual end users.
+        CHECK(relations_feedback->text().contains(
+            QStringLiteral("cancelled")));
+        CHECK(!relations_feedback->text().contains(
+            QStringLiteral("first preselected Line accepted")));
+        CHECK(ux_session->document().revision() ==
+              before_kind_revision);
+        CHECK(ux_session->undoDepth() == before_kind_undo);
+    }
+    dimensions_tool->click();
+    QApplication::processEvents();
+    CHECK(dimensions_tool->isChecked());
+    CHECK(!relations_tool->isChecked());
+    CHECK(relation_operations->isHidden());
+    CHECK(!dimension_operations->isHidden());
+    CHECK(!relations_feedback->text().contains(
+        QStringLiteral("DIMENSIONS")));
+    auto* length_kind = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchDimensionLengthButton"));
+    auto* diameter_kind = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchDimensionDiameterButton"));
+    CHECK(length_kind && diameter_kind);
+    CHECK(length_kind->isEnabled());
+    CHECK(diameter_kind->isEnabled());
+    const auto before_dimension_kind_revision =
+        ux_session->document().revision();
+    const auto before_dimension_kind_undo = ux_session->undoDepth();
+    length_kind->setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    CHECK(length_kind->hasFocus());
+    length_kind->click();
+    QApplication::processEvents();
+    CHECK(viewport->hasFocus());
+    CHECK(length_kind->isChecked());
+    CHECK(!diameter_kind->isChecked());
+    diameter_kind->setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    CHECK(diameter_kind->hasFocus());
+    diameter_kind->click();
+    QApplication::processEvents();
+    CHECK(viewport->hasFocus());
+    CHECK(!length_kind->isChecked());
+    CHECK(diameter_kind->isChecked());
+    CHECK(ux_session->document().revision() == before_dimension_kind_revision);
+    CHECK(ux_session->undoDepth() == before_dimension_kind_undo);
+    // Esc after choosing a Dimensions kind exits the disabled mode;
+    // neither selecting the kind nor cancelling may author a driver.
+    QKeyEvent cancel_dimension{
+        QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+    QApplication::sendEvent(viewport, &cancel_dimension);
+    QApplication::processEvents();
+    CHECK(select_tool->isChecked());
+    CHECK(!dimensions_tool->isChecked());
+    CHECK(relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+    CHECK(ux_session->document().revision() == before_dimension_kind_revision);
+    CHECK(ux_session->undoDepth() == before_dimension_kind_undo);
+    select_tool->click();
+    QApplication::processEvents();
+    CHECK(relation_operations->isHidden());
+    CHECK(dimension_operations->isHidden());
+
+    if (native_relations_preview) {
+        auto* banner = workbench.findChild<QLabel*>(
+            QStringLiteral("sketchRelationsNativePreviewNotice"));
+        CHECK(banner != nullptr);
+        CHECK(banner->text().contains(QStringLiteral(
+            "original PlaneGCS 0.8.0")));
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+
+        // Selection-first in the REAL CadWorkbench via the true Sketch
+        // spatial pointer route; generic SelectionIntent is reserved
+        // for non-Sketch reference/display objects.
+        const auto baseline_revision =
+            ux_session->document().revision();
+        const auto baseline_undo = ux_session->undoDepth();
+        viewport->emitSketchPointerPick(
+            viewport->sketchScene().lines.front().token,
+            2.5, 1.5);
+        QApplication::processEvents();
+        CHECK(ux_session->document().revision() ==
+              baseline_revision);
+        relations_tool->click();
+        QApplication::processEvents();
+        horizontal_relation->click();
+        QApplication::processEvents();
+
+        CHECK(ux_session->document().revision() !=
+              baseline_revision);
+        CHECK(ux_session->undoDepth() ==
+              baseline_undo + 1U);
+        const auto* authored =
+            ux_session->document().findSketch(
+                *ux_sketch.sketch_id);
+        CHECK(authored != nullptr);
+        CHECK(authored->model.state().constraints.size() == 1U);
+        CHECK(authored->model.state().constraints.front().kind ==
+              sketch::ConstraintKind::horizontal);
+        // E0: the authored seed remains independent of numerical
+        // evaluation. An accepted original PlaneGCS Horizontal must
+        // produce a horizontal CURRENT viewport scene, not a skew
+        // displayed source decorated by an "accepted" Operations row.
+        // Real Qt Workbench input is exercised here; a separate native
+        // Qt/OCCT provider test is still required for final visual PASS.
+        const auto committed_authored = authored->model.state();
+        CHECK(committed_authored.lines.size() == 1U);
+        CHECK(std::abs(committed_authored.lines.front().start.v - 1.0) <= 1.0e-8);
+        CHECK(std::abs(committed_authored.lines.front().end.v - 2.0) <= 1.0e-8);
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+        const auto rendered_after_create =
+            viewport->sketchScene().lines.front();
+        CHECK(std::abs(rendered_after_create.start.y -
+                       rendered_after_create.end.y) <= 1.0e-6);
+        // The actual Operations panel, not merely the global status bar,
+        // must give the user visible confirmation of the native result.
+        CHECK(relations_feedback->text().contains(
+            QStringLiteral("accepted by current Part solver")));
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Horizontal")));
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Line 1")));
+
+        // Real Qt Undo/Redo must refresh the authored list from Part.
+        // History cancels the transient tool, so explicitly reopen
+        // Relations to inspect each stage without synthesizing signals.
+        CHECK(undo->isEnabled());
+        undo->click();
+        QApplication::processEvents();
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.empty());
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+        const auto rendered_after_undo =
+            viewport->sketchScene().lines.front();
+        CHECK(std::abs(rendered_after_undo.start.y -
+                       rendered_after_undo.end.y) >= 0.5);
+        relations_tool->click();
+        QApplication::processEvents();
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text() ==
+              QStringLiteral("No authored relations"));
+
+        CHECK(redo->isEnabled());
+        redo->click();
+        QApplication::processEvents();
+        CHECK(ux_session->document().findSketch(
+                  *ux_sketch.sketch_id)
+                  ->model.state().constraints.size() == 1U);
+        relations_tool->click();
+        QApplication::processEvents();
+        CHECK(authored_relations->count() == 1);
+        CHECK(authored_relations->item(0)->text().contains(
+            QStringLiteral("Horizontal")));
+        const auto reopened_authored =
+            ux_session->document().findSketch(
+                *ux_sketch.sketch_id)->model.state();
+        CHECK(reopened_authored.lines.size() == 1U);
+        CHECK(std::abs(reopened_authored.lines.front().start.v - 1.0) <= 1.0e-8);
+        CHECK(std::abs(reopened_authored.lines.front().end.v - 2.0) <= 1.0e-8);
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+        const auto rendered_after_redo =
+            viewport->sketchScene().lines.front();
+        CHECK(std::abs(rendered_after_redo.start.y -
+                       rendered_after_redo.end.y) <= 1.0e-6);
+        select_tool->click();
+        QApplication::processEvents();
+    } else {
+        // Ordinary shipped-source builds stay fail-closed and cannot
+        // masquerade as an installed PlaneGCS product.
+        CHECK(workbench.findChild<QLabel*>(
+                  QStringLiteral(
+                      "sketchRelationsNativePreviewNotice")) == nullptr);
+    }
+
     CHECK(mirror_keep_original->isHidden());
     CHECK(operations->parentWidget()->isAncestorOf(
         mirror_keep_original));

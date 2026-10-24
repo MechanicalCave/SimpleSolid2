@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace simplesolid2::sketch {
@@ -30,7 +31,68 @@ enum class SketchTool : std::uint8_t {
     trim,
     extend,
     extend_both,
+    relations, // R13-A2 explicit relation mode, no inference authoring
+    dimensions, // R13-A2 explicit driving-dimension mode
 };
+
+
+// A2.0 transient typed relation acquisition. These semantic references
+ // are stable Sketch entity+role inputs but are NOT persisted or committed
+ // until a separate stage/revision-bound numerical Part command accepts.
+// Transient A2.1 UI intention, not a durable Part constraint record.
+enum class DrivingDimensionToolKind : std::uint8_t {
+    length,
+    radius,
+    diameter,
+};
+
+enum class RelationTargetOutcome : std::uint8_t {
+     inactive,
+     invalid_target,
+     first_target_accepted,
+     ready,
+ };
+struct RelationTargetDraft final {
+     ConstraintKind kind{ConstraintKind::horizontal};
+     ConstraintReference first;
+     ConstraintReference second;
+     friend bool operator==(const RelationTargetDraft&,
+                            const RelationTargetDraft&) = default;
+ };
+struct RelationTargetResult final {
+     RelationTargetOutcome outcome{RelationTargetOutcome::inactive};
+     std::optional<RelationTargetDraft> draft;
+ };
+
+// Provider-neutral EXACT endpoint hit resolver for command-first
+// Coincident. Caller supplies screen-projected semantic references for
+// the CURRENT evaluated Sketch stage. No Qt/OCCT tokens or authoring.
+// Multiple endpoints inside the native viewer tolerance are AMBIGUOUS:
+// do not pick by incidental EntityId or iteration order.
+struct RelationEndpointScreenCandidate final {
+    ConstraintReference reference;
+    Point2 screen_point;
+    friend bool operator==(
+        const RelationEndpointScreenCandidate&,
+        const RelationEndpointScreenCandidate&) = default;
+};
+enum class RelationEndpointHitStatus : std::uint8_t {
+    hit,
+    miss,
+    ambiguous,
+    invalid_input
+};
+struct RelationEndpointHit final {
+    RelationEndpointHitStatus status{
+        RelationEndpointHitStatus::invalid_input};
+    std::optional<ConstraintReference> reference;
+};
+
+[[nodiscard]] RelationEndpointHit resolveRelationEndpointHit(
+    const SketchModel& current_model,
+    Point2 pointer_screen,
+    std::span<const RelationEndpointScreenCandidate> candidates,
+    double native_hit_tolerance_pixels) noexcept;
 
 enum class MeasureRelationAcceptOutcome : std::uint8_t {
     inactive,
@@ -515,6 +577,24 @@ public:
     void activateCircle() noexcept;
     void activateArc() noexcept;
     void activateRectangle() noexcept;
+    void activateRelations() noexcept;
+    void activateDimensions() noexcept;
+    [[nodiscard]] bool setDimensionKind(DrivingDimensionToolKind kind) noexcept;
+    [[nodiscard]] std::optional<DrivingDimensionToolKind>
+    dimensionKind() const noexcept {
+        return dimension_kind_;
+    }
+    [[nodiscard]] bool setRelationKind(ConstraintKind kind) noexcept;
+    [[nodiscard]] std::optional<ConstraintKind> relationKind() const noexcept {
+        return relation_kind_;
+    }
+    [[nodiscard]] std::optional<ConstraintReference>
+    firstRelationTarget() const noexcept {
+        return relation_first_;
+    }
+    [[nodiscard]] RelationTargetResult acceptRelationTarget(
+        const SketchModel& model, ConstraintReference target) noexcept;
+    [[nodiscard]] bool cancelRelationTarget() noexcept;
     void activateMeasure(const SketchModel& model) noexcept;
     [[nodiscard]] std::optional<EntityId>
     measureTarget() const noexcept {
@@ -862,6 +942,12 @@ private:
     void resetStructuralEdit() noexcept;
 
     SketchTool tool_{SketchTool::select};
+    std::optional<ConstraintKind> relation_kind_;
+    std::optional<ConstraintReference> relation_first_;
+    // Ephemeral first-hit provenance: same EntityId alone is insufficient
+    // after a Line edit/Undo between two gesture clicks. Never authored.
+    std::optional<SketchLineState> relation_first_geometry_;
+    std::optional<DrivingDimensionToolKind> dimension_kind_;
 
     LineStage line_stage_{
         LineStage::await_first_point};
