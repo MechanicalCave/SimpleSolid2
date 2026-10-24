@@ -27,6 +27,24 @@ constexpr double planeExtent = 35.0;
 constexpr double pointExtent = 3.0;
 constexpr double datumIntersectionEpsilon = 1.0e-8;
 
+// For an unlinked Origin Sketch without an OCCT kernel, Part's existing
+// stage solver needs no projected edges. This strictly refusing provider
+// is never used for a linked Sketch or for actual Body-stage resolution.
+class NoStageProjection final : public kernel::IEdgeProjectionQuery {
+public:
+    std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+        kernel::RuntimeSolidHandle,
+        kernel::RuntimeEdgeToken) noexcept override {
+        return std::nullopt;
+    }
+    kernel::EdgeProjectionResult projectEdgeToPlane(
+        kernel::RuntimeSolidHandle,
+        const kernel::ScopedProjectionEdge&,
+        const kernel::Frame3&) noexcept override {
+        return {};
+    }
+};
+
 [[nodiscard]] viewer::Point3 viewerPoint(
     const kernel::Point3& point) noexcept {
     return {point.x, point.y, point.z};
@@ -786,6 +804,18 @@ void PartViewportController::setSolidModelingKernel(
     refreshPresentation();
 }
 
+void PartViewportController::setDevelopmentStageSolver(
+    sketch::ILocalSketchSolver* backend,
+    sketch::LocalSolverAcceptancePolicy policy) {
+    // An invalid policy never activates a solver. The borrowed backend
+    // cannot survive Sketch Edit exit; its owner explicitly revokes it.
+    development_stage_solver_ =
+        backend != nullptr && policy.valid() ? backend : nullptr;
+    development_stage_policy_ = policy;
+    effective_stage_sketch_cache_.reset();
+    refreshPresentation();
+}
+
 void PartViewportController::setDocumentSession(
     application::DocumentSession* session) {
     if (session_ != session) {
@@ -925,6 +955,9 @@ void PartViewportController::refreshDocumentTree() {
 void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
 
+    // One immutable effective source per refresh, never a previously
+    // solved snapshot replayed across a Part revision or incarnation.
+    effective_stage_sketch_cache_.reset();
     sketch_grip_projection_valid_ = false;
     projected_grip_selection_.clear();
 
@@ -1059,7 +1092,9 @@ PartViewportController::currentSketchInteractionModel() const {
         presentation_degraded_) {
         return nullptr;
     }
-    if (hosted->projection_bindings.empty()) {
+    if (hosted->projection_bindings.empty() &&
+        (development_stage_solver_ == nullptr ||
+         hosted->model.state().constraints.empty())) {
         return &hosted->model;
     }
     // Only the exact model snapshot that backed the visible scene may
@@ -1070,7 +1105,10 @@ PartViewportController::currentSketchInteractionModel() const {
             session_->documentId() ||
         current_sketch_model_snapshot_->sketch_id != hosted->id ||
         current_sketch_model_snapshot_->revision !=
-            session_->document().revision()) {
+            session_->document().revision() ||
+        !current_sketch_model_snapshot_->incarnation.lock() ||
+        current_sketch_model_snapshot_->incarnation.lock() !=
+            session_->document().incarnationToken().lock()) {
         return nullptr;
     }
     return &current_sketch_model_snapshot_->model;
@@ -4094,10 +4132,17 @@ PartViewportController::buildBodyScene() {
             return std::nullopt;
         };
 
+    // The same explicit solver/policy is used by the existing Part
+    // feature scheduler, not by an independent UI numerical shortcut.
     const auto evaluation =
-        part::evaluatePart(
-            session_->document(),
-            *solid_modeling_kernel_);
+        development_stage_solver_ != nullptr &&
+                development_stage_policy_.valid() &&
+                sketch_edit_id_.has_value()
+            ? part::evaluatePartWithLocalSolve(
+                  session_->document(), *solid_modeling_kernel_,
+                  development_stage_policy_, *development_stage_solver_)
+            : part::evaluatePart(
+                  session_->document(), *solid_modeling_kernel_);
     auto* exact =
         dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
             solid_modeling_kernel_);
@@ -4417,16 +4462,22 @@ PartViewportController::currentProfileResolution(
     if (source == nullptr) {
         return std::nullopt;
     }
-    if (source->projection_bindings.empty()) {
+    if (source->projection_bindings.empty() &&
+        source->model.state().constraints.empty()) {
         return document.evaluateProfile(profile_id);
+    }
+    if (!source->model.state().constraints.empty() &&
+        development_stage_solver_ == nullptr) {
+        return std::nullopt;
     }
 
     // A linked Profile must resolve on the current evaluated Body,
     // exactly like the visible Profile scene. An authored linked seed
     // is not a valid substitute after an upstream edit/provider loss.
-    if (!part_evaluation_cache_ ||
-        part_evaluation_cache_->source_revision !=
-            document.revision()) {
+    if ((!part_evaluation_cache_ ||
+         part_evaluation_cache_->source_revision != document.revision()) &&
+        !(source->projection_bindings.empty() &&
+          part::builtinOriginPlaneForSketchSupport(source->support))) {
         return std::nullopt;
     }
     const auto model =
@@ -4438,6 +4489,86 @@ PartViewportController::currentProfileResolution(
 sketch::SketchModel
 PartViewportController::effectiveSketchModelForPresentation(
     const part::PartSketch& hosted) const {
+    if (session_ != nullptr &&
+        development_stage_solver_ != nullptr &&
+        development_stage_policy_.valid() &&
+        !hosted.model.state().constraints.empty()) {
+        const auto& document = session_->document();
+        const auto incarnation =
+            document.incarnationToken().lock();
+        // The borrowed DEV solver is authorized for the *current Sketch
+        // Edit* only, never for some other hosted Sketch/Profile.
+        if (!sketch_edit_id_ || *sketch_edit_id_ != hosted.id ||
+            !incarnation) {
+            return sketch::SketchModel{};
+        }
+        if (effective_stage_sketch_cache_ &&
+            effective_stage_sketch_cache_->document_id ==
+                document.documentId() &&
+            effective_stage_sketch_cache_->revision ==
+                document.revision() &&
+            effective_stage_sketch_cache_->incarnation.lock() ==
+                incarnation &&
+            effective_stage_sketch_cache_->sketch_id == hosted.id) {
+            return effective_stage_sketch_cache_->model;
+        }
+
+        // Prefer the SAME evaluated Part feature prefix as the current
+        // Body scene. In kernel-free deterministic Origin-plane tests,
+        // prepare a valid empty stage owner lease; projected Body sources
+        // cannot use that fallback.
+        part::PartEvaluation prefix;
+        if (part_evaluation_cache_) {
+            if (!part::ownsCurrentPartEvaluation(
+                    document, *part_evaluation_cache_)) {
+                return sketch::SketchModel{};
+            }
+            prefix = *part_evaluation_cache_;
+        } else {
+            if (!hosted.projection_bindings.empty() ||
+                !part::builtinOriginPlaneForSketchSupport(
+                    hosted.support)) {
+                return sketch::SketchModel{};
+            }
+            prefix.source_document_id = document.documentId();
+            prefix.source_revision = document.revision();
+            prefix.source_incarnation =
+                document.incarnationToken();
+        }
+
+        NoStageProjection empty_query;
+        auto* query =
+            dynamic_cast<kernel::IEdgeProjectionQuery*>(
+                solid_modeling_kernel_);
+        if (query == nullptr && !hosted.projection_bindings.empty()) {
+            return sketch::SketchModel{};
+        }
+        const auto solved = part::evaluateStageLocalSolve(
+            document, hosted.id, prefix,
+            query != nullptr ? *query : empty_query,
+            development_stage_policy_, *development_stage_solver_);
+        if (!solved ||
+            !part::ownsCurrentPartEvaluation(document, prefix) ||
+            solved->source_document_id != document.documentId() ||
+            solved->source_revision != document.revision() ||
+            solved->source_sketch_id != hosted.id ||
+            solved->solution.status !=
+                sketch::LocalSolveGatewayStatus::candidate_accepted ||
+            !solved->solution.candidate) {
+            // Missing or rejected current numerical solution never
+            // becomes an authoritative Viewer or Profile geometry seed.
+            return sketch::SketchModel{};
+        }
+        auto model =
+            sketch::SketchModel::restore(
+                *solved->solution.candidate);
+        if (!model) return sketch::SketchModel{};
+        effective_stage_sketch_cache_ =
+            EffectiveStageSketchCache{
+                document.documentId(), document.revision(),
+                document.incarnationToken(), hosted.id, *model};
+        return *model;
+    }
     if (hosted.projection_bindings.empty()) {
         return hosted.model;
     }
@@ -4570,12 +4701,17 @@ PartViewportController::buildProfileScene() {
         // and sampled from the exact same current, disposable Sketch.
         const auto model =
             effectiveSketchModelForPresentation(*source);
+        const bool numeric_constraints =
+            !source->model.state().constraints.empty();
         const auto evaluation =
-            source->projection_bindings.empty()
-                ? session_->document().evaluateProfile(profile.id)
-                : std::optional<part::ResolvedProfileRegion>{
-                      part::resolveProfileRegionIntent(
-                          model, profile.region_intent)};
+            numeric_constraints && development_stage_solver_ == nullptr
+                ? std::optional<part::ResolvedProfileRegion>{}
+                : (source->projection_bindings.empty() &&
+                   !numeric_constraints)
+                    ? session_->document().evaluateProfile(profile.id)
+                    : std::optional<part::ResolvedProfileRegion>{
+                          part::resolveProfileRegionIntent(
+                              model, profile.region_intent)};
         if (!evaluation || !evaluation->valid()) {
             continue;
         }
@@ -4732,6 +4868,7 @@ PartViewportController::buildSketchScene() {
         session_->documentId(),
         hosted->id,
         session_->document().revision(),
+        session_->document().incarnationToken(),
         current_model};
     return scene;
 }
