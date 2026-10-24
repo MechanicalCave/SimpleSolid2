@@ -2561,9 +2561,14 @@ int main(int argc, char* argv[]) {
     {
         struct DriftingStageSolver final : sketch::ILocalSketchSolver {
             int calls{};
+            bool reject{false};
             [[nodiscard]] sketch::LocalBackendSolveResult solve(
                 const sketch::LocalSolveProblem& problem) override {
                 ++calls;
+                if (reject) {
+                    return {sketch::LocalBackendStatus::failed,
+                            std::nullopt, {}, {}, std::nullopt};
+                }
                 auto candidate = problem.authored;
                 CHECK(candidate.lines.size() == 4U);
                 for (auto& line : candidate.lines) {
@@ -2660,6 +2665,35 @@ int main(int argc, char* argv[]) {
         CHECK(solver.calls == 2);
         CHECK(vp.sketch_scene_.lines.size() == 4U);
         CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 9.0) <
+              1.0e-9);
+        CHECK(tested_session.document().revision() == rev);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.state().lines == seed.lines);
+
+        // E0 failure must invalidate ALL three native/neutral consumers:
+        // no old Body, stale Kernel extrusion, or authored seed Sketch.
+        solver.reject = true;
+        kernel.last_profile.reset();
+        vc.refreshPresentation();
+        CHECK(solver.calls == 3);
+        CHECK(!kernel.last_profile);
+        CHECK(vp.body_scene_.triangles.empty());
+        CHECK(vp.sketch_scene_.lines.empty());
+        const auto* failed_pick = vc.currentSketchInteractionModel();
+        CHECK(failed_pick == nullptr ||
+              failed_pick->state().lines.empty());
+        CHECK(!vc.currentProfileResolution(*profile.profile_id));
+        CHECK(tested_session.document().revision() == rev);
+        CHECK(tested_session.undoDepth() == undo);
+
+        // One fresh validated result is again shared with the real
+        // native Feature input on recovery, without editing Part seeds.
+        solver.reject = false;
+        vc.refreshPresentation();
+        CHECK(solver.calls == 4);
+        CHECK(kernel.last_profile.has_value());
+        CHECK(vp.sketch_scene_.lines.size() == 4U);
+        CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 13.0) <
               1.0e-9);
         CHECK(tested_session.document().revision() == rev);
         CHECK(tested_session.document().findSketch(sid)->
