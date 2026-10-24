@@ -4754,7 +4754,28 @@ int main(int argc, char* argv[]) {
         controller.refreshPresentation();
         CHECK(stage_solver.calls == 4);
         checkSamePublishedSource(5.0);
+
+        // Explicitly revoking the only stage solver MUST also revoke
+        // solved-geometry authority. Without a usable numeric provider,
+        // showing authored rectangle seeds as current solved geometry is
+        // a false-current success, even though it happens to be closed.
         controller.setDevelopmentStageSolver(nullptr, {});
+        CHECK(viewport.profile_scene_.profiles.empty());
+        CHECK(viewport.sketch_scene_.lines.empty());
+        const auto* disabled_model =
+            controller.currentSketchInteractionModel();
+        CHECK(disabled_model == nullptr ||
+              disabled_model->state().lines.empty());
+        CHECK(stage_solver.calls == 4);
+        CHECK(session.document().revision() == source_revision);
+        CHECK(session.undoDepth() == source_undo);
+
+        // Re-registering the identical backend after a lease gap is an
+        // explicit fresh evaluation; it must not revive a cached scene.
+        controller.setDevelopmentStageSolver(
+            &stage_solver, {1.0e-7, 1.0e-6});
+        CHECK(stage_solver.calls == 5);
+        checkSamePublishedSource(5.0);
     }
 
     return EXIT_SUCCESS;
