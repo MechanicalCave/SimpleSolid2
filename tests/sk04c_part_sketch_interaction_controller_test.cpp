@@ -6,6 +6,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/part/profile.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/part/effective_sketch_projection.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
@@ -4784,6 +4785,65 @@ int main(int argc, char* argv[]) {
             &stage_solver, {1.0e-7, 1.0e-6});
         CHECK(stage_solver.calls == 5);
         checkSamePublishedSource(5.0);
+
+        // Genuine native .ss2part cold load, not SketchModel::restore,
+        // same-session Undo or copying PartAuthoredState. No solved
+        // points or UI/backend cache are stored in this file.
+        const auto cold_path =
+            std::filesystem::temp_directory_path() /
+            ("ss2_e0_cold_stage_" +
+             std::to_string(
+                 std::filesystem::file_time_type::clock::now()
+                     .time_since_epoch().count()) + ".ss2part");
+        struct DeleteNativeFile final {
+            std::filesystem::path path;
+            ~DeleteNativeFile() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{cold_path};
+        part::PartDocumentStore store;
+        const auto persisted = store.createNew(
+            cold_path, session.document());
+        CHECK(persisted.ok());
+        const auto cold = store.load(cold_path);
+        CHECK(cold.ok() && cold.document && cold.checkpoint);
+        CHECK(cold.document->documentId() ==
+              session.document().documentId());
+        CHECK(cold.document->incarnationToken() !=
+              session.document().incarnationToken());
+        const auto* saved_sketch = cold.document->findSketch(sid);
+        CHECK(saved_sketch != nullptr);
+        CHECK(saved_sketch->model.state().lines == authored.lines);
+        CHECK(saved_sketch->model.state().constraints.size() == 1U);
+        CHECK(saved_sketch->model.state().constraints.front().id ==
+              *relation.constraint_id);
+        CHECK(cold.document->findProfile(*profile.profile_id) != nullptr);
+
+        application::DocumentSession reopened{
+            cold_path, std::move(*cold.document), *cold.checkpoint};
+        // A new native Part incarnation must never replay the previous
+        // temporary answer (shift 5). The new backend answer (shift 7)
+        // must be evaluated from durable relation intent, once.
+        controller.setDocumentSession(nullptr);
+        controller.setDocumentSession(&reopened);
+        controller.setSketchEditSketch(sid);
+        stage_solver.shift_u = 7.0;
+        controller.setDevelopmentStageSolver(
+            &stage_solver, {1.0e-7, 1.0e-6});
+        CHECK(stage_solver.calls == 6);
+        CHECK(viewport.sketch_scene_.lines.size() == 4U);
+        CHECK(viewport.profile_scene_.profiles.size() == 1U);
+        CHECK(near(viewport.sketch_scene_.lines.front().start.x, 7.0));
+        CHECK(near(viewport.profile_scene_.profiles.front()
+                       .region.outer.front().x, 7.0));
+        CHECK(reopened.document().findSketch(sid)->
+                  model.state().lines == authored.lines);
+        CHECK(reopened.document().findSketch(sid)->
+                  model.state().constraints.front().id ==
+              *relation.constraint_id);
+        CHECK(!reopened.needsSave());
+        CHECK(reopened.undoDepth() == 0U);
     }
 
     return EXIT_SUCCESS;
