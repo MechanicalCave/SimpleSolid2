@@ -213,6 +213,93 @@ int main(int argc, char* argv[]) {
     }
     QApplication::processEvents();
 
+    // E0 native OCCT consumer regression: a re-evaluated solved stage
+    // replaces native AIS_Line geometry, not only a neutral scene. The
+    // semantic pick must follow the newly published world coordinates
+    // and never retain an authored seed or a previously solved AIS.
+    // This is a genuine QtOcctViewerWidget test with a scripted stage
+    // scene, NOT a claim that original PlaneGCS is linked in this lane.
+    constexpr viewer::PresentationToken stage_line_token{0x10100U};
+    const auto putStageLine =
+        [&widget](viewer::Point3 start, viewer::Point3 end) {
+            viewer::SketchScene staged;
+            staged.lines.push_back(
+                viewer::SketchLinePresentation{
+                    stage_line_token, start, end});
+            return widget.setSketchScene(staged);
+        };
+    const auto project =
+        [&widget](viewer::Point3 point)
+            -> std::optional<viewer::ViewportPoint2> {
+            return widget.projectWorldPoint(point);
+        };
+    const auto picksToken =
+        [&widget](viewer::ViewportPoint2 pixel) {
+            const auto hit = widget.querySketchPresentation(pixel);
+            return hit.completed && hit.token &&
+                *hit.token == stage_line_token;
+        };
+    const auto picksNothing =
+        [&widget](viewer::ViewportPoint2 pixel) {
+            const auto hit = widget.querySketchPresentation(pixel);
+            return hit.completed && !hit.token;
+        };
+    if (!putStageLine(
+            viewer::Point3{-10.0, 1.0, 0.0},
+            viewer::Point3{10.0, 3.0, 0.0})) {
+        return fail("native E0 authored seed scene");
+    }
+    const auto skew_point =
+        project(viewer::Point3{0.0, 2.0, 0.0});
+    const auto horizontal_point =
+        project(viewer::Point3{0.0, 0.0, 0.0});
+    if (!skew_point || !horizontal_point ||
+        widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+        !picksToken(*skew_point)) {
+        return fail("native E0 authored AIS/pick");
+    }
+
+    // Use a solved Horizontal stage at y=0: the former skew midpoint
+    // is now >6 physical pixels off the native solved segment.
+    if (!putStageLine(
+            viewer::Point3{-10.0, 0.0, 0.0},
+            viewer::Point3{10.0, 0.0, 0.0}) ||
+        widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+        !picksToken(*horizontal_point) ||
+        !picksNothing(*skew_point)) {
+        return fail("native E0 solved AIS geometry/pick");
+    }
+
+    // A refused or revoked solver publishes NO current geometry. Both
+    // the OCCT AIS object count and hit query must become empty; a new
+    // valid stage then reacquires exactly one native selectable object.
+    if (!widget.setSketchScene(viewer::SketchScene{}) ||
+        widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
+        !picksNothing(*horizontal_point) ||
+        !picksNothing(*skew_point)) {
+        return fail("native E0 fail-closed AIS/pick");
+    }
+    if (!putStageLine(
+            viewer::Point3{-10.0, -1.0, 0.0},
+            viewer::Point3{10.0, -1.0, 0.0})) {
+        return fail("native E0 scene recovery");
+    }
+    const auto recovered_point =
+        project(viewer::Point3{0.0, -1.0, 0.0});
+    if (!recovered_point ||
+        widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+        !picksToken(*recovered_point) ||
+        !picksNothing(*skew_point)) {
+        return fail("native E0 recovered AIS/pick");
+    }
+    // Restore this fixture's baseline so the pre-existing native
+    // routing, orbit and window-space tests retain their original scene.
+    if (!widget.setSketchScene(scene) ||
+        widget.runtimeDiagnostics().sketch_native_objects_current != 1U) {
+        return fail("native E0 baseline restore");
+    }
+    QApplication::processEvents();
+
     viewer::SketchPreviewScene preview;
     preview.lines.push_back(
         viewer::SketchPreviewLine{
