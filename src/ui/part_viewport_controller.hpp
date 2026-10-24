@@ -788,6 +788,12 @@ private:
     // republish previously "solved" authored seed geometry. A1's
     // historical unaided authored-edit preview remains unchanged.
     bool development_stage_authority_required_{};
+    // The Body's Part Feature scheduler and Sketch/Profile scenes reuse
+    // ONE validated backend response for identical complete numerical
+    // problems in a refresh. The Part gateway still independently
+    // reviews candidate residuals, fixed lines and current provenance.
+    // Strong local leases on callers survive synchronous Qt reentry.
+    std::shared_ptr<sketch::ILocalSketchSolver> refresh_stage_solver_;
     // One per-refresh, stage-authorized disposable result for visible
     // Sketch, Profile region and semantic pick. Invalidate on every
     // refresh and require current document incarnation/revision on read.
