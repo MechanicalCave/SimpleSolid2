@@ -812,6 +812,9 @@ void PartViewportController::setDevelopmentStageSolver(
     development_stage_solver_ =
         backend != nullptr && policy.valid() ? backend : nullptr;
     development_stage_policy_ = policy;
+    if (development_stage_solver_ != nullptr) {
+        development_stage_authority_required_ = true;
+    }
     // This opt-in changes the effective Part evaluation policy without
     // changing the authored DocumentRevision. An old non-numerical (or
     // old-provider) Body/Feature evaluation is no longer authoritative.
@@ -833,6 +836,7 @@ void PartViewportController::setDocumentSession(
         // session; never carry it across document/session replacement.
         development_stage_solver_ = nullptr;
         development_stage_policy_ = {};
+        development_stage_authority_required_ = false;
         effective_stage_sketch_cache_.reset();
         selected_feature_contribution_.reset();
     project_face_feedback_revision_.reset();
@@ -887,6 +891,7 @@ void PartViewportController::clear() {
     session_ = nullptr;
     development_stage_solver_ = nullptr;
     development_stage_policy_ = {};
+    development_stage_authority_required_ = false;
     effective_stage_sketch_cache_.reset();
     selected_feature_contribution_.reset();
     hovered_feature_contribution_.reset();
@@ -1111,7 +1116,11 @@ PartViewportController::currentSketchInteractionModel() const {
         return nullptr;
     }
     if (hosted->projection_bindings.empty() &&
-        hosted->model.state().constraints.empty()) {
+        (hosted->model.state().constraints.empty() ||
+         (development_stage_solver_ == nullptr &&
+          !development_stage_authority_required_))) {
+        // Pre-E0 unaided A1 authored editing is not a solved-stage claim.
+        // After explicit DEV activation/revocation use only the snapshot.
         return &hosted->model;
     }
     // Only the exact model snapshot that backed the visible scene may
@@ -4635,12 +4644,12 @@ PartViewportController::effectiveSketchModelForPresentation(
                 document.incarnationToken(), hosted.id, *model};
         return *model;
     }
-    if (!hosted.model.state().constraints.empty()) {
-        // No accepted numerical backend (or no current edit lease) is
-        // NOT a converged Sketch. An authored seed remains valid durable
-        // intent, but cannot be published as the current solved scene.
-        // Do not allow the unlinked shortcut to undo this fail-closed
-        // boundary when a DEV provider is revoked during Sketch Edit.
+    if (!hosted.model.state().constraints.empty() &&
+        development_stage_authority_required_) {
+        // Once E0's DEV stage authority was explicitly opted into in
+        // this document runtime, revocation must not republish seeds
+        // masquerading as the last evaluated current geometry. Preserve
+        // legacy A1 unaided authored Sketch editing otherwise.
         return sketch::SketchModel{};
     }
     if (hosted.projection_bindings.empty()) {
