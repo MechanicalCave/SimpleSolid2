@@ -4450,10 +4450,15 @@ int main(int argc, char* argv[]) {
     {
         struct SolveHorizontal final : sketch::ILocalSketchSolver {
             int calls{};
+            bool fail{false};
 
             [[nodiscard]] sketch::LocalBackendSolveResult solve(
                 const sketch::LocalSolveProblem& problem) override {
                 ++calls;
+                if (fail) {
+                    return {sketch::LocalBackendStatus::failed,
+                            std::nullopt, {}, {}, std::nullopt};
+                }
                 auto candidate = problem.authored;
                 CHECK(candidate.lines.size() == 1U);
                 candidate.lines.front().end.v =
@@ -4575,6 +4580,47 @@ int main(int argc, char* argv[]) {
         CHECK(near(shown.start.y, shown.end.y));
         CHECK(near(shown.start.y, solved_line.start.v));
         CHECK(near(shown.end.y, solved_line.end.v));
+        // E0 failure is fail-closed, never a "last successful"
+        // horizontal scene nor a fallback to the authored skew seed.
+        backend.fail = true;
+        const auto revision_while_failed =
+            solved_session.document().revision();
+        const auto undo_while_failed = solved_session.undoDepth();
+        scene_controller.refreshPresentation();
+        CHECK(scene_viewport.sketch_scene_.lines.empty());
+        const auto* unavailable_pick =
+            scene_controller.currentSketchInteractionModel();
+        CHECK(unavailable_pick != nullptr);
+        CHECK(unavailable_pick->state().lines.empty());
+        CHECK(solved_session.document().revision() ==
+              revision_while_failed);
+        CHECK(solved_session.undoDepth() == undo_while_failed);
+        CHECK(solved_session.document().findSketch(sid)->model.state() ==
+              authored);
+
+        // An unchanged, valid backend may recover on a fresh current-
+        // revision refresh without copying the saved/skew seed.
+        backend.fail = false;
+        scene_controller.refreshPresentation();
+        CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
+        CHECK(near(scene_viewport.sketch_scene_.lines.front().start.y,
+                   scene_viewport.sketch_scene_.lines.front().end.y));
+
+        // Part Undo makes the constraint disappear: published geometry
+        // must be authored/skew again. Redo republishes solved geometry
+        // while the persisted Line coordinates never change.
+        CHECK(solved_session.undo().changed);
+        scene_controller.refreshPresentation();
+        CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
+        CHECK(!near(scene_viewport.sketch_scene_.lines.front().start.y,
+                    scene_viewport.sketch_scene_.lines.front().end.y));
+        CHECK(solved_session.redo().changed);
+        scene_controller.refreshPresentation();
+        CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
+        CHECK(near(scene_viewport.sketch_scene_.lines.front().start.y,
+                   scene_viewport.sketch_scene_.lines.front().end.y));
+        CHECK(solved_session.document().findSketch(sid)->model.state() ==
+              authored);
         interaction.end();
     }
 
