@@ -292,9 +292,62 @@ int main(int argc, char* argv[]) {
         !picksNothing(*skew_point)) {
         return fail("native E0 recovered AIS/pick");
     }
-    // Restore this fixture's baseline so the pre-existing native
-    // routing, orbit and window-space tests retain their original scene.
-    if (!widget.setSketchScene(scene) ||
+    // E0 placement regression: real 3D OCCT AIS presentation and
+    // semantic picking must honor the Part-defined Sketch local frame,
+    // not silently treat effective local U/V as global X/Y. Use the
+    // native built-in XZ support, an oblique camera and the SAME token.
+    const auto xz_support = part::partSketchSupportForBuiltinPlane(
+        core::BuiltinReferenceRole::xz_plane);
+    const auto xz = xz_support
+        ? part::sketchPlacementForSupport(*xz_support)
+        : std::nullopt;
+    if (!xz) return fail("native E0 XZ placement");
+    const auto toWorld = [&xz](double u, double v) {
+        return viewer::Point3{
+            xz->origin[0] + u * xz->u_axis[0] + v * xz->v_axis[0],
+            xz->origin[1] + u * xz->u_axis[1] + v * xz->v_axis[1],
+            xz->origin[2] + u * xz->u_axis[2] + v * xz->v_axis[2]};
+    };
+    const viewer::CameraState oblique_camera{
+        viewer::Point3{60.0, 75.0, 100.0},
+        viewer::Point3{0.0, 0.0, 0.0},
+        viewer::Vec3{0.0, 0.0, 1.0},
+        viewer::CameraProjection::orthographic, 100.0};
+    if (!widget.setCameraState(oblique_camera)) {
+        return fail("native E0 oblique camera");
+    }
+    const auto old_xyz = toWorld(0.0, 8.0);
+    const auto new_xyz = toWorld(0.0, -8.0);
+    if (std::abs(old_xyz.z - new_xyz.z) < 8.0) {
+        return fail("native E0 XZ support did not project into 3D");
+    }
+    if (!putStageLine(
+            toWorld(-10.0, 6.0), toWorld(10.0, 10.0))) {
+        return fail("native E0 authored XZ AIS");
+    }
+    const auto old_xz_hit = project(old_xyz);
+    const auto new_xz_hit = project(new_xyz);
+    if (!old_xz_hit || !new_xz_hit ||
+        widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+        !picksToken(*old_xz_hit)) {
+        return fail("native E0 authored XZ pick in oblique view");
+    }
+    if (!putStageLine(
+            toWorld(-10.0, -8.0), toWorld(10.0, -8.0)) ||
+        widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+        !picksToken(*new_xz_hit) ||
+        !picksNothing(*old_xz_hit)) {
+        return fail("native E0 solved XZ picks in oblique view");
+    }
+    if (!widget.setSketchScene(viewer::SketchScene{}) ||
+        widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
+        !picksNothing(*new_xz_hit)) {
+        return fail("native E0 XZ fail-closed scene");
+    }
+    // Restore the original XY camera and scene so the pre-existing
+    // spatial ray/orbit tests are not affected by this 3D E0 witness.
+    if (!widget.setCameraState(sketch_camera) ||
+        !widget.setSketchScene(scene) ||
         widget.runtimeDiagnostics().sketch_native_objects_current != 1U) {
         return fail("native E0 baseline restore");
     }
