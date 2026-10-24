@@ -1031,6 +1031,14 @@ void PartViewportController::refreshDocumentTree() {
 void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
 
+    // Qt and the borrowed numeric backend can synchronously run Undo
+    // and start a nested refresh. The outer pass must not publish an
+    // obsolete scene or overwrite the nested pass's semantic pick state.
+    const auto generation = ++presentation_refresh_generation_;
+    const auto current = [this, generation]() noexcept {
+        return presentation_refresh_generation_ == generation;
+    };
+
     // One transient numerical lease per presentation cycle. A Kernel
     // feature may consume the stage before the Sketch/Profile scene;
     // identical complete solver inputs must replay the same numerical
@@ -1117,6 +1125,7 @@ void PartViewportController::refreshPresentation() {
 
     const auto solid_scene =
         buildBodyScene();
+    if (!current()) return;
     bool solid_ok = false;
     if (solid_scene) {
         solid_ok =
@@ -1131,14 +1140,17 @@ void PartViewportController::refreshPresentation() {
                 viewer::BodyScene{}));
     }
 
+    if (!current()) return;
     const bool feature_overlay_ok =
         solid_ok
             ? applyFeatureContributionOverlay()
             : viewport_->setBodyTopologyOverlayScene(
                   viewer::BodyTopologyOverlayScene{});
 
+    if (!current()) return;
     const auto reference_scene =
         buildReferenceScene();
+    if (!current()) return;
     const bool reference_ok =
         reference_scene.has_value() &&
         viewport_->setReferenceScene(
@@ -1149,18 +1161,23 @@ void PartViewportController::refreshPresentation() {
                 viewer::ReferenceScene{}));
     }
 
+    if (!current()) return;
     const auto profile_scene =
         buildProfileScene();
+    if (!current()) return;
     const bool profile_ok =
         profile_scene.has_value() &&
         viewport_->setProfileScene(*profile_scene);
 
+    if (!current()) return;
     const auto sketch_scene =
         buildSketchScene();
+    if (!current()) return;
     const bool sketch_ok =
         sketch_scene.has_value() &&
         viewport_->setSketchScene(*sketch_scene);
 
+    if (!current()) return;
     setPresentationDegraded(
         !solid_ok ||
         !feature_overlay_ok ||
@@ -1168,6 +1185,7 @@ void PartViewportController::refreshPresentation() {
         !profile_ok ||
         !sketch_ok);
 
+    if (!current()) return;
     applySelectionToSurfaces();
 }
 
@@ -4253,6 +4271,7 @@ PartViewportController::buildBodyScene() {
     // SketchScene, after the Feature scheduler has accepted the
     // Profile→Kernel input. Keep a local strong lifetime lease across
     // synchronous native/Qt reentry, even if refresh replaces it.
+    const auto generation = presentation_refresh_generation_;
     const auto solver_lease = refresh_stage_solver_;
     const auto evaluation =
         solver_lease != nullptr &&
@@ -4263,6 +4282,11 @@ PartViewportController::buildBodyScene() {
                   development_stage_policy_, *solver_lease)
             : part::evaluatePart(
                   session_->document(), *solid_modeling_kernel_);
+    // The solver may invoke Undo and a newer refresh. Do not even
+    // begin publishing topology or derived caches from the old pass.
+    if (presentation_refresh_generation_ != generation) {
+        return std::nullopt;
+    }
     auto* exact =
         dynamic_cast<kernel::IExactBoundedEdgeGeometryQuery*>(
             solid_modeling_kernel_);
@@ -4866,8 +4890,12 @@ PartViewportController::buildProfileScene() {
         // PG-01B authored-only evaluateProfile deliberately refuses
         // linked boundaries. A valid linked Profile is instead resolved
         // and sampled from the exact same current, disposable Sketch.
+        const auto generation = presentation_refresh_generation_;
         const auto model =
             effectiveSketchModelForPresentation(*source);
+        if (presentation_refresh_generation_ != generation) {
+            return std::nullopt;
+        }
         const bool numeric_constraints =
             !source->model.state().constraints.empty();
         const auto evaluation =
@@ -4929,8 +4957,14 @@ PartViewportController::buildSketchScene() {
         viewer::SketchOriginPresentation{
             *origin};
 
+    const auto generation = presentation_refresh_generation_;
     const auto current_model =
         effectiveSketchModelForPresentation(*hosted);
+    if (presentation_refresh_generation_ != generation) {
+        // An inner refresh has already installed the post-Undo scene
+        // and semantic bindings. Preserve those, not this stale result.
+        return std::nullopt;
+    }
     const auto model_state =
         current_model.state();
 
