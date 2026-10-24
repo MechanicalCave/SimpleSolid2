@@ -2685,6 +2685,21 @@ int main(int argc, char* argv[]) {
         CHECK(authored->model.state().constraints.size() == 1U);
         CHECK(authored->model.state().constraints.front().kind ==
               sketch::ConstraintKind::horizontal);
+        // E0: the authored seed remains independent of numerical
+        // evaluation. An accepted original PlaneGCS Horizontal must
+        // produce a horizontal CURRENT viewport scene, not a skew
+        // displayed source decorated by an "accepted" Operations row.
+        // Real Qt Workbench input is exercised here; a separate native
+        // Qt/OCCT provider test is still required for final visual PASS.
+        const auto committed_authored = authored->model.state();
+        CHECK(committed_authored.lines.size() == 1U);
+        CHECK(std::abs(committed_authored.lines.front().start.v - 1.0) <= 1.0e-8);
+        CHECK(std::abs(committed_authored.lines.front().end.v - 2.0) <= 1.0e-8);
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+        const auto rendered_after_create =
+            viewport->sketchScene().lines.front();
+        CHECK(std::abs(rendered_after_create.start.y -
+                       rendered_after_create.end.y) <= 1.0e-6);
         // The actual Operations panel, not merely the global status bar,
         // must give the user visible confirmation of the native result.
         CHECK(relations_feedback->text().contains(
@@ -2704,6 +2719,11 @@ int main(int argc, char* argv[]) {
         CHECK(ux_session->document().findSketch(
                   *ux_sketch.sketch_id)
                   ->model.state().constraints.empty());
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+        const auto rendered_after_undo =
+            viewport->sketchScene().lines.front();
+        CHECK(std::abs(rendered_after_undo.start.y -
+                       rendered_after_undo.end.y) >= 0.5);
         relations_tool->click();
         QApplication::processEvents();
         CHECK(authored_relations->count() == 1);
@@ -2721,6 +2741,17 @@ int main(int argc, char* argv[]) {
         CHECK(authored_relations->count() == 1);
         CHECK(authored_relations->item(0)->text().contains(
             QStringLiteral("Horizontal")));
+        const auto reopened_authored =
+            ux_session->document().findSketch(
+                *ux_sketch.sketch_id)->model.state();
+        CHECK(reopened_authored.lines.size() == 1U);
+        CHECK(std::abs(reopened_authored.lines.front().start.v - 1.0) <= 1.0e-8);
+        CHECK(std::abs(reopened_authored.lines.front().end.v - 2.0) <= 1.0e-8);
+        CHECK(viewport->sketchScene().lines.size() == 1U);
+        const auto rendered_after_redo =
+            viewport->sketchScene().lines.front();
+        CHECK(std::abs(rendered_after_redo.start.y -
+                       rendered_after_redo.end.y) <= 1.0e-6);
         select_tool->click();
         QApplication::processEvents();
     } else {
