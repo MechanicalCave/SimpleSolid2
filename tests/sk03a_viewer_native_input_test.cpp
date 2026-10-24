@@ -221,7 +221,7 @@ int main(int argc, char* argv[]) {
     // scene, NOT a claim that original PlaneGCS is linked in this lane.
     constexpr viewer::PresentationToken stage_line_token{0x10100U};
     const auto putStageLine =
-        [&widget](viewer::Point3 start, viewer::Point3 end) {
+        [&widget, stage_line_token](viewer::Point3 start, viewer::Point3 end) {
             viewer::SketchScene staged;
             staged.lines.push_back(
                 viewer::SketchLinePresentation{
@@ -234,7 +234,7 @@ int main(int argc, char* argv[]) {
             return widget.projectWorldPoint(point);
         };
     const auto picksToken =
-        [&widget](viewer::ViewportPoint2 pixel) {
+        [&widget, stage_line_token](viewer::ViewportPoint2 pixel) {
             const auto hit = widget.querySketchPresentation(pixel);
             return hit.completed && hit.token &&
                 *hit.token == stage_line_token;
