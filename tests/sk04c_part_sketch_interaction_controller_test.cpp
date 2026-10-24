@@ -4491,6 +4491,11 @@ int main(int argc, char* argv[]) {
         interaction.begin(solved_session, sid);
         interaction.setDevelopmentRelationSolver(
             &backend, {1.0e-7, 1.0e-6});
+        // Explicit opt-in only, reproducing the Workbench's original
+        // PlaneGCS DEV preview registration. Authoring alone must not
+        // implicitly trigger solves in unrelated controller fixtures.
+        scene_controller.setDevelopmentStageSolver(
+            &backend, {1.0e-7, 1.0e-6});
         interaction.activateRelations();
         CHECK(interaction.selectRelationKind(
             sketch::ConstraintKind::horizontal));
@@ -4500,7 +4505,9 @@ int main(int argc, char* argv[]) {
         interaction.onPointer(pointer(
             sid, viewer::SpatialPointerPhase::primary_press,
             125.0, 115.0, 2.5, 1.5));
-        CHECK(backend.calls == 1);
+        // One invocation validates the Part command; one more
+        // evaluates and publishes the same revision-bound SketchScene.
+        CHECK(backend.calls == 2);
         CHECK(solved_session.undoDepth() == undo_before + 1U);
         CHECK(solved_session.document().revision() != revision_before);
         const auto authored =
@@ -4556,7 +4563,7 @@ int main(int argc, char* argv[]) {
         CHECK(near(solved_line.start.v, solved_line.end.v));
         CHECK(near(solved_line.start.v, authored.lines.front().start.v));
         CHECK(!near(solved_line.end.v, authored.lines.front().end.v));
-        CHECK(backend.calls == 2);
+        CHECK(backend.calls == 3);
         CHECK(solved_session.document().findSketch(sid)->model.state() ==
               authored);
 
