@@ -570,6 +570,149 @@ int testNativeWorkbenchRelationsHost() {
         other_session.undoDepth() != other_undo)
         return fail("E0 native Workbench XZ true 3D AIS/pick");
 
+    // Also exercise the actual Relations authoring route ON the XZ
+    // Sketch, not only non-XY AIS presentation. The same fixture runs
+    // in default preview-OFF CI and in an independently source-verified
+    // original PlaneGCS 0.8.0 UI_PREVIEW=ON Windows build.
+    // Pick *world XZ* AIS locations and never infer XZ from XY pixels.
+    const auto xzLineCrossing = [native, &xzWorld](double u)
+        -> std::optional<
+            std::pair<double, viewer::PresentationToken>> {
+        std::optional<viewer::PresentationToken> owner;
+        double sum_v{};
+        int hits{};
+        for (int step = 0; step <= 120; ++step) {
+            const double v = 6.0 + 0.05 * step;
+            const auto pixel = native->projectWorldPoint(xzWorld(u, v));
+            if (!pixel) return std::nullopt;
+            const auto queried = native->querySketchPresentation(*pixel);
+            if (!queried.completed) return std::nullopt;
+            if (!queried.token) continue;
+            if (owner && *owner != *queried.token)
+                return std::nullopt;
+            owner = *queried.token;
+            sum_v += v;
+            ++hits;
+        }
+        if (!owner || hits < 2) return std::nullopt;
+        return std::pair<double, viewer::PresentationToken>{
+            sum_v / hits, *owner};
+    };
+    const auto xz_seed_left = xzLineCrossing(0.5);
+    const auto xz_seed_right = xzLineCrossing(4.5);
+    if (!xz_seed_left || !xz_seed_right ||
+        xz_seed_left->second != other_hit.token ||
+        xz_seed_right->second != other_hit.token ||
+        !near(xz_seed_left->first, 8.2, 0.3) ||
+        !near(xz_seed_right->first, 9.8, 0.3) ||
+        std::abs(xz_seed_right->first - xz_seed_left->first) < 1.0)
+        return fail("E0 native Workbench XZ skew AIS depth");
+    sendLeftClick(
+        *native,
+        QPoint{static_cast<int>(std::lround(other_pixel->x)),
+               static_cast<int>(std::lround(other_pixel->y))});
+    QApplication::processEvents();
+    relations->click();
+    QApplication::processEvents();
+    if (!relations->isChecked() || !horizontal->isEnabled())
+        return fail("E0 native Workbench XZ Relations controls");
+    horizontal->click();
+    QApplication::processEvents();
+    const auto* xz_authored =
+        other_session.document().findSketch(*other_created.sketch_id);
+    if (!xz_authored || xz_authored->model.state().lines.size() != 1U ||
+        !near(xz_authored->model.state().lines.front().start.v, 8.0, 1.0e-8) ||
+        !near(xz_authored->model.state().lines.front().end.v, 10.0, 1.0e-8))
+        return fail("E0 native Workbench XZ authored seed still skew");
+
+    if (original_preview) {
+        // A source-backed accepted Horizontal on XZ must change the
+        // Z coordinate of the real AIS presentation, NEVER world Y,
+        // while keeping the Part-authored endpoints exactly skew.
+        if (xz_authored->model.state().constraints.size() != 1U ||
+            xz_authored->model.state().constraints.front().kind !=
+                sketch::ConstraintKind::horizontal ||
+            other_session.document().revision() == other_revision ||
+            other_session.undoDepth() != other_undo + 1U ||
+            native->runtimeDiagnostics().sketch_native_objects_current != 1U ||
+            !feedback->text().contains(
+                QStringLiteral("accepted by current Part solver")))
+            return fail("E0 original PlaneGCS XZ Workbench authoring");
+        const auto accepted_xz_relation =
+            xz_authored->model.state().constraints.front().id;
+        const auto xz_solved_left = xzLineCrossing(0.5);
+        const auto xz_solved_right = xzLineCrossing(4.5);
+        if (!xz_solved_left || !xz_solved_right ||
+            xz_solved_left->second != xz_solved_right->second ||
+            xz_solved_left->second == xz_seed_left->second ||
+            std::abs(xz_solved_left->first -
+                     xz_solved_right->first) > 0.2 ||
+            !near(xz_solved_left->first, 9.0, 0.8) ||
+            !nativeHasNoOldPick(*world_xy_wrong_pixel))
+            return fail("E0 original PlaneGCS XZ Horizontal world-Z AIS");
+
+        // Actual Workbench Undo/Redo must invalidate old native picks
+        // and regenerate the correct world-XZ effective geometry.
+        if (!undo->isEnabled())
+            return fail("E0 original PlaneGCS XZ Undo disabled");
+        undo->click();
+        QApplication::processEvents();
+        const auto* xz_undone =
+            other_session.document().findSketch(*other_created.sketch_id);
+        const auto xz_undo_left = xzLineCrossing(0.5);
+        const auto xz_undo_right = xzLineCrossing(4.5);
+        if (!xz_undone || !xz_undone->model.state().constraints.empty() ||
+            other_session.undoDepth() != other_undo ||
+            !xz_undo_left || !xz_undo_right ||
+            xz_undo_left->second != xz_undo_right->second ||
+            xz_undo_left->second == xz_solved_left->second ||
+            !near(xz_undo_left->first, 8.2, 0.3) ||
+            !near(xz_undo_right->first, 9.8, 0.3))
+            return fail("E0 original PlaneGCS XZ Undo returns skew AIS");
+        if (!redo->isEnabled())
+            return fail("E0 original PlaneGCS XZ Redo disabled");
+        redo->click();
+        QApplication::processEvents();
+        const auto* xz_redone =
+            other_session.document().findSketch(*other_created.sketch_id);
+        const auto xz_redo_left = xzLineCrossing(0.5);
+        const auto xz_redo_right = xzLineCrossing(4.5);
+        if (!xz_redone ||
+            xz_redone->model.state().constraints.size() != 1U ||
+            xz_redone->model.state().constraints.front().id !=
+                accepted_xz_relation ||
+            other_session.undoDepth() != other_undo + 1U ||
+            !xz_redo_left || !xz_redo_right ||
+            xz_redo_left->second != xz_redo_right->second ||
+            xz_redo_left->second == xz_undo_left->second ||
+            xz_redo_left->second == xz_solved_left->second ||
+            std::abs(xz_redo_left->first -
+                     xz_redo_right->first) > 0.2 ||
+            !near(xz_redo_left->first, 9.0, 0.8) ||
+            !near(xz_redone->model.state().lines.front().start.v, 8.0, 1.0e-8) ||
+            !near(xz_redone->model.state().lines.front().end.v, 10.0, 1.0e-8) ||
+            !nativeHasNoOldPick(*world_xy_wrong_pixel))
+            return fail("E0 original PlaneGCS XZ Redo current 3D AIS");
+        std::cout
+            << "E0_ORIGINAL_PLANEGCS_XZ_NATIVE_WORKBENCH_PASS"
+            << '\n';
+    } else {
+        const auto xz_still_left = xzLineCrossing(0.5);
+        const auto xz_still_right = xzLineCrossing(4.5);
+        if (!xz_authored->model.state().constraints.empty() ||
+            other_session.document().revision() != other_revision ||
+            other_session.undoDepth() != other_undo ||
+            !xz_still_left || !xz_still_right ||
+            xz_still_left->second != xz_still_right->second ||
+            !near(xz_still_left->first, 8.2, 0.3) ||
+            !near(xz_still_right->first, 9.8, 0.3) ||
+            !nativeHasNoOldPick(*world_xy_wrong_pixel) ||
+            native->runtimeDiagnostics().sketch_native_objects_current != 1U)
+            return fail("E0 native Workbench XZ preview-OFF no authoring");
+        std::cout << "E0_NATIVE_WORKBENCH_XZ_PREVIEW_OFF_PASS"
+                  << '\n';
+    }
+
     if (!workbench.activateDocument(&session, workspace))
         return fail("E0 native Workbench B to A activate");
     QApplication::processEvents();
