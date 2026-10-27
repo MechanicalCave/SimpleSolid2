@@ -2839,7 +2839,9 @@ int main(int argc, char* argv[]) {
         const auto* evaluated_redo =
             vc.currentSketchInteractionModel();
         CHECK(evaluated_redo != nullptr);
-        CHECK(evaluated_redo->state().constraints.size() == 1U);
+        CHECK(evaluated_redo->state().constraints.size() == 4U);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.findConstraint(*constraint.constraint_id));
         CHECK(tested_session.undoDepth() == undo);
         CHECK(vc.currentProfileResolution(*profile.profile_id).has_value());
         CHECK(solver.calls == before_redo_calls + 1);
