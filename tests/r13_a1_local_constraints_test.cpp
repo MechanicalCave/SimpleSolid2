@@ -2810,8 +2810,22 @@ int main() {
         CHECK(part::resolveKernelProfileInput(
             session.document(), *profile.profile_id).ok());
 
+        // The four physical rectangle Lines are NOT one solver component
+        // merely because their XY endpoints match. Explicitly connect
+        // them, then author a Vertical on the horizontal first side.
+        // Rigid rotation + translation becomes legal for this one
+        // connected, initially unsatisfied component, not a license to
+        // move arbitrary unrelated Sketch entities.
+        for (std::size_t i = 0; i < 3U; ++i) {
+            const auto joined = session.execute(app::AddSketchRelationCommand{
+                *made.sketch_id, session.document().revision(),
+                sk::ConstraintKind::coincident,
+                {rectangle.entity_ids[i], sk::ConstraintElement::line_end},
+                {rectangle.entity_ids[i+1U], sk::ConstraintElement::line_start}});
+            CHECK(joined.ok() && joined.constraint_id);
+        }
         const auto linked = session.execute(
-            app::AddHorizontalSketchConstraintCommand{
+            app::AddVerticalSketchConstraintCommand{
                 *made.sketch_id, session.document().revision(),
                 rectangle.entity_ids.front()});
         CHECK(linked.ok() && linked.changed && linked.constraint_id);
@@ -2859,13 +2873,18 @@ int main() {
                     return {sk::LocalBackendStatus::failed,
                         std::nullopt, {}, {}, std::nullopt};
                 }
-                // Scripted native test double: deliberately return a
-                // different, still-valid solved rectangle so that the
-                // Kernel Profile proves it consumes DERIVED coordinates.
+                // Scripted solver moves ONLY one explicitly connected
+                // component containing a currently unsatisfied Vertical.
+                // A rigid 90-degree rotation preserves all three authored
+                // Coincident corners and valid durable Profile regions.
                 auto geometry = problem.authored;
                 for (auto& line : geometry.lines) {
-                    line.start.u += translation_u;
-                    line.end.u += translation_u;
+                    const auto a = line.start;
+                    const auto b = line.end;
+                    line.start.u = -a.v + translation_u;
+                    line.start.v = a.u;
+                    line.end.u = -b.v + translation_u;
+                    line.end.v = b.u;
                 }
                 return {sk::LocalBackendStatus::converged,
                     std::move(geometry), {}, {}, 1U};
@@ -2940,17 +2959,15 @@ int main() {
             session.document(), *profile.profile_id, prefix, query,
             accurate, backend).ok());
         CHECK(backend.calls == 4U);
-        // First undo only the reentrant backend test edit; the next Undo
-        // must still target the original Horizontal relation.
+        // Undo the backend reentry and then the four authored relations
+        // (Vertical + three explicit Coincident connections). Restore the
+        // original valid source Profile without changing its entity IDs.
         CHECK(session.undo().changed);
-
-        // Undo revives the previously valid Profile; Redo blocks it again
-        // without mutating the authored Profile or Sketch line coordinates.
-        CHECK(session.undo().changed);
+        for (int i = 0; i < 4; ++i) CHECK(session.undo().changed);
         CHECK(session.document().evaluateProfile(*profile.profile_id)->valid());
         CHECK(part::resolveKernelProfileInput(
             session.document(), *profile.profile_id).ok());
-        CHECK(session.redo().changed);
+        for (int i = 0; i < 4; ++i) CHECK(session.redo().changed);
         CHECK(!session.document().evaluateProfile(*profile.profile_id).has_value());
         CHECK(part::resolveKernelProfileInput(
             session.document(), *profile.profile_id).status ==
