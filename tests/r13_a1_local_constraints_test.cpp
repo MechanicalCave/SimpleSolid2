@@ -314,6 +314,122 @@ int main() {
     using K=sk::ConstraintKind;
     occt::OcctSolidModelingKernel provider;
     sk::PlaneGcsDevSolver native;
+
+    // R13-A2 Owner P0-D native-original RED/GREEN evidence: not a
+    // deterministic scripted solver. The real PlaneGCS 0.8.0 adapter,
+    // Part command authoring and Part-owned read-only stage are exercised
+    // on both XY and XZ Sketch frames. A previously accepted free Line
+    // or independent constrained Line MUST remain at its last accepted
+    // coordinates across five sequential operations and two re-solves
+    // per revision. A rejected relation is a failure of this POSITIVE
+    // fixture, even if fail-closed safeguards prevented a geometry jump.
+    for (const auto support : {
+             core::BuiltinReferenceRole::xy_plane,
+             core::BuiltinReferenceRole::xz_plane}) {
+        app::DocumentSession sequence{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = sequence.execute(
+            app::CreatePartSketchCommand{support});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        std::array<sk::EntityId, 5U> ids;
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            const double u = 20.0 * static_cast<double>(i);
+            const double v = 7.0 * static_cast<double>(i) + 1.0;
+            const auto line = sequence.execute(app::AddSketchLineCommand{
+                sid, {u, v}, {u + 8.0, v + 2.0}});
+            CHECK(line.ok() && line.entity_id);
+            ids[i] = *line.entity_id;
+        }
+        const auto original =
+            sequence.document().findSketch(sid)->model.state();
+        const auto undo_depth = sequence.undoDepth();
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-7, 1.0e-6};
+        for (std::size_t step = 0; step < ids.size(); ++step) {
+            const auto before =
+                sequence.document().findSketch(sid)->model.state();
+            const auto kind = step % 2U == 0U
+                ? K::horizontal : K::vertical;
+            const app::AddSolvedSketchRelationCommand request{
+                sid, sequence.documentId(),
+                sequence.document().revision(),
+                sequence.document().incarnationToken(),
+                kind, {ids[step], E::line}, {}};
+            const auto accepted = sequence.execute(request, policy, native);
+            if (!accepted.ok()) {
+                std::cerr << "R13-A2 P0 native original relation rejected:"
+                          << " support=" << (support ==
+                              core::BuiltinReferenceRole::xy_plane ? "XY" : "XZ")
+                          << " step=" << step << '\\n';
+            }
+            CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
+            const auto after =
+                sequence.document().findSketch(sid)->model.state();
+            CHECK(after.lines.size() == ids.size());
+            CHECK(after.constraints.size() == step + 1U);
+            for (std::size_t i = 0; i < ids.size(); ++i) {
+                CHECK(after.lines[i].id == ids[i]);
+                if (i != step) {
+                    CHECK(after.lines[i] == before.lines[i]);
+                } else if (kind == K::horizontal) {
+                    CHECK(std::abs(after.lines[i].end.v -
+                                   after.lines[i].start.v) <=
+                          policy.distance_tolerance);
+                } else {
+                    CHECK(std::abs(after.lines[i].end.u -
+                                   after.lines[i].start.u) <=
+                          policy.distance_tolerance);
+                }
+            }
+            // Read-only Part stage is the single authority for the
+            // downstream Profile/Kernel and current native Viewer scene.
+            // The semantic bounds stay identical at each re-evaluation;
+            // never substitute the old drawing positions for the scene.
+            for (int replay = 0; replay != 2; ++replay) {
+                part::PartEvaluation prefix;
+                prefix.source_document_id = sequence.documentId();
+                prefix.source_revision = sequence.document().revision();
+                prefix.source_incarnation =
+                    sequence.document().incarnationToken();
+                const auto current = part::evaluateStageLocalSolve(
+                    sequence.document(), sid, prefix, provider,
+                    policy, native);
+                if (!current || current->solution.status !=
+                        sk::LocalSolveGatewayStatus::candidate_accepted) {
+                    std::cerr << "R13-A2 P0 original stage not accepted:"
+                              << " step=" << step
+                              << " replay=" << replay << '\\n';
+                }
+                CHECK(current);
+                CHECK(current->solution.status ==
+                      sk::LocalSolveGatewayStatus::candidate_accepted);
+                CHECK(current->solution.candidate);
+                CHECK(current->solution.candidate->lines == after.lines);
+                CHECK(sequence.document().findSketch(sid)->model.state() ==
+                      after);
+            }
+        }
+        CHECK(sequence.undoDepth() == undo_depth + ids.size());
+        const auto final =
+            sequence.document().findSketch(sid)->model.state();
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            CHECK(sequence.undo().changed);
+        }
+        CHECK(sequence.document().findSketch(sid)->model.state().lines ==
+              original.lines);
+        CHECK(sequence.document().findSketch(sid)->model.state()
+                  .constraints == original.constraints);
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            CHECK(sequence.redo().changed);
+        }
+        CHECK(sequence.document().findSketch(sid)->model.state().lines ==
+              final.lines);
+        CHECK(sequence.document().findSketch(sid)->model.state()
+                  .constraints == final.constraints);
+    }
+    std::cout << "R13_A2_P0_ORIGINAL_PLANEGCS_5STEP_STABILITY_PASS"
+              << " supports=XY,XZ relations=10 stage_replays=20" << '\\n';
+
     app::DocumentSession session{
         {},part::PartDocument::create(core::DocumentId::generate())};
     const auto sketch=session.execute(
