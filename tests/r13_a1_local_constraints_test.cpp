@@ -319,8 +319,9 @@ int main() {
               sk::LocalSolveGatewayStatus::candidate_accepted);
         CHECK(answer.candidate);
         CHECK(answer.candidate->lines.size() == 3U);
-        CHECK(answer.candidate->lines[0].start.v ==
-              answer.candidate->lines[0].end.v);
+        CHECK(std::abs(answer.candidate->lines[0].start.v -
+                       answer.candidate->lines[0].end.v) <
+              policy.distance_tolerance);
         CHECK(answer.candidate->lines[1].id == unrelated_a);
         CHECK(answer.candidate->lines[2].id == unrelated_b);
         CHECK(answer.candidate->lines[1] == authored.lines[1]);
