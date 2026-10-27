@@ -597,6 +597,132 @@ int main(int argc, char* argv[]) {
         }
         controller.clear();
     }
+
+    // Native E0 non-XY joined-path regression. The earlier XZ example
+    // authored a SketchScene directly; here the real Part controller
+    // must resolve XZ local U/V into OCCT world XYZ and keep semantic
+    // picking attached to the same current validated numerical stage.
+    // A horizontal world-XY shortcut would fail the oblique native hit.
+    {
+        struct XZStageSolver final : sketch::ILocalSketchSolver {
+            int calls{};
+            bool reject{};
+
+            [[nodiscard]] sketch::LocalBackendSolveResult solve(
+                const sketch::LocalSolveProblem& problem) override {
+                ++calls;
+                if (reject) {
+                    return {sketch::LocalBackendStatus::failed,
+                            std::nullopt, {}, {}, std::nullopt};
+                }
+                auto candidate = problem.authored;
+                if (candidate.lines.size() != 1U) {
+                    return {sketch::LocalBackendStatus::failed,
+                            std::nullopt, {}, {}, std::nullopt};
+                }
+                candidate.lines.front().start.v = -18.0;
+                candidate.lines.front().end.v = -18.0;
+                return {sketch::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+        application::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xz_plane});
+        if (!created.ok() || !created.sketch_id)
+            return fail("E0 joined XZ Part create Sketch");
+        const auto sid = *created.sketch_id;
+        const auto added = session.execute(
+            application::AddSketchLineCommand{
+                sid, {0.0, 1.0}, {5.0, 2.0}});
+        if (!added.ok() || !added.entity_id)
+            return fail("E0 joined XZ Part skew seed");
+        const auto relation = session.execute(
+            application::AddHorizontalSketchConstraintCommand{
+                sid, session.document().revision(), *added.entity_id});
+        if (!relation.ok() || !relation.constraint_id)
+            return fail("E0 joined XZ Horizontal relation");
+        const auto revision = session.document().revision();
+        const auto undo_depth = session.undoDepth();
+
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tree_controller{tree};
+        ui::PartViewportController controller{tree_controller, &widget};
+        controller.setDocumentSession(&session);
+        controller.setSketchEditSketch(sid);
+        if (!widget.setCameraState(oblique_camera))
+            return fail("E0 joined XZ oblique camera");
+
+        const auto old_xyz = toWorld(2.5, 1.5);
+        const auto solved_xyz = toWorld(2.5, -18.0);
+        const auto old_pixel = project(old_xyz);
+        const auto solved_pixel = project(solved_xyz);
+        const auto original_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        const auto original_hit = old_pixel
+            ? widget.querySketchPresentation(*old_pixel)
+            : viewer::SketchPointQueryResult{};
+        if (!old_pixel || !solved_pixel ||
+            std::abs(old_xyz.z - solved_xyz.z) < 10.0 ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+            !original_token || !original_hit.completed ||
+            original_hit.token != original_token) {
+            return fail("E0 joined XZ authored world-space AIS");
+        }
+
+        controller.setDevelopmentStageSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        const auto current_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        const auto solved_hit =
+            widget.querySketchPresentation(*solved_pixel);
+        const auto stale_hit =
+            widget.querySketchPresentation(*old_pixel);
+        const auto semantic = current_token
+            ? controller.sketchEntityFor(*current_token)
+            : std::nullopt;
+        const auto* current =
+            controller.currentSketchInteractionModel();
+        if (backend.calls != 1 || !current_token ||
+            current_token == original_token ||
+            !solved_hit.completed || solved_hit.token != current_token ||
+            !stale_hit.completed || stale_hit.token ||
+            controller.sketchEntityFor(*original_token) ||
+            !semantic || semantic->sketch_id != sid ||
+            semantic->entity_id != *added.entity_id ||
+            !current || current->state().lines.size() != 1U ||
+            !near(current->state().lines.front().start.v, -18.0, 1.0e-7) ||
+            !near(current->state().lines.front().end.v, -18.0, 1.0e-7) ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+            session.document().revision() != revision ||
+            session.undoDepth() != undo_depth ||
+            session.document().findSketch(sid)->
+                model.state().lines.front().end.v != 2.0) {
+            return fail("E0 joined XZ effective stage native AIS/pick");
+        }
+
+        backend.reject = true;
+        controller.refreshPresentation();
+        const auto rejected_hit =
+            widget.querySketchPresentation(*solved_pixel);
+        const auto rejected_seed_hit =
+            widget.querySketchPresentation(*old_pixel);
+        const auto* rejected =
+            controller.currentSketchInteractionModel();
+        if (backend.calls != 2 || !rejected_hit.completed ||
+            rejected_hit.token || !rejected_seed_hit.completed ||
+            rejected_seed_hit.token ||
+            controller.sketchPresentationFor(*added.entity_id) ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
+            (rejected && !rejected->state().lines.empty()) ||
+            session.document().revision() != revision ||
+            session.undoDepth() != undo_depth) {
+            return fail("E0 joined XZ rejected stage revokes AIS/pick");
+        }
+        controller.clear();
+    }
     // Restore the original XY camera and scene so the pre-existing
     // spatial ray/orbit tests are not affected by this 3D E0 witness.
     if (!widget.setCameraState(sketch_camera) ||
