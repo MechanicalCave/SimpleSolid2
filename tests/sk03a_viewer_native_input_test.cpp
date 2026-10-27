@@ -27,6 +27,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace simplesolid2;
@@ -258,8 +259,13 @@ int testNativeWorkbenchRelationsHost() {
         QStringLiteral("sketchRelationsFeedbackLabel"));
     auto* authored = workbench.findChild<QListWidget*>(
         QStringLiteral("sketchAuthoredRelationsList"));
+    auto* undo = workbench.findChild<QPushButton*>(
+        QStringLiteral("undoDocumentButton"));
+    auto* redo = workbench.findChild<QPushButton*>(
+        QStringLiteral("redoDocumentButton"));
     if (!tree || !edit || !relations || !horizontal ||
-        !feedback || !authored || !native->isVisible())
+        !feedback || !authored || !undo || !redo ||
+        !native->isVisible())
         return fail("E0 native Workbench actual UI host");
     QTreeWidgetItem* sketch_item = nullptr;
     for (QTreeWidgetItemIterator it(tree); *it; ++it) {
@@ -284,6 +290,46 @@ int testNativeWorkbenchRelationsHost() {
     if (!native->setCameraState(camera))
         return fail("E0 native Workbench Sketch camera");
     QApplication::processEvents();
+
+    // No neutral scene getter: measure the actual native projected AIS
+    // hit crossing at two well-separated X positions. A sloped seed
+    // must have different Y crossings; a solved Horizontal must have
+    // the SAME crossing in current 3D world geometry. This is a
+    // semantic native picking oracle, not a QT label or fake scene.
+    const auto nativeLineCrossing = [native](double x)
+        -> std::optional<
+            std::pair<double, viewer::PresentationToken>> {
+        std::optional<viewer::PresentationToken> owner;
+        double sum_v{};
+        int hits{};
+        for (int sample = 0; sample <= 160; ++sample) {
+            const double v = -2.0 + 0.05 * sample;
+            const auto pixel = native->projectWorldPoint(
+                viewer::Point3{x, v, 0.0});
+            if (!pixel) return std::nullopt;
+            const auto picked =
+                native->querySketchPresentation(*pixel);
+            if (!picked.completed) return std::nullopt;
+            if (!picked.token) continue;
+            if (owner && *picked.token != *owner)
+                return std::nullopt;
+            owner = *picked.token;
+            sum_v += v;
+            ++hits;
+        }
+        if (!owner || hits < 2) return std::nullopt;
+        return std::pair<double, viewer::PresentationToken>{
+            sum_v / hits, *owner};
+    };
+    const auto authored_left = nativeLineCrossing(0.5);
+    const auto authored_right = nativeLineCrossing(4.5);
+    if (!authored_left || !authored_right ||
+        authored_left->second != authored_right->second ||
+        !near(authored_left->first, 1.1, 0.2) ||
+        !near(authored_right->first, 1.9, 0.2) ||
+        std::abs(authored_right->first - authored_left->first) < 0.55) {
+        return fail("E0 native Workbench authored skew world AIS/pick");
+    }
     const auto screen =
         native->projectWorldPoint(viewer::Point3{2.5, 1.5, 0.0});
     const auto seed_hit = screen
@@ -332,14 +378,77 @@ int testNativeWorkbenchRelationsHost() {
                 QStringLiteral("Horizontal"))) {
             return fail("E0 original PlaneGCS native Workbench Horizontal");
         }
+        const auto accepted_id =
+            current->model.state().constraints.front().id;
+        const auto solved_left = nativeLineCrossing(0.5);
+        const auto solved_right = nativeLineCrossing(4.5);
+        if (!solved_left || !solved_right ||
+            solved_left->second != solved_right->second ||
+            solved_left->second == authored_left->second ||
+            std::abs(solved_left->first - solved_right->first) > 0.15 ||
+            !near(solved_left->first, 1.5, 0.75)) {
+            return fail("E0 original PlaneGCS Horizontal native 3D geometry");
+        }
+
+        // The *actual Workbench* Undo/Redo actions must restore skew
+        // then recompute a new 3D numerical stage; there must be no
+        // replay of the old native AIS token or persisted solved seed.
+        if (!undo->isEnabled())
+            return fail("E0 original PlaneGCS Workbench Undo enabled");
+        undo->click();
+        QApplication::processEvents();
+        const auto* undone = session.document().findSketch(sid);
+        const auto undo_left = nativeLineCrossing(0.5);
+        const auto undo_right = nativeLineCrossing(4.5);
+        if (!undone || !undone->model.state().constraints.empty() ||
+            session.undoDepth() != baseline_undo ||
+            !undo_left || !undo_right ||
+            undo_left->second != undo_right->second ||
+            undo_left->second == solved_left->second ||
+            !near(undo_left->first, 1.1, 0.2) ||
+            !near(undo_right->first, 1.9, 0.2) ||
+            native->runtimeDiagnostics().sketch_native_objects_current != 1U) {
+            return fail("E0 original PlaneGCS native Workbench Undo/skew");
+        }
+        if (!redo->isEnabled())
+            return fail("E0 original PlaneGCS Workbench Redo enabled");
+        redo->click();
+        QApplication::processEvents();
+        const auto* redone = session.document().findSketch(sid);
+        const auto redo_left = nativeLineCrossing(0.5);
+        const auto redo_right = nativeLineCrossing(4.5);
+        if (!redone || redone->model.state().constraints.size() != 1U ||
+            redone->model.state().constraints.front().id != accepted_id ||
+            session.undoDepth() != baseline_undo + 1U ||
+            !redo_left || !redo_right ||
+            redo_left->second != redo_right->second ||
+            redo_left->second == undo_left->second ||
+            redo_left->second == solved_left->second ||
+            std::abs(redo_left->first - redo_right->first) > 0.15 ||
+            !near(redo_left->first, 1.5, 0.75) ||
+            !near(redone->model.state().lines.front().start.v, 1.0, 1.0e-8) ||
+            !near(redone->model.state().lines.front().end.v, 2.0, 1.0e-8) ||
+            native->runtimeDiagnostics().sketch_native_objects_current != 1U) {
+            return fail("E0 original PlaneGCS native Workbench Redo/solved");
+        }
+        std::cout
+            << "E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_PREVIEW_ON_PASS"
+            << '\n';
     } else {
         // A preview-OFF Workbench may stage a relation kind but cannot
         // masquerade as successful source-backed authoring.
+        const auto still_skew_left = nativeLineCrossing(0.5);
+        const auto still_skew_right = nativeLineCrossing(4.5);
         if (!current->model.state().constraints.empty() ||
             session.document().revision() != baseline_revision ||
             session.undoDepth() != baseline_undo ||
+            !still_skew_left || !still_skew_right ||
+            still_skew_left->second != still_skew_right->second ||
+            !near(still_skew_left->first, 1.1, 0.2) ||
+            !near(still_skew_right->first, 1.9, 0.2) ||
             native->runtimeDiagnostics().sketch_native_objects_current != 1U)
             return fail("E0 native Workbench preview-OFF no authoring");
+        std::cout << "E0_NATIVE_WORKBENCH_PREVIEW_OFF_PASS" << '\n';
     }
     workbench.deactivateDocument();
     if (native->runtimeDiagnostics().sketch_native_objects_current != 0U)
