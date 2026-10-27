@@ -547,7 +547,8 @@ jobs:
   native_planegcs:
     name: windows-planegcs-native-core
     needs: classify
-    if: github.event_name == 'pull_request' && github.event.pull_request.number == 506
+    # Owner-authorized D2 native evidence: historical B1a #506 and current A2 #533.
+    if: github.event_name == 'pull_request' && contains(fromJSON('[506,533]'), github.event.pull_request.number)
     runs-on: [self-hosted, windows, x64, simplesolid2-native]
     timeout-minutes: 30
     steps:
@@ -670,7 +671,7 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
           CLOSURE_RESULT: ${{ needs.closure.result }}
           NATIVE_RESULT: ${{ needs.native_planegcs.result }}
-          NATIVE_REQUIRED: ${{ github.event.pull_request.number == 506 }}
+          NATIVE_REQUIRED: ${{ contains(fromJSON('[506,533]'), github.event.pull_request.number) }}
           TRUSTED_FULL_SHA: ${{ needs.classify.outputs.trusted_full_sha }}
           CLEAN_FULL: ${{ needs.classify.outputs.clean_full }}
         run: |
