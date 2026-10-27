@@ -1368,9 +1368,9 @@ int main() {
         CHECK(session.undoDepth() == original_undo);
         CHECK(session.document().findSketch(sid)->model.state() == original);
 
-        // Positive control: same numerical correction of A with
-        // unrelated B/C exactly fixed remains legal. Solved geometry
-        // is ephemeral; ONLY the new semantic relation is authored.
+        // Positive control: an accepted relation captures the verified
+        // current endpoints of A, while unrelated B/C remain immutable.
+        // Derived, speculative stage reads never write authored seeds.
         backend.drift_unrelated = false;
         const auto accepted = session.execute(create_a, policy, backend);
         CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
@@ -1403,7 +1403,8 @@ int main() {
     // extends an existing B--C component, so C is part of the legal
     // proposed graph even though it was not reachable from A before
     // this create command. Independent constrained D is never part
-    // of that graph. No backend-derived coordinates are persisted.
+    // of that graph. Only an accepted explicit command can materialize
+    // the solved coordinates of its connected relation component.
     {
         namespace app = simplesolid2::application;
         namespace part = simplesolid2::part;
@@ -1470,14 +1471,22 @@ int main() {
         CHECK(session.document().findSketch(sid)->model.state() == original);
 
         // The new A--B edge joins the existing B--C edge. Translating
-        // C is legal as a derived solution; translating D was not.
+        // C may be accepted into the new edit baseline; D may not move.
         backend.shift_unrelated = false;
         const auto accepted = session.execute(ab, policy, backend);
         CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
         CHECK(backend.calls == 2);
         CHECK(session.undoDepth() == undo + 1U);
         const auto after = session.document().findSketch(sid)->model.state();
-        CHECK(after.lines == original.lines);
+        CHECK(after.lines.size() == original.lines.size());
+        CHECK(after.lines[0] == original.lines[0]);
+        CHECK(after.lines[1] == original.lines[1]);
+        CHECK(after.lines[2].id == original.lines[2].id);
+        CHECK(after.lines[2].start.u == original.lines[2].start.u + 2.0);
+        CHECK(after.lines[2].end.u == original.lines[2].end.u + 2.0);
+        CHECK(after.lines[2].start.v == original.lines[2].start.v);
+        CHECK(after.lines[2].end.v == original.lines[2].end.v);
+        CHECK(after.lines[3] == original.lines[3]);
         CHECK(after.constraints.size() == original.constraints.size() + 1U);
         CHECK(session.undo().ok());
         const auto undone = session.document().findSketch(sid)->model.state();
