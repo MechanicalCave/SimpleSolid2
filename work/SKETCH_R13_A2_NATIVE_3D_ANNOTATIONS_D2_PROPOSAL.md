@@ -329,14 +329,27 @@ $nativeLog | ForEach-Object { Write-Host "$_" }
 if ($nativeExit -ne 0) {
     throw 'Original PlaneGCS Workbench + OCCT DEV native CTest FAILED'
 }
-if (($nativeLog | Out-String) -notmatch
-    'E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_PREVIEW_ON_PASS') {
-    throw 'CTest passed but failed to prove original PlaneGCS Workbench PREVIEW=ON'
+$nativeProof = $nativeLog | Out-String
+foreach ($positiveProof in @(
+    'E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_PREVIEW_ON_PASS',
+    'E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_COLD_REOPEN_PASS'
+)) {
+    if ($nativeProof -notmatch $positiveProof) {
+        throw "Original PlaneGCS native Workbench missing ON-mode proof: $positiveProof"
+    }
+}
+foreach ($wrongMode in @(
+    'E0_NATIVE_WORKBENCH_PREVIEW_OFF_PASS',
+    'E0_NATIVE_WORKBENCH_COLD_REOPEN_PREVIEW_OFF_PASS'
+)) {
+    if ($nativeProof -match $wrongMode) {
+        throw "Wrong preview-OFF native Workbench branch executed: $wrongMode"
+    }
 }
 .\ss2.ps1 run -BuildDir 'build\r13-a2-manual-dev' -Config Debug
 ```
 
-**Registered native Workbench gate (PR #533 `9a6327d9`):** `sk03a.viewer_native_input` now instantiates an actual `CadWorkbench` with exposed `QtOcctViewerWidget`, enters XY Sketch Edit, verifies a skew Line in native AIS/picking, emits a real native Qt mouse click and uses the Relations → Horizontal buttons. The ordinary CI preview-OFF path asserts no false authored Constraint/Part/Undo changes. The separately configured **preview-ON path requires source-verified original PlaneGCS**, successful authoring, original seed preservation, Workbench feedback and native AIS. Run the CTest above on the **exact PR #533 branch SHA** with both explicit flags ON, and preserve full CMakeCache and CTest logs; OFF green is not ON proof. The Owner visual/manual test must additionally inspect rendered horizontal endpoints, Undo/Redo, camera/picking, and fresh process/reopen.
+**Registered native Workbench gate (PR #533 `9a6327d9`):** `sk03a.viewer_native_input` now instantiates an actual `CadWorkbench` with exposed `QtOcctViewerWidget`, enters XY Sketch Edit, verifies a skew Line in native AIS/picking, emits a real native Qt mouse click and uses the Relations → Horizontal buttons. The ordinary CI preview-OFF path asserts no false authored Constraint/Part/Undo changes. The separately configured **preview-ON path requires source-verified original PlaneGCS**, successful authoring, original seed preservation, Workbench feedback and native AIS. Run the CTest above on the **exact PR #533 branch SHA** with both explicit flags ON, and preserve full CMakeCache and CTest logs; OFF green is not ON proof. The Owner visual/manual test must additionally inspect rendered horizontal endpoints, Undo/Redo, camera/picking, and fresh process/reopen. The same registered fixture also operates the real Workbench **Save** control with a valid native checkpoint, loads a new `.ss2part` Part incarnation through `PartDocumentStore`, deactivates the former session, re-enters Sketch Edit on the same actual OCCT window and verifies a fresh AIS/pick token and current effective stage. The M0 script above requires **both** original-PlaneGCS Horizontal proof and the separate original-PlaneGCS cold-reopen proof markers, and rejects both ordinary preview-OFF markers. This CTest still runs in one process; independent cold process plus visually observed behavior remains an Owner manual obligation.
 
 No release packaging or binary export is part of this procedure. On an unfamiliar machine, first verify toolchain, OCCT runtime DLL availability and graphical native Viewer exposure. A `SS2_R13_PLANEGCS_UI_PREVIEW=OFF` build is **not** evidence for this protocol.
 
