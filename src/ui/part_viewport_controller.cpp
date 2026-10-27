@@ -2743,6 +2743,23 @@ bool PartViewportController::projectSketchInteraction(
         return false;
     }
 
+    // The native AIS SketchScene, OSNAP and visible line grips must all
+    // resolve from exactly the same revision/instance-bound accepted
+    // effective model. Authored seeds are NOT valid positions after a
+    // numeric relation has moved the displayed line. Fail closed if
+    // there is no current solved presentation authority.
+    const auto* current_model = currentSketchInteractionModel();
+    if (current_model == nullptr) {
+        sketch_grip_projection_valid_ = false;
+        projected_grip_selection_.clear();
+        static_cast<void>(
+            viewport_->setSketchGripScene(viewer::SketchGripScene{}));
+        static_cast<void>(
+            viewport_->setSketchInteractionPresentation(
+                viewer::SketchInteractionPresentation{}));
+        return false;
+    }
+
     if (!sketch_grip_projection_valid_ ||
         projected_grips_visible_ != grips_visible ||
         projected_grip_selection_ != selected) {
@@ -2777,7 +2794,7 @@ bool PartViewportController::projectSketchInteraction(
                 const auto token = sketchPresentationFor(id);
                 if (!token) return false;
 
-                if (const auto* line = hosted->model.findLine(id)) {
+                if (const auto* line = current_model->findLine(id)) {
                     const sketch::Point2 center{
                         (line->start().u + line->end().u) * 0.5,
                         (line->start().v + line->end().v) * 0.5};
@@ -2789,7 +2806,7 @@ bool PartViewportController::projectSketchInteraction(
                     continue;
                 }
 
-                if (const auto* circle = hosted->model.findCircle(id)) {
+                if (const auto* circle = current_model->findCircle(id)) {
                     const auto c = circle->center();
                     const auto r = circle->radius();
                     if (!push_grip(*token, viewer::SketchGripRole::circle_center, c) ||
@@ -2802,7 +2819,7 @@ bool PartViewportController::projectSketchInteraction(
                     continue;
                 }
 
-                if (const auto* arc = hosted->model.findArc(id)) {
+                if (const auto* arc = current_model->findArc(id)) {
                     const auto c = arc->center();
                     const auto at = [arc, c](double angle) {
                         return sketch::Point2{
