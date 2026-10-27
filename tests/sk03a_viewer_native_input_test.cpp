@@ -496,6 +496,105 @@ int main(int argc, char* argv[]) {
             session.undoDepth() != undo_depth) {
             return fail("E0 joined recovery uses fresh native geometry");
         }
+
+        // Native manual-readiness regression: Undo removes the authored
+        // relation, returns to the skew seed without calling the stage
+        // backend and MUST revoke the formerly solved AIS and token.
+        const auto undone = session.undo();
+        if (!undone.ok() || !undone.changed)
+            return fail("E0 joined Undo command");
+        controller.refreshPresentation();
+        const auto undone_seed_hit =
+            widget.querySketchPresentation(*old_pixel);
+        const auto undone_solved_hit =
+            widget.querySketchPresentation(*recovered_pixel);
+        const auto undone_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        const auto* undone_model =
+            controller.currentSketchInteractionModel();
+        if (backend.calls != 3 ||
+            session.undoDepth() + 1U != undo_depth ||
+            session.document().findSketch(sid)->
+                model.state().constraints.size() != 0U ||
+            !undone_seed_hit.completed ||
+            undone_seed_hit.token != undone_token ||
+            !undone_token ||
+            !undone_solved_hit.completed || undone_solved_hit.token ||
+            controller.sketchEntityFor(*recovered_token) ||
+            !undone_model || undone_model->state().lines.size() != 1U ||
+            !near(undone_model->state().lines.front().end.v, 2.0, 1.0e-8) ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U) {
+            return fail("E0 joined Undo stale native AIS/token");
+        }
+
+        // Redo must authorize a NEW Part numerical stage and fresh
+        // semantic presentation token, not replay the pre-Undo AIS.
+        const auto redone = session.redo();
+        if (!redone.ok() || !redone.changed)
+            return fail("E0 joined Redo command");
+        controller.refreshPresentation();
+        const auto redone_hit =
+            widget.querySketchPresentation(*recovered_pixel);
+        const auto redone_seed_hit =
+            widget.querySketchPresentation(*old_pixel);
+        const auto redone_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        const auto redone_semantic =
+            redone_token ? controller.sketchEntityFor(*redone_token)
+                         : std::nullopt;
+        if (backend.calls != 4 ||
+            session.undoDepth() != undo_depth ||
+            session.document().findSketch(sid)->
+                model.state().constraints.size() != 1U ||
+            session.document().findSketch(sid)->
+                model.state().constraints.front().id != *relation.constraint_id ||
+            !redone_token || redone_token == recovered_token ||
+            !redone_hit.completed || redone_hit.token != redone_token ||
+            !redone_seed_hit.completed || redone_seed_hit.token ||
+            controller.sketchEntityFor(*undone_token) ||
+            !redone_semantic || redone_semantic->sketch_id != sid ||
+            redone_semantic->entity_id != *added.entity_id ||
+            session.document().findSketch(sid)->
+                model.state().lines.front().end.v != 2.0 ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U) {
+            return fail("E0 joined Redo rebuild native AIS/semantic pick");
+        }
+
+        // Ending a DEV solver lease is not a license to display the
+        // authored skew line as though it were an evaluated current
+        // solution. Clearing must revoke native objects and both picks.
+        controller.setDevelopmentStageSolver(nullptr, {});
+        const auto revoked_hit =
+            widget.querySketchPresentation(*recovered_pixel);
+        const auto revoked_seed_hit =
+            widget.querySketchPresentation(*old_pixel);
+        const auto* revoked_model =
+            controller.currentSketchInteractionModel();
+        if (backend.calls != 4 || !revoked_hit.completed ||
+            revoked_hit.token || !revoked_seed_hit.completed ||
+            revoked_seed_hit.token ||
+            controller.sketchPresentationFor(*added.entity_id) ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
+            (revoked_model && !revoked_model->state().lines.empty())) {
+            return fail("E0 joined lease revoke clears native geometry");
+        }
+
+        // Re-registration is a new evaluation, not a resurrected AIS.
+        controller.setDevelopmentStageSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        const auto restored_hit =
+            widget.querySketchPresentation(*recovered_pixel);
+        const auto restored_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        if (backend.calls != 5 || !restored_token ||
+            !restored_hit.completed || restored_hit.token != restored_token ||
+            restored_token == redone_token ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+            session.undoDepth() != undo_depth ||
+            session.document().findSketch(sid)->
+                model.state().lines.front().end.v != 2.0) {
+            return fail("E0 joined lease reactivation native stage");
+        }
         controller.clear();
     }
     // Restore the original XY camera and scene so the pre-existing
