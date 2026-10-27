@@ -2,6 +2,7 @@
 #include <simplesolid2/part/effective_sketch_projection.hpp>
 
 #include <algorithm>
+#include <set>
 
 namespace simplesolid2::part {
 
@@ -1347,6 +1348,89 @@ evaluateStageLocalSolve(
     }
 
     auto solution = sketch::evaluateLocalSolve(*problem, policy, backend);
+
+    // P0-D current-stage publication guard: PlaneGCS evaluates an entire
+    // Sketch, including disconnected underconstrained components. A valid
+    // residual alone cannot authorize moving an unrelated free Line or an
+    // independently already-satisfied component during a read/refresh.
+    // The baseline residual report uses the EXISTING caller-owned policy;
+    // there is no new geometric tolerance, nearest rebind or writeback.
+    if (solution.status ==
+            sketch::LocalSolveGatewayStatus::candidate_accepted &&
+        solution.candidate) {
+        const auto baseline = sketch::reviewLocalSolveCandidate(
+            *problem, problem->authored, policy);
+        bool stable =
+            baseline.status == sketch::LocalResidualStatus::residuals_satisfied ||
+            baseline.status == sketch::LocalResidualStatus::residual_violation;
+        std::set<sketch::EntityId> movable;
+
+        // Only a connected component that contains an equation UNSATISFIED
+        // by the current accepted seeds can acquire different coordinates.
+        // Binary relations propagate that permission transitively; neither
+        // mere proximity nor the backend's global parameter graph does.
+        if (stable) {
+            for (const auto& residual : baseline.constraints) {
+                if (residual.accepted) continue;
+                const auto relation = std::find_if(
+                    problem->equations.begin(), problem->equations.end(),
+                    [&residual](const sketch::SketchConstraintState& item) {
+                        return item.id == residual.constraint_id;
+                    });
+                if (relation == problem->equations.end() ||
+                    !relation->first.entity.valid()) {
+                    stable = false;
+                    break;
+                }
+                movable.insert(relation->first.entity);
+                if (relation->second.entity.valid()) {
+                    movable.insert(relation->second.entity);
+                }
+            }
+        }
+        if (stable) {
+            bool expanded = false;
+            do {
+                expanded = false;
+                for (const auto& relation : problem->equations) {
+                    if (!movable.contains(relation.first.entity) &&
+                        !movable.contains(relation.second.entity)) {
+                        continue;
+                    }
+                    if (relation.first.entity.valid()) {
+                        expanded =
+                            movable.insert(relation.first.entity).second ||
+                            expanded;
+                    }
+                    if (relation.second.entity.valid()) {
+                        expanded =
+                            movable.insert(relation.second.entity).second ||
+                            expanded;
+                    }
+                }
+            } while (expanded);
+
+            const auto& accepted = solution.candidate->lines;
+            const auto& original = problem->authored.lines;
+            stable = accepted.size() == original.size();
+            for (std::size_t i = 0; stable && i < original.size(); ++i) {
+                if (accepted[i].id != original[i].id ||
+                    (!movable.contains(original[i].id) &&
+                     accepted[i] != original[i])) {
+                    stable = false;
+                }
+            }
+        }
+        if (!stable) {
+            // Keep the canonical Part stage/revision as the only authority.
+            // Consumers see a structured failure, never a translated
+            // SketchScene, a stale Profile or a partial numerical result.
+            solution.status = sketch::LocalSolveGatewayStatus::invalid_candidate;
+            solution.candidate.reset();
+            solution.degrees_of_freedom.reset();
+        }
+    }
+
     // The adapter may invoke code that edits DocumentSession. Never return
     // its otherwise converged, but now stale, derived snapshot to Part.
     if (!ownsCurrentPartEvaluation(document, evaluated_prefix)) {
