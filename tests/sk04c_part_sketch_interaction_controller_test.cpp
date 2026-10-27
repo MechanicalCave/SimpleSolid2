@@ -4582,6 +4582,44 @@ int main(int argc, char* argv[]) {
         CHECK(near(shown.start.y, shown.end.y));
         CHECK(near(shown.start.y, solved_line.start.v));
         CHECK(near(shown.end.y, solved_line.end.v));
+
+        // Owner P0 A RED regression (2026-10-27): after a native
+        // Horizontal solve, grip endpoints and midpoint MUST coincide
+        // with the exact effective SketchScene. The legacy SimpleSolid
+        // SketchCanvas derives both from its displayed model. Do not
+        // show the old (0,1)-(5,2) authored line grips here.
+        CHECK(scene_controller.projectSketchInteraction(
+            {*added.entity_id}, std::nullopt, std::nullopt,
+            std::nullopt, true));
+        const auto& solved_grips = scene_viewport.grip_scene_.grips;
+        CHECK(solved_grips.size() == 3U);
+        const auto expected_mid = viewer::Point3{
+            (shown.start.x + shown.end.x) * 0.5,
+            (shown.start.y + shown.end.y) * 0.5,
+            (shown.start.z + shown.end.z) * 0.5};
+        for (const auto& grip : solved_grips) {
+            CHECK(grip.key.owner == shown.token);
+            switch (grip.key.role) {
+            case viewer::SketchGripRole::line_start:
+                CHECK(near(grip.position.x, shown.start.x));
+                CHECK(near(grip.position.y, shown.start.y));
+                CHECK(near(grip.position.z, shown.start.z));
+                break;
+            case viewer::SketchGripRole::line_center:
+                CHECK(near(grip.position.x, expected_mid.x));
+                CHECK(near(grip.position.y, expected_mid.y));
+                CHECK(near(grip.position.z, expected_mid.z));
+                break;
+            case viewer::SketchGripRole::line_end:
+                CHECK(near(grip.position.x, shown.end.x));
+                CHECK(near(grip.position.y, shown.end.y));
+                CHECK(near(grip.position.z, shown.end.z));
+                break;
+            default:
+                CHECK(false);
+            }
+        }
+        CHECK(!near(shown.end.y, authored.lines.front().end.v));
         // E0 failure is fail-closed, never a "last successful"
         // horizontal scene nor a fallback to the authored skew seed.
         backend.fail = true;
