@@ -6513,6 +6513,24 @@ int main() {
                 {5.0, 0.0}, {15.0, 8.0},
                 sk::EntityRole::regular, false});
         CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+        // Start with a CLOSED trapezoid: the right top corner is at
+        // 10 mm while the left top remains at 8 mm. Horizontal(top)
+        // is thus genuinely unsatisfied, whereas Fix(bottom), both
+        // vertical sides and all four Coincident corners can coexist.
+        // The solver must lift only the left top corner to 10 mm;
+        // a mere stage refresh of an already solved rectangle would
+        // not authorize moving any of these coordinates.
+        const auto skewed_top = rect_session.execute(
+            app::UpdateSketchGeometryCommand{
+                *rect_sketch.sketch_id,
+                rect_session.document().revision(),
+                {
+                    {rectangle.entity_ids[1],
+                     {15.0, 0.0}, {15.0, 10.0}},
+                    {rectangle.entity_ids[2],
+                     {15.0, 10.0}, {5.0, 8.0}},
+                }, {}, {}});
+        CHECK(skewed_top.ok() && skewed_top.changed);
         const auto original_rect = rect_session.document().findSketch(
             *rect_sketch.sketch_id)->model.state();
         CHECK(original_rect.lines.size() == 4U);
