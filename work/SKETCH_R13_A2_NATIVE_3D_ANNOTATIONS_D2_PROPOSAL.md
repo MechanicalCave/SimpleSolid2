@@ -114,6 +114,103 @@ Re-check current Part source references/constraint identity **at command executi
 
 **P4.** `PartViewportController` provides the one binding table; `PartSketchInteractionController` owns selected/hovered semantic constraint state and exact tool routing; `CadWorkbench` hosts the Qt label editor and Operations visibility switches; `QtOcctViewerWidget` implements draw and hit mechanics only. Native glyphs must be visible on real geometry in the actual 3D viewport; **no Operations-only substitute**. The renderer must not create/delete constraints, mutate dimension values, or write persistence.
 
+## 2A. E1-only concrete public C++ signatures for independent D2 review (2026-10-27)
+
+**Status: EXACT SIGNATURE CANDIDATE — NOT YET OWNER-FROZEN.** The Owner accepted E1 P1–P4 boundaries on 2026-10-27, **not** these newly derived method signatures, OCCT hit radius or acceptance of missing E0 original-provider evidence. Do not write public product headers based solely on this section. This packet resolves otherwise underspecified native source details into reviewable choices.
+
+**Finite first tranche (only E1, no dormant E2 API):**
+- Only `src/viewer/include/simplesolid2/viewer/sketch_presentation.hpp` and `src/viewer/include/simplesolid2/viewer/document_viewport.hpp` would receive new public types/methods after exact-signature acceptance. `SketchDimensionAnnotationScene`, inline editing and `setSketchDimensionAnnotationScene` are *deferred*, not stubbed in E1, even though §2 previews their future shape.
+- Renderer-neutral `SketchAnnotationToken` is distinct from current `PresentationToken`, whose tokens represent actual Sketch entities. Neither token is persistent. A glyph has one Part-authored `ConstraintId` **only in UI/application binding**, never in the Viewer type, native AIS object or file.
+- A glyph stores its resolved world anchor and owning current Sketch support basis. The view may render a compact non-zoomable native OCCT glyph at that world anchor; projection and native hit testing use current Qt logical pixels and DPR.
+
+Candidate declarations (names and field layout to be explicitly frozen before writing headers):
+
+```cpp
+// sketch_presentation.hpp -- E1 ONLY, proposed
+struct SketchAnnotationToken final {
+    std::uint64_t value{};
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return value != 0U;
+    }
+    friend constexpr bool operator==(
+        const SketchAnnotationToken&,
+        const SketchAnnotationToken&) = default;
+};
+
+struct SketchAnnotationGeneration final {
+    std::uint64_t value{};
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return value != 0U;
+    }
+    friend constexpr bool operator==(
+        const SketchAnnotationGeneration&,
+        const SketchAnnotationGeneration&) = default;
+};
+
+enum class SketchConstraintGlyphKind : std::uint8_t {
+    horizontal, vertical, coincident, parallel, perpendicular, fix
+};
+
+struct SketchConstraintGlyph final {
+    SketchAnnotationToken token;
+    SketchConstraintGlyphKind kind{SketchConstraintGlyphKind::horizontal};
+    Point3 anchor;            // resolved current-stage world XYZ
+    Vec3 sketch_u_axis;        // current support, world-space
+    Vec3 sketch_v_axis;        // current support, world-space
+    bool selected{};
+    bool hovered{};
+    [[nodiscard]] bool valid() const noexcept;
+};
+
+struct SketchConstraintGlyphScene final {
+    SketchAnnotationGeneration generation;
+    std::vector<SketchConstraintGlyph> glyphs;
+    [[nodiscard]] bool valid() const noexcept;
+};
+
+enum class SketchAnnotationPickStatus : std::uint8_t {
+    unavailable, miss, single, ambiguous
+};
+enum class SketchAnnotationHitRole : std::uint8_t {
+    constraint_glyph  // dimension role not compiled in E1
+};
+struct SketchAnnotationPickResult final {
+    SketchAnnotationPickStatus status{
+        SketchAnnotationPickStatus::unavailable};
+    SketchAnnotationGeneration generation;
+    std::optional<SketchAnnotationToken> token;
+    std::optional<SketchAnnotationHitRole> role;
+    [[nodiscard]] bool valid() const noexcept;
+};
+
+// document_viewport.hpp -- E1 ONLY, proposed
+virtual bool setSketchConstraintGlyphScene(
+    const SketchConstraintGlyphScene& scene) {
+    return scene.valid() && scene.glyphs.empty();
+}
+[[nodiscard]] virtual SketchAnnotationPickResult
+querySketchAnnotation(ViewportPoint2 point) {
+    (void)point;
+    return {};
+}
+```
+
+**Validation and transitions to be acceptance-tested:**
+1. A **nonempty** glyph scene requires nonzero generation, valid unique tokens, one of exactly six kinds, finite XYZ, finite nonzero/nonparallel `sketch_u_axis` and `sketch_v_axis`. The Viewer must reject duplicates, unsupported enum casts and malformed data without publishing a half-installed scene. An empty scene with zero generation is an explicit **clear/revoke**, not a new selectable generation. A nonzero-generation empty scene is an installed empty snapshot.
+2. A native glyph scene setter succeeds only after replacing its entire glyph set and selection/pick authority. Native renderer objects must be cleared after scene replacement, Sketch Edit exit or failed-current-stage evaluation. The default `IDocumentViewport` setter rejects a **nonempty** scene, so neutral/headless Viewers cannot falsely report rendered E1 glyphs.
+3. `querySketchAnnotation` returns **unavailable** with no token/role when input is invalid, renderer not ready or native query failed; **miss** with the installed generation and no token/role on a valid query with zero hits; **single** with exact generation, one token and `constraint_glyph` role; **ambiguous** with the current generation and NO token/role if 2+ glyph hit regions overlap. Invalid/status-role combinations are not accepted as valid results. No nearest-wins selection on ambiguity.
+4. Native glyph rendering may use existing `AIS_TextLabel` / 3D-point primitives with a screen-constant size and world anchor. Native hit regions must match the actual visual glyphs and use Qt-logical-position→physical-pixel DPR conversion for 100/125/150/200%; their exact radius/bounds and OCCT presentation are **subject to Windows RED fixture evidence before frozen implementation**. Native geometry is not a QPainter-only or Operations-row imitation.
+5. UI allocates a **fresh scene generation and runtime tokens** for every newly published current-stage snapshot and revokes the previous mapping first. A hit resolves only through `(DocumentId, incarnation, revision, SketchId, support/stage, glyph generation, token) → ConstraintId`. Part authoring never trusts a hit token directly. Stale callbacks, overlapping glyphs, Undo/Redo, previous Sketch/Part, ABA/cold reopen and switching active relation target keep **zero** authorized semantic mutations.
+6. E1 read-only selection/inspection does NOT enable Delete/Freeze or dimension editing and does not allocate Part IDs, dirty a document, call a solver on pointer movement, or add Undo. The existing sketch entity/grip acquisition always takes precedence while a relation target is active; view navigation keeps its existing handlers.
+
+**Registered RED→GREEN plan; no test registration, CI or new source paths:**
+- `tests/sk03a_viewer_native_input_test.cpp`: compile/new glyph interface only after accepted signature, real exposed OCCT window, absent/replaced/hidden glyph, exact hit and overlap=ambiguous, stale generation after native scene replace, world XYZ from XY/XZ/oblique support and HiDPI.
+- `tests/sk03a_part_viewport_controller_test.cpp`: glyph anchors derived from the **same** accepted evaluated Sketch as SketchScene/Profile/Body; `SketchId/ConstraintId` bindings are generation-, stage-, revision- and incarnation-guarded, including reentrant Undo and failed solve.
+- `tests/sk04c_part_sketch_interaction_controller_test.cpp` and `tests/cad_workbench_test.cpp`: Select-vs-tool hit precedence, read-only inspection, no Part changes, Esc, visibility toggles, switch/reopen and failed-stage clears.
+- Preserve every existing test and independently verify exact-head Windows FOCUSED → FAST → FULL. This plan **does not itself authorize** a new E1 executable while E0 original PlaneGCS UI PREVIEW=ON remains unverified.
+
+**Hard sequencing:** E0 genuine original PlaneGCS 0.8.0 DEV `SS2_R13_PLANEGCS_UI_PREVIEW=ON` in actual native Windows Workbench + native geometry/pick has not yet been evidenced by a passing registered exact-head combined lane; ordinary FULL tests with a deterministic double do not count. The existing CI lane `windows-planegcs-native-core` only runs for historical PR #506 and is not a native Workbench preview=ON fixture. Any changed workflow/test-registration path requires its own explicit D2 authorization. Freeze these exact signatures by independent Owner review before new public header/source mutations; governance CLOSURE and E0 proof do not themselves approve future implementation diff.
+
 ## 3. Interaction arbitration and exact hit behavior
 
 1. Annotation picking is enabled only in a valid Part Sketch Edit context. **Select** can select a visible annotation by exact 3D-viewport hit. During active Relations source capture, relation Line/endpoint acquisition keeps ownership; an overlapping glyph must **not** steal its hit or convert into an inferred constraint. Existing navigation gestures always remain navigation.
