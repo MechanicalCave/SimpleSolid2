@@ -1455,6 +1455,25 @@ int main() {
         }
         const auto initial = session.document().findSketch(sid)->model.state();
         const auto undo_before = session.undoDepth();
+
+        // Inspect the actual Part-stage solve at EVERY subsequent revision,
+        // not only the explicit authoring transaction. A pre-existing
+        // fulfilled relation cannot move during a later read-only refresh.
+        struct EmptyProjection final : simplesolid2::kernel::IEdgeProjectionQuery {
+            std::optional<simplesolid2::kernel::ScopedProjectionEdge>
+            bindEdgeToBody(
+                simplesolid2::kernel::RuntimeSolidHandle,
+                simplesolid2::kernel::RuntimeEdgeToken) noexcept override {
+                return std::nullopt;
+            }
+            simplesolid2::kernel::EdgeProjectionResult projectEdgeToPlane(
+                simplesolid2::kernel::RuntimeSolidHandle,
+                const simplesolid2::kernel::ScopedProjectionEdge&,
+                const simplesolid2::kernel::Frame3&) noexcept override {
+                return {};
+            }
+        } projection;
+        IndependentAxisSolver stage_solver;
         std::vector<sk::ConstraintId> accepted_ids;
         for (std::size_t i = 0; i < ids.size(); ++i) {
             const auto before = session.document().findSketch(sid)->model.state();
@@ -1484,8 +1503,24 @@ int main() {
                     CHECK(after.lines[j].start.v == before.lines[j].start.v);
                 }
             }
+            part::PartEvaluation prefix;
+            prefix.source_document_id = session.document().documentId();
+            prefix.source_revision = session.document().revision();
+            prefix.source_incarnation = session.document().incarnationToken();
+            const auto stage = part::evaluateStageLocalSolve(
+                session.document(), sid, prefix, projection,
+                policy, stage_solver);
+            CHECK(stage);
+            CHECK(stage->solution.status ==
+                  sk::LocalSolveGatewayStatus::candidate_accepted);
+            CHECK(stage->solution.candidate);
+            CHECK(stage->solution.candidate->lines == after.lines);
+            CHECK(stage->solution.candidate->constraints ==
+                  after.constraints);
+            CHECK(session.document().findSketch(sid)->model.state() == after);
         }
         CHECK(backend.calls == 5);
+        CHECK(stage_solver.calls == 5);
         CHECK(session.undoDepth() == undo_before + 5U);
         const auto final = session.document().findSketch(sid)->model.state();
         for (int i = 0; i < 5; ++i) CHECK(session.undo().ok());
