@@ -6179,19 +6179,33 @@ beginDirectManipulation(
         return false;
     }
 
-    // The legacy Sketcher starts edits from its current displayed
-    // geometry. Here the old DirectManipulation path still authors
-    // absolute coordinates through hosted->model. Until the bounded
-    // solved-edit transaction is implemented, do not let a user grab a
-    // visibly solved point and silently drag the historical seed.
+    // The legacy grip path sends absolute UpdateSketchGeometry coordinates
+    // without a stage-bound solver validation. A current accepted edit
+    // baseline is necessary but NOT sufficient: after P0 commits a solved
+    // Line as authored seeds, this state comparison may legitimately be
+    // equal while moving a constrained Line would violate its relation.
+    // Until a separate solver-backed grip command exists, fail closed for
+    // every constrained member of the full manipulation selection.
     const auto* effective =
         viewport_controller_->currentSketchInteractionModel();
+    const auto authored = hosted->model.state();
+    const auto& selected = interaction_.selectedEntities();
+    const auto affected = [&selected, &grip](sketch::EntityId id) {
+        return id == grip.entity_id ||
+            std::find(selected.begin(), selected.end(), id) !=
+                selected.end();
+    };
+    const bool constrained = std::any_of(
+        authored.constraints.begin(), authored.constraints.end(),
+        [&affected](const auto& relation) {
+            return affected(relation.first.entity) ||
+                   affected(relation.second.entity);
+        });
     if (effective == nullptr ||
-        effective->state() != hosted->model.state()) {
+        effective->state() != authored || constrained) {
         reportStatus(
-            "Grip editing requires a current editable geometry "
-            "baseline; solved relations cannot be dragged from "
-            "old authored coordinates.");
+            "Grip editing requires a current editable geometry baseline; "
+            "constrained Lines need a solver-validated editing command.");
         return false;
     }
 
