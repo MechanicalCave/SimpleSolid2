@@ -305,8 +305,38 @@ $boost = '<existing Boost include directory containing boost/graph/adjacency_lis
     "-DSS2_PLANEGCS_EIGEN_INCLUDE_DIR=$eigen" `
     "-DSS2_PLANEGCS_BOOST_INCLUDE_DIR=$boost"
 if ($LASTEXITCODE -ne 0) { throw 'DEV preview configure FAILED' }
-& $cmake --build $build --config Debug --target simplesolid2
-if ($LASTEXITCODE -ne 0) { throw 'DEV preview build FAILED' }
+& $cmake --build $build --config Debug --target sk03a_viewer_native_input_test simplesolid2
+if ($LASTEXITCODE -ne 0) { throw 'DEV preview native test + app build FAILED' }
+$ctest = Join-Path (Split-Path $cmake -Parent) 'ctest.exe'
+if (-not (Test-Path -LiteralPath $ctest -PathType Leaf)) {
+    throw 'Expected matching ctest.exe next to configured cmake.exe'
+}
+& $ctest --test-dir $build -C Debug --no-tests=error `
+    -R '^sk03a[.]viewer_native_input
+```
+
+**Why this registered test matters (PR #533 `9a6327d9`):** `sk03a.viewer_native_input` now instantiates the actual `CadWorkbench` with the genuine, exposed `QtOcctViewerWidget`, enters XY Sketch Edit, checks an authored nonhorizontal line against native AIS/picking, emits an actual native Qt mouse click and uses real Relations → Horizontal Operations controls. The ordinary CI preview-OFF branch checks no false accepted Constraint or Part/Undo changes; the **preview-ON branch demands one accepted original-PlaneGCS Constraint, current native AIS, feedback and unchanged authored Line**. Run the above CTest **on PR #533's exact source HEAD** with both explicit PlaneGCS flags ON. On PREVIEW=ON the test must compile, execute and actually enter that positive branch; inspect the local CMakeCache and test logs. A standard green PR #533 CI/preview-OFF run does **not** satisfy this. The still-separate Owner screenshot/video test must additionally validate numerical horizontal endpoints, on-screen behavior, native hit and restart/reopen, as the first DEV source-backed test alone does not prove every gesture.
+
+No release packaging or binary export is part of this procedure. On an unfamiliar machine, first verify toolchain, OCCT runtime DLL availability and graphical native Viewer exposure. A `SS2_R13_PLANEGCS_UI_PREVIEW=OFF` build is **not** evidence for this protocol.
+
+### M0 manual pass/fail script — actual Workbench + real OCCT
+
+1. Start the above DEV application, create a Part, enter an **XY Sketch Edit** and draw one noticeably sloped Line; confirm it is visible and selectable in the *native* 3D Viewer, not merely a Qt Operations row.
+2. Choose Relations and author **Horizontal** by the supported genuine Sketch spatial picking route. Confirm that the original source is visibly replaced by a horizontal **current effective line** in the OCCT viewport, with one accepted relation listed in Operations; if no solver or current stage is available, the UI must fail closed rather than announce a false accepted/current solution.
+3. Test **Undo**: the relation disappears and the originally sloped line is again visible/selectable at its correct world position. Test **Redo**: the same authored relation reappears, while the native Viewer shows only the newly evaluated horizontal line; an old displayed AIS or stale pick is a FAIL.
+4. Orbit/pan/zoom, repeat native hits on the actual current visible geometry, leave Sketch Edit and re-enter. Native picks must map to current Sketch owner, not the previous displayed coordinates. Capture original expected XY before/after and native screen recording.
+5. **Save/Close/Reopen** in a new document session, re-enter Sketch Edit and verify durable authored Line/Constraint semantics plus a fresh effective numerical render. Stop and record a blocker if original backend cannot be reattached or the current-stage provenance is unavailable; do not mislabel an old renderer image as success.
+6. Record exact source branch SHA, full CMakeCache DEV flags, external original 0.8.0 manifest verification, Windows MSVC/Qt/OCCT environment, CTest logs if applicable, screenshot/video of the *real* Viewer and every PASS/FAIL separately. A partial/manual fail is RED; do not downgrade the acceptance rule.
+
+**Explicit limits:** M0 is an *engineering DEV-original-solver* gate and does not prove production LGPL installed-consumer packaging. It has **no selectable native 3D E1 glyph yet** and no Dimensions/v22. M1 glyph Manual Functional+Visual PASS must follow the separately frozen E1 public signatures, registered native RED→GREEN and exact Windows Full/Docs gates. OWNER approval of implementation and merge is independent.
+
+## Documentation impact
+
+Internal docs: not required
+User/Product docs: not required
+Reason: This change is a governance-only proposal with no shipped functionality. Any later accepted E1/E2 production implementation must update the internal as-built and paired PL/EN product documentation as declared in the parent active R13-A2 Work Contract, then regenerate the Product Browser using `./ss2.ps1 docs`.
+ --output-on-failure
+if ($LASTEXITCODE -ne 0) { throw 'Original PlaneGCS Workbench + OCCT DEV native CTest FAILED' }
 .\ss2.ps1 run -BuildDir 'build\r13-a2-manual-dev' -Config Debug
 ```
 
