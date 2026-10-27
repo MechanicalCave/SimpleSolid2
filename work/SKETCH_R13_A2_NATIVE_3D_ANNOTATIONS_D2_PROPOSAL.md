@@ -337,6 +337,7 @@ if ($nativeExit -ne 0) {
 $nativeProof = $nativeLog | Out-String
 foreach ($positiveProof in @(
     'E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_PREVIEW_ON_PASS',
+    'E0_ORIGINAL_PLANEGCS_XZ_NATIVE_WORKBENCH_PASS',
     'E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_COLD_REOPEN_PASS'
 )) {
     if ($nativeProof -notmatch $positiveProof) {
@@ -345,6 +346,7 @@ foreach ($positiveProof in @(
 }
 foreach ($wrongMode in @(
     'E0_NATIVE_WORKBENCH_PREVIEW_OFF_PASS',
+    'E0_NATIVE_WORKBENCH_XZ_PREVIEW_OFF_PASS',
     'E0_NATIVE_WORKBENCH_COLD_REOPEN_PREVIEW_OFF_PASS'
 )) {
     if ($nativeProof -match $wrongMode) {
@@ -367,7 +369,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 ```
 
-**Registered native Workbench gate (PR #533 `9a6327d9`):** `sk03a.viewer_native_input` now instantiates an actual `CadWorkbench` with exposed `QtOcctViewerWidget`, enters XY Sketch Edit, verifies a skew Line in native AIS/picking, emits a real native Qt mouse click and uses the Relations → Horizontal buttons. The ordinary CI preview-OFF path asserts no false authored Constraint/Part/Undo changes. The separately configured **preview-ON path requires source-verified original PlaneGCS**, successful authoring, original seed preservation, Workbench feedback and native AIS. Run the CTest above on the **exact PR #533 branch SHA** with both explicit flags ON, and preserve full CMakeCache and CTest logs; OFF green is not ON proof. The Owner visual/manual test must additionally inspect rendered horizontal endpoints, Undo/Redo, camera/picking, and fresh process/reopen. The same registered fixture also operates the real Workbench **Save** control with a valid native checkpoint, loads a new `.ss2part` Part incarnation through `PartDocumentStore`, deactivates the former session, re-enters Sketch Edit on the same actual OCCT window and verifies a fresh AIS/pick token and current effective stage. The M0 script above requires **both** original-PlaneGCS Horizontal proof and the separate original-PlaneGCS cold-reopen proof markers, and rejects both ordinary preview-OFF markers. This CTest still runs in one process; independent cold process plus visually observed behavior remains an Owner manual obligation.
+**Registered native Workbench gate (PR #533 `9a6327d9`):** `sk03a.viewer_native_input` now instantiates an actual `CadWorkbench` with exposed `QtOcctViewerWidget`, enters XY Sketch Edit, verifies a skew Line in native AIS/picking, emits a real native Qt mouse click and uses the Relations → Horizontal buttons. The ordinary CI preview-OFF path asserts no false authored Constraint/Part/Undo changes. The separately configured **preview-ON path requires source-verified original PlaneGCS**, successful authoring, original seed preservation, Workbench feedback and native AIS. Run the CTest above on the **exact PR #533 branch SHA** (XZ authoring check introduced at test-only HEAD `a0e080c3`) with both explicit flags ON, and preserve full CMakeCache and CTest logs; OFF green is not ON proof. The Owner visual/manual test must additionally inspect rendered horizontal endpoints, Undo/Redo, camera/picking, and fresh process/reopen. The same registered fixture also operates the real Workbench **Save** control with a valid native checkpoint, loads a new `.ss2part` Part incarnation through `PartDocumentStore`, deactivates the former session, re-enters Sketch Edit on the same actual OCCT window and verifies a fresh AIS/pick token and current effective stage. The M0 script above requires **all three** source-backed positive markers: XY Horizontal, XZ Horizontal in actual world-Z native AIS (including Qt Undo/Redo) and same-Workbench native `.ss2part` cold reopen. It rejects all three corresponding preview-OFF markers. The XZ check is a genuine native mouse-pick/Qt Relations operation and requires the solver to produce horizontal world-XZ geometry, not merely text saying the relation was accepted. This CTest still runs in one process; independent cold process plus visually observed behavior remains an Owner manual obligation.
 
 **Reproducibility safeguard:** `ss2.ps1 run` is intentionally *not* used in M0 because it calls `scripts/ss2-run.ps1`, which first invokes `ss2-build.ps1` and thus `ss2-configure.ps1` again. While existing CMake cache options normally persist, a fresh configure/build after the positive CTest changes the evidence boundary. Launching `$build/src/Debug/SimpleSolid2.exe` directly under the already imported `Import-SS2LocalEnvironment` environment preserves the verified source-configured build. Capture the SHA-256 of this exact binary and the corresponding CMakeCache; if the binary cannot be found, **STOP** instead of falling back to a default build. The console log and a video/screenshot still need separate provenance tied to the same SHA.
 
