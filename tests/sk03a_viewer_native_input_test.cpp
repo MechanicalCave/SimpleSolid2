@@ -473,12 +473,39 @@ int testNativeWorkbenchRelationsHost() {
     const auto before_switch_revision = session.document().revision();
     const auto before_switch_undo = session.undoDepth();
 
+    // The other document lives on the genuinely oblique XZ support.
+    // This tests actual Workbench native placement as well as identity
+    // invalidation: treating local V as world Y will make its hit fail.
+    const auto xz_support = part::partSketchSupportForBuiltinPlane(
+        core::BuiltinReferenceRole::xz_plane);
+    const auto xz_frame = xz_support
+        ? part::sketchPlacementForSupport(*xz_support)
+        : std::nullopt;
+    if (!xz_frame)
+        return fail("E0 native Workbench XZ support placement");
+    const auto xzWorld = [&xz_frame](double u, double v) {
+        return viewer::Point3{
+            xz_frame->origin[0] +
+                u * xz_frame->u_axis[0] +
+                v * xz_frame->v_axis[0],
+            xz_frame->origin[1] +
+                u * xz_frame->u_axis[1] +
+                v * xz_frame->v_axis[1],
+            xz_frame->origin[2] +
+                u * xz_frame->u_axis[2] +
+                v * xz_frame->v_axis[2]};
+    };
+    const viewer::CameraState xz_camera{
+        viewer::Point3{60.0, 75.0, 100.0},
+        viewer::Point3{0.0, 0.0, 0.0},
+        viewer::Vec3{0.0, 0.0, 1.0},
+        viewer::CameraProjection::orthographic, 65.0};
     application::DocumentSession other_session{
         workspace / "Part002.ss2part",
         part::PartDocument::create(core::DocumentId::generate())};
     const auto other_created = other_session.execute(
         application::CreatePartSketchCommand{
-            core::BuiltinReferenceRole::xy_plane});
+            core::BuiltinReferenceRole::xz_plane});
     if (!other_created.ok() || !other_created.sketch_id)
         return fail("E0 native Workbench other Part Sketch");
     const auto other_line = other_session.execute(
@@ -494,7 +521,8 @@ int testNativeWorkbenchRelationsHost() {
             const auto hit = native->querySketchPresentation(point);
             return hit.completed && !hit.token;
         };
-    const auto openSketchFromTree = [&]() {
+    const auto openSketchFromTree =
+        [&](const viewer::CameraState& active_camera) {
         auto* item = static_cast<QTreeWidgetItem*>(nullptr);
         for (QTreeWidgetItemIterator it(tree); *it; ++it) {
             if ((*it)->text(0) == QStringLiteral("Sketch 1")) {
@@ -508,7 +536,7 @@ int testNativeWorkbenchRelationsHost() {
         if (!edit->isEnabled()) return false;
         edit->trigger();
         QApplication::processEvents();
-        return native->setCameraState(camera);
+        return native->setCameraState(active_camera);
     };
 
     if (!workbench.activateDocument(&other_session, workspace))
@@ -517,21 +545,30 @@ int testNativeWorkbenchRelationsHost() {
     if (native->runtimeDiagnostics().sketch_native_objects_current != 0U ||
         !nativeHasNoOldPick(*old_world_pixel))
         return fail("E0 native Workbench A to B revokes stale AIS");
-    if (!openSketchFromTree())
-        return fail("E0 native Workbench B enters Sketch Edit");
+    if (!openSketchFromTree(xz_camera))
+        return fail("E0 native Workbench XZ Part enters Sketch Edit");
 
-    const auto other_pixel = native->projectWorldPoint(
+    const auto xz_midpoint = xzWorld(2.5, 9.0);
+    const auto other_pixel = native->projectWorldPoint(xz_midpoint);
+    const auto world_xy_wrong_pixel = native->projectWorldPoint(
         viewer::Point3{2.5, 9.0, 0.0});
+    const auto world_xy_old_pixel = native->projectWorldPoint(
+        viewer::Point3{2.5, before_switch_left->first, 0.0});
     const auto other_hit = other_pixel
         ? native->querySketchPresentation(*other_pixel)
         : viewer::SketchPointQueryResult{};
-    if (!other_pixel || !other_hit.completed || !other_hit.token ||
+    if (!other_pixel || !world_xy_wrong_pixel ||
+        !world_xy_old_pixel ||
+        std::abs(xz_midpoint.z - 9.0) > 1.0e-8 ||
+        std::abs(xz_midpoint.y) > 1.0e-8 ||
+        !other_hit.completed || !other_hit.token ||
         other_hit.token == before_switch_left->second ||
-        !nativeHasNoOldPick(*old_world_pixel) ||
+        !nativeHasNoOldPick(*world_xy_wrong_pixel) ||
+        !nativeHasNoOldPick(*world_xy_old_pixel) ||
         native->runtimeDiagnostics().sketch_native_objects_current != 1U ||
         other_session.document().revision() != other_revision ||
         other_session.undoDepth() != other_undo)
-        return fail("E0 native Workbench B owns distinct native AIS");
+        return fail("E0 native Workbench XZ true 3D AIS/pick");
 
     if (!workbench.activateDocument(&session, workspace))
         return fail("E0 native Workbench B to A activate");
@@ -539,7 +576,7 @@ int testNativeWorkbenchRelationsHost() {
     if (native->runtimeDiagnostics().sketch_native_objects_current != 0U ||
         !nativeHasNoOldPick(*other_pixel))
         return fail("E0 native Workbench B to A revokes B native AIS");
-    if (!openSketchFromTree())
+    if (!openSketchFromTree(camera))
         return fail("E0 native Workbench A re-enters Sketch Edit");
 
     const auto returned_left = nativeLineCrossing(0.5);
@@ -619,7 +656,7 @@ int testNativeWorkbenchRelationsHost() {
         !nativeHasNoOldPick(*prior_native_pixel))
         return fail("E0 native Workbench cold deactivation revokes AIS");
     if (!workbench.activateDocument(&cold_session, workspace) ||
-        !openSketchFromTree())
+        !openSketchFromTree(camera))
         return fail("E0 native Workbench cold session re-enters Sketch");
     QApplication::processEvents();
 
