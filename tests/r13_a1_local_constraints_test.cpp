@@ -1379,7 +1379,14 @@ int main() {
         const auto after =
             session.document().findSketch(sid)->model.state();
         CHECK(after.constraints.size() == original.constraints.size() + 1U);
-        CHECK(after.lines == original.lines);
+        // P0 RED-first: after the accepted Horizontal(A) transaction,
+        // the current edit baseline must contain the accepted solved
+        // endpoints, not the initial skew seed. B/C remain unchanged.
+        // This is a semantic Part state check, not a Viewer screenshot.
+        CHECK(after.lines.front().start == original.lines.front().start);
+        CHECK(after.lines.front().end.v == after.lines.front().start.v);
+        CHECK(after.lines[1] == original.lines[1]);
+        CHECK(after.lines[2] == original.lines[2]);
         CHECK(after.constraints.front() == original.constraints.front());
         CHECK(session.undo().ok());
         const auto undone =
