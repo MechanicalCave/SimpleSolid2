@@ -4376,6 +4376,16 @@ void PartSketchInteractionController::commitReadyRelation(
 
 void PartSketchInteractionController::handleRelationsPointer(
     const SketchPointerInput& input) {
+    // SS1 SketchCanvas donor adaptation: Relations shares read-only
+    // hover feedback with Select, but a move never commits a relation,
+    // consumes a semantic target or starts direct geometry manipulation.
+    if (input.phase == viewer::SpatialPointerPhase::move) {
+        if (input.viewport_position.valid()) {
+            updateHover(input.viewport_position);
+        }
+        return;
+    }
+
     // R13-A2.0 transient, command-first semantic target capture only.
     // It NEVER calls the old headless AddSketchRelationCommand: numerical
     // convergence, stage provenance and atomic Part transaction are
@@ -6109,11 +6119,14 @@ void PartSketchInteractionController::updateHover(
     const bool select_mode =
         interaction_.tool() ==
         sketch::SketchTool::select;
+    const bool relations_mode =
+        interaction_.tool() ==
+        sketch::SketchTool::relations;
     const bool transform_collect_mode =
         interaction_.commonTransformStage() ==
             sketch::CommonTransformStage::select_objects;
 
-    if ((!select_mode && !transform_collect_mode) ||
+    if ((!select_mode && !relations_mode && !transform_collect_mode) ||
         interaction_.directManipulationActive()) {
         return;
     }
@@ -7386,15 +7399,29 @@ void PartSketchInteractionController::projectSelection() {
 void PartSketchInteractionController::projectInteraction() {
     if (!active()) return;
 
+    const bool relations_mode =
+        !profile_session_ &&
+        interaction_.tool() == sketch::SketchTool::relations;
+    // Relations hover requires Start/Mid/End markers even before any
+    // object is selected. Reuse the current-stage semantic grip
+    // projection, but keep this visual-only temporary membership OUT
+    // of the actual Sketch selection and the authoring transaction.
+    auto grip_targets = interaction_.selectedEntities();
+    if (relations_mode && interaction_.hoveredEntity() &&
+        std::find(grip_targets.begin(), grip_targets.end(),
+                  *interaction_.hoveredEntity()) ==
+            grip_targets.end()) {
+        grip_targets.push_back(*interaction_.hoveredEntity());
+    }
     static_cast<void>(
         viewport_controller_->projectSketchInteraction(
-            interaction_.selectedEntities(),
+            grip_targets,
             interaction_.hoveredEntity(),
             interaction_.hoveredGrip(),
             interaction_.activeGrip(),
             !profile_session_ &&
-                interaction_.tool() ==
-                    sketch::SketchTool::select));
+                (interaction_.tool() == sketch::SketchTool::select ||
+                 relations_mode)));
 
     projectMeasureInteraction();
 }
