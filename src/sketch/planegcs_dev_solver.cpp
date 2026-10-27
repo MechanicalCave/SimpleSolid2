@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <limits>
 #include <optional>
 #include <set>
 #include <vector>
@@ -156,8 +157,23 @@ LocalBackendSolveResult PlaneGcsDevSolver::solve(
         }
         const auto diagnosis = native.diagnose();
         if (diagnosis.dof >= 0) {
-            out.degrees_of_freedom =
-                static_cast<std::size_t>(diagnosis.dof);
+            // Native-only immobilization is an implementation mechanism,
+            // not a user-authored Fix. Preserve the full semantic DoF:
+            // each unreferenced, non-Fix Line still contributes four
+            // independent sketch-local endpoint coordinates.
+            const auto native_dof = static_cast<std::size_t>(diagnosis.dof);
+            const auto independent = static_cast<std::size_t>(
+                std::count_if(problem.lines.begin(), problem.lines.end(),
+                    [&referenced](const auto& line) {
+                        return !line.fixed &&
+                            !referenced.contains(line.id);
+                    }));
+            if (independent >
+                    (std::numeric_limits<std::size_t>::max() - native_dof)
+                        / 4U) {
+                return failed();
+            }
+            out.degrees_of_freedom = native_dof + 4U * independent;
         }
         std::set<ConstraintId> diagnosed;
         const auto append = [&](const std::vector<int>& tags,
