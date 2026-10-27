@@ -4173,6 +4173,132 @@ int main() {
     }
 
 
+    // R13-A2 P0-D RED: a globally Converged full-Sketch solver may
+    // translate disconnected geometry while satisfying every equation.
+    // Current Part-stage consumers MUST refuse that candidate, including
+    // both a free Line and an independently already-satisfied component.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        namespace kernel = simplesolid2::kernel;
+        struct EmptyProjection final : kernel::IEdgeProjectionQuery {
+            std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+                kernel::RuntimeSolidHandle,
+                kernel::RuntimeEdgeToken) noexcept override {
+                return std::nullopt;
+            }
+            kernel::EdgeProjectionResult projectEdgeToPlane(
+                kernel::RuntimeSolidHandle,
+                const kernel::ScopedProjectionEdge&,
+                const kernel::Frame3&) noexcept override {
+                return {};
+            }
+        } projection;
+        struct GlobalDrift final : sk::ILocalSketchSolver {
+            bool drift{true};
+            sk::EntityId free_line;
+            sk::EntityId satisfied_line;
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& input) override {
+                ++calls;
+                auto candidate = input.authored;
+                for (const auto& equation : input.equations) {
+                    if (equation.kind != sk::ConstraintKind::horizontal)
+                        return {sk::LocalBackendStatus::unsupported,
+                                std::nullopt, {}, {}, std::nullopt};
+                    const auto it = std::find_if(
+                        candidate.lines.begin(), candidate.lines.end(),
+                        [&equation](const auto& line) {
+                            return line.id == equation.first.entity;
+                        });
+                    if (it == candidate.lines.end())
+                        return {sk::LocalBackendStatus::failed,
+                                std::nullopt, {}, {}, std::nullopt};
+                    it->end.v = it->start.v;
+                }
+                if (drift) {
+                    for (auto& line : candidate.lines) {
+                        if (line.id == free_line ||
+                            line.id == satisfied_line) {
+                            line.start.u += 4.0;
+                            line.end.u += 4.0;
+                        }
+                    }
+                }
+                return {sk::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 1.0}, {5.0, 2.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {20.0, 5.0}, {25.0, 7.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {40.0, 8.0}, {45.0, 8.0}});
+        CHECK(a.ok() && a.entity_id && b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        backend.free_line = *b.entity_id;
+        backend.satisfied_line = *c.entity_id;
+        for (const auto id : {*a.entity_id, *c.entity_id}) {
+            const auto added = session.execute(app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {id, sk::ConstraintElement::line}, {}});
+            CHECK(added.ok() && added.constraint_id);
+        }
+        const auto initial =
+            session.document().findSketch(sid)->model.state();
+        const auto initial_rev = session.document().revision();
+        const auto initial_undo = session.undoDepth();
+        part::PartEvaluation prefix;
+        prefix.source_document_id = session.document().documentId();
+        prefix.source_revision = initial_rev;
+        prefix.source_incarnation = session.document().incarnationToken();
+        const auto problem = part::prepareStageLocalSolveProblem(
+            session.document(), sid, prefix, projection);
+        CHECK(problem && problem->lines.size() == 3U);
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        const auto bare = sk::evaluateLocalSolve(
+            *problem, policy, backend);
+        CHECK(bare.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(bare.candidate && backend.calls == 1);
+        CHECK(bare.candidate->lines[1] != initial.lines[1]);
+        CHECK(bare.candidate->lines[2] != initial.lines[2]);
+
+        // Actual authoritative stage result must not expose that drift
+        // to SketchScene, Profile or downstream Kernel consumers.
+        const auto rejected = part::evaluateStageLocalSolve(
+            session.document(), sid, prefix, projection, policy, backend);
+        CHECK(rejected);
+        CHECK(rejected->solution.status !=
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(!rejected->solution.candidate);
+        CHECK(session.document().revision() == initial_rev);
+        CHECK(session.undoDepth() == initial_undo);
+        CHECK(session.document().findSketch(sid)->model.state() == initial);
+
+        backend.drift = false;
+        const auto accepted = part::evaluateStageLocalSolve(
+            session.document(), sid, prefix, projection, policy, backend);
+        CHECK(accepted);
+        CHECK(accepted->solution.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(accepted->solution.candidate);
+        CHECK(accepted->solution.candidate->lines[0].start.v ==
+              accepted->solution.candidate->lines[0].end.v);
+        CHECK(accepted->solution.candidate->lines[1] == initial.lines[1]);
+        CHECK(accepted->solution.candidate->lines[2] == initial.lines[2]);
+        CHECK(session.document().findSketch(sid)->model.state() == initial);
+    }
+
     // R13-A1.2 Part-owned native bridge: a solver problem must come
     // from the exact PartDocument owner/revision and current stage;
     // PG-01 projection must never fall back to stale authored seeds.
