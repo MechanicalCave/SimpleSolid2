@@ -2184,11 +2184,14 @@ AddSolvedSketchRelationResult DocumentSession::execute(
                 failed.diagnostic};
     }
 
-    // Reconstruct the fully validated authored proposal in a temporary
-    // Part state. The accepted *derived* solution remains ephemeral:
-    // it must never replace authored seeds or enter native persistence.
+    // Materialize the independently validated, accepted solver result as
+    // the next authored/edit baseline of THIS explicit semantic Add command.
+    // This is not solver-evaluation writeback: the revision/incarnation,
+    // strict relation-component isolation and numerical acceptance have
+    // already been checked before one guarded Part transaction. Ordinary
+    // read-only Stage evaluation remains disposable.
     auto model = sketch::SketchModel::restore(
-        *preflight.proposed_authored);
+        *preflight.solve.candidate);
     if (!model) {
         return reject(DocumentSessionErrorCode::invalid_command,
             "Solved relation accepted an invalid temporary Sketch model");
