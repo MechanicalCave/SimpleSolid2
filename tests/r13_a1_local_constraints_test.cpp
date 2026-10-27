@@ -1209,6 +1209,29 @@ int main() {
         CHECK(!duplicate.provisional_constraint_id);
         CHECK(backend.calls == 1);
 
+        // C/RED: an already-authored Fix pins all four coordinates.
+        // A later Horizontal on that fixed, exactly level Line cannot
+        // add independent design intent. The native adapter may omit
+        // already existing fixed-only equations during a stage replay,
+        // but a NEW redundant relation must fail before the backend.
+        sk::SketchModel fixed_model;
+        const auto fixed_line =
+            fixed_model.addLine({0.0, 4.0}, {5.0, 4.0});
+        CHECK(fixed_model.addConstraint(
+            sk::ConstraintKind::fix,
+            {fixed_line, sk::ConstraintElement::line}));
+        const auto fixed_before = fixed_model.state();
+        const auto no_new_axis = sk::preflightLocalRelation(
+            fixed_before, sk::ConstraintKind::horizontal,
+            {fixed_line, sk::ConstraintElement::line}, {},
+            {}, policy, backend);
+        CHECK(no_new_axis.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!no_new_axis.provisional_constraint_id);
+        CHECK(!no_new_axis.proposed_authored);
+        CHECK(backend.calls == 1);
+        CHECK(fixed_model.state() == fixed_before);
+
         const auto nonexistent = sk::EntityId::parse("9999");
         CHECK(nonexistent);
         const auto missing = sk::preflightLocalRelation(
