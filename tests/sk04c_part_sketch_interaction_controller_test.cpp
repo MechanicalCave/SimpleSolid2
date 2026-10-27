@@ -4620,6 +4620,37 @@ int main(int argc, char* argv[]) {
             }
         }
         CHECK(!near(shown.end.y, authored.lines.front().end.v));
+
+        // The old DirectManipulation command still sends absolute
+        // authored coordinates to UpdateSketchGeometry. Until solved
+        // geometry edit transactions exist, prevent a solved-line grip
+        // from silently authoring an obsolete pre-Horizontal point.
+        interaction.activateSelect();
+        scene_viewport.point_query_ = {true, shown.token};
+        interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            125.0, 110.0, 2.5, 1.0));
+        interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_release,
+            125.0, 110.0, 2.5, 1.0));
+        CHECK(interaction.selectedCount() == 1U);
+        scene_viewport.grip_query_ = {
+            true, viewer::SketchGripKey{
+                shown.token, viewer::SketchGripRole::line_end}};
+        const auto before_blocked_drag_revision =
+            solved_session.document().revision();
+        const auto before_blocked_drag_undo =
+            solved_session.undoDepth();
+        interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::primary_press,
+            150.0, 110.0, 5.0, 1.0));
+        CHECK(!interaction.directManipulationActive());
+        CHECK(solved_session.document().revision() ==
+              before_blocked_drag_revision);
+        CHECK(solved_session.undoDepth() == before_blocked_drag_undo);
+        CHECK(solved_session.document().findSketch(sid)->model.state() ==
+              authored);
+
         // E0 failure is fail-closed, never a "last successful"
         // horizontal scene nor a fallback to the authored skew seed.
         backend.fail = true;
