@@ -642,14 +642,76 @@ int testNativeWorkbenchRelationsHost() {
             xz_authored->model.state().constraints.front().id;
         const auto xz_solved_left = xzLineCrossing(0.5);
         const auto xz_solved_right = xzLineCrossing(4.5);
+        const bool xz_wrong_xy_pick =
+            !nativeHasNoOldPick(*world_xy_wrong_pixel);
         if (!xz_solved_left || !xz_solved_right ||
             xz_solved_left->second != xz_solved_right->second ||
             xz_solved_left->second == xz_seed_left->second ||
             std::abs(xz_solved_left->first -
                      xz_solved_right->first) > 0.2 ||
             !near(xz_solved_left->first, 9.0, 0.8) ||
-            !nativeHasNoOldPick(*world_xy_wrong_pixel))
+            xz_wrong_xy_pick) {
+            // Keep the exact existing fail-closed assertions. A source-
+            // verified original PlaneGCS run on Windows exposed this
+            // checkpoint as RED; separate actual AIS sampling geometry,
+            // identity, and accidental XY pickup before changing source.
+            const auto xz_center_left = native->projectWorldPoint(
+                xzWorld(0.5, 9.0));
+            const auto xz_center_right = native->projectWorldPoint(
+                xzWorld(4.5, 9.0));
+            const auto center_left_hit = xz_center_left
+                ? native->querySketchPresentation(*xz_center_left)
+                : viewer::SketchPointQueryResult{};
+            const auto center_right_hit = xz_center_right
+                ? native->querySketchPresentation(*xz_center_right)
+                : viewer::SketchPointQueryResult{};
+            const auto diag = native->runtimeDiagnostics();
+            std::cerr
+                << "E0_XZ_DIAG: preview_on=1"
+                << " authored_constraints="
+                << xz_authored->model.state().constraints.size()
+                << " workbench_feedback="
+                << feedback->text().toStdString()
+                << "\n  seed_left_v=" << xz_seed_left->first
+                << " seed_right_v=" << xz_seed_right->first
+                << "\n  solved_left_present=" << bool(xz_solved_left)
+                << " solved_right_present=" << bool(xz_solved_right);
+            if (xz_solved_left) {
+                std::cerr
+                    << " solved_left_v=" << xz_solved_left->first
+                    << " left_token_same_as_seed="
+                    << (xz_solved_left->second == xz_seed_left->second);
+            }
+            if (xz_solved_right) {
+                std::cerr
+                    << " solved_right_v=" << xz_solved_right->first
+                    << " right_token_same_as_seed="
+                    << (xz_solved_right->second == xz_seed_right->second);
+            }
+            if (xz_solved_left && xz_solved_right) {
+                std::cerr
+                    << " solved_token_match="
+                    << (xz_solved_left->second == xz_solved_right->second)
+                    << " solved_v_delta="
+                    << std::abs(xz_solved_left->first -
+                                xz_solved_right->first);
+            }
+            std::cerr
+                << "\n  center_z9_left_token_present="
+                << bool(center_left_hit.token)
+                << " center_z9_right_token_present="
+                << bool(center_right_hit.token)
+                << " center_z9_left_completed="
+                << center_left_hit.completed
+                << " center_z9_right_completed="
+                << center_right_hit.completed
+                << " wrong_xy_pick=" << xz_wrong_xy_pick
+                << " native_ais_count="
+                << diag.sketch_native_objects_current
+                << " native_redraws=" << diag.redraw_calls
+                << '\n';
             return fail("E0 original PlaneGCS XZ Horizontal world-Z AIS");
+        }
 
         // Actual Workbench Undo/Redo must invalidate old native picks
         // and regenerate the correct world-XZ effective geometry.
