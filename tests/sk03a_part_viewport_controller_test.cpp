@@ -2574,9 +2574,23 @@ int main(int argc, char* argv[]) {
                 }
                 auto candidate = problem.authored;
                 CHECK(candidate.lines.size() == 4U);
-                for (auto& line : candidate.lines) {
-                    line.start.u += 2.0 * calls;
-                    line.end.u += 2.0 * calls;
+                const bool vertical_pending = std::any_of(
+                    problem.equations.begin(), problem.equations.end(),
+                    [](const auto& relation) {
+                        return relation.kind == sketch::ConstraintKind::vertical;
+                    });
+                if (vertical_pending) {
+                    // A currently unsatisfied Vertical and three explicit
+                    // Coincident links make this entire rigid rectangle
+                    // one legitimately movable constraint component.
+                    for (auto& line : candidate.lines) {
+                        const auto a = line.start;
+                        const auto b = line.end;
+                        line.start.u = -a.v + 2.0 * calls;
+                        line.start.v = a.u;
+                        line.end.u = -b.v + 2.0 * calls;
+                        line.end.v = b.u;
+                    }
                 }
                 return {sketch::LocalBackendStatus::converged,
                         std::move(candidate), {}, {}, std::nullopt};
@@ -2615,10 +2629,25 @@ int main(int argc, char* argv[]) {
                 part::OneSidedExtrudeExtent{core::LengthValue{5.0}, false},
                 {}}, kernel);
         CHECK(feature.ok() && feature.feature_id);
+        for (std::size_t i = 0; i < 3U; ++i) {
+            const auto linked = tested_session.execute(
+                application::AddSketchRelationCommand{
+                    sid, tested_session.document().revision(),
+                    sketch::ConstraintKind::coincident,
+                    {rect.entity_ids[i], sketch::ConstraintElement::line_end},
+                    {rect.entity_ids[i+1U],
+                     sketch::ConstraintElement::line_start}});
+            CHECK(linked.ok() && linked.constraint_id);
+        }
+        // Make the original horizontal side Vertical. The solver may
+        // rotate/translate this explicitly linked component, but never
+        // silently transport four independent free Lines.
         const auto constraint = tested_session.execute(
-            application::AddHorizontalSketchConstraintCommand{
+            application::AddSketchRelationCommand{
                 sid, tested_session.document().revision(),
-                rect.entity_ids.front()});
+                sketch::ConstraintKind::vertical,
+                {rect.entity_ids.front(), sketch::ConstraintElement::line},
+                {}});
         CHECK(constraint.ok() && constraint.constraint_id);
         const auto rev = tested_session.document().revision();
         const auto undo = tested_session.undoDepth();
@@ -2660,7 +2689,7 @@ int main(int argc, char* argv[]) {
                 std::min(line.start.x, line.end.x));
         }
         CHECK(std::abs(kernel_leftmost - sketch_leftmost) < 1.0e-9);
-        CHECK(std::abs(kernel_leftmost - 7.0) < 1.0e-9);
+        CHECK(std::abs(kernel_leftmost - (-8.0 + 2.0)) < 1.0e-9);
         CHECK(tested_session.document().revision() == rev);
         CHECK(tested_session.undoDepth() == undo);
         CHECK(tested_session.document().findSketch(sid)->
@@ -2673,7 +2702,7 @@ int main(int argc, char* argv[]) {
         CHECK(kernel.last_profile.has_value());
         CHECK(solver.calls == 2);
         CHECK(vp.sketch_scene_.lines.size() == 4U);
-        CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 9.0) <
+        CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 4.0) <
               1.0e-9);
         CHECK(tested_session.document().revision() == rev);
         CHECK(tested_session.document().findSketch(sid)->
@@ -2708,7 +2737,7 @@ int main(int argc, char* argv[]) {
         CHECK(recovered_profile_properties &&
               recovered_profile_properties->valid());
         CHECK(solver.calls == 4);
-        CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 13.0) <
+        CHECK(std::abs(vp.sketch_scene_.lines.front().start.x - 8.0) <
               1.0e-9);
         CHECK(tested_session.document().revision() == rev);
         CHECK(tested_session.document().findSketch(sid)->
@@ -2727,7 +2756,9 @@ int main(int argc, char* argv[]) {
             const auto undone = tested_session.undo();
             CHECK(undone.ok() && undone.changed);
             CHECK(tested_session.document().findSketch(sid)->
-                      model.state().constraints.empty());
+                      model.state().constraints.size() == 3U);
+            CHECK(!tested_session.document().findSketch(sid)->
+                      model.findConstraint(*constraint.constraint_id));
             vc.refreshPresentation();
             CHECK(kernel.last_profile.has_value());
             CHECK(!vp.body_scene_.triangles.empty());
@@ -2741,7 +2772,9 @@ int main(int argc, char* argv[]) {
         CHECK(tested_session.document().revision() != rev);
         CHECK(tested_session.undoDepth() + 1U == undo);
         CHECK(tested_session.document().findSketch(sid)->
-                  model.state().constraints.empty());
+                  model.state().constraints.size() == 3U);
+        CHECK(!tested_session.document().findSketch(sid)->
+                  model.findConstraint(*constraint.constraint_id));
         CHECK(kernel.last_profile.has_value());
         CHECK(!vp.body_scene_.triangles.empty());
         CHECK(vp.body_scene_.generation.valid());
@@ -2750,7 +2783,7 @@ int main(int argc, char* argv[]) {
               1.0e-9);
         const auto* post_undo = vc.currentSketchInteractionModel();
         CHECK(post_undo != nullptr);
-        CHECK(post_undo->state().constraints.empty());
+        CHECK(post_undo->state().constraints.size() == 3U);
         CHECK(post_undo->state().lines == seed.lines);
         const auto after_undo_profile =
             vc.currentProfileResolution(*profile.profile_id);
@@ -2778,7 +2811,9 @@ int main(int argc, char* argv[]) {
         CHECK(tested_session.document().revision() !=
               before_redo_revision);
         CHECK(tested_session.document().findSketch(sid)->
-                  model.state().constraints.size() == 1U);
+                  model.state().constraints.size() == 4U);
+        CHECK(tested_session.document().findSketch(sid)->
+                  model.findConstraint(*constraint.constraint_id));
         kernel.last_profile.reset();
         vc.refreshPresentation();
         CHECK(solver.calls == before_redo_calls + 1);
@@ -2786,10 +2821,11 @@ int main(int argc, char* argv[]) {
         CHECK(!vp.body_scene_.triangles.empty());
         CHECK(vp.body_scene_.generation.valid());
         CHECK(vp.sketch_scene_.lines.size() == 4U);
-        const auto solved_leftmost =
-            5.0 + 2.0 * static_cast<double>(solver.calls);
+        const auto solved_first_x =
+            2.0 * static_cast<double>(solver.calls);
+        const auto solved_leftmost = solved_first_x - 8.0;
         CHECK(std::abs(vp.sketch_scene_.lines.front().start.x -
-                       solved_leftmost) < 1.0e-9);
+                       solved_first_x) < 1.0e-9);
         double kernel_leftmost_after_redo = 1.0e10;
         for (const auto& use : kernel.last_profile->outer.boundary) {
             const auto* line = std::get_if<kernel::Line2>(&use.curve);
