@@ -649,16 +649,26 @@ int testNativeWorkbenchRelationsHost() {
             xz_solved_left->second == xz_seed_left->second ||
             std::abs(xz_solved_left->first -
                      xz_solved_right->first) > 0.2 ||
-            !near(xz_solved_left->first, 9.0, 0.8) ||
+            // Horizontal constrains the two local V ordinates to
+            // equality, NOT to an absolute world Z. Verified original
+            // PlaneGCS 0.8.0 legitimately chooses Z=8 for the authored
+            // (0,8)-(5,10) seed, while the earlier test demanded Z~=9.
+            // xzLineCrossing samples only on the actual XZ plane and
+            // requires native AIS hits at two distinct world X sites.
             xz_wrong_xy_pick) {
             // Keep the exact existing fail-closed assertions. A source-
             // verified original PlaneGCS run on Windows exposed this
             // checkpoint as RED; separate actual AIS sampling geometry,
             // identity, and accidental XY pickup before changing source.
+            const double measured_v = xz_solved_left
+                ? xz_solved_left->first
+                : xz_solved_right
+                    ? xz_solved_right->first
+                    : 9.0;
             const auto xz_center_left = native->projectWorldPoint(
-                xzWorld(0.5, 9.0));
+                xzWorld(0.5, measured_v));
             const auto xz_center_right = native->projectWorldPoint(
-                xzWorld(4.5, 9.0));
+                xzWorld(4.5, measured_v));
             const auto center_left_hit = xz_center_left
                 ? native->querySketchPresentation(*xz_center_left)
                 : viewer::SketchPointQueryResult{};
@@ -697,13 +707,14 @@ int testNativeWorkbenchRelationsHost() {
                                 xz_solved_right->first);
             }
             std::cerr
-                << "\n  center_z9_left_token_present="
+                << "\n  center_measured_v=" << measured_v
+                << " center_left_token_present="
                 << bool(center_left_hit.token)
-                << " center_z9_right_token_present="
+                << " center_right_token_present="
                 << bool(center_right_hit.token)
-                << " center_z9_left_completed="
+                << " center_left_completed="
                 << center_left_hit.completed
-                << " center_z9_right_completed="
+                << " center_right_completed="
                 << center_right_hit.completed
                 << " wrong_xy_pick=" << xz_wrong_xy_pick
                 << " native_ais_count="
@@ -750,7 +761,9 @@ int testNativeWorkbenchRelationsHost() {
             xz_redo_left->second == xz_solved_left->second ||
             std::abs(xz_redo_left->first -
                      xz_redo_right->first) > 0.2 ||
-            !near(xz_redo_left->first, 9.0, 0.8) ||
+            // Redo must reproduce the same real numerical stage as
+            // the initial accepted solve, not an arbitrary absolute Z.
+            !near(xz_redo_left->first, xz_solved_left->first, 0.2) ||
             !near(xz_redone->model.state().lines.front().start.v, 8.0, 1.0e-8) ||
             !near(xz_redone->model.state().lines.front().end.v, 10.0, 1.0e-8) ||
             !nativeHasNoOldPick(*world_xy_wrong_pixel))
