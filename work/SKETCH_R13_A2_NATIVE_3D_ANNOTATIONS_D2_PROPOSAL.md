@@ -287,12 +287,17 @@ Both gates require exact-head Windows FOCUSED → FAST → Ready FULL (Core + ke
 
 Use a **separate clean Windows x64 / MSVC 2022 build directory**, with working Qt6+OpenCASCADE local environment (`./ss2.ps1 setup` must already have populated `.ss2-local/env.ps1`) and the **original source-backed PlaneGCS 0.8.0** already available offline. No download, vendor edit or distribution. `src/CMakeLists.txt` verifies the complete vendor source manifest SHA-256 and requires known Eigen3/Boost headers; if any input is missing, **STOP**, do not swap in a different solver or bypass verification.
 
-Illustrative PowerShell build sequence, after filling all three machine-local original dependencies with existing verified paths:
+Illustrative PowerShell build sequence, from the **exact checked-out PR #533 E0 HEAD**, after filling all three machine-local original dependencies with existing verified paths. Record `git rev-parse HEAD` and compare it against the current PR head **before** running; a different revision is a hard STOP. This procedure uses a dedicated clean build folder and launches the exact compiled application directly, without another configure/build step after CTest:
 
 ```powershell
 . .\scripts\ss2-common.ps1
 Import-SS2LocalEnvironment
 $cmake = Get-SS2CMakeExe
+$expectedE0Head = '<paste full current PR #533 source head SHA>'
+$actualE0Head = (& git rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $actualE0Head -ne $expectedE0Head) {
+    throw "Wrong E0 source HEAD: expected $expectedE0Head, got $actualE0Head"
+}
 $build = Join-Path (Get-Location).Path 'build\r13-a2-manual-dev'
 $source = '<original unmodified planegcs-0.8.0 root>'
 $eigen = '<existing Eigen3 include directory containing Eigen/Core>'
@@ -346,10 +351,25 @@ foreach ($wrongMode in @(
         throw "Wrong preview-OFF native Workbench branch executed: $wrongMode"
     }
 }
-.\ss2.ps1 run -BuildDir 'build\r13-a2-manual-dev' -Config Debug
+# Launch the SAME already-built binary, without ss2.ps1 run.
+# ss2.ps1 run -> ss2-build.ps1 -> ss2-configure.ps1 would otherwise
+# perform another CMake configure/build after we captured proof.
+$exe = Join-Path $build 'src\Debug\SimpleSolid2.exe'
+if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+    throw "Original PlaneGCS Workbench DEV binary missing: $exe"
+}
+Write-Host "[M0] Git HEAD: $(& git rev-parse HEAD)"
+Write-Host "[M0] Direct DEV executable: $exe"
+Write-Host "[M0] DEV executable SHA256: $((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash)"
+& $exe
+if ($LASTEXITCODE -ne 0) {
+    throw "Original PlaneGCS DEV Workbench exited abnormally: $LASTEXITCODE"
+}
 ```
 
 **Registered native Workbench gate (PR #533 `9a6327d9`):** `sk03a.viewer_native_input` now instantiates an actual `CadWorkbench` with exposed `QtOcctViewerWidget`, enters XY Sketch Edit, verifies a skew Line in native AIS/picking, emits a real native Qt mouse click and uses the Relations → Horizontal buttons. The ordinary CI preview-OFF path asserts no false authored Constraint/Part/Undo changes. The separately configured **preview-ON path requires source-verified original PlaneGCS**, successful authoring, original seed preservation, Workbench feedback and native AIS. Run the CTest above on the **exact PR #533 branch SHA** with both explicit flags ON, and preserve full CMakeCache and CTest logs; OFF green is not ON proof. The Owner visual/manual test must additionally inspect rendered horizontal endpoints, Undo/Redo, camera/picking, and fresh process/reopen. The same registered fixture also operates the real Workbench **Save** control with a valid native checkpoint, loads a new `.ss2part` Part incarnation through `PartDocumentStore`, deactivates the former session, re-enters Sketch Edit on the same actual OCCT window and verifies a fresh AIS/pick token and current effective stage. The M0 script above requires **both** original-PlaneGCS Horizontal proof and the separate original-PlaneGCS cold-reopen proof markers, and rejects both ordinary preview-OFF markers. This CTest still runs in one process; independent cold process plus visually observed behavior remains an Owner manual obligation.
+
+**Reproducibility safeguard:** `ss2.ps1 run` is intentionally *not* used in M0 because it calls `scripts/ss2-run.ps1`, which first invokes `ss2-build.ps1` and thus `ss2-configure.ps1` again. While existing CMake cache options normally persist, a fresh configure/build after the positive CTest changes the evidence boundary. Launching `$build/src/Debug/SimpleSolid2.exe` directly under the already imported `Import-SS2LocalEnvironment` environment preserves the verified source-configured build. Capture the SHA-256 of this exact binary and the corresponding CMakeCache; if the binary cannot be found, **STOP** instead of falling back to a default build. The console log and a video/screenshot still need separate provenance tied to the same SHA.
 
 No release packaging or binary export is part of this procedure. On an unfamiliar machine, first verify toolchain, OCCT runtime DLL availability and graphical native Viewer exposure. A `SS2_R13_PLANEGCS_UI_PREVIEW=OFF` build is **not** evidence for this protocol.
 
