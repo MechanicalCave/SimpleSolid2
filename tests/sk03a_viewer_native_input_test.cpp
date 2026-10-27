@@ -217,9 +217,16 @@ int testNativeWorkbenchRelationsHost() {
         QSettings::UserScope,
         QString::fromStdString((workspace / "prefs").string()));
 
+    const auto initial_path = workspace / "Part001.ss2part";
+    auto initial_part =
+        part::PartDocument::create(core::DocumentId::generate());
+    part::PartDocumentStore initial_store;
+    const auto initial_file = initial_store.createNew(
+        initial_path, initial_part);
+    if (!initial_file.ok() || !initial_file.checkpoint)
+        return fail("E0 native Workbench initial PartStore checkpoint");
     application::DocumentSession session{
-        workspace / "Part001.ss2part",
-        part::PartDocument::create(core::DocumentId::generate())};
+        initial_path, std::move(initial_part), *initial_file.checkpoint};
     const auto created = session.execute(
         application::CreatePartSketchCommand{
             core::BuiltinReferenceRole::xy_plane});
