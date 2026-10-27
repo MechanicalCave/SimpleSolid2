@@ -121,8 +121,58 @@ LocalBackendSolveResult PlaneGcsDevSolver::solve(
                 }
             }
         }
+        // When an existing equation became fully immovable through a
+        // LATER authored Fix, its scalar residual is still authoritative
+        // but feeding it to PlaneGCS as a free equation falsely makes
+        // the already accepted relation "redundant" against fixed
+        // parameters. Omit ONLY exact satisfied fully-fixed equations
+        // from this disposable provider graph. The SS2 gateway checks
+        // ALL original equations, including these, against the caller's
+        // acceptance policy. Never hide unsatisfied or partially movable
+        // equations: they must retain native conflict/diagnostic evidence.
+        const auto fixedSatisfied = [&fixed, &inputs](
+            const SketchConstraintState& relation) {
+            if (!fixed.contains(relation.first.entity) ||
+                (relation.second.entity.valid() &&
+                 !fixed.contains(relation.second.entity))) return false;
+            const auto& first = *inputs.at(relation.first.entity);
+            const auto& second = relation.second.entity.valid()
+                ? *inputs.at(relation.second.entity) : first;
+            switch (relation.kind) {
+            case ConstraintKind::horizontal:
+                return first.start.v == first.end.v;
+            case ConstraintKind::vertical:
+                return first.start.u == first.end.u;
+            case ConstraintKind::coincident: {
+                const auto at = [](const LocalSolveLineInput& line,
+                                   ConstraintElement element) {
+                    return element == ConstraintElement::line_start
+                        ? line.start : line.end;
+                };
+                return at(first, relation.first.element) ==
+                       at(second, relation.second.element);
+            }
+            case ConstraintKind::parallel:
+            case ConstraintKind::perpendicular: {
+                const double au = first.end.u - first.start.u;
+                const double av = first.end.v - first.start.v;
+                const double bu = second.end.u - second.start.u;
+                const double bv = second.end.v - second.start.v;
+                return relation.kind == ConstraintKind::parallel
+                    ? au * bv == av * bu
+                    : au * bu == -av * bv;
+            }
+            case ConstraintKind::fix:
+                return false;
+            }
+            return false;
+        };
+
         std::map<int,ConstraintId> tagToId;
         for (const auto& relation : problem.equations) {
+            if (fixedSatisfied(relation)) {
+                continue;
+            }
             const auto& a = handles.at(relation.first.entity);
             int tag = 0;
             switch (relation.kind) {
