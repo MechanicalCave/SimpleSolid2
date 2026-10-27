@@ -311,9 +311,28 @@ $ctest = Join-Path (Split-Path $cmake -Parent) 'ctest.exe'
 if (-not (Test-Path -LiteralPath $ctest -PathType Leaf)) {
     throw 'Expected matching ctest.exe next to configured cmake.exe'
 }
-& $ctest --test-dir $build -C Debug --no-tests=error `
-    -R '^sk03a[.]viewer_native_input$' --output-on-failure
-if ($LASTEXITCODE -ne 0) { throw 'Original PlaneGCS Workbench + OCCT DEV native CTest FAILED' }
+# Check actual CMake configuration, not just a successful OFF-mode CTest.
+$cache = Get-Content -LiteralPath (Join-Path $build 'CMakeCache.txt')
+foreach ($required in @(
+    'SS2_R13_PLANEGCS_DEV:BOOL=ON',
+    'SS2_R13_PLANEGCS_UI_PREVIEW:BOOL=ON'
+)) {
+    if ($cache -notcontains $required) {
+        throw "Required original PlaneGCS preview CMake flag missing: $required"
+    }
+}
+# -V includes the exact native fixture's own ON/OFF evidence marker.
+$nativeLog = & $ctest --test-dir $build -C Debug --no-tests=error `
+    -R '^sk03a[.]viewer_native_input$' -V 2>&1
+$nativeExit = $LASTEXITCODE
+$nativeLog | ForEach-Object { Write-Host "$_" }
+if ($nativeExit -ne 0) {
+    throw 'Original PlaneGCS Workbench + OCCT DEV native CTest FAILED'
+}
+if (($nativeLog | Out-String) -notmatch
+    'E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_PREVIEW_ON_PASS') {
+    throw 'CTest passed but failed to prove original PlaneGCS Workbench PREVIEW=ON'
+}
 .\ss2.ps1 run -BuildDir 'build\r13-a2-manual-dev' -Config Debug
 ```
 
