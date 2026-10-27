@@ -801,6 +801,19 @@ LocalRelationPreflightResult preflightLocalRelation(
         return result;
     }
 
+    // Fix is a position mask, not a sixth scalar equation. A fresh
+    // geometric relation whose every participant is ALREADY authored
+    // fixed cannot independently control any geometry. Reject this
+    // redundant proposal BEFORE the native adapter: existing older
+    // equations are allowed to survive a later explicit Fix transaction.
+    // Do not conflate externally stage-fixed PG-01 with authored Fix.
+    if (kind != ConstraintKind::fix &&
+        disposable->isFixedLine(first.entity) &&
+        (!second.entity.valid() ||
+         disposable->isFixedLine(second.entity))) {
+        return result;
+    }
+
     const auto provisional_id =
         disposable->addConstraint(kind, first, second);
     if (!provisional_id) return result;
