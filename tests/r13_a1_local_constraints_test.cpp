@@ -2824,10 +2824,10 @@ int main() {
                 {rectangle.entity_ids[i+1U], sk::ConstraintElement::line_start}});
             CHECK(joined.ok() && joined.constraint_id);
         }
-        const auto linked = session.execute(
-            app::AddVerticalSketchConstraintCommand{
-                *made.sketch_id, session.document().revision(),
-                rectangle.entity_ids.front()});
+        const auto linked = session.execute(app::AddSketchRelationCommand{
+            *made.sketch_id, session.document().revision(),
+            sk::ConstraintKind::vertical,
+            {rectangle.entity_ids.front(), sk::ConstraintElement::line}, {}});
         CHECK(linked.ok() && linked.changed && linked.constraint_id);
         CHECK(!session.document().evaluateProfile(*profile.profile_id).has_value());
         const auto unresolved = part::resolveKernelProfileInput(
