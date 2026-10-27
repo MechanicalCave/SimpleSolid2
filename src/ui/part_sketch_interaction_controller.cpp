@@ -6179,6 +6179,22 @@ beginDirectManipulation(
         return false;
     }
 
+    // The legacy Sketcher starts edits from its current displayed
+    // geometry. Here the old DirectManipulation path still authors
+    // absolute coordinates through hosted->model. Until the bounded
+    // solved-edit transaction is implemented, do not let a user grab a
+    // visibly solved point and silently drag the historical seed.
+    const auto* effective =
+        viewport_controller_->currentSketchInteractionModel();
+    if (effective == nullptr ||
+        effective->state() != hosted->model.state()) {
+        reportStatus(
+            "Grip editing requires a current editable geometry "
+            "baseline; solved relations cannot be dragged from "
+            "old authored coordinates.");
+        return false;
+    }
+
     if (!interaction_.beginDirectManipulation(
             hosted->model,
             grip)) {
