@@ -4713,8 +4713,12 @@ int main(int argc, char* argv[]) {
                 auto candidate = problem.authored;
                 CHECK(candidate.lines.size() == 4U);
                 for (auto& line : candidate.lines) {
-                    line.start.u += shift_u;
-                    line.end.u += shift_u;
+                    const auto a = line.start;
+                    const auto b = line.end;
+                    line.start.u = -a.v + shift_u;
+                    line.start.v = a.u;
+                    line.end.u = -b.v + shift_u;
+                    line.end.v = b.u;
                 }
                 return {sketch::LocalBackendStatus::converged,
                         std::move(candidate), {}, {}, std::nullopt};
@@ -4745,10 +4749,27 @@ int main(int argc, char* argv[]) {
             application::CreateProfileCommand{
                 sid, session.document().revision(), *intent});
         CHECK(profile.ok() && profile.profile_id);
+        // Three authored Coincident corners deliberately connect all
+        // four Lines. A Vertical on the original horizontal bottom edge
+        // requires a rigidly rotated (still closed) solved Profile; only
+        // this related component may translate between evaluations.
+        for (std::size_t i = 0; i < 3U; ++i) {
+            const auto joined = session.execute(
+                application::AddSketchRelationCommand{
+                    sid, session.document().revision(),
+                    sketch::ConstraintKind::coincident,
+                    {rectangle.entity_ids[i],
+                     sketch::ConstraintElement::line_end},
+                    {rectangle.entity_ids[i+1U],
+                     sketch::ConstraintElement::line_start}});
+            CHECK(joined.ok() && joined.constraint_id);
+        }
         const auto relation = session.execute(
-            application::AddHorizontalSketchConstraintCommand{
+            application::AddSketchRelationCommand{
                 sid, session.document().revision(),
-                rectangle.entity_ids.front()});
+                sketch::ConstraintKind::vertical,
+                {rectangle.entity_ids.front(),
+                 sketch::ConstraintElement::line}, {}});
         CHECK(relation.ok() && relation.constraint_id);
         const auto source_revision = session.document().revision();
         const auto source_undo = session.undoDepth();
@@ -4783,7 +4804,7 @@ int main(int argc, char* argv[]) {
                 }
                 return minimum;
             };
-            CHECK(near(leftmost(loop), shift));
+            CHECK(near(leftmost(loop), shift - 8.0));
             double sketch_leftmost =
                 viewport.sketch_scene_.lines.front().start.x;
             for (const auto& line : viewport.sketch_scene_.lines) {
@@ -4791,7 +4812,7 @@ int main(int argc, char* argv[]) {
                     sketch_leftmost,
                     std::min(line.start.x, line.end.x));
             }
-            CHECK(near(sketch_leftmost, shift));
+            CHECK(near(sketch_leftmost, shift - 8.0));
             const auto effective =
                 controller.currentSketchInteractionModel();
             CHECK(effective != nullptr);
@@ -4882,9 +4903,8 @@ int main(int argc, char* argv[]) {
         const auto* saved_sketch = cold.document->findSketch(sid);
         CHECK(saved_sketch != nullptr);
         CHECK(saved_sketch->model.state().lines == authored.lines);
-        CHECK(saved_sketch->model.state().constraints.size() == 1U);
-        CHECK(saved_sketch->model.state().constraints.front().id ==
-              *relation.constraint_id);
+        CHECK(saved_sketch->model.state().constraints.size() == 4U);
+        CHECK(saved_sketch->model.findConstraint(*relation.constraint_id));
         CHECK(cold.document->findProfile(*profile.profile_id) != nullptr);
 
         application::DocumentSession reopened{
@@ -4907,8 +4927,7 @@ int main(int argc, char* argv[]) {
         CHECK(reopened.document().findSketch(sid)->
                   model.state().lines == authored.lines);
         CHECK(reopened.document().findSketch(sid)->
-                  model.state().constraints.front().id ==
-              *relation.constraint_id);
+                  model.findConstraint(*relation.constraint_id));
         CHECK(!reopened.needsSave());
         CHECK(reopened.undoDepth() == 0U);
 
