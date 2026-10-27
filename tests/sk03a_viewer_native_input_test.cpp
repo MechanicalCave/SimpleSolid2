@@ -450,8 +450,114 @@ int testNativeWorkbenchRelationsHost() {
             return fail("E0 native Workbench preview-OFF no authoring");
         std::cout << "E0_NATIVE_WORKBENCH_PREVIEW_OFF_PASS" << '\n';
     }
+    // User-visible document switch: A's native Sketch AIS/semantic
+    // selection must be revoked before opening a different Part. A
+    // later return to A must republish a *new* token and a fresh
+    // native stage from the correct Part/sketch, never reuse B's hit.
+    const auto before_switch_left = nativeLineCrossing(0.5);
+    if (!before_switch_left)
+        return fail("E0 native Workbench switch source AIS");
+    const auto old_world_pixel = native->projectWorldPoint(
+        viewer::Point3{0.5, before_switch_left->first, 0.0});
+    if (!old_world_pixel)
+        return fail("E0 native Workbench switch source projection");
+    const auto before_switch_revision = session.document().revision();
+    const auto before_switch_undo = session.undoDepth();
+
+    application::DocumentSession other_session{
+        workspace / "Part002.ss2part",
+        part::PartDocument::create(core::DocumentId::generate())};
+    const auto other_created = other_session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    if (!other_created.ok() || !other_created.sketch_id)
+        return fail("E0 native Workbench other Part Sketch");
+    const auto other_line = other_session.execute(
+        application::AddSketchLineCommand{
+            *other_created.sketch_id, {0.0, 8.0}, {5.0, 10.0}});
+    if (!other_line.ok() || !other_line.entity_id)
+        return fail("E0 native Workbench other Part Line");
+    const auto other_revision = other_session.document().revision();
+    const auto other_undo = other_session.undoDepth();
+
+    const auto nativeHasNoOldPick =
+        [native](viewer::ViewportPoint2 point) {
+            const auto hit = native->querySketchPresentation(point);
+            return hit.completed && !hit.token;
+        };
+    const auto openSketchFromTree = [&]() {
+        auto* item = static_cast<QTreeWidgetItem*>(nullptr);
+        for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+            if ((*it)->text(0) == QStringLiteral("Sketch 1")) {
+                item = *it;
+                break;
+            }
+        }
+        if (!item) return false;
+        tree->setCurrentItem(item);
+        QApplication::processEvents();
+        if (!edit->isEnabled()) return false;
+        edit->trigger();
+        QApplication::processEvents();
+        return native->setCameraState(camera);
+    };
+
+    if (!workbench.activateDocument(&other_session, workspace))
+        return fail("E0 native Workbench A to B activate");
+    QApplication::processEvents();
+    if (native->runtimeDiagnostics().sketch_native_objects_current != 0U ||
+        !nativeHasNoOldPick(*old_world_pixel))
+        return fail("E0 native Workbench A to B revokes stale AIS");
+    if (!openSketchFromTree())
+        return fail("E0 native Workbench B enters Sketch Edit");
+
+    const auto other_pixel = native->projectWorldPoint(
+        viewer::Point3{2.5, 9.0, 0.0});
+    const auto other_hit = other_pixel
+        ? native->querySketchPresentation(*other_pixel)
+        : viewer::SketchPointQueryResult{};
+    if (!other_pixel || !other_hit.completed || !other_hit.token ||
+        other_hit.token == before_switch_left->second ||
+        !nativeHasNoOldPick(*old_world_pixel) ||
+        native->runtimeDiagnostics().sketch_native_objects_current != 1U ||
+        other_session.document().revision() != other_revision ||
+        other_session.undoDepth() != other_undo)
+        return fail("E0 native Workbench B owns distinct native AIS");
+
+    if (!workbench.activateDocument(&session, workspace))
+        return fail("E0 native Workbench B to A activate");
+    QApplication::processEvents();
+    if (native->runtimeDiagnostics().sketch_native_objects_current != 0U ||
+        !nativeHasNoOldPick(*other_pixel))
+        return fail("E0 native Workbench B to A revokes B native AIS");
+    if (!openSketchFromTree())
+        return fail("E0 native Workbench A re-enters Sketch Edit");
+
+    const auto returned_left = nativeLineCrossing(0.5);
+    const auto returned_right = nativeLineCrossing(4.5);
+    if (!returned_left || !returned_right ||
+        returned_left->second != returned_right->second ||
+        returned_left->second == before_switch_left->second ||
+        returned_left->second == other_hit.token ||
+        native->runtimeDiagnostics().sketch_native_objects_current != 1U ||
+        session.document().revision() != before_switch_revision ||
+        session.undoDepth() != before_switch_undo) {
+        return fail("E0 native Workbench A re-entry fresh AIS/lease");
+    }
+    if (original_preview) {
+        const auto* returned_sketch = session.document().findSketch(sid);
+        if (!returned_sketch ||
+            returned_sketch->model.state().constraints.size() != 1U ||
+            std::abs(returned_left->first - returned_right->first) > 0.15 ||
+            !near(returned_left->first, 1.5, 0.75))
+            return fail("E0 original PlaneGCS A re-entry accepted stage");
+    } else if (!near(returned_left->first, 1.1, 0.2) ||
+               !near(returned_right->first, 1.9, 0.2)) {
+        return fail("E0 native Workbench preview-OFF A re-entry seed");
+    }
     workbench.deactivateDocument();
-    if (native->runtimeDiagnostics().sketch_native_objects_current != 0U)
+    if (native->runtimeDiagnostics().sketch_native_objects_current != 0U ||
+        !nativeHasNoOldPick(*old_world_pixel))
         return fail("E0 native Workbench exit revokes AIS");
     workbench.close();
     return EXIT_SUCCESS;
