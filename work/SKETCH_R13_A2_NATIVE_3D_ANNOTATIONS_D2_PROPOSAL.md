@@ -279,6 +279,50 @@ Both gates require exact-head Windows FOCUSED → FAST → Ready FULL (Core + ke
 
 **Current STOP:** E1 P1–P4 scope is Owner-accepted but cannot claim E0 closure or begin unreviewed public API implementation until the native E0 prerequisite and concrete signature gates pass. E2/v22 authoring, new provider/CI paths, Delete/Freeze and DLL distribution are NOT authorized. No Owner manual/release/merge claim. #530 remains Draft with independent governance CLOSURE and guarded merge still required.
 
+## 8. First Owner/manual DEV UI smoke protocol (2026-10-27; pre-E1 glyph release)
+
+**Status: proposed, not yet executed; *not* proof of installed original PlaneGCS / E1 manual acceptance.** This is the first manual functional + visual evaluation of the *existing* local DEV-ONLY Relations Workbench, **not** production/installer proof. Do not show the six E1 glyphs as implemented until the future native E1 renderer and exact signature gates have passed. The existing E0 suite has Windows FULL **203/203 PASS at `37cd1fec`** and new native Undo/Redo/lease **FOCUSED 1/1 PASS at `e5ef833d`**, both using a deterministic solver double in the native joined test; these are independent evidence.
+
+### Environment and source integrity
+
+Use a **separate clean Windows x64 / MSVC 2022 build directory**, with working Qt6+OpenCASCADE local environment (`./ss2.ps1 setup` must already have populated `.ss2-local/env.ps1`) and the **original source-backed PlaneGCS 0.8.0** already available offline. No download, vendor edit or distribution. `src/CMakeLists.txt` verifies the complete vendor source manifest SHA-256 and requires known Eigen3/Boost headers; if any input is missing, **STOP**, do not swap in a different solver or bypass verification.
+
+Illustrative PowerShell build sequence, after filling all three machine-local original dependencies with existing verified paths:
+
+```powershell
+. .\scripts\ss2-common.ps1
+Import-SS2LocalEnvironment
+$cmake = Get-SS2CMakeExe
+$build = Join-Path (Get-Location).Path 'build\r13-a2-manual-dev'
+$source = '<original unmodified planegcs-0.8.0 root>'
+$eigen = '<existing Eigen3 include directory containing Eigen/Core>'
+$boost = '<existing Boost include directory containing boost/graph/adjacency_list.hpp>'
+& $cmake -S . -B $build -G 'Visual Studio 17 2022' -A x64 `
+    '-DSS2_BUILD_DESKTOP=ON' `
+    '-DSS2_R13_PLANEGCS_DEV=ON' `
+    '-DSS2_R13_PLANEGCS_UI_PREVIEW=ON' `
+    "-DSS2_PLANEGCS_080_SOURCE_DIR=$source" `
+    "-DSS2_PLANEGCS_EIGEN_INCLUDE_DIR=$eigen" `
+    "-DSS2_PLANEGCS_BOOST_INCLUDE_DIR=$boost"
+if ($LASTEXITCODE -ne 0) { throw 'DEV preview configure FAILED' }
+& $cmake --build $build --config Debug --target simplesolid2
+if ($LASTEXITCODE -ne 0) { throw 'DEV preview build FAILED' }
+.\ss2.ps1 run -BuildDir 'build\r13-a2-manual-dev' -Config Debug
+```
+
+No release packaging or binary export is part of this procedure. On an unfamiliar machine, first verify toolchain, OCCT runtime DLL availability and graphical native Viewer exposure. A `SS2_R13_PLANEGCS_UI_PREVIEW=OFF` build is **not** evidence for this protocol.
+
+### M0 manual pass/fail script — actual Workbench + real OCCT
+
+1. Start the above DEV application, create a Part, enter an **XY Sketch Edit** and draw one noticeably sloped Line; confirm it is visible and selectable in the *native* 3D Viewer, not merely a Qt Operations row.
+2. Choose Relations and author **Horizontal** by the supported genuine Sketch spatial picking route. Confirm that the original source is visibly replaced by a horizontal **current effective line** in the OCCT viewport, with one accepted relation listed in Operations; if no solver or current stage is available, the UI must fail closed rather than announce a false accepted/current solution.
+3. Test **Undo**: the relation disappears and the originally sloped line is again visible/selectable at its correct world position. Test **Redo**: the same authored relation reappears, while the native Viewer shows only the newly evaluated horizontal line; an old displayed AIS or stale pick is a FAIL.
+4. Orbit/pan/zoom, repeat native hits on the actual current visible geometry, leave Sketch Edit and re-enter. Native picks must map to current Sketch owner, not the previous displayed coordinates. Capture original expected XY before/after and native screen recording.
+5. **Save/Close/Reopen** in a new document session, re-enter Sketch Edit and verify durable authored Line/Constraint semantics plus a fresh effective numerical render. Stop and record a blocker if original backend cannot be reattached or the current-stage provenance is unavailable; do not mislabel an old renderer image as success.
+6. Record exact source branch SHA, full CMakeCache DEV flags, external original 0.8.0 manifest verification, Windows MSVC/Qt/OCCT environment, CTest logs if applicable, screenshot/video of the *real* Viewer and every PASS/FAIL separately. A partial/manual fail is RED; do not downgrade the acceptance rule.
+
+**Explicit limits:** M0 is an *engineering DEV-original-solver* gate and does not prove production LGPL installed-consumer packaging. It has **no selectable native 3D E1 glyph yet** and no Dimensions/v22. M1 glyph Manual Functional+Visual PASS must follow the separately frozen E1 public signatures, registered native RED→GREEN and exact Windows Full/Docs gates. OWNER approval of implementation and merge is independent.
+
 ## Documentation impact
 
 Internal docs: not required
