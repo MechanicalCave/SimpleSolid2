@@ -360,7 +360,7 @@ int main() {
                 std::cerr << "R13-A2 P0 native original relation rejected:"
                           << " support=" << (support ==
                               core::BuiltinReferenceRole::xy_plane ? "XY" : "XZ")
-                          << " step=" << step << '\\n';
+                          << " step=" << step << '\n';
             }
             CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
             const auto after =
@@ -398,7 +398,7 @@ int main() {
                         sk::LocalSolveGatewayStatus::candidate_accepted) {
                     std::cerr << "R13-A2 P0 original stage not accepted:"
                               << " step=" << step
-                              << " replay=" << replay << '\\n';
+                              << " replay=" << replay << '\n';
                 }
                 CHECK(current);
                 CHECK(current->solution.status ==
@@ -428,7 +428,7 @@ int main() {
                   .constraints == final.constraints);
     }
     std::cout << "R13_A2_P0_ORIGINAL_PLANEGCS_5STEP_STABILITY_PASS"
-              << " supports=XY,XZ relations=10 stage_replays=20" << '\\n';
+              << " supports=XY,XZ relations=10 stage_replays=20" << '\n';
 
     app::DocumentSession session{
         {},part::PartDocument::create(core::DocumentId::generate())};
