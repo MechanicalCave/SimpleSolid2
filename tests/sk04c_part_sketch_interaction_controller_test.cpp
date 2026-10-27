@@ -2436,6 +2436,34 @@ int main(int argc, char* argv[]) {
         const auto original_sketch =
             a2_session.document().findSketch(sid)->model.state();
 
+        // SS1 SketchCanvas donor behavior, adapted to the SS2 native
+        // 3D Viewer: Relations hover must show the same current-stage
+        // semantic entity and Start/Mid/End preview grips as Select,
+        // WITHOUT selecting, activating a drag or modifying Part.
+        // The grip overlay is a read-only target affordance.
+        CHECK(a2_viewport.sketch_scene_.lines.size() == 2U);
+        const auto first_token = a2_viewport.sketch_scene_.lines[0].token;
+        a2_viewport.point_query_ = {true, first_token};
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::move,
+            125.0, 100.0, 2.5, 0.0));
+        CHECK(a2_interaction.selectedCount() == 0U);
+        CHECK(a2_viewport.interaction_presentation_.hovered_entity ==
+              first_token);
+        CHECK(a2_viewport.grip_scene_.grips.size() == 3U);
+        CHECK(a2_session.document().revision() == original_revision);
+        CHECK(a2_session.undoDepth() == original_undo);
+        CHECK(a2_session.document().findSketch(sid)->model.state() ==
+              original_sketch);
+        a2_viewport.point_query_ = {true, std::nullopt};
+        a2_interaction.onPointer(pointer(
+            sid, viewer::SpatialPointerPhase::move,
+            300.0, 250.0, 20.0, 15.0));
+        CHECK(!a2_viewport.interaction_presentation_.hovered_entity);
+        CHECK(a2_viewport.grip_scene_.grips.empty());
+        CHECK(a2_interaction.selectedCount() == 0U);
+        CHECK(a2_session.document().revision() == original_revision);
+
         // End of first Line is at (150,100) in test screen frame.
         a2_interaction.onPointer(pointer(
             sid, viewer::SpatialPointerPhase::primary_press,
