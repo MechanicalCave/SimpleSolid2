@@ -1399,6 +1399,108 @@ int main() {
             *accepted.constraint_id) != nullptr);
     }
 
+    // P0/P1: five independent Lines may receive successive standalone
+    // Horizontal/Vertical relations without any Coincident. Every accepted
+    // edit starts from its predecessor's committed geometry; none of the
+    // four unrelated Lines may move, and Undo/Redo round-trips all five.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct IndependentAxisSolver final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                for (const auto& equation : problem.equations) {
+                    const auto target = std::find_if(
+                        candidate.lines.begin(), candidate.lines.end(),
+                        [&equation](const auto& line) {
+                            return line.id == equation.first.entity;
+                        });
+                    if (target == candidate.lines.end()) {
+                        return {sk::LocalBackendStatus::failed, std::nullopt,
+                                {}, {}, std::nullopt};
+                    }
+                    if (equation.kind == sk::ConstraintKind::horizontal) {
+                        target->end.v = target->start.v;
+                    } else if (equation.kind ==
+                               sk::ConstraintKind::vertical) {
+                        target->end.u = target->start.u;
+                    } else {
+                        return {sk::LocalBackendStatus::unsupported,
+                                std::nullopt, {}, {}, std::nullopt};
+                    }
+                }
+                return {sk::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        std::vector<sk::EntityId> ids;
+        for (int i = 0; i < 5; ++i) {
+            const double u = 10.0 * i;
+            const double v = 3.0 * i + 1.0;
+            const auto line = session.execute(app::AddSketchLineCommand{
+                sid, {u, v}, {u + 5.0, v + 1.0}});
+            CHECK(line.ok() && line.entity_id);
+            ids.push_back(*line.entity_id);
+        }
+        const auto initial = session.document().findSketch(sid)->model.state();
+        const auto undo_before = session.undoDepth();
+        std::vector<sk::ConstraintId> accepted_ids;
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            const auto before = session.document().findSketch(sid)->model.state();
+            const auto kind = (i % 2U == 0U)
+                ? sk::ConstraintKind::horizontal
+                : sk::ConstraintKind::vertical;
+            const app::AddSolvedSketchRelationCommand command{
+                sid, session.document().documentId(),
+                session.document().revision(),
+                session.document().incarnationToken(),
+                kind, {ids[i], sk::ConstraintElement::line}, {}};
+            const auto result = session.execute(command, policy, backend);
+            CHECK(result.ok() && result.changed && result.constraint_id);
+            accepted_ids.push_back(*result.constraint_id);
+            const auto after = session.document().findSketch(sid)->model.state();
+            CHECK(after.constraints.size() == i + 1U);
+            CHECK(after.lines.size() == ids.size());
+            for (std::size_t j = 0; j < ids.size(); ++j) {
+                CHECK(after.lines[j].id == ids[j]);
+                if (j != i) {
+                    CHECK(after.lines[j] == before.lines[j]);
+                } else if (kind == sk::ConstraintKind::horizontal) {
+                    CHECK(after.lines[j].start.v == after.lines[j].end.v);
+                    CHECK(after.lines[j].start.u == before.lines[j].start.u);
+                } else {
+                    CHECK(after.lines[j].start.u == after.lines[j].end.u);
+                    CHECK(after.lines[j].start.v == before.lines[j].start.v);
+                }
+            }
+        }
+        CHECK(backend.calls == 5);
+        CHECK(session.undoDepth() == undo_before + 5U);
+        const auto final = session.document().findSketch(sid)->model.state();
+        for (int i = 0; i < 5; ++i) CHECK(session.undo().ok());
+        const auto undone = session.document().findSketch(sid)->model.state();
+        CHECK(undone.lines == initial.lines);
+        CHECK(undone.constraints == initial.constraints);
+        for (int i = 0; i < 5; ++i) CHECK(session.redo().ok());
+        const auto redone = session.document().findSketch(sid)->model.state();
+        CHECK(redone.lines == final.lines);
+        CHECK(redone.constraints == final.constraints);
+        for (const auto id : accepted_ids) {
+            CHECK(session.document().findSketch(sid)->model.findConstraint(id));
+        }
+    }
+
     // A2.0 connected-component proof: a newly created A--B relation
     // extends an existing B--C component, so C is part of the legal
     // proposed graph even though it was not reachable from A before
