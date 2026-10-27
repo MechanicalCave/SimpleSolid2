@@ -4,6 +4,7 @@
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
@@ -14,8 +15,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -594,6 +597,113 @@ int main(int argc, char* argv[]) {
             session.document().findSketch(sid)->
                 model.state().lines.front().end.v != 2.0) {
             return fail("E0 joined lease reactivation native stage");
+        }
+        // Persist actual .ss2part authored state. A new loaded Part
+        // incarnation must not inherit any UI/OCCT stage cache, native
+        // AIS object, selection token or borrowed solver authority.
+        // This is a cold DocumentSession/PartStore load in this test
+        // process, NOT a distinct-process original PlaneGCS proof.
+        const auto cold_path =
+            std::filesystem::temp_directory_path() /
+            ("ss2_e0_native_cold_" +
+             std::to_string(
+                 std::filesystem::file_time_type::clock::now()
+                     .time_since_epoch().count()) + ".ss2part");
+        struct RemoveColdNativeFile final {
+            std::filesystem::path path;
+            ~RemoveColdNativeFile() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{cold_path};
+        part::PartDocumentStore store;
+        if (!store.createNew(cold_path, session.document()).ok()) {
+            return fail("E0 joined native cold persist .ss2part");
+        }
+        auto cold = store.load(cold_path);
+        if (!cold.ok() || !cold.document || !cold.checkpoint ||
+            cold.document->documentId() != session.documentId() ||
+            cold.document->incarnationToken() ==
+                session.document().incarnationToken()) {
+            return fail("E0 joined native cold loaded Part incarnation");
+        }
+        const auto* durable = cold.document->findSketch(sid);
+        if (!durable || durable->model.state().lines.size() != 1U ||
+            !near(durable->model.state().lines.front().start.v, 1.0, 1.0e-8) ||
+            !near(durable->model.state().lines.front().end.v, 2.0, 1.0e-8) ||
+            durable->model.state().constraints.size() != 1U ||
+            durable->model.state().constraints.front().id !=
+                *relation.constraint_id) {
+            return fail("E0 joined native cold retained authored intent");
+        }
+
+        application::DocumentSession reopened{
+            cold_path, std::move(*cold.document), *cold.checkpoint};
+        controller.setDocumentSession(nullptr);
+        const auto closed_hit =
+            widget.querySketchPresentation(*recovered_pixel);
+        if (!closed_hit.completed || closed_hit.token ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
+            controller.sketchEntityFor(*restored_token) ||
+            backend.calls != 5) {
+            return fail("E0 joined native close revokes old AIS/token");
+        }
+        controller.setDocumentSession(&reopened);
+        controller.setSketchEditSketch(sid);
+        // The new backend answer is deliberately different from the
+        // previously displayed solved stage at v=-10.
+        backend.solved_v = -24.0;
+        controller.setDevelopmentStageSolver(
+            &backend, {1.0e-7, 1.0e-6});
+        const auto cold_pixel =
+            project(viewer::Point3{2.5, -24.0, 0.0});
+        const auto cold_hit = cold_pixel
+            ? widget.querySketchPresentation(*cold_pixel)
+            : viewer::SketchPointQueryResult{};
+        const auto obsolete_cold_hit =
+            widget.querySketchPresentation(*recovered_pixel);
+        const auto obsolete_seed_hit =
+            widget.querySketchPresentation(*old_pixel);
+        const auto cold_token =
+            controller.sketchPresentationFor(*added.entity_id);
+        const auto cold_semantic = cold_token
+            ? controller.sketchEntityFor(*cold_token)
+            : std::nullopt;
+        const auto* cold_model =
+            controller.currentSketchInteractionModel();
+        if (backend.calls != 6 || !cold_pixel || !cold_token ||
+            cold_token == restored_token ||
+            !cold_hit.completed || cold_hit.token != cold_token ||
+            !obsolete_cold_hit.completed || obsolete_cold_hit.token ||
+            !obsolete_seed_hit.completed || obsolete_seed_hit.token ||
+            controller.sketchEntityFor(*restored_token) ||
+            !cold_semantic || cold_semantic->sketch_id != sid ||
+            cold_semantic->entity_id != *added.entity_id ||
+            !cold_model || cold_model->state().lines.size() != 1U ||
+            !near(cold_model->state().lines.front().start.v, -24.0, 1.0e-7) ||
+            !near(cold_model->state().lines.front().end.v, -24.0, 1.0e-7) ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 1U ||
+            reopened.document().findSketch(sid)->
+                model.state().constraints.front().id != *relation.constraint_id ||
+            reopened.document().findSketch(sid)->
+                model.state().lines.front().end.v != 2.0 ||
+            reopened.needsSave() || reopened.undoDepth() != 0U) {
+            return fail("E0 joined native cold reopens fresh effective stage");
+        }
+
+        // A failure on the NEW incarnation must still clear that new
+        // result rather than reviving either old or newly cached AIS.
+        backend.reject = true;
+        controller.refreshPresentation();
+        const auto failed_cold_hit =
+            widget.querySketchPresentation(*cold_pixel);
+        if (backend.calls != 7 || !failed_cold_hit.completed ||
+            failed_cold_hit.token ||
+            widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
+            controller.sketchPresentationFor(*added.entity_id) ||
+            controller.sketchEntityFor(*cold_token) ||
+            reopened.needsSave() || reopened.undoDepth() != 0U) {
+            return fail("E0 joined native cold failed stage clears AIS");
         }
         controller.clear();
     }
