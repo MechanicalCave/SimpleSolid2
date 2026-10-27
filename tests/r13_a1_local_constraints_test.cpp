@@ -335,7 +335,49 @@ int main() {
         std::cout << "R13_A2_P0_NATIVE_FREE_LINE_PIN_PASS" << '\n';
     }
 
-    CHECK(passed==10U);
+    // R13-A2 Owner C: Fix Current Position must NOT make an already
+    // accepted Horizontal equation spuriously "redundant" in the original
+    // PlaneGCS backend. Fixed parameter masks are not newly authored
+    // scalar equations; the existing compatible relation remains durable.
+    {
+        sk::SketchModel model;
+        const auto a = model.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto b = model.addLine({12.0, 3.0}, {17.0, 5.0});
+        CHECK(model.addConstraint(K::horizontal, {a,L}));
+        CHECK(model.addConstraint(K::parallel, {a,L}, {b,L}));
+        const auto open = model.state();
+        const auto free_problem = sk::prepareLocalSolveProblem(open);
+        CHECK(free_problem);
+        const auto free_solved =
+            sk::evaluateLocalSolve(*free_problem, policy, native);
+        CHECK(free_solved.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(free_solved.candidate);
+
+        // Apply the approved effective solution as an explicit edit
+        // baseline, then assert Fix + the two surviving constraints
+        // produces an accepted solution without moving either Line.
+        auto accepted_model =
+            sk::SketchModel::restore(*free_solved.candidate);
+        CHECK(accepted_model);
+        const auto before_fixed = accepted_model->state();
+        CHECK(accepted_model->addConstraint(K::fix, {a,L}));
+        const auto fixed_state = accepted_model->state();
+        const auto frozen = sk::prepareLocalSolveProblem(fixed_state);
+        CHECK(frozen && frozen->fixed_lines.size() == 1U);
+        CHECK(frozen->equations.size() == 2U);
+        const auto solved =
+            sk::evaluateLocalSolve(*frozen, policy, native);
+        CHECK(solved.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(solved.candidate);
+        CHECK(solved.candidate->lines == fixed_state.lines);
+        CHECK(solved.candidate->lines[0] == before_fixed.lines[0]);
+        CHECK(model.state() == open);
+        ++passed;
+    }
+
+    CHECK(passed==11U);
     std::cout<<"R13_A1_ORIGINAL_PLANEGCS_NATIVE_PASS cases="<<passed<<'\n';
     return EXIT_SUCCESS;
 }
