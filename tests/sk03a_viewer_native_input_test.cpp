@@ -1,16 +1,23 @@
 #include "sketch_viewport_mapping.hpp"
 #include "part_document_tree_controller.hpp"
 #include "part_viewport_controller.hpp"
+#include "cad_workbench.hpp"
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
+#include <QAction>
 #include <QApplication>
+#include <QLabel>
+#include <QListWidget>
+#include <QPushButton>
+#include <QSettings>
 #include <QMouseEvent>
 #include <QTest>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
 
 #include <algorithm>
 #include <cmath>
@@ -178,6 +185,167 @@ int failMapping(
 
     std::cerr << '\n';
     return EXIT_FAILURE;
+}
+
+// Native Workbench + actual Qt/OCCT provider, not the scripted
+// TestViewportWidget used by wb01.cad_workbench. In the ordinary
+// preview-OFF build this protects the non-authoring fallback. In a
+// separately configured original PlaneGCS UI_PREVIEW=ON build it
+// exercises real spatial input and an accepted Horizontal command.
+// No original-provider success is claimed from preview-OFF CI.
+int testNativeWorkbenchRelationsHost() {
+    const auto workspace =
+        std::filesystem::temp_directory_path() /
+        ("ss2_e0_native_workbench_" +
+         std::to_string(
+             std::filesystem::file_time_type::clock::now()
+                 .time_since_epoch().count()));
+    std::error_code ec;
+    std::filesystem::create_directories(workspace, ec);
+    if (ec) return fail("E0 native Workbench temporary workspace");
+    struct RemoveWorkspace final {
+        std::filesystem::path path;
+        ~RemoveWorkspace() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{workspace};
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(
+        QSettings::IniFormat,
+        QSettings::UserScope,
+        QString::fromStdString((workspace / "prefs").string()));
+
+    application::DocumentSession session{
+        workspace / "Part001.ss2part",
+        part::PartDocument::create(core::DocumentId::generate())};
+    const auto created = session.execute(
+        application::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+    if (!created.ok() || !created.sketch_id)
+        return fail("E0 native Workbench create Sketch");
+    const auto sid = *created.sketch_id;
+    const auto line = session.execute(
+        application::AddSketchLineCommand{
+            sid, {0.0, 1.0}, {5.0, 2.0}});
+    if (!line.ok() || !line.entity_id)
+        return fail("E0 native Workbench skew authored Line");
+    const auto baseline_revision = session.document().revision();
+    const auto baseline_undo = session.undoDepth();
+
+    viewer_qt_occt::QtOcctViewerWidget* native = nullptr;
+    ui::CadWorkbench workbench{
+        [&native](QWidget* parent) {
+            native = new viewer_qt_occt::QtOcctViewerWidget{parent};
+            return ui::ViewportSurface{native, native};
+        }};
+    if (!native) return fail("E0 native Workbench provider factory");
+    workbench.resize(1400, 900);
+    workbench.show();
+    if (!QTest::qWaitForWindowExposed(&workbench, 3000))
+        return fail("E0 native Workbench exposure");
+    if (!workbench.activateDocument(&session, workspace))
+        return fail("E0 native Workbench activate Part");
+    auto* tree = workbench.findChild<QTreeWidget*>(
+        QStringLiteral("documentTree"));
+    auto* edit = workbench.findChild<QAction*>(
+        QStringLiteral("editSketchAction"));
+    auto* relations = workbench.findChild<QPushButton*>(
+        QStringLiteral("relationsSketchToolButton"));
+    auto* horizontal = workbench.findChild<QPushButton*>(
+        QStringLiteral("sketchRelationHorizontalButton"));
+    auto* feedback = workbench.findChild<QLabel*>(
+        QStringLiteral("sketchRelationsFeedbackLabel"));
+    auto* authored = workbench.findChild<QListWidget*>(
+        QStringLiteral("sketchAuthoredRelationsList"));
+    if (!tree || !edit || !relations || !horizontal ||
+        !feedback || !authored || !native->isVisible())
+        return fail("E0 native Workbench actual UI host");
+    QTreeWidgetItem* sketch_item = nullptr;
+    for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+        if ((*it)->text(0) == QStringLiteral("Sketch 1")) {
+            sketch_item = *it;
+            break;
+        }
+    }
+    if (!sketch_item) return fail("E0 native Workbench Sketch tree");
+    tree->setCurrentItem(sketch_item);
+    QApplication::processEvents();
+    if (!edit->isEnabled())
+        return fail("E0 native Workbench Sketch Edit action");
+    edit->trigger();
+    QApplication::processEvents();
+    // Fix a known camera for exact native pixel and hit evidence.
+    const viewer::CameraState camera{
+        viewer::Point3{0.0, 0.0, 100.0},
+        viewer::Point3{0.0, 0.0, 0.0},
+        viewer::Vec3{0.0, 1.0, 0.0},
+        viewer::CameraProjection::orthographic, 30.0};
+    if (!native->setCameraState(camera))
+        return fail("E0 native Workbench Sketch camera");
+    QApplication::processEvents();
+    const auto screen =
+        native->projectWorldPoint(viewer::Point3{2.5, 1.5, 0.0});
+    const auto seed_hit = screen
+        ? native->querySketchPresentation(*screen)
+        : viewer::SketchPointQueryResult{};
+    if (!screen || !seed_hit.completed || !seed_hit.token ||
+        native->runtimeDiagnostics().sketch_native_objects_current != 1U)
+        return fail("E0 native Workbench genuine skew AIS/pick");
+
+    // A genuine mouse click goes through the installed native input
+    // handler, unlike the synthetic semantic pick in wb01.
+    sendLeftClick(
+        *native,
+        QPoint{static_cast<int>(std::lround(screen->x)),
+               static_cast<int>(std::lround(screen->y))});
+    QApplication::processEvents();
+    relations->click();
+    QApplication::processEvents();
+    if (!relations->isChecked() || !horizontal->isEnabled())
+        return fail("E0 native Workbench Relations controls");
+    horizontal->click();
+    QApplication::processEvents();
+    const bool original_preview = workbench.property(
+        "ss2OriginalPlaneGcsDevRelationsPreview").toBool();
+    const auto* current = session.document().findSketch(sid);
+    if (!current || current->model.state().lines.size() != 1U ||
+        !near(current->model.state().lines.front().start.v, 1.0, 1.0e-8) ||
+        !near(current->model.state().lines.front().end.v, 2.0, 1.0e-8))
+        return fail("E0 native Workbench durable line seed");
+
+    if (original_preview) {
+        // This branch runs only when the entire UI library is built
+        // with the source-verified real original PlaneGCS 0.8.0.
+        // A real native click + Qt buttons must author exactly one
+        // constraint without overwriting the skew authored Line.
+        if (current->model.state().constraints.size() != 1U ||
+            current->model.state().constraints.front().kind !=
+                sketch::ConstraintKind::horizontal ||
+            session.document().revision() == baseline_revision ||
+            session.undoDepth() != baseline_undo + 1U ||
+            native->runtimeDiagnostics().sketch_native_objects_current != 1U ||
+            !feedback->text().contains(
+                QStringLiteral("accepted by current Part solver")) ||
+            authored->count() != 1 ||
+            !authored->item(0)->text().contains(
+                QStringLiteral("Horizontal"))) {
+            return fail("E0 original PlaneGCS native Workbench Horizontal");
+        }
+    } else {
+        // A preview-OFF Workbench may stage a relation kind but cannot
+        // masquerade as successful source-backed authoring.
+        if (!current->model.state().constraints.empty() ||
+            session.document().revision() != baseline_revision ||
+            session.undoDepth() != baseline_undo ||
+            native->runtimeDiagnostics().sketch_native_objects_current != 1U)
+            return fail("E0 native Workbench preview-OFF no authoring");
+    }
+    workbench.deactivateDocument();
+    if (native->runtimeDiagnostics().sketch_native_objects_current != 0U)
+        return fail("E0 native Workbench exit revokes AIS");
+    workbench.close();
+    return EXIT_SUCCESS;
 }
 
 } // namespace
@@ -1106,5 +1274,7 @@ int main(int argc, char* argv[]) {
             system_default);
 
     widget.close();
+    if (testNativeWorkbenchRelationsHost() != EXIT_SUCCESS)
+        return EXIT_FAILURE;
     return EXIT_SUCCESS;
 }
