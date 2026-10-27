@@ -88,6 +88,21 @@ LocalBackendSolveResult PlaneGcsDevSolver::solve(
             }
         }
 
+        // P0-D: the original numeric backend receives the *whole*
+        // Sketch for evaluation. Lines with no equation references are
+        // not owned by the component being solved and have no reason
+        // to acquire new coordinates. Freeze them in the provider-private
+        // native parameter mask, without promoting them to authored Fix,
+        // changing the public LocalSolveProblem or widening tolerances.
+        // Existing stage-fixed and semantic Fix Lines retain precedence.
+        std::set<EntityId> referenced;
+        for (const auto& relation : problem.equations) {
+            referenced.insert(relation.first.entity);
+            if (relation.second.entity.valid()) {
+                referenced.insert(relation.second.entity);
+            }
+        }
+
         SketchSolver native;
         std::map<EntityId, NativeLine> handles;
         for (const auto& line : problem.lines) {
@@ -95,7 +110,9 @@ LocalBackendSolveResult PlaneGcsDevSolver::solve(
             const int b = native.add_point(line.end.u, line.end.v);
             const int segment = native.add_line(a, b);
             handles.emplace(line.id, NativeLine{a,b,segment});
-            if (line.fixed) {
+            const bool native_frozen =
+                line.fixed || !referenced.contains(line.id);
+            if (native_frozen) {
                 for (int id : {a,b}) {
                     const auto [x,y] = native.get_point_param_ids(id);
                     native.set_param_fixed(x,true);
@@ -213,7 +230,12 @@ LocalBackendSolveResult PlaneGcsDevSolver::solve(
                 std::hypot(end.u-start.u,end.v-start.v);
             if (!finite(start) || !finite(end) ||
                 !std::isfinite(length) || length <= 0.0) return failed();
-            if (input->second->fixed &&
+            // A provider-private frozen free Line has the same exact
+            // immobility guarantee as an explicit Fix/PG-01 Line, but
+            // never becomes an authored or externally fixed relation.
+            const bool native_frozen = input->second->fixed ||
+                !referenced.contains(line.id);
+            if (native_frozen &&
                 (start != input->second->start ||
                  end != input->second->end)) return failed();
             line.start = start;
