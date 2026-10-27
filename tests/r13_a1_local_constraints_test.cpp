@@ -325,6 +325,11 @@ int main() {
         CHECK(answer.candidate->lines[2].id == unrelated_b);
         CHECK(answer.candidate->lines[1] == authored.lines[1]);
         CHECK(answer.candidate->lines[2] == authored.lines[2]);
+        // Horizontal on one editable Line leaves three independent
+        // scalar DoF; the two untouched free Lines have four each.
+        // Internal native pinning cannot masquerade as semantic Fix.
+        CHECK(answer.degrees_of_freedom &&
+              *answer.degrees_of_freedom == 11U);
         CHECK(model.state() == authored);
         std::cout << "R13_A2_P0_NATIVE_FREE_LINE_PIN_PASS" << '\n';
     }
