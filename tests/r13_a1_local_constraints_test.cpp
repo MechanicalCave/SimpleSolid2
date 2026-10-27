@@ -297,6 +297,38 @@ int main() {
         ++passed;
     }
 
+    // Additional P0-D provider-private RED case: the original PlaneGCS
+    // must NOT move free Lines that have no authored equation, even
+    // while correcting an unrelated skew Horizontal. Without an actual
+    // original-source build this is a registered native requirement,
+    // not an asserted Windows execution result.
+    {
+        sk::SketchModel model;
+        const auto constrained =
+            model.addLine({0.0, 1.0}, {5.0, 2.0});
+        const auto unrelated_a =
+            model.addLine({12.0, 7.0}, {16.0, 9.0});
+        const auto unrelated_b =
+            model.addLine({30.0, 3.0}, {32.0, 10.0});
+        CHECK(model.addConstraint(K::horizontal, {constrained, L}));
+        const auto authored = model.state();
+        const auto problem = sk::prepareLocalSolveProblem(authored);
+        CHECK(problem && problem->equations.size() == 1U);
+        const auto answer = sk::evaluateLocalSolve(*problem, policy, native);
+        CHECK(answer.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(answer.candidate);
+        CHECK(answer.candidate->lines.size() == 3U);
+        CHECK(answer.candidate->lines[0].start.v ==
+              answer.candidate->lines[0].end.v);
+        CHECK(answer.candidate->lines[1].id == unrelated_a);
+        CHECK(answer.candidate->lines[2].id == unrelated_b);
+        CHECK(answer.candidate->lines[1] == authored.lines[1]);
+        CHECK(answer.candidate->lines[2] == authored.lines[2]);
+        CHECK(model.state() == authored);
+        std::cout << "R13_A2_P0_NATIVE_FREE_LINE_PIN_PASS" << '\n';
+    }
+
     CHECK(passed==10U);
     std::cout<<"R13_A1_ORIGINAL_PLANEGCS_NATIVE_PASS cases="<<passed<<'\n';
     return EXIT_SUCCESS;
