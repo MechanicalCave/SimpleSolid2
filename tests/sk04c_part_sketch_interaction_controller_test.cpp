@@ -4524,10 +4524,10 @@ int main(int argc, char* argv[]) {
               sketch::ConstraintKind::horizontal);
         CHECK(authored.lines.size() == 1U);
         CHECK(near(authored.lines.front().start.v, 1.0));
-        CHECK(near(authored.lines.front().end.v, 2.0));
-        // The accepted Part stage-solver gateway is ALREADY capable of
-        // producing the same Horizontal effective geometry independently
-        // from the authored, deliberately skew Line seed. This check is
+        CHECK(near(authored.lines.front().end.v, 1.0));
+        // The explicit Add command commits the verified Horizontal
+        // endpoints as current authored baseline. The Part stage gateway
+        // independently rechecks the same effective result without writeback. This check is
         // a domain-side E0 oracle, not a new Viewer API, shortcut or
         // second numerical solver. It must PASS before the Viewer RED.
         struct NoProjectedEdges final : kernel::IEdgeProjectionQuery {
@@ -4569,7 +4569,7 @@ int main(int argc, char* argv[]) {
         CHECK(solved_line.id == *added.entity_id);
         CHECK(near(solved_line.start.v, solved_line.end.v));
         CHECK(near(solved_line.start.v, authored.lines.front().start.v));
-        CHECK(!near(solved_line.end.v, authored.lines.front().end.v));
+        CHECK(near(solved_line.end.v, authored.lines.front().end.v));
         CHECK(backend.calls == 3);
         CHECK(solved_session.document().findSketch(sid)->model.state() ==
               authored);
@@ -4619,12 +4619,11 @@ int main(int argc, char* argv[]) {
                 CHECK(false);
             }
         }
-        CHECK(!near(shown.end.y, authored.lines.front().end.v));
+        CHECK(near(shown.end.y, authored.lines.front().end.v));
 
-        // The old DirectManipulation command still sends absolute
-        // authored coordinates to UpdateSketchGeometry. Until solved
-        // geometry edit transactions exist, prevent a solved-line grip
-        // from silently authoring an obsolete pre-Horizontal point.
+        // Even now that the authored edit baseline is solved, ordinary
+        // DirectManipulation is NOT a solver-backed edit transaction.
+        // A constrained Line grip must remain blocked until it is.
         interaction.activateSelect();
         scene_viewport.point_query_ = {true, shown.token};
         interaction.onPointer(pointer(
@@ -4670,16 +4669,15 @@ int main(int argc, char* argv[]) {
               authored);
 
         // An unchanged, valid backend may recover on a fresh current-
-        // revision refresh without copying the saved/skew seed.
+        // revision refresh without changing the saved accepted baseline.
         backend.fail = false;
         scene_controller.refreshPresentation();
         CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
         CHECK(near(scene_viewport.sketch_scene_.lines.front().start.y,
                    scene_viewport.sketch_scene_.lines.front().end.y));
 
-        // Part Undo makes the constraint disappear: published geometry
-        // must be authored/skew again. Redo republishes solved geometry
-        // while the persisted Line coordinates never change.
+        // Part Undo restores the pre-transaction skew baseline. Redo
+        // atomically restores the committed Horizontal baseline and intent.
         CHECK(solved_session.undo().changed);
         scene_controller.refreshPresentation();
         CHECK(scene_viewport.sketch_scene_.lines.size() == 1U);
