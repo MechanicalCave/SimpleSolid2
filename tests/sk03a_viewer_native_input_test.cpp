@@ -263,8 +263,10 @@ int testNativeWorkbenchRelationsHost() {
         QStringLiteral("undoDocumentButton"));
     auto* redo = workbench.findChild<QPushButton*>(
         QStringLiteral("redoDocumentButton"));
+    auto* save = workbench.findChild<QPushButton*>(
+        QStringLiteral("saveDocumentButton"));
     if (!tree || !edit || !relations || !horizontal ||
-        !feedback || !authored || !undo || !redo ||
+        !feedback || !authored || !undo || !redo || !save ||
         !native->isVisible())
         return fail("E0 native Workbench actual UI host");
     QTreeWidgetItem* sketch_item = nullptr;
@@ -555,10 +557,106 @@ int testNativeWorkbenchRelationsHost() {
                !near(returned_right->first, 1.9, 0.2)) {
         return fail("E0 native Workbench preview-OFF A re-entry seed");
     }
+    // Unlike the PartViewportController cold-load test, exercise the
+    // actual Workbench Save button, true .ss2part container persistence,
+    // document deactivation, new DocumentSession incarnation, and the
+    // SAME live Qt/OCCT Workbench's re-entry after a cold load.
+    const auto before_save_left = nativeLineCrossing(0.5);
+    const auto before_save_right = nativeLineCrossing(4.5);
+    if (!before_save_left || !before_save_right || !save->isEnabled())
+        return fail("E0 native Workbench cold Save prerequisites");
+    const auto persisted_revision = session.document().revision();
+    const auto persisted_undo = session.undoDepth();
+    const auto persisted_sketch = session.document().findSketch(sid);
+    if (!persisted_sketch ||
+        persisted_sketch->model.state().lines.size() != 1U)
+        return fail("E0 native Workbench durable Sketch before Save");
+
+    save->click();
+    QApplication::processEvents();
+    if (!session.fileCheckpoint() || session.needsSave() ||
+        !std::filesystem::is_regular_file(session.path()) ||
+        session.document().revision() != persisted_revision ||
+        session.undoDepth() != persisted_undo)
+        return fail("E0 native Workbench Qt Save .ss2part");
+
+    part::PartDocumentStore store;
+    auto disk = store.load(session.path());
+    if (!disk.ok() || !disk.document || !disk.checkpoint ||
+        disk.document->documentId() != session.documentId() ||
+        disk.document->incarnationToken() ==
+            session.document().incarnationToken())
+        return fail("E0 native Workbench cold loaded Part incarnation");
+    const auto* durable_sketch = disk.document->findSketch(sid);
+    if (!durable_sketch ||
+        durable_sketch->model.state().lines !=
+            persisted_sketch->model.state().lines ||
+        durable_sketch->model.state().constraints !=
+            persisted_sketch->model.state().constraints ||
+        durable_sketch->model.state().constraints.size() !=
+            (original_preview ? 1U : 0U))
+        return fail("E0 native Workbench cold authored relation/seed");
+
+    const auto prior_native_token = before_save_left->second;
+    const auto prior_native_pixel = native->projectWorldPoint(
+        viewer::Point3{0.5, before_save_left->first, 0.0});
+    if (!prior_native_pixel)
+        return fail("E0 native Workbench saved stage projected point");
+    application::DocumentSession cold_session{
+        session.path(), std::move(*disk.document), *disk.checkpoint};
+
+    workbench.deactivateDocument();
+    QApplication::processEvents();
+    if (workbench.activeDocumentId() ||
+        native->runtimeDiagnostics().sketch_native_objects_current != 0U ||
+        !nativeHasNoOldPick(*prior_native_pixel))
+        return fail("E0 native Workbench cold deactivation revokes AIS");
+    if (!workbench.activateDocument(&cold_session, workspace) ||
+        !openSketchFromTree())
+        return fail("E0 native Workbench cold session re-enters Sketch");
+    QApplication::processEvents();
+
+    const auto cold_left = nativeLineCrossing(0.5);
+    const auto cold_right = nativeLineCrossing(4.5);
+    const auto* reloaded_sketch = cold_session.document().findSketch(sid);
+    if (!reloaded_sketch || !cold_left || !cold_right ||
+        cold_left->second != cold_right->second ||
+        cold_left->second == prior_native_token ||
+        cold_left->second == other_hit.token ||
+        native->runtimeDiagnostics().sketch_native_objects_current != 1U ||
+        cold_session.needsSave() || cold_session.undoDepth() != 0U ||
+        cold_session.document().findSketch(sid)->
+            model.state().lines != persisted_sketch->model.state().lines ||
+        cold_session.document().findSketch(sid)->
+            model.state().constraints !=
+                persisted_sketch->model.state().constraints)
+        return fail("E0 native Workbench cold fresh AIS and authored state");
+
+    if (original_preview) {
+        // The new Sketch Edit lease must reauthorize the original real
+        // PlaneGCS provider; a previously saved numerical AIS answer is
+        // not an authored Sketch and cannot be resurrected.
+        if (reloaded_sketch->model.state().constraints.size() != 1U ||
+            std::abs(cold_left->first - cold_right->first) > 0.15 ||
+            !near(cold_left->first, 1.5, 0.75))
+            return fail("E0 original PlaneGCS Workbench cold solver stage");
+    } else if (!near(cold_left->first, 1.1, 0.2) ||
+               !near(cold_right->first, 1.9, 0.2)) {
+        return fail("E0 native Workbench cold preview-OFF skew seed");
+    }
     workbench.deactivateDocument();
     if (native->runtimeDiagnostics().sketch_native_objects_current != 0U ||
-        !nativeHasNoOldPick(*old_world_pixel))
+        !nativeHasNoOldPick(*prior_native_pixel))
         return fail("E0 native Workbench exit revokes AIS");
+
+    if (original_preview) {
+        std::cout
+            << "E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_COLD_REOPEN_PASS"
+            << '\n';
+    } else {
+        std::cout << "E0_NATIVE_WORKBENCH_COLD_REOPEN_PREVIEW_OFF_PASS"
+                  << '\n';
+    }
     workbench.close();
     return EXIT_SUCCESS;
 }
