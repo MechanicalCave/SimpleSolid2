@@ -455,11 +455,22 @@ int main(int argc, char* argv[]) {
         controller.refreshPresentation();
         const auto rejected_hit =
             widget.querySketchPresentation(*solved_pixel);
+        const auto rejected_authored_hit =
+            widget.querySketchPresentation(*old_pixel);
+        const auto* rejected_model =
+            controller.currentSketchInteractionModel();
+        // A valid *empty* current snapshot is allowed by the E0
+        // authority contract. It carries zero selectable geometry;
+        // nullptr is not the only legitimate fail-closed result.
         if (backend.calls != 2 || !rejected_hit.completed ||
             rejected_hit.token ||
+            !rejected_authored_hit.completed ||
+            rejected_authored_hit.token ||
             widget.runtimeDiagnostics().sketch_native_objects_current != 0U ||
             controller.sketchPresentationFor(*added.entity_id) ||
-            controller.currentSketchInteractionModel()) {
+            (rejected_model &&
+             (!rejected_model->state().lines.empty() ||
+              !rejected_model->state().constraints.empty()))) {
             return fail("E0 joined rejected Part stage clears native AIS");
         }
 
