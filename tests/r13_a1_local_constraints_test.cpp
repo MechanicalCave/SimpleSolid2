@@ -5076,6 +5076,18 @@ int main() {
                 line.start.u += translated_u;
                 line.end.u += translated_u;
             }
+            // The fixture is a genuine closed, slightly slanted
+            // quadrilateral carrying a violated Horizontal on side 0.
+            // Restore a rectangular 5..15 x 0..8 current-stage solve
+            // while retaining all four explicitly linked Coincident
+            // corners. A later +2 mm shift is therefore inside the
+            // affected semantic component, not free-Line drift.
+            if (solved.lines[0].end.v != solved.lines[0].start.v) {
+                solved.lines[0].end.v = solved.lines[0].start.v;
+                solved.lines[1].start.v = solved.lines[0].end.v;
+                solved.lines[1].end.v = solved.lines[2].end.v;
+                solved.lines[2].start.v = solved.lines[1].end.v;
+            }
             solved.lines[1].start.u += seam_offset;
             return {sk::LocalBackendStatus::converged,
                     std::move(solved), {}, {}, 3U};
@@ -5095,6 +5107,20 @@ int main() {
         {5.0, 0.0}, {15.0, 8.0}, sk::EntityRole::regular, false});
     CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
 
+    // Deliberately make a CLOSED slanted four-sided region. One side
+    // now violates Horizontal, giving the guarded Part solver genuine
+    // work to do. All adjacent corners remain coincident as authored,
+    // so the Profile exists before the relation is added; this fixture
+    // does not silently reclassify the untouched sides as movable.
+    const auto tilted = session.execute(app::UpdateSketchGeometryCommand{
+        *sketch.sketch_id, session.document().revision(),
+        {
+            {rectangle.entity_ids[0], {5.0, 0.0}, {15.0, 0.25}},
+            {rectangle.entity_ids[1], {15.0, 0.25}, {15.0, 8.25}},
+            {rectangle.entity_ids[2], {15.0, 8.25}, {5.0, 8.0}},
+        }, {}, {}});
+    CHECK(tilted.ok() && tilted.changed);
+
     const auto* original = session.document().findSketch(*sketch.sketch_id);
     CHECK(original != nullptr);
     const auto seed = original->model.state();
@@ -5113,6 +5139,25 @@ int main() {
         {seed.lines[0].id, sk::ConstraintElement::line_end},
         {seed.lines[1].id, sk::ConstraintElement::line_start}});
     CHECK(coincide.ok() && coincide.constraint_id);
+    // Without these three explicit Coincident links, sides 2 and 3
+    // would be independent despite matching authored endpoint numbers,
+    // and a global +2 mm numerical translation must be rejected.
+    for (std::size_t i = 1U; i < 4U; ++i) {
+        const auto linked = session.execute(app::AddSketchRelationCommand{
+            *sketch.sketch_id, session.document().revision(),
+            sk::ConstraintKind::coincident,
+            {seed.lines[i].id, sk::ConstraintElement::line_end},
+            {seed.lines[(i + 1U) % 4U].id,
+             sk::ConstraintElement::line_start}});
+        CHECK(linked.ok() && linked.constraint_id);
+    }
+    const auto horizontal = session.execute(app::AddSketchRelationCommand{
+        *sketch.sketch_id, session.document().revision(),
+        sk::ConstraintKind::horizontal,
+        {seed.lines[0].id, sk::ConstraintElement::line}, {}});
+    CHECK(horizontal.ok() && horizontal.constraint_id);
+    CHECK(session.document().findSketch(*sketch.sketch_id)->
+        model.state().constraints.size() == 5U);
 
     CHECK(!session.document().evaluateProfile(*profile.profile_id));
     CHECK(part::resolveKernelProfileInput(
@@ -5214,11 +5259,11 @@ int main() {
     CHECK(session.document().findSketch(*sketch.sketch_id)
         ->model.state().lines == seed.lines);
 
-    // A refused candidate must not poison either the authored intent or
-    // the old Profile/OCCT path. Undo the ONLY new Coincident relation;
-    // the exact same ProfileId must immediately work through the original
-    // public resolver and produce a genuine native solid again.
-    CHECK(session.undo().changed);
+    // A refused candidate must not poison authored intent or the
+    // Profile/OCCT path. Undo the five semantic relations (Horizontal
+    // and four connected Coincident edges); the same ProfileId must
+    // immediately work through the original public resolver.
+    for (int i = 0; i < 5; ++i) CHECK(session.undo().changed);
     const auto* unconstrained =
         session.document().findProfile(*profile.profile_id);
     CHECK(unconstrained != nullptr);
@@ -5235,15 +5280,16 @@ int main() {
     CHECK(restored_solid.brep_valid);
     CHECK(restored_solid.solid_count == 1U);
 
-    // Redo restores the exact authored relation identity and fail-closed
-    // unsolved Profile state; no stale OCCT or solver result is reused.
-    CHECK(session.redo().changed);
+    // Redo restores the same five authored ConstraintIds and a
+    // fail-closed unsolved Profile state, not a stale cached OCCT body.
+    for (int i = 0; i < 5; ++i) CHECK(session.redo().changed);
     CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
     const auto after_redo =
         session.document().findSketch(*sketch.sketch_id)->model.state();
     CHECK(after_redo.lines == seed.lines);
-    CHECK(after_redo.constraints.size() == 1U);
+    CHECK(after_redo.constraints.size() == 5U);
     CHECK(after_redo.constraints.front().id == *coincide.constraint_id);
+    CHECK(after_redo.constraints.back().id == *horizontal.constraint_id);
     CHECK(part::resolveKernelProfileInput(
         session.document(), *profile.profile_id).status ==
         part::ProfileKernelInputStatus::unresolved_profile);
@@ -5437,9 +5483,11 @@ int main() {
         const auto authoredRevolve =
             revolve_document.document->findSketch(*sketch.sketch_id)
                 ->model.state();
-        CHECK(authoredRevolve.constraints.size() == 1U);
+        CHECK(authoredRevolve.constraints.size() == 5U);
         CHECK(authoredRevolve.constraints.front().id ==
               *coincide.constraint_id);
+        CHECK(authoredRevolve.constraints.back().id ==
+              *horizontal.constraint_id);
         const auto coldPath = std::filesystem::temp_directory_path() /
             ("r13_a1_p21_native_revolve_" +
              std::string{revolve_document.document->documentId().value()} +
