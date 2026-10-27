@@ -289,6 +289,8 @@ Use a **separate clean Windows x64 / MSVC 2022 build directory**, with working Q
 
 Illustrative PowerShell build sequence for the **actual same Windows runner** `SS2-Windows`. Historical source integrity and native feasibility were demonstrated by original-source [Windows PR #506 run #39630814429](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/39630814429) on **2026-10-21**: `r13a1.planegcs_native` and `r13a1.planegcs_occt_native` both **PASS (2/2)**. It reported the unmodified source tree at `D:\SimpleSolid2\build\b1a\source\planegcs-0.8.0`; its existing Boost and Eigen directories are shown below. The same named runner `SS2-Windows` also executed the ordinary native Workbench E0 [#40494267907](https://github.com/MechanicalCave/SimpleSolid2/actions/runs/40494267907) on **2026-10-27** (default UI preview OFF).
 
+**New actual M0 observation (2026-10-27, exact earlier test HEAD `a0e080c3`):** operator's clean Windows isolated local build really found original PlaneGCS source, Eigen, Boost, Qt/OCCT, verified original wrapper SHA-256, built `ss2_r13_planegcs_dev.lib` and `SimpleSolid2.exe` and confirmed `SS2_R13_PLANEGCS_DEV=ON`, `SS2_R13_PLANEGCS_UI_PREVIEW=ON`. The registered real native Workbench CTest ran **4.34 s and FAILED**: it printed `E0_ORIGINAL_PLANEGCS_NATIVE_WORKBENCH_PREVIEW_ON_PASS` (XY genuine Horizontal achieved) then `SK-03A native input failure: E0 original PlaneGCS XZ Horizontal world-Z AIS`. Thus **XZ RED** and **cold-reopen NOT REACHED**, so M0 stays RED. A following OCCT `wglMakeCurrent()` context error does not yet establish cause. Correct next activity is to run the *test-only* targeted XZ failure diagnostics added at PR #533 `d03ca09e` in that same original-source ON build, keeping all original acceptance assertions; only after the native XZ issue is identified and corrected may M0 be retried as a complete three-positive-marker gate. Do not mislabel compiler or XY-only success as combined PASS.
+
 These are **historical paths**, *not* a claim that the files still exist or that the native Workbench ON test has run. Check the paths on the actual runner **before** CMake, stop on any missing item, and allow `src/CMakeLists.txt` to reverify every consumed original source SHA-256. Use the **exact checked-out PR #533 HEAD** shown below (update the pinned SHA explicitly if the PR head changes). This clean, dedicated build launches the same binary after CTest without implicit reconfigure/build:
 
 ```powershell
@@ -297,7 +299,7 @@ Import-SS2LocalEnvironment
 $cmake = Get-SS2CMakeExe
 # Exact PR #533 HEAD checked on 2026-10-27. If PR #533 moves,
 # update this SHA only after verifying the new PR head independently.
-$expectedE0Head = 'a0e080c3d9e1b2c3301933e77b69fdf21155814d'
+$expectedE0Head = 'd03ca09ea67ef7bfaf7a07024a3224d20aa4ca78'
 $actualE0Head = (& git rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $actualE0Head -ne $expectedE0Head) {
     throw "Wrong E0 source HEAD: expected $expectedE0Head, got $actualE0Head"
