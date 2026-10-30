@@ -4987,6 +4987,27 @@ int main(int argc, char* argv[]) {
         CHECK(reopened.document().findSketch(sid)->
                   model.state().lines == authored.lines);
         CHECK(!reopened.needsSave());
+
+        // Owner 2026-10-30 manual RED, native v21: Finish Sketch
+        // must not remove the numerical stage authority for read-only
+        // Profile/Body presentation. Authored Part remains unchanged.
+        const auto finished_revision = reopened.document().revision();
+        const auto finished_undo = reopened.undoDepth();
+        const auto before_finish_calls = stage_solver.calls;
+        controller.setSketchEditSketch(std::nullopt);
+        CHECK(viewport.sketch_scene_.lines.empty());
+        CHECK(viewport.profile_scene_.profiles.size() == 1U);
+        CHECK(controller.currentProfileResolution(
+            *profile.profile_id).has_value());
+        CHECK(stage_solver.calls > before_finish_calls);
+        CHECK(reopened.document().revision() == finished_revision);
+        CHECK(reopened.undoDepth() == finished_undo);
+        CHECK(!reopened.needsSave());
+
+        // Session replacement must still revoke a borrowed backend
+        // and clear all previous Profile bindings and snapshots.
+        controller.setDocumentSession(nullptr);
+        CHECK(viewport.profile_scene_.profiles.empty());
     }
 
     // E0 Part provenance under synchronous backend reentry: while a
