@@ -509,5 +509,470 @@ int main() {
     CHECK(state.selectedEntities().empty());
     CHECK(!state.primarySelection().has_value());
 
+    // R13-A2.0 typed Sketch-owned selection grammar; no Qt-generated
+    // constraint ID and no authored Sketch mutation during collection.
+    sketch::SketchModel relation_model;
+    const auto relation_a = relation_model.addLine(
+        {0.0, 0.0}, {5.0, 0.0});
+    const auto relation_b = relation_model.addLine(
+        {0.0, 3.0}, {5.0, 4.0});
+    const auto relation_circle = relation_model.addCircle(
+        {1.0, 1.0}, 2.0);
+    const auto relation_before = relation_model.state();
+    sketch::SketchInteractionState acquire;
+    using RK = sketch::ConstraintKind;
+    using RE = sketch::ConstraintElement;
+    using RO = sketch::RelationTargetOutcome;
+    const sketch::ConstraintReference first_line{
+        relation_a, RE::line};
+    const sketch::ConstraintReference second_line{
+        relation_b, RE::line};
+    const sketch::ConstraintReference a_end{
+        relation_a, RE::line_end};
+    const sketch::ConstraintReference b_start{
+        relation_b, RE::line_start};
+    CHECK(!acquire.setRelationKind(RK::parallel));
+    CHECK(acquire.replaceSelection(relation_a));
+    acquire.activateRelations();
+    CHECK(acquire.tool() == sketch::SketchTool::relations);
+    CHECK(acquire.selectedEntities().size() == 1U);
+    CHECK(acquire.selectedEntities().front() == relation_a);
+    CHECK(acquire.setRelationKind(RK::horizontal));
+    const auto horizontal = acquire.acceptRelationTarget(
+        relation_model, first_line);
+    CHECK(horizontal.outcome == RO::ready);
+    CHECK(horizontal.draft.has_value());
+    CHECK(horizontal.draft->kind == RK::horizontal);
+    CHECK(horizontal.draft->first == first_line);
+    CHECK(!horizontal.draft->second.entity.valid());
+
+    CHECK(acquire.setRelationKind(RK::coincident));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line).outcome == RO::invalid_target);
+    const auto first_relation_pick = acquire.acceptRelationTarget(
+        relation_model, a_end);
+    CHECK(first_relation_pick.outcome == RO::first_target_accepted);
+    CHECK(acquire.firstRelationTarget() == a_end);
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, {relation_a, RE::line_start}
+    ).outcome == RO::invalid_target);
+    CHECK(acquire.firstRelationTarget() == a_end);
+    const auto coincident = acquire.acceptRelationTarget(
+        relation_model, b_start);
+    CHECK(coincident.outcome == RO::ready);
+    CHECK(coincident.draft.has_value());
+    CHECK(coincident.draft->first == a_end);
+    CHECK(coincident.draft->second == b_start);
+    CHECK(!acquire.firstRelationTarget());
+    CHECK(acquire.relationKind() == RK::coincident);
+
+    CHECK(acquire.setRelationKind(RK::parallel));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::first_target_accepted);
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, {relation_circle, RE::line}
+    ).outcome == RO::invalid_target);
+    CHECK(acquire.cancelRelationTarget());
+    CHECK(!acquire.firstRelationTarget());
+    CHECK(!acquire.cancelRelationTarget());
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::first_target_accepted);
+    const auto parallel = acquire.acceptRelationTarget(
+        relation_model, second_line);
+    CHECK(parallel.outcome == RO::ready);
+    CHECK(parallel.draft->kind == RK::parallel);
+    CHECK(parallel.draft->first.entity != parallel.draft->second.entity);
+
+    CHECK(acquire.setRelationKind(RK::fix));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::ready);
+    CHECK(!acquire.setRelationKind(static_cast<RK>(255)));
+    CHECK(acquire.relationKind() == RK::fix);
+    CHECK(relation_model.state() == relation_before);
+    CHECK(!acquire.setDimensionKind(sketch::DrivingDimensionToolKind::length));
+    acquire.activateDimensions();
+    CHECK(acquire.tool() == sketch::SketchTool::dimensions);
+    CHECK(!acquire.relationKind());
+    CHECK(!acquire.dimensionKind());
+    CHECK(acquire.setDimensionKind(sketch::DrivingDimensionToolKind::length));
+    CHECK(acquire.dimensionKind() == sketch::DrivingDimensionToolKind::length);
+    CHECK(acquire.setDimensionKind(sketch::DrivingDimensionToolKind::diameter));
+    CHECK(acquire.dimensionKind() == sketch::DrivingDimensionToolKind::diameter);
+    CHECK(!acquire.setDimensionKind(static_cast<sketch::DrivingDimensionToolKind>(255)));
+    CHECK(acquire.dimensionKind() == sketch::DrivingDimensionToolKind::diameter);
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::inactive);
+    acquire.finishTool();
+    CHECK(acquire.tool() == sketch::SketchTool::select);
+    CHECK(!acquire.dimensionKind());
+    acquire.activateRelations();
+    CHECK(acquire.setRelationKind(RK::parallel));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::first_target_accepted);
+    acquire.activateLine();
+    CHECK(acquire.tool() == sketch::SketchTool::line);
+    CHECK(!acquire.relationKind());
+    CHECK(!acquire.firstRelationTarget());
+    CHECK(relation_model.state() == relation_before);
+
+    acquire.activateRelations();
+    CHECK(acquire.setRelationKind(RK::parallel));
+    CHECK(acquire.acceptRelationTarget(
+        relation_model, first_line
+    ).outcome == RO::first_target_accepted);
+    CHECK(acquire.escape());
+    CHECK(acquire.tool() == sketch::SketchTool::relations);
+    CHECK(acquire.relationKind() == RK::parallel);
+    CHECK(!acquire.firstRelationTarget());
+    CHECK(acquire.escape());
+    CHECK(acquire.tool() == sketch::SketchTool::select);
+    CHECK(!acquire.relationKind());
+    acquire.activateDimensions();
+    CHECK(acquire.setDimensionKind(sketch::DrivingDimensionToolKind::radius));
+    CHECK(acquire.escape());
+    CHECK(acquire.tool() == sketch::SketchTool::select);
+    CHECK(!acquire.dimensionKind());
+    CHECK(relation_model.state() == relation_before);
+
+    // A2.0 lifecycle contract: cancelling and switching away from
+    // Relations clears its half-collected target and type, never changes
+    // the Sketch model or leaves a hidden target for a later command.
+    // Esc is intentionally two-stage: first drops the pending hit,
+    // second leaves the Relations mode.
+    {
+        sketch::SketchInteractionState switched;
+        const auto begin = [&]() {
+            switched.activateRelations();
+            CHECK(switched.setRelationKind(RK::parallel));
+            CHECK(switched.acceptRelationTarget(
+                relation_model, first_line).outcome ==
+                RO::first_target_accepted);
+            CHECK(switched.firstRelationTarget() == first_line);
+        };
+        begin();
+        switched.cancelForHistory();
+        CHECK(switched.tool() == sketch::SketchTool::select);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.cancelTool();
+        CHECK(switched.tool() == sketch::SketchTool::select);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.finishTool();
+        CHECK(switched.tool() == sketch::SketchTool::select);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.activateCircle();
+        CHECK(switched.tool() == sketch::SketchTool::circle);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.activateArc();
+        CHECK(switched.tool() == sketch::SketchTool::arc);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.activateRectangle();
+        CHECK(switched.tool() == sketch::SketchTool::rectangle);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        begin();
+        switched.activateDimensions();
+        CHECK(switched.tool() == sketch::SketchTool::dimensions);
+        CHECK(!switched.firstRelationTarget());
+        CHECK(!switched.relationKind());
+        CHECK(relation_model.state() == relation_before);
+    }
+
+    // R13-A2.0 RED: a two-hit relation draft must never be READY with a
+    // first semantic Line that was deleted between the two user clicks.
+    // This is a stale current-model validation failure, not a reason to
+    // reset the selected tool or consume a constraint ID.
+    for (const auto kind : {RK::coincident, RK::parallel,
+                            RK::perpendicular}) {
+        sketch::SketchModel changing;
+        const auto removed = changing.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto surviving = changing.addLine({0.0, 2.0}, {5.0, 2.0});
+        const auto third = changing.addLine({0.0, 4.0}, {5.0, 4.0});
+        const auto role = kind == RK::coincident
+            ? RE::line_end : RE::line;
+        const auto next_role = kind == RK::coincident
+            ? RE::line_start : RE::line;
+        const sketch::ConstraintReference original_target{removed, role};
+        const sketch::ConstraintReference current_target{surviving, next_role};
+        const sketch::ConstraintReference final_target{third, role};
+
+        sketch::SketchInteractionState staged;
+        staged.activateRelations();
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            changing, original_target).outcome ==
+            RO::first_target_accepted);
+        CHECK(staged.firstRelationTarget() == original_target);
+        CHECK(changing.erase(removed));
+
+        const auto stale_second = staged.acceptRelationTarget(
+            changing, current_target);
+        CHECK(stale_second.outcome == RO::invalid_target);
+        CHECK(!stale_second.draft);
+        CHECK(!staged.firstRelationTarget());
+        CHECK(staged.relationKind() == kind);
+
+        // After explicit rejection the new first hit is acquired from
+        // the current Sketch; a third distinct current Line completes
+        // a valid transient draft without resetting the chosen kind.
+        CHECK(staged.acceptRelationTarget(
+            changing, current_target).outcome ==
+            RO::first_target_accepted);
+        const auto recovered = staged.acceptRelationTarget(
+            changing, final_target);
+        CHECK(recovered.outcome == RO::ready);
+        CHECK(recovered.draft);
+        CHECK(recovered.draft->first == current_target);
+        CHECK(recovered.draft->second == final_target);
+        CHECK(!staged.firstRelationTarget());
+    }
+
+    // Symmetric invalid second-hit case: the FIRST semantic target is
+    // still current, only the attempted second Line vanished. Keep the
+    // first pick so correcting the second click does not restart a valid
+    // two-target gesture or author any partial relation.
+    for (const auto kind : {RK::coincident, RK::parallel,
+                            RK::perpendicular}) {
+        sketch::SketchModel changing;
+        const auto first = changing.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto gone_second =
+            changing.addLine({0.0, 2.0}, {5.0, 2.0});
+        const auto valid_second =
+            changing.addLine({0.0, 4.0}, {5.0, 4.0});
+        const auto first_role = kind == RK::coincident
+            ? RE::line_end : RE::line;
+        const auto second_role = kind == RK::coincident
+            ? RE::line_start : RE::line;
+        const sketch::ConstraintReference first_ref{first, first_role};
+        const sketch::ConstraintReference gone_ref{
+            gone_second, second_role};
+        const sketch::ConstraintReference valid_ref{
+            valid_second, second_role};
+
+        sketch::SketchInteractionState staged;
+        staged.activateRelations();
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            changing, first_ref).outcome ==
+            RO::first_target_accepted);
+        CHECK(changing.erase(gone_second));
+        const auto lost_second = staged.acceptRelationTarget(
+            changing, gone_ref);
+        CHECK(lost_second.outcome == RO::invalid_target);
+        CHECK(!lost_second.draft);
+        CHECK(staged.firstRelationTarget() == first_ref);
+        CHECK(staged.relationKind() == kind);
+
+        const auto corrected = staged.acceptRelationTarget(
+            changing, valid_ref);
+        CHECK(corrected.outcome == RO::ready);
+        CHECK(corrected.draft);
+        CHECK(corrected.draft->first == first_ref);
+        CHECK(corrected.draft->second == valid_ref);
+        CHECK(!staged.firstRelationTarget());
+    }
+
+    // A2.0 RED: a stale first semantic Line can still have the SAME
+    // EntityId after a legal current-stage endpoint/role edit or Undo.
+    // Such a hit is not the originally selected geometry and must not
+    // produce a READY relation draft on the second click.
+    for (const auto kind : {RK::coincident, RK::parallel,
+                            RK::perpendicular}) {
+        sketch::SketchModel edited;
+        const auto first = edited.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto second = edited.addLine({0.0, 3.0}, {5.0, 3.0});
+        const auto third = edited.addLine({0.0, 6.0}, {5.0, 6.0});
+        const auto first_role =
+            kind == RK::coincident ? RE::line_end : RE::line;
+        const auto second_role =
+            kind == RK::coincident ? RE::line_start : RE::line;
+        const sketch::ConstraintReference initial{first, first_role};
+        const sketch::ConstraintReference next{second, second_role};
+        const sketch::ConstraintReference corrected{third, first_role};
+        sketch::SketchInteractionState staged;
+        staged.activateRelations();
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            edited, initial).outcome == RO::first_target_accepted);
+        CHECK(staged.firstRelationTarget() == initial);
+
+        // The first Line still exists with its durable identity, but its
+        // initially hit endpoint has moved in the current effective model.
+        CHECK(edited.updateLine(first, {0.0, 0.0}, {5.0, 2.0}));
+        const auto stale_geometry =
+            staged.acceptRelationTarget(edited, next);
+        CHECK(stale_geometry.outcome == RO::invalid_target);
+        CHECK(!stale_geometry.draft);
+        CHECK(!staged.firstRelationTarget());
+        CHECK(staged.relationKind() == kind);
+        CHECK(edited.findLine(first) != nullptr);
+
+        CHECK(staged.acceptRelationTarget(
+            edited, next).outcome == RO::first_target_accepted);
+        const auto ready = staged.acceptRelationTarget(edited, corrected);
+        CHECK(ready.outcome == RO::ready);
+        CHECK(ready.draft);
+        CHECK(ready.draft->first == next);
+        CHECK(ready.draft->second == corrected);
+        CHECK(!staged.firstRelationTarget());
+
+        // Changing a different Line must NOT invalidate a stable first
+        // Line hit. A current-stage second hit can still complete it.
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            edited, initial).outcome == RO::first_target_accepted);
+        CHECK(edited.updateLine(second, {0.0, 3.0}, {5.0, 4.0}));
+        const auto independent = staged.acceptRelationTarget(edited, next);
+        CHECK(independent.outcome == RO::ready);
+        CHECK(independent.draft);
+        CHECK(independent.draft->first == initial);
+        CHECK(independent.draft->second == next);
+
+        // Role intent is part of the same first-hit provenance. It can
+        // change with a retained EntityId and identical endpoints.
+        CHECK(staged.setRelationKind(kind));
+        CHECK(staged.acceptRelationTarget(
+            edited, initial).outcome == RO::first_target_accepted);
+        CHECK(edited.setEntityRole(
+            first, sketch::EntityRole::construction));
+        const auto changed_role = staged.acceptRelationTarget(edited, next);
+        CHECK(changed_role.outcome == RO::invalid_target);
+        CHECK(!changed_role.draft);
+        CHECK(!staged.firstRelationTarget());
+        CHECK(staged.relationKind() == kind);
+
+        // A fresh pick must capture the construction-role Line as it is,
+        // not keep comparing against the old regular-role snapshot.
+        CHECK(staged.acceptRelationTarget(
+            edited, initial).outcome == RO::first_target_accepted);
+        const auto after_role_repick =
+            staged.acceptRelationTarget(edited, next);
+        CHECK(after_role_repick.outcome == RO::ready);
+        CHECK(after_role_repick.draft);
+        CHECK(after_role_repick.draft->first == initial);
+        CHECK(after_role_repick.draft->second == next);
+    }
+
+    // Native viewport screen-space R13-A2 Coincident endpoint grammar:
+    // input is a disposable projection from the *current* Sketch stage.
+    // It does not need visible/selected editable grips and cannot write CAD.
+    using EH = sketch::RelationEndpointHitStatus;
+    const std::vector<sketch::RelationEndpointScreenCandidate> endpoint_hits{
+        {a_end, {40.0, 65.0}},
+        {b_start, {100.0, 90.0}},
+    };
+    const auto endpoint_hit = sketch::resolveRelationEndpointHit(
+        relation_model, {42.0, 63.0}, endpoint_hits, 9.0);
+    CHECK(endpoint_hit.status == EH::hit);
+    CHECK(endpoint_hit.reference == a_end);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {42.0, 63.0}, endpoint_hits, 1.0
+    ).status == EH::miss);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {150.0, 150.0}, endpoint_hits, 9.0
+    ).status == EH::miss);
+
+    // Exact/overlapping projected endpoints must NEVER resolve via
+    // incidental entity ordering, even when one is marginally closer.
+    const std::vector<sketch::RelationEndpointScreenCandidate> overlap{
+        {a_end, {40.0, 65.0}},
+        {b_start, {41.0, 66.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, overlap, 9.0
+    ).status == EH::ambiguous);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, {overlap.data(), overlap.size()}, 9.0
+    ).status == EH::ambiguous);
+
+    // A2.0 RED: input validation must run over the WHOLE candidate
+    // collection. An early ambiguous hit is not permission to skip a
+    // later stale, duplicated or non-finite endpoint projection.
+    const std::vector<sketch::RelationEndpointScreenCandidate> late_stale{
+        {a_end, {40.0, 65.0}},
+        {b_start, {41.0, 66.0}},
+        {{relation_circle, RE::line_end}, {200.0, 200.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, late_stale, 9.0
+    ).status == EH::invalid_input);
+    const std::vector<sketch::RelationEndpointScreenCandidate> late_duplicate{
+        {a_end, {40.0, 65.0}},
+        {b_start, {41.0, 66.0}},
+        {a_end, {200.0, 200.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, late_duplicate, 9.0
+    ).status == EH::invalid_input);
+    const std::vector<sketch::RelationEndpointScreenCandidate> late_nonfinite{
+        {a_end, {40.0, 65.0}},
+        {b_start, {41.0, 66.0}},
+        {a_end, {std::numeric_limits<double>::infinity(), 200.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, late_nonfinite, 9.0
+    ).status == EH::invalid_input);
+    // VALID overlap still returns ambiguity independently of order,
+    // and never chooses a nearest-by-iteration endpoint.
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, overlap, 9.0
+    ).status == EH::ambiguous);
+
+    const std::vector<sketch::RelationEndpointScreenCandidate> duplicate{
+        {a_end, {40.0, 65.0}},
+        {a_end, {40.0, 65.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, duplicate, 9.0
+    ).status == EH::invalid_input);
+    const std::vector<sketch::RelationEndpointScreenCandidate> non_endpoint{
+        {first_line, {40.0, 65.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, non_endpoint, 9.0
+    ).status == EH::invalid_input);
+    const std::vector<sketch::RelationEndpointScreenCandidate> non_line{
+        {{relation_circle, RE::line_start}, {40.0, 65.0}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, non_line, 9.0
+    ).status == EH::invalid_input);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, endpoint_hits,
+        std::numeric_limits<double>::infinity()
+    ).status == EH::invalid_input);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model,
+        {std::numeric_limits<double>::quiet_NaN(), 65.0},
+        endpoint_hits, 9.0
+    ).status == EH::invalid_input);
+    // A2.0 RED: finite but distant screen points are valid INPUT and
+    // must return MISS, not INVALID_INPUT. Squaring a 1e160-pixel delta
+    // overflows binary64; this is not a malformed/stale Qt projection.
+    const std::vector<sketch::RelationEndpointScreenCandidate> huge_offset{
+        {a_end, {1.0e160, 1.0e160}},
+    };
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {40.0, 65.0}, huge_offset, 9.0
+    ).status == EH::miss);
+    CHECK(sketch::resolveRelationEndpointHit(
+        relation_model, {1.0e160, -1.0e160}, endpoint_hits, 9.0
+    ).status == EH::miss);
+    CHECK(relation_model.state() == relation_before);
+
     return EXIT_SUCCESS;
 }

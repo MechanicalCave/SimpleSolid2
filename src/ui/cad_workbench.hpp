@@ -27,6 +27,7 @@ class QComboBox;
 class QEvent;
 class QLabel;
 class QLineEdit;
+class QListWidget;
 class QPlainTextEdit;
 class QPushButton;
 class QStackedWidget;
@@ -37,6 +38,10 @@ class QWidget;
 
 namespace simplesolid2::kernel {
 class ISolidModelingKernel;
+}
+
+namespace simplesolid2::sketch {
+class ILocalSketchSolver;
 }
 
 namespace simplesolid2::ui {
@@ -369,6 +374,8 @@ private:
     void activateSketchCircle();
     void activateSketchArc();
     void activateSketchRectangle();
+    void activateSketchRelations();
+    void activateSketchDimensions();
     void activateSketchTrim();
     void activateSketchExtend();
     void activateSketchExtendBoth();
@@ -507,6 +514,11 @@ private:
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
     PartViewportController* viewport_controller_{};
+    // Explicit opt-in local original-PlaneGCS UI preview: this owner must
+    // outlive the interaction controller's borrowed ILocalSketchSolver.
+    // Empty for every normal desktop/consumer build.
+    std::unique_ptr<sketch::ILocalSketchSolver>
+        dev_relation_preview_solver_;
     std::unique_ptr<PartSketchInteractionController>
         sketch_interaction_controller_;
 
@@ -633,6 +645,16 @@ private:
     QLabel* topology_geometry_{};
 
     QLabel* operations_placeholder_{};
+    QWidget* sketch_relations_operations_widget_{};
+    QLabel* sketch_relations_feedback_label_{};
+    QLabel* sketch_relation_targets_label_{};
+    QListWidget* sketch_authored_relations_list_{};
+    std::array<QPushButton*, 6> sketch_relation_kind_buttons_{};
+    QWidget* sketch_dimensions_operations_widget_{};
+    std::array<QPushButton*, 3> sketch_dimension_kind_buttons_{};
+    QWidget* sketch_a2_visibility_widget_{};
+    QCheckBox* sketch_show_constraints_check_{};
+    QCheckBox* sketch_show_dimensions_check_{};
     QWidget* precision_operations_widget_{};
     QLabel* precision_status_label_{};
     QPushButton* object_snap_toggle_button_{};
@@ -679,6 +701,8 @@ private:
     QPushButton* circle_sketch_button_{};
     QPushButton* arc_sketch_button_{};
     QPushButton* rectangle_sketch_button_{};
+    QPushButton* relations_sketch_button_{};
+    QPushButton* dimensions_sketch_button_{};
     QPushButton* create_construction_button_{};
     QPushButton* rectangle_diagonals_button_{};
     QLabel* profile_tools_label_{};

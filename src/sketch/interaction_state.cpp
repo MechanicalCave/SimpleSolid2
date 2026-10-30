@@ -1355,6 +1355,216 @@ void SketchInteractionState::activateRectangle() noexcept {
     resetRectangleStage();
 }
 
+void SketchInteractionState::activateRelations() noexcept {
+    // Mode activation is transient Sketch-owned state. No constraint may
+    // be committed by a Qt button or from ordinary snap/inference.
+    resetStructuralEdit();
+    resetMeasure();
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    tool_ = SketchTool::relations;
+    relation_kind_.reset();
+    relation_first_.reset();
+    relation_first_geometry_.reset();
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    resetRectangleStage();
+}
+
+void SketchInteractionState::activateDimensions() noexcept {
+    resetStructuralEdit();
+    resetMeasure();
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    tool_ = SketchTool::dimensions;
+    relation_kind_.reset();
+    relation_first_.reset();
+    relation_first_geometry_.reset();
+    dimension_kind_.reset();
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    resetRectangleStage();
+}
+
+bool SketchInteractionState::setDimensionKind(
+    DrivingDimensionToolKind kind) noexcept {
+    if (tool_ != SketchTool::dimensions) return false;
+    switch (kind) {
+    case DrivingDimensionToolKind::length:
+    case DrivingDimensionToolKind::radius:
+    case DrivingDimensionToolKind::diameter:
+        dimension_kind_ = kind;
+        return true;
+    }
+    return false;
+}
+
+RelationEndpointHit resolveRelationEndpointHit(
+    const SketchModel& current_model,
+    Point2 pointer_screen,
+    std::span<const RelationEndpointScreenCandidate> candidates,
+    double native_hit_tolerance_pixels) noexcept {
+    const RelationEndpointHit invalid{
+        RelationEndpointHitStatus::invalid_input, std::nullopt};
+    if (!pointer_screen.finite() ||
+        !std::isfinite(native_hit_tolerance_pixels) ||
+        native_hit_tolerance_pixels <= 0.0) {
+        return invalid;
+    }
+
+    // Keep valid finite viewport coordinates valid even when their
+    // separation is too large to square in binary64. hypot avoids
+    // intermediate squared-distance overflow; a very far finite
+    // projection is a MISS, not an INVALID_INPUT capture error.
+    std::optional<ConstraintReference> found;
+    bool multiple_hits = false;
+    // Validate every supplied projection, even after a second visible
+    // hit makes selection ambiguous. Otherwise a later stale EntityId,
+    // duplicate endpoint or non-finite screen point is silently hidden
+    // behind an early AMBIGUOUS response instead of INVALID_INPUT.
+    for (std::size_t index = 0; index < candidates.size(); ++index) {
+        const auto& candidate = candidates[index];
+        const auto reference = candidate.reference;
+        if (!reference.entity.valid() ||
+            (reference.element != ConstraintElement::line_start &&
+             reference.element != ConstraintElement::line_end) ||
+            current_model.findLine(reference.entity) == nullptr ||
+            !candidate.screen_point.finite()) {
+            return invalid;
+        }
+        for (std::size_t other = 0; other < index; ++other) {
+            if (candidates[other].reference == reference) {
+                // A duplicated candidate is not a second user-selectable
+                // endpoint, and is a caller projection/capture error.
+                return invalid;
+            }
+        }
+        const double distance = std::hypot(
+            pointer_screen.u - candidate.screen_point.u,
+            pointer_screen.v - candidate.screen_point.v);
+        if (distance > native_hit_tolerance_pixels) continue;
+        if (found) {
+            multiple_hits = true;
+        } else {
+            found = reference;
+        }
+    }
+
+    if (multiple_hits) {
+        return {RelationEndpointHitStatus::ambiguous, std::nullopt};
+    }
+    return found
+        ? RelationEndpointHit{RelationEndpointHitStatus::hit, found}
+        : RelationEndpointHit{RelationEndpointHitStatus::miss, std::nullopt};
+}
+
+bool SketchInteractionState::setRelationKind(
+    ConstraintKind kind) noexcept {
+    if (tool_ != SketchTool::relations) return false;
+    switch (kind) {
+    case ConstraintKind::horizontal:
+    case ConstraintKind::vertical:
+    case ConstraintKind::coincident:
+    case ConstraintKind::parallel:
+    case ConstraintKind::perpendicular:
+    case ConstraintKind::fix:
+        break;
+    default:
+        return false;
+    }
+    relation_kind_ = kind;
+    relation_first_.reset();
+    relation_first_geometry_.reset();
+    return true;
+}
+
+RelationTargetResult SketchInteractionState::acceptRelationTarget(
+    const SketchModel& model,
+    ConstraintReference target) noexcept {
+    if (tool_ != SketchTool::relations || !relation_kind_) {
+        return {};
+    }
+
+    // A two-hit draft may survive a geometry edit, Undo or stage
+    // refresh between clicks. Durable EntityId alone cannot prove that
+    // the picked Line is STILL the same current-stage geometry/role.
+    // Reject a changed first hit without emitting READY or authoring ID;
+    // retain the relation kind for a fresh pair of semantic clicks.
+    if (relation_first_) {
+        const auto* line = model.findLine(relation_first_->entity);
+        if (!line || !relation_first_geometry_ ||
+            line->start() != relation_first_geometry_->start ||
+            line->end() != relation_first_geometry_->end ||
+            line->role() != relation_first_geometry_->role) {
+            relation_first_.reset();
+            relation_first_geometry_.reset();
+            return {RelationTargetOutcome::invalid_target, std::nullopt};
+        }
+    }
+
+    const auto kind = *relation_kind_;
+    const bool pair =
+        kind == ConstraintKind::coincident ||
+        kind == ConstraintKind::parallel ||
+        kind == ConstraintKind::perpendicular;
+    const bool line_body =
+        kind != ConstraintKind::coincident;
+    const bool correct_role =
+        line_body
+            ? target.element == ConstraintElement::line
+            : target.element == ConstraintElement::line_start ||
+              target.element == ConstraintElement::line_end;
+    if (!correct_role || !target.entity.valid() ||
+        model.findLine(target.entity) == nullptr) {
+        return {RelationTargetOutcome::invalid_target, std::nullopt};
+    }
+
+    if (!pair) {
+        return {RelationTargetOutcome::ready,
+                RelationTargetDraft{kind, target, {}}};
+    }
+    if (!relation_first_) {
+        const auto* line = model.findLine(target.entity);
+        // Already checked above; capture by value rather than pointer
+        // so subsequent Line edits cannot silently retarget the gesture.
+        relation_first_ = target;
+        relation_first_geometry_ = SketchLineState{
+            target.entity, line->start(), line->end(), line->role()};
+        return {RelationTargetOutcome::first_target_accepted,
+                std::nullopt};
+    }
+    if (relation_first_->entity == target.entity) {
+        // Coincident cannot close one Line onto itself. Parallel and
+        // perpendicular require two distinct Lines. Preserve first
+        // target so the user can correct the second click without
+        // reopening the command.
+        return {RelationTargetOutcome::invalid_target, std::nullopt};
+    }
+
+    const RelationTargetDraft candidate{
+        kind, *relation_first_, target};
+    relation_first_.reset();
+    relation_first_geometry_.reset();
+    // READY is a transient semantic request only. No ID, solver
+    // value, Part revision, persistence or history is mutated here.
+    return {RelationTargetOutcome::ready, candidate};
+}
+
+bool SketchInteractionState::cancelRelationTarget() noexcept {
+    if (tool_ != SketchTool::relations || !relation_first_) {
+        return false;
+    }
+    relation_first_.reset();
+    relation_first_geometry_.reset();
+    return true;
+}
+
 void SketchInteractionState::activateMeasure(
     const SketchModel& model) noexcept {
     resetStructuralEdit();
@@ -2837,6 +3047,21 @@ bool SketchInteractionState::escape() noexcept {
         return true;
     }
 
+    if (tool_ == SketchTool::relations) {
+        // First Esc cancels only an unfinished two-target acquisition.
+        // Second Esc exits Relations. No Part operation/Undo is created.
+        if (cancelRelationTarget()) return true;
+        resetToSelect();
+        clearHover();
+        return true;
+    }
+
+    if (tool_ == SketchTool::dimensions) {
+        resetToSelect();
+        clearHover();
+        return true;
+    }
+
     return false;
 }
 
@@ -3036,6 +3261,7 @@ bool SketchInteractionState::setHoveredEntity(
     std::optional<EntityId> entity) noexcept {
     const bool hover_allowed =
         tool_ == SketchTool::select ||
+        tool_ == SketchTool::relations ||
         tool_ == SketchTool::trim ||
         tool_ == SketchTool::extend ||
         tool_ == SketchTool::extend_both ||
@@ -3680,6 +3906,10 @@ SketchInteractionState::deterministicPrimary()
 
 void SketchInteractionState::resetToSelect() noexcept {
     resetMeasure();
+    relation_kind_.reset();
+    relation_first_.reset();
+    relation_first_geometry_.reset();
+    dimension_kind_.reset();
     tool_ = SketchTool::select;
     resetLineStage();
     resetCircleStage();
@@ -3767,6 +3997,12 @@ void SketchInteractionState::resetMeasure() noexcept {
 void SketchInteractionState::resetStructuralEdit() noexcept {
     structural_boundaries_.clear();
     extend_both_first_line_.reset();
+    // Every other Sketch tool activates through this shared transient
+    // cleanup path. Never carry half-acquired A2 references across tools.
+    relation_kind_.reset();
+    relation_first_.reset();
+    relation_first_geometry_.reset();
+    dimension_kind_.reset();
 }
 
 } // namespace simplesolid2::sketch

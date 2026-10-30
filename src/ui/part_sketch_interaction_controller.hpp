@@ -362,6 +362,39 @@ public:
     void activateCircle();
     void activateArc();
     void activateRectangle();
+    void activateRelations();
+    void activateDimensions();
+    // Explicit DEV/test-only numerical dependency. Normal desktop builds
+    // inject no solver and cannot author constraints merely through UI
+    // target capture. Borrowed backend must outlive its registration.
+    // Production PlaneGCS packaging/distribution remains a separate D2 gate.
+    void setDevelopmentRelationSolver(
+        sketch::ILocalSketchSolver* backend,
+        sketch::LocalSolverAcceptancePolicy policy) noexcept {
+        // A borrowed solver (or policy) registration change is a new
+        // acceptance epoch. Do not transfer a half-picked two-click
+        // relation, or its Part revision lease, to another provider.
+        ++relation_context_generation_;
+        static_cast<void>(interaction_.cancelRelationTarget());
+        relation_first_revision_.reset();
+        development_relation_solver_ =
+            backend != nullptr && policy.valid() ? backend : nullptr;
+        development_relation_policy_ = policy;
+    }
+    [[nodiscard]] bool selectRelationKind(sketch::ConstraintKind kind);
+    [[nodiscard]] bool selectDimensionKind(sketch::DrivingDimensionToolKind kind);
+    [[nodiscard]] std::optional<sketch::DrivingDimensionToolKind>
+    dimensionKind() const noexcept {
+        return interaction_.dimensionKind();
+    }
+    [[nodiscard]] std::optional<sketch::ConstraintKind>
+    relationKind() const noexcept {
+        return interaction_.relationKind();
+    }
+    [[nodiscard]] std::optional<sketch::ConstraintReference>
+    firstRelationTarget() const noexcept {
+        return interaction_.firstRelationTarget();
+    }
     [[nodiscard]] bool activateTrim();
     [[nodiscard]] bool activateExtend();
     void activateExtendBoth();
@@ -414,6 +447,9 @@ private:
     void handleArcPointer(const SketchPointerInput& input);
     void handleRectanglePointer(const SketchPointerInput& input);
     void handleMeasurePointer(const SketchPointerInput& input);
+    void handleRelationsPointer(const SketchPointerInput& input);
+    void commitReadyRelation(
+        const sketch::RelationTargetDraft& draft);
     void handleStructuralEditPointer(
         const SketchPointerInput& input);
     [[nodiscard]] std::optional<
@@ -535,7 +571,19 @@ private:
     PartViewportController* viewport_controller_{};
     kernel::ISolidModelingKernel* solid_modeling_kernel_{};
     application::DocumentSession* session_{};
+    // Borrowed only for explicitly provisioned developer/native tests;
+    // never manufactured from the unsolved A1 command.
+    sketch::ILocalSketchSolver* development_relation_solver_{};
+    sketch::LocalSolverAcceptancePolicy development_relation_policy_{};
+    // Transient UI generation. An in-flight numeric solve must not
+    // authorize an old command after tool/context/solver re-registration,
+    // even if the Part's durable revision and IDs are unchanged.
+    std::uint64_t relation_context_generation_{};
     std::optional<sketch::SketchId> sketch_id_;
+    // The first semantic target of a two-click relation belongs to one
+    // exact Part revision, even if unrelated edits leave its Line unchanged.
+    // Transient controller lease only; never persisted in SketchModel/Part.
+    std::optional<core::DocumentRevision> relation_first_revision_;
     std::optional<SketchPointerInput> last_pointer_input_;
     sketch::SketchInteractionState interaction_;
 

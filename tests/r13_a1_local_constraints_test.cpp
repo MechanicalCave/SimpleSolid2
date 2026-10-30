@@ -54,6 +54,72 @@ int main() {
     sk::PlaneGcsDevSolver native;
     unsigned passed = 0;
 
+    // R13-A2.0 real original-source PlaneGCS numerical preflight:
+    // one click may prepare, but never publish an unsolved Part relation.
+    {
+        sk::SketchModel current;
+        const auto line = current.addLine({0.0,0.0},{5.0,2.0});
+        const auto baseline = current.state();
+        const auto first = sk::ConstraintReference{line,L};
+        const auto preview = sk::preflightLocalRelation(
+            baseline, K::horizontal, first, {},
+            {}, policy, native);
+        CHECK(preview.status ==
+              sk::LocalRelationPreflightStatus::candidate_accepted);
+        CHECK(preview.provisional_constraint_id);
+        CHECK(preview.proposed_authored);
+        CHECK(preview.solve.candidate);
+        CHECK(preview.solve.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(preview.proposed_authored->constraints.size() == 1U);
+        CHECK(preview.proposed_authored->constraints.front().id ==
+              *preview.provisional_constraint_id);
+        CHECK(preview.proposed_authored->constraints.front().kind ==
+              K::horizontal);
+        CHECK(std::abs(preview.solve.candidate->lines.front().start.v -
+                       preview.solve.candidate->lines.front().end.v) <
+              policy.distance_tolerance);
+        CHECK(current.state() == baseline);
+        CHECK(baseline.constraints.empty());
+        CHECK(baseline.next_constraint_id == current.state().next_constraint_id);
+
+        // A semantic duplicate is rejected before the backend is invoked.
+        const auto duplicate = sk::preflightLocalRelation(
+            *preview.proposed_authored, K::horizontal, first, {},
+            {}, policy, native);
+        CHECK(duplicate.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!duplicate.provisional_constraint_id);
+        CHECK(!duplicate.proposed_authored);
+        CHECK(!duplicate.solve.candidate);
+
+        // A horizontal equation on an immovable skew Line is impossible.
+        // A naive residual or "backend says success" shortcut must not
+        // authorize this candidate, nor alter original authored seeds.
+        const std::array<sk::EntityId,1> fixed{line};
+        const auto conflict = sk::preflightLocalRelation(
+            baseline, K::horizontal, first, {},
+            fixed, policy, native);
+        CHECK(conflict.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(!conflict.provisional_constraint_id);
+        CHECK(!conflict.proposed_authored);
+        CHECK(!conflict.solve.candidate);
+        CHECK(current.state() == baseline);
+
+        // Invalid non-existing Line semantic identity never publishes a
+        // candidate, even before the solver sees the proposal.
+        const auto absent = sk::EntityId::parse("99");
+        CHECK(absent);
+        const auto invalid = sk::preflightLocalRelation(
+            baseline, K::horizontal, {*absent,L}, {},
+            {}, policy, native);
+        CHECK(invalid.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!invalid.provisional_constraint_id);
+        CHECK(current.state() == baseline);
+    }
+
     for (const auto kind : {K::horizontal,K::vertical}) {
         sk::SketchModel model;
         const auto line = model.addLine({0.0,0.0},{5.0,2.0});
@@ -231,7 +297,87 @@ int main() {
         ++passed;
     }
 
-    CHECK(passed==10U);
+    // Additional P0-D provider-private RED case: the original PlaneGCS
+    // must NOT move free Lines that have no authored equation, even
+    // while correcting an unrelated skew Horizontal. Without an actual
+    // original-source build this is a registered native requirement,
+    // not an asserted Windows execution result.
+    {
+        sk::SketchModel model;
+        const auto constrained =
+            model.addLine({0.0, 1.0}, {5.0, 2.0});
+        const auto unrelated_a =
+            model.addLine({12.0, 7.0}, {16.0, 9.0});
+        const auto unrelated_b =
+            model.addLine({30.0, 3.0}, {32.0, 10.0});
+        CHECK(model.addConstraint(K::horizontal, {constrained, L}));
+        const auto authored = model.state();
+        const auto problem = sk::prepareLocalSolveProblem(authored);
+        CHECK(problem && problem->equations.size() == 1U);
+        const auto answer = sk::evaluateLocalSolve(*problem, policy, native);
+        CHECK(answer.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(answer.candidate);
+        CHECK(answer.candidate->lines.size() == 3U);
+        CHECK(std::abs(answer.candidate->lines[0].start.v -
+                       answer.candidate->lines[0].end.v) <
+              policy.distance_tolerance);
+        CHECK(answer.candidate->lines[1].id == unrelated_a);
+        CHECK(answer.candidate->lines[2].id == unrelated_b);
+        CHECK(answer.candidate->lines[1] == authored.lines[1]);
+        CHECK(answer.candidate->lines[2] == authored.lines[2]);
+        // Horizontal on one editable Line leaves three independent
+        // scalar DoF; the two untouched free Lines have four each.
+        // Internal native pinning cannot masquerade as semantic Fix.
+        CHECK(answer.degrees_of_freedom &&
+              *answer.degrees_of_freedom == 11U);
+        CHECK(model.state() == authored);
+        std::cout << "R13_A2_P0_NATIVE_FREE_LINE_PIN_PASS" << '\n';
+    }
+
+    // R13-A2 Owner C: Fix Current Position must NOT make an already
+    // accepted Horizontal equation spuriously "redundant" in the original
+    // PlaneGCS backend. Fixed parameter masks are not newly authored
+    // scalar equations; the existing compatible relation remains durable.
+    {
+        sk::SketchModel model;
+        const auto a = model.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto b = model.addLine({12.0, 3.0}, {17.0, 5.0});
+        CHECK(model.addConstraint(K::horizontal, {a,L}));
+        CHECK(model.addConstraint(K::parallel, {a,L}, {b,L}));
+        const auto open = model.state();
+        const auto free_problem = sk::prepareLocalSolveProblem(open);
+        CHECK(free_problem);
+        const auto free_solved =
+            sk::evaluateLocalSolve(*free_problem, policy, native);
+        CHECK(free_solved.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(free_solved.candidate);
+
+        // Apply the approved effective solution as an explicit edit
+        // baseline, then assert Fix + the two surviving constraints
+        // produces an accepted solution without moving either Line.
+        auto accepted_model =
+            sk::SketchModel::restore(*free_solved.candidate);
+        CHECK(accepted_model);
+        const auto before_fixed = accepted_model->state();
+        CHECK(accepted_model->addConstraint(K::fix, {a,L}));
+        const auto fixed_state = accepted_model->state();
+        const auto frozen = sk::prepareLocalSolveProblem(fixed_state);
+        CHECK(frozen && frozen->fixed_lines.size() == 1U);
+        CHECK(frozen->equations.size() == 2U);
+        const auto solved =
+            sk::evaluateLocalSolve(*frozen, policy, native);
+        CHECK(solved.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(solved.candidate);
+        CHECK(solved.candidate->lines == fixed_state.lines);
+        CHECK(solved.candidate->lines[0] == before_fixed.lines[0]);
+        CHECK(model.state() == open);
+        ++passed;
+    }
+
+    CHECK(passed==11U);
     std::cout<<"R13_A1_ORIGINAL_PLANEGCS_NATIVE_PASS cases="<<passed<<'\n';
     return EXIT_SUCCESS;
 }
@@ -248,6 +394,122 @@ int main() {
     using K=sk::ConstraintKind;
     occt::OcctSolidModelingKernel provider;
     sk::PlaneGcsDevSolver native;
+
+    // R13-A2 Owner P0-D native-original RED/GREEN evidence: not a
+    // deterministic scripted solver. The real PlaneGCS 0.8.0 adapter,
+    // Part command authoring and Part-owned read-only stage are exercised
+    // on both XY and XZ Sketch frames. A previously accepted free Line
+    // or independent constrained Line MUST remain at its last accepted
+    // coordinates across five sequential operations and two re-solves
+    // per revision. A rejected relation is a failure of this POSITIVE
+    // fixture, even if fail-closed safeguards prevented a geometry jump.
+    for (const auto support : {
+             core::BuiltinReferenceRole::xy_plane,
+             core::BuiltinReferenceRole::xz_plane}) {
+        app::DocumentSession sequence{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = sequence.execute(
+            app::CreatePartSketchCommand{support});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        std::array<sk::EntityId, 5U> ids;
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            const double u = 20.0 * static_cast<double>(i);
+            const double v = 7.0 * static_cast<double>(i) + 1.0;
+            const auto line = sequence.execute(app::AddSketchLineCommand{
+                sid, {u, v}, {u + 8.0, v + 2.0}});
+            CHECK(line.ok() && line.entity_id);
+            ids[i] = *line.entity_id;
+        }
+        const auto original =
+            sequence.document().findSketch(sid)->model.state();
+        const auto undo_depth = sequence.undoDepth();
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-7, 1.0e-6};
+        for (std::size_t step = 0; step < ids.size(); ++step) {
+            const auto before =
+                sequence.document().findSketch(sid)->model.state();
+            const auto kind = step % 2U == 0U
+                ? K::horizontal : K::vertical;
+            const app::AddSolvedSketchRelationCommand request{
+                sid, sequence.documentId(),
+                sequence.document().revision(),
+                sequence.document().incarnationToken(),
+                kind, {ids[step], E::line}, {}};
+            const auto accepted = sequence.execute(request, policy, native);
+            if (!accepted.ok()) {
+                std::cerr << "R13-A2 P0 native original relation rejected:"
+                          << " support=" << (support ==
+                              core::BuiltinReferenceRole::xy_plane ? "XY" : "XZ")
+                          << " step=" << step << '\n';
+            }
+            CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
+            const auto after =
+                sequence.document().findSketch(sid)->model.state();
+            CHECK(after.lines.size() == ids.size());
+            CHECK(after.constraints.size() == step + 1U);
+            for (std::size_t i = 0; i < ids.size(); ++i) {
+                CHECK(after.lines[i].id == ids[i]);
+                if (i != step) {
+                    CHECK(after.lines[i] == before.lines[i]);
+                } else if (kind == K::horizontal) {
+                    CHECK(std::abs(after.lines[i].end.v -
+                                   after.lines[i].start.v) <=
+                          policy.distance_tolerance);
+                } else {
+                    CHECK(std::abs(after.lines[i].end.u -
+                                   after.lines[i].start.u) <=
+                          policy.distance_tolerance);
+                }
+            }
+            // Read-only Part stage is the single authority for the
+            // downstream Profile/Kernel and current native Viewer scene.
+            // The semantic bounds stay identical at each re-evaluation;
+            // never substitute the old drawing positions for the scene.
+            for (int replay = 0; replay != 2; ++replay) {
+                part::PartEvaluation prefix;
+                prefix.source_document_id = sequence.documentId();
+                prefix.source_revision = sequence.document().revision();
+                prefix.source_incarnation =
+                    sequence.document().incarnationToken();
+                const auto current = part::evaluateStageLocalSolve(
+                    sequence.document(), sid, prefix, provider,
+                    policy, native);
+                if (!current || current->solution.status !=
+                        sk::LocalSolveGatewayStatus::candidate_accepted) {
+                    std::cerr << "R13-A2 P0 original stage not accepted:"
+                              << " step=" << step
+                              << " replay=" << replay << '\n';
+                }
+                CHECK(current);
+                CHECK(current->solution.status ==
+                      sk::LocalSolveGatewayStatus::candidate_accepted);
+                CHECK(current->solution.candidate);
+                CHECK(current->solution.candidate->lines == after.lines);
+                CHECK(sequence.document().findSketch(sid)->model.state() ==
+                      after);
+            }
+        }
+        CHECK(sequence.undoDepth() == undo_depth + ids.size());
+        const auto final =
+            sequence.document().findSketch(sid)->model.state();
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            CHECK(sequence.undo().changed);
+        }
+        CHECK(sequence.document().findSketch(sid)->model.state().lines ==
+              original.lines);
+        CHECK(sequence.document().findSketch(sid)->model.state()
+                  .constraints == original.constraints);
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            CHECK(sequence.redo().changed);
+        }
+        CHECK(sequence.document().findSketch(sid)->model.state().lines ==
+              final.lines);
+        CHECK(sequence.document().findSketch(sid)->model.state()
+                  .constraints == final.constraints);
+    }
+    std::cout << "R13_A2_P0_ORIGINAL_PLANEGCS_5STEP_STABILITY_PASS"
+              << " supports=XY,XZ relations=10 stage_replays=20" << '\n';
+
     app::DocumentSession session{
         {},part::PartDocument::create(core::DocumentId::generate())};
     const auto sketch=session.execute(
@@ -865,6 +1127,1770 @@ int main() {
     CHECK(!sk::ConstraintId::parse("-1"));
     CHECK(!sk::ConstraintId::parse("18446744073709551616"));
 
+    // R13-A2.0 registered FAST proof: caller-injected backend cannot
+    // mutate the authoritative current-stage Sketch during preflight.
+    // An echo backend exercises the stage-neutral gateway, NOT an
+    // installed/redistributable numerical product solver.
+    {
+        struct EchoBackend final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, 3U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        sk::SketchModel flat;
+        const auto line = flat.addLine({0.0, 3.0}, {5.0, 3.0});
+        const auto before = flat.state();
+        const sk::ConstraintReference ref{
+            line, sk::ConstraintElement::line};
+        const auto accepted = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            ref, {}, {}, policy, backend);
+        CHECK(accepted.status ==
+              sk::LocalRelationPreflightStatus::candidate_accepted);
+        CHECK(accepted.provisional_constraint_id);
+        CHECK(accepted.proposed_authored);
+        CHECK(accepted.proposed_authored->constraints.size() == 1U);
+        CHECK(accepted.solve.candidate);
+        CHECK(accepted.solve.degrees_of_freedom == 3U);
+        CHECK(flat.state() == before);
+        CHECK(backend.calls == 1);
+
+        // RED (R13-A2.0): a backend cannot claim more free scalar
+        // parameters than the Line-only solver problem actually owns.
+        // One unfixed Line has four endpoint coordinates, not five.
+        // This must fail closed even when the backend says Converged
+        // and all independent geometric residuals are satisfied.
+        struct ImpossibleDofBackend final : sk::ILocalSketchSolver {
+            std::size_t claimed_dof{5U};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, claimed_dof};
+            }
+        } impossible_dof;
+        const auto invalid_dof = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            ref, {}, {}, policy, impossible_dof);
+        CHECK(invalid_dof.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(invalid_dof.solve.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!invalid_dof.proposed_authored);
+        CHECK(!invalid_dof.provisional_constraint_id);
+        CHECK(!invalid_dof.solve.candidate);
+        CHECK(flat.state() == before);
+
+        // A fixed Line has no editable scalar parameters at all,
+        // regardless of how many coordinates its geometry contains.
+        impossible_dof.claimed_dof = 1U;
+        const std::array<sk::EntityId, 1> stage_fixed{line};
+        const auto invalid_fixed_dof = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            ref, {}, stage_fixed, policy, impossible_dof);
+        CHECK(invalid_fixed_dof.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(invalid_fixed_dof.solve.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!invalid_fixed_dof.proposed_authored);
+        CHECK(!invalid_fixed_dof.provisional_constraint_id);
+        CHECK(!invalid_fixed_dof.solve.candidate);
+        CHECK(flat.state() == before);
+
+        const auto duplicate = sk::preflightLocalRelation(
+            *accepted.proposed_authored, sk::ConstraintKind::horizontal,
+            ref, {}, {}, policy, backend);
+        CHECK(duplicate.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!duplicate.provisional_constraint_id);
+        CHECK(backend.calls == 1);
+
+        // C/RED: an already-authored Fix pins all four coordinates.
+        // A later Horizontal on that fixed, exactly level Line cannot
+        // add independent design intent. The native adapter may omit
+        // already existing fixed-only equations during a stage replay,
+        // but a NEW redundant relation must fail before the backend.
+        sk::SketchModel fixed_model;
+        const auto fixed_line =
+            fixed_model.addLine({0.0, 4.0}, {5.0, 4.0});
+        CHECK(fixed_model.addConstraint(
+            sk::ConstraintKind::fix,
+            {fixed_line, sk::ConstraintElement::line}));
+        const auto fixed_before = fixed_model.state();
+        const auto no_new_axis = sk::preflightLocalRelation(
+            fixed_before, sk::ConstraintKind::horizontal,
+            {fixed_line, sk::ConstraintElement::line}, {},
+            {}, policy, backend);
+        CHECK(no_new_axis.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!no_new_axis.provisional_constraint_id);
+        CHECK(!no_new_axis.proposed_authored);
+        CHECK(backend.calls == 1);
+        CHECK(fixed_model.state() == fixed_before);
+
+        const auto nonexistent = sk::EntityId::parse("9999");
+        CHECK(nonexistent);
+        const auto missing = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            {*nonexistent, sk::ConstraintElement::line}, {},
+            {}, policy, backend);
+        CHECK(missing.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(backend.calls == 1);
+
+        const std::array<sk::EntityId, 2> invalid_fixed{line, line};
+        const auto bad_stage = sk::preflightLocalRelation(
+            before, sk::ConstraintKind::horizontal,
+            ref, {}, invalid_fixed, policy, backend);
+        CHECK(bad_stage.status ==
+              sk::LocalRelationPreflightStatus::invalid_problem);
+        CHECK(!bad_stage.provisional_constraint_id);
+        CHECK(!bad_stage.proposed_authored);
+        CHECK(backend.calls == 1);
+
+        sk::SketchModel skew;
+        const auto skew_line = skew.addLine(
+            {0.0, 0.0}, {5.0, 2.0});
+        const auto skew_before = skew.state();
+        const auto rejected = sk::preflightLocalRelation(
+            skew_before, sk::ConstraintKind::horizontal,
+            {skew_line, sk::ConstraintElement::line}, {},
+            {}, policy, backend);
+        CHECK(rejected.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(rejected.solve.status ==
+              sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!rejected.provisional_constraint_id);
+        CHECK(!rejected.proposed_authored);
+        CHECK(!rejected.solve.candidate);
+        CHECK(skew.state() == skew_before);
+        CHECK(backend.calls == 2);
+    }
+
+
+    // A2.0 RED: an untrustworthy solver's silence about redundancy
+    // cannot authorize a new relation already implied by existing
+    // semantic relations. An implied request must reject BEFORE calling
+    // the backend and must not expose a provisional ConstraintId.
+    {
+        struct SilentRedundancy final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, std::nullopt};
+            }
+        } solver;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        using CK = sk::ConstraintKind;
+        using CE = sk::ConstraintElement;
+
+        sk::SketchModel parallel_chain;
+        const auto a = parallel_chain.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto b = parallel_chain.addLine({0.0, 3.0}, {5.0, 3.0});
+        const auto c = parallel_chain.addLine({0.0, 6.0}, {5.0, 6.0});
+        const sk::ConstraintReference ar{a, CE::line};
+        const sk::ConstraintReference br{b, CE::line};
+        const sk::ConstraintReference cr{c, CE::line};
+        CHECK(parallel_chain.addConstraint(CK::parallel, ar, br));
+        CHECK(parallel_chain.addConstraint(CK::parallel, br, cr));
+        const auto unchanged_parallel = parallel_chain.state();
+        const auto transitive = sk::preflightLocalRelation(
+            unchanged_parallel, CK::parallel, ar, cr, {}, policy, solver);
+        CHECK(transitive.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!transitive.provisional_constraint_id);
+        CHECK(!transitive.proposed_authored);
+        CHECK(solver.calls == 0);
+        CHECK(parallel_chain.state() == unchanged_parallel);
+
+        // Two perpendicular turns give a parallel relation; this is
+        // implied by relation parity, not by seeded geometry alone.
+        sk::SketchModel parity_chain;
+        const auto p = parity_chain.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto q = parity_chain.addLine({0.0, 2.0}, {0.0, 7.0});
+        const auto r = parity_chain.addLine({0.0, 9.0}, {5.0, 9.0});
+        const sk::ConstraintReference pr{p, CE::line};
+        const sk::ConstraintReference qr{q, CE::line};
+        const sk::ConstraintReference rr{r, CE::line};
+        CHECK(parity_chain.addConstraint(CK::perpendicular, pr, qr));
+        CHECK(parity_chain.addConstraint(CK::perpendicular, qr, rr));
+        const auto parity_before = parity_chain.state();
+        const auto double_perpendicular = sk::preflightLocalRelation(
+            parity_before, CK::parallel, pr, rr, {}, policy, solver);
+        CHECK(double_perpendicular.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!double_perpendicular.provisional_constraint_id);
+        CHECK(solver.calls == 0);
+        CHECK(parity_chain.state() == parity_before);
+
+        // Horizontal(A) + Parallel(A,B) already establishes horizontal B.
+        sk::SketchModel anchored;
+        const auto horizontal_a = anchored.addLine({0.0, 1.0}, {5.0, 1.0});
+        const auto horizontal_b = anchored.addLine({0.0, 3.0}, {5.0, 3.0});
+        const sk::ConstraintReference ha{horizontal_a, CE::line};
+        const sk::ConstraintReference hb{horizontal_b, CE::line};
+        CHECK(anchored.addConstraint(CK::horizontal, ha, {}));
+        CHECK(anchored.addConstraint(CK::parallel, ha, hb));
+        const auto anchored_before = anchored.state();
+        const auto inherited_axis = sk::preflightLocalRelation(
+            anchored_before, CK::horizontal, hb, {}, {}, policy, solver);
+        CHECK(inherited_axis.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!inherited_axis.provisional_constraint_id);
+        CHECK(solver.calls == 0);
+        CHECK(anchored.state() == anchored_before);
+
+        // Coincident endpoint closure is transitive across three distinct
+        // Lines and must use endpoint roles, not whole-Line identity.
+        sk::SketchModel coincident_chain;
+        const auto ca = coincident_chain.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto cb = coincident_chain.addLine({5.0, 0.0}, {8.0, 1.0});
+        const auto cc = coincident_chain.addLine({5.0, 0.0}, {7.0, 2.0});
+        const sk::ConstraintReference ca_end{ca, CE::line_end};
+        const sk::ConstraintReference cb_start{cb, CE::line_start};
+        const sk::ConstraintReference cc_start{cc, CE::line_start};
+        CHECK(coincident_chain.addConstraint(CK::coincident, ca_end, cb_start));
+        CHECK(coincident_chain.addConstraint(CK::coincident, cb_start, cc_start));
+        const auto coincident_before = coincident_chain.state();
+        const auto endpoint_closure = sk::preflightLocalRelation(
+            coincident_before, CK::coincident, ca_end, cc_start,
+            {}, policy, solver);
+        CHECK(endpoint_closure.status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!endpoint_closure.provisional_constraint_id);
+        CHECK(solver.calls == 0);
+        CHECK(coincident_chain.state() == coincident_before);
+
+        // RED: a contradictory authored parity cycle is NOT evidence
+        // of a redundant request. The source model allows these
+        // independently legal manual relations; only the solver can
+        // reject the globally impossible system. Do not silently label
+        // Vertical(C) as redundant merely because ONE path from C to
+        // the horizontal axis happens to have odd parity.
+        sk::SketchModel contradictory;
+        const auto bad_a = contradictory.addLine(
+            {0.0, 0.0}, {5.0, 0.0});
+        const auto bad_b = contradictory.addLine(
+            {0.0, 3.0}, {5.0, 3.0});
+        const auto bad_c = contradictory.addLine(
+            {0.0, 6.0}, {5.0, 6.0});
+        const sk::ConstraintReference bad_ar{bad_a, CE::line};
+        const sk::ConstraintReference bad_br{bad_b, CE::line};
+        const sk::ConstraintReference bad_cr{bad_c, CE::line};
+        CHECK(contradictory.addConstraint(
+            CK::horizontal, bad_ar, {}));
+        CHECK(contradictory.addConstraint(
+            CK::parallel, bad_ar, bad_br));
+        CHECK(contradictory.addConstraint(
+            CK::parallel, bad_br, bad_cr));
+        CHECK(contradictory.addConstraint(
+            CK::perpendicular, bad_ar, bad_cr));
+        const auto contradictory_before = contradictory.state();
+        const auto prior_solver_calls = solver.calls;
+        const auto conflicting_cycle = sk::preflightLocalRelation(
+            contradictory_before, CK::vertical, bad_cr, {},
+            {}, policy, solver);
+        CHECK(conflicting_cycle.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(conflicting_cycle.solve.status ==
+              sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!conflicting_cycle.proposed_authored);
+        CHECK(!conflicting_cycle.provisional_constraint_id);
+        CHECK(solver.calls == prior_solver_calls + 1);
+        CHECK(contradictory.state() == contradictory_before);
+
+        // A CONSISTENT parity chain carrying the opposite value must
+        // also reach the solver instead of masquerading as redundancy.
+        // Horizontal(A), Perpendicular(A,B), Parallel(B,C) imply that
+        // A and C are perpendicular, not parallel. This new conflicting
+        // Parallel(A,C) should be diagnosed by the numeric residual.
+        sk::SketchModel coherent_opposite;
+        const auto good_a = coherent_opposite.addLine(
+            {0.0, 0.0}, {5.0, 0.0});
+        const auto good_b = coherent_opposite.addLine(
+            {0.0, 3.0}, {0.0, 8.0});
+        const auto good_c = coherent_opposite.addLine(
+            {3.0, 3.0}, {3.0, 8.0});
+        const sk::ConstraintReference good_ar{good_a, CE::line};
+        const sk::ConstraintReference good_br{good_b, CE::line};
+        const sk::ConstraintReference good_cr{good_c, CE::line};
+        CHECK(coherent_opposite.addConstraint(
+            CK::horizontal, good_ar, {}));
+        CHECK(coherent_opposite.addConstraint(
+            CK::perpendicular, good_ar, good_br));
+        CHECK(coherent_opposite.addConstraint(
+            CK::parallel, good_br, good_cr));
+        const auto coherent_before = coherent_opposite.state();
+        const auto coherent_call_count = solver.calls;
+        const auto conflicting_intent = sk::preflightLocalRelation(
+            coherent_before, CK::parallel, good_ar, good_cr,
+            {}, policy, solver);
+        CHECK(conflicting_intent.status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(conflicting_intent.solve.status ==
+              sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(!conflicting_intent.provisional_constraint_id);
+        CHECK(!conflicting_intent.proposed_authored);
+        CHECK(solver.calls == coherent_call_count + 1);
+        CHECK(coherent_opposite.state() == coherent_before);
+
+        // No false rejection merely because the seed lines happen to be
+        // parallel: no authored relation connects Line C yet.
+        sk::SketchModel free_third;
+        const auto fa = free_third.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto fb = free_third.addLine({0.0, 3.0}, {5.0, 3.0});
+        const auto fc = free_third.addLine({0.0, 6.0}, {5.0, 6.0});
+        const sk::ConstraintReference far{fa, CE::line};
+        const sk::ConstraintReference fbr{fb, CE::line};
+        const sk::ConstraintReference fcr{fc, CE::line};
+        CHECK(free_third.addConstraint(CK::parallel, far, fbr));
+        const auto free_before = free_third.state();
+        const auto before_independent_calls = solver.calls;
+        const auto independent = sk::preflightLocalRelation(
+            free_before, CK::parallel, far, fcr, {}, policy, solver);
+        CHECK(independent.status ==
+              sk::LocalRelationPreflightStatus::candidate_accepted);
+        CHECK(independent.provisional_constraint_id);
+        CHECK(independent.proposed_authored);
+        CHECK(solver.calls == before_independent_calls + 1);
+        CHECK(free_third.state() == free_before);
+    }
+
+    // The general solver gateway returns disposable derived geometry and
+    // can legitimately translate underconstrained lines. Only an AUTHORING
+    // command that captures this candidate must guard unrelated seeds.
+    {
+        struct MoveUnrelatedLine final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 2U);
+                candidate.lines.back().start.u += 1.0;
+                candidate.lines.back().end.u += 1.0;
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, 7U};
+            }
+        } drift;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        sk::SketchModel authored;
+        const auto constrained = authored.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto unrelated = authored.addLine({10.0, 2.0}, {15.0, 2.0});
+        CHECK(constrained.valid() && unrelated.valid());
+        CHECK(authored.addConstraint(
+            sk::ConstraintKind::horizontal,
+            {constrained, sk::ConstraintElement::line}));
+        const auto before = authored.state();
+        const auto problem = sk::prepareLocalSolveProblem(before);
+        CHECK(problem && problem->equations.size() == 1U);
+        const auto wrong = sk::evaluateLocalSolve(*problem, policy, drift);
+        CHECK(drift.calls == 1);
+        CHECK(wrong.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(wrong.candidate);
+        CHECK(authored.state() == before);
+
+        // No equations means zero geometric residuals; this is still a
+        // transient candidate, not permission to author changed seeds.
+        sk::SketchModel no_constraints;
+        const auto free_a =
+            no_constraints.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto free_b =
+            no_constraints.addLine({10.0, 2.0}, {15.0, 2.0});
+        CHECK(free_a.valid() && free_b.valid());
+        const auto free_state = no_constraints.state();
+        const auto empty_problem = sk::prepareLocalSolveProblem(free_state);
+        CHECK(empty_problem && empty_problem->equations.empty());
+        const auto wrong_empty =
+            sk::evaluateLocalSolve(*empty_problem, policy, drift);
+        CHECK(drift.calls == 2);
+        CHECK(wrong_empty.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(wrong_empty.candidate);
+        CHECK(no_constraints.state() == free_state);
+    }
+
+    // A2.0 RED: the new numerically solved relation is permitted to
+    // correct its own connected component, NOT translate an independent
+    // Horizontal Line when all residuals happen to remain satisfied.
+    // The create writer must fail closed before a Part transaction.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct CreatedRelationDrift final : sk::ILocalSketchSolver {
+            bool drift_unrelated{true};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 3U);
+                // The authored first Line is skew; the backend solves
+                // the requested Horizontal(A) equation legitimately.
+                candidate.lines.front().end.v =
+                    candidate.lines.front().start.v;
+                if (drift_unrelated) {
+                    // C has its own unrelated Horizontal constraint.
+                    // Its 2 mm translation still satisfies residuals.
+                    candidate.lines.back().start.u += 2.0;
+                    candidate.lines.back().end.u += 2.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 1.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {10.0, 3.0}, {15.0, 3.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {20.0, 7.0}, {25.0, 7.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        const auto fixed_c = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(),
+            sk::ConstraintKind::horizontal,
+            {*c.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(fixed_c.ok() && fixed_c.constraint_id);
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        const auto original_rev = session.document().revision();
+        const auto original_undo = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand create_a{
+            sid, session.document().documentId(), original_rev,
+            session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {*a.entity_id, sk::ConstraintElement::line}, {}};
+
+        // A generic current-stage solver may return this geometry,
+        // but an explicit relation authoring command cannot accept
+        // it as new authoritative relational intent.
+        const auto bad = session.execute(create_a, policy, backend);
+        CHECK(!bad.ok() && !bad.changed && !bad.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == original_rev);
+        CHECK(session.undoDepth() == original_undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        // Positive control: an accepted relation captures the verified
+        // current endpoints of A, while unrelated B/C remain immutable.
+        // Derived, speculative stage reads never write authored seeds.
+        backend.drift_unrelated = false;
+        const auto accepted = session.execute(create_a, policy, backend);
+        CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
+        CHECK(backend.calls == 2);
+        CHECK(session.undoDepth() == original_undo + 1U);
+        const auto after =
+            session.document().findSketch(sid)->model.state();
+        CHECK(after.constraints.size() == original.constraints.size() + 1U);
+        // P0 RED-first: after the accepted Horizontal(A) transaction,
+        // the current edit baseline must contain the accepted solved
+        // endpoints, not the initial skew seed. B/C remain unchanged.
+        // This is a semantic Part state check, not a Viewer screenshot.
+        CHECK(after.lines.front().start == original.lines.front().start);
+        CHECK(after.lines.front().end.v == after.lines.front().start.v);
+        CHECK(after.lines[1] == original.lines[1]);
+        CHECK(after.lines[2] == original.lines[2]);
+        CHECK(after.constraints.front() == original.constraints.front());
+        CHECK(session.undo().ok());
+        const auto undone =
+            session.document().findSketch(sid)->model.state();
+        CHECK(undone.lines == original.lines);
+        CHECK(undone.constraints == original.constraints);
+        CHECK(undone.next_constraint_id == after.next_constraint_id);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.findConstraint(
+            *accepted.constraint_id) != nullptr);
+    }
+
+    // P0/P1: five independent Lines may receive successive standalone
+    // Horizontal/Vertical relations without any Coincident. Every accepted
+    // edit starts from its predecessor's committed geometry; none of the
+    // four unrelated Lines may move, and Undo/Redo round-trips all five.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct IndependentAxisSolver final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                for (const auto& equation : problem.equations) {
+                    const auto target = std::find_if(
+                        candidate.lines.begin(), candidate.lines.end(),
+                        [&equation](const auto& line) {
+                            return line.id == equation.first.entity;
+                        });
+                    if (target == candidate.lines.end()) {
+                        return {sk::LocalBackendStatus::failed, std::nullopt,
+                                {}, {}, std::nullopt};
+                    }
+                    if (equation.kind == sk::ConstraintKind::horizontal) {
+                        target->end.v = target->start.v;
+                    } else if (equation.kind ==
+                               sk::ConstraintKind::vertical) {
+                        target->end.u = target->start.u;
+                    } else {
+                        return {sk::LocalBackendStatus::unsupported,
+                                std::nullopt, {}, {}, std::nullopt};
+                    }
+                }
+                return {sk::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        std::vector<sk::EntityId> ids;
+        for (int i = 0; i < 5; ++i) {
+            const double u = 10.0 * i;
+            const double v = 3.0 * i + 1.0;
+            const auto line = session.execute(app::AddSketchLineCommand{
+                sid, {u, v}, {u + 5.0, v + 1.0}});
+            CHECK(line.ok() && line.entity_id);
+            ids.push_back(*line.entity_id);
+        }
+        const auto initial = session.document().findSketch(sid)->model.state();
+        const auto undo_before = session.undoDepth();
+
+        // Inspect the actual Part-stage solve at EVERY subsequent revision,
+        // not only the explicit authoring transaction. A pre-existing
+        // fulfilled relation cannot move during a later read-only refresh.
+        struct EmptyProjection final : simplesolid2::kernel::IEdgeProjectionQuery {
+            std::optional<simplesolid2::kernel::ScopedProjectionEdge>
+            bindEdgeToBody(
+                simplesolid2::kernel::RuntimeSolidHandle,
+                simplesolid2::kernel::RuntimeEdgeToken) noexcept override {
+                return std::nullopt;
+            }
+            simplesolid2::kernel::EdgeProjectionResult projectEdgeToPlane(
+                simplesolid2::kernel::RuntimeSolidHandle,
+                const simplesolid2::kernel::ScopedProjectionEdge&,
+                const simplesolid2::kernel::Frame3&) noexcept override {
+                return {};
+            }
+        } projection;
+        IndependentAxisSolver stage_solver;
+        std::vector<sk::ConstraintId> accepted_ids;
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            const auto before = session.document().findSketch(sid)->model.state();
+            const auto kind = (i % 2U == 0U)
+                ? sk::ConstraintKind::horizontal
+                : sk::ConstraintKind::vertical;
+            const app::AddSolvedSketchRelationCommand command{
+                sid, session.document().documentId(),
+                session.document().revision(),
+                session.document().incarnationToken(),
+                kind, {ids[i], sk::ConstraintElement::line}, {}};
+            const auto result = session.execute(command, policy, backend);
+            CHECK(result.ok() && result.changed && result.constraint_id);
+            accepted_ids.push_back(*result.constraint_id);
+            const auto after = session.document().findSketch(sid)->model.state();
+            CHECK(after.constraints.size() == i + 1U);
+            CHECK(after.lines.size() == ids.size());
+            for (std::size_t j = 0; j < ids.size(); ++j) {
+                CHECK(after.lines[j].id == ids[j]);
+                if (j != i) {
+                    CHECK(after.lines[j] == before.lines[j]);
+                } else if (kind == sk::ConstraintKind::horizontal) {
+                    CHECK(after.lines[j].start.v == after.lines[j].end.v);
+                    CHECK(after.lines[j].start.u == before.lines[j].start.u);
+                } else {
+                    CHECK(after.lines[j].start.u == after.lines[j].end.u);
+                    CHECK(after.lines[j].start.v == before.lines[j].start.v);
+                }
+            }
+            part::PartEvaluation prefix;
+            prefix.source_document_id = session.document().documentId();
+            prefix.source_revision = session.document().revision();
+            prefix.source_incarnation = session.document().incarnationToken();
+            const auto stage = part::evaluateStageLocalSolve(
+                session.document(), sid, prefix, projection,
+                policy, stage_solver);
+            CHECK(stage);
+            CHECK(stage->solution.status ==
+                  sk::LocalSolveGatewayStatus::candidate_accepted);
+            CHECK(stage->solution.candidate);
+            CHECK(stage->solution.candidate->lines == after.lines);
+            CHECK(stage->solution.candidate->constraints ==
+                  after.constraints);
+            CHECK(session.document().findSketch(sid)->model.state() == after);
+        }
+        CHECK(backend.calls == 5);
+        CHECK(stage_solver.calls == 5);
+        CHECK(session.undoDepth() == undo_before + 5U);
+        const auto final = session.document().findSketch(sid)->model.state();
+        for (int i = 0; i < 5; ++i) CHECK(session.undo().ok());
+        const auto undone = session.document().findSketch(sid)->model.state();
+        CHECK(undone.lines == initial.lines);
+        CHECK(undone.constraints == initial.constraints);
+        for (int i = 0; i < 5; ++i) CHECK(session.redo().ok());
+        const auto redone = session.document().findSketch(sid)->model.state();
+        CHECK(redone.lines == final.lines);
+        CHECK(redone.constraints == final.constraints);
+        for (const auto id : accepted_ids) {
+            CHECK(session.document().findSketch(sid)->model.findConstraint(id));
+        }
+    }
+
+    // A2.0 connected-component proof: a newly created A--B relation
+    // extends an existing B--C component, so C is part of the legal
+    // proposed graph even though it was not reachable from A before
+    // this create command. Independent constrained D is never part
+    // of that graph. Only an accepted explicit command can materialize
+    // the solved coordinates of its connected relation component.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct ExtendedCreateComponent final : sk::ILocalSketchSolver {
+            bool shift_unrelated{true};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 4U);
+                auto& line = shift_unrelated
+                    ? candidate.lines.back()
+                    : candidate.lines[2];
+                line.start.u += 2.0;
+                line.end.u += 2.0;
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {10.0, 2.0}, {15.0, 2.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {20.0, 4.0}, {25.0, 4.0}});
+        const auto d = session.execute(app::AddSketchLineCommand{
+            sid, {30.0, 6.0}, {35.0, 6.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        CHECK(d.ok() && d.entity_id);
+        using CK = sk::ConstraintKind;
+        using CE = sk::ConstraintElement;
+        const auto bc = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(), CK::parallel,
+            {*b.entity_id, CE::line}, {*c.entity_id, CE::line}});
+        const auto d_h = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(), CK::horizontal,
+            {*d.entity_id, CE::line}, {}});
+        CHECK(bc.ok() && bc.constraint_id);
+        CHECK(d_h.ok() && d_h.constraint_id);
+        const auto original = session.document().findSketch(sid)->model.state();
+        const auto revision = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand ab{
+            sid, session.document().documentId(), revision,
+            session.document().incarnationToken(), CK::parallel,
+            {*a.entity_id, CE::line}, {*b.entity_id, CE::line}};
+
+        const auto rejected = session.execute(ab, policy, backend);
+        CHECK(!rejected.ok() && !rejected.changed && !rejected.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == revision);
+        CHECK(session.undoDepth() == undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        // The new A--B edge joins the existing B--C edge. Translating
+        // C may be accepted into the new edit baseline; D may not move.
+        backend.shift_unrelated = false;
+        const auto accepted = session.execute(ab, policy, backend);
+        CHECK(accepted.ok() && accepted.changed && accepted.constraint_id);
+        CHECK(backend.calls == 2);
+        CHECK(session.undoDepth() == undo + 1U);
+        const auto after = session.document().findSketch(sid)->model.state();
+        CHECK(after.lines.size() == original.lines.size());
+        CHECK(after.lines[0] == original.lines[0]);
+        CHECK(after.lines[1] == original.lines[1]);
+        CHECK(after.lines[2].id == original.lines[2].id);
+        CHECK(after.lines[2].start.u == original.lines[2].start.u + 2.0);
+        CHECK(after.lines[2].end.u == original.lines[2].end.u + 2.0);
+        CHECK(after.lines[2].start.v == original.lines[2].start.v);
+        CHECK(after.lines[2].end.v == original.lines[2].end.v);
+        CHECK(after.lines[3] == original.lines[3]);
+        CHECK(after.constraints.size() == original.constraints.size() + 1U);
+        CHECK(session.undo().ok());
+        const auto undone = session.document().findSketch(sid)->model.state();
+        CHECK(undone.lines == original.lines);
+        CHECK(undone.constraints == original.constraints);
+        CHECK(undone.next_constraint_id == after.next_constraint_id);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.findConstraint(
+            *accepted.constraint_id) != nullptr);
+    }
+
+    // A2.0 command-level RED: explicit authoring is not allowed to turn
+    // an unrelated free Line's solver-only translation into authored seeds.
+    // The generic numerical gateway deliberately remains permissive for
+    // current-stage derived geometry (Profile/Kernel tests above).
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct ShiftFreeLine final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(!candidate.lines.empty());
+                if (calls == 1) {
+                    auto& moved = candidate.lines.back();
+                    moved.start.u += 2.0;
+                    moved.end.u += 2.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto first = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        CHECK(first.ok() && first.entity_id);
+        const auto original = session.document().findSketch(sid)->model.state();
+        const auto fix_revision = session.document().revision();
+        const auto fix_undo = session.undoDepth();
+        const app::FixCurrentSketchLineCommand fix{
+            sid, session.document().documentId(), fix_revision,
+            session.document().incarnationToken(), *first.entity_id};
+        const auto wrong_fix = session.execute(fix, policy, backend);
+        CHECK(!wrong_fix.ok() && !wrong_fix.changed);
+        CHECK(!wrong_fix.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == fix_revision);
+        CHECK(session.undoDepth() == fix_undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        const auto extra = session.execute(
+            app::AddSketchLineCommand{
+                sid, {10.0, 2.0}, {15.0, 2.0}});
+        CHECK(extra.ok() && extra.entity_id);
+        const auto relation = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*first.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(relation.ok() && relation.constraint_id);
+        // Re-arm one malicious initial candidate; the second solver
+        // would preserve any staged seeds, so without an authoring
+        // guard the transaction would incorrectly commit the jump.
+        backend.calls = 0;
+        const auto before_delete =
+            session.document().findSketch(sid)->model.state();
+        const auto delete_revision = session.document().revision();
+        const auto delete_undo = session.undoDepth();
+        const app::EraseSolvedSketchConstraintCommand erase{
+            sid, session.document().documentId(), delete_revision,
+            session.document().incarnationToken(), *relation.constraint_id};
+        const auto wrong_delete = session.execute(erase, policy, backend);
+        CHECK(!wrong_delete.ok() && !wrong_delete.changed);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == delete_revision);
+        CHECK(session.undoDepth() == delete_undo);
+        CHECK(session.document().findSketch(sid)->model.state()
+              == before_delete);
+
+        // Positive control: the same unconstrained secondary Line is
+        // legal when its exact solved endpoints remain unchanged.
+        struct StableBackend final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, std::nullopt};
+            }
+        } stable;
+        const auto stable_fix = session.execute(
+            app::FixCurrentSketchLineCommand{
+                sid, session.document().documentId(),
+                session.document().revision(),
+                session.document().incarnationToken(), *first.entity_id},
+            policy, stable);
+        CHECK(stable_fix.ok() && stable_fix.changed);
+        CHECK(stable_fix.constraint_id);
+        CHECK(stable.calls == 2);
+        CHECK(session.document().findSketch(sid)
+              ->model.isFixedLine(*first.entity_id));
+        const auto stable_erase = session.execute(
+            app::EraseSolvedSketchConstraintCommand{
+                sid, session.document().documentId(),
+                session.document().revision(),
+                session.document().incarnationToken(), *relation.constraint_id},
+            policy, stable);
+        CHECK(stable_erase.ok() && stable_erase.changed);
+        CHECK(stable.calls == 4);
+        const auto& after_erase = session.document().findSketch(sid)->model;
+        CHECK(after_erase.findConstraint(*relation.constraint_id) == nullptr);
+        CHECK(after_erase.isFixedLine(*first.entity_id));
+        CHECK(after_erase.findLine(*extra.entity_id) != nullptr);
+        CHECK((after_erase.findLine(*extra.entity_id)->start() ==
+               sk::Point2{10.0, 2.0}));
+        CHECK((after_erase.findLine(*extra.entity_id)->end() ==
+               sk::Point2{15.0, 2.0}));
+    }
+
+    // R13-A2.0 application-level atomic numeric transaction prototype.
+    // The backend is injected by the test. Nothing is linked to the
+    // unapproved consumer PlaneGCS package or Qt authoring path.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct EchoNumeric final : sk::ILocalSketchSolver {
+            int calls{};
+            std::size_t reported_dof{3U};
+            app::DocumentSession* reenter{};
+            std::optional<sk::SketchId> sketch_id;
+            bool reentered{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                if (reenter && !reentered) {
+                    reentered = true;
+                    CHECK(sketch_id);
+                    const auto changed = reenter->execute(
+                        app::AddSketchLineCommand{
+                            *sketch_id, {30.0, 30.0}, {34.0, 31.0}});
+                    CHECK(changed.ok() && changed.changed);
+                }
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, reported_dof};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line_result = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 4.0}, {7.0, 4.0}});
+        CHECK(line_result.ok() && line_result.entity_id);
+        const auto id = *line_result.entity_id;
+        const auto authored_before =
+            session.document().findSketch(sid)->model.state();
+        const auto starting_rev = session.document().revision();
+        const auto starting_undo = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand command{
+            sid, session.document().documentId(), starting_rev,
+            session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {id, sk::ConstraintElement::line}, {}};
+        auto accepted = session.execute(command, policy, backend);
+        CHECK(accepted.ok() && accepted.changed &&
+              accepted.constraint_id);
+        CHECK(accepted.preflight_status ==
+              sk::LocalRelationPreflightStatus::candidate_accepted);
+        CHECK(accepted.solver_status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == starting_undo + 1U);
+        CHECK(session.document().findSketch(sid)
+              ->model.constraintCount() == 1U);
+        CHECK(session.document().findSketch(sid)
+              ->model.state().lines == authored_before.lines);
+        const auto committed_state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(session.undo().ok());
+        const auto after_undo =
+            session.document().findSketch(sid)->model.state();
+        CHECK(after_undo.lines == authored_before.lines);
+        CHECK(after_undo.circles == authored_before.circles);
+        CHECK(after_undo.arcs == authored_before.arcs);
+        CHECK(after_undo.constraints == authored_before.constraints);
+        // Undo removes authorship, never rewinds the semantic high-water
+        // ConstraintId cursor: identity must never be recycled.
+        CHECK(after_undo.next_constraint_id ==
+              committed_state.next_constraint_id);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)
+              ->model.findConstraint(*accepted.constraint_id));
+
+        // Reusing the previous revision cannot re-execute a command.
+        auto stale = session.execute(command, policy, backend);
+        CHECK(!stale.ok() && !stale.changed);
+        CHECK(backend.calls == 1);
+
+        // Duplicate semantic intent cannot consume another constraint ID.
+        const app::AddSolvedSketchRelationCommand repeat{
+            sid, session.document().documentId(),
+            session.document().revision(),
+            session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {id, sk::ConstraintElement::line}, {}};
+        const auto undo_before_repeat = session.undoDepth();
+        auto duplicate = session.execute(repeat, policy, backend);
+        CHECK(!duplicate.ok() && !duplicate.changed);
+        CHECK(duplicate.preflight_status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(!duplicate.constraint_id && backend.calls == 1);
+        CHECK(session.undoDepth() == undo_before_repeat);
+
+        // Fix Current Position must be implemented with current
+        // *effective* solved geometry, not this raw-authored endpoint path.
+        const app::AddSolvedSketchRelationCommand fix{
+            sid, session.document().documentId(),
+            session.document().revision(),
+            session.document().incarnationToken(),
+            sk::ConstraintKind::fix,
+            {id, sk::ConstraintElement::line}, {}};
+        CHECK(!session.execute(fix, policy, backend).ok());
+        CHECK(backend.calls == 1);
+
+        // A forged weak incarnation from a separate cold reconstruction
+        // of the same DocumentId/revision is never enough to commit.
+        const auto cold = part::PartDocument::restore(
+            session.document().documentId(), session.document().state(),
+            session.document().revision());
+        CHECK(cold.ok() && cold.document);
+        const app::AddSolvedSketchRelationCommand wrong_owner{
+            sid, session.document().documentId(),
+            session.document().revision(),
+            cold.document->incarnationToken(),
+            sk::ConstraintKind::vertical,
+            {id, sk::ConstraintElement::line}, {}};
+        CHECK(!session.execute(wrong_owner, policy, backend).ok());
+        CHECK(backend.calls == 1);
+
+        // Reusing valid identifiers in another document is not enough.
+        const app::AddSolvedSketchRelationCommand wrong_document{
+            sid, core::DocumentId::generate(),
+            session.document().revision(),
+            session.document().incarnationToken(),
+            sk::ConstraintKind::vertical,
+            {id, sk::ConstraintElement::line}, {}};
+        const auto wrong_document_undo = session.undoDepth();
+        CHECK(!session.execute(wrong_document, policy, backend).ok());
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == wrong_document_undo);
+
+        // Numerically impossible horizontal request on a skew free Line:
+        // echo backend falsely claims convergence. Independent residual
+        // review must reject it with typed diagnostics and ZERO Part change.
+        const auto skew_line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {10.0, 10.0}, {15.0, 12.0}});
+        CHECK(skew_line.ok() && skew_line.entity_id);
+        const auto skew_before =
+            session.document().findSketch(sid)->model.state();
+        const auto skew_rev = session.document().revision();
+        const auto skew_undo = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand impossible{
+            sid, session.document().documentId(), skew_rev,
+            session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {*skew_line.entity_id, sk::ConstraintElement::line}, {}};
+        const auto refused_solve =
+            session.execute(impossible, policy, backend);
+        CHECK(!refused_solve.ok() && !refused_solve.changed);
+        CHECK(!refused_solve.constraint_id);
+        CHECK(refused_solve.preflight_status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(refused_solve.solver_status ==
+              sk::LocalSolveGatewayStatus::residual_violation);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().revision() == skew_rev);
+        CHECK(session.undoDepth() == skew_undo);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              skew_before);
+
+        // Stale backend result re-entry cannot overwrite a newer Part.
+        const auto next_line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {5.0, 7.0}, {8.0, 7.0}});
+        CHECK(next_line.ok() && next_line.entity_id);
+        const auto extra = *next_line.entity_id;
+        const auto before_reentry = session.document().revision();
+        const auto undo_before_reentry = session.undoDepth();
+        const app::AddSolvedSketchRelationCommand reentrant{
+            sid, session.document().documentId(),
+            before_reentry, session.document().incarnationToken(),
+            sk::ConstraintKind::horizontal,
+            {extra, sk::ConstraintElement::line}, {}};
+        // Even an authoritative command must reject impossible backend
+        // DoF without consuming an ID, mutating Part, or creating Undo.
+        // Three free Lines expose at most 12 scalar endpoint parameters.
+        const auto no_write_snapshot =
+            session.document().findSketch(sid)->model.state();
+        backend.reported_dof = 13U;
+        const auto bad_dof_write =
+            session.execute(reentrant, policy, backend);
+        CHECK(!bad_dof_write.ok() && !bad_dof_write.changed);
+        CHECK(!bad_dof_write.constraint_id);
+        CHECK(bad_dof_write.preflight_status ==
+              sk::LocalRelationPreflightStatus::solver_rejected);
+        CHECK(bad_dof_write.solver_status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(session.undoDepth() == undo_before_reentry);
+        CHECK(session.document().revision() == before_reentry);
+        CHECK(session.document().findSketch(sid)->model.state() ==
+              no_write_snapshot);
+
+        backend.reported_dof = 3U;
+        backend.reenter = &session;
+        backend.sketch_id = sid;
+        const auto refused = session.execute(reentrant, policy, backend);
+        CHECK(!refused.ok() && !refused.changed);
+        CHECK(!refused.constraint_id);
+        CHECK(backend.reentered);
+        CHECK(session.document().revision() != before_reentry);
+        CHECK(session.undoDepth() == undo_before_reentry + 1U);
+        CHECK(session.document().findSketch(sid)
+              ->model.findConstraint(*accepted.constraint_id) != nullptr);
+        CHECK(session.document().findSketch(sid)
+              ->model.constraintCount() == 1U);
+        CHECK(session.document().findSketch(sid)
+              ->model.findLine(extra) != nullptr);
+    }
+
+    // A2.0 actual Part writer proof: an implicitly redundant new
+    // relation cannot spend a ConstraintId, change DocumentRevision, or
+    // create Undo even when the injected backend would say Converged.
+    // A genuinely independent relation must still commit normally.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct SilentRedundancy final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                return {sk::LocalBackendStatus::converged,
+                        problem.authored, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 2.0}, {5.0, 2.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 4.0}, {5.0, 4.0}});
+        const auto d = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 6.0}, {5.0, 6.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        CHECK(d.ok() && d.entity_id);
+        using CK = sk::ConstraintKind;
+        using CE = sk::ConstraintElement;
+        const sk::ConstraintReference ar{*a.entity_id, CE::line};
+        const sk::ConstraintReference br{*b.entity_id, CE::line};
+        const sk::ConstraintReference cr{*c.entity_id, CE::line};
+        const sk::ConstraintReference dr{*d.entity_id, CE::line};
+        const auto ab = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(), CK::parallel, ar, br});
+        const auto bc = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(), CK::parallel, br, cr});
+        CHECK(ab.ok() && ab.constraint_id);
+        CHECK(bc.ok() && bc.constraint_id);
+        const auto snapshot = session.document().findSketch(sid)->model.state();
+        const auto before_rev = session.document().revision();
+        const auto before_undo = session.undoDepth();
+        const auto wrong = session.execute(
+            app::AddSolvedSketchRelationCommand{
+                sid, session.document().documentId(), before_rev,
+                session.document().incarnationToken(),
+                CK::parallel, ar, cr}, policy, backend);
+        CHECK(!wrong.ok() && !wrong.changed);
+        CHECK(!wrong.constraint_id);
+        CHECK(wrong.preflight_status ==
+              sk::LocalRelationPreflightStatus::invalid_intent);
+        CHECK(backend.calls == 0);
+        CHECK(session.document().revision() == before_rev);
+        CHECK(session.undoDepth() == before_undo);
+        CHECK(session.document().findSketch(sid)->model.state() == snapshot);
+
+        const auto valid = session.execute(
+            app::AddSolvedSketchRelationCommand{
+                sid, session.document().documentId(), before_rev,
+                session.document().incarnationToken(),
+                CK::parallel, ar, dr}, policy, backend);
+        CHECK(valid.ok() && valid.changed && valid.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.undoDepth() == before_undo + 1U);
+        const auto after = session.document().findSketch(sid)->model.state();
+        CHECK(after.constraints.size() == 3U);
+        CHECK(after.next_constraint_id != snapshot.next_constraint_id);
+        CHECK(after.lines == snapshot.lines);
+        CHECK(session.undo().ok());
+        const auto undone = session.document().findSketch(sid)->model.state();
+        CHECK(undone.constraints == snapshot.constraints);
+        CHECK(undone.lines == snapshot.lines);
+        CHECK(undone.next_constraint_id == after.next_constraint_id);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.findConstraint(
+            *valid.constraint_id) != nullptr);
+    }
+
+    // A2.0 RED: a second, independently constrained component must not
+    // drift during Fix or solver-backed Delete. Every residual is valid:
+    // both lines are horizontal, yet only component A is being edited.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct DisconnectedHorizontalDrift final : sk::ILocalSketchSolver {
+            bool shift_every_solve{};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.lines.size() == 2U);
+                if (shift_every_solve || calls == 1) {
+                    candidate.lines[1].start.u += 2.0;
+                    candidate.lines[1].end.u += 2.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto line_a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto line_b = session.execute(app::AddSketchLineCommand{
+            sid, {10.0, 2.0}, {15.0, 2.0}});
+        CHECK(line_a.ok() && line_a.entity_id);
+        CHECK(line_b.ok() && line_b.entity_id);
+        const auto horizontal_a = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line_a.entity_id, sk::ConstraintElement::line}, {}});
+        const auto horizontal_b = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line_b.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(horizontal_a.ok() && horizontal_a.constraint_id);
+        CHECK(horizontal_b.ok() && horizontal_b.constraint_id);
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        CHECK(original.constraints.size() == 2U);
+        const auto revision_before = session.document().revision();
+        const auto undo_before = session.undoDepth();
+
+        // Re-solving after a provisional Fix returns exactly the same
+        // apparently valid drift of component B. This must not authorize
+        // an extra Fix transaction or publication of this candidate.
+        backend.shift_every_solve = true;
+        const app::FixCurrentSketchLineCommand fix{
+            sid, session.document().documentId(), revision_before,
+            session.document().incarnationToken(), *line_a.entity_id};
+        const auto bad_fix = session.execute(fix, policy, backend);
+        CHECK(!bad_fix.ok() && !bad_fix.changed);
+        CHECK(!bad_fix.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == revision_before);
+        CHECK(session.undoDepth() == undo_before);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        // Delete(A) previously materialized the full solved candidate;
+        // component B then jumped 2 mm despite having an independent
+        // horizontal relation and no selected target in that component.
+        backend.calls = 0;
+        backend.shift_every_solve = false;
+        const app::EraseSolvedSketchConstraintCommand erase{
+            sid, session.document().documentId(), revision_before,
+            session.document().incarnationToken(), *horizontal_a.constraint_id};
+        const auto bad_delete = session.execute(erase, policy, backend);
+        CHECK(!bad_delete.ok() && !bad_delete.changed);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == revision_before);
+        CHECK(session.undoDepth() == undo_before);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+    }
+
+    // Positive connected-component control: Delete(A--B) is allowed to
+    // preserve the accepted effective position of C when B--C has its
+    // own surviving relation. Traversal must be TRANSITIVE, not only
+    // the two directly selected Line ids.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct ConnectedEffective final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto solved = problem.authored;
+                CHECK(solved.lines.size() == 3U);
+                if (calls == 1) {
+                    solved.lines.back().start.u += 2.0;
+                    solved.lines.back().end.u += 2.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        solved, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {10.0, 2.0}, {15.0, 2.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {20.0, 4.0}, {25.0, 4.0}});
+        CHECK(a.ok() && a.entity_id);
+        CHECK(b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        const auto a_b = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(),
+            sk::ConstraintKind::parallel,
+            {*a.entity_id, sk::ConstraintElement::line},
+            {*b.entity_id, sk::ConstraintElement::line}});
+        const auto b_c = session.execute(app::AddSketchRelationCommand{
+            sid, session.document().revision(),
+            sk::ConstraintKind::parallel,
+            {*b.entity_id, sk::ConstraintElement::line},
+            {*c.entity_id, sk::ConstraintElement::line}});
+        CHECK(a_b.ok() && a_b.constraint_id);
+        CHECK(b_c.ok() && b_c.constraint_id);
+        const auto before = session.document().findSketch(sid)->model.state();
+        const auto old_undo = session.undoDepth();
+        const app::EraseSolvedSketchConstraintCommand erase{
+            sid, session.document().documentId(),
+            session.document().revision(),
+            session.document().incarnationToken(), *a_b.constraint_id};
+        const auto deleted = session.execute(erase, policy, backend);
+        CHECK(deleted.ok() && deleted.changed);
+        CHECK(backend.calls == 2);
+        CHECK(session.undoDepth() == old_undo + 1U);
+        const auto& current = session.document().findSketch(sid)->model;
+        CHECK(current.findConstraint(*a_b.constraint_id) == nullptr);
+        CHECK(current.findConstraint(*b_c.constraint_id) != nullptr);
+        CHECK((current.findLine(*c.entity_id)->start() ==
+               sk::Point2{22.0, 4.0}));
+        CHECK((current.findLine(*c.entity_id)->end() ==
+               sk::Point2{27.0, 4.0}));
+        CHECK(session.undo().ok());
+        const auto undone = session.document().findSketch(sid)->model.state();
+        CHECK(undone.lines == before.lines);
+        CHECK(undone.constraints == before.constraints);
+        CHECK(session.redo().ok());
+        CHECK((session.document().findSketch(sid)->model
+                   .findLine(*c.entity_id)->start() ==
+               sk::Point2{22.0, 4.0}));
+    }
+
+    // A2.0 mixed-primitive regression: the Line-only native bridge
+    // must never reinterpret Circle/Arc as solver-editable geometry.
+    // Fix/Delete remain atomic with exact, unrelated primitive seeds.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct MixedPrimitiveBackend final : sk::ILocalSketchSolver {
+            enum class Mode { echo, move_circle, resize_arc };
+            Mode mode{Mode::echo};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                CHECK(candidate.circles.size() == 1U);
+                CHECK(candidate.arcs.size() == 1U);
+                if (mode == Mode::move_circle) {
+                    candidate.circles.front().center.u += 1.0;
+                } else if (mode == Mode::resize_arc) {
+                    candidate.arcs.front().radius += 0.5;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {}, std::nullopt};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto made = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(made.ok() && made.sketch_id);
+        const auto sid = *made.sketch_id;
+        const auto line = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto circle = session.execute(app::AddSketchCircleCommand{
+            sid, {12.0, 3.0}, 2.5});
+        const auto arc = session.execute(app::AddSketchArcCommand{
+            sid, {20.0, 3.0}, 1.5, 0.0, 1.2});
+        CHECK(line.ok() && line.entity_id);
+        CHECK(circle.ok() && circle.entity_id);
+        CHECK(arc.ok() && arc.entity_id);
+        const auto horizontal = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(horizontal.ok() && horizontal.constraint_id);
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        CHECK(original.circles.size() == 1U && original.arcs.size() == 1U);
+        const auto revision = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::FixCurrentSketchLineCommand fix{
+            sid, session.document().documentId(), revision,
+            session.document().incarnationToken(), *line.entity_id};
+        const app::EraseSolvedSketchConstraintCommand erase{
+            sid, session.document().documentId(), revision,
+            session.document().incarnationToken(), *horizontal.constraint_id};
+
+        // Even a Converged answer with satisfied Line residuals must
+        // not publish a Circle/Arc change through a Line-only solver.
+        backend.mode = MixedPrimitiveBackend::Mode::move_circle;
+        const auto bad_fix = session.execute(fix, policy, backend);
+        CHECK(!bad_fix.ok() && !bad_fix.changed && !bad_fix.constraint_id);
+        CHECK(backend.calls == 1);
+        CHECK(session.document().revision() == revision);
+        CHECK(session.undoDepth() == undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        backend.mode = MixedPrimitiveBackend::Mode::resize_arc;
+        const auto bad_delete = session.execute(erase, policy, backend);
+        CHECK(!bad_delete.ok() && !bad_delete.changed);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().revision() == revision);
+        CHECK(session.undoDepth() == undo);
+        CHECK(session.document().findSketch(sid)->model.state() == original);
+
+        // Legal unchanged non-Line primitives survive Fix + Delete.
+        backend.mode = MixedPrimitiveBackend::Mode::echo;
+        const auto good_fix = session.execute(fix, policy, backend);
+        CHECK(good_fix.ok() && good_fix.changed && good_fix.constraint_id);
+        CHECK(backend.calls == 4);
+        const auto good_erase = session.execute(
+            app::EraseSolvedSketchConstraintCommand{
+                sid, session.document().documentId(),
+                session.document().revision(),
+                session.document().incarnationToken(),
+                *horizontal.constraint_id},
+            policy, backend);
+        CHECK(good_erase.ok() && good_erase.changed);
+        CHECK(backend.calls == 6);
+        const auto after = session.document().findSketch(sid)->model.state();
+        CHECK(after.circles == original.circles);
+        CHECK(after.arcs == original.arcs);
+        CHECK(after.lines == original.lines);
+        CHECK(after.constraints.size() == 1U);
+        CHECK(session.document().findSketch(sid)->model.isFixedLine(
+            *line.entity_id));
+        CHECK(session.undo().ok());
+        CHECK(session.document().findSketch(sid)->model.state().circles ==
+              original.circles);
+        CHECK(session.document().findSketch(sid)->model.state().arcs ==
+              original.arcs);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.state().circles ==
+              original.circles);
+        CHECK(session.document().findSketch(sid)->model.state().arcs ==
+              original.arcs);
+    }
+
+    // A2.0 RED: Fix Current Position must capture current NUMERIC
+    // solution, rather than the historical skew authored seed.
+    // Source is intentionally local/XY, never a projected or Body-stage Line.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct SolveToHorizontal final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                for (auto& line : candidate.lines) {
+                    line.end.v = line.start.v;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {},
+                        problem.fixed_lines.empty() ? 3U : 0U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 2.0}});
+        CHECK(line.ok() && line.entity_id);
+        const auto id = *line.entity_id;
+        const auto horizontal = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {id, sk::ConstraintElement::line}, {}});
+        CHECK(horizontal.ok() && horizontal.constraint_id);
+        const auto before_fix =
+            session.document().findSketch(sid)->model.state();
+        const auto rev = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::FixCurrentSketchLineCommand command{
+            sid, session.document().documentId(), rev,
+            session.document().incarnationToken(), id};
+        const auto frozen = session.execute(command, policy, backend);
+        CHECK(frozen.ok() && frozen.changed && frozen.constraint_id);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().revision() != rev);
+        CHECK(session.undoDepth() == undo + 1U);
+        const auto& model =
+            session.document().findSketch(sid)->model;
+        CHECK(model.isFixedLine(id));
+        CHECK(model.findLine(id) != nullptr);
+        CHECK((model.findLine(id)->start() == sk::Point2{0.0, 0.0}));
+        CHECK((model.findLine(id)->end() == sk::Point2{5.0, 0.0}));
+        CHECK(model.constraintCount() == 2U);
+        CHECK(session.undo().ok());
+        CHECK(session.document().findSketch(sid)->model.state().lines ==
+              before_fix.lines);
+        CHECK(!session.document().findSketch(sid)->model.isFixedLine(id));
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.isFixedLine(id));
+        CHECK((session.document().findSketch(sid)->model.findLine(id)->end() ==
+              sk::Point2{5.0, 0.0}));
+        const auto fixed_rev = session.document().revision();
+        const auto fixed_undo = session.undoDepth();
+        const auto again = session.execute(
+            app::FixCurrentSketchLineCommand{
+                sid, session.document().documentId(), fixed_rev,
+                session.document().incarnationToken(), id},
+            policy, backend);
+        CHECK(!again.ok() && !again.changed);
+        CHECK(!again.constraint_id);
+        CHECK(session.document().revision() == fixed_rev);
+        CHECK(session.undoDepth() == fixed_undo);
+        CHECK(backend.calls == 2);
+    }
+
+    // Fix Current Position must never accept a second solve that
+    // independently moves other geometry, even when all residuals pass.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct AlternateSolution final : sk::ILocalSketchSolver {
+            int calls{};
+            app::DocumentSession* reenter{};
+            std::optional<sk::SketchId> sketch_id;
+            bool reentered{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                if (calls == 2 && reenter) {
+                    reentered = true;
+                    CHECK(sketch_id);
+                    const auto changed = reenter->execute(
+                        app::AddSketchLineCommand{
+                            *sketch_id, {30.0, 0.0}, {34.0, 0.0}});
+                    CHECK(changed.ok() && changed.changed);
+                } else if (calls == 2) {
+                    auto& other = candidate.lines.back();
+                    other.start.u += 1.0;
+                    other.end.u += 1.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {},
+                        problem.fixed_lines.empty() ? 8U : 4U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto a = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto b = session.execute(
+            app::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(a.ok() && a.entity_id && b.ok() && b.entity_id);
+        const auto prior = session.document().findSketch(sid)->model.state();
+        const auto rev = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::FixCurrentSketchLineCommand command{
+            sid, session.document().documentId(), rev,
+            session.document().incarnationToken(), *a.entity_id};
+        const auto alternative = session.execute(command, policy, backend);
+        CHECK(!alternative.ok() && !alternative.changed);
+        CHECK(!alternative.constraint_id);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().findSketch(sid)->model.state() == prior);
+        CHECK(session.document().revision() == rev);
+        CHECK(session.undoDepth() == undo);
+
+        // An old command is rejected before any additional backend call.
+        const auto changed = session.execute(
+            app::AddSketchLineCommand{
+                sid, {20.0, 0.0}, {25.0, 0.0}});
+        CHECK(changed.ok() && changed.changed);
+        CHECK(!session.execute(command, policy, backend).ok());
+        CHECK(backend.calls == 2);
+
+        // A backend that re-enters DocumentSession during the second
+        // validation invalidates the original command without hiding
+        // its own independently committed change or consuming a Fix ID.
+        backend.calls = 0;
+        backend.reenter = &session;
+        backend.sketch_id = sid;
+        const auto current_rev = session.document().revision();
+        const auto current_undo = session.undoDepth();
+        const auto current_constraints =
+            session.document().findSketch(sid)->model.constraintCount();
+        const app::FixCurrentSketchLineCommand reentrant{
+            sid, session.document().documentId(), current_rev,
+            session.document().incarnationToken(), *a.entity_id};
+        const auto stale_solve = session.execute(
+            reentrant, policy, backend);
+        CHECK(!stale_solve.ok() && !stale_solve.changed);
+        CHECK(!stale_solve.constraint_id);
+        CHECK(backend.calls == 2 && backend.reentered);
+        CHECK(session.document().revision() != current_rev);
+        CHECK(session.undoDepth() == current_undo + 1U);
+        CHECK(session.document().findSketch(sid)->model.constraintCount()
+              == current_constraints);
+        CHECK(!session.document().findSketch(sid)->model.isFixedLine(
+            *a.entity_id));
+    }
+
+    // A2.0 RED: Delete relation must retain last accepted effective
+    // geometry as authored seeds instead of snapping back to old inputs.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct HorizontalEffective final : sk::ILocalSketchSolver {
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                if (!problem.equations.empty()) {
+                    for (auto& line : candidate.lines) {
+                        line.end.v = line.start.v;
+                    }
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {},
+                        problem.equations.empty() ? 4U : 3U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 2.0}});
+        CHECK(line.ok() && line.entity_id);
+        const auto horizontal = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(horizontal.ok() && horizontal.constraint_id);
+        const auto original =
+            session.document().findSketch(sid)->model.state();
+        const auto original_rev = session.document().revision();
+        const auto original_undo = session.undoDepth();
+        const app::EraseSolvedSketchConstraintCommand command{
+            sid, session.document().documentId(), original_rev,
+            session.document().incarnationToken(), *horizontal.constraint_id};
+        const auto erased = session.execute(command, policy, backend);
+        CHECK(erased.ok() && erased.changed);
+        CHECK(backend.calls == 2);
+        const auto& after = session.document().findSketch(sid)->model;
+        CHECK(after.constraintCount() == 0U);
+        CHECK((after.findLine(*line.entity_id)->end() ==
+               sk::Point2{5.0, 0.0}));
+        CHECK(after.state().next_constraint_id ==
+              original.next_constraint_id);
+        CHECK(session.undoDepth() == original_undo + 1U);
+        CHECK(session.undo().ok());
+        const auto undo_state =
+            session.document().findSketch(sid)->model.state();
+        CHECK(undo_state.lines == original.lines);
+        CHECK(undo_state.constraints == original.constraints);
+        CHECK(session.redo().ok());
+        CHECK(session.document().findSketch(sid)->model.constraintCount() == 0U);
+        CHECK((session.document().findSketch(sid)->model
+                   .findLine(*line.entity_id)->end() ==
+               sk::Point2{5.0, 0.0}));
+        const auto no_op_rev = session.document().revision();
+        const auto no_op_undo = session.undoDepth();
+        const auto removed_twice = session.execute(
+            app::EraseSolvedSketchConstraintCommand{
+                sid, session.document().documentId(), no_op_rev,
+                session.document().incarnationToken(), *horizontal.constraint_id},
+            policy, backend);
+        CHECK(!removed_twice.ok() && !removed_twice.changed);
+        CHECK(session.document().revision() == no_op_rev);
+        CHECK(session.undoDepth() == no_op_undo);
+        CHECK(backend.calls == 2);
+    }
+
+    // Solved Delete must fail closed if the remaining solver shifts an
+    // otherwise unconstrained Line, or mutates the owning Part mid-solve.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        struct DivertOrReenter final : sk::ILocalSketchSolver {
+            int calls{};
+            app::DocumentSession* reenter{};
+            std::optional<sk::SketchId> sketch_id;
+            bool reentered{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& problem) override {
+                ++calls;
+                auto candidate = problem.authored;
+                if (calls == 2 && reenter) {
+                    reentered = true;
+                    CHECK(sketch_id);
+                    const auto extra = reenter->execute(
+                        app::AddSketchLineCommand{
+                            *sketch_id, {30.0, 0.0}, {35.0, 0.0}});
+                    CHECK(extra.ok() && extra.changed);
+                } else if (calls == 2) {
+                    candidate.lines.back().start.u += 1.0;
+                    candidate.lines.back().end.u += 1.0;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        candidate, {}, {},
+                        problem.equations.empty() ? 8U : 7U};
+            }
+        } backend;
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8,1.0e-8};
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(
+            app::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto line = session.execute(
+            app::AddSketchLineCommand{
+                sid, {0.0, 0.0}, {5.0, 0.0}});
+        const auto other = session.execute(
+            app::AddSketchLineCommand{
+                sid, {10.0, 0.0}, {15.0, 0.0}});
+        CHECK(line.ok() && line.entity_id &&
+              other.ok() && other.entity_id);
+        const auto added = session.execute(
+            app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {*line.entity_id, sk::ConstraintElement::line}, {}});
+        CHECK(added.ok() && added.constraint_id);
+        const auto before =
+            session.document().findSketch(sid)->model.state();
+        const auto rev = session.document().revision();
+        const auto undo = session.undoDepth();
+        const app::EraseSolvedSketchConstraintCommand command{
+            sid, session.document().documentId(), rev,
+            session.document().incarnationToken(), *added.constraint_id};
+        const auto divergent = session.execute(
+            command, policy, backend);
+        CHECK(!divergent.ok() && !divergent.changed);
+        CHECK(backend.calls == 2);
+        CHECK(session.document().findSketch(sid)->model.state() == before);
+        CHECK(session.document().revision() == rev);
+        CHECK(session.undoDepth() == undo);
+
+        backend.calls = 0;
+        backend.reenter = &session;
+        backend.sketch_id = sid;
+        const auto changing = session.execute(
+            command, policy, backend);
+        CHECK(!changing.ok() && !changing.changed);
+        CHECK(backend.calls == 2 && backend.reentered);
+        CHECK(session.document().revision() != rev);
+        CHECK(session.undoDepth() == undo + 1U);
+        const auto afterReentry =
+            session.document().findSketch(sid)->model.state();
+        CHECK(afterReentry.constraints == before.constraints);
+        CHECK(afterReentry.lines.size() == before.lines.size() + 1U);
+        CHECK(!session.execute(command, policy, backend).ok());
+        CHECK(backend.calls == 2);
+    }
+
     sk::SketchModel model;
     const auto line = model.addLine({1.0, 2.0}, {5.0, 4.0});
     const auto seed = model.state();
@@ -1038,10 +3064,24 @@ int main() {
         CHECK(part::resolveKernelProfileInput(
             session.document(), *profile.profile_id).ok());
 
-        const auto linked = session.execute(
-            app::AddHorizontalSketchConstraintCommand{
+        // The four physical rectangle Lines are NOT one solver component
+        // merely because their XY endpoints match. Explicitly connect
+        // them, then author a Vertical on the horizontal first side.
+        // Rigid rotation + translation becomes legal for this one
+        // connected, initially unsatisfied component, not a license to
+        // move arbitrary unrelated Sketch entities.
+        for (std::size_t i = 0; i < 3U; ++i) {
+            const auto joined = session.execute(app::AddSketchRelationCommand{
                 *made.sketch_id, session.document().revision(),
-                rectangle.entity_ids.front()});
+                sk::ConstraintKind::coincident,
+                {rectangle.entity_ids[i], sk::ConstraintElement::line_end},
+                {rectangle.entity_ids[i+1U], sk::ConstraintElement::line_start}});
+            CHECK(joined.ok() && joined.constraint_id);
+        }
+        const auto linked = session.execute(app::AddSketchRelationCommand{
+            *made.sketch_id, session.document().revision(),
+            sk::ConstraintKind::vertical,
+            {rectangle.entity_ids.front(), sk::ConstraintElement::line}, {}});
         CHECK(linked.ok() && linked.changed && linked.constraint_id);
         CHECK(!session.document().evaluateProfile(*profile.profile_id).has_value());
         const auto unresolved = part::resolveKernelProfileInput(
@@ -1087,13 +3127,18 @@ int main() {
                     return {sk::LocalBackendStatus::failed,
                         std::nullopt, {}, {}, std::nullopt};
                 }
-                // Scripted native test double: deliberately return a
-                // different, still-valid solved rectangle so that the
-                // Kernel Profile proves it consumes DERIVED coordinates.
+                // Scripted solver moves ONLY one explicitly connected
+                // component containing a currently unsatisfied Vertical.
+                // A rigid 90-degree rotation preserves all three authored
+                // Coincident corners and valid durable Profile regions.
                 auto geometry = problem.authored;
                 for (auto& line : geometry.lines) {
-                    line.start.u += translation_u;
-                    line.end.u += translation_u;
+                    const auto a = line.start;
+                    const auto b = line.end;
+                    line.start.u = -a.v + translation_u;
+                    line.start.v = a.u;
+                    line.end.u = -b.v + translation_u;
+                    line.end.v = b.u;
                 }
                 return {sk::LocalBackendStatus::converged,
                     std::move(geometry), {}, {}, 1U};
@@ -1168,17 +3213,15 @@ int main() {
             session.document(), *profile.profile_id, prefix, query,
             accurate, backend).ok());
         CHECK(backend.calls == 4U);
-        // First undo only the reentrant backend test edit; the next Undo
-        // must still target the original Horizontal relation.
+        // Undo the backend reentry and then the four authored relations
+        // (Vertical + three explicit Coincident connections). Restore the
+        // original valid source Profile without changing its entity IDs.
         CHECK(session.undo().changed);
-
-        // Undo revives the previously valid Profile; Redo blocks it again
-        // without mutating the authored Profile or Sketch line coordinates.
-        CHECK(session.undo().changed);
+        for (int i = 0; i < 4; ++i) CHECK(session.undo().changed);
         CHECK(session.document().evaluateProfile(*profile.profile_id)->valid());
         CHECK(part::resolveKernelProfileInput(
             session.document(), *profile.profile_id).ok());
-        CHECK(session.redo().changed);
+        for (int i = 0; i < 4; ++i) CHECK(session.redo().changed);
         CHECK(!session.document().evaluateProfile(*profile.profile_id).has_value());
         CHECK(part::resolveKernelProfileInput(
             session.document(), *profile.profile_id).status ==
@@ -1561,6 +3604,115 @@ int main() {
             sk::SketchModelState{}, fixed));
     }
 
+    // A2.0 RED: a solver receives an input DTO by const reference, not
+    // permission to rewrite the canonical problem's authored inventory.
+    // As the gateway owns a mutable temporary value, an untrusted
+    // adapter could legally cast away const on THAT copy, delete the
+    // Horizontal equation and report convergence on a skew candidate.
+    // Never validate against a solver-mutated copy of the original
+    // contract; confirm exact input integrity after the callback.
+    {
+        struct MutateSolverInput final : sk::ILocalSketchSolver {
+            enum class Attack { remove_equation, rewrite_seed_geometry };
+            Attack attack{Attack::remove_equation};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& immutable_view) override {
+                ++calls;
+                auto& tampered =
+                    const_cast<sk::LocalSolveProblem&>(immutable_view);
+                if (attack == Attack::remove_equation) {
+                    tampered.authored.constraints.clear();
+                    tampered.constraints.clear();
+                    tampered.equations.clear();
+                } else {
+                    // Keep the Horizontal equation but counterfeit a
+                    // different, now-horizontal AUTHORED seed as input.
+                    tampered.authored.lines.front().end.v =
+                        tampered.authored.lines.front().start.v;
+                    tampered.lines.front().end.v =
+                        tampered.lines.front().start.v;
+                }
+                return {sk::LocalBackendStatus::converged,
+                        tampered.authored, {}, {}, std::nullopt};
+            }
+        } backend;
+        sk::SketchModel skew;
+        const auto id = skew.addLine({0.0, 0.0}, {5.0, 1.0});
+        CHECK(skew.addHorizontal(id));
+        const auto original = skew.state();
+        const auto problem = sk::prepareLocalSolveProblem(original);
+        CHECK(problem && problem->equations.size() == 1U);
+        const auto result = sk::evaluateLocalSolve(
+            *problem, sk::LocalSolverAcceptancePolicy{1.0e-8, 1.0e-8},
+            backend);
+        CHECK(backend.calls == 1);
+        CHECK(result.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!result.candidate);
+        CHECK(problem->authored == original);
+        CHECK(problem->constraints == original.constraints);
+        CHECK(problem->equations.size() == 1U);
+        CHECK(skew.state() == original);
+
+        backend.attack =
+            MutateSolverInput::Attack::rewrite_seed_geometry;
+        const auto geometry_poison = sk::evaluateLocalSolve(
+            *problem, sk::LocalSolverAcceptancePolicy{1.0e-8, 1.0e-8},
+            backend);
+        CHECK(backend.calls == 2);
+        CHECK(geometry_poison.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!geometry_poison.candidate);
+        CHECK(problem->authored == original);
+        CHECK(problem->lines.front().end == original.lines.front().end);
+        CHECK(skew.state() == original);
+    }
+
+    // A2.0 RED: comparing backend-mutated canonical DTO with the
+    // *current* caller DTO is insufficient if a reentrant adapter also
+    // holds a mutable pointer to the caller's disposable problem.
+    // Keep an independent entry snapshot, not two mutable views that
+    // can be rewritten identically during solve().
+    {
+        struct DoubleTamperBackend final : sk::ILocalSketchSolver {
+            sk::LocalSolveProblem* caller{};
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& view) override {
+                ++calls;
+                CHECK(caller != nullptr);
+                auto& canonical =
+                    const_cast<sk::LocalSolveProblem&>(view);
+                // Both problems now CLAIM the originally skew Line
+                // was already horizontal, so the old post-solve
+                // equality check cannot detect this breach.
+                caller->authored.lines.front().end.v = 0.0;
+                caller->lines.front().end.v = 0.0;
+                canonical.authored.lines.front().end.v = 0.0;
+                canonical.lines.front().end.v = 0.0;
+                return {sk::LocalBackendStatus::converged,
+                        canonical.authored, {}, {}, std::nullopt};
+            }
+        } backend;
+        sk::SketchModel original_model;
+        const auto id = original_model.addLine(
+            {0.0, 0.0}, {5.0, 1.0});
+        CHECK(original_model.addHorizontal(id));
+        const auto original = original_model.state();
+        auto input = sk::prepareLocalSolveProblem(original);
+        CHECK(input && input->equations.size() == 1U);
+        backend.caller = &*input;
+        const auto result = sk::evaluateLocalSolve(
+            *input, sk::LocalSolverAcceptancePolicy{1.0e-8, 1.0e-8},
+            backend);
+        CHECK(backend.calls == 1);
+        CHECK(result.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!result.candidate);
+        CHECK(original_model.state() == original);
+    }
+
     // SS1-style backend gateway RED: do not mistake a backend's declared
     // convergence for a trustworthy solved Sketch or Part authority.
     // Scripted backend tests the boundary; it is NOT a production solver.
@@ -1839,6 +3991,165 @@ int main() {
         CHECK(conflict.status == sk::LocalSolveGatewayStatus::conflict);
         CHECK(!conflict.candidate);
         CHECK(conflict.conflicting_constraints == backend.conflicts);
+
+        // A2.0 RED: a backend may not publish contradictory semantic
+        // conflict provenance. The vector consumed by UI highlights and
+        // the detailed diagnostics must agree on exact ConstraintIds.
+        backend.diagnostics = {{
+            sk::LocalBackendDiagnosticKind::conflicting_constraint,
+            relation}};
+        backend.conflicts.clear();
+        const auto diagnostic_without_owner = sk::evaluateLocalSolve(
+            *input, policy, backend);
+        CHECK(diagnostic_without_owner.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!diagnostic_without_owner.candidate);
+        CHECK(diagnostic_without_owner.conflicting_constraints.empty());
+        backend.conflicts = {*relation};
+        const auto consistent_conflict = sk::evaluateLocalSolve(
+            *input, policy, backend);
+        CHECK(consistent_conflict.status ==
+              sk::LocalSolveGatewayStatus::conflict);
+        CHECK(consistent_conflict.conflicting_constraints ==
+              backend.conflicts);
+        CHECK(consistent_conflict.diagnostics == backend.diagnostics);
+        backend.diagnostics.clear();
+
+        // R13-A2.0 gateway provenance RED: Fix(Line) is a parameter
+        // mask, NEVER a native equation. An untrusted backend must not
+        // attribute an equation conflict or redundancy to a perfectly
+        // valid but non-equation Fix ConstraintId. This is also true
+        // when the complete problem contains a real equation with
+        // its own separate semantic ID.
+        {
+            sk::SketchModel fixedWithEquation;
+            const auto fixedLine = fixedWithEquation.addLine(
+                {0.0, 0.0}, {5.0, 0.0});
+            const auto freeLine = fixedWithEquation.addLine(
+                {0.0, 2.0}, {5.0, 2.0});
+            const auto fixMask = fixedWithEquation.addConstraint(
+                sk::ConstraintKind::fix,
+                {fixedLine, sk::ConstraintElement::line});
+            const auto equation = fixedWithEquation.addHorizontal(freeLine);
+            CHECK(fixMask && equation && *fixMask != *equation);
+            const auto fixedState = fixedWithEquation.state();
+            const auto fixedInput = sk::prepareLocalSolveProblem(fixedState);
+            CHECK(fixedInput);
+            CHECK(fixedInput->constraints.size() == 2U);
+            CHECK(fixedInput->equations.size() == 1U);
+            CHECK(fixedInput->equations.front().id == *equation);
+            CHECK(fixedInput->fixed_lines.size() == 1U);
+            CHECK(fixedInput->fixed_lines.front() == fixedLine);
+
+            ScriptedBackend provenance;
+            provenance.candidate = fixedState;
+            provenance.degrees_of_freedom = 3U;
+            const auto normal = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(normal.status ==
+                sk::LocalSolveGatewayStatus::candidate_accepted);
+            CHECK(normal.candidate && *normal.candidate == fixedState);
+
+            provenance.diagnostics = {{
+                sk::LocalBackendDiagnosticKind::redundant_constraint,
+                *fixMask}};
+            const auto maskRedundancy = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(maskRedundancy.status ==
+                sk::LocalSolveGatewayStatus::invalid_backend_response);
+            CHECK(!maskRedundancy.candidate);
+
+            provenance.diagnostics = {{
+                sk::LocalBackendDiagnosticKind::redundant_constraint,
+                *equation}};
+            const auto realRedundancy = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(realRedundancy.status ==
+                sk::LocalSolveGatewayStatus::redundant_constraint);
+            CHECK(!realRedundancy.candidate);
+
+            provenance.status = sk::LocalBackendStatus::conflict;
+            provenance.candidate.reset();
+            provenance.diagnostics.clear();
+            provenance.conflicts = {*fixMask};
+            const auto maskConflict = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(maskConflict.status ==
+                sk::LocalSolveGatewayStatus::invalid_backend_response);
+            CHECK(!maskConflict.candidate);
+            CHECK(maskConflict.conflicting_constraints.empty());
+
+            provenance.diagnostics = {{
+                sk::LocalBackendDiagnosticKind::conflicting_constraint,
+                *fixMask}};
+            const auto detailedMaskConflict = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(detailedMaskConflict.status ==
+                sk::LocalSolveGatewayStatus::invalid_backend_response);
+            CHECK(!detailedMaskConflict.candidate);
+
+            provenance.conflicts = {*equation};
+            provenance.diagnostics = {{
+                sk::LocalBackendDiagnosticKind::conflicting_constraint,
+                *equation}};
+            const auto realConflict = sk::evaluateLocalSolve(
+                *fixedInput, policy, provenance);
+            CHECK(realConflict.status ==
+                sk::LocalSolveGatewayStatus::conflict);
+            CHECK(realConflict.conflicting_constraints ==
+                std::vector<sk::ConstraintId>{*equation});
+            CHECK(realConflict.diagnostics == provenance.diagnostics);
+            CHECK(fixedWithEquation.state() == fixedState);
+        }
+
+        // Cross-linked detail from a different, existing ConstraintId
+        // is equally unsafe; checking IDs only for existence is not
+        // enough. A partial diagnostic list cannot contradict the
+        // conflict-owner inventory.
+        sk::SketchModel multi;
+        const auto first_line =
+            multi.addLine({0.0, 0.0}, {5.0, 0.0});
+        const auto second_line =
+            multi.addLine({0.0, 2.0}, {5.0, 2.0});
+        const auto first_relation = multi.addHorizontal(first_line);
+        const auto second_relation = multi.addHorizontal(second_line);
+        CHECK(first_relation && second_relation);
+        const auto multi_problem =
+            sk::prepareLocalSolveProblem(multi.state());
+        CHECK(multi_problem);
+        backend.conflicts = {*first_relation};
+        backend.diagnostics = {{
+            sk::LocalBackendDiagnosticKind::conflicting_constraint,
+            *second_relation}};
+        const auto mismatched_conflict = sk::evaluateLocalSolve(
+            *multi_problem, policy, backend);
+        CHECK(mismatched_conflict.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!mismatched_conflict.candidate);
+        CHECK(mismatched_conflict.conflicting_constraints.empty());
+
+        // The detailed inventory cannot be an incomplete subset of
+        // the actual conflict owners either. Exact complete coverage
+        // of two independent IDs remains accepted.
+        backend.conflicts = {*first_relation, *second_relation};
+        backend.diagnostics = {{
+            sk::LocalBackendDiagnosticKind::conflicting_constraint,
+            *first_relation}};
+        const auto missing_detail = sk::evaluateLocalSolve(
+            *multi_problem, policy, backend);
+        CHECK(missing_detail.status ==
+              sk::LocalSolveGatewayStatus::invalid_backend_response);
+        CHECK(!missing_detail.candidate);
+        backend.diagnostics.push_back({
+            sk::LocalBackendDiagnosticKind::conflicting_constraint,
+            *second_relation});
+        const auto full_details = sk::evaluateLocalSolve(
+            *multi_problem, policy, backend);
+        CHECK(full_details.status == sk::LocalSolveGatewayStatus::conflict);
+        CHECK(!full_details.candidate);
+        CHECK(full_details.conflicting_constraints == backend.conflicts);
+        CHECK(full_details.diagnostics == backend.diagnostics);
+        backend.diagnostics.clear();
 
         backend.conflicts = {*sk::ConstraintId::parse("9999")};
         CHECK(sk::evaluateLocalSolve(*input, policy, backend).status ==
@@ -2132,6 +4443,132 @@ int main() {
 
     }
 
+
+    // R13-A2 P0-D RED: a globally Converged full-Sketch solver may
+    // translate disconnected geometry while satisfying every equation.
+    // Current Part-stage consumers MUST refuse that candidate, including
+    // both a free Line and an independently already-satisfied component.
+    {
+        namespace app = simplesolid2::application;
+        namespace part = simplesolid2::part;
+        namespace core = simplesolid2::core;
+        namespace kernel = simplesolid2::kernel;
+        struct EmptyProjection final : kernel::IEdgeProjectionQuery {
+            std::optional<kernel::ScopedProjectionEdge> bindEdgeToBody(
+                kernel::RuntimeSolidHandle,
+                kernel::RuntimeEdgeToken) noexcept override {
+                return std::nullopt;
+            }
+            kernel::EdgeProjectionResult projectEdgeToPlane(
+                kernel::RuntimeSolidHandle,
+                const kernel::ScopedProjectionEdge&,
+                const kernel::Frame3&) noexcept override {
+                return {};
+            }
+        } projection;
+        struct GlobalDrift final : sk::ILocalSketchSolver {
+            bool drift{true};
+            sk::EntityId free_line;
+            sk::EntityId satisfied_line;
+            int calls{};
+            sk::LocalBackendSolveResult solve(
+                const sk::LocalSolveProblem& input) override {
+                ++calls;
+                auto candidate = input.authored;
+                for (const auto& equation : input.equations) {
+                    if (equation.kind != sk::ConstraintKind::horizontal)
+                        return {sk::LocalBackendStatus::unsupported,
+                                std::nullopt, {}, {}, std::nullopt};
+                    const auto it = std::find_if(
+                        candidate.lines.begin(), candidate.lines.end(),
+                        [&equation](const auto& line) {
+                            return line.id == equation.first.entity;
+                        });
+                    if (it == candidate.lines.end())
+                        return {sk::LocalBackendStatus::failed,
+                                std::nullopt, {}, {}, std::nullopt};
+                    it->end.v = it->start.v;
+                }
+                if (drift) {
+                    for (auto& line : candidate.lines) {
+                        if (line.id == free_line ||
+                            line.id == satisfied_line) {
+                            line.start.u += 4.0;
+                            line.end.u += 4.0;
+                        }
+                    }
+                }
+                return {sk::LocalBackendStatus::converged,
+                        std::move(candidate), {}, {}, std::nullopt};
+            }
+        } backend;
+        app::DocumentSession session{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = session.execute(app::CreatePartSketchCommand{
+            core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto a = session.execute(app::AddSketchLineCommand{
+            sid, {0.0, 1.0}, {5.0, 2.0}});
+        const auto b = session.execute(app::AddSketchLineCommand{
+            sid, {20.0, 5.0}, {25.0, 7.0}});
+        const auto c = session.execute(app::AddSketchLineCommand{
+            sid, {40.0, 8.0}, {45.0, 8.0}});
+        CHECK(a.ok() && a.entity_id && b.ok() && b.entity_id);
+        CHECK(c.ok() && c.entity_id);
+        backend.free_line = *b.entity_id;
+        backend.satisfied_line = *c.entity_id;
+        for (const auto id : {*a.entity_id, *c.entity_id}) {
+            const auto added = session.execute(app::AddSketchRelationCommand{
+                sid, session.document().revision(),
+                sk::ConstraintKind::horizontal,
+                {id, sk::ConstraintElement::line}, {}});
+            CHECK(added.ok() && added.constraint_id);
+        }
+        const auto initial =
+            session.document().findSketch(sid)->model.state();
+        const auto initial_rev = session.document().revision();
+        const auto initial_undo = session.undoDepth();
+        part::PartEvaluation prefix;
+        prefix.source_document_id = session.document().documentId();
+        prefix.source_revision = initial_rev;
+        prefix.source_incarnation = session.document().incarnationToken();
+        const auto problem = part::prepareStageLocalSolveProblem(
+            session.document(), sid, prefix, projection);
+        CHECK(problem && problem->lines.size() == 3U);
+        const sk::LocalSolverAcceptancePolicy policy{1.0e-8, 1.0e-8};
+        const auto bare = sk::evaluateLocalSolve(
+            *problem, policy, backend);
+        CHECK(bare.status == sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(bare.candidate && backend.calls == 1);
+        CHECK(bare.candidate->lines[1] != initial.lines[1]);
+        CHECK(bare.candidate->lines[2] != initial.lines[2]);
+
+        // Actual authoritative stage result must not expose that drift
+        // to SketchScene, Profile or downstream Kernel consumers.
+        const auto rejected = part::evaluateStageLocalSolve(
+            session.document(), sid, prefix, projection, policy, backend);
+        CHECK(rejected);
+        CHECK(rejected->solution.status !=
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(!rejected->solution.candidate);
+        CHECK(session.document().revision() == initial_rev);
+        CHECK(session.undoDepth() == initial_undo);
+        CHECK(session.document().findSketch(sid)->model.state() == initial);
+
+        backend.drift = false;
+        const auto accepted = part::evaluateStageLocalSolve(
+            session.document(), sid, prefix, projection, policy, backend);
+        CHECK(accepted);
+        CHECK(accepted->solution.status ==
+              sk::LocalSolveGatewayStatus::candidate_accepted);
+        CHECK(accepted->solution.candidate);
+        CHECK(accepted->solution.candidate->lines[0].start.v ==
+              accepted->solution.candidate->lines[0].end.v);
+        CHECK(accepted->solution.candidate->lines[1] == initial.lines[1]);
+        CHECK(accepted->solution.candidate->lines[2] == initial.lines[2]);
+        CHECK(session.document().findSketch(sid)->model.state() == initial);
+    }
 
     // R13-A1.2 Part-owned native bridge: a solver problem must come
     // from the exact PartDocument owner/revision and current stage;
@@ -2639,6 +5076,18 @@ int main() {
                 line.start.u += translated_u;
                 line.end.u += translated_u;
             }
+            // The fixture is a genuine closed, slightly slanted
+            // quadrilateral carrying a violated Horizontal on side 0.
+            // Restore a rectangular 5..15 x 0..8 current-stage solve
+            // while retaining all four explicitly linked Coincident
+            // corners. A later +2 mm shift is therefore inside the
+            // affected semantic component, not free-Line drift.
+            if (solved.lines[0].end.v != solved.lines[0].start.v) {
+                solved.lines[0].end.v = solved.lines[0].start.v;
+                solved.lines[1].start.v = solved.lines[0].end.v;
+                solved.lines[1].end.v = solved.lines[2].end.v;
+                solved.lines[2].start.v = solved.lines[1].end.v;
+            }
             solved.lines[1].start.u += seam_offset;
             return {sk::LocalBackendStatus::converged,
                     std::move(solved), {}, {}, 3U};
@@ -2658,6 +5107,20 @@ int main() {
         {5.0, 0.0}, {15.0, 8.0}, sk::EntityRole::regular, false});
     CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
 
+    // Deliberately make a CLOSED slanted four-sided region. One side
+    // now violates Horizontal, giving the guarded Part solver genuine
+    // work to do. All adjacent corners remain coincident as authored,
+    // so the Profile exists before the relation is added; this fixture
+    // does not silently reclassify the untouched sides as movable.
+    const auto tilted = session.execute(app::UpdateSketchGeometryCommand{
+        *sketch.sketch_id, session.document().revision(),
+        {
+            {rectangle.entity_ids[0], {5.0, 0.0}, {15.0, 0.25}},
+            {rectangle.entity_ids[1], {15.0, 0.25}, {15.0, 8.25}},
+            {rectangle.entity_ids[2], {15.0, 8.25}, {5.0, 8.0}},
+        }, {}, {}});
+    CHECK(tilted.ok() && tilted.changed);
+
     const auto* original = session.document().findSketch(*sketch.sketch_id);
     CHECK(original != nullptr);
     const auto seed = original->model.state();
@@ -2676,6 +5139,25 @@ int main() {
         {seed.lines[0].id, sk::ConstraintElement::line_end},
         {seed.lines[1].id, sk::ConstraintElement::line_start}});
     CHECK(coincide.ok() && coincide.constraint_id);
+    // Without these three explicit Coincident links, sides 2 and 3
+    // would be independent despite matching authored endpoint numbers,
+    // and a global +2 mm numerical translation must be rejected.
+    for (std::size_t i = 1U; i < 4U; ++i) {
+        const auto linked = session.execute(app::AddSketchRelationCommand{
+            *sketch.sketch_id, session.document().revision(),
+            sk::ConstraintKind::coincident,
+            {seed.lines[i].id, sk::ConstraintElement::line_end},
+            {seed.lines[(i + 1U) % 4U].id,
+             sk::ConstraintElement::line_start}});
+        CHECK(linked.ok() && linked.constraint_id);
+    }
+    const auto horizontal = session.execute(app::AddSketchRelationCommand{
+        *sketch.sketch_id, session.document().revision(),
+        sk::ConstraintKind::horizontal,
+        {seed.lines[0].id, sk::ConstraintElement::line}, {}});
+    CHECK(horizontal.ok() && horizontal.constraint_id);
+    CHECK(session.document().findSketch(*sketch.sketch_id)->
+        model.state().constraints.size() == 5U);
 
     CHECK(!session.document().evaluateProfile(*profile.profile_id));
     CHECK(part::resolveKernelProfileInput(
@@ -2777,11 +5259,11 @@ int main() {
     CHECK(session.document().findSketch(*sketch.sketch_id)
         ->model.state().lines == seed.lines);
 
-    // A refused candidate must not poison either the authored intent or
-    // the old Profile/OCCT path. Undo the ONLY new Coincident relation;
-    // the exact same ProfileId must immediately work through the original
-    // public resolver and produce a genuine native solid again.
-    CHECK(session.undo().changed);
+    // A refused candidate must not poison authored intent or the
+    // Profile/OCCT path. Undo the five semantic relations (Horizontal
+    // and four connected Coincident edges); the same ProfileId must
+    // immediately work through the original public resolver.
+    for (int i = 0; i < 5; ++i) CHECK(session.undo().changed);
     const auto* unconstrained =
         session.document().findProfile(*profile.profile_id);
     CHECK(unconstrained != nullptr);
@@ -2798,15 +5280,16 @@ int main() {
     CHECK(restored_solid.brep_valid);
     CHECK(restored_solid.solid_count == 1U);
 
-    // Redo restores the exact authored relation identity and fail-closed
-    // unsolved Profile state; no stale OCCT or solver result is reused.
-    CHECK(session.redo().changed);
+    // Redo restores the same five authored ConstraintIds and a
+    // fail-closed unsolved Profile state, not a stale cached OCCT body.
+    for (int i = 0; i < 5; ++i) CHECK(session.redo().changed);
     CHECK(session.document().findProfile(*profile.profile_id) != nullptr);
     const auto after_redo =
         session.document().findSketch(*sketch.sketch_id)->model.state();
     CHECK(after_redo.lines == seed.lines);
-    CHECK(after_redo.constraints.size() == 1U);
+    CHECK(after_redo.constraints.size() == 5U);
     CHECK(after_redo.constraints.front().id == *coincide.constraint_id);
+    CHECK(after_redo.constraints.back().id == *horizontal.constraint_id);
     CHECK(part::resolveKernelProfileInput(
         session.document(), *profile.profile_id).status ==
         part::ProfileKernelInputStatus::unresolved_profile);
@@ -3000,9 +5483,11 @@ int main() {
         const auto authoredRevolve =
             revolve_document.document->findSketch(*sketch.sketch_id)
                 ->model.state();
-        CHECK(authoredRevolve.constraints.size() == 1U);
+        CHECK(authoredRevolve.constraints.size() == 5U);
         CHECK(authoredRevolve.constraints.front().id ==
               *coincide.constraint_id);
+        CHECK(authoredRevolve.constraints.back().id ==
+              *horizontal.constraint_id);
         const auto coldPath = std::filesystem::temp_directory_path() /
             ("r13_a1_p21_native_revolve_" +
              std::string{revolve_document.document->documentId().value()} +
@@ -4028,6 +6513,24 @@ int main() {
                 {5.0, 0.0}, {15.0, 8.0},
                 sk::EntityRole::regular, false});
         CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+        // Start with a CLOSED trapezoid: the right top corner is at
+        // 10 mm while the left top remains at 8 mm. Horizontal(top)
+        // is thus genuinely unsatisfied, whereas Fix(bottom), both
+        // vertical sides and all four Coincident corners can coexist.
+        // The solver must lift only the left top corner to 10 mm;
+        // a mere stage refresh of an already solved rectangle would
+        // not authorize moving any of these coordinates.
+        const auto skewed_top = rect_session.execute(
+            app::UpdateSketchGeometryCommand{
+                *rect_sketch.sketch_id,
+                rect_session.document().revision(),
+                {
+                    {rectangle.entity_ids[1],
+                     {15.0, 0.0}, {15.0, 10.0}},
+                    {rectangle.entity_ids[2],
+                     {15.0, 10.0}, {5.0, 8.0}},
+                }, {}, {}});
+        CHECK(skewed_top.ok() && skewed_top.changed);
         const auto original_rect = rect_session.document().findSketch(
             *rect_sketch.sketch_id)->model.state();
         CHECK(original_rect.lines.size() == 4U);

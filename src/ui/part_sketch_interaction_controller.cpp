@@ -220,6 +220,75 @@ arcPointAt(
     return "unknown structural edit status";
 }
 
+// A2.0 Operations diagnostics are a projection of the validated
+// DocumentSession result, not a second authority about solver success.
+// Do not collapse conflict, unsupported geometry, input corruption and
+// stale Part provenance into an indistinguishable generic message.
+[[nodiscard]] const char* relationSolveFailureText(
+    sketch::LocalSolveGatewayStatus status) noexcept {
+    using Status = sketch::LocalSolveGatewayStatus;
+    switch (status) {
+    case Status::candidate_accepted:
+        return nullptr; // A later Part/transaction gate may still reject.
+    case Status::invalid_policy:
+        return "invalid numerical acceptance policy";
+    case Status::invalid_problem:
+        return "invalid current-stage solver input";
+    case Status::invalid_backend_response:
+        return "invalid solver response; backend input or output changed";
+    case Status::redundant_constraint:
+        return "redundant relation; an existing relation already implies it";
+    case Status::conflict:
+        return "conflict; the requested relation is incompatible with current constraints";
+    case Status::unsupported:
+        return "unsupported relation or geometry for the configured solver";
+    case Status::backend_failure:
+        return "solver failure or nonconvergence; inspect the constraints";
+    case Status::residual_violation:
+        return "residual violation; the numerical candidate does not satisfy the relation";
+    case Status::coincident_not_closed:
+        return "Coincident endpoints could not be closed exactly";
+    case Status::invalid_candidate:
+        return "invalid solved candidate geometry";
+    case Status::stale_semantics:
+        return "stale candidate semantic identity or authored constraints";
+    case Status::fixed_entity_changed:
+        return "fixed Sketch source changed during numerical solving";
+    }
+    return "unclassified solver rejection";
+}
+
+[[nodiscard]] std::string relationCommitRejectionText(
+    const application::AddSolvedSketchRelationResult& result) {
+    using Error = application::DocumentSessionErrorCode;
+    if (result.diagnostic.code == Error::revision_diverged) {
+        return "RELATIONS: stale Part revision or runtime context; "
+               "refresh the Sketch and retry. No command accepted.";
+    }
+    if (result.preflight_status ==
+        sketch::LocalRelationPreflightStatus::invalid_intent) {
+        return "RELATIONS: invalid or already implied/redundant relation; "
+               "check exact targets and existing constraints. No command accepted.";
+    }
+    if (result.solver_status) {
+        if (const char* reason =
+                relationSolveFailureText(*result.solver_status)) {
+            return std::string{"RELATIONS: "} + reason +
+                   ". No command accepted.";
+        }
+    }
+    if (result.preflight_status ==
+        sketch::LocalRelationPreflightStatus::invalid_problem) {
+        return "RELATIONS: invalid semantic solver problem; "
+               "check the current Sketch stage. No command accepted.";
+    }
+    return "RELATIONS: transaction or command rejected; " +
+        (result.diagnostic.message.empty()
+             ? std::string{"check current Sketch and Part context"}
+             : result.diagnostic.message) +
+        ". No command accepted.";
+}
+
 } // namespace
 
 PartSketchInteractionController::PartSketchInteractionController(
@@ -231,6 +300,12 @@ void PartSketchInteractionController::begin(
     sketch::SketchId sketch_id) {
     session_ = &session;
     sketch_id_ = sketch_id;
+    // A development solver is borrowed, never owned by this controller.
+    // Switching the Part/Sketch edit context revokes an old registration.
+    development_relation_solver_ = nullptr;
+    development_relation_policy_ = {};
+    ++relation_context_generation_;
+    relation_first_revision_.reset();
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
     tracking_hover_.reset();
@@ -263,6 +338,10 @@ void PartSketchInteractionController::begin(
 }
 
 void PartSketchInteractionController::end() {
+    development_relation_solver_ = nullptr;
+    development_relation_policy_ = {};
+    ++relation_context_generation_;
+    relation_first_revision_.reset();
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
     tracking_hover_.reset();
@@ -1550,6 +1629,12 @@ bool PartSketchInteractionController::activateCadInputSemanticTool(
     case sketch::SketchTool::rectangle:
         activateRectangle();
         return this->tool() == tool;
+    case sketch::SketchTool::relations:
+        activateRelations();
+        return this->tool() == tool;
+    case sketch::SketchTool::dimensions:
+        activateDimensions();
+        return this->tool() == tool;
     case sketch::SketchTool::measure:
         return activateMeasure();
     case sketch::SketchTool::move:
@@ -2007,6 +2092,8 @@ bool PartSketchInteractionController::repeatLastCommand() {
     case sketch::SketchTool::mirror:
         return activateMirror();
     case sketch::SketchTool::measure:
+    case sketch::SketchTool::relations:
+    case sketch::SketchTool::dimensions:
     case sketch::SketchTool::select:
     case sketch::SketchTool::trim:
     case sketch::SketchTool::extend:
@@ -2332,6 +2419,261 @@ void PartSketchInteractionController::activateRectangle() {
     configureForCurrentTool();
     last_repeatable_command_ =
         sketch::SketchTool::rectangle;
+    notifyStateChanged();
+}
+
+void PartSketchInteractionController::activateRelations() {
+    if (!active()) return;
+    resetProfileRuntime();
+    interaction_.activateRelations();
+    ++relation_context_generation_;
+    relation_first_revision_.reset();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    rectangle_revision_.reset();
+    // Finish ALL original-epoch resets before reporting anything to UI.
+    // Both status listeners and native Viewer projection may reenter.
+    // Do not let an obsolete outer activation clear the new edit's
+    // first relation target or its DocumentRevision lease.
+    const auto activation_generation = relation_context_generation_;
+    reportStatus(
+        development_relation_solver_ != nullptr &&
+                development_relation_policy_.valid()
+            ? "RELATIONS DEV PREVIEW: numerical backend registered. "
+              "Select a current-stage Line/endpoint; an accepted relation "
+              "must pass guarded Part validation. Not a release build."
+            : "RELATIONS: numeric production solver and semantic targets "
+              "are not yet enabled. No relation is authored.");
+    if (relation_context_generation_ != activation_generation ||
+        !active() ||
+        interaction_.tool() != sketch::SketchTool::relations) {
+        return;
+    }
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+}
+
+bool PartSketchInteractionController::selectRelationKind(
+    sketch::ConstraintKind kind) {
+    if (!active() || profile_session_ ||
+        !interaction_.setRelationKind(kind)) {
+        return false;
+    }
+    ++relation_context_generation_;
+    // Capture both the selected durable IDs and exact original Part
+    // stage BEFORE notifying Qt or the viewer. Both callbacks may reenter
+    // DocumentSession and author an unrelated Part change; an old
+    // preselection must not inherit the new revision.
+    auto* const selection_session = session_;
+    const auto selection_sketch = *sketch_id_;
+    const auto selection_document_id =
+        selection_session->documentId();
+    const auto selection_revision =
+        selection_session->document().revision();
+    // A reentrant stateChanged/projectInteraction callback can close
+    // and reopen this exact same Sketch without changing Part identity,
+    // revision, or relation kind. The old selected EntityIds remain
+    // valid by ID but belong to a superseded UI gesture.
+    const auto selection_generation = relation_context_generation_;
+    const auto selection_incarnation =
+        selection_session->document().incarnationToken();
+    const auto selected = interaction_.selectedEntities();
+    const auto stillCurrentSelection = [&]() {
+        return session_ == selection_session &&
+            sketch_id_ && *sketch_id_ == selection_sketch &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == kind &&
+            relation_context_generation_ == selection_generation &&
+            selection_session->documentId() == selection_document_id &&
+            selection_session->document().incarnationToken() ==
+                selection_incarnation &&
+            selection_session->document().revision() ==
+                selection_revision;
+    };
+    const auto rejectStaleSelection = [&]() {
+        if (stillCurrentSelection()) return false;
+        // An older selection-first callback may have triggered a new
+        // edit of this SAME Part/Sketch and identical relation kind.
+        // The new epoch now owns its first target: neither clear its
+        // pending draft nor replace it with the old selection.
+        if (relation_context_generation_ != selection_generation) {
+            reportStatus(
+                "RELATIONS: stale previous selection-first request ignored; "
+                "newer edit-context selection preserved. No Part change.");
+            notifyStateChanged();
+            return true;
+        }
+        // Discard the old draft only in the original active tool;
+        // never overwrite a different session or a changed tool.
+        if (session_ == selection_session && sketch_id_ &&
+            *sketch_id_ == selection_sketch &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == kind) {
+            static_cast<void>(interaction_.setRelationKind(kind));
+            relation_first_revision_.reset();
+        }
+        reportStatus(
+            "RELATIONS: stale selection-first targets after Part or "
+            "Sketch context changed; select the current-stage Lines again. "
+            "No Part change.");
+        notifyStateChanged();
+        return true;
+    };
+
+    relation_first_revision_.reset();
+    projectInteraction();
+    if (rejectStaleSelection()) return true;
+    notifyStateChanged();
+    if (rejectStaleSelection()) return true;
+    if (selected.empty()) {
+        reportStatus(
+            development_relation_solver_ != nullptr &&
+                    development_relation_policy_.valid()
+                ? "RELATIONS DEV PREVIEW: choose the required "
+                  "current-stage Line/endpoint; no Part change yet."
+                : "RELATIONS: choose the required Line/endpoint. "
+                  "Numeric authoring is not yet enabled.");
+        return true;
+    }
+    if (kind == sketch::ConstraintKind::coincident) {
+        // Entity-level preselection cannot identify Start vs End.
+        reportStatus(
+            "COINCIDENT: select two exact endpoints; "
+            "preselected Lines do not determine endpoint roles.");
+        return true;
+    }
+
+    const bool pair =
+        kind == sketch::ConstraintKind::parallel ||
+        kind == sketch::ConstraintKind::perpendicular;
+    const auto arity = pair ? 2U : 1U;
+    if (selected.size() > arity) {
+        reportStatus(
+            "RELATIONS: preselection contains too many Lines "
+            "for the selected relation. No target consumed.");
+        return true;
+    }
+    const auto* current =
+        viewport_controller_->currentSketchInteractionModel();
+    const auto* hosted = activeSketch();
+    if (current == nullptr || hosted == nullptr) {
+        reportStatus(
+            "RELATIONS: current-stage preselection unavailable.");
+        return true;
+    }
+
+    // Validate the complete selected set before consuming its first
+    // transient target. Otherwise a linked/missing second entity could
+    // accidentally leave an incomplete constraint draft.
+    for (const auto id : selected) {
+        const bool linked = std::any_of(
+            hosted->projection_bindings.begin(),
+            hosted->projection_bindings.end(),
+            [id](const part::ProjectedEdgeBinding& binding) {
+                return binding.target_entity == id;
+            });
+        if (!id.valid() || linked ||
+            current->findLine(id) == nullptr) {
+            reportStatus(
+                "RELATIONS: preselection is not a local, "
+                "current-stage Line; no target consumed.");
+            return true;
+        }
+    }
+
+    // Keep using the entry-time lease, not a fresh snapshot acquired
+    // after native projection or any reentrant UI callback.
+    sketch::RelationTargetResult result;
+    for (const auto id : selected) {
+        result = interaction_.acceptRelationTarget(
+            *current,
+            {id, sketch::ConstraintElement::line});
+        if (result.outcome ==
+                sketch::RelationTargetOutcome::invalid_target ||
+            result.outcome ==
+                sketch::RelationTargetOutcome::inactive) {
+            // Should not occur after complete prevalidation; keep the
+            // kind but clear any half-consumed selection, fail closed.
+            static_cast<void>(interaction_.setRelationKind(kind));
+            relation_first_revision_.reset();
+            reportStatus(
+                "RELATIONS: preselected targets were rejected. "
+                "No Part change.");
+            notifyStateChanged();
+            return true;
+        }
+    }
+    if (result.outcome ==
+            sketch::RelationTargetOutcome::first_target_accepted) {
+        relation_first_revision_ = selection_revision;
+    }
+    notifyStateChanged();
+    // Both a partial pair and a fully preselected ready relation must
+    // pass this gate after UI callbacks and before a Part command. Reuse
+    // the same generation-aware rejection as the *earlier* notifications:
+    // an obsolete selection-first continuation may not cancel a new
+    // edit context's first target even if SketchId/kind/revision match.
+    if (rejectStaleSelection()) return true;
+    if (result.outcome ==
+        sketch::RelationTargetOutcome::first_target_accepted) {
+        reportStatus(
+            "RELATIONS: first preselected Line accepted; "
+            "click one more Line. No Part change.");
+    } else if (result.outcome ==
+                   sketch::RelationTargetOutcome::ready &&
+               result.draft) {
+        relation_first_revision_.reset();
+        commitReadyRelation(*result.draft);
+    }
+    return true;
+}
+
+bool PartSketchInteractionController::selectDimensionKind(
+    sketch::DrivingDimensionToolKind kind) {
+    if (!active() || profile_session_ ||
+        !interaction_.setDimensionKind(kind)) {
+        return false;
+    }
+    // Both Viewer projection and Operations notification can reenter.
+    // Do not report this obsolete placeholder after either callback.
+    reportStatus(
+        "DIMENSIONS: type selected. Authoring is blocked pending "
+        "strict v22 and a native driving solver; no Part change.");
+    projectInteraction();
+    notifyStateChanged();
+    return true;
+}
+
+void PartSketchInteractionController::activateDimensions() {
+    if (!active()) return;
+    resetProfileRuntime();
+    interaction_.activateDimensions();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    rectangle_revision_.reset();
+    // The provisional notice must follow local resets but precede ANY
+    // synchronous external Viewer/UI callback. Abandon the outer
+    // projection when a listener switches to a new edit generation.
+    const auto activation_generation = relation_context_generation_;
+    reportStatus("DIMENSIONS: native driving-dimension solver and v22 schema are not yet enabled. No dimension is authored.");
+    if (relation_context_generation_ != activation_generation ||
+        !active() ||
+        interaction_.tool() != sketch::SketchTool::dimensions) {
+        return;
+    }
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
     notifyStateChanged();
 }
 
@@ -2767,6 +3109,10 @@ bool PartSketchInteractionController::escape() {
 
     const bool changed = interaction_.escape();
     if (!changed) return false;
+    ++relation_context_generation_;
+    if (!interaction_.firstRelationTarget()) {
+        relation_first_revision_.reset();
+    }
 
     if (was_manipulating &&
         !interaction_.directManipulationActive()) {
@@ -3247,6 +3593,8 @@ void PartSketchInteractionController::cancelForHistory() {
 
     resetProfileRuntime();
     interaction_.cancelForHistory();
+    ++relation_context_generation_;
+    relation_first_revision_.reset();
     mirror_keep_original_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
@@ -3883,6 +4231,399 @@ handleStructuralEditPointer(
             : "EXTEND committed.");
 }
 
+void PartSketchInteractionController::commitReadyRelation(
+    const sketch::RelationTargetDraft& draft) {
+    // This controller never invents a numeric solver. End-user runtime
+    // remains fail-closed until separately approved original PlaneGCS
+    // packaging, linkage and installed-consumer evidence exist.
+    if (!development_relation_solver_ ||
+        !development_relation_policy_.valid() ||
+        session_ == nullptr || !sketch_id_ || !active()) {
+        reportStatus(
+            "RELATIONS: no approved native solver available; "
+            "semantic targets not authored.");
+        return;
+    }
+
+    const auto expected_incarnation =
+        session_->document().incarnationToken();
+    if (!expected_incarnation) {
+        reportStatus("RELATIONS: current Part incarnation unavailable.");
+        return;
+    }
+    const auto expected_document_id = session_->documentId();
+    const auto expected_revision = session_->document().revision();
+    auto* const initiating_session = session_;
+    const auto initiating_sketch = *sketch_id_;
+    const auto initiating_kind = draft.kind;
+    auto* const borrowed_backend = development_relation_solver_;
+    const auto initiating_generation = relation_context_generation_;
+    // A successful domain commit advances DocumentRevision by design.
+    // Separate stable UI/context identity from the BEFORE-commit lease:
+    // only backend calls require the exact original revision.
+    const auto sameUiContext = [this, initiating_session,
+                                initiating_sketch, initiating_kind,
+                                borrowed_backend,
+                                initiating_generation,
+                                expected_document_id,
+                                expected_incarnation]() {
+        return session_ == initiating_session &&
+            sketch_id_ && *sketch_id_ == initiating_sketch &&
+            active() &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == initiating_kind &&
+            development_relation_solver_ == borrowed_backend &&
+            relation_context_generation_ == initiating_generation &&
+            initiating_session->documentId() == expected_document_id &&
+            initiating_session->document().incarnationToken() ==
+                expected_incarnation;
+    };
+    const auto stillCurrentTool = [&]() {
+        return sameUiContext() &&
+            initiating_session->document().revision() == expected_revision;
+    };
+
+    // DocumentSession protects Part state/revision. It cannot know that
+    // a synchronous DEV backend callback changed the Qt edit command or
+    // closed/reopened the controller on the *same unchanged Part*.
+    // Reject such a backend result BEFORE the domain writer can publish
+    // an otherwise valid candidate.
+    class UiLeaseCheckedSolver final : public sketch::ILocalSketchSolver {
+    public:
+        UiLeaseCheckedSolver(
+            sketch::ILocalSketchSolver& underlying,
+            std::function<bool()> still_current,
+            bool& invalidated)
+            : underlying_{underlying},
+              still_current_{std::move(still_current)},
+              invalidated_{invalidated} {}
+
+        [[nodiscard]] sketch::LocalBackendSolveResult solve(
+            const sketch::LocalSolveProblem& problem) override {
+            if (!still_current_()) return invalidatedResponse();
+            auto solved = underlying_.solve(problem);
+            if (!still_current_()) return invalidatedResponse();
+            return solved;
+        }
+
+    private:
+        [[nodiscard]] sketch::LocalBackendSolveResult
+        invalidatedResponse() {
+            invalidated_ = true;
+            return {sketch::LocalBackendStatus::failed,
+                    std::nullopt, {}, {}, std::nullopt};
+        }
+        sketch::ILocalSketchSolver& underlying_;
+        std::function<bool()> still_current_;
+        bool& invalidated_;
+    };
+
+    bool tool_invalidated = false;
+    UiLeaseCheckedSolver guarded_backend{
+        *borrowed_backend, stillCurrentTool, tool_invalidated};
+
+    // The same owning DocumentSession is used for command-first and
+    // selection-first requests. In particular, never call the old
+    // headless AddSketchRelationCommand as a success shortcut.
+    application::AddSolvedSketchRelationResult committed;
+    if (draft.kind == sketch::ConstraintKind::fix) {
+        committed = session_->execute(
+            application::FixCurrentSketchLineCommand{
+                *sketch_id_, expected_document_id, expected_revision,
+                expected_incarnation, draft.first.entity},
+            development_relation_policy_,
+            guarded_backend);
+    } else {
+        committed = session_->execute(
+            application::AddSolvedSketchRelationCommand{
+                *sketch_id_, expected_document_id, expected_revision,
+                expected_incarnation, draft.kind,
+                draft.first, draft.second},
+            development_relation_policy_,
+            guarded_backend);
+    }
+    if (!sameUiContext()) {
+        // A newer tool or solver registration owns the Operations UI.
+        // The old in-flight request must not overwrite its presentation.
+        return;
+    }
+    if (tool_invalidated) {
+        reportStatus(
+            "RELATIONS: stale in-flight solver result after context "
+            "or revision change; no relation command accepted.");
+        return;
+    }
+    // A successful Part commit MUST increment revision. The post-solve
+    // UI gate therefore compares stable session/tool generation, while
+    // the wrapped solver compared the exact entry-time revision.
+    if (!committed.ok() || !committed.changed) {
+        reportStatus(relationCommitRejectionText(committed));
+        return;
+    }
+
+    viewport_controller_->refreshPresentation();
+    if (!sameUiContext()) return;
+    projectSelection();
+    if (!sameUiContext()) return;
+    projectInteraction();
+    if (!sameUiContext()) return;
+    notifyStateChanged();
+    if (!sameUiContext()) return;
+    reportStatus(
+        "RELATIONS: accepted by current Part solver and transaction "
+        "(development-only backend).");
+}
+
+void PartSketchInteractionController::handleRelationsPointer(
+    const SketchPointerInput& input) {
+    // SS1 SketchCanvas donor adaptation: Relations shares read-only
+    // hover feedback with Select, but a move never commits a relation,
+    // consumes a semantic target or starts direct geometry manipulation.
+    if (input.phase == viewer::SpatialPointerPhase::move) {
+        if (input.viewport_position.valid()) {
+            updateHover(input.viewport_position);
+        }
+        return;
+    }
+
+    // R13-A2.0 transient, command-first semantic target capture only.
+    // It NEVER calls the old headless AddSketchRelationCommand: numerical
+    // convergence, stage provenance and atomic Part transaction are
+    // separate hard acceptance gates.
+    if (input.phase != viewer::SpatialPointerPhase::primary_press ||
+        !input.viewport_position.valid() ||
+        !interaction_.relationKind() ||
+        !sketch_id_) {
+        return;
+    }
+
+    // Source identity and geometry equality are NOT sufficient to resume
+    // a two-click gesture after another Part transaction. The second
+    // target must be picked in the SAME exact DocumentRevision as the
+    // first. Discard the old first target before any new solver call or
+    // transient allocation; keep the selected kind for a clean retry.
+    if (interaction_.firstRelationTarget()) {
+        if (!relation_first_revision_ ||
+            *relation_first_revision_ !=
+                session_->document().revision()) {
+            static_cast<void>(interaction_.cancelRelationTarget());
+            relation_first_revision_.reset();
+            reportStatus(
+                "RELATIONS: stale two-target gesture after Part revision "
+                "change; select both targets again. No Part change.");
+            notifyStateChanged();
+            return;
+        }
+    } else {
+        relation_first_revision_.reset();
+    }
+
+    // The native Viewer is an external callback boundary. It may reenter
+    // DocumentSession and replace the hosted Part/Sketch while returning
+    // an otherwise valid new-generation hit token. Never dereference a
+    // pre-query SketchModel/PartSketch pointer after that transition.
+    auto* const pointer_session = session_;
+    const auto pointer_sketch = *sketch_id_;
+    const auto pointer_kind = *interaction_.relationKind();
+    // Unlike durable Part provenance, the controller's edit-session
+    // generation also distinguishes end/begin ABA of the same Sketch,
+    // same relation kind and same borrowed backend during a Viewer query.
+    const auto pointer_generation = relation_context_generation_;
+    const auto pointer_revision =
+        pointer_session->document().revision();
+    const auto pointer_document_id = pointer_session->documentId();
+    const auto pointer_incarnation =
+        pointer_session->document().incarnationToken();
+    const auto stillCurrentPick = [&]() {
+        return session_ == pointer_session &&
+            sketch_id_ && *sketch_id_ == pointer_sketch &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == pointer_kind &&
+            relation_context_generation_ == pointer_generation &&
+            pointer_session->documentId() == pointer_document_id &&
+            pointer_session->document().incarnationToken() ==
+                pointer_incarnation &&
+            pointer_session->document().revision() == pointer_revision;
+    };
+    const auto rejectStalePick = [&]() {
+        // An obsolete pointer event must NEVER cancel a first target
+        // acquired reentrantly by a newer edit generation. Same Part,
+        // SketchId and kind after end()/begin() do not make it ours.
+        if (relation_context_generation_ != pointer_generation) {
+            reportStatus(
+                "RELATIONS: stale previous native pick ignored; "
+                "newer edit-context selection preserved. No Part change.");
+            notifyStateChanged();
+            return;
+        }
+        if (session_ == pointer_session && sketch_id_ &&
+            *sketch_id_ == pointer_sketch &&
+            interaction_.tool() == sketch::SketchTool::relations &&
+            interaction_.relationKind() == pointer_kind) {
+            static_cast<void>(interaction_.cancelRelationTarget());
+            relation_first_revision_.reset();
+        }
+        reportStatus(
+            "RELATIONS: stale native pick after Part/Sketch revision "
+            "or edit-context change; retry on current stage. No Part change.");
+        notifyStateChanged();
+    };
+
+    const auto* current_model =
+        viewport_controller_->currentSketchInteractionModel();
+    const auto* hosted = activeSketch();
+    if (current_model == nullptr || hosted == nullptr) {
+        reportStatus("RELATIONS: current-stage Sketch is unavailable.");
+        return;
+    }
+
+    std::optional<sketch::ConstraintReference> target;
+    if (*interaction_.relationKind() ==
+        sketch::ConstraintKind::coincident) {
+        // The existing editable GripScene is restricted to SELECT and
+        // selected entities. Project BOTH semantic endpoints from the
+        // current effective Sketch instead, regardless of preselection.
+        // The Qt/OCCT native grip hit tolerance is 9 logical pixels
+        // (DPR-aware provider projection), not a model-space epsilon.
+        constexpr double native_endpoint_hit_pixels = 9.0;
+        std::vector<sketch::RelationEndpointScreenCandidate> candidates;
+        const auto snapshot = current_model->state();
+        candidates.reserve(snapshot.lines.size() * 2U);
+        for (const auto& line : snapshot.lines) {
+            const auto start =
+                viewport_controller_->projectSketchPointToViewport(
+                    line.start);
+            const auto end =
+                viewport_controller_->projectSketchPointToViewport(
+                    line.end);
+            if (!stillCurrentPick()) {
+                rejectStalePick();
+                return;
+            }
+            if (!start || !end ||
+                !start->valid() || !end->valid()) {
+                reportStatus(
+                    "RELATIONS: current-stage endpoint projection failed.");
+                return;
+            }
+            candidates.push_back({
+                {line.id, sketch::ConstraintElement::line_start},
+                {start->x, start->y}});
+            candidates.push_back({
+                {line.id, sketch::ConstraintElement::line_end},
+                {end->x, end->y}});
+        }
+        if (!stillCurrentPick()) {
+            rejectStalePick();
+            return;
+        }
+        const auto hit = sketch::resolveRelationEndpointHit(
+            *current_model,
+            {input.viewport_position.x, input.viewport_position.y},
+            candidates,
+            native_endpoint_hit_pixels);
+        switch (hit.status) {
+        case sketch::RelationEndpointHitStatus::hit:
+            target = hit.reference;
+            break;
+        case sketch::RelationEndpointHitStatus::miss:
+            reportStatus(
+                "COINCIDENT: select the actual Start/End endpoint, "
+                "not an arbitrary location on a Line.");
+            return;
+        case sketch::RelationEndpointHitStatus::ambiguous:
+            reportStatus(
+                "COINCIDENT: multiple endpoints under pointer; "
+                "zoom or disambiguate before picking.");
+            return;
+        case sketch::RelationEndpointHitStatus::invalid_input:
+            reportStatus(
+                "COINCIDENT: stale or invalid current-stage endpoint "
+                "projection; no Part change.");
+            return;
+        }
+    } else {
+        const auto hit = viewport_controller_->querySketchEntityAt(
+            input.viewport_position);
+        if (!stillCurrentPick()) {
+            rejectStalePick();
+            return;
+        }
+        if (!hit.completed) {
+            reportStatus("RELATIONS: current-stage Line hit query failed.");
+            return;
+        }
+        if (!hit.hit) {
+            reportStatus("RELATIONS: point to the required Line.");
+            return;
+        }
+        if (hit.hit->sketch_id != *sketch_id_) {
+            reportStatus("RELATIONS: stale SketchId in Line pick.");
+            return;
+        }
+        if (current_model->findLine(hit.hit->entity_id) == nullptr) {
+            reportStatus("RELATIONS: selected entity is not a Line.");
+            return;
+        }
+        target = sketch::ConstraintReference{
+            hit.hit->entity_id, sketch::ConstraintElement::line};
+    }
+
+    if (!target) return;
+    // Both the authored SketchModel pointer and the linked-source
+    // bindings above were taken from one particular Part incarnation.
+    // Native pick/projection calls must not cross that stage boundary.
+    if (!stillCurrentPick()) {
+        rejectStalePick();
+        return;
+    }
+    // A1 has not authorized numerical constraints on PG-01 linked
+    // sources. Reject any such target *before* consuming a draft pick.
+    const auto linked = std::any_of(
+        hosted->projection_bindings.begin(),
+        hosted->projection_bindings.end(),
+        [target](const part::ProjectedEdgeBinding& binding) {
+            return binding.target_entity == target->entity;
+        });
+    if (linked) {
+        reportStatus(
+            "RELATIONS: linked projection requires a separate "
+            "fixed-source solver gate; nothing authored.");
+        return;
+    }
+    const auto accepted =
+        interaction_.acceptRelationTarget(*current_model, *target);
+    switch (accepted.outcome) {
+    case sketch::RelationTargetOutcome::inactive:
+        return;
+    case sketch::RelationTargetOutcome::invalid_target:
+        if (!interaction_.firstRelationTarget()) {
+            relation_first_revision_.reset();
+        }
+        reportStatus(
+            "RELATIONS: target role rejected or initial Line changed; "
+            "choose current-stage targets again if needed.");
+        return;
+    case sketch::RelationTargetOutcome::first_target_accepted:
+        relation_first_revision_ = pointer_revision;
+        reportStatus(
+            "RELATIONS: first target accepted; choose the "
+            "second distinct Line/endpoint.");
+        notifyStateChanged();
+        return;
+    case sketch::RelationTargetOutcome::ready:
+        relation_first_revision_.reset();
+        if (!accepted.draft) {
+            reportStatus("RELATIONS: incomplete semantic target; no Part change.");
+            return;
+        }
+        // No authoring unless a backend has been explicitly injected;
+        // the DocumentSession command revalidates exact Part provenance.
+        commitReadyRelation(*accepted.draft);
+        return;
+    }
+}
+
 void PartSketchInteractionController::onPointer(
     const SketchPointerInput& input) {
     if (!active() ||
@@ -3920,6 +4661,13 @@ void PartSketchInteractionController::onPointer(
         break;
     case sketch::SketchTool::measure:
         handleMeasurePointer(input);
+        break;
+    case sketch::SketchTool::relations:
+        handleRelationsPointer(input);
+        break;
+    case sketch::SketchTool::dimensions:
+        // Strict v22 numeric authoring is still blocked. Selecting a
+        // dimension kind alone never changes the current Part.
         break;
     case sketch::SketchTool::trim:
     case sketch::SketchTool::extend:
@@ -5371,11 +6119,14 @@ void PartSketchInteractionController::updateHover(
     const bool select_mode =
         interaction_.tool() ==
         sketch::SketchTool::select;
+    const bool relations_mode =
+        interaction_.tool() ==
+        sketch::SketchTool::relations;
     const bool transform_collect_mode =
         interaction_.commonTransformStage() ==
             sketch::CommonTransformStage::select_objects;
 
-    if ((!select_mode && !transform_collect_mode) ||
+    if ((!select_mode && !relations_mode && !transform_collect_mode) ||
         interaction_.directManipulationActive()) {
         return;
     }
@@ -5438,6 +6189,36 @@ beginDirectManipulation(
     const auto* hosted = activeSketch();
     if (hosted == nullptr ||
         session_ == nullptr) {
+        return false;
+    }
+
+    // The legacy grip path sends absolute UpdateSketchGeometry coordinates
+    // without a stage-bound solver validation. A current accepted edit
+    // baseline is necessary but NOT sufficient: after P0 commits a solved
+    // Line as authored seeds, this state comparison may legitimately be
+    // equal while moving a constrained Line would violate its relation.
+    // Until a separate solver-backed grip command exists, fail closed for
+    // every constrained member of the full manipulation selection.
+    const auto* effective =
+        viewport_controller_->currentSketchInteractionModel();
+    const auto authored = hosted->model.state();
+    const auto& selected = interaction_.selectedEntities();
+    const auto affected = [&selected, &grip](sketch::EntityId id) {
+        return id == grip.entity_id ||
+            std::find(selected.begin(), selected.end(), id) !=
+                selected.end();
+    };
+    const bool constrained = std::any_of(
+        authored.constraints.begin(), authored.constraints.end(),
+        [&affected](const auto& relation) {
+            return affected(relation.first.entity) ||
+                   affected(relation.second.entity);
+        });
+    if (effective == nullptr ||
+        effective->state() != authored || constrained) {
+        reportStatus(
+            "Grip editing requires a current editable geometry baseline; "
+            "constrained Lines need a solver-validated editing command.");
         return false;
     }
 
@@ -6618,15 +7399,29 @@ void PartSketchInteractionController::projectSelection() {
 void PartSketchInteractionController::projectInteraction() {
     if (!active()) return;
 
+    const bool relations_mode =
+        !profile_session_ &&
+        interaction_.tool() == sketch::SketchTool::relations;
+    // Relations hover requires Start/Mid/End markers even before any
+    // object is selected. Reuse the current-stage semantic grip
+    // projection, but keep this visual-only temporary membership OUT
+    // of the actual Sketch selection and the authoring transaction.
+    auto grip_targets = interaction_.selectedEntities();
+    if (relations_mode && interaction_.hoveredEntity() &&
+        std::find(grip_targets.begin(), grip_targets.end(),
+                  *interaction_.hoveredEntity()) ==
+            grip_targets.end()) {
+        grip_targets.push_back(*interaction_.hoveredEntity());
+    }
     static_cast<void>(
         viewport_controller_->projectSketchInteraction(
-            interaction_.selectedEntities(),
+            grip_targets,
             interaction_.hoveredEntity(),
             interaction_.hoveredGrip(),
             interaction_.activeGrip(),
             !profile_session_ &&
-                interaction_.tool() ==
-                    sketch::SketchTool::select));
+                (interaction_.tool() == sketch::SketchTool::select ||
+                 relations_mode)));
 
     projectMeasureInteraction();
 }
