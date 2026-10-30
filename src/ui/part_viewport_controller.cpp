@@ -860,8 +860,10 @@ void PartViewportController::setSolidModelingKernel(
 void PartViewportController::setDevelopmentStageSolver(
     sketch::ILocalSketchSolver* backend,
     sketch::LocalSolverAcceptancePolicy policy) {
-    // An invalid policy never activates a solver. The borrowed backend
-    // cannot survive Sketch Edit exit; its owner explicitly revokes it.
+    // The Workbench-owned DEV provider is borrowed for the current Part
+    // document, not merely a Sketch Edit gesture. An invalid policy
+    // never activates it; setDocumentSession/clear revoke it on a true
+    // Part context replacement.
     development_stage_solver_ =
         backend != nullptr && policy.valid() ? backend : nullptr;
     development_stage_policy_ = policy;
@@ -1047,9 +1049,9 @@ void PartViewportController::refreshPresentation() {
     // the Body must be evaluated again with that very same candidate,
     // never returned from a stale revision-only Body cache.
     refresh_stage_solver_.reset();
-    if (development_stage_solver_ != nullptr &&
-        development_stage_policy_.valid() &&
-        sketch_edit_id_.has_value()) {
+    if (session_ != nullptr &&
+        development_stage_solver_ != nullptr &&
+        development_stage_policy_.valid()) {
         refresh_stage_solver_ =
             std::make_shared<OneRefreshStageBackend>(
                 *development_stage_solver_);
@@ -1236,10 +1238,9 @@ PartViewportController::currentSketchInteractionModel() const {
 void PartViewportController::setSketchEditSketch(
     std::optional<sketch::SketchId> sketch_id) {
     if (sketch_edit_id_ != sketch_id) {
-        // On a different edit context, the previously borrowed backend
-        // no longer owns any numeric scene-authoring authority.
-        development_stage_solver_ = nullptr;
-        development_stage_policy_ = {};
+        // Finish Sketch only changes the pointer/tool context. The
+        // read-only solved Profile stage belongs to this Part document,
+        // and remains available until a true session replacement.
         effective_stage_sketch_cache_.reset();
         // No Part revision changes on an edit-context switch, yet the
         // prior Body evaluation may have used the revoked DEV backend.
@@ -4292,8 +4293,7 @@ PartViewportController::buildBodyScene() {
     const auto solver_lease = refresh_stage_solver_;
     const auto evaluation =
         solver_lease != nullptr &&
-                development_stage_policy_.valid() &&
-                sketch_edit_id_.has_value()
+                development_stage_policy_.valid()
             ? part::evaluatePartWithLocalSolve(
                   session_->document(), *solid_modeling_kernel_,
                   development_stage_policy_, *solver_lease)
@@ -4700,10 +4700,11 @@ PartViewportController::effectiveSketchModelForPresentation(
             return effective_stage_sketch_cache_->model.value_or(
                 sketch::SketchModel{});
         }
-        // The borrowed DEV solver is authorized for the *current Sketch
-        // Edit* only, never for some other hosted Sketch/Profile.
-        if (!sketch_edit_id_ ||
-            *sketch_edit_id_ != source_sketch_id || !incarnation) {
+        // A current Part incarnation with an explicit DEV lease may
+        // resolve authored Profiles even after Finish Sketch or cold
+        // reopen. Neither saved seeds nor a previous incarnation's
+        // numerical candidate can replace the current validated stage.
+        if (!incarnation) {
             return failClosed();
         }
 
