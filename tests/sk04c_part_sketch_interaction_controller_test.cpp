@@ -5010,6 +5010,152 @@ int main(int argc, char* argv[]) {
         CHECK(viewport.profile_scene_.profiles.empty());
     }
 
+    // Owner 2026-10-30 .ss2part manual P0: ONE Sketch owns three
+    // independent authored Profiles (two circular + one rectangular).
+    // Only the rectangle participates in five valid authored relations.
+    // This is a sanitized synthetic replica of the failure *shape*,
+    // never the Owner's private document, coordinates or identifiers.
+    // Finish Sketch, save, cold reopen and an edit-less DEV lease must
+    // preserve ALL three Profile visibility/properties and current
+    // region topology without writing back numerical geometry.
+    {
+        EchoConvergedRelationSolver solver;
+        application::DocumentSession multi{
+            {}, part::PartDocument::create(core::DocumentId::generate())};
+        const auto created = multi.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+        CHECK(created.ok() && created.sketch_id);
+        const auto sid = *created.sketch_id;
+        const auto rectangle = multi.execute(
+            application::AddSketchRectangleCommand{
+                sid, multi.document().revision(), {0.0, 0.0},
+                {12.0, 6.0}, sketch::EntityRole::regular, false});
+        CHECK(rectangle.ok() && rectangle.entity_ids.size() == 4U);
+        const auto circle_a = multi.execute(
+            application::AddSketchCircleCommand{
+                sid, {30.0, 6.0}, 4.0});
+        const auto circle_b = multi.execute(
+            application::AddSketchCircleCommand{
+                sid, {52.0, 6.0}, 3.0});
+        CHECK(circle_a.ok() && circle_b.ok());
+        const auto regions = sketch::analyzeRegions(
+            multi.document().findSketch(sid)->model);
+        CHECK(regions.complete() && regions.regions.size() == 3U);
+        std::vector<part::ProfileId> profile_ids;
+        for (const auto& region : regions.regions) {
+            const auto intent = part::makeProfileRegionIntent(region);
+            CHECK(intent);
+            const auto added = multi.execute(
+                application::CreateProfileCommand{
+                    sid, multi.document().revision(), *intent});
+            CHECK(added.ok() && added.profile_id);
+            profile_ids.push_back(*added.profile_id);
+        }
+        const auto line = [&rectangle](std::size_t i) {
+            return sketch::ConstraintReference{
+                rectangle.entity_ids[i],
+                sketch::ConstraintElement::line};
+        };
+        const auto endpoint = [&rectangle](
+            std::size_t i, sketch::ConstraintElement end) {
+            return sketch::ConstraintReference{
+                rectangle.entity_ids[i], end};
+        };
+        const auto add = [&](sketch::ConstraintKind kind,
+                             sketch::ConstraintReference first,
+                             sketch::ConstraintReference second =
+                                 sketch::ConstraintReference{}) {
+            const auto accepted = multi.execute(
+                application::AddSketchRelationCommand{
+                    sid, multi.document().revision(), kind,
+                    first, second});
+            CHECK(accepted.ok() && accepted.constraint_id);
+        };
+        add(sketch::ConstraintKind::horizontal, line(0U));
+        add(sketch::ConstraintKind::perpendicular,
+            line(0U), line(1U));
+        add(sketch::ConstraintKind::perpendicular,
+            line(1U), line(2U));
+        add(sketch::ConstraintKind::coincident,
+            endpoint(0U, sketch::ConstraintElement::line_end),
+            endpoint(1U, sketch::ConstraintElement::line_start));
+        add(sketch::ConstraintKind::coincident,
+            endpoint(1U, sketch::ConstraintElement::line_end),
+            endpoint(2U, sketch::ConstraintElement::line_start));
+        CHECK(multi.document().findSketch(sid)->
+                  model.state().constraints.size() == 5U);
+        const auto authored = multi.document().findSketch(sid)->
+            model.state();
+        const auto revision = multi.document().revision();
+        const auto undo = multi.undoDepth();
+        QTreeWidget tree;
+        ui::PartDocumentTreeController tc{tree};
+        TestViewport display;
+        ui::PartViewportController controller{tc, &display};
+        controller.setDocumentSession(&multi);
+        controller.setSketchEditSketch(sid);
+        controller.setDevelopmentStageSolver(
+            &solver, {1.0e-7, 1.0e-6});
+        const auto allValid = [&](const application::DocumentSession& owner) {
+            CHECK(display.profile_scene_.profiles.size() == 3U);
+            for (const auto id : profile_ids) {
+                CHECK(owner.document().findProfile(id) != nullptr);
+                const auto resolved = controller.currentProfileResolution(id);
+                CHECK(resolved && resolved->valid());
+            }
+        };
+        allValid(multi);
+        controller.setSketchEditSketch(std::nullopt);
+        CHECK(display.sketch_scene_.lines.empty());
+        allValid(multi);
+        controller.refreshPresentation();
+        allValid(multi);
+        CHECK(multi.document().revision() == revision);
+        CHECK(multi.undoDepth() == undo);
+        CHECK(multi.document().findSketch(sid)->model.state() ==
+              authored);
+
+        const auto cold_path =
+            std::filesystem::temp_directory_path() /
+            ("ss2_three_profiles_finish_" +
+             std::to_string(
+                 std::filesystem::file_time_type::clock::now()
+                     .time_since_epoch().count()) + ".ss2part");
+        struct RemoveColdFile final {
+            std::filesystem::path path;
+            ~RemoveColdFile() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{cold_path};
+        part::PartDocumentStore store;
+        CHECK(store.createNew(cold_path, multi.document()).ok());
+        auto loaded = store.load(cold_path);
+        CHECK(loaded.ok() && loaded.document && loaded.checkpoint);
+        CHECK(loaded.document->incarnationToken() !=
+              multi.document().incarnationToken());
+        application::DocumentSession reopened{
+            cold_path, std::move(*loaded.document), *loaded.checkpoint};
+        CHECK(reopened.document().findSketch(sid)->model.state() ==
+              authored);
+        CHECK(reopened.document().profiles().size() == 3U);
+        controller.setDocumentSession(nullptr);
+        controller.setDocumentSession(&reopened);
+        CHECK(display.profile_scene_.profiles.empty());
+        // Workbench registers a fresh document-scoped native provider
+        // without opening Sketch Edit on a cold-loaded Part.
+        controller.setDevelopmentStageSolver(
+            &solver, {1.0e-7, 1.0e-6});
+        allValid(reopened);
+        controller.refreshPresentation();
+        allValid(reopened);
+        CHECK(reopened.undoDepth() == 0U);
+        CHECK(!reopened.needsSave());
+        CHECK(reopened.document().findSketch(sid)->model.state() ==
+              authored);
+    }
+
     // E0 Part provenance under synchronous backend reentry: while a
     // current-stage candidate is being evaluated, the user may Undo
     // and trigger a *new* Viewer refresh before the old solve returns.
