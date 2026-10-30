@@ -1983,8 +1983,10 @@ void CadWorkbench::buildUi() {
     // Normal application builds contain no native provider registration.
     dev_relation_preview_solver_ =
         std::make_unique<sketch::PlaneGcsDevSolver>();
-    // begin()/end() correctly revoke borrowed solver leases; register
-    // the preview only AFTER entering each actual Sketch Edit context.
+    // Relation authoring remains Sketch Edit-only, but the borrowed
+    // numerical stage must also serve read-only Profile/Body resolution
+    // after Finish Sketch and on a newly opened v21 Part. The Workbench
+    // owns this provider for its full lifetime.
     setProperty("ss2OriginalPlaneGcsDevRelationsPreview", true);
 #endif
     sketch_interaction_controller_->
@@ -15092,11 +15094,10 @@ void CadWorkbench::clearSketchRuntimeContext() {
         viewport_controller_->clearSketchDynamicInputOverlay();
     }
 
-    if (viewport_controller_ != nullptr) {
-        // Borrowed DEV solver lifetime is Sketch Edit lifetime only.
-        viewport_controller_->setDevelopmentStageSolver(
-            nullptr, {});
-    }
+    // Ending the interaction gesture revokes only the authoring tool.
+    // Do NOT revoke the document-scoped DEV Stage/Profile solver here:
+    // doing so made ALL three saved Profiles disappear after Finish.
+    // The viewport revokes it on document replacement/clear instead.
     if (sketch_interaction_controller_) {
         sketch_interaction_controller_->end();
     }
@@ -15289,6 +15290,14 @@ void CadWorkbench::refreshActiveContext() {
     engineering_revision_->setEnabled(true);
 
     viewport_controller_->setDocumentSession(document_session);
+#if defined(SS2_R13_PLANEGCS_UI_PREVIEW)
+    // Cold native v21 reopen has no Sketch Edit gesture. Re-register
+    // the Workbench-owned original-source provider for the new exact
+    // Part incarnation BEFORE Profile presentation and property access.
+    viewport_controller_->setDevelopmentStageSolver(
+        dev_relation_preview_solver_.get(),
+        sketch::LocalSolverAcceptancePolicy{1.0e-7, 1.0e-6});
+#endif
     refreshPartFeatureEvaluationSnapshot();
     reconcileSketchRuntimeContext();
     if (axis_draft_) {
